@@ -178,3 +178,6 @@ msgstr "切换 本地 ⇄ 加州时间"
 
 msgid "Toggle local ⇄ Beijing time"
 msgstr "切换 本地 ⇄ 北京时间"
+
+msgid "X reports this account is based in %(place)s"
+msgstr "X 显示此账号所在地为%(place)s"

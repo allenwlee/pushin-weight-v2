@@ -868,6 +868,53 @@
   .feed-row .account-role.role-official { color: #fbbf24; }
   .feed-row .account-role.role-staff { color: #c4b5fd; }
   .feed-row .account-role.role-community { color: #86efac; }
+  .feed-row .account-geography {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 38px;
+    margin-top: 2px;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .feed-row .account-geography-flag {
+    display: inline-flex;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 7.875px;
+  }
+  .feed-row .account-country-flag {
+    display: block;
+    width: 14px;
+    height: 7.875px;
+    filter: saturate(0.72) brightness(0.90);
+    opacity: 0.90;
+  }
+  .feed-row .account-geography-connector {
+    flex: 0 0 auto;
+    margin: 0 1px;
+    color: #64748b;
+    font-size: 7px;
+    line-height: 1;
+  }
+  .feed-row .account-geography-text {
+    min-width: 0;
+    max-width: 38px;
+    color: var(--muted);
+    font-size: 6.5px;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .feed-row .geography-taiwan {
+    flex-direction: column;
+    gap: 1px;
+  }
+  .feed-row .geography-taiwan .account-geography-connector {
+    height: 3px;
+    margin: -1px 0 0;
+    transform: rotate(90deg);
+  }
   .feed-row .follower-bin-1k-10k {
     --follower-size: 15px;
     --follower-color: #8492a6;

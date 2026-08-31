@@ -26,3 +26,6 @@ msgstr "Toggle local ⇄ Beijing time"
 
 msgid "Trend summaries updated"
 msgstr "Trend summaries updated"
+
+msgid "X reports this account is based in %(place)s"
+msgstr "X reports this account is based in %(place)s"

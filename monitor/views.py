@@ -16,7 +16,7 @@ import logging
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from threading import Lock
 from time import monotonic
 from typing import Any
@@ -41,6 +41,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext, override
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
@@ -50,6 +51,8 @@ from core.models import (
     BrandAccount,
     BrandCompany,
     Company,
+    Country,
+    CountryLabel,
     DiscourseLabel,
     NationalismLabel,
     Post,
@@ -59,10 +62,12 @@ from core.models import (
     PostEnrichmentState,
     PostTypeLabel,
     PostUnsanctionedFlag,
+    RegionLabel,
     RoleLabel,
     SentimentKey,
     SentimentLabel,
 )
+from monitor.country_flags import country_flag_symbol_id
 from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
@@ -848,6 +853,206 @@ def _display_role_label(
     return zh_label if _is_zh_locale(locale) else en_label
 
 
+def _geography_label(labels: dict[str, str], locale: str) -> str:
+    """Select a complete seeded label without exposing taxonomy keys."""
+
+    key = "zh_cn" if _is_zh_locale(locale) else "en"
+    label = labels.get(key)
+    return label.strip() if isinstance(label, str) else ""
+
+
+def _geography_accessible_label(label: str, locale: str) -> str:
+    language = "zh-hans" if _is_zh_locale(locale) else "en"
+    with override(language):
+        return gettext("X reports this account is based in %(place)s") % {
+            "place": label
+        }
+
+
+def _region_geography_wire(
+    labels: dict[str, str],
+    locale: str,
+) -> dict[str, Any] | None:
+    label = _geography_label(labels, locale)
+    if not label:
+        return None
+    accessible_label = _geography_accessible_label(label, locale)
+    return {
+        "kind": "region",
+        "label": label,
+        "accessible_label": accessible_label,
+        "flags": [],
+        "text": label,
+        "relationship_type": "",
+    }
+
+
+def _feed_geography_wire(
+    source: dict[str, Any] | None,
+    locale: str,
+) -> dict[str, Any] | None:
+    """Project accepted normalized geography into one presentation-safe object."""
+
+    if not source:
+        return None
+    country_code = source.get("country_code")
+    if not country_code:
+        return _region_geography_wire(
+            source.get("direct_region_labels") or {}, locale
+        )
+
+    label = _geography_label(source.get("country_labels") or {}, locale)
+    if not label:
+        return None
+    parent_code = source.get("parent_country_code")
+    parent_label = _geography_label(
+        source.get("parent_country_labels") or {}, locale
+    )
+    parent_symbol = country_flag_symbol_id(parent_code) if parent_code else None
+    child_symbol = country_flag_symbol_id(country_code)
+    relationship_type = source.get("relationship_type") or ""
+    accessible_label = _geography_accessible_label(label, locale)
+
+    if country_code == "TW":
+        if parent_code != "CN" or not parent_symbol or not parent_label:
+            return _region_geography_wire(
+                source.get("fallback_region_labels") or {}, locale
+            )
+        return {
+            "kind": "taiwan",
+            "label": label,
+            "accessible_label": accessible_label,
+            "flags": [
+                {
+                    "code": parent_code,
+                    "symbol_id": parent_symbol,
+                    "label": parent_label,
+                }
+            ],
+            "text": f"TW · {label}",
+            "relationship_type": relationship_type,
+        }
+
+    if not child_symbol:
+        return _region_geography_wire(
+            source.get("fallback_region_labels") or {}, locale
+        )
+
+    flags: list[dict[str, str]] = []
+    if parent_code:
+        if not parent_symbol or not parent_label:
+            return _region_geography_wire(
+                source.get("fallback_region_labels") or {}, locale
+            )
+        flags.append(
+            {
+                "code": parent_code,
+                "symbol_id": parent_symbol,
+                "label": parent_label,
+            }
+        )
+    flags.append(
+        {"code": country_code, "symbol_id": child_symbol, "label": label}
+    )
+    return {
+        "kind": "hierarchy" if parent_code else "country",
+        "label": label,
+        "accessible_label": accessible_label,
+        "flags": flags,
+        "text": "",
+        "relationship_type": relationship_type,
+    }
+
+
+def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, Any]]:
+    """Bulk-load normalized geography and both feed locales for this page."""
+
+    accounts = {
+        post.author_id: post.author
+        for post in posts
+        if getattr(post, "author_id", None) and getattr(post, "author", None)
+    }
+    country_codes = {
+        account.country_id for account in accounts.values() if account.country_id
+    }
+    direct_region_keys = {
+        account.based_in_region_id
+        for account in accounts.values()
+        if account.based_in_region_id
+    }
+    country_rows = {
+        row["code"]: row
+        for row in Country.objects.filter(code__in=country_codes).values(
+            "code",
+            "display_parent_country_id",
+            "display_parent_relationship_type",
+            "region_mapping__region_id",
+        )
+    }
+    parent_codes = {
+        row["display_parent_country_id"]
+        for row in country_rows.values()
+        if row["display_parent_country_id"]
+    }
+    all_country_codes = country_codes | parent_codes
+    country_labels: dict[str, dict[str, str]] = {
+        code: {} for code in all_country_codes
+    }
+    for code, lang, label in CountryLabel.objects.filter(
+        country_id__in=all_country_codes,
+        lang__in=("en", "zh-cn"),
+    ).values_list("country_id", "lang", "label"):
+        country_labels[code]["zh_cn" if lang == "zh-cn" else "en"] = label
+
+    fallback_region_keys = {
+        row["region_mapping__region_id"]
+        for row in country_rows.values()
+        if row["region_mapping__region_id"]
+    }
+    all_region_keys = direct_region_keys | fallback_region_keys
+    region_labels: dict[str, dict[str, str]] = {
+        key: {} for key in all_region_keys
+    }
+    for key, lang, label in RegionLabel.objects.filter(
+        region_id__in=all_region_keys,
+        lang__in=("en", "zh-cn"),
+    ).values_list("region_id", "lang", "label"):
+        region_labels[key]["zh_cn" if lang == "zh-cn" else "en"] = label
+
+    result: dict[str, dict[str, Any]] = {}
+    for author_id, account in accounts.items():
+        if account.country_id:
+            country = country_rows.get(account.country_id)
+            if not country:
+                continue
+            parent_code = country["display_parent_country_id"]
+            region_key = country["region_mapping__region_id"]
+            result[author_id] = {
+                "country_code": account.country_id,
+                "country_labels": country_labels.get(account.country_id, {}),
+                "parent_country_code": parent_code,
+                "parent_country_labels": country_labels.get(parent_code, {}),
+                "relationship_type": country[
+                    "display_parent_relationship_type"
+                ],
+                "fallback_region_labels": region_labels.get(region_key, {}),
+                "direct_region_labels": {},
+            }
+        elif account.based_in_region_id:
+            result[author_id] = {
+                "country_code": None,
+                "country_labels": {},
+                "parent_country_code": None,
+                "parent_country_labels": {},
+                "relationship_type": "",
+                "fallback_region_labels": {},
+                "direct_region_labels": region_labels.get(
+                    account.based_in_region_id, {}
+                ),
+            }
+    return result
+
+
 def _v22_feed_display_fields(
     classifications: dict[str, dict[str, Any]],
     *,
@@ -906,6 +1111,7 @@ def _post_to_wire(
     enriched: dict[str, Any] | None = None,
     *,
     active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
+    include_geography: bool = False,
 ) -> dict[str, Any]:
     """Serialize a Post ORM instance to the JSON wire shape for the feed.
 
@@ -984,6 +1190,10 @@ def _post_to_wire(
             "followers_count": acc.get("followers_count") or 0,
             "followers_pretty": acc.get("followers_pretty") or "",
         }
+        if include_geography:
+            account_wire["geography"] = _feed_geography_wire(
+                acc.get("_geography_source"), locale
+            )
     elif post.author:
         handle = post.author.handle or post.author_handle or "@unknown"
         account_wire = {
@@ -996,6 +1206,8 @@ def _post_to_wire(
             "followers_count": post.author.followers_count or 0,
             "followers_pretty": _pretty_followers(post.author.followers_count),
         }
+        if include_geography:
+            account_wire["geography"] = None
     else:
         handle = post.author_handle or "@unknown"
         account_wire = {
@@ -1004,6 +1216,8 @@ def _post_to_wire(
             "role": None, "role_label": "",
             "followers_count": 0, "followers_pretty": "",
         }
+        if include_geography:
+            account_wire["geography"] = None
 
     role_candidates = (
         enriched.get("role_keys")
@@ -1074,6 +1288,8 @@ def _post_to_wire(
 def _enrich_posts_with_classifications(
     posts: QuerySet,
     brand_nickname: str | None = None,
+    *,
+    include_geography: bool = False,
 ) -> list[dict[str, Any]]:
     """Enrich a Post QuerySet with per-brand classifications and unsanctioned flags.
 
@@ -1143,6 +1359,9 @@ def _enrich_posts_with_classifications(
         for ba in ba_qs:
             if ba.account_id:
                 role_map[(ba.brand_id, ba.account_id)] = ba.role.key if ba.role_id else None
+    geography_by_author = (
+        _feed_geography_sources(posts) if include_geography else {}
+    )
 
     # Index by tweet_id
     signals_by_tweet: dict[str, dict[str, dict[str, list[str]]]] = {}
@@ -1262,6 +1481,10 @@ def _enrich_posts_with_classifications(
                 "followers_pretty": _pretty_followers(post.author.followers_count if post.author else 0),
             },
         }
+        if include_geography:
+            row["account"]["_geography_source"] = geography_by_author.get(
+                post.author_id
+            )
 
         # Merge per-brand data from PostBrand junction + classifications
         for pb in post.brands.all():
@@ -2109,7 +2332,9 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Get recent posts with brand associations for feed
     feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
-    enriched = _enrich_posts_with_classifications(feed_posts)
+    enriched = _enrich_posts_with_classifications(
+        feed_posts, include_geography=True
+    )
     enriched_map = {e["tweet_id"]: e for e in enriched}
     matching_ids = {
         post["tweet_id"] for post in enriched
@@ -2121,6 +2346,7 @@ def home(request: HttpRequest) -> HttpResponse:
             locale,
             enriched_map.get(p.tweet_id),
             active_brand_scope=initial_filters["brands"],
+            include_geography=True,
         )
         for p in feed_posts if p.tweet_id in matching_ids
     ]
@@ -2332,6 +2558,7 @@ def _serialize_feed_row(
     locale: str,
     *,
     active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
+    include_geography: bool = False,
 ) -> dict[str, Any]:
     '''Serialize one enriched post dict to the feed wire shape.
 
@@ -2376,6 +2603,7 @@ def _serialize_feed_row(
         }
 
     account_wire = dict(post.get("account") or {})
+    geography_source = account_wire.pop("_geography_source", None)
     account_handle = account_wire.get("handle") or post.get("author_handle") or "@unknown"
     account_wire["handle"] = account_handle
     account_wire["display_name"] = _feed_account_display_name(
@@ -2388,6 +2616,10 @@ def _serialize_feed_row(
     account_wire["role_label"] = _display_role_label(
         display_role, locale, label_cache
     )
+    if include_geography:
+        account_wire["geography"] = _feed_geography_wire(
+            geography_source, locale
+        )
 
     display_fields = _v22_feed_display_fields(
         classifications,
@@ -2566,7 +2798,9 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
 
     # Enrich with classifications for filtering
     enriched = _enrich_posts_with_classifications(
-        all_posts, brand_nickname=brand_nickname,
+        all_posts,
+        brand_nickname=brand_nickname,
+        include_geography=True,
     )
 
     # Apply filters
@@ -2596,6 +2830,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
             post,
             locale,
             active_brand_scope=normalized_filters.get("brands", "__all__"),
+            include_geography=True,
         )
         for post in page
     ]

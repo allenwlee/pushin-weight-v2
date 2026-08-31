@@ -1,0 +1,12 @@
+<span class="account-geography geography-{{ geography.kind }}"
+      data-geography-kind="{{ geography.kind }}"
+      {% if geography.relationship_type %}data-geography-relationship="{{ geography.relationship_type }}"{% endif %}
+      role="img" aria-label="{{ geography.accessible_label }}" title="{{ geography.accessible_label }}">
+  {% for flag in geography.flags %}
+    <span class="account-geography-flag" title="{{ flag.label }}">
+      <svg class="account-country-flag" viewBox="0 0 16 9" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><use href="#{{ flag.symbol_id }}"></use></svg>
+    </span>
+    {% if not forloop.last or geography.text %}<span class="account-geography-connector" aria-hidden="true">›</span>{% endif %}
+  {% endfor %}
+  {% if geography.text %}<span class="account-geography-text" title="{{ geography.label }}">{{ geography.text }}</span>{% endif %}
+</span>

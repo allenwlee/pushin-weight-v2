@@ -153,6 +153,7 @@ if (typeof renderRowHtml === 'function') {
   global.document = {
     body: { getAttribute: () => 'en' },
     querySelector: () => null,
+    getElementById: (id) => ['flag-cn', 'flag-hk', 'flag-us'].includes(id) ? {} : null,
   };
   const rowHtml = renderRowHtml({
     account: {
@@ -161,6 +162,16 @@ if (typeof renderRowHtml === 'function') {
       role: 'official',
       role_label: 'Official',
       followers_pretty: '52.1k',
+      geography: {
+        kind: 'hierarchy',
+        label: 'Hong Kong',
+        accessible_label: 'X reports this account is based in Hong Kong',
+        flags: [
+          { code: 'CN', symbol_id: 'flag-cn', label: 'China' },
+          { code: 'HK', symbol_id: 'flag-hk', label: 'Hong Kong' },
+        ],
+        text: '',
+      },
     },
     follower_bin: '50k-plus',
     followers_label: '52.1k followers',
@@ -183,6 +194,14 @@ if (typeof renderRowHtml === 'function') {
     'client-created rows use the Cyber-Quan role badge');
   assertEq(rowHtml.includes('aria-label="Official"'), true,
     'role badge retains its localized accessible label');
+  assertEq(rowHtml.includes('class="account-geography geography-hierarchy"'), true,
+    'guiding-country geography is rendered in the follower lead');
+  assertEq(rowHtml.includes('href="#flag-cn"') && rowHtml.includes('href="#flag-hk"'), true,
+    'guiding flag precedes the child flag');
+  assertEq(rowHtml.indexOf('role-official') < rowHtml.indexOf('account-geography'), true,
+    'official role precedes geography');
+  assertEq(rowHtml.includes('title="China"') && rowHtml.includes('title="Hong Kong"'), true,
+    'each geography flag exposes its localized full name');
   assertEq(rowHtml.includes('>Account Name</a>'), true,
     'visible account link uses the display name');
   assertEq(rowHtml.includes('href="https://x.com/account_handle"'), true,
@@ -202,6 +221,51 @@ if (typeof renderRowHtml === 'function') {
     'rows without account metadata still show their zero follower count');
   assertEq(unknownFollowerHtml.includes('class="account-role is-empty"'), true,
     'rows without a named role reserve an empty hidden role slot');
+
+  const nonOfficialTaiwanHtml = renderRowHtml({
+    account: {
+      handle: '@taiwan',
+      role: 'staff',
+      role_label: 'Staff',
+      geography: {
+        kind: 'taiwan',
+        label: 'Taiwan',
+        accessible_label: 'X reports this account is based in Taiwan',
+        flags: [{ code: 'CN', symbol_id: 'flag-cn', label: 'China' }],
+        text: 'TW · Taiwan',
+      },
+    },
+    follower_bin: '0-1k',
+    engagement_pretty: { followers: '0' },
+  });
+  assertEq(nonOfficialTaiwanHtml.includes('href="#flag-tw"'), false,
+    'Taiwan signal never references the Taiwan flag');
+  assertEq(nonOfficialTaiwanHtml.includes('TW · Taiwan'), true,
+    'Taiwan signal remains visibly explicit');
+  assertEq(
+    nonOfficialTaiwanHtml.indexOf('account-geography') < nonOfficialTaiwanHtml.indexOf('role-staff'),
+    true,
+    'geography precedes every non-official role'
+  );
+
+  const unknownFlagHtml = renderRowHtml({
+    account: {
+      handle: '@unknown_flag',
+      geography: {
+        kind: 'country',
+        label: '<Unknown>',
+        accessible_label: 'Unknown geography',
+        flags: [{ code: 'ZZ', symbol_id: 'flag-zz', label: '<Unknown>' }],
+        text: '',
+      },
+    },
+    follower_bin: '0-1k',
+    engagement_pretty: { followers: '0' },
+  });
+  assertEq(unknownFlagHtml.includes('href="#flag-zz"'), false,
+    'unknown runtime symbols never reach an SVG use href');
+  assertEq(unknownFlagHtml.includes('class="account-geography'), false,
+    'an invalid geography object reserves no metadata slot');
 
   const longText = 'x'.repeat(701);
   const longTextHtml = renderRowHtml({

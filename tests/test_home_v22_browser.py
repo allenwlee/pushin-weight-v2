@@ -3059,6 +3059,96 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(response.status_code, 200)
         return response.json()
 
+    def _seed_account_geography_fixture(self) -> None:
+        from core.models import (
+            Country,
+            CountryLabel,
+            CountryRegion,
+            Region,
+            RegionLabel,
+        )
+
+        regions = {
+            "northern-america": ("021", "Northern America", "北美洲"),
+            "eastern-asia": ("030", "Eastern Asia", "东亚"),
+            "europe": ("150", "Europe", "欧洲"),
+            "northern-europe": ("154", "Northern Europe", "北欧"),
+        }
+        for key, (m49_code, label_en, label_zh) in regions.items():
+            Region.objects.update_or_create(
+                key=key,
+                defaults={
+                    "m49_code": m49_code,
+                    "source": "un-m49",
+                    "level": "subregion",
+                    "parent_id": None,
+                },
+            )
+            for lang, label in (("en", label_en), ("zh-cn", label_zh)):
+                RegionLabel.objects.update_or_create(
+                    region_id=key, lang=lang, defaults={"label": label}
+                )
+
+        countries = {
+            "CN": ("156", "China", "中国", "eastern-asia", None, None),
+            "US": (
+                "840",
+                "United States of America",
+                "美利坚合众国",
+                "northern-america",
+                None,
+                None,
+            ),
+            "HK": (
+                "344",
+                "China, Hong Kong Special Administrative Region",
+                "中国香港特别行政区",
+                "eastern-asia",
+                "CN",
+                "special_administrative_region",
+            ),
+            "TW": (
+                "158",
+                "Taiwan",
+                "台湾",
+                "eastern-asia",
+                "CN",
+                "owner_display_context",
+            ),
+            "AX": (
+                "248",
+                "Åland Islands",
+                "奥兰群岛",
+                "northern-europe",
+                None,
+                None,
+            ),
+        }
+        for code, (
+            m49_code,
+            label_en,
+            label_zh,
+            region_key,
+            parent_code,
+            relationship_type,
+        ) in countries.items():
+            Country.objects.update_or_create(
+                code=code,
+                defaults={
+                    "m49_code": m49_code,
+                    "display_parent_country_id": parent_code,
+                    "display_parent_relationship_type": relationship_type,
+                },
+            )
+            for lang, label in (("en", label_en), ("zh-cn", label_zh)):
+                CountryLabel.objects.update_or_create(
+                    country_id=code, lang=lang, defaults={"label": label}
+                )
+            CountryRegion.objects.update_or_create(
+                country_id=code,
+                defaults={"region_id": region_key, "source": "un-m49"},
+            )
+
     def _assert_row_contract(self, row: dict[str, object], *, tweet_id: str, tint: str) -> None:
         self.assertEqual(row["tweet_id"], tweet_id)
         self.assertEqual(row["tint_class"], tint)
@@ -3541,6 +3631,239 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertGreater(box["width"], 0, f"marker has zero width: {selector}")
             self.assertGreater(box["height"], 0, f"marker has zero height: {selector}")
             self.assertGreater(marker.locator("use").count(), 0, f"marker has no symbol: {selector}")
+
+    def test_account_geography_matches_initial_and_replacement_feed_in_both_locales(
+        self,
+    ) -> None:
+        from core.models import Account, BrandAccount, Role
+
+        self._seed_account_geography_fixture()
+
+        Account.objects.filter(author_id="v22-metadata-account-000").update(
+            country_id="US", based_in_region_id=None
+        )
+        Account.objects.filter(author_id="v22-metadata-account-006").update(
+            country_id="HK", based_in_region_id=None
+        )
+        staff_role, _ = Role.objects.get_or_create(key="staff")
+        BrandAccount.objects.create(
+            brand_id="moonshot_kimi",
+            account_id="v22-metadata-account-006",
+            role=staff_role,
+        )
+        Account.objects.filter(author_id="v22-metadata-account-002").update(
+            country_id="TW", based_in_region_id=None
+        )
+        Account.objects.filter(author_id="v22-metadata-account-003").update(
+            country_id=None, based_in_region_id="europe"
+        )
+        Account.objects.filter(author_id="v22-metadata-account-004").update(
+            country_id="AX", based_in_region_id=None
+        )
+
+        tweet_ids = {
+            "country": self.fixture["replacement_id"],
+            "hierarchy": "v22-metadata-006",
+            "taiwan": self.fixture["brand_scope_id"],
+            "region": "v22-metadata-003",
+            "fallback": "v22-metadata-004",
+            "unresolved": "v22-metadata-005",
+        }
+        projection_script = """ids => Object.fromEntries(
+          Object.entries(ids).map(([key, tweetId]) => {
+            const row = document.querySelector(`[data-tweet-id="${tweetId}"]`);
+            const lead = row?.querySelector('.follower-lead');
+            const geography = lead?.querySelector('.account-geography');
+            if (!geography) return [key, {
+              geography: null,
+              leadChildren: [...(lead?.children || [])].map(node => node.className),
+            }];
+            const flag = geography.querySelector('.account-country-flag');
+            const style = flag ? getComputedStyle(flag) : null;
+            return [key, {
+              geography: {
+                kind: geography.dataset.geographyKind,
+                aria: geography.getAttribute('aria-label'),
+                flags: [...geography.querySelectorAll('use')]
+                  .map(node => node.getAttribute('href')),
+                flagTitles: [...geography.querySelectorAll('.account-geography-flag')]
+                  .map(node => node.getAttribute('title')),
+                text: geography.querySelector('.account-geography-text')
+                  ?.textContent.trim() || '',
+                width: style ? style.width : '',
+                filter: style ? style.filter : '',
+                opacity: style ? style.opacity : '',
+              },
+              leadChildren: [...lead.children].map(node => node.className),
+            }];
+          })
+        )"""
+        cases = (
+            (
+                "en",
+                VIEWPORTS["desktop"],
+                {
+                    "country": "United States of America",
+                    "hierarchy": "China, Hong Kong Special Administrative Region",
+                    "taiwan": "TW · Taiwan",
+                    "region": "Europe",
+                    "fallback": "Northern Europe",
+                },
+            ),
+            (
+                "zh_cn",
+                VIEWPORTS["mobile"],
+                {
+                    "country": "美利坚合众国",
+                    "hierarchy": "中国香港特别行政区",
+                    "taiwan": "TW · 台湾",
+                    "region": "欧洲",
+                    "fallback": "北欧",
+                },
+            ),
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, viewport, labels in cases:
+                    with self.subTest(locale=locale, viewport=viewport):
+                        context = browser.new_context(
+                            viewport=viewport, timezone_id="Asia/Tokyo"
+                        )
+                        _freeze_clock(context)
+                        page = context.new_page()
+                        try:
+                            response = page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            page.wait_for_function("() => window.pwFilter")
+                            initial = page.evaluate(projection_script, tweet_ids)
+
+                            self.assertEqual(
+                                initial["country"]["leadChildren"],
+                                [
+                                    "follower-magnitude",
+                                    "account-role role-official",
+                                    "account-geography geography-country",
+                                ],
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["flags"],
+                                ["#flag-us"],
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["flagTitles"],
+                                [labels["country"]],
+                            )
+                            self.assertEqual(
+                                initial["hierarchy"]["leadChildren"],
+                                [
+                                    "follower-magnitude",
+                                    "account-geography geography-hierarchy",
+                                    "account-role role-staff",
+                                ],
+                            )
+                            self.assertEqual(
+                                initial["hierarchy"]["geography"]["flags"],
+                                ["#flag-cn", "#flag-hk"],
+                            )
+                            self.assertEqual(
+                                initial["hierarchy"]["geography"]["flagTitles"][-1],
+                                labels["hierarchy"],
+                            )
+                            self.assertEqual(
+                                initial["taiwan"]["geography"]["flags"],
+                                ["#flag-cn"],
+                            )
+                            self.assertNotIn(
+                                "#flag-tw", initial["taiwan"]["geography"]["flags"]
+                            )
+                            self.assertEqual(
+                                initial["taiwan"]["geography"]["text"],
+                                labels["taiwan"],
+                            )
+                            expected_prefix = (
+                                "X 显示此账号所在地为"
+                                if locale == "zh_cn"
+                                else "X reports this account is based in "
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["aria"],
+                                expected_prefix + labels["country"],
+                            )
+                            self.assertEqual(
+                                initial["taiwan"]["geography"]["aria"],
+                                expected_prefix
+                                + ("台湾" if locale == "zh_cn" else "Taiwan"),
+                            )
+                            self.assertEqual(
+                                initial["region"]["geography"]["flags"], []
+                            )
+                            self.assertEqual(
+                                initial["region"]["geography"]["text"],
+                                labels["region"],
+                            )
+                            self.assertEqual(
+                                initial["fallback"]["geography"]["text"],
+                                labels["fallback"],
+                            )
+                            self.assertIsNone(initial["unresolved"]["geography"])
+                            self.assertEqual(
+                                initial["country"]["geography"]["width"], "14px"
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["filter"],
+                                "saturate(0.72) brightness(0.9)",
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["opacity"], "0.9"
+                            )
+                            self.assertEqual(
+                                page.locator(".account-geography use").evaluate_all(
+                                    """nodes => nodes.map(node => node.getAttribute('href'))
+                                      .filter(href => !href || !document.querySelector(href))"""
+                                ),
+                                [],
+                            )
+                            self.assertEqual(
+                                page.locator(
+                                    ".account-geography use[href='#flag-tw']"
+                                ).count(),
+                                0,
+                            )
+                            self.assertEqual(
+                                page.locator(".account-geography[tabindex]").count(), 0
+                            )
+
+                            with page.expect_response(
+                                lambda result: "/feed/?" in result.url
+                                and result.status == 200
+                            ):
+                                page.evaluate(
+                                    """() => document.dispatchEvent(
+                                      new CustomEvent('pw:filter-change', {
+                                        detail: {filters: window.pwFilter.get()},
+                                      })
+                                    )"""
+                                )
+                            page.wait_for_function(
+                                "tweetId => document.querySelector(`[data-tweet-id=\"${tweetId}\"] .account-geography`)",
+                                arg=tweet_ids["country"],
+                            )
+                            replacement = page.evaluate(projection_script, tweet_ids)
+                            self.assertEqual(replacement, initial)
+                            self.assertFalse(
+                                page.evaluate(
+                                    "() => document.documentElement.scrollWidth > innerWidth"
+                                )
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
 
     def test_cyber_quan_symbols_cover_the_public_surface_without_layout_errors(self) -> None:
         expected_symbols = {
@@ -4030,6 +4353,25 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertIsNone(excluded, "a non-associated brand must exclude the row")
 
     def test_feed_metadata_projection_has_a_bounded_query_count(self) -> None:
+        from core.models import Account
+
+        self._seed_account_geography_fixture()
+
+        Account.objects.filter(author_id="v22-metadata-account-000").update(
+            country_id="US", based_in_region_id=None
+        )
+        Account.objects.filter(author_id="v22-metadata-account-001").update(
+            country_id="HK", based_in_region_id=None
+        )
+        Account.objects.filter(author_id="v22-metadata-account-002").update(
+            country_id="TW", based_in_region_id=None
+        )
+        Account.objects.filter(author_id="v22-metadata-account-003").update(
+            country_id=None, based_in_region_id="europe"
+        )
+        Account.objects.filter(author_id="v22-metadata-account-004").update(
+            country_id="AX", based_in_region_id=None
+        )
         with CaptureQueriesContext(connection) as full_queries:
             full_payload = self._feed_payload(
                 limit=50,

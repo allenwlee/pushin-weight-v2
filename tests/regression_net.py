@@ -94,6 +94,7 @@ class RegressionNet:
         self._check_feed_engagement(html)
         self._check_follower_glyphs(html)
         self._check_feed_row_shape(html)
+        self._check_account_geography_contract(html)
         self._check_filter_contract(html)
         self._check_chart_contract(html)
         self._check_chart_no_hover_isolate(session)
@@ -515,6 +516,27 @@ class RegressionNet:
         self.assert_("follower count is not duplicated in engagement",
                      'class="followers"' not in html,
                      "legacy engagement follower span still present")
+
+    def _check_account_geography_contract(self, html):
+        """Net G — geography assets and fail-closed Taiwan presentation."""
+        self.assert_("country flag sprite is embedded once",
+                     html.count('class="pw-country-flag-sprite"') == 1,
+                     "public homepage must expose exactly one runtime flag sprite")
+        self.assert_("country flag sprite contains approved symbols",
+                     all(f'id="flag-{code}"' in html for code in ("cn", "hk", "mo", "tw", "us")),
+                     "approved country symbols are missing from the runtime sprite")
+        self.assert_("Taiwan flag is not presented in feed geography",
+                     '<use href="#flag-tw"' not in html,
+                     "Taiwan geography must use CN plus a neutral text signal")
+
+        wrappers = re.findall(
+            r'<span class="account-geography geography-([a-z]+)"[^>]*>',
+            html,
+        )
+        allowed_kinds = {"country", "hierarchy", "taiwan", "region"}
+        self.assert_("rendered geography kinds are allowlisted",
+                     set(wrappers) <= allowed_kinds,
+                     f"unexpected kinds: {sorted(set(wrappers) - allowed_kinds)}")
 
     def _check_filter_contract(self, html):
         # Net C — Filter contract (unchanged wire).

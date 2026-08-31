@@ -190,6 +190,79 @@
       renderIcon('icon-role-badge', 'account-role-icon') + '</span>';
   }
 
+  function approvedFlag(flag) {
+    if (!flag || typeof flag !== 'object') return null;
+    var code = typeof flag.code === 'string' ? flag.code : '';
+    var symbolId = typeof flag.symbol_id === 'string' ? flag.symbol_id : '';
+    var label = typeof flag.label === 'string' ? flag.label : '';
+    if (!/^[A-Z]{2}$/.test(code) || symbolId !== 'flag-' + code.toLowerCase() || !label) {
+      return null;
+    }
+    if (typeof document !== 'undefined' && typeof document.getElementById === 'function' &&
+        !document.getElementById(symbolId)) {
+      return null;
+    }
+    return { code: code, symbolId: symbolId, label: label };
+  }
+
+  function accountGeographyHtml(row) {
+    var account = row.account || {};
+    var geography = account.geography;
+    if (!geography || typeof geography !== 'object') return '';
+    var kind = geography.kind;
+    if (['country', 'hierarchy', 'taiwan', 'region'].indexOf(kind) === -1) return '';
+    var accessibleLabel = typeof geography.accessible_label === 'string'
+      ? geography.accessible_label : '';
+    var label = typeof geography.label === 'string' ? geography.label : '';
+    var text = typeof geography.text === 'string' ? geography.text : '';
+    var relationship = typeof geography.relationship_type === 'string'
+      ? geography.relationship_type : '';
+    if (!accessibleLabel || !label) return '';
+    var rawFlags = Array.isArray(geography.flags) ? geography.flags : [];
+    var flags = rawFlags.map(approvedFlag).filter(Boolean);
+    if (flags.length !== rawFlags.length || flags.length > 2) return '';
+    if (kind === 'country' && (flags.length !== 1 || text)) return '';
+    if (kind === 'hierarchy' && (flags.length !== 2 || text)) return '';
+    if (kind === 'taiwan' &&
+        (flags.length !== 1 || flags[0].code !== 'CN' || text.indexOf('TW · ') !== 0)) {
+      return '';
+    }
+    if (kind === 'region' && (flags.length || !text)) return '';
+
+    var content = '';
+    flags.forEach(function (flag, index) {
+      content += '<span class="account-geography-flag" title="' +
+        escapeHtml(flag.label) + '">' +
+        '<svg class="account-country-flag" viewBox="0 0 16 9"' +
+        ' preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">' +
+        '<use href="#' + flag.symbolId + '"></use></svg></span>';
+      if (index < flags.length - 1 || text) {
+        content += '<span class="account-geography-connector" aria-hidden="true">›</span>';
+      }
+    });
+    if (text) {
+      content += '<span class="account-geography-text" title="' +
+        escapeHtml(label) + '">' + escapeHtml(text) + '</span>';
+    }
+    return '<span class="account-geography geography-' + kind + '"' +
+      ' data-geography-kind="' + kind + '"' +
+      (relationship ? ' data-geography-relationship="' + escapeHtml(relationship) + '"' : '') +
+      ' role="img" aria-label="' + escapeHtml(accessibleLabel) + '"' +
+      ' title="' + escapeHtml(accessibleLabel) + '">' + content + '</span>';
+  }
+
+  function accountLeadMetadataHtml(row) {
+    var account = row.account || {};
+    var roleHtml = accountRoleHtml(row);
+    var geographyHtml = accountGeographyHtml(row);
+    if (account.role === 'official') return roleHtml + geographyHtml;
+    if (geographyHtml) {
+      return geographyHtml +
+        (['staff', 'community'].indexOf(account.role) !== -1 ? roleHtml : '');
+    }
+    return roleHtml;
+  }
+
   // Render the production two-column grid. paintSignals() fills the reserved
   // signal column after the row enters the DOM.
   function renderRowHtml(row) {
@@ -232,7 +305,7 @@
               '</span>' +
               '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
             '</div>' +
-            accountRoleHtml(row) +
+            accountLeadMetadataHtml(row) +
           '</div>' +
           '<div class="body">' +
             '<div class="head">' +

@@ -27,10 +27,16 @@
             <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
             <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
           </div>
-          {% if row.account.role %}
+          {% if row.account.role == 'official' %}
             <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
+            {% if row.account.geography %}{% include "monitor/_account_geography.html" with geography=row.account.geography %}{% endif %}
           {% else %}
-            <span class="account-role is-empty" aria-hidden="true"></span>
+            {% if row.account.geography %}{% include "monitor/_account_geography.html" with geography=row.account.geography %}{% endif %}
+            {% if row.account.role %}
+              <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
+            {% elif not row.account.geography %}
+              <span class="account-role is-empty" aria-hidden="true"></span>
+            {% endif %}
           {% endif %}
         </div>
         <div class="body">
