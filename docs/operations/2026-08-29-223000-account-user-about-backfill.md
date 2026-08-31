@@ -230,6 +230,76 @@ Generic provider errors remain uncheckpointed by design. Retry only that
 missing residue under a fresh bounded budget. Do not convert errors into false
 success checkpoints just to reach zero.
 
+## Post-population geography reconciliation
+
+The owner declared `aboutuserbackfill` complete before this phase. Geography
+reconciliation reads only persisted `accounts.account_based_in`; it does not
+load a TwitterAPI credential, make an HTTP request, refresh an Account, or run
+from the scheduled harvester.
+
+The reviewed input is frozen in
+`monitor/data/account_based_in_census.json`: 59,066 nonblank Accounts, 194
+distinct values, and census SHA-256
+`b17cd81b3b5dd3711c6924c3c7c34d9c4402febf45b3eb66bd6dc135ba3e7668`.
+The migration must apply `0026_account_geography_taxonomy` before
+`0027_account_country_foreign_key`; it seeds all lookup rows before enforcing
+the existing physical `accounts.country_code` column as a foreign key.
+
+On staging, verify the exact deployed SHA and run dry-run then apply:
+
+```bash
+python manage.py reconcile_account_geography --target staging
+
+python manage.py reconcile_account_geography \
+  --target staging --apply \
+  --confirm-database pushinweight_staging \
+  --json-report /tmp/account-geography-staging.json \
+  --markdown-report /tmp/account-geography-staging.md
+```
+
+Dry-run and apply classifications must match; apply must report zero unknown
+values, rejected rows, remaining changes, HTTP calls, and provider credits. A
+second staging apply must report `changed: 0`.
+
+Production requires a new narrow recovery proof. Do not reuse the earlier
+full-Account paid-run receipt:
+
+```bash
+python manage.py prepare_account_geography_recovery
+
+python manage.py prepare_account_geography_recovery \
+  --apply --confirm-database pushinweight_shadow
+```
+
+The snapshot contains only `author_id`, raw and normalized geography,
+`account_based_in_fetched_at`, and `first_seen_at`. It is stored in the private
+`account_geography_backup` schema, digest-checked after a temporary restore,
+and bound to a 24-hour receipt. Keep the receipt in the operator's secure
+session and never put its token in source control or ordinary chat.
+
+Use that receipt with the same reviewed SHA:
+
+```bash
+python manage.py reconcile_account_geography \
+  --target production --apply \
+  --confirm-database pushinweight_shadow \
+  --recovery-receipt '<secure-geography-receipt>' \
+  --json-report /tmp/account-geography-production.json \
+  --markdown-report /tmp/account-geography-production.md
+```
+
+Production apply refuses when the current pre-write rows differ from the
+snapshot, the final raw-value census differs from the frozen digest or totals,
+the taxonomy differs from the pinned manifest, or the nonblocking geography
+lock is held. Expected final classification is 52,488 country, 5,925 region,
+and 653 explicitly unresolved Accounts (`Congo`: 13; `Korea`: 640).
+
+Verify the aggregate report against SQL and run the command again in dry-run
+mode. The second classification must retain the same raw census, and
+`would_change` must be zero. Preserve the exact receipt-named recovery table
+through production browser verification and one healthy scheduled harvest;
+remove only that table in a later explicit cleanup.
+
 ## Stop and recovery
 
 The normal rollback is to stop launching jobs. Additive nullable columns can

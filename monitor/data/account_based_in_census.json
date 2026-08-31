@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T21:36:30Z",
+  "database": "pushinweight_shadow",
+  "row_encoding": "UTF-8 CSV without header; columns account_based_in,count; ORDER BY account_based_in; LF",
+  "census_sha256": "b17cd81b3b5dd3711c6924c3c7c34d9c4402febf45b3eb66bd6dc135ba3e7668",
+  "distinct_values": 194,
+  "nonblank_accounts": 59066,
+  "classification": {
+    "country": 52488,
+    "region": 5925,
+    "unresolved": 653
+  },
+  "unresolved_values": {
+    "Congo": 13,
+    "Korea": 640
+  }
+}
