@@ -323,7 +323,7 @@ async def test_fetch_batch_reuses_session_and_counts_429_retry(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_batch_stops_on_schema_drift_without_raw_payload(monkeypatch):
+async def test_fetch_batch_quarantines_schema_drift_without_raw_payload(monkeypatch):
     import json
     from unittest.mock import AsyncMock, MagicMock
 
@@ -351,13 +351,55 @@ async def test_fetch_batch_stops_on_schema_drift_without_raw_payload(monkeypatch
         max_wall_seconds=60,
     )
 
-    assert result.stop_reason == "schema_drift"
+    assert result.stop_reason is None
     assert result.outcomes[0].reason == "schema_drift"
     assert "parser_error:unknown_leaves:response.data" in (
         result.outcomes[0].schema_diagnostic or ()
     )
     assert "$.data.unknown:string" in (result.outcomes[0].schema_diagnostic or ())
     assert "secret-value" not in repr(result)
+
+
+@pytest.mark.asyncio
+async def test_fetch_batch_quarantines_identity_mismatch_and_continues(monkeypatch):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    mismatched = _complete_payload()
+    mismatched["data"]["id"] = "999"
+    accepted = _complete_payload()
+    accepted["data"]["id"] = "43"
+    accepted["data"]["userName"] = "second"
+    responses = [
+        _fake_response(200, json.dumps(mismatched)),
+        _fake_response(200, json.dumps(accepted)),
+    ]
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(side_effect=responses)
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id="42", handle="example"),
+            FetchSelection(author_id="43", handle="second"),
+        ],
+        api_key="secret",
+        rate_qps=5,
+        concurrency=1,
+        max_attempts=2,
+        max_credits=36,
+        max_wall_seconds=60,
+    )
+
+    assert result.stop_reason is None
+    assert [outcome.reason for outcome in result.outcomes] == [
+        "identity_mismatch",
+        "success",
+    ]
+    assert result.attempts == 2
 
 
 def _fake_response(status, body="error", headers=None):
@@ -615,14 +657,11 @@ async def test_concurrent_fetch_never_exceeds_attempt_or_connector_budget(monkey
 
 
 @pytest.mark.asyncio
-async def test_fatal_concurrent_response_stops_queued_request_admission(monkeypatch):
+async def test_schema_drift_does_not_stop_queued_request_admission(monkeypatch):
     import asyncio
     import json
     from unittest.mock import MagicMock
 
-    drift = _complete_payload()
-    drift["data"]["unknown"] = "private"
-    payloads = [json.dumps(drift), json.dumps(_complete_payload())]
     request_count = 0
 
     class ResponseContext:
@@ -646,11 +685,19 @@ async def test_fatal_concurrent_response_stops_queued_request_admission(monkeypa
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=None)
 
-    def get(*_args, **_kwargs):
+    def get(*_args, **kwargs):
         nonlocal request_count
-        payload = payloads[min(request_count, len(payloads) - 1)]
+        handle = kwargs["params"]["userName"]
+        author_id = handle.removeprefix("user")
+        payload = _complete_payload()
+        payload["data"]["id"] = author_id
+        payload["data"]["userName"] = handle
+        if author_id == "0":
+            payload["data"]["verification_info"]["reason"][
+                "override_verified_year"
+            ] = 2025.5
         request_count += 1
-        return ResponseContext(payload)
+        return ResponseContext(json.dumps(payload))
 
     session.get.side_effect = get
     monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
@@ -668,6 +715,46 @@ async def test_fatal_concurrent_response_stops_queued_request_admission(monkeypa
         max_wall_seconds=60,
     )
 
-    assert result.stop_reason == "schema_drift"
-    assert request_count <= 2
-    assert all(outcome.author_id in {"0", "1"} for outcome in result.outcomes)
+    assert result.stop_reason is None
+    assert request_count == 10
+    assert len(result.outcomes) == 10
+    assert [outcome.reason for outcome in result.outcomes].count("schema_drift") == 1
+    assert [outcome.reason for outcome in result.outcomes].count("success") == 9
+    assert (
+        "parser_error:response.data.verification_info.reason."
+        "override_verified_year must be a nonnegative integer"
+    ) in (result.outcomes[0].schema_diagnostic or ())
+
+
+@pytest.mark.asyncio
+async def test_consecutive_account_quarantines_stop_systemic_drift(monkeypatch):
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+
+    payload = _complete_payload()
+    payload["data"]["unknown"] = "private"
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = MagicMock(
+        side_effect=[_fake_response(200, json.dumps(payload)) for _ in range(12)]
+    )
+    monkeypatch.setattr("aiohttp.ClientSession", lambda **kwargs: session)
+    monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
+    result = await fetch_user_about_batch(
+        [
+            FetchSelection(author_id=str(index), handle=f"user{index}")
+            for index in range(12)
+        ],
+        api_key="secret",
+        rate_qps=1_000,
+        concurrency=1,
+        max_attempts=12,
+        max_credits=216,
+        max_wall_seconds=60,
+    )
+
+    assert result.stop_reason == "account_quarantine_threshold"
+    assert result.attempts == 10
+    assert len(result.outcomes) == 10

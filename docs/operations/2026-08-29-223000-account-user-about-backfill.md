@@ -33,9 +33,12 @@ feed rendering.
 - Reports and progress logs are aggregate-only. They must not contain handles,
   X IDs, database URLs, credentials, request headers, recovery-receipt tokens,
   or raw provider values.
-- Unknown schema, returned-ID mismatch, authentication failure, an open
-  circuit, or a hard budget stops new admissions. Already-reserved concurrent
-  requests may finish and checkpoint safely.
+- Unknown schema and returned-ID mismatch quarantine only the affected Account:
+  they write and checkpoint nothing, emit aggregate-only reason counts, and do
+  not stop admission for other Accounts. Ten consecutive Account quarantines
+  indicate systemic drift and stop new admissions. Authentication failure, an
+  open circuit, or a hard budget also remains a global stop. Already-reserved
+  concurrent requests may finish and checkpoint safely.
 
 TwitterAPI's pricing page showed 18 credits per returned profile and
 100,000 credits per USD on 2026-08-31. At that rate, 60,000 one-shot calls
@@ -161,11 +164,11 @@ follower-size buckets, and public profile-location proxies for the US, EU,
 Japan, other, and unknown. Profile location is used only to diversify the
 test; it never populates or validates `country_code`.
 
-Stop before the full run if the smoke has any authentication, schema,
-identity, rate-limit, circuit, or hard-budget stop; unexpected rejected-field
-pattern; receipt mismatch; or harvester regression. Reconcile the 100-row
-aggregate receipt with PostgreSQL counts and, when available, the provider's
-exact UTC-window Recent API Calls ledger.
+Stop before the full run if the smoke has any authentication, rate-limit,
+circuit, or hard-budget stop; an unexplained schema or identity quarantine;
+unexpected rejected-field pattern; receipt mismatch; or harvester regression.
+Reconcile the 100-row aggregate receipt with PostgreSQL counts and, when
+available, the provider's exact UTC-window Recent API Calls ledger.
 
 ## Full missing-only production run
 
@@ -217,10 +220,11 @@ FROM accounts;
 ```
 
 The run is complete when every Account present at the recovery cutoff with a
-nonblank handle is either checkpointed or documented as a non-callable,
-non-retryable provider outcome; all admitted attempts and projected credits
-are within the recorded budgets; reports contain no sensitive values; and a
-fresh scheduled harvest cycle succeeds under the scheduled key.
+nonblank handle is either checkpointed or documented as a quarantined or
+non-callable provider outcome; no retryable Account remains; all admitted
+attempts and projected credits are within the recorded budgets; reports
+contain no sensitive values; and a fresh scheduled harvest cycle succeeds
+under the scheduled key.
 
 Generic provider errors remain uncheckpointed by design. Retry only that
 missing residue under a fresh bounded budget. Do not convert errors into false

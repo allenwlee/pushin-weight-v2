@@ -112,6 +112,20 @@ def _unavailable(author_id: str) -> FetchOutcome:
     )
 
 
+def _schema_drift(author_id: str) -> FetchOutcome:
+    return FetchOutcome(
+        author_id=author_id,
+        observation=None,
+        reason="schema_drift",
+        status_code=200,
+        latency_ms=10,
+        schema_diagnostic=(
+            "parser_error:response.data.example must be an integer",
+            "$.data.example:number",
+        ),
+    )
+
+
 def test_default_dry_run_selects_without_http_or_writes():
     for index in range(3):
         Account.objects.create(author_id=str(index), handle=f"user{index}")
@@ -341,7 +355,9 @@ def test_schema_drift_reaches_report_without_response_values_or_account_identity
 
     report = json_path.read_text()
     account.refresh_from_db()
-    assert '"stop_reason": "schema_drift"' in report
+    assert '"stop_reason": null' in report
+    assert '"quarantined_accounts": 1' in report
+    assert '"remaining_retryable": 0' in report
     assert "$.data.unknownLeaf:string" in report
     assert "private-response-value" not in report
     assert "managed-secret" not in report
@@ -862,7 +878,7 @@ def test_production_require_complete_fails_after_writing_resume_report(
             "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
             side_effect=fetch_selected,
         ),
-        pytest.raises(CommandError, match="1 eligible Accounts remain"),
+        pytest.raises(CommandError, match="1 retryable Accounts remain"),
     ):
         call_command(
             "backfill_account_based_in",
@@ -884,6 +900,82 @@ def test_production_require_complete_fails_after_writing_resume_report(
         )
 
     assert json.loads(json_path.read_text())["outcome"]["remaining_eligible"] == 1
+
+
+@override_settings(OLLIJA_STAGING_MODE=False)
+def test_production_require_complete_quarantines_account_drift_and_continues(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "managed-secret")
+    for index in range(2):
+        Account.objects.create(author_id=str(index), handle=f"user{index}")
+    json_path = tmp_path / "quarantined.json"
+    quarantined_ids: list[str] = []
+    accepted_ids: list[str] = []
+
+    async def fetch_selected(selections, **_kwargs):
+        quarantined_ids.append(selections[0].author_id)
+        accepted_ids.append(selections[1].author_id)
+        return _batch(
+            [
+                _schema_drift(selections[0].author_id),
+                _success(selections[1].author_id),
+            ]
+        )
+
+    with (
+        patch(
+            "monitor.management.commands.backfill_account_based_in._current_database_name",
+            return_value="pushinweight_shadow",
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._required_migrations_applied",
+            return_value=True,
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._verify_recovery_snapshot"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in._production_run_lock"
+        ),
+        patch(
+            "monitor.management.commands.backfill_account_based_in.fetch_user_about_batch",
+            side_effect=fetch_selected,
+        ),
+    ):
+        call_command(
+            "backfill_account_based_in",
+            apply=True,
+            target="production",
+            require_complete=True,
+            limit=2,
+            max_attempts=2,
+            max_credits=36,
+            max_wall_seconds=60,
+            max_qps=1,
+            provider_qps=1,
+            concurrency=1,
+            chunk_size=2,
+            recovery_receipt=_production_recovery_receipt(account_count=2),
+            json_report=str(json_path),
+            markdown_report=str(tmp_path / "quarantined.md"),
+            stdout=StringIO(),
+        )
+
+    report = json.loads(json_path.read_text())
+    assert Account.objects.get(
+        author_id=quarantined_ids[0]
+    ).account_based_in_fetched_at is None
+    assert Account.objects.get(
+        author_id=accepted_ids[0]
+    ).account_based_in_fetched_at is not None
+    assert report["outcome"]["quarantined_accounts"] == 1
+    assert report["outcome"]["quarantined_reasons"] == {"schema_drift": 1}
+    assert report["outcome"]["remaining_eligible"] == 1
+    assert report["outcome"]["remaining_retryable"] == 0
+    assert report["outcome"]["stop_reason"] is None
 
 
 @override_settings(OLLIJA_STAGING_MODE=False)

@@ -27,7 +27,11 @@ from django.utils import timezone
 from psycopg import sql
 
 from core.models import Account
-from monitor.twitterapi.user_about import FetchSelection, fetch_user_about_batch
+from monitor.twitterapi.user_about import (
+    ACCOUNT_QUARANTINE_REASONS,
+    FetchSelection,
+    fetch_user_about_batch,
+)
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
@@ -432,6 +436,9 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Effective QPS: {usage['effective_qps']}",
         f"- Stop reason: {outcome['stop_reason'] or 'none'}",
         f"- Remaining eligible: {outcome['remaining_eligible']}",
+        f"- Remaining retryable: {outcome['remaining_retryable']}",
+        f"- Quarantined Accounts: {outcome['quarantined_accounts']}",
+        f"- Quarantine reasons: `{json.dumps(outcome['quarantined_reasons'], sort_keys=True)}`",
         f"- Schema diagnostics: `{json.dumps(outcome['schema_diagnostics'])}`",
         "",
         "## Sample distribution",
@@ -606,6 +613,8 @@ class Command(BaseCommand):
         country_yield: Counter[str] = Counter()
         location_accurate: Counter[str] = Counter()
         about_source: Counter[str] = Counter()
+        quarantined_reasons: Counter[str] = Counter()
+        quarantined_author_ids: set[str] = set()
         schema_diagnostics: set[str] = set()
         accepted = changed = unchanged = success_empty = 0
         attempts = retries = projected_credits = attempted_accounts = 0
@@ -670,6 +679,12 @@ class Command(BaseCommand):
                     provider_reasons[fetched.reason] += 1
                     if fetched.schema_diagnostic:
                         schema_diagnostics.update(fetched.schema_diagnostic)
+                    if (
+                        fetched.reason in ACCOUNT_QUARANTINE_REASONS
+                        and fetched.author_id in chunk_ids
+                    ):
+                        quarantined_author_ids.add(fetched.author_id)
+                        quarantined_reasons[fetched.reason] += 1
                     observation = fetched.observation
                     if observation is None or fetched.author_id not in chunk_ids:
                         continue
@@ -690,6 +705,8 @@ class Command(BaseCommand):
                     )
                     if outcome.identity_rejected:
                         provider_reasons["identity_mismatch"] += 1
+                        quarantined_author_ids.add(fetched.author_id)
+                        quarantined_reasons["identity_mismatch"] += 1
                         continue
                     accepted += 1
                     if outcome.applied_fields:
@@ -733,10 +750,15 @@ class Command(BaseCommand):
         full_population = Account.objects.filter(
             ~Q(handle__isnull=True), ~Q(handle="")
         ).count()
-        remaining_eligible = _eligible_accounts(
+        remaining_queryset = _eligible_accounts(
             refresh=options["refresh"],
             eligible_before=eligible_before,
+        )
+        remaining_eligible = remaining_queryset.count()
+        quarantined_remaining = remaining_queryset.filter(
+            author_id__in=quarantined_author_ids
         ).count()
+        remaining_retryable = remaining_eligible - quarantined_remaining
         report = {
             "schema_version": 2,
             "mode": f"{target}_apply",
@@ -787,6 +809,9 @@ class Command(BaseCommand):
                 "success_empty": success_empty,
                 "not_attempted": len(selections) - attempted_accounts,
                 "remaining_eligible": remaining_eligible,
+                "remaining_retryable": remaining_retryable,
+                "quarantined_accounts": quarantined_remaining,
+                "quarantined_reasons": dict(sorted(quarantined_reasons.items())),
                 "provider_reasons": dict(sorted(provider_reasons.items())),
                 "rejected_fields": dict(sorted(rejected_fields.items())),
                 "leaf_coverage": dict(sorted(leaf_coverage.items())),
@@ -833,8 +858,8 @@ class Command(BaseCommand):
         self.stdout.write(json.dumps(report, indent=2, sort_keys=True))
         if target == "production" and stop_reason:
             raise CommandError(f"production backfill stopped: {stop_reason}")
-        if options["require_complete"] and remaining_eligible:
+        if options["require_complete"] and remaining_retryable:
             raise CommandError(
                 "production backfill incomplete: "
-                f"{remaining_eligible} eligible Accounts remain"
+                f"{remaining_retryable} retryable Accounts remain"
             )

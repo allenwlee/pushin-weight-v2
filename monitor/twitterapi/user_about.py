@@ -21,6 +21,8 @@ from monitor.country_codes import normalize_country_code
 from monitor.twitterapi.caller import USER_AGENT, CircuitBreaker, GlobalPaceGate
 
 USER_ABOUT_URL = "https://api.twitterapi.io/twitter/user_about"
+ACCOUNT_QUARANTINE_REASONS = frozenset({"identity_mismatch", "schema_drift"})
+ACCOUNT_QUARANTINE_STOP_THRESHOLD = 10
 
 
 class UserAboutError(ValueError):
@@ -718,6 +720,7 @@ async def fetch_user_about_batch(
     attempts = 0
     retries = 0
     projected_credits = 0
+    consecutive_account_quarantines = 0
     outcomes: list[FetchOutcome] = []
     latencies_ms: list[float] = []
     stop_reason: str | None = None
@@ -746,6 +749,18 @@ async def fetch_user_about_batch(
             if stop_reason is None:
                 stop_reason = reason
             stopped.set()
+
+    async def record_account_result(reason: str) -> bool:
+        nonlocal consecutive_account_quarantines
+        async with admission_lock:
+            if reason in ACCOUNT_QUARANTINE_REASONS:
+                consecutive_account_quarantines += 1
+            else:
+                consecutive_account_quarantines = 0
+            return (
+                consecutive_account_quarantines
+                >= ACCOUNT_QUARANTINE_STOP_THRESHOLD
+            )
 
     async def reserve_attempt(*, retry: bool) -> bool:
         nonlocal attempts, retries, projected_credits, stop_reason
@@ -856,6 +871,7 @@ async def fetch_user_about_batch(
                                     status_code=status,
                                     latency_ms=latency,
                                 )
+                                await record_account_result("success")
                                 breaker.record("success")
                                 break
                     elif status in {401, 403}:
@@ -877,13 +893,11 @@ async def fetch_user_about_batch(
                     latency_ms=latency,
                     schema_diagnostic=schema_diagnostic,
                 )
-                if reason in {
-                    "schema_drift",
-                    "identity_mismatch",
-                    "auth_invalid",
-                    "auth_forbidden",
-                    "wall_time_budget",
-                }:
+                if reason in ACCOUNT_QUARANTINE_REASONS:
+                    if await record_account_result(reason):
+                        await stop("account_quarantine_threshold")
+                    break
+                if reason in {"auth_invalid", "auth_forbidden", "wall_time_budget"}:
                     await stop(reason)
                     break
                 retryable = reason in {"rate_limited", "http_5xx", "connection_error"}
