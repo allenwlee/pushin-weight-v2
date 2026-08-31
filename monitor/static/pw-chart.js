@@ -895,7 +895,7 @@
       detail.setAttribute('data-pw-headline-detail', '');
       detail.setAttribute('aria-controls', detailId);
       detail.setAttribute('aria-expanded', 'false');
-      detail.textContent = zh ? '详情' : 'detail';
+      detail.textContent = zh ? '更多' : 'more';
       headline.appendChild(detail);
       article.appendChild(headline);
 
@@ -906,16 +906,8 @@
       secondary.hidden = true;
       var secondaryCopy = document.createElement('span');
       secondaryCopy.setAttribute('data-pw-headline-secondary-copy', '');
-      secondaryCopy.setAttribute('role', 'button');
-      secondaryCopy.setAttribute('tabindex', '0');
       secondaryCopy.textContent = item.secondary;
       secondary.appendChild(secondaryCopy);
-      var hide = document.createElement('button');
-      hide.type = 'button';
-      hide.className = 'headline-disclosure';
-      hide.setAttribute('data-pw-headline-hide', '');
-      hide.textContent = zh ? '收起' : 'hide';
-      secondary.appendChild(hide);
       article.appendChild(secondary);
       container.appendChild(article);
     });
@@ -928,7 +920,9 @@
     if (!detail || !secondary) return;
     secondary.hidden = !expanded;
     detail.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    if (!expanded && restoreFocus && typeof detail.focus === 'function') detail.focus();
+    var zh = isZhLocale(currentLocale(getHomeChartRegion()));
+    detail.textContent = expanded ? (zh ? '收起' : 'less') : (zh ? '更多' : 'more');
+    if (restoreFocus && typeof detail.focus === 'function') detail.focus();
   }
 
   function wireHeadlineDisclosure() {
@@ -936,21 +930,13 @@
       if (!event.target || !event.target.closest) return;
       var article = event.target.closest('[data-pw-headline-item]');
       if (!article) return;
-      if (event.target.closest('[data-pw-headline-detail]')) {
-        setHeadlineDetail(article, true);
-        return;
-      }
-      if (event.target.closest('[data-pw-headline-hide]') ||
-          event.target.closest('[data-pw-headline-item-secondary]')) {
-        setHeadlineDetail(article, false, true);
-      }
-    });
-    document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      if (!event.target || !event.target.closest ||
-          !event.target.closest('[data-pw-headline-secondary-copy]')) return;
-      event.preventDefault();
-      setHeadlineDetail(event.target.closest('[data-pw-headline-item]'), false, true);
+      var detail = event.target.closest('[data-pw-headline-detail]');
+      if (!detail) return;
+      setHeadlineDetail(
+        article,
+        detail.getAttribute('aria-expanded') !== 'true',
+        true
+      );
     });
   }
 

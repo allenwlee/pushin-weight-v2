@@ -51,6 +51,7 @@ PRESENTATION_CONTROLS = {
     "feed_text",
     "headline_detail",
     "role_badge",
+    "account_geography",
     "chart_hover_freeze",
     "freeze_point",
 }

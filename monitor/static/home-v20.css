@@ -645,7 +645,7 @@
     line-height: 1.45;
   }
   .headline-item-secondary[hidden] { display: none; }
-  .headline-item-secondary [data-pw-headline-secondary-copy] { cursor: pointer; }
+  .headline-item-secondary [data-pw-headline-secondary-copy] { user-select: text; }
   .headline-status[data-pw-status-kind="success"] {
     position: absolute;
     width: 1px;

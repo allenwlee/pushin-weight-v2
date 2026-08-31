@@ -82,6 +82,9 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     assert controls["brand_lens"]["values"] == ["open", "closed"]
     assert controls["nationalism_lens"]["values"] == ["us", "cn"]
     assert controls["bulk_action"]["values"] == ["idle", "all", "clear"]
+    assert controls["account_geography"]["values"] == [
+        "none", "country", "hierarchy", "taiwan", "region"
+    ]
 
 
 def test_fixture_digest_and_declared_brands_are_exact() -> None:
@@ -114,4 +117,5 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "mimo-seven-to-one-latest-wins",
         "unsanctioned-only-off-partition",
         "hover-freeze-preserves-brand-and-restores-locale",
+        "guiding-country-taiwan-region-stay-distinct",
     }

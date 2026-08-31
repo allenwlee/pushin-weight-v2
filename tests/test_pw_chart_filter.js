@@ -847,6 +847,26 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(cards.headline.items.children[1].getAttribute('data-pw-verified-at') ===
     '2026-08-10T20:34:00+00:00',
     'each card retains the exact absolute verification timestamp');
+  const firstHeadline = cards.headline.items.children[0].children[1];
+  const firstDisclosure = firstHeadline.children[0];
+  const firstSecondary = cards.headline.items.children[0].children[2];
+  const firstSecondaryCopy = firstSecondary.children[0];
+  assert(firstDisclosure.textContent === 'more' &&
+    firstDisclosure.getAttribute('aria-expanded') === 'false',
+    'replacement headlines start behind one collapsed more control');
+  assert(firstSecondary.hidden && firstSecondary.children.length === 1,
+    'replacement secondary copy starts hidden without a second hide control');
+  assert(firstSecondaryCopy.getAttribute('role') === null &&
+    firstSecondaryCopy.getAttribute('tabindex') === null,
+    'replacement secondary copy remains plain selectable text');
+  const zhCards = makeSandbox({ locale: 'zh_cn' });
+  zhCards.fetchQueue.push(response(payloadV3(7, ['deepseek'])));
+  zhCards.document.dispatchEvent(
+    new zhCards.sandbox.CustomEvent('pw:filter-change', { detail: {} })
+  );
+  await flush();
+  assert(zhCards.headline.items.children[0].children[1].children[0].textContent === '更多',
+    'replacement headlines use the collapsed zh-CN disclosure label');
   assert(cards.headline.bodyParent.hidden,
     'DTO v3 hides the legacy shared-headline body');
 

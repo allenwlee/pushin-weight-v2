@@ -111,6 +111,7 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
             "feed_text",
             "headline_detail",
             "role_badge",
+            "account_geography",
             "chart_hover_freeze",
             "freeze_point",
         }:
@@ -168,6 +169,33 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert accessibility["headline_expanded"] is True
         assert accessibility["role_badge"] == "staff"
         assert accessibility["role_label"] == "staff"
+    elif invariant_id == "account-geography-agrees":
+        expected_flags = {
+            "none": [],
+            "country": ["US"],
+            "hierarchy": ["CN", "HK"],
+            "taiwan": ["CN"],
+            "region": [],
+        }
+        for kind, flags in expected_flags.items():
+            state = set_control(initial_state(), "account_geography", kind)
+            accessibility = projection(fixture, state)["accessibility"]
+            assert accessibility["account_geography"] == kind
+            assert accessibility["geography_flags"] == flags
+            assert accessibility["geography_uses_tw_flag"] is False
+        official = set_control(initial_state(), "role_badge", "official")
+        official = set_control(official, "account_geography", "country")
+        assert projection(fixture, official)["accessibility"]["metadata_order"] == [
+            "followers", "role-official", "geography"
+        ]
+        staff = set_control(initial_state(), "role_badge", "staff")
+        staff = set_control(staff, "account_geography", "hierarchy")
+        assert projection(fixture, staff)["accessibility"]["metadata_order"] == [
+            "followers", "geography", "role-staff"
+        ]
+        taiwan_zh = set_control(initial_state(), "locale", "zh_cn")
+        taiwan_zh = set_control(taiwan_zh, "account_geography", "taiwan")
+        assert projection(fixture, taiwan_zh)["accessibility"]["geography_label"] == "台湾"
     elif invariant_id == "hover-freeze-agrees":
         state = set_control(initial_state(), "brands", "qwen")
         state = set_control(state, "sentiment", "negative")
@@ -292,6 +320,23 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         assert released["controls"]["brands"] == ["qwen"]
         assert released["accessibility"]["locale_selected"] == ["en"]
         assert released["network"]["feed_refresh_paused"] is False
+    elif seed_id == "guiding-country-taiwan-region-stay-distinct":
+        hierarchy = projection(
+            fixture,
+            set_control(initial_state(), "account_geography", "hierarchy"),
+        )["accessibility"]
+        taiwan = projection(
+            fixture,
+            set_control(initial_state(), "account_geography", "taiwan"),
+        )["accessibility"]
+        region = projection(
+            fixture,
+            set_control(initial_state(), "account_geography", "region"),
+        )["accessibility"]
+        assert hierarchy["geography_flags"] == ["CN", "HK"]
+        assert taiwan["geography_flags"] == ["CN"]
+        assert taiwan["geography_uses_tw_flag"] is False
+        assert region["geography_flags"] == []
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 
@@ -347,6 +392,10 @@ def _check_ordered(
     elif group_id == "headline-disclosure-order":
         assert observed["accessibility"]["headline_detail"] == last_value(
             "headline_detail"
+        )
+    elif group_id == "geography-presentation-order":
+        assert observed["accessibility"]["account_geography"] == last_value(
+            "account_geography"
         )
     elif group_id == "hover-freeze-state-order":
         assert observed["accessibility"]["chart_hover_freeze"] == last_value(

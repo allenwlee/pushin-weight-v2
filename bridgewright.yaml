@@ -6,6 +6,7 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md
       - docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md
       - docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md
       - docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md
@@ -22,7 +23,7 @@ configuration:
       - monitor/views.py
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md
+    last_approved_contract: docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md
   assurance:
     profile: stateful-ui-assurance/v1
     declaration: tests/fixtures/ui_assurance/declaration.json
@@ -49,6 +50,8 @@ configuration:
       description: Owner-approved bounded feed text, headline disclosure, semantic option icons, account roles, and one-line identity delta.
     - key: production.home.chart-hover-freeze
       description: Owner-approved one-day point freeze, local and Beijing datetime tooltip, brand-only bucket feed, and exact transient-state restoration delta.
+    - key: production.home.feed-country-geography
+      description: Owner-approved normalized account geography, guiding-country hierarchy, Taiwan-neutral signal, and one-button headline disclosure delta.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []

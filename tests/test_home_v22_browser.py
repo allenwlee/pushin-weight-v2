@@ -1999,35 +1999,63 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 page.locator("[data-pw-headline-legacy]").is_hidden()
                             )
                             detail = cards.nth(0).locator("[data-pw-headline-detail]")
+                            sibling_detail = cards.nth(1).locator(
+                                "[data-pw-headline-detail]"
+                            )
                             secondary = cards.nth(0).locator(
                                 "[data-pw-headline-item-secondary]"
                             )
+                            secondary_copy = secondary.locator(
+                                "[data-pw-headline-secondary-copy]"
+                            )
                             self.assertTrue(secondary.is_hidden())
                             self.assertEqual(detail.get_attribute("aria-expanded"), "false")
-                            expected_detail = "详情" if locale == "zh_hans" else "detail"
-                            expected_hide = "收起" if locale == "zh_hans" else "hide"
-                            self.assertEqual(detail.inner_text(), expected_detail)
+                            expected_more = "更多" if locale == "zh_hans" else "more"
+                            expected_less = "收起" if locale == "zh_hans" else "less"
+                            self.assertEqual(detail.inner_text(), expected_more)
+                            self.assertEqual(
+                                page.locator("[data-pw-headline-hide]").count(), 0
+                            )
+                            self.assertIsNone(secondary_copy.get_attribute("role"))
+                            self.assertIsNone(secondary_copy.get_attribute("tabindex"))
+                            self.assertNotEqual(
+                                secondary_copy.evaluate(
+                                    "node => getComputedStyle(node).userSelect"
+                                ),
+                                "none",
+                            )
                             detail.click()
                             self.assertTrue(secondary.is_visible())
                             self.assertEqual(detail.get_attribute("aria-expanded"), "true")
-                            self.assertEqual(
-                                secondary.locator("[data-pw-headline-hide]").inner_text(),
-                                expected_hide,
+                            self.assertEqual(detail.inner_text(), expected_less)
+                            self.assertTrue(
+                                detail.evaluate("node => document.activeElement === node")
                             )
-                            secondary.locator("[data-pw-headline-hide]").click()
+                            self.assertEqual(
+                                sibling_detail.get_attribute("aria-expanded"), "false"
+                            )
+                            page.locator("[data-pw-headline]").screenshot(
+                                path=str(
+                                    artifact_dir
+                                    / f"per-brand-expanded-{locale}.png"
+                                )
+                            )
+                            secondary_copy.click()
+                            self.assertTrue(secondary.is_visible())
+                            self.assertEqual(detail.get_attribute("aria-expanded"), "true")
+                            detail.click()
                             self.assertTrue(secondary.is_hidden())
                             self.assertEqual(detail.get_attribute("aria-expanded"), "false")
-                            self.assertTrue(detail.evaluate("node => document.activeElement === node"))
-                            detail.click()
-                            secondary.click()
+                            self.assertEqual(detail.inner_text(), expected_more)
+                            self.assertTrue(
+                                detail.evaluate("node => document.activeElement === node")
+                            )
+                            detail.press("Enter")
+                            self.assertTrue(secondary.is_visible())
+                            self.assertEqual(detail.inner_text(), expected_less)
+                            detail.press("Space")
                             self.assertTrue(secondary.is_hidden())
-                            self.assertEqual(detail.get_attribute("aria-expanded"), "false")
-                            detail.click()
-                            secondary.locator(
-                                "[data-pw-headline-secondary-copy]"
-                            ).press("Enter")
-                            self.assertTrue(secondary.is_hidden())
-                            self.assertTrue(detail.evaluate("node => document.activeElement === node"))
+                            self.assertEqual(detail.inner_text(), expected_more)
                             detail.click()
                             with page.expect_response(
                                 lambda response: "/chart.html" in response.url
@@ -2045,6 +2073,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 .locator("[data-pw-headline-detail]")
                                 .get_attribute("aria-expanded"),
                                 "false",
+                            )
+                            self.assertEqual(
+                                cards.nth(0)
+                                .locator("[data-pw-headline-detail]")
+                                .inner_text(),
+                                expected_more,
                             )
                             for index in range(2):
                                 bounds = cards.nth(index).bounding_box()

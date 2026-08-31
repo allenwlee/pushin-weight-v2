@@ -95,6 +95,7 @@ class RegressionNet:
         self._check_follower_glyphs(html)
         self._check_feed_row_shape(html)
         self._check_account_geography_contract(html)
+        self._check_headline_disclosure_contract(html)
         self._check_filter_contract(html)
         self._check_chart_contract(html)
         self._check_chart_no_hover_isolate(session)
@@ -537,6 +538,26 @@ class RegressionNet:
         self.assert_("rendered geography kinds are allowlisted",
                      set(wrappers) <= allowed_kinds,
                      f"unexpected kinds: {sorted(set(wrappers) - allowed_kinds)}")
+
+    def _check_headline_disclosure_contract(self, html):
+        """Net H — one reversible, localized headline disclosure."""
+        self.assert_("legacy headline hide control is absent",
+                     "data-pw-headline-hide" not in html,
+                     "headline items must use the adjacent disclosure only")
+        self.assert_("headline secondary copy is not an interactive control",
+                     not re.search(
+                         r'data-pw-headline-secondary-copy[^>]*(?:role="button"|tabindex=)',
+                         html,
+                     ),
+                     "secondary copy must remain plain selectable text")
+        if "data-pw-headline-detail" in html:
+            expected = "更多" if self.locale in {"zh_cn", "zh_hans"} else "more"
+            self.assert_("collapsed headline disclosure uses the locale label",
+                         re.search(
+                             rf'data-pw-headline-detail[^>]*aria-expanded="false"[^>]*>{expected}</button>',
+                             html,
+                         ) is not None,
+                         f"expected collapsed disclosure label {expected!r}")
 
     def _check_filter_contract(self, html):
         # Net C — Filter contract (unchanged wire).

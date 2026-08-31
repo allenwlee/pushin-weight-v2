@@ -48,6 +48,7 @@ def initial_state() -> dict[str, Any]:
         "feed_text": "synthesis_collapsed",
         "headline_detail": "collapsed",
         "role_badge": "none",
+        "account_geography": "none",
         "chart_hover_freeze": "idle",
         "freeze_point": "none",
         "latest_generation": 0,
@@ -79,6 +80,7 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
         "feed_text",
         "headline_detail",
         "role_badge",
+        "account_geography",
         "chart_hover_freeze",
         "freeze_point",
     }:
@@ -167,6 +169,28 @@ def filter_posts(
 
 def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     rows = filter_posts(fixture, state)
+    geography = state["account_geography"]
+    geography_flags = {
+        "none": [],
+        "country": ["US"],
+        "hierarchy": ["CN", "HK"],
+        "taiwan": ["CN"],
+        "region": [],
+    }[geography]
+    geography_labels = {
+        "none": {"en": None, "zh_cn": None},
+        "country": {"en": "United States of America", "zh_cn": "美利坚合众国"},
+        "hierarchy": {"en": "Hong Kong", "zh_cn": "香港"},
+        "taiwan": {"en": "Taiwan", "zh_cn": "台湾"},
+        "region": {"en": "Europe", "zh_cn": "欧洲"},
+    }
+    metadata_order = ["followers"]
+    if state["role_badge"] == "official":
+        metadata_order.append("role-official")
+    if geography != "none":
+        metadata_order.append("geography")
+    if state["role_badge"] in {"staff", "community"}:
+        metadata_order.append(f"role-{state['role_badge']}")
     hover_freeze_active = (
         state["chart_hover_freeze"] == "frozen"
         and int(state["filters"]["window"]) == 1
@@ -186,6 +210,13 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "headline_expanded": state["headline_detail"] == "expanded",
             "role_badge": state["role_badge"],
             "role_label": None if state["role_badge"] == "none" else state["role_badge"],
+            "account_geography": geography,
+            "geography_flags": geography_flags,
+            "geography_label": geography_labels[geography].get(
+                state["locale"], geography_labels[geography]["en"]
+            ),
+            "geography_uses_tw_flag": False,
+            "metadata_order": metadata_order,
             "chart_hover_freeze": state["chart_hover_freeze"],
             "freeze_point": state["freeze_point"],
             "locale_selected": [] if hover_freeze_active else [state["locale"]],

@@ -6,15 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=geography1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=geography-disclosure1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
   <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
   <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=hoverfreeze1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=geography1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=geography-disclosure1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=geography-disclosure1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -290,8 +290,8 @@
                       {% if item.freshness.absolute %}title="{{ item.freshness.absolute }}"{% endif %}
                       aria-label="{{ item.state_label }}{% if item.freshness.absolute %}. {{ item.freshness.absolute }}{% endif %}">{{ item.state_label }}</span>
               </div>
-              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }} <button type="button" class="headline-disclosure" data-pw-headline-detail aria-controls="trend-narrative-{{ forloop.counter }}-detail" aria-expanded="false">{% if is_zh_chrome %}详情{% else %}detail{% endif %}</button></h2>
-              <div class="headline-item-secondary" data-pw-headline-item-secondary id="trend-narrative-{{ forloop.counter }}-detail" hidden><span data-pw-headline-secondary-copy role="button" tabindex="0">{{ item.secondary }}</span> <button type="button" class="headline-disclosure" data-pw-headline-hide>{% if is_zh_chrome %}收起{% else %}hide{% endif %}</button></div>
+              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }} <button type="button" class="headline-disclosure" data-pw-headline-detail aria-controls="trend-narrative-{{ forloop.counter }}-detail" aria-expanded="false">{% if is_zh_chrome %}更多{% else %}more{% endif %}</button></h2>
+              <div class="headline-item-secondary" data-pw-headline-item-secondary id="trend-narrative-{{ forloop.counter }}-detail" hidden><span data-pw-headline-secondary-copy>{{ item.secondary }}</span></div>
             </article>
           {% empty %}
             <p class="headline-empty" data-pw-headline-empty>{{ trend_narrative.body }}</p>

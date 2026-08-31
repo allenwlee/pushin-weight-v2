@@ -1128,6 +1128,14 @@ U5-U9 produced the validated About-user foundation, and the owner accepts U10 as
 - A whole-repository collection attempt reached 509 required PostgreSQL verifications but stopped on two unchanged baseline import errors: `tests/test_brand_search_terms_hybrid.py` expects `_log_brand_search_terms_drift`, and `tests/test_relevance.py` expects `load_filter`. Neither affected module or test differs from the production candidate's base SHA.
 - The external read-only Claude adversarial review timed out without schema-shaped output and was excluded. The inline correctness, project-standards, testing, maintainability, security, performance, data-migration, reliability, agent-native, learnings, and deployment passes found and resolved two release gates: verify the receipt's current snapshot relation, and fail an incomplete full invocation.
 
+## Geography and Feed Implementation Evidence — 2026-09-01
+
+- U11-U13 are checkpointed in commits `e5b75e3`, `f338b0c`, and `f1dc39d`: the typed taxonomy, guarded DB-only reconciliation, and deterministic 215-symbol reference/runtime sprite are complete.
+- U14 is checkpointed in commit `641144f`. Focused geography, serializer, query-count, browser-parity, existing feed/view, and Node formatter verification passed (`32`, `202`, and `89` tests or checks respectively), with no feed DOM reference to `flag-tw`.
+- U15 replaces the two-control headline interaction with one localized `more` / `less` or `更多` / `收起` button. Pointer, Enter, Space, focus, sibling isolation, inert secondary copy, and replacement-reset behavior pass in real Chromium at desktop and 390-pixel mobile widths.
+- The combined Bridgewright declaration validates and prescribes cleanly with 2,919 required obligations. Its affected gate passed (`63` Python tests, `14` browser subtests, and the chart/feed/timezone Node contracts), and fresh expanded/collapsed English and zh-CN screenshots were visually inspected.
+- U16 staging migration, reconciliation, exact-SHA browser assurance, unchanged-SHA production promotion, production reconciliation, and final health verification remain pending.
+
 ---
 
 ## Appendix
