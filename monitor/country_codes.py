@@ -208,10 +208,16 @@ COUNTRY_NAMES: dict[str, str] = {
 COUNTRY_CODES_BY_NAME: dict[str, str] = {
     name: code for code, name in COUNTRY_NAMES.items()
 }
+PROVIDER_COUNTRY_CODES_BY_NAME: dict[str, str] = {
+    'Macedonia': 'MK',
+    'Russian Federation': 'RU',
+    'Turkey': 'TR',
+}
+COUNTRY_CODES_BY_NAME.update(PROVIDER_COUNTRY_CODES_BY_NAME)
 
 
 def normalize_country_code(value: object) -> str | None:
-    """Return a code only for an exact approved code or English name."""
+    """Return a code only for an exact code, canonical name, or provider alias."""
     if not isinstance(value, str):
         return None
     if value in COUNTRY_NAMES:

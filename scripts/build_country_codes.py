@@ -12,6 +12,12 @@ DEFAULT_SOURCE = (
 )
 DEFAULT_OUTPUT = ROOT / "monitor" / "country_codes.py"
 
+PROVIDER_COUNTRY_CODES_BY_NAME = {
+    "Macedonia": "MK",
+    "Russian Federation": "RU",
+    "Turkey": "TR",
+}
+
 
 def render(source: Path) -> str:
     payload = json.loads(source.read_text(encoding="utf-8"))
@@ -23,6 +29,12 @@ def render(source: Path) -> str:
         raise ValueError("country codes must be uppercase alpha-2 values")
     if len({name for _code, name in countries}) != 197:
         raise ValueError("canonical country names must be unique")
+    canonical_codes = dict(countries)
+    canonical_names = {name for _code, name in countries}
+    if not set(PROVIDER_COUNTRY_CODES_BY_NAME.values()) <= set(canonical_codes):
+        raise ValueError("provider country aliases must use approved country codes")
+    if set(PROVIDER_COUNTRY_CODES_BY_NAME) & canonical_names:
+        raise ValueError("provider country aliases must not replace canonical names")
 
     lines = [
         '"""Generated exact country-code map. Do not edit by hand.',
@@ -42,10 +54,21 @@ def render(source: Path) -> str:
             "COUNTRY_CODES_BY_NAME: dict[str, str] = {",
             "    name: code for code, name in COUNTRY_NAMES.items()",
             "}",
+            "PROVIDER_COUNTRY_CODES_BY_NAME: dict[str, str] = {",
+        ]
+    )
+    lines.extend(
+        f"    {name!r}: {code!r},"
+        for name, code in sorted(PROVIDER_COUNTRY_CODES_BY_NAME.items())
+    )
+    lines.extend(
+        [
+            "}",
+            "COUNTRY_CODES_BY_NAME.update(PROVIDER_COUNTRY_CODES_BY_NAME)",
             "",
             "",
             "def normalize_country_code(value: object) -> str | None:",
-            '    """Return a code only for an exact approved code or English name."""',
+            '    """Return a code only for an exact code, canonical name, or provider alias."""',
             "    if not isinstance(value, str):",
             "        return None",
             "    if value in COUNTRY_NAMES:",

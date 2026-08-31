@@ -222,6 +222,28 @@ def test_unsupported_country_stores_exact_value_without_code():
 
 
 @pytest.mark.parametrize(
+    ("provider_name", "expected_code"),
+    [
+        ("Turkey", "TR"),
+        ("Russian Federation", "RU"),
+        ("Macedonia", "MK"),
+    ],
+)
+def test_provider_country_alias_derives_country_code(provider_name, expected_code):
+    payload = _complete_payload()
+    payload["data"]["about_profile"]["account_based_in"] = provider_name
+    observation = parse_user_about(
+        payload,
+        expected_author_id="42",
+        observed_at=datetime(2026, 8, 29, tzinfo=UTC),
+    )
+
+    assert observation.candidates["account_based_in"] == provider_name
+    assert observation.candidates["country_code"] == expected_code
+    assert "country_code" in observation.present_fields
+
+
+@pytest.mark.parametrize(
     "mutate",
     [
         lambda payload: payload["data"].__setitem__("surprise", "drift"),
