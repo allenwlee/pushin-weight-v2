@@ -559,6 +559,7 @@
     if (region && chartIn(region) === canvas) {
       region.setAttribute('data-pw-chart-granularity', granularity);
     }
+    var compactPublicOneDay = granularity === 'minute' && isPublicHomeRegion(region);
     var prior = Chart.getChart(canvas);
     if (prior) prior.destroy();
 
@@ -574,8 +575,8 @@
         type: 'line',
         borderColor: stroke,
         backgroundColor: stroke,
-        borderWidth: 2,
-        pointRadius: granularity === 'minute' ? 1.5 : 0,
+        borderWidth: compactPublicOneDay ? 4 / 3 : 2,
+        pointRadius: compactPublicOneDay ? 1 : (granularity === 'minute' ? 1.5 : 0),
         pointHitRadius: granularity === 'minute' ? 8 : 0,
         tension: granularity === 'minute' ? 0.3 : 0,
         fill: false,

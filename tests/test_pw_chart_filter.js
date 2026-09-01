@@ -38,7 +38,7 @@ function payload(windowDays, count, pulseName) {
     stacked: { qwen: {} },
     colors: { qwen: '#f97316' },
     totals: { qwen: count },
-    granularity: 'minute',
+    granularity: windowDays === 1 ? 'minute' : 'day',
     window_days: windowDays,
     computed_at: computedAt,
     pulse: {
@@ -542,6 +542,13 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   }));
   const axis = makeSandbox({ initial: oneDay });
   const scales = axis.charts[0].config.options.scales;
+  const oneDayTotal = axis.charts[0].config.data.datasets[0];
+  assert(oneDayTotal.borderWidth === 4 / 3,
+    'one-day total-series stroke is reduced by exactly one third');
+  assert(oneDayTotal.pointRadius === 1,
+    'one-day total-series point radius is reduced by exactly one third');
+  assert(oneDayTotal.pointHitRadius === 8,
+    'one-day point hit radius remains unchanged');
   assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xComparison', 'y']),
     '1d config creates local, comparison, and y scales');
   assert(scales.x.position === 'bottom' && scales.xComparison.position === 'bottom',
@@ -626,6 +633,9 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'California fall-back keeps 24 real tick instants while suppressing odd-hour labels');
 
   const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen') });
+  const sevenDayTotal = sevenDay.charts[0].config.data.datasets[0];
+  assert(sevenDayTotal.borderWidth === 2 && sevenDayTotal.pointRadius === 0,
+    'non-one-day total-series stroke and point radius remain unchanged');
   assert(JSON.stringify(Object.keys(sevenDay.charts[0].config.options.scales).sort()) === JSON.stringify(['x', 'y']),
     'non-1d config keeps the existing single date axis');
 
@@ -1019,6 +1029,9 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
 
   console.log('--- /internal fallback keeps one canvas lifecycle ---');
   const internal = makeSandbox({ legacy: true });
+  const internalTotal = internal.charts[0].config.data.datasets[0];
+  assert(internalTotal.borderWidth === 2 && internalTotal.pointRadius === 1.5,
+    'one-day sizing delta is confined to the public homepage');
   internal.fetchQueue.push(response(payload(1, 2, 'internal')));
   internal.document.dispatchEvent(new internal.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
   await flush();

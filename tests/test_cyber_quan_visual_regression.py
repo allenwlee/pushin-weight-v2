@@ -145,7 +145,7 @@ def _icon_mask(page: Page) -> bytes:
 
 
 def _release_a_mask(page: Page) -> bytes:
-    """Mask only the later owner-approved feed/headline usability surfaces."""
+    """Mask only later owner-approved feed, headline, and chart surfaces."""
     data_url = page.evaluate(
         """() => {
           const canvas = document.createElement('canvas');
@@ -155,7 +155,7 @@ def _release_a_mask(page: Page) -> bytes:
           context.fillStyle = '#000';
           context.fillRect(0, 0, canvas.width, canvas.height);
           context.fillStyle = '#fff';
-          document.querySelectorAll('.headline-strip, .feed-strip').forEach(node => {
+          document.querySelectorAll('.headline-strip, .feed-strip, canvas.home-chart').forEach(node => {
             const rect = node.getBoundingClientRect();
             context.fillRect(
               Math.floor(rect.left - 3),

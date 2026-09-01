@@ -14,6 +14,8 @@ PULSE_FEED_TIMEZONE_CONTRACT = "docs/reference/2026-08-26-202742-pulse-feed-time
 CYBER_QUAN_CONTRACT = "docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md"
 FEED_HEADLINE_CONTRACT = "docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md"
 HOVER_FREEZE_CONTRACT = "docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
+GEOGRAPHY_CONTRACT = "docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
+FEED_INSPECTION_CONTRACT = "docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -22,7 +24,9 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == HOVER_FREEZE_CONTRACT
+    assert authorities["last_approved_contract"] == FEED_INSPECTION_CONTRACT
+    assert FEED_INSPECTION_CONTRACT in authorities["approved_product_intent"]
+    assert GEOGRAPHY_CONTRACT in authorities["approved_product_intent"]
     assert HOVER_FREEZE_CONTRACT in authorities["approved_product_intent"]
     assert FEED_HEADLINE_CONTRACT in authorities["approved_product_intent"]
     assert CYBER_QUAN_CONTRACT in authorities["approved_product_intent"]
@@ -65,6 +69,14 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.chart-hover-freeze",
             "description": "Owner-approved one-day point freeze, local and Beijing datetime tooltip, brand-only bucket feed, and exact transient-state restoration delta.",
+        },
+        {
+            "key": "production.home.feed-country-geography",
+            "description": "Owner-approved normalized account geography, guiding-country hierarchy, Taiwan-neutral signal, and one-button headline disclosure delta.",
+        },
+        {
+            "key": "production.home.feed-inspection-pagination",
+            "description": "Owner-approved feed inspection, X-only navigation, language and region projection, flag-tree hierarchy, one-day chart sizing, and window-complete pagination delta.",
         },
         {
             "key": "trend.headline",
@@ -154,3 +166,12 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "browser-local datetime" in hover_freeze_contract
     assert "preserves the active brand selection" in hover_freeze_contract
     assert "7-, 30-, and 365-day charts" in hover_freeze_contract
+
+    feed_inspection_contract = (
+        REPO_ROOT / FEED_INSPECTION_CONTRACT
+    ).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in feed_inspection_contract
+    assert "staging delivery only" in feed_inspection_contract
+    assert "only control that opens the exact original post" in feed_inspection_contract
+    assert "no cumulative 500-row ceiling" in feed_inspection_contract
+    assert "stroke `4 / 3`" in feed_inspection_contract

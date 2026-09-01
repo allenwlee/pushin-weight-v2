@@ -17,12 +17,13 @@
        data-post-types="{{ row.post_type_keys|join:',' }}"
        data-nat-cn="{{ row.nat_cn|default:'' }}"
        data-nat-us="{{ row.nat_us|default:'' }}"
+       data-signal-inspections="{{ row.signal_inspections_json }}"
        data-unsanctioned="{{ row.unsanctioned|yesno:'1,' }}"
        data-enrichment-status="{{ row.enrichment_status|default:'succeeded' }}"
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
-        <div class="follower-lead follower-bin-{{ row.follower_bin }}">
+        <div class="follower-lead follower-bin-{{ row.follower_bin }}{% if row.account.role or row.account.geography %} has-account-metadata{% endif %}">
           <div class="follower-magnitude" role="img" aria-label="{{ row.followers_label }}" title="{{ row.followers_label }}">
             <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
             <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
@@ -34,8 +35,6 @@
             {% if row.account.geography %}{% include "monitor/_account_geography.html" with geography=row.account.geography %}{% endif %}
             {% if row.account.role %}
               <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
-            {% elif not row.account.geography %}
-              <span class="account-role is-empty" aria-hidden="true"></span>
             {% endif %}
           {% endif %}
         </div>
@@ -58,6 +57,7 @@
             </span>
           </div>
           <div class="text" data-text-cycle role="button" tabindex="0"
+               data-language-display="{{ row.language_display }}"
                data-commentary-zh-cn="{{ row.commentary_zh_cn|default:'' }}"
                data-commentary-en="{{ row.commentary_en|default:'' }}"
                data-literal-cn="{{ row.text_zh_cn|default:'' }}"
@@ -65,30 +65,31 @@
                data-text-source="{{ row.text_original|default:row.text }}">
             {% if is_zh_chrome %}
               {% if row.commentary_zh_cn %}
-                <span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
               {% elif row.text_zh_cn %}
-                <span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
               {% else %}
-                <span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
               {% endif %}
             {% elif active_locale == 'original' %}
-              {{ row.text_original|default:row.text|default:'NULL' }}
+              <span class="post-language-tag">{{ row.language_display }}</span>{{ row.text_original|default:row.text|default:'NULL' }}
             {% elif row.commentary_en %}
-              <span class="text-layer-tag">synthesis</span>{{ row.commentary_en }}
+              <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">synthesis</span>{{ row.commentary_en }}
             {% elif row.text_en %}
-              <span class="text-layer-tag">en</span>{{ row.text_en }}
+              <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">en</span>{{ row.text_en }}
             {% else %}
-              {{ row.text_original|default:row.text|default:'NULL' }}
+              <span class="post-language-tag">{{ row.language_display }}</span>{{ row.text_original|default:row.text|default:'NULL' }}
             {% endif %}
           </div>
           <div class="engagement">
             <span class="likes"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>{{ row.engagement_pretty.likes }}</span>
             <span class="rts"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-repost"></use></svg>{{ row.engagement_pretty.retweets }}</span>
             <span class="replies"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-reply"></use></svg>{{ row.engagement_pretty.replies }}</span>
+            <a class="feed-x-link" href="https://x.com/i/web/status/{{ row.tweet_id }}" target="_blank" rel="noopener noreferrer" aria-label="{% if is_zh_chrome %}在 X 查看原帖{% else %}Open original post on X{% endif %}"><svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg></a>
           </div>
         </div>
       </div>
-      <div class="feed-signals" aria-hidden="true">
+      <div class="feed-signals">
         <div class="sig-row sig-sentiment" data-sig-sentiment></div>
         <div class="sig-row sig-post-type" data-sig-post-type></div>
         <div class="sig-row sig-nat" data-sig-nat></div>

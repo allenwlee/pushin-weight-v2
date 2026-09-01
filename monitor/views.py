@@ -11,8 +11,11 @@ are progressively enhanced.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
+import re
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
@@ -22,9 +25,7 @@ from time import monotonic
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.core.signing import salted_hmac
 from django.db.models import (
     Count,
@@ -45,12 +46,10 @@ from django.utils.translation import gettext, override
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
+from core.classification_labels import CLASSIFICATION_LABELS
 from core.models import (
-    Account,
     Brand,
     BrandAccount,
-    BrandCompany,
-    Company,
     Country,
     CountryLabel,
     DiscourseLabel,
@@ -201,6 +200,37 @@ _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
     "other": "其他",
 }
 
+_COMPACT_LANG_NAMES_ZH_CN: dict[str, str] = {
+    "ar": "阿拉伯语",
+    "cs": "捷克语",
+    "da": "丹麦语",
+    "de": "德语",
+    "el": "希腊语",
+    "en": "英语",
+    "es": "西班牙语",
+    "fa": "波斯语",
+    "fi": "芬兰语",
+    "fr": "法语",
+    "he": "希伯来语",
+    "hi": "印地语",
+    "hu": "匈牙利语",
+    "id": "印度尼西亚语",
+    "it": "意大利语",
+    "ja": "日语",
+    "ko": "韩语",
+    "nl": "荷兰语",
+    "no": "挪威语",
+    "pl": "波兰语",
+    "pt": "葡萄牙语",
+    "ro": "罗马尼亚语",
+    "ru": "俄语",
+    "sv": "瑞典语",
+    "th": "泰语",
+    "tr": "土耳其语",
+    "uk": "乌克兰语",
+    "vi": "越南语",
+}
+
 # Presentation-only V22 lens. Brand has no open/closed schema field, and these
 # four settled provider nicknames are the authored closed-model tier.
 _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
@@ -235,8 +265,9 @@ HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; in
 HOME_WINDOW_DEFAULT_BEFORE: int = 7  # pinned for Net B regression (BEFORE value, not used in code)
 HOME_WINDOW_COOKIE: str = "home_window"
 
-FEED_HARD_CAP: int = 500
 FEED_DEFAULT_LIMIT: int = 50
+FEED_REQUEST_MAX: int = 100
+BRAND_CHART_ROW_LIMIT: int = 500
 
 _HOME_PULSE_CACHE_TTL_SECONDS = 60.0
 _HOME_PULSE_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
@@ -338,7 +369,6 @@ _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
 _ZHCN_LANG_CODES: tuple[str, ...] = ("zh-cn", "zh_cn", "zh-hans")
 _EN_LANG_CODES: tuple[str, ...] = ("en",)
 
-
 def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     """Return the ordered tuple of lang codes to try for a display locale.
 
@@ -366,8 +396,9 @@ def _localize_classification_value(
         `_build_label_cache`. Pre-fetched for the whole request so the
         loop below stays O(1) per call.
 
-    Returns the resolved label, or the raw key on miss. Returns None
-    when `key` is None/empty so the caller can skip emission.
+    Returns the resolved label, the canonical fallback label, or a humanized
+    English key on an unknown miss. Returns None when `key` is None/empty so
+    the caller can skip emission.
     """
     if not key:
         return None
@@ -380,6 +411,12 @@ def _localize_classification_value(
         cached = label_cache.get((family, key, lang))
         if cached:
             return cached
+    display_locale = "zh-cn" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "en"
+    canonical = CLASSIFICATION_LABELS.get(family, {}).get(key, {})
+    if canonical.get(display_locale):
+        return canonical[display_locale]
+    if display_locale == "en":
+        return key.replace("_", " ").replace("-", " ").title()
     return key
 
 
@@ -869,6 +906,69 @@ def _geography_accessible_label(label: str, locale: str) -> str:
         }
 
 
+def _compact_language_display(lang_detected: str | None, locale: str) -> str:
+    """Project persisted language metadata without guessing from post text."""
+
+    normalized = (lang_detected or "").strip().replace("_", "-").casefold()
+    use_zh = _is_zh_locale(locale)
+    if not normalized:
+        return "未检测" if use_zh else "undetected"
+    if normalized == "other":
+        return "其他" if use_zh else "other"
+    if normalized in {"und", "unknown", "undetected"}:
+        return "未检测" if use_zh else "undetected"
+
+    primary = normalized.split("-", 1)[0]
+    if not re.fullmatch(r"[a-z]{2}", primary):
+        return "其他" if use_zh else "other"
+    if not use_zh:
+        return primary
+    if normalized in {"zh-hant", "zh-tw", "zh-hk", "zh-mo"}:
+        return "繁体中文"
+    if primary == "zh":
+        return "简体中文"
+    return _COMPACT_LANG_NAMES_ZH_CN.get(primary, "其他")
+
+
+_LEADING_REGION_COMPOUND_DIRECTION = re.compile(
+    r"^(north(?:ern)?|south(?:ern)?)[ -]?(east(?:ern)?|west(?:ern)?)(?:[ -]+)?",
+    re.IGNORECASE,
+)
+_LEADING_REGION_SINGLE_DIRECTION = re.compile(
+    r"^(north(?:ern)?|south(?:ern)?|east(?:ern)?|west(?:ern)?)(?:[ -]+)?",
+    re.IGNORECASE,
+)
+
+
+def _compact_region_label(label: str, locale: str) -> str:
+    """Abbreviate only the leading direction in English region display text."""
+
+    if _is_zh_locale(locale):
+        return label
+
+    compound = _LEADING_REGION_COMPOUND_DIRECTION.match(label)
+    if compound:
+        first = "N" if compound.group(1).casefold().startswith("north") else "S"
+        second = "E" if compound.group(2).casefold().startswith("east") else "W"
+        return f"{first}{second} {label[compound.end():]}".rstrip()
+
+    single = _LEADING_REGION_SINGLE_DIRECTION.match(label)
+    if single:
+        direction = {
+            "north": "N",
+            "south": "S",
+            "east": "E",
+            "west": "W",
+        }
+        stem = next(
+            abbreviation
+            for prefix, abbreviation in direction.items()
+            if single.group(1).casefold().startswith(prefix)
+        )
+        return f"{stem} {label[single.end():]}".rstrip()
+    return label
+
+
 def _region_geography_wire(
     labels: dict[str, str],
     locale: str,
@@ -882,7 +982,7 @@ def _region_geography_wire(
         "label": label,
         "accessible_label": accessible_label,
         "flags": [],
-        "text": label,
+        "text": _compact_region_label(label, locale),
         "relationship_type": "",
     }
 
@@ -1053,6 +1153,83 @@ def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, 
     return result
 
 
+def _feed_signal_inspections(
+    classifications: dict[str, dict[str, Any]],
+    brands: list[dict[str, Any]],
+    locale: str,
+    *,
+    unsanctioned: bool,
+) -> dict[str, dict[str, list[dict[str, str]]]]:
+    """Keep every brand contributor behind each deduplicated visual signal."""
+
+    use_zh = _is_zh_locale(locale)
+    family_labels = {
+        "sentiment": "情感" if use_zh else "Sentiment",
+        "post_type": "帖子类型" if use_zh else "Post Type",
+        "nat_cn": "中国民族主义" if use_zh else "China Nationalism",
+        "nat_us": "美国民族主义" if use_zh else "U.S. Nationalism",
+    }
+    brand_names: dict[str, str] = {}
+    for brand in brands:
+        nickname = str(brand.get("nickname") or "")
+        if not nickname:
+            continue
+        if use_zh:
+            name = brand.get("display_name_zh_cn") or brand.get("display_name")
+        else:
+            name = brand.get("display_name_en") or brand.get("display_name")
+        brand_names[nickname] = str(name or nickname)
+
+    result: dict[str, dict[str, list[dict[str, str]]]] = {
+        "sentiment": {},
+        "post_type": {},
+        "nat_cn": {},
+        "nat_us": {},
+        "unsanctioned": {},
+    }
+
+    def append_entry(family: str, key: str, nickname: str, value: str) -> None:
+        brand = brand_names.get(nickname, nickname)
+        separator = "：" if use_zh else ": "
+        text = f"{brand} {family_labels[family]}{separator}{value}"
+        result[family].setdefault(key, []).append({
+            "brand": brand,
+            "value": value,
+            "text": text,
+        })
+
+    for nickname, classification in classifications.items():
+        for item in classification.get("sentiments") or []:
+            if isinstance(item, dict) and item.get("key"):
+                append_entry(
+                    "sentiment", str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
+        for item in classification.get("post_types") or []:
+            if isinstance(item, dict) and item.get("key"):
+                append_entry(
+                    "post_type", str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
+        for family, field_name in (
+            ("nat_cn", "cn_nationalism"),
+            ("nat_us", "us_nationalism"),
+        ):
+            item = classification.get(field_name)
+            if isinstance(item, dict) and item.get("key") and item["key"] != "none":
+                append_entry(
+                    family, str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
+
+    if unsanctioned:
+        text = "非官方发布" if use_zh else "Unsanctioned"
+        result["unsanctioned"]["true"] = [
+            {"brand": "", "value": text, "text": text}
+        ]
+    return result
+
+
 def _v22_feed_display_fields(
     classifications: dict[str, dict[str, Any]],
     *,
@@ -1124,6 +1301,19 @@ def _post_to_wire(
     brand_nicknames: list[str] = []
     brands_wire: list[dict[str, Any]] = []
     classifications: dict[str, dict[str, Any]] = {}
+    cls_by_brand = enriched.get("classifications_by_brand", {}) if enriched else {}
+    label_cache = (
+        enriched.get("label_cache_by_locale", {}).get(locale, {})
+        if enriched
+        else {}
+    )
+
+    def _labelize(family: str, key: str | None) -> dict[str, str] | None:
+        label = _localize_classification_value(family, key, locale, label_cache)
+        if not key:
+            return None
+        return {"key": key, "label": label if label is not None else key}
+
     for pb in post.brands.all():
         nick = pb.brand.nickname
         brand_nicknames.append(nick)
@@ -1138,19 +1328,7 @@ def _post_to_wire(
         # Each value is reshaped into {key, label} so the JS / template
         # can render the localized label while preserving the raw DB key
         # for tooling / debug.
-        cls_by_brand = enriched.get("classifications_by_brand", {}) if enriched else {}
         cls = cls_by_brand.get(nick, {})
-        label_cache = (
-            enriched.get("label_cache_by_locale", {}).get(locale, {})
-            if enriched else {}
-        )
-
-        def _labelize(family: str, key: str | None) -> dict[str, str] | None:
-            label = _localize_classification_value(family, key, locale, label_cache)
-            if not key:
-                return None
-            return {"key": key, "label": label if label is not None else key}
-
         classifications[nick] = {
             "discourse": [
                 v for v in (
@@ -1253,12 +1431,19 @@ def _post_to_wire(
         reply_count=post.reply_count,
         author_handle=post.author_handle,
     )
+    signal_inspections = _feed_signal_inspections(
+        classifications,
+        brands_wire,
+        locale,
+        unsanctioned=unsanctioned,
+    )
 
     return {
         "tweet_id": post.tweet_id,
         "created_at": created_at_raw,
         "created_at_iso": created_at_iso,
         "lang_detected": post.lang_detected,
+        "language_display": _compact_language_display(post.lang_detected, locale),
         "text": text_original,
         "text_original": text_original,
         "text_translated": text_translated,
@@ -1274,6 +1459,10 @@ def _post_to_wire(
         "brands": brands_wire,
         "brand_nicknames": brand_nicknames,
         "classifications": classifications,
+        "signal_inspections": signal_inspections,
+        "signal_inspections_json": json.dumps(
+            signal_inspections, ensure_ascii=False, separators=(",", ":")
+        ),
         "unsanctioned": unsanctioned,
         "enrichment_status": enrichment_status,
         "enrichment_status_label": _enrichment_status_label(
@@ -1493,9 +1682,19 @@ def _enrich_posts_with_classifications(
                 row["brand_nicknames"].append(nick)
             row["brands"].append({
                 "nickname": nick,
-                "display_name": MODEL_DISPLAY_NAMES.get(nick, nick),
-                "display_name_en": MODEL_DISPLAY_NAMES.get(nick, nick),
-                "display_name_zh_cn": MODEL_DISPLAY_NAMES.get(nick, nick),
+                "display_name": (
+                    pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick)
+                ),
+                "display_name_en": (
+                    pb.brand.display_name_en
+                    or pb.brand.display_name
+                    or MODEL_DISPLAY_NAMES.get(nick, nick)
+                ),
+                "display_name_zh_cn": (
+                    pb.brand.display_name_zh_cn
+                    or pb.brand.display_name
+                    or MODEL_DISPLAY_NAMES.get(nick, nick)
+                ),
             })
 
             cls_data: dict[str, Any] = {
@@ -1565,7 +1764,7 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key in (
         "brands", "discourse", "post_types", "role", "lang", "sentiment",
-        "cn_nationalism", "us_nationalism",
+        "cn_nationalism", "us_nationalism", "country", "region",
     ):
         v = request.GET.get(key)
         if v:
@@ -1625,7 +1824,7 @@ def _parse_hover_freeze_range(
 
 _HOME_MULTI_VALUE_FILTERS: tuple[str, ...] = (
     "brands", "discourse", "post_types", "role", "lang", "sentiment",
-    "cn_nationalism", "us_nationalism",
+    "cn_nationalism", "us_nationalism", "country", "region",
 )
 
 
@@ -1782,12 +1981,22 @@ def _filter_home_posts_queryset(
     normalized_filters: dict[str, Any],
     *,
     now: datetime,
+    queryset: QuerySet | None = None,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
 ) -> QuerySet:
     """Return the bounded, set-based Post queryset shared by chart aggregation."""
-    queryset = Post.objects.filter(
-        created_at__gte=now - timedelta(days=window_days),
-        created_at__lt=now,
-    )
+    queryset = queryset if queryset is not None else Post.objects.all()
+    if created_at_start is not None or created_at_end is not None:
+        if created_at_start is not None:
+            queryset = queryset.filter(created_at__gte=created_at_start)
+        if created_at_end is not None:
+            queryset = queryset.filter(created_at__lt=created_at_end)
+    else:
+        queryset = queryset.filter(
+            created_at__gte=now - timedelta(days=window_days),
+            created_at__lt=now,
+        )
 
     relation_filters = {
         "brands": "brands__brand_id__in",
@@ -1815,6 +2024,21 @@ def _filter_home_posts_queryset(
             queryset = queryset.filter(condition)
         else:
             queryset = queryset.filter(**{lookup: active})
+
+    active_countries = normalized_filters.get("country")
+    if active_countries is not None and active_countries != "__all__":
+        if not active_countries:
+            return queryset.none()
+        queryset = queryset.filter(author__country_id__in=active_countries)
+
+    active_regions = normalized_filters.get("region")
+    if active_regions is not None and active_regions != "__all__":
+        if not active_regions:
+            return queryset.none()
+        queryset = queryset.filter(
+            Q(author__based_in_region_id__in=active_regions)
+            | Q(author__country__region_mapping__region_id__in=active_regions)
+        )
 
     active_discourse = normalized_filters.get("discourse")
     if active_discourse is not None and active_discourse != "__all__":
@@ -2330,26 +2554,12 @@ def home(request: HttpRequest) -> HttpResponse:
         # Keep all server projections on the same already-resolved window.
         initial_filters["window"] = window_days
 
-    # Get recent posts with brand associations for feed
-    feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
-    enriched = _enrich_posts_with_classifications(
-        feed_posts, include_geography=True
+    feed_rows, feed_cursor, feed_has_more, _normalized_feed_filters = _feed_page_wire(
+        locale=locale,
+        window_days=window_days,
+        filters=initial_filters,
+        include_geography=True,
     )
-    enriched_map = {e["tweet_id"]: e for e in enriched}
-    matching_ids = {
-        post["tweet_id"] for post in enriched
-        if _post_matches_filter(post, initial_filters)
-    }
-    feed_rows = [
-        _post_to_wire(
-            p,
-            locale,
-            enriched_map.get(p.tweet_id),
-            active_brand_scope=initial_filters["brands"],
-            include_geography=True,
-        )
-        for p in feed_posts if p.tweet_id in matching_ids
-    ]
 
     # Initial chart payload so the canvas renders on first load (no placeholder flash)
     initial_chart_payload = _build_home_chart_payload(
@@ -2372,7 +2582,11 @@ def home(request: HttpRequest) -> HttpResponse:
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
         "applied_filters_json": json.dumps(initial_filters),
-        "feed": {"rows": feed_rows, "next_cursor": None},
+        "feed": {
+            "rows": feed_rows,
+            "next_cursor": feed_cursor,
+            "has_more": feed_has_more,
+        },
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
         "home_window_days": window_days,
@@ -2409,13 +2623,11 @@ def home_internal(request: HttpRequest) -> HttpResponse:
     brands_data = _build_brands_context()
     brand_nicknames = [b["nickname"] for b in brands_data]
 
-    feed_posts = _get_feed_posts(window_days=window_days, limit=FEED_DEFAULT_LIMIT)
-    enriched = _enrich_posts_with_classifications(feed_posts)
-    enriched_map = {e["tweet_id"]: e for e in enriched}
-    feed_rows = [
-        _post_to_wire(p, locale, enriched_map.get(p.tweet_id))
-        for p in feed_posts
-    ]
+    feed_rows, feed_cursor, feed_has_more, _normalized_feed_filters = _feed_page_wire(
+        locale=locale,
+        window_days=window_days,
+        filters={"unsanctioned": "any"},
+    )
 
     initial_chart_payload = _build_home_chart_payload(window_days, {})
     initial_chart_payload["applied_filters"] = {}
@@ -2425,7 +2637,11 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         "brand_count": len(brands_data),
         "brand_nicknames_json": json.dumps(brand_nicknames),
         "applied_filters_json": json.dumps({}),
-        "feed": {"rows": feed_rows, "next_cursor": None},
+        "feed": {
+            "rows": feed_rows,
+            "next_cursor": feed_cursor,
+            "has_more": feed_has_more,
+        },
         "active_locale": locale,
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
@@ -2458,15 +2674,12 @@ def brand_home(
     except Brand.DoesNotExist:
         raise Http404("Brand not found")
 
-    # Get posts for this brand
-    feed_posts = _get_feed_posts(
+    feed_rows, feed_cursor, feed_has_more, _normalized_feed_filters = _feed_page_wire(
+        locale=locale,
         window_days=window_days,
+        filters={"unsanctioned": "any"},
         brand_nickname=brand,
-        limit=FEED_DEFAULT_LIMIT,
     )
-    enriched = _enrich_posts_with_classifications(feed_posts, brand_nickname=brand)
-    enriched_map = {e["tweet_id"]: e for e in enriched}
-    feed_rows = [_post_to_wire(p, locale, enriched_map.get(p.tweet_id)) for p in feed_posts]
 
     display_name = brand_obj.display_name or MODEL_DISPLAY_NAMES.get(brand, brand)
     accent_color = brand_obj.accent_color or MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
@@ -2483,7 +2696,11 @@ def brand_home(
             "accent_color": accent_color,
         },
         "brand_id": brand,
-        "feed": {"rows": feed_rows, "next_cursor": None},
+        "feed": {
+            "rows": feed_rows,
+            "next_cursor": feed_cursor,
+            "has_more": feed_has_more,
+        },
         "active_locale": locale,
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
@@ -2525,32 +2742,6 @@ def _decode_cursor(cursor: str | None) -> tuple[str, str] | None:
     if not iso or not tweet_id:
         return None
     return iso.strip(), tweet_id.strip()
-
-
-def _encode_cursor(created_at: str, tweet_id: str) -> str:
-    """Encode a (created_at, tweet_id) pair as a cursor string."""
-    return f"{created_at}|{tweet_id}"
-
-
-def _post_passes_cursor(
-    post: dict[str, Any],
-    cursor_pair: tuple[str, str],
-    order: str,
-) -> bool:
-    """Check whether a post dict should be included given the cursor.
-
-    For desc: return posts with (created_at, tweet_id) < cursor.
-    For asc:  return posts with (created_at, tweet_id) > cursor.
-    """
-    p_iso = post.get("created_at") or ""
-    p_tweet = post.get("tweet_id") or ""
-    if not p_iso or not p_tweet:
-        return False
-    cur_iso, cur_tweet = cursor_pair
-    if order == "desc":
-        return (p_iso, p_tweet) < (cur_iso, cur_tweet)
-    else:
-        return (p_iso, p_tweet) > (cur_iso, cur_tweet)
 
 
 def _serialize_feed_row(
@@ -2631,12 +2822,22 @@ def _serialize_feed_row(
         reply_count=post.get("reply_count"),
         author_handle=post.get("author_handle"),
     )
+    unsanctioned = post.get("unsanctioned", False)
+    signal_inspections = _feed_signal_inspections(
+        classifications,
+        post.get("brands", []),
+        locale,
+        unsanctioned=unsanctioned,
+    )
 
     return {
         "tweet_id": post["tweet_id"],
         "created_at": post.get("created_at"),
         "created_at_iso": post.get("created_at"),
         "lang_detected": post.get("lang_detected"),
+        "language_display": _compact_language_display(
+            post.get("lang_detected"), locale
+        ),
         "text": text_original,
         "text_original": text_original,
         "text_translated": text_translated,
@@ -2651,7 +2852,11 @@ def _serialize_feed_row(
         "brands": post.get("brands", []),
         "brand_nicknames": post.get("brand_nicknames", []),
         "classifications": classifications,
-        "unsanctioned": post.get("unsanctioned", False),
+        "signal_inspections": signal_inspections,
+        "signal_inspections_json": json.dumps(
+            signal_inspections, ensure_ascii=False, separators=(",", ":")
+        ),
+        "unsanctioned": unsanctioned,
         "enrichment_status": post.get(
             "enrichment_status", PostEnrichmentState.Status.SUCCEEDED
         ),
@@ -2669,76 +2874,189 @@ def _serialize_feed_row(
 # ============================================================================
 
 
-def _paginate_feed(
-    posts: list[dict[str, Any]],
+_FEED_CURSOR_VERSION = 2
+
+
+def _encode_feed_cursor(post: Post, *, sort: str, order: str) -> str:
+    """Return an opaque cursor bound to the active sort contract."""
+    if sort == "like_count":
+        value: str | int = int(post.like_count or 0)
+    else:
+        value = post.created_at.isoformat() if post.created_at else ""
+    payload = json.dumps(
+        {
+            "v": _FEED_CURSOR_VERSION,
+            "sort": sort,
+            "order": order,
+            "value": value,
+            "tweet_id": post.tweet_id,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_feed_cursor(
+    cursor: str | None,
     *,
-    cursor: str | None = None,
+    sort: str,
+    order: str,
+) -> tuple[Any, str] | None:
+    """Decode a current cursor, accepting legacy created-at cursors safely."""
+    if not cursor:
+        return None
+    try:
+        padding = "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode((cursor + padding).encode("ascii"))
+        payload = json.loads(raw.decode("utf-8"))
+    except (
+        ValueError,
+        TypeError,
+        UnicodeDecodeError,
+        UnicodeEncodeError,
+        binascii.Error,
+    ):
+        payload = None
+    if isinstance(payload, dict):
+        if (
+            payload.get("v") != _FEED_CURSOR_VERSION
+            or payload.get("sort") != sort
+            or payload.get("order") != order
+            or not isinstance(payload.get("tweet_id"), str)
+            or not payload["tweet_id"]
+        ):
+            return None
+        raw_value = payload.get("value")
+        if sort == "like_count":
+            if isinstance(raw_value, bool) or not isinstance(raw_value, int):
+                return None
+            return raw_value, payload["tweet_id"]
+        if not isinstance(raw_value, str):
+            return None
+        parsed = parse_datetime(raw_value)
+        if parsed is None or not django_timezone.is_aware(parsed):
+            return None
+        return parsed, payload["tweet_id"]
+
+    if sort != "created_at":
+        return None
+    legacy = _decode_cursor(cursor)
+    if legacy is None:
+        return None
+    parsed = parse_datetime(legacy[0])
+    if parsed is None or not django_timezone.is_aware(parsed):
+        return None
+    return parsed, legacy[1]
+
+
+def _feed_page_posts(
+    *,
+    window_days: int,
+    filters: dict[str, Any],
+    sort: str,
+    order: str,
+    cursor: str | None,
+    limit: int,
+    brand_nickname: str | None = None,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
+    now: datetime | None = None,
+) -> tuple[list[Post], str | None, bool, dict[str, Any]]:
+    """Return one filtered database page plus a server-owned continuation."""
+    normalized = _normalize_home_filters(filters)
+    if brand_nickname:
+        normalized["brands"] = [brand_nickname]
+    current = now or django_timezone.now()
+    terminal_state = Q(
+        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    eligible = Post.objects.filter(persisted_output_complete_q()).filter(
+        Q(enrichment_state__isnull=True) | terminal_state
+    )
+    queryset = _filter_home_posts_queryset(
+        window_days,
+        normalized,
+        now=current,
+        queryset=eligible,
+        created_at_start=created_at_start,
+        created_at_end=created_at_end,
+    )
+
+    sort_field = "created_at"
+    if sort == "like_count":
+        queryset = queryset.annotate(_feed_sort_value=Coalesce("like_count", 0))
+        sort_field = "_feed_sort_value"
+
+    decoded = _decode_feed_cursor(cursor, sort=sort, order=order)
+    if decoded is not None:
+        value, tweet_id = decoded
+        comparison = "lt" if order == "desc" else "gt"
+        queryset = queryset.filter(
+            Q(**{f"{sort_field}__{comparison}": value})
+            | Q(**{sort_field: value, f"tweet_id__{comparison}": tweet_id})
+        )
+
+    prefix = "-" if order == "desc" else ""
+    bounded = max(1, min(int(limit), FEED_REQUEST_MAX))
+    page_with_lookahead = list(
+        queryset.select_related("author")
+        .prefetch_related(
+            Prefetch("brands", queryset=PostBrand.objects.select_related("brand"))
+        )
+        .order_by(f"{prefix}{sort_field}", f"{prefix}tweet_id")[: bounded + 1]
+    )
+    has_more = len(page_with_lookahead) > bounded
+    page = page_with_lookahead[:bounded]
+    next_cursor = (
+        _encode_feed_cursor(page[-1], sort=sort, order=order)
+        if page and has_more
+        else None
+    )
+    return page, next_cursor, has_more, normalized
+
+
+def _feed_page_wire(
+    *,
+    locale: str,
+    window_days: int,
+    filters: dict[str, Any],
     sort: str = _FEED_DEFAULT_SORT,
     order: str = _FEED_DEFAULT_ORDER,
+    cursor: str | None = None,
     limit: int = FEED_DEFAULT_LIMIT,
-    offset: int = 0,
-) -> tuple[list[dict[str, Any]], str | None, bool]:
-    """Paginate a list of enriched+filtered post dicts.
-
-    Returns (page, next_cursor, has_more).
-
-    Cursor-based pagination is used for sort=created_at (the default).
-    For sort=like_count, falls back to offset-based pagination because
-    the DOM cursor is always built from created_at|tweet_id.
-
-    Args:
-        posts: list of enriched post dicts, already sorted and filtered.
-        cursor: raw cursor string from query param (may be None/malformed).
-        sort: "created_at" or "like_count".
-        order: "asc" or "desc".
-        limit: page size.
-        offset: fallback offset for like_count sort.
-    """
-    cursor_pair = _decode_cursor(cursor) if cursor else None
-
-    if sort == "like_count" or cursor_pair is None:
-        # Offset-based fallback
-        page = posts[offset:offset + limit]
-        has_more = (offset + limit) < len(posts)
-        next_cursor: str | None = None
-        if page and has_more:
-            # Even in offset mode, provide a cursor so pw-feed.js can
-            # read it from the last DOM row on the next scroll event.
-            last = page[-1]
-            if last.get("created_at") and last.get("tweet_id"):
-                next_cursor = _encode_cursor(last["created_at"], last["tweet_id"])
-        return page, next_cursor, has_more
-
-    # Cursor-based pagination for created_at sort
-    rows: list[dict[str, Any]] = []
-    had_more_after = False
-
-    for p in posts:
-        if len(rows) >= limit:
-            # Page is full; scan one more eligible post to determine has_more.
-            if _post_passes_cursor(p, cursor_pair, order):
-                had_more_after = True
-                break
-            continue
-
-        if not _post_passes_cursor(p, cursor_pair, order):
-            continue
-
-        rows.append(p)
-
-    # has_more: true only when we scanned past a full page and found at
-    # least one more eligible post.  When the loop exits naturally with
-    # had_more_after=False, we either never filled the page (ran out of
-    # data) or filled it on the last post (no more to scan).
-    has_more = had_more_after
-
-    next_cursor: str | None = None
-    if rows and has_more:
-        last = rows[-1]
-        if last.get("created_at") and last.get("tweet_id"):
-            next_cursor = _encode_cursor(last["created_at"], last["tweet_id"])
-
-    return rows, next_cursor, has_more
+    brand_nickname: str | None = None,
+    include_geography: bool = False,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
+) -> tuple[list[dict[str, Any]], str | None, bool, dict[str, Any]]:
+    posts, next_cursor, has_more, normalized = _feed_page_posts(
+        window_days=window_days,
+        filters=filters,
+        sort=sort,
+        order=order,
+        cursor=cursor,
+        limit=limit,
+        brand_nickname=brand_nickname,
+        created_at_start=created_at_start,
+        created_at_end=created_at_end,
+    )
+    enriched = _enrich_posts_with_classifications(
+        posts,
+        brand_nickname=brand_nickname,
+        include_geography=include_geography,
+    )
+    rows = [
+        _serialize_feed_row(
+            post,
+            locale,
+            active_brand_scope=normalized.get("brands", "__all__"),
+            include_geography=include_geography,
+        )
+        for post in enriched
+    ]
+    return rows, next_cursor, has_more, normalized
 
 
 def home_feed_json(request: HttpRequest) -> JsonResponse:
@@ -2774,12 +3092,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
         limit = int(request.GET.get("limit", FEED_DEFAULT_LIMIT))
     except ValueError:
         limit = FEED_DEFAULT_LIMIT
-    limit = min(limit, FEED_HARD_CAP)
-
-    try:
-        offset = int(request.GET.get("offset", 0))
-    except ValueError:
-        offset = 0
+    limit = max(1, min(limit, FEED_REQUEST_MAX))
 
     # Validate sort / order
     if sort not in _FEED_SORT_COLUMNS:
@@ -2787,53 +3100,19 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    # Get all posts in the window
-    all_posts = _get_feed_posts(
-        window_days=None if freeze_range is not None else window_days,
+    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+        locale=locale,
+        window_days=window_days,
+        filters=filters,
         brand_nickname=brand_nickname,
-        limit=FEED_HARD_CAP,
-        created_at_start=freeze_range[0] if freeze_range is not None else None,
-        created_at_end=freeze_range[1] if freeze_range is not None else None,
-    )
-
-    # Enrich with classifications for filtering
-    enriched = _enrich_posts_with_classifications(
-        all_posts,
-        brand_nickname=brand_nickname,
-        include_geography=True,
-    )
-
-    # Apply filters
-    filtered = [p for p in enriched if _post_matches_filter(p, filters)]
-
-    # Sort in memory (DB already returns -created_at for default)
-    if sort == "like_count":
-        filtered.sort(key=lambda p: p.get("like_count", 0), reverse=(order == "desc"))
-    else:
-        # created_at: DB already returns desc; reverse to asc if needed
-        if order == "asc":
-            filtered.reverse()
-
-    # Paginate
-    page, next_cursor, has_more = _paginate_feed(
-        filtered,
         cursor=cursor,
         sort=sort,
         order=order,
         limit=limit,
-        offset=offset,
+        include_geography=True,
+        created_at_start=freeze_range[0] if freeze_range is not None else None,
+        created_at_end=freeze_range[1] if freeze_range is not None else None,
     )
-
-    normalized_filters = _normalize_home_filters(filters)
-    rows = [
-        _serialize_feed_row(
-            post,
-            locale,
-            active_brand_scope=normalized_filters.get("brands", "__all__"),
-            include_geography=True,
-        )
-        for post in page
-    ]
 
     return JsonResponse({
         "rows": rows,
@@ -2868,12 +3147,7 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         limit = int(request.GET.get("limit", FEED_DEFAULT_LIMIT))
     except ValueError:
         limit = FEED_DEFAULT_LIMIT
-    limit = min(limit, FEED_HARD_CAP)
-
-    try:
-        offset = int(request.GET.get("offset", 0))
-    except ValueError:
-        offset = 0
+    limit = max(1, min(limit, FEED_REQUEST_MAX))
 
     # Validate sort / order
     if sort not in _FEED_SORT_COLUMNS:
@@ -2881,43 +3155,16 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    all_posts = _get_feed_posts(
+    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+        locale=locale,
         window_days=window_days,
+        filters=filters,
         brand_nickname=brand_nickname,
-        limit=FEED_HARD_CAP,
-    )
-    enriched = _enrich_posts_with_classifications(
-        all_posts, brand_nickname=brand_nickname,
-    )
-
-    filtered = [p for p in enriched if _post_matches_filter(p, filters)]
-
-    # Sort in memory
-    if sort == "like_count":
-        filtered.sort(key=lambda p: p.get("like_count", 0), reverse=(order == "desc"))
-    else:
-        if order == "asc":
-            filtered.reverse()
-
-    # Paginate
-    page, next_cursor, has_more = _paginate_feed(
-        filtered,
         cursor=cursor,
         sort=sort,
         order=order,
         limit=limit,
-        offset=offset,
     )
-
-    normalized_filters = _normalize_home_filters(filters)
-    rows = [
-        _serialize_feed_row(
-            post,
-            locale,
-            active_brand_scope=normalized_filters.get("brands", "__all__"),
-        )
-        for post in page
-    ]
 
     return JsonResponse({
         "rows": rows,
@@ -2981,7 +3228,7 @@ def _build_brand_chart_payload(
     posts = _get_feed_posts(
         window_days=window_days,
         brand_nickname=brand_nickname,
-        limit=FEED_HARD_CAP,
+        limit=BRAND_CHART_ROW_LIMIT,
     )
     enriched = _enrich_posts_with_classifications(posts, brand_nickname=brand_nickname)
     filtered = [p for p in enriched if _post_matches_filter(p, filters)]

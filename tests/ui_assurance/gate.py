@@ -23,6 +23,7 @@ FOCUSED_TESTS = [
     "tests/test_cyber_quan_visual_regression.py",
     "tests/test_trend_narrative_projection_fallback_names.py",
     "tests/test_feed_geography.py",
+    "tests/test_views.py::TestFeedViewIntegration::test_filtered_feed_and_cursor_chain_are_complete_beyond_500",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_account_geography_matches_initial_and_replacement_feed_in_both_locales",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_feed_metadata_projection_has_a_bounded_query_count",

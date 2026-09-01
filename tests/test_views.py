@@ -1,10 +1,4 @@
-"""Tests for monitor/views.py — cursor pagination, sort, feed serialization (U2).
-
-Focuses on the pure helpers (_decode_cursor, _encode_cursor,
-_post_passes_cursor, _paginate_feed, _serialize_feed_row) which can be
-tested without a database.  Integration tests for the full view are
-marked with @pytest.mark.django_db.
-"""
+"""Tests for monitor/views.py cursor compatibility and feed serialization."""
 
 from __future__ import annotations
 
@@ -13,17 +7,11 @@ import pytest
 from monitor.views import (
     MODEL_DISPLAY_NAMES,
     _decode_cursor,
-    _encode_cursor,
     _feed_tint_class,
     _follower_bin,
-    _paginate_feed,
     _partition_home_brands,
-    _post_passes_cursor,
     _serialize_feed_row,
     _parse_filters_from_request,
-    _FEED_DEFAULT_SORT,
-    _FEED_DEFAULT_ORDER,
-    FEED_DEFAULT_LIMIT,
 )
 
 
@@ -57,30 +45,8 @@ def _make_post(tweet_id: str, created_at: str, like_count: int = 0, **kw) -> dic
     return d
 
 
-def _make_posts(n: int, *, base_tweet_id: str = "100", start_iso: str = "2026-07-20T10:00:00") -> list[dict]:
-    """Build n posts with descending created_at and ascending tweet_id.
-
-    The timestamps step backward by 1 minute each, and tweet_ids
-    increment.  This ensures (created_at, tweet_id) tuples are unique
-    and the descending sort is stable.
-    """
-    from datetime import datetime, timedelta, timezone
-
-    base = datetime.fromisoformat(start_iso).replace(tzinfo=timezone.utc)
-    posts = []
-    for i in range(n):
-        dt = base - timedelta(minutes=i)
-        tid = str(int(base_tweet_id) + i)
-        posts.append(_make_post(
-            tweet_id=tid,
-            created_at=dt.isoformat(),
-            like_count=n - i,  # descending likes: newest has highest
-        ))
-    return posts
-
-
 # ============================================================================
-# _decode_cursor / _encode_cursor
+# Legacy cursor compatibility
 # ============================================================================
 
 
@@ -105,201 +71,6 @@ class TestDecodeCursor:
     def test_empty_parts(self):
         assert _decode_cursor("|12345") is None
         assert _decode_cursor("2026-07-20|") is None
-
-
-class TestEncodeCursor:
-    def test_roundtrip(self):
-        original = ("2026-07-20T10:00:00+00:00", "1234567890123456789")
-        encoded = _encode_cursor(*original)
-        assert _decode_cursor(encoded) == original
-
-    def test_simple(self):
-        assert _encode_cursor("2026-07-20T10:00:00Z", "100") == "2026-07-20T10:00:00Z|100"
-
-
-# ============================================================================
-# _post_passes_cursor
-# ============================================================================
-
-
-class TestPostPassesCursor:
-    def test_desc_newer_than_cursor_is_blocked(self):
-        """For desc, posts newer than or equal to cursor are blocked."""
-        post = _make_post("200", "2026-07-20T10:00:00+00:00")
-        cursor = ("2026-07-20T09:00:00+00:00", "200")
-        # post cursor > reference cursor, so it should be blocked (desc wants <)
-        assert not _post_passes_cursor(post, cursor, "desc")
-
-    def test_desc_older_than_cursor_passes(self):
-        """For desc, posts older than cursor pass."""
-        post = _make_post("200", "2026-07-20T09:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert _post_passes_cursor(post, cursor, "desc")
-
-    def test_desc_same_created_at_but_lower_tweet_id_passes(self):
-        """Tie-break on tweet_id: lower tweet_id is older, should pass for desc."""
-        post = _make_post("199", "2026-07-20T10:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        # (same_iso, 199) < (same_iso, 200) → passes
-        assert _post_passes_cursor(post, cursor, "desc")
-
-    def test_desc_same_created_at_same_tweet_id_blocked(self):
-        """Exact match is blocked (strict <, not <=)."""
-        post = _make_post("200", "2026-07-20T10:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert not _post_passes_cursor(post, cursor, "desc")
-
-    def test_asc_older_than_cursor_blocked(self):
-        post = _make_post("200", "2026-07-20T09:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert not _post_passes_cursor(post, cursor, "asc")
-
-    def test_asc_newer_than_cursor_passes(self):
-        post = _make_post("200", "2026-07-20T11:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert _post_passes_cursor(post, cursor, "asc")
-
-    def test_asc_same_created_at_higher_tweet_id_passes(self):
-        post = _make_post("201", "2026-07-20T10:00:00+00:00")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert _post_passes_cursor(post, cursor, "asc")
-
-    def test_missing_created_at_fails(self):
-        post = _make_post("200", "")
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert not _post_passes_cursor(post, cursor, "desc")
-
-    def test_missing_tweet_id_fails(self):
-        post = {"tweet_id": "", "created_at": "2026-07-20T10:00:00+00:00"}
-        cursor = ("2026-07-20T10:00:00+00:00", "200")
-        assert not _post_passes_cursor(post, cursor, "desc")
-
-
-# ============================================================================
-# _paginate_feed
-# ============================================================================
-
-
-class TestPaginateFeed:
-    def test_first_page_no_cursor_returns_first_n(self):
-        posts = _make_posts(25)
-        page, cursor, has_more = _paginate_feed(posts, cursor=None, limit=10)
-        assert len(page) == 10
-        assert page[0]["tweet_id"] == "100"  # newest first
-        assert cursor is not None
-        assert has_more is True
-
-    def test_first_page_next_cursor_is_last_row(self):
-        posts = _make_posts(25)
-        page, cursor, has_more = _paginate_feed(posts, cursor=None, limit=10)
-        last = page[-1]
-        expected = _encode_cursor(last["created_at"], last["tweet_id"])
-        assert cursor == expected
-
-    def test_second_page_no_overlap_with_first(self):
-        posts = _make_posts(25)
-        page1, cursor1, _ = _paginate_feed(posts, cursor=None, limit=10)
-        page2, cursor2, _ = _paginate_feed(posts, cursor=cursor1, limit=10)
-
-        ids1 = {r["tweet_id"] for r in page1}
-        ids2 = {r["tweet_id"] for r in page2}
-        assert ids1.isdisjoint(ids2), "pages must not overlap"
-        # page2 should have older posts (higher tweet_id numbers)
-        assert all(
-            r["tweet_id"] not in ids1 for r in page2
-        ), "no duplicate tweet_ids across pages"
-
-    def test_last_page_has_more_false(self):
-        posts = _make_posts(12)
-        page, cursor, has_more = _paginate_feed(posts, cursor=None, limit=10)
-        assert len(page) == 10
-        assert has_more is True
-        assert cursor is not None
-
-        page2, cursor2, has_more2 = _paginate_feed(posts, cursor=cursor, limit=10)
-        assert len(page2) == 2
-        assert has_more2 is False
-        assert cursor2 is None
-
-    def test_cursor_pagination_asc_order(self):
-        posts = _make_posts(25)
-        # Reverse to asc (oldest first)
-        posts_asc = list(reversed(posts))
-        page1, cursor1, has_more1 = _paginate_feed(
-            posts_asc, cursor=None, sort="created_at", order="asc", limit=10,
-        )
-        assert len(page1) == 10
-        assert has_more1 is True
-        # First page should have the oldest posts (highest tweet_ids)
-        assert page1[0]["tweet_id"] == "124"
-
-        page2, cursor2, has_more2 = _paginate_feed(
-            posts_asc, cursor=cursor1, sort="created_at", order="asc", limit=10,
-        )
-        assert len(page2) == 10
-        # No overlap
-        ids1 = {r["tweet_id"] for r in page1}
-        ids2 = {r["tweet_id"] for r in page2}
-        assert ids1.isdisjoint(ids2)
-
-    def test_like_count_sort_uses_offset_fallback(self):
-        posts = _make_posts(25)
-        # like_count desc: newest posts have highest like_count
-        page1, cursor1, has_more1 = _paginate_feed(
-            posts, cursor=None, sort="like_count", order="desc", limit=10,
-        )
-        assert len(page1) == 10
-        assert has_more1 is True
-        # Verify descending like_count: first should be highest
-        assert page1[0]["like_count"] >= page1[-1]["like_count"]
-
-        # Even with a cursor, like_count should still use offset (cursor ignored)
-        page2, _, _ = _paginate_feed(
-            posts, cursor=cursor1, sort="like_count", order="desc", limit=10, offset=10,
-        )
-        assert len(page2) == 10
-
-    def test_invalid_cursor_graceful_degradation(self):
-        """Malformed cursor should return first page (offset=0)."""
-        posts = _make_posts(25)
-        page, cursor, has_more = _paginate_feed(
-            posts, cursor="garbage", sort="created_at", order="desc", limit=10,
-        )
-        # garbage → decode fails → cursor_pair=None → offset fallback at offset=0
-        assert len(page) == 10
-        # Should be the first page (newest posts)
-        assert page[0]["tweet_id"] == "100"
-
-    def test_limit_zero_returns_empty(self):
-        posts = _make_posts(25)
-        page, cursor, has_more = _paginate_feed(posts, cursor=None, limit=0)
-        assert len(page) == 0
-
-    def test_empty_posts(self):
-        page, cursor, has_more = _paginate_feed([], cursor=None, limit=10)
-        assert len(page) == 0
-        assert cursor is None
-        assert has_more is False
-
-    def test_exact_page_size_fills_no_more(self):
-        """When posts exactly fill the page, has_more should be False."""
-        posts = _make_posts(5)
-        page, cursor, has_more = _paginate_feed(posts, cursor=None, limit=5)
-        assert len(page) == 5
-        assert has_more is False
-        assert cursor is None
-
-    def test_offset_fallback_with_explicit_offset(self):
-        posts = _make_posts(25)
-        page, _, _ = _paginate_feed(
-            posts, cursor=None, sort="like_count", order="desc", limit=10, offset=10,
-        )
-        assert len(page) == 10
-        # Should skip first 10
-        all_ids = {p["tweet_id"] for p in posts}
-        page_ids = {p["tweet_id"] for p in page}
-        remaining = all_ids - page_ids
-        assert len(remaining) == 15
 
 
 # ============================================================================
@@ -383,7 +154,7 @@ class TestSerializeFeedRow:
         row = _serialize_feed_row(post, "en")
         assert "deepseek" in row["classifications"]
         assert row["classifications"]["deepseek"]["discourse"] == [
-            {"key": "genuine_hype", "label": "genuine_hype"},
+            {"key": "genuine_hype", "label": "Genuine Hype"},
         ]
 
     def test_v22_display_contract_includes_signal_and_tint_fields(self):
@@ -788,13 +559,103 @@ class TestFeedViewIntegration:
         resp = client.get("/feed/?brand=nonexistent&limit=5")
         assert resp.status_code == 200
 
-    def test_feed_with_invalid_limit_clamps_to_hard_cap(self, client, django_user_model):
+    def test_feed_with_invalid_limit_clamps_to_request_max(self, client, django_user_model):
         user = django_user_model.objects.create_user(
             username="testuser5", password="pass",
         )
         client.force_login(user)
         resp = client.get("/feed/?limit=9999")
         assert resp.status_code == 200
-        # Should not return more than FEED_HARD_CAP (500)
+        # One response stays bounded even though total traversal has no ceiling.
         data = resp.json()
-        assert len(data["rows"]) <= 500
+        assert len(data["rows"]) <= 100
+
+    def test_filtered_feed_and_cursor_chain_are_complete_beyond_500(self, client):
+        """The real route must filter before slicing and exhaust the full window."""
+        import json
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import Brand, Post, PostBrand
+
+        now = timezone.now()
+        filler = Brand.objects.create(nickname="pagination-filler", display_name="Filler")
+        target = Brand.objects.create(nickname="pagination-target", display_name="Target")
+        complete = {
+            "text": "source",
+            "text_en": "translation",
+            "text_zh_cn": "翻译",
+            "commentary_en": "commentary",
+            "commentary_zh_cn": "评论",
+            "lang_detected": "en",
+        }
+        posts = [
+            Post(
+                tweet_id=f"pagination-{index:04d}",
+                created_at=now - timedelta(seconds=1),
+                like_count=625 - index,
+                **complete,
+            )
+            for index in range(625)
+        ]
+        Post.objects.bulk_create(posts)
+        PostBrand.objects.bulk_create([
+            PostBrand(
+                post=post,
+                brand=target if index == 0 else filler,
+            )
+            for index, post in enumerate(posts)
+        ])
+
+        selective = client.get(
+            "/feed/",
+            {
+                "limit": 50,
+                "window": 7,
+                "filters": json.dumps({"brands": [target.nickname], "window": 7}),
+            },
+            secure=True,
+        ).json()
+        assert [row["tweet_id"] for row in selective["rows"]] == ["pagination-0000"]
+
+        seen: list[str] = []
+        cursor = None
+        while True:
+            params = {"limit": 50, "window": 7}
+            if cursor:
+                params["cursor"] = cursor
+            payload = client.get("/feed/", params, secure=True).json()
+            seen.extend(row["tweet_id"] for row in payload["rows"])
+            cursor = payload["next_cursor"]
+            if not payload["has_more"]:
+                break
+
+        expected = [post.tweet_id for post in reversed(posts)]
+        assert seen == expected
+        assert len(seen) == len(set(seen)) == 625
+
+        Post.objects.filter(tweet_id__startswith="pagination-").update(like_count=7)
+        for order in ("asc", "desc"):
+            like_seen: list[str] = []
+            cursor = None
+            while True:
+                params = {
+                    "limit": 50,
+                    "window": 7,
+                    "sort": "like_count",
+                    "order": order,
+                }
+                if cursor:
+                    params["cursor"] = cursor
+                payload = client.get("/feed/", params, secure=True).json()
+                like_seen.extend(row["tweet_id"] for row in payload["rows"])
+                cursor = payload["next_cursor"]
+                if not payload["has_more"]:
+                    break
+
+            expected_likes = sorted(
+                (post.tweet_id for post in posts), reverse=order == "desc"
+            )
+            assert like_seen == expected_likes
+            assert len(like_seen) == len(set(like_seen)) == 625

@@ -6,6 +6,8 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
+      - docs/ideation/2026-09-01-112352-country-flag-svg-reference.html
       - docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md
       - docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md
       - docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md
@@ -23,7 +25,7 @@ configuration:
       - monitor/views.py
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md
+    last_approved_contract: docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
   assurance:
     profile: stateful-ui-assurance/v1
     declaration: tests/fixtures/ui_assurance/declaration.json
@@ -52,6 +54,8 @@ configuration:
       description: Owner-approved one-day point freeze, local and Beijing datetime tooltip, brand-only bucket feed, and exact transient-state restoration delta.
     - key: production.home.feed-country-geography
       description: Owner-approved normalized account geography, guiding-country hierarchy, Taiwan-neutral signal, and one-button headline disclosure delta.
+    - key: production.home.feed-inspection-pagination
+      description: Owner-approved feed inspection, X-only navigation, language and region projection, flag-tree hierarchy, one-day chart sizing, and window-complete pagination delta.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []

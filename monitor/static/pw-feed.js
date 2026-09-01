@@ -13,7 +13,6 @@
 (function () {
   'use strict';
 
-  var HARD_CAP = 500;     // mirror _FEED_HARD_CAP from the data layer
   var BATCH = 50;
   var REFRESH_MS = 60_000;
   var FETCH_TIMEOUT_MS = 15_000;
@@ -128,6 +127,7 @@
     div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
     div.setAttribute('data-nat-cn', row.nat_cn || '');
     div.setAttribute('data-nat-us', row.nat_us || '');
+    div.setAttribute('data-signal-inspections', JSON.stringify(row.signal_inspections || {}));
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
     div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
     div.setAttribute('data-tint', tint);
@@ -182,7 +182,7 @@
     var account = row.account || {};
     var role = account.role || '';
     if (['official', 'staff', 'community'].indexOf(role) === -1) {
-      return '<span class="account-role is-empty" aria-hidden="true"></span>';
+      return '';
     }
     var label = account.role_label || role;
     return '<span class="account-role role-' + role + '" role="img"' +
@@ -231,24 +231,31 @@
 
     var content = '';
     flags.forEach(function (flag, index) {
-      content += '<span class="account-geography-flag" title="' +
-        escapeHtml(flag.label) + '">' +
+      if (kind === 'hierarchy' && index > 0) {
+        content += '<span class="account-geography-elbow" aria-hidden="true"></span>';
+      }
+      content += '<button type="button" class="account-geography-flag pw-inspection-trigger' +
+        (kind === 'hierarchy' ? (index === 0 ? ' is-parent' : ' is-child') : '') + '"' +
+        ' data-pw-inspection="' + escapeHtml(flag.label) + '"' +
+        ' aria-label="' + escapeHtml(flag.label) + '" aria-expanded="false">' +
         '<svg class="account-country-flag" viewBox="0 0 16 9"' +
         ' preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">' +
-        '<use href="#' + flag.symbolId + '"></use></svg></span>';
-      if (index < flags.length - 1 || text) {
-        content += '<span class="account-geography-connector" aria-hidden="true">›</span>';
+        '<use href="#' + flag.symbolId + '"></use></svg></button>';
+      if (kind === 'taiwan' && text) {
+        content += '<span class="account-geography-connector" aria-hidden="true"></span>';
       }
     });
     if (text) {
-      content += '<span class="account-geography-text" title="' +
-        escapeHtml(label) + '">' + escapeHtml(text) + '</span>';
+      content += '<button type="button" class="account-geography-text pw-inspection-trigger"' +
+        ' data-pw-inspection="' + escapeHtml(label) + '"' +
+        ' aria-label="' + escapeHtml(label) + '" aria-expanded="false">' +
+        escapeHtml(text) + '</button>';
     }
     return '<span class="account-geography geography-' + kind + '"' +
       ' data-geography-kind="' + kind + '"' +
       (relationship ? ' data-geography-relationship="' + escapeHtml(relationship) + '"' : '') +
-      ' role="img" aria-label="' + escapeHtml(accessibleLabel) + '"' +
-      ' title="' + escapeHtml(accessibleLabel) + '">' + content + '</span>';
+      ' role="group" aria-label="' + escapeHtml(accessibleLabel) + '">' +
+      content + '</span>';
   }
 
   function accountLeadMetadataHtml(row) {
@@ -287,6 +294,8 @@
     var commentaryEn = row.commentary_en || '';
     var literalCnText = row.text_zh_cn || '';
     var englishText = row.text_en || '';
+    var languageDisplay = row.language_display || 'undetected';
+    var leadMetadata = accountLeadMetadataHtml(row);
     var locale = currentLocale();
     var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
       ? (commentaryZhCn || literalCnText || sourceText)
@@ -296,7 +305,8 @@
     return (
       '<div class="feed-row-shell ' + escapeHtml(tint) + '">' +
         '<div class="feed-main">' +
-          '<div class="follower-lead follower-bin-' + followerClass + '">' +
+          '<div class="follower-lead follower-bin-' + followerClass +
+            (leadMetadata ? ' has-account-metadata' : '') + '">' +
             '<div class="follower-magnitude" role="img"' +
               ' aria-label="' + escapeHtml(followersLabel) + '"' +
               ' title="' + escapeHtml(followersLabel) + '">' +
@@ -305,7 +315,7 @@
               '</span>' +
               '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
             '</div>' +
-            accountLeadMetadataHtml(row) +
+            leadMetadata +
           '</div>' +
           '<div class="body">' +
             '<div class="head">' +
@@ -313,21 +323,31 @@
               '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + '</span>' +
             '</div>' +
             '<div class="text" data-text-cycle role="button" tabindex="0"' +
+              ' data-language-display="' + escapeHtml(languageDisplay) + '"' +
               ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
               ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
               ' data-literal-cn="' + escapeHtml(literalCnText) + '"' +
               ' data-text-en="' + escapeHtml(englishText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
+              '<span class="post-language-tag">' + escapeHtml(languageDisplay) + '</span>' +
               escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
               '<span class="likes">' + renderIcon('icon-heart', 'engagement-icon') + escapeHtml(eng.likes || '') + '</span>' +
               '<span class="rts">' + renderIcon('icon-repost', 'engagement-icon') + escapeHtml(eng.retweets || '') + '</span>' +
               '<span class="replies">' + renderIcon('icon-reply', 'engagement-icon') + escapeHtml(eng.replies || '') + '</span>' +
+              '<a class="feed-x-link" href="https://x.com/i/web/status/' +
+                encodeURIComponent(row.tweet_id || '') + '" target="_blank"' +
+                ' rel="noopener noreferrer" aria-label="' +
+                escapeHtml((locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans')
+                  ? '在 X 查看原帖' : 'Open original post on X') + '">' +
+                '<svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+                  '<path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path>' +
+                '</svg></a>' +
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="feed-signals" aria-hidden="true">' +
+        '<div class="feed-signals">' +
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
           '<div class="sig-row sig-nat" data-sig-nat></div>' +
@@ -367,6 +387,31 @@
       : '';
     return symbolId ? renderIcon(symbolId, className + (tone ? ' ' + tone : '')) : '';
   }
+  function signalInspections(row) {
+    var raw = row.getAttribute('data-signal-inspections') || '{}';
+    try {
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+  function signalInspectionText(inspections, family, key) {
+    var familyEntries = inspections[family];
+    var entries = familyEntries && familyEntries[key];
+    if (!Array.isArray(entries)) return '';
+    return entries.map(function (entry) {
+      return entry && typeof entry.text === 'string' ? entry.text : '';
+    }).filter(Boolean).join('\n');
+  }
+  function inspectionTriggerHtml(content, inspection, className) {
+    if (!content) return '';
+    if (!inspection) return content;
+    return '<button type="button" class="pw-inspection-trigger ' +
+      escapeHtml(className || '') + '" data-pw-inspection="' +
+      escapeHtml(inspection) + '" aria-label="' + escapeHtml(inspection) +
+      '" aria-expanded="false">' + content + '</button>';
+  }
   function paintSignals(row) {
     var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
     var types = uniqueInOrder(parseListAttr(row.getAttribute('data-post-types')), TYPE_ORDER);
@@ -374,16 +419,25 @@
     var natUs = (row.getAttribute('data-nat-us') || '').trim();
     var showCn = natCn && natCn !== 'none';
     var showUs = natUs && natUs !== 'none';
+    var inspections = signalInspections(row);
     var elS = row.querySelector('[data-sig-sentiment]');
     if (elS) {
       elS.innerHTML = sents.map(function (key) {
-        return semanticIcon('sentiment', key, 'signal-icon');
+        return inspectionTriggerHtml(
+          semanticIcon('sentiment', key, 'signal-icon'),
+          signalInspectionText(inspections, 'sentiment', key),
+          'signal-inspection-trigger'
+        );
       }).join('');
     }
     var elT = row.querySelector('[data-sig-post-type]');
     if (elT) {
       elT.innerHTML = types.map(function (key) {
-        return semanticIcon('post_types', key, 'signal-icon');
+        return inspectionTriggerHtml(
+          semanticIcon('post_types', key, 'signal-icon'),
+          signalInspectionText(inspections, 'post_type', key),
+          'signal-inspection-trigger'
+        );
       }).join('');
     }
     var elN = row.querySelector('[data-sig-nat]');
@@ -392,13 +446,19 @@
       else {
         elN.classList.remove('is-empty');
         var regions = (showCn
-          ? '<span class="nationalism-region nationalism-cn">' +
-              renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b></span>'
+          ? inspectionTriggerHtml(
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b>',
+              signalInspectionText(inspections, 'nat_cn', natCn),
+              'signal-inspection-trigger nationalism-region nationalism-cn'
+            )
           : '') + (showUs
-          ? '<span class="nationalism-region nationalism-us">' +
-              renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b></span>'
+          ? inspectionTriggerHtml(
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b>',
+              signalInspectionText(inspections, 'nat_us', natUs),
+              'signal-inspection-trigger nationalism-region nationalism-us'
+            )
           : '');
-        elN.innerHTML = '<span class="sig-nat-prefix">' +
+        elN.innerHTML = '<span class="sig-nat-prefix" aria-hidden="true">' +
           renderIcon('icon-discourse', 'signal-icon') + ':</span>' + regions;
       }
     }
@@ -408,7 +468,11 @@
       var isUn = uns === '1' || uns === 'true' || uns === 'yes';
       if (isUn) {
         elU.classList.remove('is-empty');
-        elU.innerHTML = renderIcon('icon-unsanctioned', 'signal-icon tone-negative');
+        elU.innerHTML = inspectionTriggerHtml(
+          renderIcon('icon-unsanctioned', 'signal-icon tone-negative'),
+          signalInspectionText(inspections, 'unsanctioned', 'true'),
+          'signal-inspection-trigger'
+        );
       }
       else      { elU.textContent = ''; elU.classList.add('is-empty'); }
     }
@@ -416,6 +480,124 @@
   function paintAllSignals(root) {
     if (!root) return;
     $$('.feed-row[data-pw-feed-row]', root).forEach(paintSignals);
+  }
+
+  var inspectionPopover = null;
+
+  function createInspectionPopoverController() {
+    var popover = document.createElement('div');
+    popover.id = 'pw-feed-inspection-popover';
+    popover.className = 'pw-feed-inspection-popover';
+    popover.setAttribute('role', 'tooltip');
+    popover.hidden = true;
+    document.body.appendChild(popover);
+    var activeTrigger = null;
+    var pinned = false;
+
+    function position() {
+      if (!activeTrigger || !activeTrigger.isConnected || popover.hidden) {
+        close();
+        return;
+      }
+      var margin = 8;
+      var gap = 6;
+      var rect = activeTrigger.getBoundingClientRect();
+      var width = popover.offsetWidth;
+      var height = popover.offsetHeight;
+      var left = rect.left + (rect.width - width) / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+      var top = rect.bottom + gap;
+      if (top + height > window.innerHeight - margin) {
+        top = rect.top - height - gap;
+      }
+      top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+      popover.style.left = Math.round(left) + 'px';
+      popover.style.top = Math.round(top) + 'px';
+    }
+
+    function close() {
+      if (activeTrigger) {
+        activeTrigger.setAttribute('aria-expanded', 'false');
+        activeTrigger.removeAttribute('aria-describedby');
+      }
+      activeTrigger = null;
+      pinned = false;
+      popover.hidden = true;
+      popover.textContent = '';
+    }
+
+    function open(trigger, shouldPin) {
+      var content = trigger && trigger.getAttribute('data-pw-inspection');
+      if (!content) return;
+      if (activeTrigger && activeTrigger !== trigger) {
+        activeTrigger.setAttribute('aria-expanded', 'false');
+        activeTrigger.removeAttribute('aria-describedby');
+      }
+      activeTrigger = trigger;
+      pinned = Boolean(shouldPin);
+      trigger.setAttribute('aria-expanded', 'true');
+      trigger.setAttribute('aria-describedby', popover.id);
+      popover.textContent = content;
+      popover.hidden = false;
+      position();
+    }
+
+    function toggle(trigger) {
+      if (activeTrigger === trigger && pinned) {
+        close();
+        return;
+      }
+      open(trigger, true);
+    }
+
+    document.addEventListener('pointerover', function (event) {
+      var trigger = event.target.closest('.pw-inspection-trigger');
+      if (!trigger || (activeTrigger && pinned)) return;
+      open(trigger, false);
+    });
+    document.addEventListener('pointerout', function (event) {
+      var trigger = event.target.closest('.pw-inspection-trigger');
+      if (!trigger || pinned || activeTrigger !== trigger) return;
+      if (event.relatedTarget && (
+        trigger.contains(event.relatedTarget) || popover.contains(event.relatedTarget)
+      )) return;
+      close();
+    });
+    document.addEventListener('focusin', function (event) {
+      var trigger = event.target.closest('.pw-inspection-trigger');
+      if (trigger && !(activeTrigger && pinned)) open(trigger, false);
+    });
+    document.addEventListener('focusout', function (event) {
+      if (pinned || event.target !== activeTrigger) return;
+      if (event.relatedTarget && popover.contains(event.relatedTarget)) return;
+      close();
+    });
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest('.pw-inspection-trigger');
+      if (!trigger) return;
+      event.preventDefault();
+      event.stopPropagation();
+      toggle(trigger);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && activeTrigger) {
+        var prior = activeTrigger;
+        close();
+        prior.focus();
+      }
+    });
+    document.addEventListener('pointerdown', function (event) {
+      if (!pinned || !activeTrigger) return;
+      if (event.target.closest('.pw-inspection-trigger') || popover.contains(event.target)) return;
+      close();
+    });
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+
+    return {
+      close: close,
+      activeTrigger: function () { return activeTrigger; },
+    };
   }
 
   // Reuses the V24 mockup's text-layer interaction on real feed rows.
@@ -463,7 +645,8 @@
   function renderTextLayer(el) {
     var layers = textLayers(el);
     if (!layers.length) {
-      el.textContent = '';
+      el.innerHTML = '<span class="post-language-tag">' +
+        escapeHtml(el.getAttribute('data-language-display') || 'undetected') + '</span>';
       el.removeAttribute('data-layer-key');
       return;
     }
@@ -472,7 +655,9 @@
     var layer = layers[index];
     el.setAttribute('data-layer-idx', String(index));
     el.setAttribute('data-layer-key', layer.key);
-    el.innerHTML = '<span class="text-layer-tag">' + escapeHtml(layer.label) + '</span>' +
+    el.innerHTML = '<span class="post-language-tag">' +
+      escapeHtml(el.getAttribute('data-language-display') || 'undetected') + '</span>' +
+      '<span class="text-layer-tag">' + escapeHtml(layer.label) + '</span>' +
       escapeHtml(layer.value);
   }
 
@@ -485,30 +670,11 @@
     renderTextLayer(el);
   }
 
-  function attachRowLink(row) {
-    if (!row || typeof row.getAttribute !== 'function' ||
-        typeof row.addEventListener !== 'function' ||
-        row.getAttribute('data-row-link-bound') === '1') return;
-    row.setAttribute('data-row-link-bound', '1');
-    row.addEventListener('click', function (event) {
-      if (event.defaultPrevented || !event.target || !event.target.closest) return;
-      var excluded = event.target.closest(
-        '.text[data-text-cycle], .handle, .feed-signals, a, button, input, label'
-      );
-      if (excluded && row.contains(excluded)) return;
-      var url = row.getAttribute('data-x-url');
-      if (!url) return;
-      var opened = window.open(url, '_blank', 'noopener,noreferrer');
-      if (opened) opened.opener = null;
-    });
-  }
-
   function hydrateRows(rows) {
     var now = new Date();
     rows.forEach(function (row) {
       paintSignals(row);
       attachCellClickHandlers(row);
-      attachRowLink(row);
       formatRowTimestamp(row, now);
     });
   }
@@ -527,11 +693,15 @@
       '<div class="feed-row"><div class="feed-row-shell tint-neutral">' +
         '<div class="feed-main"><div class="body"><div class="text muted-cell">' +
           escapeHtml(emptyText) +
-        '</div></div></div><div class="feed-signals" aria-hidden="true"></div>' +
+        '</div></div></div><div class="feed-signals"></div>' +
       '</div></div>';
   }
 
   function replaceRows(body, rows) {
+    if (inspectionPopover) {
+      var trigger = inspectionPopover.activeTrigger();
+      if (trigger && body.contains(trigger)) inspectionPopover.close();
+    }
     body.innerHTML = '';
     if (!rows.length) {
       renderEmptyState(body);
@@ -694,16 +864,6 @@
     });
   }
 
-  function readCursorFromLastRow(body) {
-    var rows = body.querySelectorAll('.feed-row[data-pw-feed-row]');
-    if (rows.length === 0) return null;
-    var last = rows[rows.length - 1];
-    var twid = last.getAttribute('data-tweet-id');
-    var iso = last.getAttribute('data-created-at-iso');
-    if (!iso || !twid) return null;
-    return iso + '|' + twid;
-  }
-
   function fetchBatch(filters, opts, signal) {
     opts = opts || {};
     var url = '/feed/?' + buildQuery(filters || {}, {
@@ -838,25 +998,17 @@
       entries.forEach(function (entry) {
         if (!entry.isIntersecting) return;
         if (state.fetching || state.exhausted) return;
-        if (state.total >= HARD_CAP) {
-          state.exhausted = true;
-          showEnd();
-          return;
-        }
-        // Read the current cursor from the last rendered row
-        // (covers filter changes that re-fetched the first page).
         var filters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
         if (state.committedKey !== requestKey(requestFilters(filters))) {
           clearAndRefetch(filters);
           return;
         }
-        var cursor = readCursorFromLastRow(body);
-        runFeedRequest(filters, { cursor: cursor }, function (payload, committedFilters) {
+        runFeedRequest(filters, { cursor: state.cursor }, function (payload, committedFilters) {
           appendRows(body, payload.rows);
           state.cursor = payload.next_cursor;
           state.total += payload.rows.length;
           state.committedKey = requestKey(committedFilters);
-          if (!state.cursor || state.total >= HARD_CAP) {
+          if (!state.cursor) {
             state.exhausted = true;
             showEnd();
           } else {
@@ -979,12 +1131,16 @@
 
   function init() {
     if (!getFeedRoot()) return;
+    inspectionPopover = createInspectionPopoverController();
     var body = $('[data-pw-feed-body]');
     if (body) {
       var initialRows = $$('.feed-row[data-pw-feed-row]', body);
       hydrateRows(initialRows);
       state.total = initialRows.length;
-      state.cursor = readCursorFromLastRow(body);
+      var root = getFeedRoot();
+      state.cursor = root && root.getAttribute('data-pw-next-cursor') || null;
+      state.exhausted = root && root.getAttribute('data-pw-has-more') === 'false';
+      if (state.exhausted) showEnd();
     }
     var initialFilters = (window.pwFilter && window.pwFilter.get) ? window.pwFilter.get() : {};
     state.committedKey = requestKey(initialFilters);

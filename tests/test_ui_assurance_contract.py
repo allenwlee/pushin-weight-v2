@@ -85,6 +85,13 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     assert controls["account_geography"]["values"] == [
         "none", "country", "hierarchy", "taiwan", "region"
     ]
+    assert controls["feed_inspection"]["values"] == [
+        "closed", "preview", "pinned", "transferred"
+    ]
+    assert controls["feed_navigation"]["values"] == ["row", "x"]
+    assert controls["feed_pagination"]["values"] == [
+        "first", "over500", "exhausted"
+    ]
 
 
 def test_fixture_digest_and_declared_brands_are_exact() -> None:
@@ -118,4 +125,6 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "unsanctioned-only-off-partition",
         "hover-freeze-preserves-brand-and-restores-locale",
         "guiding-country-taiwan-region-stay-distinct",
+        "inspection-transfer-keeps-x-exclusive",
+        "pagination-crosses-500-and-exhausts",
     }

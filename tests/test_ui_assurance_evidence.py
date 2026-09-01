@@ -20,9 +20,9 @@ def test_full_target_evidence_closes_every_bridgewright_obligation() -> None:
     )
     assessment = assess_evidence(declaration, evidence)
 
-    assert len(evidence.results) == len(compile_obligations(declaration)) == 2919
+    assert len(evidence.results) == len(compile_obligations(declaration)) == 3435
     assert assessment.status == "clean"
-    assert assessment.coverage.passed == 2919
+    assert assessment.coverage.passed == 3435
     assert assessment.coverage.missing == 0
     assert assessment.coverage.unknown == 0
 

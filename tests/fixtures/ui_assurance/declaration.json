@@ -27,6 +27,9 @@
     {"id":"headline_detail","kind":"toggle","values":["collapsed","expanded"],"initial_value":"collapsed","reversible":true},
     {"id":"role_badge","kind":"single_select","values":["none","official","staff","community"],"initial_value":"none","reversible":true},
     {"id":"account_geography","kind":"single_select","values":["none","country","hierarchy","taiwan","region"],"initial_value":"none","reversible":true},
+    {"id":"feed_inspection","kind":"single_select","values":["closed","preview","pinned","transferred"],"initial_value":"closed","reversible":true},
+    {"id":"feed_navigation","kind":"single_select","values":["row","x"],"initial_value":"row","reversible":true},
+    {"id":"feed_pagination","kind":"single_select","values":["first","over500","exhausted"],"initial_value":"first","reversible":true},
     {"id":"chart_hover_freeze","kind":"single_select","values":["idle","hovered","frozen","released"],"initial_value":"idle","reversible":true},
     {"id":"freeze_point","kind":"single_select","values":["none","first","same","other","empty"],"initial_value":"none","reversible":true}
   ],
@@ -39,6 +42,8 @@
     {"id":"flag-partition-risk","controls":["brands","unsanctioned","window"],"strength":3},
     {"id":"feed-disclosure-risk","controls":["locale","feed_text","headline_detail","role_badge"],"strength":2},
     {"id":"geography-disclosure-risk","controls":["locale","headline_detail","role_badge","account_geography"],"strength":2},
+    {"id":"feed-inspection-risk","controls":["locale","account_geography","feed_inspection","feed_navigation"],"strength":2},
+    {"id":"feed-pagination-risk","controls":["brands","window","feed_pagination"],"strength":3},
     {"id":"hover-freeze-risk","controls":["brands","sentiment","locale","window","chart_hover_freeze","freeze_point"],"strength":2}
   ],
   "ordered_groups": [
@@ -49,6 +54,9 @@
     {"id":"zh-text-order","actions":["feed_text:synthesis_collapsed","feed_text:literal_expanded","feed_text:source_expanded"],"strength":3},
     {"id":"headline-disclosure-order","actions":["headline_detail:collapsed","headline_detail:expanded","headline_detail:collapsed"],"strength":3},
     {"id":"geography-presentation-order","actions":["account_geography:none","account_geography:hierarchy","account_geography:taiwan","account_geography:region","account_geography:none"],"strength":3},
+    {"id":"feed-inspection-order","actions":["feed_inspection:closed","feed_inspection:preview","feed_inspection:pinned","feed_inspection:transferred","feed_inspection:closed"],"strength":3},
+    {"id":"feed-navigation-order","actions":["feed_navigation:row","feed_navigation:x"],"strength":2},
+    {"id":"feed-pagination-order","actions":["feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"strength":3},
     {"id":"hover-freeze-state-order","actions":["chart_hover_freeze:idle","chart_hover_freeze:hovered","chart_hover_freeze:frozen","chart_hover_freeze:released"],"strength":3},
     {"id":"hover-freeze-point-order","actions":["freeze_point:first","freeze_point:same","freeze_point:other","freeze_point:empty"],"strength":2}
   ],
@@ -62,6 +70,9 @@
     {"id":"flagged-partition-is-exact","projections":["feed","counts","network"]},
     {"id":"feed-disclosure-agrees","projections":["accessibility"]},
     {"id":"account-geography-agrees","projections":["accessibility","feed"]},
+    {"id":"feed-inspection-agrees","projections":["accessibility","feed"]},
+    {"id":"feed-navigation-agrees","projections":["accessibility","network"]},
+    {"id":"feed-pagination-complete","projections":["feed","counts","network"]},
     {"id":"hover-freeze-agrees","projections":["controls","accessibility","feed","chart","network"]}
   ],
   "races": [
@@ -78,7 +89,9 @@
     {"id":"mimo-seven-to-one-latest-wins","actions":["window:7","brands:mimo","window:1"],"invariants":["filter-state-agrees","chart-oracle-agrees","latest-intent-wins"]},
     {"id":"unsanctioned-only-off-partition","actions":["unsanctioned:only","unsanctioned:off"],"invariants":["filter-state-agrees","feed-oracle-agrees","flagged-partition-is-exact"]},
     {"id":"hover-freeze-preserves-brand-and-restores-locale","actions":["brands:qwen","chart_hover_freeze:frozen","freeze_point:same","freeze_point:other","chart_hover_freeze:released"],"invariants":["filter-state-agrees","hover-freeze-agrees","latest-intent-wins"]},
-    {"id":"guiding-country-taiwan-region-stay-distinct","actions":["account_geography:hierarchy","account_geography:taiwan","account_geography:region"],"invariants":["account-geography-agrees"]}
+    {"id":"guiding-country-taiwan-region-stay-distinct","actions":["account_geography:hierarchy","account_geography:taiwan","account_geography:region"],"invariants":["account-geography-agrees"]},
+    {"id":"inspection-transfer-keeps-x-exclusive","actions":["feed_inspection:preview","feed_inspection:pinned","feed_inspection:transferred","feed_navigation:row","feed_navigation:x"],"invariants":["feed-inspection-agrees","feed-navigation-agrees"]},
+    {"id":"pagination-crosses-500-and-exhausts","actions":["window:7","feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"invariants":["feed-pagination-complete"]}
   ],
   "environments": [{"id":"desktop-chromium","browser_runtime":"playwright-chromium","required":true}],
   "gates": [

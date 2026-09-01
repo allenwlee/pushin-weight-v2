@@ -769,6 +769,31 @@
     letter-spacing: 0;
   }
   .feed-signals .signal-icon { width: 15px; height: 15px; }
+  .feed-signals .signal-inspection-trigger,
+  .feed-row .account-geography button {
+    appearance: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    line-height: inherit;
+    cursor: help;
+  }
+  .feed-signals .signal-inspection-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+  }
+  .feed-signals .signal-inspection-trigger:hover,
+  .feed-signals .signal-inspection-trigger:focus-visible,
+  .feed-row .account-geography .pw-inspection-trigger:hover,
+  .feed-row .account-geography .pw-inspection-trigger:focus-visible {
+    outline: 1px solid rgba(148, 163, 184, 0.7);
+    outline-offset: 1px;
+    background: rgba(255, 255, 255, 0.06);
+  }
   .feed-signals .tone-positive { color: var(--up); }
   .feed-signals .tone-neutral { color: var(--muted); }
   .feed-signals .tone-negative { color: var(--down); }
@@ -868,10 +893,16 @@
   .feed-row .account-role.role-official { color: #fbbf24; }
   .feed-row .account-role.role-staff { color: #c4b5fd; }
   .feed-row .account-role.role-community { color: #86efac; }
+  .feed-row .follower-magnitude + .account-role,
+  .feed-row .follower-magnitude + .account-geography {
+    margin-top: 4px;
+  }
   .feed-row .account-geography {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 38px;
+    width: 38px;
     max-width: 38px;
     margin-top: 2px;
     color: var(--muted);
@@ -879,6 +910,8 @@
   }
   .feed-row .account-geography-flag {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 14px;
     width: 14px;
     height: 7.875px;
@@ -891,20 +924,44 @@
     opacity: 0.90;
   }
   .feed-row .account-geography-connector {
-    flex: 0 0 auto;
-    margin: 0 1px;
-    color: #64748b;
-    font-size: 7px;
-    line-height: 1;
+    flex: 0 0 1px;
+    width: 1px;
+    height: 4px;
+    margin: 0;
+    border-left: 1px solid #64748b;
   }
-  .feed-row .account-geography-text {
+  .feed-row .account-geography .account-geography-text {
     min-width: 0;
     max-width: 38px;
-    color: #95a4b9;
+    color: #9aa9bd;
     font-size: 6.5px;
     line-height: 1.05;
     overflow-wrap: anywhere;
     text-align: center;
+  }
+  .feed-row .geography-hierarchy {
+    position: relative;
+    display: block;
+    height: 22px;
+  }
+  .feed-row .geography-hierarchy .account-geography-flag {
+    position: absolute;
+    left: 12px;
+    top: 0;
+  }
+  .feed-row .geography-hierarchy .account-geography-flag.is-child {
+    left: 20px;
+    top: 13px;
+  }
+  .feed-row .geography-hierarchy .account-geography-elbow {
+    position: absolute;
+    left: 19px;
+    top: 7px;
+    width: 7px;
+    height: 10px;
+    border-left: 1px solid #64748b;
+    border-bottom: 1px solid #64748b;
+    pointer-events: none;
   }
   .feed-row .geography-taiwan {
     flex-direction: column;
@@ -912,8 +969,7 @@
   }
   .feed-row .geography-taiwan .account-geography-connector {
     height: 3px;
-    margin: -1px 0 0;
-    transform: rotate(90deg);
+    margin: 0;
   }
   .feed-row .follower-bin-1k-10k {
     --follower-size: 15px;
@@ -976,6 +1032,16 @@
     margin-right: 4px;
     font-weight: 600;
   }
+  .feed-row .text .post-language-tag {
+    display: inline-block;
+    margin-right: 4px;
+    color: #94a3b8;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    line-height: 1;
+    text-transform: none;
+  }
   .feed-row .engagement {
     color: var(--muted);
     font-size: 9.5px;
@@ -993,6 +1059,41 @@
   .feed-row .engagement .likes .engagement-icon { color: #f87171; }
   .feed-row .engagement .rts .engagement-icon { width: 8.734375px; color: var(--up); }
   .feed-row .engagement .replies .engagement-icon { width: 12.828125px; }
+  .feed-row .engagement .feed-x-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    color: var(--text);
+    border-radius: 2px;
+  }
+  .feed-row .engagement .feed-x-link:hover,
+  .feed-row .engagement .feed-x-link:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    outline: 1px solid rgba(148, 163, 184, 0.55);
+  }
+  .feed-row .engagement .feed-x-icon { width: 9px; height: 9px; }
+
+  .pw-feed-inspection-popover {
+    position: fixed;
+    z-index: 10020;
+    box-sizing: border-box;
+    max-width: min(280px, calc(100vw - 16px));
+    padding: 7px 9px;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    color: #f8fafc;
+    background: #080d16;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.48), 0 2px 7px rgba(0, 0, 0, 0.38);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: pre-line;
+    pointer-events: none;
+  }
+  .pw-feed-inspection-popover[hidden] { display: none; }
 
   /* CA mark — tiny monogram, not the letters "SV" */
   .tz-ca-icon,

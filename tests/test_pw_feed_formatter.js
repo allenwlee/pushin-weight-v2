@@ -177,7 +177,7 @@ if (typeof renderRowHtml === 'function') {
     followers_label: '52.1k followers',
     engagement_pretty: { followers: '52.1k', likes: '3', retweets: '2', replies: '1' },
   });
-  assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus"'), true,
+  assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus has-account-metadata"'), true,
     'feed row reserves a fixed follower lead column');
   assertEq(rowHtml.includes('class="follower-glyph"'), true,
     'feed row shows a size-binned follower symbol');
@@ -200,8 +200,10 @@ if (typeof renderRowHtml === 'function') {
     'guiding flag precedes the child flag');
   assertEq(rowHtml.indexOf('role-official') < rowHtml.indexOf('account-geography'), true,
     'official role precedes geography');
-  assertEq(rowHtml.includes('title="China"') && rowHtml.includes('title="Hong Kong"'), true,
-    'each geography flag exposes its localized full name');
+  assertEq(rowHtml.includes('data-pw-inspection="China"') &&
+    rowHtml.includes('data-pw-inspection="Hong Kong"') &&
+    !rowHtml.includes('title="China"') && !rowHtml.includes('title="Hong Kong"'), true,
+    'each geography flag exposes its localized full name without a native tooltip');
   assertEq(rowHtml.includes('>Account Name</a>'), true,
     'visible account link uses the display name');
   assertEq(rowHtml.includes('href="https://x.com/account_handle"'), true,
@@ -219,8 +221,8 @@ if (typeof renderRowHtml === 'function') {
   });
   assertEq(unknownFollowerHtml.includes('class="follower-count">0</span>'), true,
     'rows without account metadata still show their zero follower count');
-  assertEq(unknownFollowerHtml.includes('class="account-role is-empty"'), true,
-    'rows without a named role reserve an empty hidden role slot');
+  assertEq(unknownFollowerHtml.includes('class="account-role is-empty"'), false,
+    'rows without account metadata reserve no empty spacer');
 
   const nonOfficialTaiwanHtml = renderRowHtml({
     account: {
@@ -349,6 +351,12 @@ const apostrophe = String.fromCharCode(39);
 const rootSelector = "return $(" + apostrophe + "[data-pw-feed]" + apostrophe + ") || $(" + apostrophe + "#feed" + apostrophe + ");";
 console.log("\n--- getFeedRoot selector migration ---");
 assertEq(feedSrc.includes(rootSelector), true, "getFeedRoot prefers data-pw-feed with #feed fallback");
+assertEq(feedSrc.includes('var HARD_CAP = 500'), false,
+  'feed scrolling has no cumulative 500-row browser cap');
+assertEq(feedSrc.includes('function attachRowLink'), false,
+  'row bodies no longer own original-post navigation');
+assertEq(feedSrc.includes('function readCursorFromLastRow'), false,
+  'append requests consume the server cursor instead of rebuilding one from DOM rows');
 
 // ---------------------------------------------------------------------------
 // V22 feed metadata: the server owns tint selection.  The browser only paints

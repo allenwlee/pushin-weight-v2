@@ -49,6 +49,9 @@ def initial_state() -> dict[str, Any]:
         "headline_detail": "collapsed",
         "role_badge": "none",
         "account_geography": "none",
+        "feed_inspection": "closed",
+        "feed_navigation": "row",
+        "feed_pagination": "first",
         "chart_hover_freeze": "idle",
         "freeze_point": "none",
         "latest_generation": 0,
@@ -81,6 +84,9 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
         "headline_detail",
         "role_badge",
         "account_geography",
+        "feed_inspection",
+        "feed_navigation",
+        "feed_pagination",
         "chart_hover_freeze",
         "freeze_point",
     }:
@@ -211,6 +217,13 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "role_badge": state["role_badge"],
             "role_label": None if state["role_badge"] == "none" else state["role_badge"],
             "account_geography": geography,
+            "feed_inspection": state["feed_inspection"],
+            "inspection_open": state["feed_inspection"] != "closed",
+            "inspection_pinned": state["feed_inspection"] in {"pinned", "transferred"},
+            "feed_navigation": state["feed_navigation"],
+            "row_opens_original": False,
+            "x_opens_original": state["feed_navigation"] == "x",
+            "feed_pagination": state["feed_pagination"],
             "geography_flags": geography_flags,
             "geography_label": geography_labels[geography].get(
                 state["locale"], geography_labels[geography]["en"]
@@ -249,5 +262,8 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
                 else deepcopy(state["filters"])
             ),
             "bucket": "five-minute-half-open" if hover_freeze_active else None,
+            "original_post_owner": "x" if state["feed_navigation"] == "x" else None,
+            "pagination_has_total_ceiling": False,
+            "pagination_exhausted": state["feed_pagination"] == "exhausted",
         },
     }

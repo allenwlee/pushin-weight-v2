@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from monitor.views import _feed_geography_wire
+from monitor.views import (
+    _compact_language_display,
+    _compact_region_label,
+    _feed_geography_wire,
+    _feed_signal_inspections,
+    _localize_classification_value,
+)
 
 GUIDING_COUNTRIES = {
     "HK": "CN",
@@ -111,7 +117,91 @@ def test_country_without_approved_symbol_falls_back_to_its_region() -> None:
     assert geography is not None
     assert geography["kind"] == "region"
     assert geography["flags"] == []
-    assert geography["text"] == "Northern Europe"
+    assert geography["text"] == "N Europe"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    (
+        ("Northern Europe", "N Europe"),
+        ("Eastern Asia", "E Asia"),
+        ("South-Eastern Asia", "SE Asia"),
+        ("Southeastern Asia", "SE Asia"),
+        ("Northwestern Europe", "NW Europe"),
+        ("Central Asia", "Central Asia"),
+    ),
+)
+def test_english_region_direction_is_compact_presentation_only(
+    source: str,
+    expected: str,
+) -> None:
+    assert _compact_region_label(source, "en") == expected
+    assert _compact_region_label(source, "zh_cn") == source
+
+
+@pytest.mark.parametrize(
+    ("language", "en", "zh_cn"),
+    (
+        ("en-US", "en", "英语"),
+        ("zh-Hans", "zh", "简体中文"),
+        ("zh-Hant", "zh", "繁体中文"),
+        ("other", "other", "其他"),
+        (None, "undetected", "未检测"),
+    ),
+)
+def test_language_projection_uses_persisted_value_only(
+    language: str | None,
+    en: str,
+    zh_cn: str,
+) -> None:
+    assert _compact_language_display(language, "en") == en
+    assert _compact_language_display(language, "zh_cn") == zh_cn
+
+
+def test_deduplicated_signal_inspection_retains_every_brand() -> None:
+    inspections = _feed_signal_inspections(
+        {
+            "minimax": {
+                "sentiments": [{"key": "positive", "label": "Positive"}],
+            },
+            "qwen": {
+                "sentiments": [{"key": "positive", "label": "Positive"}],
+            },
+        },
+        [
+            {"nickname": "minimax", "display_name_en": "MiniMax"},
+            {"nickname": "qwen", "display_name_en": "Qwen"},
+        ],
+        "en",
+        unsanctioned=False,
+    )
+
+    assert [entry["brand"] for entry in inspections["sentiment"]["positive"]] == [
+        "MiniMax",
+        "Qwen",
+    ]
+    assert [entry["text"] for entry in inspections["sentiment"]["positive"]] == [
+        "MiniMax Sentiment: Positive",
+        "Qwen Sentiment: Positive",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("family", "key", "locale", "expected"),
+    (
+        ("sentiment", "positive", "en", "Positive"),
+        ("post_type", "buzz_releases", "en", "Buzz & Releases"),
+        ("sentiment", "positive", "zh_cn", "正面"),
+        ("post_type", "buzz_releases", "zh_cn", "热点发布"),
+    ),
+)
+def test_signal_copy_has_canonical_fallback_when_seed_rows_are_missing(
+    family: str,
+    key: str,
+    locale: str,
+    expected: str,
+) -> None:
+    assert _localize_classification_value(family, key, locale, {}) == expected
 
 
 @pytest.mark.parametrize(

@@ -3202,6 +3202,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "meta_text",
             "ts_abs_text",
             "classifications",
+            "language_display",
+            "signal_inspections",
             "sentiment_keys",
             "post_type_keys",
             "nat_cn",
@@ -3715,6 +3717,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             const flag = geography.querySelector('.account-country-flag');
             const style = flag ? getComputedStyle(flag) : null;
             const text = geography.querySelector('.account-geography-text');
+            const flagTriggers = [...geography.querySelectorAll('.account-geography-flag')];
+            const flagRects = flagTriggers.map(node => node.getBoundingClientRect());
+            const followerCountRect = lead.querySelector('.follower-count').getBoundingClientRect();
+            const firstMetadata = lead.children[1];
+            const firstMetadataRect = firstMetadata?.getBoundingClientRect();
+            const elbow = geography.querySelector('.account-geography-elbow');
             const parseColor = value => {
               const channels = value.match(/[\\d.]+/g).map(Number);
               return {
@@ -3756,14 +3764,24 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 aria: geography.getAttribute('aria-label'),
                 flags: [...geography.querySelectorAll('use')]
                   .map(node => node.getAttribute('href')),
-                flagTitles: [...geography.querySelectorAll('.account-geography-flag')]
-                  .map(node => node.getAttribute('title')),
+                flagInspections: flagTriggers.map(node => node.dataset.pwInspection),
+                flagTitles: flagTriggers.map(node => node.getAttribute('title')),
+                flagCenters: flagRects.map(rect => rect.left + rect.width / 2),
+                flagTops: flagRects.map(rect => rect.top),
+                elbow: elbow ? {
+                  left: getComputedStyle(elbow).borderLeftWidth,
+                  bottom: getComputedStyle(elbow).borderBottomWidth,
+                } : null,
                 text: geography.querySelector('.account-geography-text')
                   ?.textContent.trim() || '',
                 width: style ? style.width : '',
                 filter: style ? style.filter : '',
                 opacity: style ? style.opacity : '',
                 textContrast: contrast,
+                firstMetadataMargin: firstMetadata
+                  ? getComputedStyle(firstMetadata).marginTop : '',
+                countToMetadata: firstMetadataRect
+                  ? firstMetadataRect.top - followerCountRect.bottom : null,
               },
               leadChildren: [...lead.children].map(node => node.className),
             }];
@@ -3778,7 +3796,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     "hierarchy": "China, Hong Kong Special Administrative Region",
                     "taiwan": "TW · Taiwan",
                     "region": "Europe",
-                    "fallback": "Northern Europe",
+                    "fallback": "N Europe",
                 },
             ),
             (
@@ -3826,8 +3844,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ["#flag-us"],
                             )
                             self.assertEqual(
-                                initial["country"]["geography"]["flagTitles"],
+                                initial["country"]["geography"]["flagInspections"],
                                 [labels["country"]],
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["flagTitles"],
+                                [None],
                             )
                             self.assertEqual(
                                 initial["hierarchy"]["leadChildren"],
@@ -3842,8 +3864,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ["#flag-cn", "#flag-hk"],
                             )
                             self.assertEqual(
-                                initial["hierarchy"]["geography"]["flagTitles"][-1],
+                                initial["hierarchy"]["geography"]["flagInspections"][-1],
                                 labels["hierarchy"],
+                            )
+                            self.assertEqual(
+                                initial["hierarchy"]["geography"]["flagTitles"],
+                                [None, None],
                             )
                             self.assertEqual(
                                 initial["taiwan"]["geography"]["flags"],
@@ -3900,6 +3926,31 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["country"]["geography"]["opacity"], "0.9"
                             )
+                            self.assertAlmostEqual(
+                                initial["country"]["geography"]["flagCenters"][0],
+                                initial["hierarchy"]["geography"]["flagCenters"][0],
+                                delta=0.5,
+                            )
+                            self.assertGreater(
+                                initial["hierarchy"]["geography"]["flagCenters"][1],
+                                initial["hierarchy"]["geography"]["flagCenters"][0],
+                            )
+                            self.assertGreater(
+                                initial["hierarchy"]["geography"]["flagTops"][1],
+                                initial["hierarchy"]["geography"]["flagTops"][0],
+                            )
+                            self.assertEqual(
+                                initial["hierarchy"]["geography"]["elbow"],
+                                {"left": "1px", "bottom": "1px"},
+                            )
+                            self.assertEqual(
+                                initial["country"]["geography"]["firstMetadataMargin"],
+                                "4px",
+                            )
+                            self.assertGreaterEqual(
+                                initial["country"]["geography"]["countToMetadata"],
+                                4,
+                            )
                             self.assertEqual(
                                 page.locator(".account-geography use").evaluate_all(
                                     """nodes => nodes.map(node => node.getAttribute('href'))
@@ -3916,6 +3967,36 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 page.locator(".account-geography[tabindex]").count(), 0
                             )
+                            self.assertEqual(
+                                page.locator(".pw-inspection-trigger[title]").count(), 0
+                            )
+
+                            country_row = page.locator(
+                                f'[data-tweet-id="{tweet_ids["country"]}"]'
+                            )
+                            country_flag = country_row.locator(
+                                ".account-geography-flag"
+                            )
+                            popover = page.locator("#pw-feed-inspection-popover")
+                            country_flag.hover()
+                            self.assertTrue(popover.is_visible())
+                            self.assertEqual(popover.inner_text(), labels["country"])
+                            country_flag.click()
+                            self.assertEqual(
+                                country_flag.get_attribute("aria-expanded"), "true"
+                            )
+                            signal = country_row.locator(
+                                ".feed-signals .pw-inspection-trigger"
+                            ).first
+                            self.assertGreater(signal.count(), 0)
+                            signal.click()
+                            expected_family = "情感" if locale == "zh_cn" else "Sentiment"
+                            self.assertIn(expected_family, popover.inner_text())
+                            self.assertEqual(
+                                country_flag.get_attribute("aria-expanded"), "false"
+                            )
+                            page.keyboard.press("Escape")
+                            self.assertFalse(popover.is_visible())
 
                             with page.expect_response(
                                 lambda result: "/feed/?" in result.url
@@ -4169,10 +4250,20 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     row.locator(".feed-row-shell").dispatch_event("click")
                     self.assertEqual(
                         page.evaluate("window.__pwOpenedUrls.length"),
-                        1,
+                        0,
                     )
+                    x_link = row.locator(".engagement .feed-x-link")
+                    self.assertEqual(x_link.count(), 1)
                     self.assertRegex(
-                        page.evaluate("window.__pwOpenedUrls[0]"),
+                        x_link.get_attribute("href") or "",
+                        r"^https://x\.com/i/web/status/",
+                    )
+                    x_link.evaluate(
+                        "element => element.addEventListener('click', event => event.preventDefault(), {once: true})"
+                    )
+                    x_link.dispatch_event("click")
+                    self.assertRegex(
+                        x_link.get_attribute("href") or "",
                         r"^https://x\.com/i/web/status/",
                     )
 
@@ -4183,7 +4274,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     row.locator(".feed-handle-link").dispatch_event("click")
                     row.locator(".handle").dispatch_event("click")
                     row.locator(".feed-signals").dispatch_event("click")
-                    self.assertEqual(page.evaluate("window.__pwOpenedUrls.length"), 1)
+                    self.assertEqual(page.evaluate("window.__pwOpenedUrls.length"), 0)
+
+                    language_tag = text.locator(".post-language-tag")
+                    self.assertEqual(language_tag.count(), 1)
+                    self.assertEqual(language_tag.inner_text(), "英语")
 
                     with page.expect_response(lambda response: "/feed/?" in response.url):
                         page.evaluate("window.pwFilter.set('sentiment', '__all__')")
@@ -4198,6 +4293,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(
                         refreshed_text.get_attribute("data-layer-key"),
                         "literal_cn",
+                    )
+                    self.assertEqual(
+                        refreshed_text.locator(".post-language-tag").inner_text(),
+                        "英语",
                     )
                 finally:
                     context.close()

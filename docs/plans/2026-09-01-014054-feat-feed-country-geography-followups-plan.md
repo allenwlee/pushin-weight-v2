@@ -172,7 +172,7 @@ Native `title` tooltips are delayed and do not provide a dependable touch intera
 ### Sources
 
 - `docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md` owns the existing geography and disclosure baseline.
-- `docs/ideation/2026-08-31-092211-country-flag-svg-reference.html` owns the approved visual inspection-card treatment and must be added to this branch from the owner-approved reference artifact before UI implementation.
+- `docs/ideation/2026-09-01-112352-country-flag-svg-reference.html` owns the approved 215-flag inventory and visual inspection-card treatment carried forward from the owner-reviewed artifact.
 - `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` requires testing the real locale path rather than a bypassed render path.
 - `monitor/views.py`, `monitor/static/pw-feed.js`, and `monitor/templates/monitor/_feed_initial_v22.html` expose the current 500-candidate and whole-row-navigation behavior.
 
@@ -266,7 +266,7 @@ U1 establishes the approved target and red tests. U2 fixes page reachability bef
 - **Goal:** Bind the approved deltas to a new Bridgewright authority and prove current production-shaped callers fail the new obligations.
 - **Requirements:** R1-R29.
 - **Dependencies:** None.
-- **Files:** `docs/ideation/2026-08-31-092211-country-flag-svg-reference.html`, `docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md`, `bridgewright.yaml`, `tests/fixtures/ui_assurance/declaration.json`, `tests/test_ui_assurance_contract.py`, `tests/test_home_v22_browser.py`, `tests/test_pw_feed_formatter.js`, `tests/test_combined_chart_js.py`.
+- **Files:** `docs/ideation/2026-09-01-112352-country-flag-svg-reference.html`, `docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md`, `bridgewright.yaml`, `tests/fixtures/ui_assurance/declaration.json`, `tests/test_ui_assurance_contract.py`, `tests/test_home_v22_browser.py`, `tests/test_pw_feed_formatter.js`, `tests/test_pw_chart_filter.js`.
 - **Approach:**
   1. Add the owner-approved reference artifact to this branch and bind only its inspection-card visual treatment.
   2. Extend the Bridgewright state model for preview, pinned, transferred, dismissed, X-owned navigation, and exhaustive pagination.

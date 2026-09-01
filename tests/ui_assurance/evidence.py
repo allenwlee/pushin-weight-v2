@@ -112,6 +112,9 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
             "headline_detail",
             "role_badge",
             "account_geography",
+            "feed_inspection",
+            "feed_navigation",
+            "feed_pagination",
             "chart_hover_freeze",
             "freeze_point",
         }:
@@ -196,6 +199,44 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         taiwan_zh = set_control(initial_state(), "locale", "zh_cn")
         taiwan_zh = set_control(taiwan_zh, "account_geography", "taiwan")
         assert projection(fixture, taiwan_zh)["accessibility"]["geography_label"] == "台湾"
+    elif invariant_id == "feed-inspection-agrees":
+        for state_name, is_open, is_pinned in (
+            ("closed", False, False),
+            ("preview", True, False),
+            ("pinned", True, True),
+            ("transferred", True, True),
+        ):
+            observed = projection(
+                fixture,
+                set_control(initial_state(), "feed_inspection", state_name),
+            )["accessibility"]
+            assert observed["feed_inspection"] == state_name
+            assert observed["inspection_open"] is is_open
+            assert observed["inspection_pinned"] is is_pinned
+    elif invariant_id == "feed-navigation-agrees":
+        row = projection(
+            fixture,
+            set_control(initial_state(), "feed_navigation", "row"),
+        )
+        x_link = projection(
+            fixture,
+            set_control(initial_state(), "feed_navigation", "x"),
+        )
+        assert row["accessibility"]["row_opens_original"] is False
+        assert row["network"]["original_post_owner"] is None
+        assert x_link["accessibility"]["x_opens_original"] is True
+        assert x_link["network"]["original_post_owner"] == "x"
+    elif invariant_id == "feed-pagination-complete":
+        for state_name in ("first", "over500", "exhausted"):
+            observed = projection(
+                fixture,
+                set_control(initial_state(), "feed_pagination", state_name),
+            )
+            assert observed["accessibility"]["feed_pagination"] == state_name
+            assert observed["network"]["pagination_has_total_ceiling"] is False
+            assert observed["network"]["pagination_exhausted"] is (
+                state_name == "exhausted"
+            )
     elif invariant_id == "hover-freeze-agrees":
         state = set_control(initial_state(), "brands", "qwen")
         state = set_control(state, "sentiment", "negative")
@@ -337,6 +378,23 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         assert taiwan["geography_flags"] == ["CN"]
         assert taiwan["geography_uses_tw_flag"] is False
         assert region["geography_flags"] == []
+    elif seed_id == "inspection-transfer-keeps-x-exclusive":
+        state = set_control(initial_state(), "feed_inspection", "preview")
+        state = set_control(state, "feed_inspection", "pinned")
+        state = set_control(state, "feed_inspection", "transferred")
+        state = set_control(state, "feed_navigation", "row")
+        row = projection(fixture, state)
+        assert row["accessibility"]["inspection_pinned"] is True
+        assert row["accessibility"]["row_opens_original"] is False
+        state = set_control(state, "feed_navigation", "x")
+        assert projection(fixture, state)["network"]["original_post_owner"] == "x"
+    elif seed_id == "pagination-crosses-500-and-exhausts":
+        state = set_control(initial_state(), "window", 7)
+        for page_state in ("first", "over500", "exhausted"):
+            state = set_control(state, "feed_pagination", page_state)
+        observed = projection(fixture, state)
+        assert observed["network"]["pagination_has_total_ceiling"] is False
+        assert observed["network"]["pagination_exhausted"] is True
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 
@@ -396,6 +454,18 @@ def _check_ordered(
     elif group_id == "geography-presentation-order":
         assert observed["accessibility"]["account_geography"] == last_value(
             "account_geography"
+        )
+    elif group_id == "feed-inspection-order":
+        assert observed["accessibility"]["feed_inspection"] == last_value(
+            "feed_inspection"
+        )
+    elif group_id == "feed-navigation-order":
+        assert observed["accessibility"]["feed_navigation"] == last_value(
+            "feed_navigation"
+        )
+    elif group_id == "feed-pagination-order":
+        assert observed["accessibility"]["feed_pagination"] == last_value(
+            "feed_pagination"
         )
     elif group_id == "hover-freeze-state-order":
         assert observed["accessibility"]["chart_hover_freeze"] == last_value(

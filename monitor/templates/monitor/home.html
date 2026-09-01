@@ -6,15 +6,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
-  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=geography-disclosure1">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=feed-inspection1">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
   <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
   <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
-  <script src="{% static 'pw-chart.js' %}?v=geography-disclosure1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=geography-disclosure1" defer></script>
+  <script src="{% static 'pw-chart.js' %}?v=feed-inspection1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=feed-inspection1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -328,6 +328,8 @@
 
     <div class="desktop-col-feed">
       <section class="feed-strip" data-pw-feed data-pw-locale="{{ active_locale }}"
+               data-pw-next-cursor="{{ feed.next_cursor|default:'' }}"
+               data-pw-has-more="{{ feed.has_more|yesno:'true,false' }}"
                data-pw-default-title-en="Latest in window"
                data-pw-default-title-zh="本窗口最新"
                data-pw-empty-text="{% trans 'no posts in window' %}"

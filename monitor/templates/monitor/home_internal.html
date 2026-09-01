@@ -144,6 +144,8 @@
 
   <section class="feed" id="feed"
            data-pw-feed
+           data-pw-next-cursor="{{ feed.next_cursor|default:'' }}"
+           data-pw-has-more="{{ feed.has_more|yesno:'true,false' }}"
            data-pw-locale="{{ active_locale }}">
     <table>
       <thead>

@@ -31,6 +31,7 @@ def _fake_row():
         "created_at": "2026-08-09T01:51:00Z",
         "created_at_iso": "2026-08-09T01:51:00Z",
         "lang_detected": "en",
+        "language_display": "en",
         "text_en": "Mock en", "text_zh_cn": "模拟直译", "text_translated": "模拟直译",
         "commentary_en": None, "commentary_zh_cn": "模拟综合",
         "text_original": "Mock", "text": "Mock",
@@ -45,6 +46,7 @@ def _fake_row():
         "brands": [{"nickname": "kimi", "display_name": "Kimi", "display_name_en": "Kimi", "display_name_zh_cn": "Kimi"}],
         "brand_nicknames": ["kimi"],
         "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}, "discourse": []}},
+        "signal_inspections_json": '{"sentiment":{"positive":[{"text":"Kimi Sentiment: Positive"}]}}',
         "unsanctioned": False,
         "account": {"handle": "@kimi_moonshot", "display_name": "Moonshot AI", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
     }
@@ -81,6 +83,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         fake = _fake_row()
         brands = [{**fake["brands"][0], "accent_color": "#ec4899"}]
         patches = {
+            "monitor.views._feed_page_wire": ([fake], None, False, {}),
             "monitor.views._get_feed_posts": [SimpleNamespace(tweet_id="1")],
             "monitor.views._enrich_posts_with_classifications": [fake],
             "monitor.views._build_brands_context": brands,
@@ -141,7 +144,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         # bin while the text body remains aligned across rows.
         self.assertRegex(
             body,
-            r'<div class="feed-main">\s*<div class="follower-lead follower-bin-50k-plus"',
+            r'<div class="feed-main">\s*<div class="follower-lead follower-bin-50k-plus has-account-metadata"',
         )
         self.assertIn('class="follower-glyph"', body)
         self.assertIn('class="follower-count">128.4k</span>', body)
@@ -162,18 +165,21 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         self.assertIn('class="ts-abs"', body)
         # text + text-layer-tag
         self.assertIn('class="text"', body)
+        self.assertIn('class="post-language-tag">en</span>', body)
         self.assertIn('class="text-layer-tag"', body)
         # Follower count moved out of engagement, leaving interaction stats.
         self.assertIn('class="engagement"', body)
         self.assertNotIn('class="followers"', body)
         for stat in ("likes", "rts", "replies"):
             self.assertIn(f'class="{stat}"', body, f"missing engagement stat .{stat}")
+        self.assertIn('class="feed-x-link"', body)
+        self.assertIn('href="https://x.com/i/web/status/1"', body)
 
     def test_signal_data_attributes_present(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
         # The JS signal painter needs these data-* attrs on every row
-        for attr in ("data-sentiments=", "data-post-types=", "data-nat-cn=", "data-nat-us=", "data-unsanctioned="):
+        for attr in ("data-sentiments=", "data-post-types=", "data-nat-cn=", "data-nat-us=", "data-unsanctioned=", "data-signal-inspections="):
             self.assertIn(attr, body, f"missing {attr} — JS painter won't run")
 
     def test_feed_row_carries_text_layers_and_guarded_x_post_url(self):
@@ -189,6 +195,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         """Regression: /internal/ (Net F legacy) must still render the legacy chrome."""
         fake = _fake_row()
         patches = [
+            patch("monitor.views._feed_page_wire", return_value=([], None, False, {})),
             patch("monitor.views._get_feed_posts", return_value=[SimpleNamespace(tweet_id="1")]),
             patch("monitor.views._enrich_posts_with_classifications", return_value=[]),
             patch("monitor.views._build_brands_context", return_value=[]),

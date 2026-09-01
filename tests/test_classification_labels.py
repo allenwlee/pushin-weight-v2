@@ -50,19 +50,25 @@ class TestLocaleToLangCodes:
 
 
 class TestLocalizeEmptyCache:
-    """Helper resolution against an empty cache falls back to the raw key."""
+    """Helper resolution against an empty cache stays user-readable."""
 
-    def test_post_type_zh_cn_miss_returns_key(self):
+    def test_post_type_zh_cn_miss_returns_canonical_fallback(self):
         out = _localize_classification_value(
             "post_type", "hands_on_usage", "zh_cn", label_cache={}
         )
-        assert out == "hands_on_usage"
+        assert out == "实际使用"
 
-    def test_en_miss_returns_key(self):
+    def test_en_miss_returns_canonical_fallback(self):
         out = _localize_classification_value(
             "discourse", "sarcasm", "en", label_cache={}
         )
-        assert out == "sarcasm"
+        assert out == "Sarcasm"
+
+    def test_unknown_en_key_is_humanized(self):
+        out = _localize_classification_value(
+            "discourse", "new_signal", "en", label_cache={}
+        )
+        assert out == "New Signal"
 
     def test_none_key_returns_none(self):
         out = _localize_classification_value(
@@ -281,15 +287,15 @@ class TestSerializeFeedRow:
         assert cls["discourse"][0] == {"key": "genuine_hype", "label": "Genuine hype"}
         assert cls["cn_nationalism"] == {"key": "none", "label": "None"}
 
-    def test_empty_cache_returns_raw_keys(self):
-        """Miss branch: empty cache => label == key."""
+    def test_empty_cache_returns_canonical_fallback_labels(self):
+        """Miss branch: empty cache still emits active-locale display copy."""
         row = self._make_enriched_row()
         row["label_cache_by_locale"] = {"zh_cn": {}, "en": {}}
 
         wire = _serialize_feed_row(row, "zh_cn")
         cls = wire["classifications"]["minimax"]
-        assert cls["post_types"][0] == {"key": "hands_on_usage", "label": "hands_on_usage"}
-        assert cls["cn_nationalism"] == {"key": "none", "label": "none"}
+        assert cls["post_types"][0] == {"key": "hands_on_usage", "label": "实际使用"}
+        assert cls["cn_nationalism"] == {"key": "none", "label": "无"}
 
     def test_text_original_prefers_text_zh_cn_under_zh_cn(self):
         row = self._make_enriched_row()
