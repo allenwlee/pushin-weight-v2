@@ -74,6 +74,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ## Delivery Exceptions
 
 - Owner follow-up on 2026-09-01 supersedes the staging-only boundary and explicitly authorizes production delivery and merge. Integrate PR #35 into this branch, preserve the approved Cyber-Quan symbol IDs, colors, dimensions, callers, and layout, track the cited approved alternate-source artifact, regenerate exact-candidate assurance, verify the unchanged candidate on staging, then promote that exact SHA to production and merge the stacked pull requests in dependency order.
+- Owner correction on 2026-09-01 supersedes only the flag-artwork exclusion and preservation language for `flag-au` and `flag-cn`. Replace those two runtime symbols with **AU Revised** and **CN V4** from `docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html`, preserve their existing IDs, `0 0 16 9` view boxes, 14 × 7.875px presentation, subdued treatment, callers, and all other flag symbols, track the cited source artifact, and add exact-geometry plus real-feed browser regression coverage. PR #35 remains the separate seven-symbol Cyber-Quan change. Reverify the amended candidate on staging and promote that same SHA through the already selected production target.
 
 # Feed Country Geography Follow-ups - Plan
 

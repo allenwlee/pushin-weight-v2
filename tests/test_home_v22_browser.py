@@ -3105,6 +3105,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         regions = {
             "northern-america": ("021", "Northern America", "北美洲"),
             "eastern-asia": ("030", "Eastern Asia", "东亚"),
+            "australia-and-new-zealand": (
+                "053",
+                "Australia and New Zealand",
+                "澳大利亚和新西兰",
+            ),
             "europe": ("150", "Europe", "欧洲"),
             "northern-europe": ("154", "Northern Europe", "北欧"),
         }
@@ -3125,6 +3130,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
         countries = {
             "CN": ("156", "China", "中国", "eastern-asia", None, None),
+            "AU": (
+                "036",
+                "Australia",
+                "澳大利亚",
+                "australia-and-new-zealand",
+                None,
+                None,
+            ),
             "US": (
                 "840",
                 "United States of America",
@@ -3678,6 +3691,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         Account.objects.filter(author_id="v22-metadata-account-000").update(
             country_id="US", based_in_region_id=None
         )
+        Account.objects.filter(author_id="v22-metadata-account-007").update(
+            country_id="AU", based_in_region_id=None
+        )
         Account.objects.filter(author_id="v22-metadata-account-006").update(
             country_id="HK", based_in_region_id=None
         )
@@ -3699,6 +3715,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
         tweet_ids = {
             "country": self.fixture["replacement_id"],
+            "australia": "v22-metadata-007",
             "hierarchy": "v22-metadata-006",
             "taiwan": self.fixture["brand_scope_id"],
             "region": "v22-metadata-003",
@@ -3793,6 +3810,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 VIEWPORTS["desktop"],
                 {
                     "country": "United States of America",
+                    "australia": "Australia",
                     "hierarchy": "China, Hong Kong Special Administrative Region",
                     "taiwan": "TW · Taiwan",
                     "region": "Europe",
@@ -3804,6 +3822,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 VIEWPORTS["mobile"],
                 {
                     "country": "美利坚合众国",
+                    "australia": "澳大利亚",
                     "hierarchy": "中国香港特别行政区",
                     "taiwan": "TW · 台湾",
                     "region": "欧洲",
@@ -3842,6 +3861,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["country"]["geography"]["flags"],
                                 ["#flag-us"],
+                            )
+                            self.assertEqual(
+                                initial["australia"]["geography"]["flags"],
+                                ["#flag-au"],
+                            )
+                            self.assertEqual(
+                                initial["australia"]["geography"][
+                                    "flagInspections"
+                                ],
+                                [labels["australia"]],
                             )
                             self.assertEqual(
                                 initial["country"]["geography"]["flagInspections"],
@@ -3957,6 +3986,26 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                       .filter(href => !href || !document.querySelector(href))"""
                                 ),
                                 [],
+                            )
+                            revised_symbols = page.evaluate(
+                                """() => ({
+                                  auOverlay: Boolean(document.querySelector(
+                                    '#flag-au g[shape-rendering="geometricPrecision"]'
+                                  )),
+                                  cnBackground: document.querySelector('#flag-cn rect')
+                                    ?.getAttribute('fill'),
+                                  cnStars: document.querySelectorAll(
+                                    '#flag-cn > g > g > path'
+                                  ).length,
+                                })"""
+                            )
+                            self.assertEqual(
+                                revised_symbols,
+                                {
+                                    "auOverlay": True,
+                                    "cnBackground": "#FF0000",
+                                    "cnStars": 5,
+                                },
                             )
                             self.assertEqual(
                                 page.locator(

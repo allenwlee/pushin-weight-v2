@@ -32,6 +32,12 @@ RUNTIME_TEMPLATE_PATH = (
     REPO_ROOT / "monitor/templates/monitor/_country_flag_sprite.html"
 )
 RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
+REVISION_SOURCE_PATH = (
+    REPO_ROOT / "docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html"
+)
+REVISION_SOURCE_SHA256 = (
+    "9f98fa0fc96a933abf31453af4cc088e1fe4f9a00acfa14143753970cd20390f"
+)
 BASE_EXPECTED_CODES = (
     "AD",
     "AE",
@@ -289,13 +295,17 @@ EXPECTED_CLDR_SOURCE = {
     "license_url": "https://www.unicode.org/license.txt",
 }
 APPROVED_SYMBOL_SHA256 = {
-    "flag-cn": "b2b8b8866a47d1b6519507112bdb2dbe194ebf3cbe0b76424b85b914caf4072c",
     "flag-kr": "6cfee124679d2da52ecb80b35ccdf9cd9165c229092cfac89890890ccb1f3e67",
     "flag-us": "221c2158dc06e6d23181d311ee48acb37943a6b16fafa06ccd6016b24f27de7b",
 }
-BASE_SYMBOLS_SHA256 = (
-    "5655a794de17d49badc8b5cebfb508c1a6fa75150e03d585a39b9b1b821a373f"
+UNCHANGED_SYMBOLS_SHA256 = (
+    "9f0d505e714fe222157db4b91f2b2484f56ca799152340e5d7e5b45fbd7e880b"
 )
+REVISED_CODES = frozenset({"AU", "CN"})
+APPROVED_REVISED_SYMBOL_SHA256 = {
+    "flag-au": "01cb26a69f391297ae88887a74db19a52ce84aae4b3c276d5e4ac917fde9acee",
+    "flag-cn": "3bb478eebf182e9d025df882b9402aef5a91dc51aa538a353d93e6773366feb6",
+}
 COUNTRY_COUNT = 215
 TREATMENT_COUNT = COUNTRY_COUNT * 3
 SPECIMEN_COUNT = TREATMENT_COUNT * 3
@@ -481,11 +491,23 @@ def test_generated_sprite_reconstructs_all_manifest_pixels() -> None:
         f"flag-{code.lower()}" for code in EXPECTED_CODES
     )
     assert all(symbol.attrib["viewBox"] == "0 0 16 9" for symbol in symbols)
-    assert all(symbol.attrib["shape-rendering"] == "crispEdges" for symbol in symbols)
+    assert all(
+        symbol.attrib.get("shape-rendering") == "crispEdges"
+        for symbol in symbols
+        if symbol.attrib["id"] != "flag-cn"
+    )
+    assert (
+        "shape-rendering"
+        not in next(
+            symbol for symbol in symbols if symbol.attrib["id"] == "flag-cn"
+        ).attrib
+    )
 
     flags_by_code = {flag["code"]: flag for flag in manifest["flags"]}
     for symbol in symbols:
         code = symbol.attrib["id"].removeprefix("flag-").upper()
+        if code in REVISED_CODES:
+            continue
         reconstructed: list[list[str | None]] = [
             [None for _ in range(16)] for _ in range(9)
         ]
@@ -507,22 +529,57 @@ def test_generated_sprite_reconstructs_all_manifest_pixels() -> None:
         assert reconstructed == flags_by_code[code]["pixels"]
 
     symbol_bodies = _symbol_bodies(committed)
-    base_symbol_payload = "\n".join(
+    unchanged_symbol_payload = "\n".join(
         f"flag-{code.lower()}\t{symbol_bodies[f'flag-{code.lower()}']}"
-        for code in BASE_EXPECTED_CODES
+        for code in EXPECTED_CODES
+        if code not in REVISED_CODES
     )
-    assert hashlib.sha256(base_symbol_payload.encode()).hexdigest() == (
-        BASE_SYMBOLS_SHA256
+    assert hashlib.sha256(unchanged_symbol_payload.encode()).hexdigest() == (
+        UNCHANGED_SYMBOLS_SHA256
     )
     assert set(symbol_bodies).difference(
         f"flag-{code.lower()}" for code in BASE_EXPECTED_CODES
-    ) == {
-        f"flag-{code.lower()}" for code in EXPECTED_ADDITIONAL_SOURCE_FILES
-    }
+    ) == {f"flag-{code.lower()}" for code in EXPECTED_ADDITIONAL_SOURCE_FILES}
     for symbol_id, expected_digest in APPROVED_SYMBOL_SHA256.items():
         assert hashlib.sha256(symbol_bodies[symbol_id].encode()).hexdigest() == (
             expected_digest
         )
+
+
+def test_runtime_uses_approved_cn_v4_and_au_revised_artwork() -> None:
+    source = REVISION_SOURCE_PATH.read_text(encoding="utf-8")
+    assert hashlib.sha256(source.encode()).hexdigest() == REVISION_SOURCE_SHA256
+
+    runtime = RUNTIME_TEMPLATE_PATH.read_text(encoding="utf-8")
+    runtime_bodies = _symbol_bodies(runtime)
+    assert {
+        symbol_id: hashlib.sha256(runtime_bodies[symbol_id].encode()).hexdigest()
+        for symbol_id in APPROVED_REVISED_SYMBOL_SHA256
+    } == APPROVED_REVISED_SYMBOL_SHA256
+
+    au_open = re.search(r'<symbol id="flag-au"([^>]*)>', runtime)
+    cn_open = re.search(r'<symbol id="flag-cn"([^>]*)>', runtime)
+    assert au_open and cn_open
+    assert 'viewBox="0 0 16 9"' in au_open.group(1)
+    assert 'shape-rendering="crispEdges"' in au_open.group(1)
+    assert 'viewBox="0 0 16 9"' in cn_open.group(1)
+    assert "shape-rendering" not in cn_open.group(1)
+
+
+def test_revision_source_drift_fails_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    generator = _load_generator()
+    manifest = _load_manifest()
+    changed_source = tmp_path / REVISION_SOURCE_PATH.name
+    changed_source.write_text(
+        REVISION_SOURCE_PATH.read_text(encoding="utf-8") + "\n<!-- drift -->\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(generator, "REVISION_SOURCE_PATH", changed_source)
+
+    with pytest.raises(ValueError, match="revision source digest"):
+        generator.render_runtime_template(manifest)
 
 
 def test_sprite_inventory_is_complete_and_excludes_sentinels() -> None:

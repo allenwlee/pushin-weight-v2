@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PushinWeight — CN and AU 14px flag revisions</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #101a2b;
+      --line: #26344a;
+      --text: #f5f7fb;
+      --muted: #9caabd;
+      --cyan: #5ce7ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 28px; }
+    main { width: min(820px, 100%); }
+    .eyebrow { margin: 0 0 7px; color: var(--cyan); font: 700 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 0 0 7px; font-size: 21px; line-height: 1.15; letter-spacing: -.025em; }
+    .lede { margin: 0 0 20px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    th { color: var(--muted); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .country { width: 104px; font-weight: 700; }
+    .flag-slot { width: 82px; }
+    .flag {
+      display: block;
+      width: 14px;
+      height: 7.875px;
+      filter: saturate(.72) brightness(.90);
+      opacity: .90;
+    }
+    .revision .flag { outline: 1px solid rgba(92, 231, 255, .22); outline-offset: 5px; }
+    .empty { color: #58677c; }
+    .note { color: var(--muted); line-height: 1.35; }
+    .measure { margin-top: 12px; color: var(--muted); font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="flag-cn-source" viewBox="0 0 16 9" shape-rendering="crispEdges">
+    <path fill="#FF0000" d="M0 0h5v1H0z M7 0h1v1H7z M9 0h7v1H9z M10 1h6v1H10z M10 2h6v1H10z M0 3h1v1H0z M5 3h1v1H5z M8 3h1v1H8z M10 3h6v1H10z M0 4h1v1H0z M3 4h1v1H3z M10 4h6v1H10z M0 5h3v1H0z M4 5h1v1H4z M7 5h1v1H7z M9 5h7v1H9z M0 6h1v1H0z M5 6h2v1H5z M8 6h8v1H8z M0 7h6v1H0z M7 7h9v1H7z M0 8h16v1H0z"/>
+    <path fill="#FF4700" d="M5 0h1v1H5z"/>
+    <path fill="#FF1700" d="M6 0h1v1H6z"/>
+    <path fill="#FF0100" d="M8 0h1v1H8z M9 1h1v1H9z M9 3h1v1H9z M2 6h2v1H2z M7 6h1v1H7z M6 7h1v1H6z"/>
+    <path fill="#FF0400" d="M0 1h1v1H0z M8 4h1v1H8z"/>
+    <path fill="#FF1600" d="M1 1h1v1H1z"/>
+    <path fill="#FF4C00" d="M2 1h1v1H2z"/>
+    <path fill="#FF9B00" d="M3 1h1v1H3z"/>
+    <path fill="#FF1300" d="M4 1h1v1H4z"/>
+    <path fill="#FFA800" d="M5 1h1v1H5z"/>
+    <path fill="#FF5E00" d="M6 1h1v1H6z"/>
+    <path fill="#FF4400" d="M7 1h1v1H7z M4 4h1v1H4z"/>
+    <path fill="#FF0300" d="M8 1h1v1H8z M8 2h1v1H8z"/>
+    <path fill="#FF0600" d="M0 2h1v1H0z"/>
+    <path fill="#FF8600" d="M1 2h1v1H1z"/>
+    <path fill="#FFEE00" d="M2 2h1v1H2z"/>
+    <path fill="#FFFA00" d="M3 2h1v1H3z"/>
+    <path fill="#FFCB00" d="M4 2h1v1H4z"/>
+    <path fill="#FF2600" d="M5 2h1v1H5z"/>
+    <path fill="#FF3400" d="M6 2h1v1H6z"/>
+    <path fill="#FF9600" d="M7 2h1v1H7z"/>
+    <path fill="#FF0200" d="M9 2h1v1H9z M9 4h1v1H9z M3 5h1v1H3z M8 5h1v1H8z M1 6h1v1H1z M4 6h1v1H4z"/>
+    <path fill="#FF4800" d="M1 3h1v1H1z"/>
+    <path fill="#FFCF00" d="M2 3h1v1H2z"/>
+    <path fill="#FFAF00" d="M3 3h1v1H3z"/>
+    <path fill="#FFB300" d="M4 3h1v1H4z"/>
+    <path fill="#FF1200" d="M6 3h1v1H6z"/>
+    <path fill="#FF4100" d="M7 3h1v1H7z M6 5h1v1H6z"/>
+    <path fill="#FF3B00" d="M1 4h1v1H1z"/>
+    <path fill="#FF1A00" d="M2 4h1v1H2z"/>
+    <path fill="#FF4900" d="M5 4h1v1H5z"/>
+    <path fill="#FF5D00" d="M6 4h1v1H6z"/>
+    <path fill="#FF9F00" d="M7 4h1v1H7z"/>
+    <path fill="#FFA000" d="M5 5h1v1H5z"/>
+  </symbol>
+    <symbol id="flag-au-source" viewBox="0 0 16 9" shape-rendering="crispEdges">
+    <path fill="#A2305A" d="M0 0h1v1H0z"/>
+    <path fill="#E57981" d="M1 0h1v1H1z"/>
+    <path fill="#928CBD" d="M2 0h1v1H2z"/>
+    <path fill="#F27076" d="M3 0h1v1H3z"/>
+    <path fill="#FF0E06" d="M4 0h1v1H4z"/>
+    <path fill="#8A7DB3" d="M5 0h1v1H5z"/>
+    <path fill="#752E70" d="M6 0h1v1H6z"/>
+    <path fill="#ED7C7C" d="M7 0h1v1H7z"/>
+    <path fill="#6F407B" d="M8 0h1v1H8z"/>
+    <path fill="#01067D" d="M9 0h1v1H9z"/>
+    <path fill="#020279" d="M10 0h1v1H10z"/>
+    <path fill="#1C208B" d="M11 0h1v1H11z"/>
+    <path fill="#5052A5" d="M12 0h1v1H12z"/>
+    <path fill="#010378" d="M13 0h1v1H13z"/>
+    <path fill="#05087E" d="M14 0h1v1H14z"/>
+    <path fill="#00047C" d="M15 0h1v1H15z M10 6h1v1H10z M9 7h1v1H9z M8 8h4v1H8z"/>
+    <path fill="#7B77B5" d="M0 1h1v1H0z"/>
+    <path fill="#C78FA8" d="M1 1h1v1H1z"/>
+    <path fill="#FFA69B" d="M2 1h1v1H2z"/>
+    <path fill="#FE6969" d="M3 1h1v1H3z"/>
+    <path fill="#FF0A0A" d="M4 1h1v1H4z"/>
+    <path fill="#F69DA1" d="M5 1h1v1H5z"/>
+    <path fill="#FFABA1" d="M6 1h1v1H6z"/>
+    <path fill="#C3B7D1" d="M7 1h1v1H7z"/>
+    <path fill="#45499D" d="M8 1h1v1H8z"/>
+    <path fill="#050679" d="M9 1h1v1H9z"/>
+    <path fill="#020276" d="M10 1h1v1H10z"/>
+    <path fill="#696BB2" d="M11 1h1v1H11z"/>
+    <path fill="#C0C2DF" d="M12 1h1v1H12z"/>
+    <path fill="#0A0E80" d="M13 1h1v1H13z"/>
+    <path fill="#000073" d="M14 1h1v1H14z M10 2h1v1H10z M11 7h1v1H11z"/>
+    <path fill="#01057E" d="M15 1h1v1H15z"/>
+    <path fill="#FF3927" d="M0 2h1v1H0z"/>
+    <path fill="#FF302E" d="M1 2h1v1H1z"/>
+    <path fill="#FB3134" d="M2 2h1v1H2z"/>
+    <path fill="#FF1010" d="M3 2h1v1H3z"/>
+    <path fill="#FE0000" d="M4 2h1v1H4z"/>
+    <path fill="#FE2B2C" d="M5 2h1v1H5z"/>
+    <path fill="#F43237" d="M6 2h1v1H6z"/>
+    <path fill="#FF3429" d="M7 2h1v1H7z"/>
+    <path fill="#941F51" d="M8 2h1v1H8z"/>
+    <path fill="#000080" d="M9 2h1v1H9z"/>
+    <path fill="#04087E" d="M11 2h1v1H11z"/>
+    <path fill="#000279" d="M12 2h1v1H12z M1 8h1v1H1z"/>
+    <path fill="#20248D" d="M13 2h1v1H13z"/>
+    <path fill="#4B4DA2" d="M14 2h1v1H14z"/>
+    <path fill="#000278" d="M15 2h1v1H15z"/>
+    <path fill="#9391C5" d="M0 3h1v1H0z"/>
+    <path fill="#FFC8C5" d="M1 3h1v1H1z"/>
+    <path fill="#FF9692" d="M2 3h1v1H2z"/>
+    <path fill="#FF6968" d="M3 3h1v1H3z"/>
+    <path fill="#FF0B0A" d="M4 3h1v1H4z"/>
+    <path fill="#FFB2AA" d="M5 3h1v1H5z"/>
+    <path fill="#FF9D99" d="M6 3h1v1H6z"/>
+    <path fill="#9582B5" d="M7 3h1v1H7z"/>
+    <path fill="#363997" d="M8 3h1v1H8z"/>
+    <path fill="#1C1C84" d="M9 3h1v1H9z"/>
+    <path fill="#4E50A3" d="M10 3h1v1H10z"/>
+    <path fill="#01047A" d="M11 3h1v1H11z"/>
+    <path fill="#000070" d="M12 3h1v1H12z"/>
+    <path fill="#5E60AC" d="M13 3h1v1H13z"/>
+    <path fill="#C2C4E1" d="M14 3h1v1H14z"/>
+    <path fill="#101383" d="M15 3h1v1H15z"/>
+    <path fill="#CF6B7D" d="M0 4h1v1H0z"/>
+    <path fill="#B55070" d="M1 4h1v1H1z"/>
+    <path fill="#493F97" d="M2 4h1v1H2z"/>
+    <path fill="#D55A6E" d="M3 4h1v1H3z"/>
+    <path fill="#E60207" d="M4 4h1v1H4z"/>
+    <path fill="#A895BE" d="M5 4h1v1H5z"/>
+    <path fill="#AB6B92" d="M6 4h1v1H6z"/>
+    <path fill="#CD6774" d="M7 4h1v1H7z"/>
+    <path fill="#270258" d="M8 4h1v1H8z"/>
+    <path fill="#5F6CB7" d="M9 4h1v1H9z"/>
+    <path fill="#C6C5E0" d="M10 4h1v1H10z"/>
+    <path fill="#0C0E7F" d="M11 4h1v1H11z"/>
+    <path fill="#22238D" d="M12 4h1v1H12z"/>
+    <path fill="#4E51A4" d="M13 4h1v1H13z"/>
+    <path fill="#000176" d="M14 4h1v1H14z"/>
+    <path fill="#060A7F" d="M15 4h1v1H15z M4 8h1v1H4z"/>
+    <path fill="#170069" d="M0 5h1v1H0z"/>
+    <path fill="#000C84" d="M1 5h1v1H1z"/>
+    <path fill="#050F86" d="M2 5h1v1H2z"/>
+    <path fill="#2C288C" d="M3 5h1v1H3z"/>
+    <path fill="#4C4395" d="M4 5h1v1H4z"/>
+    <path fill="#121683" d="M5 5h1v1H5z"/>
+    <path fill="#00138D" d="M6 5h1v1H6z"/>
+    <path fill="#16147F" d="M7 5h1v1H7z"/>
+    <path fill="#11046F" d="M8 5h1v1H8z"/>
+    <path fill="#010880" d="M9 5h1v1H9z"/>
+    <path fill="#02067C" d="M10 5h1v1H10z"/>
+    <path fill="#020478" d="M11 5h1v1H11z"/>
+    <path fill="#40449D" d="M12 5h1v1H12z"/>
+    <path fill="#43469F" d="M13 5h1v1H13z"/>
+    <path fill="#000175" d="M14 5h1v1H14z"/>
+    <path fill="#02067D" d="M15 5h1v1H15z"/>
+    <path fill="#000983" d="M0 6h1v1H0z"/>
+    <path fill="#010074" d="M1 6h1v1H1z"/>
+    <path fill="#3A3C98" d="M2 6h1v1H2z"/>
+    <path fill="#EAECF6" d="M3 6h1v1H3z"/>
+    <path fill="#FFFFFF" d="M4 6h1v1H4z"/>
+    <path fill="#A2A3CE" d="M5 6h1v1H5z"/>
+    <path fill="#070576" d="M6 6h1v1H6z"/>
+    <path fill="#00027C" d="M7 6h1v1H7z"/>
+    <path fill="#00057F" d="M8 6h1v1H8z"/>
+    <path fill="#00037B" d="M9 6h1v1H9z"/>
+    <path fill="#00027A" d="M11 6h1v1H11z"/>
+    <path fill="#101484" d="M12 6h1v1H12z"/>
+    <path fill="#3E419C" d="M13 6h1v1H13z"/>
+    <path fill="#000379" d="M14 6h1v1H14z"/>
+    <path fill="#01057D" d="M15 6h1v1H15z M0 8h1v1H0z"/>
+    <path fill="#04077D" d="M0 7h1v1H0z"/>
+    <path fill="#000076" d="M1 7h1v1H1z"/>
+    <path fill="#41449D" d="M2 7h1v1H2z"/>
+    <path fill="#EEEEF6" d="M3 7h1v1H3z"/>
+    <path fill="#BFBFDD" d="M4 7h1v1H4z"/>
+    <path fill="#B9BADB" d="M5 7h1v1H5z"/>
+    <path fill="#040576" d="M6 7h1v1H6z"/>
+    <path fill="#04067D" d="M7 7h1v1H7z"/>
+    <path fill="#01047C" d="M8 7h1v1H8z"/>
+    <path fill="#05097E" d="M10 7h1v1H10z"/>
+    <path fill="#6B6DB3" d="M12 7h1v1H12z"/>
+    <path fill="#C3C5E1" d="M13 7h1v1H13z"/>
+    <path fill="#0F1282" d="M14 7h1v1H14z"/>
+    <path fill="#01017A" d="M15 7h1v1H15z"/>
+    <path fill="#25288F" d="M2 8h1v1H2z"/>
+    <path fill="#3F429C" d="M3 8h1v1H3z"/>
+    <path fill="#5255A6" d="M5 8h1v1H5z"/>
+    <path fill="#02047A" d="M6 8h1v1H6z"/>
+    <path fill="#01057C" d="M7 8h1v1H7z"/>
+    <path fill="#03077E" d="M12 8h1v1H12z M14 8h1v1H14z"/>
+    <path fill="#00037C" d="M13 8h1v1H13z"/>
+    <path fill="#00047B" d="M15 8h1v1H15z"/>
+  </symbol>
+
+    <path id="five-point-star" d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z"/>
+
+    <symbol id="flag-cn-revised" viewBox="0 0 16 9">
+      <rect width="16" height="9" fill="#FF0000"/>
+      <g fill="#FFDE00">
+        <use href="#five-point-star" transform="translate(2.75 2.55) scale(1.18)"/>
+        <use href="#five-point-star" transform="translate(5.12 1.25) rotate(22) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(6.15 2.20) rotate(8) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(6.02 3.47) rotate(-8) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(5.08 4.55) rotate(-22) scale(.42)"/>
+      </g>
+    </symbol>
+
+    <symbol id="flag-cn-upper-left" viewBox="0 0 16 9">
+      <rect width="16" height="9" fill="#FF0000"/>
+      <g fill="#FFDE00" transform="scale(1.5)">
+        <use href="#five-point-star" transform="translate(2.75 2.55) scale(1.18)"/>
+        <use href="#five-point-star" transform="translate(5.12 1.25) rotate(22) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(6.15 2.20) rotate(8) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(6.02 3.47) rotate(-8) scale(.42)"/>
+        <use href="#five-point-star" transform="translate(5.08 4.55) rotate(-22) scale(.42)"/>
+      </g>
+    </symbol>
+
+    <symbol id="flag-cn-v4" viewBox="0 0 16 9">
+      <rect width="16" height="9" fill="#FF0000"/>
+      <g fill="#FFDE00">
+        <g transform="translate(2.75 2.55) scale(1.33)"><use href="#five-point-star" transform="scale(1.18)"/></g>
+        <g transform="translate(5.12 1.25) rotate(22) scale(1.33)"><use href="#five-point-star" transform="scale(.42)"/></g>
+        <g transform="translate(6.15 2.20) rotate(8) scale(1.33)"><use href="#five-point-star" transform="scale(.42)"/></g>
+        <g transform="translate(6.02 3.47) rotate(-8) scale(1.33)"><use href="#five-point-star" transform="scale(.42)"/></g>
+        <g transform="translate(5.08 4.55) rotate(-22) scale(1.33)"><use href="#five-point-star" transform="scale(.42)"/></g>
+      </g>
+    </symbol>
+
+    <symbol id="flag-au-revised" viewBox="0 0 16 9">
+      <use href="#flag-au-source"/>
+      <g shape-rendering="crispEdges">
+        <path fill="#2A2B8E" d="M3 6h1v1H3z"/>
+        <path fill="#1D1F87" d="M4 6h1v1H4z"/>
+        <path fill="#11137F" d="M5 6h1v1H5z"/>
+        <path fill="#303294" d="M3 7h1v1H3z"/>
+        <path fill="#202188" d="M4 7h1v1H4z"/>
+        <path fill="#11127F" d="M5 7h1v1H5z"/>
+      </g>
+      <g shape-rendering="geometricPrecision" transform="translate(4.5 7) scale(.86) translate(-4.5 -7)">
+        <path fill="#EAECF6" d="M3 6h1v1H3z"/>
+        <path fill="#FFFFFF" d="M4 6h1v1H4z"/>
+        <path fill="#A2A3CE" d="M5 6h1v1H5z"/>
+        <path fill="#EEEEF6" d="M3 7h1v1H3z"/>
+        <path fill="#BFBFDD" d="M4 7h1v1H4z"/>
+        <path fill="#B9BADB" d="M5 7h1v1H5z"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <main>
+    <p class="eyebrow">PushinWeight / Pixel Flags by R74n / focused revision</p>
+    <h1>CN + AU at 14px</h1>
+    <p class="lede">Source and revised glyphs are rendered at the production 14 × 7.875 px treatment. No enlarged inspection render is included.</p>
+
+    <table aria-label="China and Australia flag revisions at 14 pixels">
+      <thead>
+        <tr>
+          <th>Country</th>
+          <th>Source</th>
+          <th>Revised</th>
+          <th>Upper-left 66%</th>
+          <th>V4 · +33%</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="country">CN · China</td>
+          <td class="flag-slot">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="Source China flag"><use href="#flag-cn-source"/></svg>
+          </td>
+          <td class="flag-slot revision">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="Revised China flag"><use href="#flag-cn-revised"/></svg>
+          </td>
+          <td class="flag-slot revision">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="China flag with enlarged upper-left star field"><use href="#flag-cn-upper-left"/></svg>
+          </td>
+          <td class="flag-slot revision">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="China flag V4 with stars enlarged proportionally by 33 percent"><use href="#flag-cn-v4"/></svg>
+          </td>
+          <td class="note">V4 returns to the revised layout and enlarges every star by 33%; centers and proportions stay fixed.</td>
+        </tr>
+        <tr>
+          <td class="country">AU · Australia</td>
+          <td class="flag-slot">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="Source Australia flag"><use href="#flag-au-source"/></svg>
+          </td>
+          <td class="flag-slot revision">
+            <svg class="flag" width="14" height="7.875" viewBox="0 0 16 9" aria-label="Revised Australia flag"><use href="#flag-au-revised"/></svg>
+          </td>
+          <td class="flag-slot empty" aria-label="No additional Australia revision">—</td>
+          <td class="flag-slot empty" aria-label="No Australia V4 revision">—</td>
+          <td class="note">Commonwealth Star reduced by 14%; all other source pixels retained.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="measure">Display treatment: 14 × 7.875 px · 72% saturation · 90% brightness · 90% opacity</p>
+  </main>
+</body>
+</html>

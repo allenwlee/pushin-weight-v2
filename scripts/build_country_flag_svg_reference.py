@@ -9,6 +9,7 @@ import html
 import json
 import re
 import sys
+import textwrap
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from io import BytesIO
@@ -29,6 +30,16 @@ RUNTIME_TEMPLATE_PATH = (
 )
 RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
 GEOGRAPHY_MANIFEST_PATH = REPO_ROOT / "monitor/data/account_geography.json"
+REVISION_SOURCE_PATH = (
+    REPO_ROOT / "docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html"
+)
+REVISION_SOURCE_SHA256 = (
+    "9f98fa0fc96a933abf31453af4cc088e1fe4f9a00acfa14143753970cd20390f"
+)
+REVISION_SYMBOLS = {
+    "AU": "flag-au-revised",
+    "CN": "flag-cn-v4",
+}
 CLDR_ZH_CN_SOURCE = {
     "provider": "Unicode CLDR",
     "release": "48",
@@ -582,11 +593,65 @@ def _paths_by_color(pixels: list[list[str | None]]) -> dict[str, list[str]]:
     return dict(paths)
 
 
+def _revision_source() -> str:
+    source = REVISION_SOURCE_PATH.read_text(encoding="utf-8")
+    if hashlib.sha256(source.encode()).hexdigest() != REVISION_SOURCE_SHA256:
+        raise ValueError("CN/AU flag revision source digest does not match")
+    return source
+
+
+def _symbol_body(source: str, symbol_id: str) -> str:
+    match = re.search(
+        rf'<symbol id="{re.escape(symbol_id)}"[^>]*>(.*?)</symbol>',
+        source,
+        flags=re.DOTALL,
+    )
+    if not match:
+        raise ValueError(f"flag revision source is missing {symbol_id}")
+    return textwrap.dedent(match.group(1)).strip()
+
+
+def _pixel_path_lines(flag: dict) -> list[str]:
+    return [
+        f'<path fill="{color}" d="{" ".join(commands)}"/>'
+        for color, commands in _paths_by_color(flag["pixels"]).items()
+    ]
+
+
+def _revision_body(source: str, flag: dict) -> str | None:
+    code = flag["code"]
+    revision_id = REVISION_SYMBOLS.get(code)
+    if revision_id is None:
+        return None
+
+    body = _symbol_body(source, revision_id)
+    if code == "AU":
+        source_body = "\n".join(_pixel_path_lines(flag))
+        placeholder = '<use href="#flag-au-source"/>'
+        if body.count(placeholder) != 1:
+            raise ValueError("AU Revised must reference flag-au-source exactly once")
+        return body.replace(placeholder, source_body)
+
+    star_match = re.search(r'<path id="five-point-star" d="([^"]+)"\s*/>', source)
+    if not star_match:
+        raise ValueError("CN V4 source is missing the five-point-star definition")
+    star_path = star_match.group(1)
+    body, replacement_count = re.subn(
+        r'<use href="#five-point-star" transform="([^"]+)"/>',
+        rf'<path d="{star_path}" transform="\1"/>',
+        body,
+    )
+    if replacement_count != 5 or "<use " in body:
+        raise ValueError("CN V4 must contain exactly five approved star instances")
+    return body
+
+
 def render_sprite(manifest: dict) -> str:
-    """Render one path per source color, composed of horizontal pixel runs."""
+    """Render the approved sprite, including the two reviewed vector revisions."""
 
     validate_manifest(manifest)
     source = manifest["source"]
+    revision_source = _revision_source()
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">',
@@ -594,14 +659,22 @@ def render_sprite(manifest: dict) -> str:
             "  <!-- Pixel flags by R74n; source revisions: "
             f"Top Gun {source['top_gun_commit']}, R74n {source['r74n_revision']}. -->"
         ),
+        (
+            "  <!-- AU Revised and CN V4: "
+            "docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html. -->"
+        ),
     ]
     for flag in manifest["flags"]:
+        revised_body = _revision_body(revision_source, flag)
+        shape_rendering = ' shape-rendering="crispEdges"' if flag["code"] != "CN" else ""
         lines.append(
-            f'  <symbol id="flag-{flag["code"].lower()}" viewBox="0 0 16 9" '
-            'shape-rendering="crispEdges">'
+            f'  <symbol id="flag-{flag["code"].lower()}" viewBox="0 0 16 9"'
+            f"{shape_rendering}>"
         )
-        for color, commands in _paths_by_color(flag["pixels"]).items():
-            lines.append(f'    <path fill="{color}" d="{" ".join(commands)}"/>')
+        if revised_body is None:
+            lines.extend(f"    {line}" for line in _pixel_path_lines(flag))
+        else:
+            lines.extend(f"    {line}" for line in revised_body.splitlines())
         lines.append("  </symbol>")
     lines.append("</svg>")
     return "\n".join(lines) + "\n"
@@ -892,7 +965,7 @@ def render_html(manifest: dict) -> str:
   <aside class="status-card">
     <span class="status">Review boundary</span>
     <strong>215 flags · Recommended approved</strong>
-    <p>Reference artifact for the homepage feed integration. Runtime instances use the Recommended presentation while source fills stay exact.</p>
+    <p>Reference artifact for the homepage feed integration. Runtime instances use the Recommended presentation; AU Revised and CN V4 follow the later owner-approved focused revision.</p>
   </aside>
 </header>
 
@@ -918,7 +991,7 @@ def render_html(manifest: dict) -> str:
 </main>
 
 <footer class="shell">
-  <strong>{{ATTRIBUTION}}</strong> · Top Gun <code>{{TOP_GUN_COMMIT}}</code> · R74n <code>{{R74N_REVISION}}</code>. License clearance confirmed by the owner for this PushinWeight use. Chinese territory names come from Unicode CLDR 48 under Unicode License v3. SVG path fills remain exact to the vendored matrices; muting is presentation-only.
+  <strong>{{ATTRIBUTION}}</strong> · Top Gun <code>{{TOP_GUN_COMMIT}}</code> · R74n <code>{{R74N_REVISION}}</code>. License clearance confirmed by the owner for this PushinWeight use. Chinese territory names come from Unicode CLDR 48 under Unicode License v3. AU Revised and CN V4 come from the focused 2026-09-01 review artifact; the other 213 SVGs remain exact to the vendored matrices. Muting is presentation-only.
 </footer>
 </body>
 </html>

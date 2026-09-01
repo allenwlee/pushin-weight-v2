@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
   <!-- Pixel flags by R74n; source revisions: Top Gun 5ad0dbda9140ffa52ea791a0ec51c975b8c9a97b, R74n a1f3a5db7e97961e3e515db192ac7d2c7fa1a8bf. -->
+  <!-- AU Revised and CN V4: docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html. -->
   <symbol id="flag-ad" viewBox="0 0 16 9" shape-rendering="crispEdges">
     <path fill="#0029FF" d="M0 0h3v1H0z M0 1h3v1H0z M0 2h3v1H0z M0 3h3v1H0z M0 4h3v1H0z M0 5h3v1H0z M0 6h3v1H0z M0 7h3v1H0z M0 8h3v1H0z"/>
     <path fill="#052CFA" d="M3 0h1v1H3z M3 1h1v1H3z M3 2h1v1H3z M3 6h1v1H3z M3 7h1v1H3z M3 8h1v1H3z"/>
@@ -615,6 +616,22 @@
     <path fill="#03077E" d="M12 8h1v1H12z M14 8h1v1H14z"/>
     <path fill="#00037C" d="M13 8h1v1H13z"/>
     <path fill="#00047B" d="M15 8h1v1H15z"/>
+    <g shape-rendering="crispEdges">
+      <path fill="#2A2B8E" d="M3 6h1v1H3z"/>
+      <path fill="#1D1F87" d="M4 6h1v1H4z"/>
+      <path fill="#11137F" d="M5 6h1v1H5z"/>
+      <path fill="#303294" d="M3 7h1v1H3z"/>
+      <path fill="#202188" d="M4 7h1v1H4z"/>
+      <path fill="#11127F" d="M5 7h1v1H5z"/>
+    </g>
+    <g shape-rendering="geometricPrecision" transform="translate(4.5 7) scale(.86) translate(-4.5 -7)">
+      <path fill="#EAECF6" d="M3 6h1v1H3z"/>
+      <path fill="#FFFFFF" d="M4 6h1v1H4z"/>
+      <path fill="#A2A3CE" d="M5 6h1v1H5z"/>
+      <path fill="#EEEEF6" d="M3 7h1v1H3z"/>
+      <path fill="#BFBFDD" d="M4 7h1v1H4z"/>
+      <path fill="#B9BADB" d="M5 7h1v1H5z"/>
+    </g>
   </symbol>
   <symbol id="flag-aw" viewBox="0 0 16 9" shape-rendering="crispEdges">
     <path fill="#0487B8" d="M0 0h1v1H0z"/>
@@ -2063,41 +2080,15 @@
     <path fill="#FF0300" d="M8 7h1v1H8z"/>
     <path fill="#FF0100" d="M6 8h1v1H6z M8 8h2v1H8z"/>
   </symbol>
-  <symbol id="flag-cn" viewBox="0 0 16 9" shape-rendering="crispEdges">
-    <path fill="#FF0000" d="M0 0h5v1H0z M7 0h1v1H7z M9 0h7v1H9z M10 1h6v1H10z M10 2h6v1H10z M0 3h1v1H0z M5 3h1v1H5z M8 3h1v1H8z M10 3h6v1H10z M0 4h1v1H0z M3 4h1v1H3z M10 4h6v1H10z M0 5h3v1H0z M4 5h1v1H4z M7 5h1v1H7z M9 5h7v1H9z M0 6h1v1H0z M5 6h2v1H5z M8 6h8v1H8z M0 7h6v1H0z M7 7h9v1H7z M0 8h16v1H0z"/>
-    <path fill="#FF4700" d="M5 0h1v1H5z"/>
-    <path fill="#FF1700" d="M6 0h1v1H6z"/>
-    <path fill="#FF0100" d="M8 0h1v1H8z M9 1h1v1H9z M9 3h1v1H9z M2 6h2v1H2z M7 6h1v1H7z M6 7h1v1H6z"/>
-    <path fill="#FF0400" d="M0 1h1v1H0z M8 4h1v1H8z"/>
-    <path fill="#FF1600" d="M1 1h1v1H1z"/>
-    <path fill="#FF4C00" d="M2 1h1v1H2z"/>
-    <path fill="#FF9B00" d="M3 1h1v1H3z"/>
-    <path fill="#FF1300" d="M4 1h1v1H4z"/>
-    <path fill="#FFA800" d="M5 1h1v1H5z"/>
-    <path fill="#FF5E00" d="M6 1h1v1H6z"/>
-    <path fill="#FF4400" d="M7 1h1v1H7z M4 4h1v1H4z"/>
-    <path fill="#FF0300" d="M8 1h1v1H8z M8 2h1v1H8z"/>
-    <path fill="#FF0600" d="M0 2h1v1H0z"/>
-    <path fill="#FF8600" d="M1 2h1v1H1z"/>
-    <path fill="#FFEE00" d="M2 2h1v1H2z"/>
-    <path fill="#FFFA00" d="M3 2h1v1H3z"/>
-    <path fill="#FFCB00" d="M4 2h1v1H4z"/>
-    <path fill="#FF2600" d="M5 2h1v1H5z"/>
-    <path fill="#FF3400" d="M6 2h1v1H6z"/>
-    <path fill="#FF9600" d="M7 2h1v1H7z"/>
-    <path fill="#FF0200" d="M9 2h1v1H9z M9 4h1v1H9z M3 5h1v1H3z M8 5h1v1H8z M1 6h1v1H1z M4 6h1v1H4z"/>
-    <path fill="#FF4800" d="M1 3h1v1H1z"/>
-    <path fill="#FFCF00" d="M2 3h1v1H2z"/>
-    <path fill="#FFAF00" d="M3 3h1v1H3z"/>
-    <path fill="#FFB300" d="M4 3h1v1H4z"/>
-    <path fill="#FF1200" d="M6 3h1v1H6z"/>
-    <path fill="#FF4100" d="M7 3h1v1H7z M6 5h1v1H6z"/>
-    <path fill="#FF3B00" d="M1 4h1v1H1z"/>
-    <path fill="#FF1A00" d="M2 4h1v1H2z"/>
-    <path fill="#FF4900" d="M5 4h1v1H5z"/>
-    <path fill="#FF5D00" d="M6 4h1v1H6z"/>
-    <path fill="#FF9F00" d="M7 4h1v1H7z"/>
-    <path fill="#FFA000" d="M5 5h1v1H5z"/>
+  <symbol id="flag-cn" viewBox="0 0 16 9">
+    <rect width="16" height="9" fill="#FF0000"/>
+    <g fill="#FFDE00">
+      <g transform="translate(2.75 2.55) scale(1.33)"><path d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z" transform="scale(1.18)"/></g>
+      <g transform="translate(5.12 1.25) rotate(22) scale(1.33)"><path d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z" transform="scale(.42)"/></g>
+      <g transform="translate(6.15 2.20) rotate(8) scale(1.33)"><path d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z" transform="scale(.42)"/></g>
+      <g transform="translate(6.02 3.47) rotate(-8) scale(1.33)"><path d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z" transform="scale(.42)"/></g>
+      <g transform="translate(5.08 4.55) rotate(-22) scale(1.33)"><path d="M0-1 .2245-.309 .9511-.309 .3633.118 .5878.809 0 .382-.5878.809-.3633.118-.9511-.309-.2245-.309Z" transform="scale(.42)"/></g>
+    </g>
   </symbol>
   <symbol id="flag-co" viewBox="0 0 16 9" shape-rendering="crispEdges">
     <path fill="#FFE100" d="M0 0h16v1H0z"/>
