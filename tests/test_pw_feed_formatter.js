@@ -188,12 +188,21 @@ if (typeof renderRowHtml === 'function') {
     'client-created rows use the approved engagement symbols');
   assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
     'follower count sits directly under the follower symbol');
-  assertEq(rowHtml.includes('class="account-role role-official"'), true,
+  assertEq(rowHtml.includes('class="follower-magnitude pw-inspection-trigger"') &&
+    rowHtml.includes('data-pw-inspection="52.1k followers"') &&
+    rowHtml.includes('aria-expanded="false"') &&
+    !rowHtml.includes('title="52.1k followers"'), true,
+    'follower magnitude uses the shared inspection popover without a native tooltip');
+  assertEq(rowHtml.includes('class="account-role role-official pw-inspection-trigger"'), true,
     'feed row reserves and colors the official role slot');
   assertEq(rowHtml.includes('href="#icon-role-badge"'), true,
     'client-created rows use the Cyber-Quan role badge');
   assertEq(rowHtml.includes('aria-label="Official"'), true,
     'role badge retains its localized accessible label');
+  assertEq(rowHtml.includes('data-pw-inspection="Official"') &&
+    rowHtml.includes('aria-expanded="false"') &&
+    !rowHtml.includes('title="Official"'), true,
+    'role badge uses the shared inspection popover without a native tooltip');
   assertEq(rowHtml.includes('class="account-geography geography-hierarchy"'), true,
     'guiding-country geography is rendered in the follower lead');
   assertEq(rowHtml.includes('href="#flag-cn"') && rowHtml.includes('href="#flag-hk"'), true,

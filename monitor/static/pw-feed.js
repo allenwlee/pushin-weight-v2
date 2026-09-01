@@ -185,9 +185,10 @@
       return '';
     }
     var label = account.role_label || role;
-    return '<span class="account-role role-' + role + '" role="img"' +
-      ' aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '">' +
-      renderIcon('icon-role-badge', 'account-role-icon') + '</span>';
+    return '<button type="button" class="account-role role-' + role +
+      ' pw-inspection-trigger" data-pw-inspection="' + escapeHtml(label) + '"' +
+      ' aria-label="' + escapeHtml(label) + '" aria-expanded="false">' +
+      renderIcon('icon-role-badge', 'account-role-icon') + '</button>';
   }
 
   function approvedFlag(flag) {
@@ -307,14 +308,14 @@
         '<div class="feed-main">' +
           '<div class="follower-lead follower-bin-' + followerClass +
             (leadMetadata ? ' has-account-metadata' : '') + '">' +
-            '<div class="follower-magnitude" role="img"' +
-              ' aria-label="' + escapeHtml(followersLabel) + '"' +
-              ' title="' + escapeHtml(followersLabel) + '">' +
+            '<button type="button" class="follower-magnitude pw-inspection-trigger"' +
+              ' data-pw-inspection="' + escapeHtml(followersLabel) + '"' +
+              ' aria-label="' + escapeHtml(followersLabel) + '" aria-expanded="false">' +
               '<span class="follower-glyph" aria-hidden="true">' +
                 renderIcon(FOLLOWER_ICONS[followerClass], 'follower-icon') +
               '</span>' +
               '<span class="follower-count">' + escapeHtml(followersPretty) + '</span>' +
-            '</div>' +
+            '</button>' +
             leadMetadata +
           '</div>' +
           '<div class="body">' +

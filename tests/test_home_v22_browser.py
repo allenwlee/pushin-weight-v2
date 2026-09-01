@@ -3834,8 +3834,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["country"]["leadChildren"],
                                 [
-                                    "follower-magnitude",
-                                    "account-role role-official",
+                                    "follower-magnitude pw-inspection-trigger",
+                                    "account-role role-official pw-inspection-trigger",
                                     "account-geography geography-country",
                                 ],
                             )
@@ -3854,9 +3854,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["hierarchy"]["leadChildren"],
                                 [
-                                    "follower-magnitude",
+                                    "follower-magnitude pw-inspection-trigger",
                                     "account-geography geography-hierarchy",
-                                    "account-role role-staff",
+                                    "account-role role-staff pw-inspection-trigger",
                                 ],
                             )
                             self.assertEqual(
@@ -3977,7 +3977,77 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             country_flag = country_row.locator(
                                 ".account-geography-flag"
                             )
+                            self.assertEqual(
+                                country_flag.evaluate(
+                                    "node => getComputedStyle(node).cursor"
+                                ),
+                                "pointer",
+                            )
                             popover = page.locator("#pw-feed-inspection-popover")
+                            follower_magnitude = country_row.locator(
+                                ".follower-magnitude"
+                            )
+                            self.assertEqual(
+                                follower_magnitude.evaluate("node => node.tagName"),
+                                "BUTTON",
+                            )
+                            self.assertIsNone(
+                                follower_magnitude.get_attribute("title")
+                            )
+                            self.assertEqual(
+                                follower_magnitude.get_attribute(
+                                    "data-pw-inspection"
+                                ),
+                                follower_magnitude.get_attribute("aria-label"),
+                            )
+                            self.assertEqual(
+                                follower_magnitude.evaluate(
+                                    "node => getComputedStyle(node).cursor"
+                                ),
+                                "pointer",
+                            )
+                            follower_magnitude.hover()
+                            self.assertTrue(popover.is_visible())
+                            self.assertEqual(
+                                popover.inner_text(),
+                                follower_magnitude.get_attribute("aria-label"),
+                            )
+                            follower_magnitude.click()
+                            self.assertEqual(
+                                follower_magnitude.get_attribute("aria-expanded"),
+                                "true",
+                            )
+                            follower_magnitude.click()
+                            self.assertFalse(popover.is_visible())
+                            role_badge = country_row.locator(
+                                ".account-role.role-official"
+                            )
+                            self.assertEqual(
+                                role_badge.evaluate("node => node.tagName"), "BUTTON"
+                            )
+                            self.assertIsNone(role_badge.get_attribute("title"))
+                            self.assertEqual(
+                                role_badge.get_attribute("data-pw-inspection"),
+                                "官方" if locale == "zh_cn" else "Official",
+                            )
+                            self.assertEqual(
+                                role_badge.evaluate(
+                                    "node => getComputedStyle(node).cursor"
+                                ),
+                                "pointer",
+                            )
+                            role_badge.hover()
+                            self.assertTrue(popover.is_visible())
+                            self.assertEqual(
+                                popover.inner_text(),
+                                "官方" if locale == "zh_cn" else "Official",
+                            )
+                            role_badge.click()
+                            self.assertEqual(
+                                role_badge.get_attribute("aria-expanded"), "true"
+                            )
+                            role_badge.click()
+                            self.assertFalse(popover.is_visible())
                             country_flag.hover()
                             self.assertTrue(popover.is_visible())
                             self.assertEqual(popover.inner_text(), labels["country"])
@@ -3989,6 +4059,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ".feed-signals .pw-inspection-trigger"
                             ).first
                             self.assertGreater(signal.count(), 0)
+                            self.assertEqual(
+                                signal.evaluate(
+                                    "node => getComputedStyle(node).cursor"
+                                ),
+                                "pointer",
+                            )
                             signal.click()
                             expected_family = "情感" if locale == "zh_cn" else "Sentiment"
                             self.assertIn(expected_family, popover.inner_text())

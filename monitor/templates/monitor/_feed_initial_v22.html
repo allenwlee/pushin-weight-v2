@@ -24,17 +24,17 @@
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
         <div class="follower-lead follower-bin-{{ row.follower_bin }}{% if row.account.role or row.account.geography %} has-account-metadata{% endif %}">
-          <div class="follower-magnitude" role="img" aria-label="{{ row.followers_label }}" title="{{ row.followers_label }}">
+          <button type="button" class="follower-magnitude pw-inspection-trigger" data-pw-inspection="{{ row.followers_label }}" aria-label="{{ row.followers_label }}" aria-expanded="false">
             <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
             <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
-          </div>
+          </button>
           {% if row.account.role == 'official' %}
-            <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
+            <button type="button" class="account-role role-{{ row.account.role }} pw-inspection-trigger" data-pw-inspection="{{ row.account.role_label }}" aria-label="{{ row.account.role_label }}" aria-expanded="false"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></button>
             {% if row.account.geography %}{% include "monitor/_account_geography.html" with geography=row.account.geography %}{% endif %}
           {% else %}
             {% if row.account.geography %}{% include "monitor/_account_geography.html" with geography=row.account.geography %}{% endif %}
             {% if row.account.role %}
-              <span class="account-role role-{{ row.account.role }}" role="img" aria-label="{{ row.account.role_label }}" title="{{ row.account.role_label }}"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span>
+              <button type="button" class="account-role role-{{ row.account.role }} pw-inspection-trigger" data-pw-inspection="{{ row.account.role_label }}" aria-label="{{ row.account.role_label }}" aria-expanded="false"><svg class="pw-icon account-role-icon" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></button>
             {% endif %}
           {% endif %}
         </div>

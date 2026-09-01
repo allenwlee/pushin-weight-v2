@@ -769,8 +769,7 @@
     letter-spacing: 0;
   }
   .feed-signals .signal-icon { width: 15px; height: 15px; }
-  .feed-signals .signal-inspection-trigger,
-  .feed-row .account-geography button {
+  .feed-row .pw-inspection-trigger {
     appearance: none;
     border: 0;
     padding: 0;
@@ -778,7 +777,7 @@
     background: transparent;
     font: inherit;
     line-height: inherit;
-    cursor: help;
+    cursor: pointer;
   }
   .feed-signals .signal-inspection-trigger {
     display: inline-flex;
@@ -786,10 +785,8 @@
     justify-content: center;
     border-radius: 3px;
   }
-  .feed-signals .signal-inspection-trigger:hover,
-  .feed-signals .signal-inspection-trigger:focus-visible,
-  .feed-row .account-geography .pw-inspection-trigger:hover,
-  .feed-row .account-geography .pw-inspection-trigger:focus-visible {
+  .feed-row .pw-inspection-trigger:hover,
+  .feed-row .pw-inspection-trigger:focus-visible {
     outline: 1px solid rgba(148, 163, 184, 0.7);
     outline-offset: 1px;
     background: rgba(255, 255, 255, 0.06);

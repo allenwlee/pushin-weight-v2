@@ -149,9 +149,19 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         self.assertIn('class="follower-glyph"', body)
         self.assertIn('class="follower-count">128.4k</span>', body)
         self.assertIn('aria-label="128.4k followers"', body)
-        self.assertIn('class="account-role role-official"', body)
+        self.assertIn(
+            'class="follower-magnitude pw-inspection-trigger"', body
+        )
+        self.assertIn('data-pw-inspection="128.4k followers"', body)
+        self.assertNotIn('title="128.4k followers"', body)
+        self.assertIn(
+            'class="account-role role-official pw-inspection-trigger"', body
+        )
         self.assertIn('href="#icon-role-badge"', body)
         self.assertIn('aria-label="official"', body)
+        self.assertIn('data-pw-inspection="official"', body)
+        self.assertIn('aria-expanded="false"', body)
+        self.assertNotIn('title="official"', body)
         self.assertNotIn('<span class="avatar"', body)
         # The name is visible, while the account handle remains the link target.
         self.assertIn('>Moonshot AI</a>', body)

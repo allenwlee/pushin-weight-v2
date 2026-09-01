@@ -22,7 +22,7 @@ unnamed surface. This contract authorizes staging delivery only.
 
 | Surface | Approved target |
 | --- | --- |
-| Feed inspection | Geography and every visible sentiment, post-type, China/US nationalism, and unsanctioned signal use one immediate body-level dark inspection card. Hover or focus previews; click or tap pins; another activation transfers; repeat activation, outside input, or Escape dismisses. Copy is active-locale only, viewport-clamped, and contains every contributing brand behind a deduplicated icon. |
+| Feed inspection | Follower magnitude, every account-role badge, geography, and every visible sentiment, post-type, China/US nationalism, and unsanctioned signal use one immediate body-level dark inspection card and a normal pointer cursor, never the help/question-mark cursor. Hover or focus previews; click or tap pins; another activation transfers; repeat activation, outside input, or Escape dismisses. Copy is active-locale only, viewport-clamped, and contains every contributing brand behind a deduplicated icon. |
 | Original-post navigation | A monochrome X logo immediately right of replies is the only control that opens the exact original post. Row bodies and metadata inspection never navigate to X; account-name links retain their separate destination. |
 | Language and regions | Every text layer begins with a persisted-language token. English uses the ISO 639-1 primary code; zh-CN uses a centralized Simplified-Chinese name and distinguishes Traditional Chinese. English leading region directions abbreviate to N/S/E/W/NE/NW/SE/SW without mutating full accessible or canonical labels. |
 | Geography hierarchy | Approved parent/child flags form a vertical 38-pixel tree. Parent and standalone flags share a centerline; the child is lower and rightward behind a CSS-border elbow. Taiwan retains the approved China-flag plus `TW · Taiwan` / `TW · 台湾` text treatment. The first account metadata begins two pixels farther below the follower count, with no empty role spacer. |
@@ -56,8 +56,9 @@ unnamed surface. This contract authorizes staging delivery only.
 
 - Drive real anonymous `/` and `/feed/` callers in Chromium at desktop and
   390-pixel mobile widths in English and zh-CN.
-- Prove immediate inspection, pin/transfer/dismiss behavior, no native flag
-  title, X-only outbound navigation, language persistence through text cycling,
+- Prove immediate inspection for follower magnitude, role badges, geography,
+  and signals; pin/transfer/dismiss behavior; normal pointer cursors; no native
+  inspection titles; X-only outbound navigation; language persistence through text cycling,
   compact English region text, hierarchy geometry, metadata spacing, and no
   horizontal overflow.
 - Traverse at least 625 matching equal-sort rows in 50-row pages, prove exact

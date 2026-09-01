@@ -85,7 +85,7 @@ None.
 
 ### Summary
 
-The public homepage feed gains immediate, accessible inspection popovers for account geography and signal icons, an explicit X-post link, compact post-language and region labels, a clearer flag hierarchy, and a lighter one-day chart. Feed pagination becomes complete across the selected time window by applying active filters before page slicing.
+The public homepage feed gains immediate, accessible inspection popovers for follower magnitude, account role, account geography, and signal icons, an explicit X-post link, compact post-language and region labels, a clearer flag hierarchy, and a lighter one-day chart. Feed pagination becomes complete across the selected time window by applying active filters before page slicing.
 
 ### Problem Frame
 
@@ -95,16 +95,17 @@ Native `title` tooltips are delayed and do not provide a dependable touch intera
 
 - **Use explicit X navigation instead of whole-row navigation** (session-settled: user-directed — chosen over delegated row-body navigation: row clicks obscure inspection interactions on desktop and mobile). Governs R5-R6.
 - **Use immediate visual inspection cards instead of native `title` tooltips** (session-settled: user-directed — chosen over browser-native tooltips: native delay and tap behavior do not support the intended inspection flow). Governs R1-R4.
+- **Use a normal pointer for every inspection target** (session-settled: user-directed — chosen after browser verification showed `cursor: help` as a large question-mark cursor). Governs R1-R4.
 - **Render guiding-country flags as a vertical parent/child tree** (session-settled: user-directed — chosen over the horizontal flag pair: the vertical elbow makes the hierarchy visually explicit). Governs R15-R18.
 
 ### Requirements
 
 **Inspection and navigation**
 
-- R1. Preserve the approved country-flag SVGs, 14 × 7.875px dimensions, subdued treatment, and normalized hierarchy while replacing native titles with the dark bordered and shadowed treatment in `docs/ideation/2026-08-31-092211-country-flag-svg-reference.html`.
+- R1. Preserve the approved country-flag SVGs, 14 × 7.875px dimensions, subdued treatment, and normalized hierarchy while replacing native titles with the dark bordered and shadowed treatment in `docs/ideation/2026-08-31-092211-country-flag-svg-reference.html`; every inspection target uses the normal pointer cursor, never the help/question-mark cursor.
 - R2. A geography trigger shows only its active-locale full name and supports immediate hover/focus, click/tap pinning, repeated activation, outside dismissal, Escape dismissal, and single-open transfer.
 - R3. Every visible sentiment, post-type, China/US nationalism, and unsanctioned icon uses the R2 interaction and active-locale family/value copy while preserving every contributing brand for a deduplicated icon.
-- R4. Inspection triggers have truthful keyboard semantics and accessible names, no native `title`, and one viewport-clamped popover that survives scroll safely and closes when its owning row is replaced or removed.
+- R4. Follower magnitude, every account-role badge, geography, and feed-signal inspection triggers have truthful keyboard semantics and accessible names, no native `title`, and one viewport-clamped popover that survives scroll safely and closes when its owning row is replaced or removed.
 - R5. A monochrome theme-aware X logo immediately right of replies opens the exact post URL in a safe new tab.
 - R6. The X logo is the only original-post outbound control; row bodies never navigate and existing handle, selection, scrolling, text-cycle, and inspection behaviors keep their ownership.
 
@@ -145,7 +146,7 @@ Native `title` tooltips are delayed and do not provide a dependable touch intera
 
 ### Acceptance Examples
 
-- AE1. Covers R2-R6. Given a mobile feed row, tapping its geography flag pins one localized card, tapping another signal transfers the card, tapping the row body does nothing, and tapping the X logo opens only that post.
+- AE1. Covers R2-R6. Given a mobile feed row, hovering or tapping follower magnitude, its role badge, its geography flag, or a signal uses the same localized card and normal pointer; tapping another target transfers the card, tapping the row body does nothing, and tapping the X logo opens only that post.
 - AE2. Covers R3. Given one sentiment key contributed by two brands, the visible icon appears once and its localized card names both brands.
 - AE3. Covers R9-R14. Given an English source-only `zh-Hant` post from an `Eastern Asia` fallback account, the row begins with `zh` and displays `E Asia`; after switching to zh-CN it begins with `繁体中文` and retains the full Chinese region label.
 - AE4. Covers R15-R19. Given standalone and CN/HK rows, both parent centerlines match within 0.5px, HK is lower and rightward behind a CSS elbow, and role-first and flag-first metadata start 2px farther below followers.
@@ -191,7 +192,7 @@ The requirements-only Product Contract was preserved in substance; planning adds
 - KTD3. **Filter one eligible Post queryset before enrichment.** Reusable Django `Q`/`Exists` predicates translate the normalized filter payload into relational constraints before cursor and `limit + 1`; only the selected page is enriched and serialized. This implements R20-R26.
 - KTD4. **Use a sort-aware opaque keyset cursor.** The server cursor includes the active sort value and tweet ID, applies tuple-equivalent comparison in the queryset, and validates sort/order compatibility. `like_count` no longer falls back to a cumulative offset scan. This implements R22-R24.
 - KTD5. **Keep presentation projections centralized in Python.** Server wire fields own compact language and English region text, while full canonical and accessible geography labels remain untouched. This implements R9-R14.
-- KTD6. **Use semantic trigger markup with delegated behavior.** Flags and generated signal controls expose data-backed inspection content, real focus behavior, and ARIA state; the controller handles SSR and appended rows without per-row listener state. This implements R2-R6 and R12.
+- KTD6. **Use semantic trigger markup with delegated behavior.** Follower magnitude, role badges, flags, and generated signal controls expose data-backed inspection content, real focus behavior, normal pointer cursors, and ARIA state; the controller handles SSR and appended rows without per-row listener state. This implements R2-R6 and R12.
 - KTD7. **Use CSS geometry for the hierarchy lane.** Kind-specific spans place parent, elbow, and child in a 38px lane while standalone and parent flags share the same center coordinate. This implements R15-R19.
 - KTD8. **Ship the exact candidate only to staging** (session-settled: user-directed — chosen over production delivery: the owner selected staging for this LFG run). The candidate must fast-forward the staging lane and pass exact-SHA browser and SQL checks before this workflow stops. This implements R28-R29.
 
@@ -319,19 +320,19 @@ U1 establishes the approved target and red tests. U2 fixes page reachability bef
 
 ### U4. Add shared inspection popovers and explicit X navigation
 
-- **Goal:** Make flags and feed signals inspectable on pointer, keyboard, and touch while ending accidental row-body navigation.
+- **Goal:** Make follower magnitude, role badges, flags, and feed signals inspectable on pointer, keyboard, and touch while ending accidental row-body navigation.
 - **Requirements:** R1-R6, R12, R27.
 - **Dependencies:** U1, U3.
 - **Files:** `monitor/templates/monitor/_feed_initial_v22.html`, `monitor/templates/monitor/_account_geography.html`, `monitor/static/pw-feed.js`, `monitor/static/home-v20.css`, `monitor/templates/monitor/home.html`, `tests/test_home_v22_feed_row_shape.py`, `tests/test_home_v22_browser.py`, `tests/test_pw_feed_formatter.js`.
 - **Approach:**
-  1. Emit semantic inspection triggers for flags and generated signals with KTD2 payloads and without native titles.
+  1. Emit semantic inspection triggers for follower magnitude, role badges, flags, and generated signals with KTD2 payloads and without native titles or help/question-mark cursors.
   2. Implement KTD1 and KTD6 through delegated events that cover existing and appended rows.
   3. Add the X anchor after replies, remove row-link binding and cursor affordance, and preserve handle-link ownership.
 - **Execution note:** Use the real Chromium caller before CSS refinement and assert the exact opened URL rather than only anchor presence.
 - **Test scenarios:**
   - Covers AE1. Hover/focus previews and click/tap pins, transfers, and dismisses one viewport-clamped card.
   - A refresh that removes the active trigger closes the card without a detached ARIA relationship.
-  - Every signal family and geography kind exposes truthful active-locale text and keyboard activation.
+  - Follower magnitude, every role badge, every signal family, and every geography kind exposes truthful active-locale text and keyboard activation.
   - Row body, selection, text cycle, and signal activation never open X; the X anchor does so with `noopener noreferrer`.
 - **Verification:** Desktop/mobile browser tests pass with one live popover, zero native tooltip duplicates, and X-only original-post navigation.
 
