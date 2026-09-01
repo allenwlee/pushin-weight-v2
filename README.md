@@ -360,6 +360,86 @@ column and brand chip display names. The locale cookie is set via
 UI reference: `../docs/reference/home-pages-ui-guide.md` — element names,
 DOM hooks, payload shapes for each pane.
 
+`headline-state` and `headline-item-state` are display elements, not database columns. Their text comes from a projected `state_label`; the underlying state is calculated for every chart response.
+
+## Generation path
+
+1. The chart builder calls `project_trend_narrative()` with the selected window and brands in [views.py](/Users/fuchitalee/development/pushin-weight-v2/monitor/views.py:1720).
+2. The projection finds the visible run for that window in `trend_narrative_visible_runs`, then loads its per-brand records from `brand_trend_narratives`.
+3. Each brand’s persisted status, `verified_at`, and `last_good` are converted into an item state by [_per_brand_item()](/Users/fuchitalee/development/pushin-weight-v2/monitor/trend_narrative_projection.py:427).
+4. The overall headline state is calculated from the displayed item states by [_v3_projection()](/Users/fuchitalee/development/pushin-weight-v2/monitor/trend_narrative_projection.py:364).
+5. The template prints:
+
+   - `trend_narrative.state_label` into `.headline-state`
+   - `item.state_label` into `.headline-item-state`
+
+   See [home.html](/Users/fuchitalee/development/pushin-weight-v2/monitor/templates/monitor/home.html:274).
+
+## `headline-item-state` possibilities
+
+These are the actual per-brand UI states:
+
+| State | Display label | Meaning |
+|---|---|---|
+| `available` | Available / 可用 | The persisted outcome is `approved`, and its `verified_at` time is still inside the freshness limit. |
+| `stale` | Stale · last verified… / 过期 · 上次验证于… | Either an approved narrative exceeded its freshness limit, or the latest attempt was held and the previous `last_good` narrative is being served. |
+| `unavailable` | Unavailable / 暂不可用 | No outcome exists, or the latest outcome does not contain a publishable narrative. This includes persisted `prepared` or `unavailable` outcomes. |
+| `no_content` | No content / 无内容 | Source coverage was complete, but the brand had no posts in that window. This is a valid terminal result, not a processing failure. |
+| `data_quality_unavailable` | Data unavailable / 数据不完整 | Source coverage or underlying data was incomplete, so the system deliberately made no trend claim. |
+
+The labels are defined in [trend_narrative_projection.py](/Users/fuchitalee/development/pushin-weight-v2/monitor/trend_narrative_projection.py:623).
+
+The browser validator also accepts `disabled` as an item state in [pw-chart.js](/Users/fuchitalee/development/pushin-weight-v2/monitor/static/pw-chart.js:129), but the current server never emits a disabled item. When headline serving is disabled, it emits an empty item list and sets only the overall state to `disabled`.
+
+## `headline-state` possibilities
+
+This is the aggregate state for the entire headline strip:
+
+| State | Display label | Meaning |
+|---|---|---|
+| `disabled` | Disabled / 已停用 | Headline serving is not active. No headline items are returned. |
+| `unavailable` | Unavailable / 暂不可用 | There are no displayed items, or every displayed item is unavailable. |
+| `available` | Available / 可用 | Every displayed item is available. |
+| `stale` | Stale / 过期 | Every displayed item is stale. |
+| `no_content` | No content / 无内容 | Every displayed item reports no content. |
+| `data_quality_unavailable` | Data unavailable / 数据不完整 | Every displayed item reports insufficient source data. |
+| `mixed` | Mixed / 混合状态 | The displayed items have different states—for example, one available and one stale. |
+
+The aggregate rule is:
+
+```text
+no items             → unavailable
+all items same state → that state
+different states     → mixed
+serving inactive     → disabled
+```
+
+The list and labels are defined in [_v3_state_label()](/Users/fuchitalee/development/pushin-weight-v2/monitor/trend_narrative_projection.py:637).
+
+## Persisted status list
+
+The underlying database status has a different list, stored in `brand_trend_narratives.status` and defined by `BrandTrendNarrative.Status` in [core/models.py](/Users/fuchitalee/development/pushin-weight-v2/core/models.py:2034):
+
+| Persisted status | Meaning |
+|---|---|
+| `prepared` | Intermediate outcome prepared but not approved for publication. Projects as `unavailable`. |
+| `approved` | Verified, publishable narrative. Projects as `available` or `stale`, depending on age. |
+| `held` | Latest narrative failed semantic review. If a `last_good` exists, that older narrative is served as `stale`; otherwise lifecycle code converts it to `unavailable`. |
+| `unavailable` | No usable narrative could be produced. |
+| `no_content` | Complete coverage, but no posts for the brand/window. |
+| `data_quality_unavailable` | Data was insufficient or incomplete. |
+
+Freshness limits are stored in [config.yaml](/Users/fuchitalee/development/pushin-weight-v2/config.yaml:164):
+
+| Window | Becomes stale after |
+|---|---:|
+| 1 day | 60 minutes |
+| 7 days | 120 minutes |
+| 30 days | 720 minutes |
+| 365 days | 2,880 minutes |
+
+So there is no single centralized list for everything: the persisted statuses live in the Django model, while the derived UI-state possibilities and labels live in `trend_narrative_projection.py`, with a mirrored acceptance list in `pw-chart.js`.
+
 ---
 
 ## Deployment — two launchd agents
