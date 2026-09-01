@@ -10,8 +10,8 @@ deepened: 2026-09-01
 ollija:
   change_id: feat-feed-country-geography-followups-2026-09-01-014054
   branch: feat/feed-country-geography-followups
-  workflow: plan
-  delivery_target: staging
+  workflow: lfg
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -39,8 +39,8 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ### Delivery scope
 
-- Workflow: `plan`
-- Delivery target: `staging`
+- Workflow: `lfg`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -51,6 +51,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-country-geography-followups` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-country-geography-followups` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -66,7 +73,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+- Owner follow-up on 2026-09-01 supersedes the staging-only boundary and explicitly authorizes production delivery and merge. Integrate PR #35 into this branch, preserve the approved Cyber-Quan symbol IDs, colors, dimensions, callers, and layout, track the cited approved alternate-source artifact, regenerate exact-candidate assurance, verify the unchanged candidate on staging, then promote that exact SHA to production and merge the stacked pull requests in dependency order.
 
 # Feed Country Geography Follow-ups - Plan
 
@@ -75,9 +82,9 @@ None.
 - **Objective:** Homepage-feed users can inspect dense account and post metadata without accidental outbound navigation, and every filtered post in the selected time window remains reachable.
 - **Means:** Use one localized inspection-popover controller, SQL-complete keyset pagination, shared server wire projections, and narrowly scoped CSS and Chart.js changes (KTD1-KTD8).
 - **Authority:** The Product Contract below governs user behavior; the Planning Contract governs implementation mechanics; the approved Bridgewright target governs unnamed visual behavior.
-- **Execution profile:** Code change with test-first browser coverage and staging-only delivery.
-- **Stop conditions:** Stop at staging verification failure, an unresolved product-contract contradiction, or evidence that the planned query cannot meet window-complete behavior without a schema change.
-- **Tail ownership:** The LFG workflow owns implementation, review, exact-SHA staging deployment, and staging evidence; production promotion is outside this run.
+- **Execution profile:** Code change with test-first browser coverage and exact-SHA staging-to-production delivery.
+- **Stop conditions:** Stop at staging or production verification failure, an unresolved product-contract contradiction, or evidence that the planned query cannot meet window-complete behavior without a schema change.
+- **Tail ownership:** The LFG workflow owns implementation, PR #35 reconciliation, review, exact-SHA staging and production deployment, stacked-PR merge, production evidence, and guarded canonical-worktree cleanup.
 
 ---
 
@@ -142,7 +149,9 @@ Native `title` tooltips are delayed and do not provide a dependable touch intera
 
 - R27. Real caller-to-browser tests fail before implementation and cover inspection, X navigation, language projection, region abbreviation, hierarchy geometry, metadata spacing, chart options, and SSR/replacement parity in English and zh-CN.
 - R28. Bridgewright affected and candidate gates run at the exact source SHA with desktop/mobile evidence and zero failed, skipped, errored, missing, or unknown obligations.
-- R29. Staging compares deterministic SQL counts to full cursor traversal for every window and repeats the MiniMax role-filter reproduction; production is not promoted in this run.
+- R29. Staging compares deterministic SQL counts to full cursor traversal for every window and repeats the MiniMax role-filter reproduction; only that exact verified SHA may advance to production.
+- R30. Integrate PR #35's seven owner-approved Cyber-Quan runtime alternatives while preserving symbol IDs, `0 0 24 24` view boxes, colors, dimensions, callers, layout, and the current role-badge geometry; track the cited approved alternate-source HTML and rerun its contract and visual evidence on the integrated tree.
+- R31. Production receives the unchanged staging-verified SHA, reports that exact revision, passes browser smoke verification, and the stacked PRs merge in dependency order without an independent PR #35 deployment.
 
 ### Acceptance Examples
 
@@ -158,11 +167,11 @@ Native `title` tooltips are delayed and do not provide a dependable touch intera
 **In scope**
 
 - Public homepage feed rendering, JSON replacement rows, filter-aware query pagination, and the shared browser interaction controller.
-- Approved Bridgewright declarations, evidence, and exact-SHA staging verification.
+- Approved Bridgewright declarations, Cyber-Quan source and golden evidence, and exact-SHA staging and production verification.
 
 **Outside this delivery**
 
-- Production promotion, flag artwork changes, geography normalization policy changes, database backfills, and `/internal/` redesign.
+- Flag artwork changes, geography normalization policy changes, database backfills, and `/internal/` redesign.
 - Single-brand chart styling and changes to classification, translation, or harvesting pipelines.
 
 **Deferred to follow-up work**
@@ -194,7 +203,7 @@ The requirements-only Product Contract was preserved in substance; planning adds
 - KTD5. **Keep presentation projections centralized in Python.** Server wire fields own compact language and English region text, while full canonical and accessible geography labels remain untouched. This implements R9-R14.
 - KTD6. **Use semantic trigger markup with delegated behavior.** Follower magnitude, role badges, flags, and generated signal controls expose data-backed inspection content, real focus behavior, normal pointer cursors, and ARIA state; the controller handles SSR and appended rows without per-row listener state. This implements R2-R6 and R12.
 - KTD7. **Use CSS geometry for the hierarchy lane.** Kind-specific spans place parent, elbow, and child in a 38px lane while standalone and parent flags share the same center coordinate. This implements R15-R19.
-- KTD8. **Ship the exact candidate only to staging** (session-settled: user-directed — chosen over production delivery: the owner selected staging for this LFG run). The candidate must fast-forward the staging lane and pass exact-SHA browser and SQL checks before this workflow stops. This implements R28-R29.
+- KTD8. **Promote only the unchanged staging-verified candidate to production** (session-settled: user-directed — the owner superseded the earlier staging-only choice and explicitly authorized production and merge). The candidate must fast-forward the staging lane, pass exact-SHA browser and SQL checks, then advance unchanged to `main` and pass production revision and browser verification. This implements R28-R31.
 
 ### High-Level Technical Design
 
@@ -256,7 +265,7 @@ sequenceDiagram
 
 ### Sequencing
 
-U1 establishes the approved target and red tests. U2 fixes page reachability before UI consumers depend on replacement behavior. U3 provides the shared localized wire. U4-U6 implement independent visible changes. U7 closes browser and Bridgewright assurance. U8 delivers the exact candidate to staging.
+U1 establishes the approved target and red tests. U2 fixes page reachability before UI consumers depend on replacement behavior. U3 provides the shared localized wire. U4-U6 implement independent visible changes. U7 closes browser and Bridgewright assurance. U8 integrates PR #35 and delivers the exact candidate through staging to production.
 
 ---
 
@@ -265,7 +274,7 @@ U1 establishes the approved target and red tests. U2 fixes page reachability bef
 ### U1. Freeze the interaction and pagination assurance contract
 
 - **Goal:** Bind the approved deltas to a new Bridgewright authority and prove current production-shaped callers fail the new obligations.
-- **Requirements:** R1-R29.
+- **Requirements:** R1-R31.
 - **Dependencies:** None.
 - **Files:** `docs/ideation/2026-09-01-112352-country-flag-svg-reference.html`, `docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md`, `bridgewright.yaml`, `tests/fixtures/ui_assurance/declaration.json`, `tests/test_ui_assurance_contract.py`, `tests/test_home_v22_browser.py`, `tests/test_pw_feed_formatter.js`, `tests/test_pw_chart_filter.js`.
 - **Approach:**
@@ -382,19 +391,20 @@ U1 establishes the approved target and red tests. U2 fixes page reachability bef
   - Verify zero failed, skipped, errored, missing, or unknown obligations in affected and candidate evidence.
 - **Verification:** All focused and full suites pass, Bridgewright is exact-SHA clean, and the diff contains no stale title, row-link, hard-cap, or abandoned helper paths.
 
-### U8. Deliver and verify the exact candidate on staging
+### U8. Integrate PR #35 and deliver the exact candidate through production
 
-- **Goal:** Stop with the verified candidate deployed to the staging lane and no production mutation.
-- **Requirements:** R28-R29.
+- **Goal:** Reconcile the approved Cyber-Quan alternatives, verify one integrated candidate on staging, promote that unchanged SHA to production, and merge the stacked PRs.
+- **Requirements:** R28-R31.
 - **Dependencies:** U7.
 - **Files:** `docs/plans/2026-09-01-014054-feat-feed-country-geography-followups-plan.md`.
-- **Approach:** Follow KTD8 and the generated Ollija Delivery Guide, including preflight `annotate-plan --check`, exact candidate SHA push, Render SHA verification, SQL traversal comparisons, and the MiniMax role/geography reproduction.
-- **Execution note:** Retain this canonical worktree because the delivery target is staging-only.
+- **Approach:** Merge PR #35 into this branch, track its approved source artifact, repin and rerun Cyber-Quan plus Bridgewright assurance, then follow KTD8 and the generated Ollija Delivery Guide through exact-SHA staging and production verification and stacked-PR merge.
+- **Execution note:** Remove the canonical worktree only after the generated production cleanup guards pass, and make removal the final filesystem action.
 - **Test scenarios:**
   - Compare full cursor traversal with deterministic SQL counts for `1d`, `7d`, `30d`, and `365d`.
   - Select the `7d` window, apply MiniMax Official/Staff/Community filters, and assert `@Hailuo_AI` is reachable without chart-point freeze.
-  - Verify desktop English and mobile zh-CN inspection, X navigation, language tag, hierarchy, and chart behavior against the deployed candidate SHA.
-- **Verification:** Remote staging and Render report the candidate SHA, all staging checks pass, and production refs and services remain unchanged.
+  - Verify desktop English and mobile zh-CN inspection, X navigation, language tag, hierarchy, chart behavior, and approved Cyber-Quan alternatives against the deployed candidate SHA.
+  - Verify production `main`, Render, and browser smoke evidence all report or exercise the unchanged staging-approved SHA before merging the stack.
+- **Verification:** Remote staging and production refs, their Render deployments, and browser evidence all agree on the unchanged candidate SHA; PR #35 is reconciled before PR #34 merges.
 
 ---
 
@@ -410,6 +420,7 @@ U1 establishes the approved target and red tests. U2 fixes page reachability bef
 | Bridgewright affected | Configured affected profile at candidate source | Zero failed, skipped, errored, missing, or unknown obligations |
 | Bridgewright candidate | Full candidate profile at exact candidate SHA | Zero failed, skipped, errored, missing, or unknown obligations |
 | Staging exact-SHA | Remote staging ref, Render deploy, browser, and SQL checks | All point to the candidate SHA and satisfy R29 |
+| Production exact-SHA | Remote `main`, Render deploy, and browser smoke checks | All point to the unchanged staging-approved SHA and satisfy R31 |
 
 The test-first proof for U1 is retained in the execution record. Any test unavailable in the local environment must run in the staging-capable environment before U8 can complete.
 
@@ -423,5 +434,5 @@ The test-first proof for U1 is retained in the execution record. Any test unavai
 - Language, region, hierarchy, spacing, and chart changes match the Product Contract in SSR and replacement rows.
 - Every matching post in all supported windows is reachable through stable 50-row pages without a 500-row ceiling.
 - Focused tests, full regression, Bridgewright affected/candidate gates, and Ollija checks pass.
-- The exact candidate is verified on staging, production is untouched, and the staging-only worktree is retained.
+- The unchanged candidate is verified on staging and production, the stacked PRs are merged in dependency order, and guarded canonical-worktree cleanup is the final filesystem action.
 - Abandoned experiments, dead helpers, duplicate label maps, stale native titles, and stale hard-cap paths are absent from the final diff.
