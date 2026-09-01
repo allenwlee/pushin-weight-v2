@@ -20,6 +20,14 @@ The tracked bilingual studies originated from these exact approved files:
 The timestamped tracked HTML files only change the relative stylesheet name.
 All 38 source symbols retain their approved geometry and `0 0 24 24` view box.
 
+The owner-approved runtime alternates in
+`2026-08-29-161106-cyber-quan-icon-alts.html` supersede the earlier runtime
+geometry for `icon-rise`, `icon-fall`, `icon-followers-1`,
+`icon-followers-3`, `icon-sentiment-neutral`, `icon-hands-on-hammer`, and
+`icon-california`. Symbol IDs, `0 0 24 24` view boxes, callers, colors, and
+dimensions remain unchanged. Follower bins 2 and 4 retain their earlier
+geometry.
+
 ## Runtime boundary
 
 The production sprite contains exactly these 32 symbols:
@@ -59,10 +67,10 @@ goldens and exact icon masks use the same frozen state.
 | Frame | Route / locale | Viewport | SHA-256 |
 | --- | --- | --- | --- |
 | `prechange-desktop-en.png` | `/?locale=en` | 1440×960 | `e2920fdc769371a7b8832f837711fae34cd9cfe12732d7787d1e12cf3c1ae1c7` |
-| `desktop-en.png` | `/?locale=en` | 1440×960 | `13ae27945e76c9faaf641ff59421fdcaaefadf2b07915e2bb05c2fe19da385b2` |
+| `desktop-en.png` | `/?locale=en` | 1440×960 | `18fd93bf131bac991fee112859893a8d4f842a797a678a0a5ec291093448af33` |
 | `mask-desktop-en.png` | `/?locale=en` | 1440×960 | `a521be13916fad475ad293278905418a3b7b267d3c5a4537735de9d4438ec15f` |
 | `prechange-mobile-zh-cn.png` | `/?locale=zh_cn` | 390×844 | `60ebf13da5cded2df252c1a2e5cfe1fd639fe0e6de1997f8a47085cc49b24719` |
-| `mobile-zh-cn.png` | `/?locale=zh_cn` | 390×844 | `12a1a5b6c3d1f02537a6bcae05c06715937738bbcb655474883cc0bbe6f0df96` |
+| `mobile-zh-cn.png` | `/?locale=zh_cn` | 390×844 | `373572587b78aaeed49248a159f36e5791219bdaea869bf6218f4398a7c23571` |
 | `mask-mobile-zh-cn.png` | `/?locale=zh_cn` | 390×844 | `f45674edba7bbfdfb36e35ca1a38a92732d9538292a054382ddb9fb630835837` |
 
 Baseline element boxes in CSS pixels are recorded below. Candidate masks may
