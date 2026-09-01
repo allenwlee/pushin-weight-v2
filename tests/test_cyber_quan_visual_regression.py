@@ -155,15 +155,23 @@ def _release_a_mask(page: Page) -> bytes:
           context.fillStyle = '#000';
           context.fillRect(0, 0, canvas.width, canvas.height);
           context.fillStyle = '#fff';
-          document.querySelectorAll('.headline-strip, .feed-strip, canvas.home-chart').forEach(node => {
+          const paint = (node, pad = 3, leadingWidth = null) => {
             const rect = node.getBoundingClientRect();
+            const width = leadingWidth == null ? rect.width : Math.min(rect.width, leadingWidth);
             context.fillRect(
-              Math.floor(rect.left - 3),
-              Math.floor(rect.top - 3),
-              Math.ceil(rect.width + 6),
-              Math.ceil(rect.height + 6)
+              Math.floor(rect.left - pad),
+              Math.floor(rect.top - pad),
+              Math.ceil(width + pad * 2),
+              Math.ceil(rect.height + pad * 2)
             );
-          });
+          };
+          document.querySelectorAll('.headline-strip, .feed-strip, canvas.home-chart')
+            .forEach(node => paint(node));
+          // Preserve the same known Chromium rounded-edge seam allowance as
+          // the reviewed icon mask above. This is a two-pixel raster boundary,
+          // not an additional owner-approved product surface.
+          document.querySelectorAll('.tz-choice.is-selected')
+            .forEach(node => paint(node, 0, 2));
           return canvas.toDataURL('image/png');
         }"""
     )
