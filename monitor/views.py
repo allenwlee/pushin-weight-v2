@@ -1233,6 +1233,7 @@ def _feed_signal_inspections(
 def _v22_feed_display_fields(
     classifications: dict[str, dict[str, Any]],
     *,
+    locale: str,
     active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
     created_at: Any,
     account: dict[str, Any],
@@ -1277,7 +1278,11 @@ def _v22_feed_display_fields(
         "avatar_color": _avatar_color(handle),
         "follower_bin": _follower_bin(followers_count),
         "followers_count": followers_count,
-        "followers_label": f"{engagement_pretty['followers']} followers",
+        "followers_label": (
+            f"{engagement_pretty['followers']} 关注者"
+            if _is_zh_locale(locale)
+            else f"{engagement_pretty['followers']} followers"
+        ),
         "engagement_pretty": engagement_pretty,
     }
 
@@ -1423,6 +1428,7 @@ def _post_to_wire(
 
     display_fields = _v22_feed_display_fields(
         classifications,
+        locale=locale,
         active_brand_scope=active_brand_scope,
         created_at=post.created_at,
         account=account_wire,
@@ -2814,6 +2820,7 @@ def _serialize_feed_row(
 
     display_fields = _v22_feed_display_fields(
         classifications,
+        locale=locale,
         active_brand_scope=active_brand_scope,
         created_at=post.get("created_at"),
         account=account_wire,

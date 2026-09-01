@@ -4000,6 +4000,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ),
                                 follower_magnitude.get_attribute("aria-label"),
                             )
+                            self.assertTrue(
+                                (
+                                    follower_magnitude.get_attribute("aria-label")
+                                    or ""
+                                ).endswith(
+                                    "关注者" if locale == "zh_cn" else "followers"
+                                )
+                            )
                             self.assertEqual(
                                 follower_magnitude.evaluate(
                                     "node => getComputedStyle(node).cursor"

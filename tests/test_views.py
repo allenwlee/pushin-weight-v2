@@ -197,6 +197,9 @@ class TestSerializeFeedRow:
         assert row["followers_label"] == "12.8k followers"
         assert row["engagement_pretty"]["followers"] == "12.8k"
 
+        zh_row = _serialize_feed_row(post, "zh_cn")
+        assert zh_row["followers_label"] == "12.8k 关注者"
+
     @pytest.mark.parametrize(
         ("followers", "expected"),
         [
