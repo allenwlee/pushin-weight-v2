@@ -1135,7 +1135,17 @@ U5-U9 produced the validated About-user foundation, and the owner accepts U10 as
 - U15 replaces the two-control headline interaction with one localized `more` / `less` or `更多` / `收起` button. Pointer, Enter, Space, focus, sibling isolation, inert secondary copy, and replacement-reset behavior pass in real Chromium at desktop and 390-pixel mobile widths.
 - Pipeline browser assurance found the new region fallback at 4.48:1 on a positive-tint row; a one-step muted-color adjustment now keeps region and Taiwan text at or above 4.5:1 without changing the subdued flag treatment, and the real SSR/replacement browser regression pins that contrast.
 - The combined Bridgewright declaration validates and prescribes cleanly with 2,919 required obligations. Its affected gate passed (`63` Python tests, `14` browser subtests, and the chart/feed/timezone Node contracts), and fresh expanded/collapsed English and zh-CN screenshots were visually inspected.
-- U16 staging migration, reconciliation, exact-SHA browser assurance, unchanged-SHA production promotion, production reconciliation, and final health verification remain pending.
+- U16 completed staging migration and seed verification, dry-run/apply/zero-change reconciliation, desktop and narrow browser assurance, unchanged-product-SHA production promotion, restore-proved production apply, live production browser verification, and the next persisted scheduled harvest. Aggregate evidence is in `docs/analysis/2026-09-01-090343-account-geography-feed-production-delivery.md` and matching JSON.
+
+## Integrated Delivery Evidence — 2026-09-01
+
+- Product SHA `6adbd408a72cdb22227ecf4e9e089cff27e57ce9` was verified on staging, `main`, production web, and the production harvest service before apply.
+- Staging applied 13 normalized geography changes and a repeated apply changed zero; all temporary browser data and authentication state were restored or deleted.
+- Production restore-proved a 61,538-Account pre-write snapshot, applied 9,657 changes with zero rejected or remaining rows, then restore-proved the post-write state and repeated with zero changes.
+- Production retains the exact 52,488 country, 5,925 region, and 653 reviewed unresolved partition with no dual-target Account and no change to raw About values or fetch timestamps.
+- Authenticated production Chromium passed live English and zh-CN geography, disclosure, desktop, and 390-pixel checks with no console or page errors and no Account fixtures.
+- Scheduled run `20260901T000055_0000-d54ca242` completed all seven calls on the same product SHA, persisted 26 inserts and one update, and reported zero persistence, enrichment, or cycle errors while preserving geography.
+- The DB-only reconciliation made zero HTTP calls and used zero provider credits; `aboutuserbackfill` remained complete and was not restarted.
 
 ---
 

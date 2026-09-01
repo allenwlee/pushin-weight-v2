@@ -317,3 +317,27 @@ place, drop migrations, truncate `accounts`, or improvise a broad overwrite.
 Retain the recovery relation until final reconciliation and at least one
 healthy scheduled harvest. Drop only the exact receipt-named table in a later,
 explicit cleanup; never drop the backup schema recursively.
+
+## Geography delivery evidence — 2026-09-01
+
+The integrated geography and feed candidate completed staging and production
+delivery on product SHA `6adbd408a72cdb22227ecf4e9e089cff27e57ce9`.
+Production classified 59,066 nonblank raw values into 52,488 countries, 5,925
+regions, and 653 reviewed unresolved values. The first apply changed 9,657
+Accounts with no rejection or remainder; a fresh post-write recovery proof and
+repeat apply changed zero rows. Both operations used zero geography HTTP calls
+and zero provider credits.
+
+Authenticated production Chromium verified live country and region rendering,
+both locales, the reversible disclosure, the 390-pixel layout, and zero browser
+errors without writing an Account fixture. The next scheduled seven-call cycle
+completed on the same product SHA with 26 inserts, one update, and zero cycle,
+persistence, or enrichment errors. Post-cycle SQL found no change to the
+geography partition, raw About values, or About fetch timestamps.
+
+The aggregate human and machine receipts are
+[`2026-09-01-090343-account-geography-feed-production-delivery.md`](../analysis/2026-09-01-090343-account-geography-feed-production-delivery.md)
+and
+[`2026-09-01-090343-account-geography-feed-production-delivery.json`](../analysis/2026-09-01-090343-account-geography-feed-production-delivery.json).
+The pre-write and post-write geography recovery relations named there remain
+retained; remove them only in a later explicit cleanup.

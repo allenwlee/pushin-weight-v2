@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "mode": "integrated_delivery",
+  "result": "completed",
+  "generated_at": "2026-09-01T09:03:43+09:00",
+  "product_candidate_sha": "6adbd408a72cdb22227ecf4e9e089cff27e57ce9",
+  "provider_usage": {
+    "geography_http_calls": 0,
+    "geography_provider_credits": 0,
+    "aboutuserbackfill_restarted": false
+  },
+  "taxonomy": {
+    "migrations_applied": [
+      "0026_account_geography_taxonomy",
+      "0027_account_country_foreign_key"
+    ],
+    "countries": 249,
+    "country_labels": 498,
+    "regions": 31,
+    "region_labels": 62,
+    "country_region_rows": 249,
+    "account_based_in_mappings": 317,
+    "guiding_country_relationships": 19,
+    "flag_symbols": 215,
+    "manifest_sha256": "73beff89305600c01113c0429df3c93e896e0f351efd7a3fd4b8d680708d7e28",
+    "census_sha256": "b17cd81b3b5dd3711c6924c3c7c34d9c4402febf45b3eb66bd6dc135ba3e7668"
+  },
+  "staging": {
+    "database": "pushinweight_staging",
+    "web_service_id": "srv-d9vb8t49v7es738lf2ng",
+    "deploy_id": "dep-dab0o8bbc2fs73ap78p0",
+    "deployed_sha": "6adbd408a72cdb22227ecf4e9e089cff27e57ce9",
+    "dry_run": {
+      "job_id": "job-dab0q0qjnfac73a7q9qg",
+      "nonblank_accounts": 97,
+      "country": 91,
+      "region": 6,
+      "unresolved": 0,
+      "would_change": 13,
+      "writes": 0
+    },
+    "apply": {
+      "job_id": "job-dab0qi2d0e5s73d15ue0",
+      "changed": 13,
+      "remaining_changes": 0,
+      "rejected": 0,
+      "writes": 13
+    },
+    "repeat_apply": {
+      "job_id": "job-dab0rb49v7es73bnadjg",
+      "changed": 0,
+      "remaining_changes": 0,
+      "rejected": 0,
+      "writes": 0
+    },
+    "post_cleanup_dry_run": {
+      "job_id": "job-dab10t49v7es73bnr2l0",
+      "would_change": 0,
+      "writes": 0
+    },
+    "browser": {
+      "desktop_zh_cn": true,
+      "mobile_zh_cn_390px": true,
+      "desktop_en": true,
+      "direct_country": true,
+      "guided_cn_hk": true,
+      "taiwan_neutral_cn_tw_text": true,
+      "taiwan_flag_references": 0,
+      "region_fallback": true,
+      "headline_more_less_both_locales": true,
+      "temporary_account_values_restored": 4,
+      "temporary_sessions_deleted": 1
+    }
+  },
+  "production": {
+    "database": "pushinweight_shadow",
+    "web_service_id": "srv-d9go2breo5us73cg6vqg",
+    "web_deploy_id": "dep-dab11hmk1f9s738qcgtg",
+    "harvest_service_id": "crn-d9gv94o4n6ts739tqaug",
+    "harvest_deploy_id": "dep-dab11hmk1f9s738qchcg",
+    "deployed_sha": "6adbd408a72cdb22227ecf4e9e089cff27e57ce9",
+    "prewrite_recovery": {
+      "dry_run_job_id": "job-dab12mid0e5s73d1uk8g",
+      "apply_job_id": "job-dab131v10e5c739i1n50",
+      "snapshot_relation": "account_geography_backup.accounts_geo_20260831t234312z",
+      "snapshot_account_count": 61538,
+      "snapshot_row_digest": "da1fe9162f47f36724290f14cad0c5ee85e3d682a90b4a0c9ef28ecf077ba25b",
+      "receipt_sha256": "c9cb532a0c18f65cc3ad0eb607b66461ebcf4fcb1283a785f076fda7732ab022",
+      "restore_proved": true
+    },
+    "dry_run": {
+      "job_id": "job-dab13eijnfac73a8ki90",
+      "nonblank_accounts": 59066,
+      "distinct_values": 194,
+      "country": 52488,
+      "region": 5925,
+      "unresolved": 653,
+      "unresolved_values": {
+        "Congo": 13,
+        "Korea": 640
+      },
+      "would_change": 9657,
+      "writes": 0
+    },
+    "apply": {
+      "job_id": "job-dab14es9v7es73bo4eu0",
+      "changed": 9657,
+      "unchanged": 49409,
+      "remaining_changes": 0,
+      "rejected": 0,
+      "writes": 9657
+    },
+    "guarded_no_write_stops": [
+      {
+        "job_id": "job-dab15dn40ujc739h5kc0",
+        "reason": "invalid_recovery_receipt",
+        "writes": 0
+      },
+      {
+        "job_id": "job-dab160bm8hqs73aikkng",
+        "reason": "current_state_no_longer_matches_prewrite_snapshot",
+        "writes": 0
+      }
+    ],
+    "postwrite_dry_run": {
+      "job_id": "job-dab16had0e5s73d29or0",
+      "would_change": 0,
+      "writes": 0
+    },
+    "postwrite_recovery": {
+      "apply_job_id": "job-dab1943tqb8s73eg9p60",
+      "snapshot_relation": "account_geography_backup.accounts_geo_20260831t235622z",
+      "snapshot_account_count": 61546,
+      "snapshot_row_digest": "7f2c748c0ad5d2bc3b638517f061642fbe7e2a8aad90b54f3f5452a16d0808b5",
+      "receipt_sha256": "e4f9c0abf6367058bd5a3d94fe0d34087ad4275b92a84c631d6b2ce746ccfde9",
+      "restore_proved": true
+    },
+    "repeat_apply": {
+      "job_id": "job-dab19kqjobas73b2hjg0",
+      "changed": 0,
+      "unchanged": 59066,
+      "remaining_changes": 0,
+      "rejected": 0,
+      "writes": 0
+    },
+    "browser": {
+      "authenticated_homepage": true,
+      "visible_geographies": 36,
+      "visible_countries": 34,
+      "visible_regions": 2,
+      "taiwan_flag_references": 0,
+      "flag_width_px": 14,
+      "flag_filter": "saturate(0.72) brightness(0.9)",
+      "flag_opacity": 0.9,
+      "headline_more_less_en": true,
+      "headline_more_less_zh_cn": true,
+      "focus_retained": true,
+      "mobile_width_px": 390,
+      "mobile_horizontal_overflow": false,
+      "console_messages": 0,
+      "page_errors": 0,
+      "temporary_sessions_deleted": 1,
+      "production_account_fixtures_written": 0
+    },
+    "post_harvest_database": {
+      "accounts_total": 61549,
+      "nonblank_account_based_in": 59066,
+      "country_mapped": 52488,
+      "region_mapped": 5925,
+      "unresolved_nonblank": 653,
+      "country_and_region_both_set": 0,
+      "raw_about_changes_against_prewrite_snapshot": 0,
+      "about_fetch_timestamp_changes_against_prewrite_snapshot": 0
+    },
+    "scheduled_harvest": {
+      "run_id": "20260901T000055_0000-d54ca242",
+      "summary_sha256": "c3e8755456576a12a47dc338f64e83dcc0bdcf8f2a3cb25d84e0c40aa4723913",
+      "started_at": "2026-09-01T00:00:55+00:00",
+      "finished_at": "2026-09-01T00:02:48+00:00",
+      "service_last_success_at": "2026-09-01T00:02:53Z",
+      "deploy_sha": "6adbd408a72cdb22227ecf4e9e089cff27e57ce9",
+      "calls_planned": 7,
+      "calls_run": 7,
+      "results": 57,
+      "attributed": 27,
+      "posts_inserted": 26,
+      "posts_updated": 1,
+      "posts_persisted_since_cycle_start": 26,
+      "persist_failures": 0,
+      "errors": 0,
+      "enrichment_succeeded": 26,
+      "enrichment_failed": 0
+    }
+  },
+  "validation": {
+    "ollija_tests_passed": 74,
+    "feed_node_tests_passed": 89,
+    "core_tests_passed": 268,
+    "required_postgresql_tests_passed": 72,
+    "bridgewright_required_obligations_passed": 2919,
+    "django_check_errors": 0,
+    "known_unrelated_browser_failures": 4,
+    "known_deploy_warnings": 3
+  },
+  "retention": {
+    "recovery_relations_retained": [
+      "account_geography_backup.accounts_geo_20260831t234312z",
+      "account_geography_backup.accounts_geo_20260831t235622z"
+    ],
+    "cleanup_policy": "later_explicit_cleanup_only"
+  },
+  "privacy": {
+    "aggregate_only": true,
+    "contains_account_identifiers": false,
+    "contains_credentials": false,
+    "contains_recovery_receipt_tokens": false,
+    "contains_provider_payloads": false
+  }
+}
