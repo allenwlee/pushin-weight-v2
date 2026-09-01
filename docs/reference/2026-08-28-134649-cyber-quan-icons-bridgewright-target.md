@@ -21,7 +21,9 @@ The timestamped tracked HTML files only change the relative stylesheet name.
 All 38 source symbols retain their approved geometry and `0 0 24 24` view box.
 
 The owner-approved runtime alternates in
-`2026-08-29-161106-cyber-quan-icon-alts.html` supersede the earlier runtime
+`docs/ideation/2026-08-29-161106-cyber-quan-icon-alts.html` (SHA-256
+`dae29084a247656169dd3e076f0d616390c4fe6f791c697a38a7f8076ad55d81`)
+supersede the earlier runtime
 geometry for `icon-rise`, `icon-fall`, `icon-followers-1`,
 `icon-followers-3`, `icon-sentiment-neutral`, `icon-hands-on-hammer`, and
 `icon-california`. Symbol IDs, `0 0 24 24` view boxes, callers, colors, and
@@ -30,11 +32,11 @@ geometry.
 
 ## Runtime boundary
 
-The production sprite contains exactly these 32 symbols:
+The production sprite contains exactly these 33 symbols:
 
 `mark-quiet`, `icon-heart`, `icon-reply`, `icon-repost`, `icon-rise`,
 `icon-flat`, `icon-fall`, `icon-followers-1`, `icon-followers-2`,
-`icon-followers-3`, `icon-followers-4`, `icon-sentiment-neutral`,
+`icon-followers-3`, `icon-followers-4`, `icon-role-badge`, `icon-sentiment-neutral`,
 `icon-sentiment-negative`, `icon-sentiment-mixed`,
 `icon-hands-on-hammer`, `icon-compare`, `icon-question`, `icon-marketing`,
 `icon-event`, `icon-discourse`, `icon-nationalism`, `icon-unsanctioned`,

@@ -15,6 +15,8 @@ SOURCE_FILES = (
 )
 SOURCE_CSS = "2026-08-28-134649-cyber-quan-svg-system.css"
 FULL_SPRITE_SHA256 = "9a5fd90add8e5d60baf87796054b0211fbb94d9ad92e952fc5133465eb9da658"
+ALTERNATE_SOURCE = REPO_ROOT / "docs/ideation/2026-08-29-161106-cyber-quan-icon-alts.html"
+ALTERNATE_SOURCE_SHA256 = "dae29084a247656169dd3e076f0d616390c4fe6f791c697a38a7f8076ad55d81"
 SPRITE = REPO_ROOT / "monitor/templates/monitor/_cyber_quan_sprite.html"
 HELPER = REPO_ROOT / "monitor/static/pw-icons.js"
 HOME_CSS = REPO_ROOT / "monitor/static/home-v20.css"
@@ -96,30 +98,14 @@ RUNTIME_SYMBOLS = (
     "icon-night",
 )
 
-APPROVED_RUNTIME_OVERRIDES = {
-    "icon-rise": '<path fill="currentColor" d="M12.15 6.05 2.85 17.35l18.45-.4Z"/>',
-    "icon-fall": '<path fill="currentColor" d="M12.1 17.95 2.8 6.7l18.5.35Z"/>',
-    "icon-followers-1": """
-      <circle cx="11.78" cy="6.7" r="2.82" fill="none" stroke="currentColor" stroke-width="1.55"/>
-      <path d="M6.53 19.65c.32-4.72 2.05-6.9 5.22-7.01 3.15-.11 4.84 2.02 5.25 6.73" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
-    """,
-    "icon-followers-3": """
-      <circle cx="5.12" cy="7.85" r="1.72" fill="none" stroke="currentColor" stroke-width="1.28"/>
-      <circle cx="11.94" cy="6.45" r="2.02" fill="none" stroke="currentColor" stroke-width="1.32"/>
-      <circle cx="18.88" cy="7.55" r="1.74" fill="none" stroke="currentColor" stroke-width="1.28"/>
-      <path d="M1.48 19.12c.23-3.36 1.43-4.95 3.65-5.02 2.13-.07 3.28 1.31 3.6 4.43M7.96 18.5c.27-4.05 1.64-5.91 4.15-6 2.5-.08 3.84 1.72 4.17 5.74m-.07-.04c.28-3.41 1.45-4.97 3.62-5.05 2.21-.07 3.41 1.49 3.69 4.85" fill="none" stroke="currentColor" stroke-width="1.36" stroke-linecap="round"/>
-    """,
-    "icon-sentiment-neutral": """
-      <path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
-      <path d="M8.75 10.02h.01m6.46-.19h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    """,
-    "icon-hands-on-hammer": """
-      <g transform="rotate(45 12 12)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.16 21.72 5.72 15.5c-.72-1-.48-2.38.52-3.08.98-.68 2.3-.45 3.02.5l1.06 1.42V4.38c0-1.38 1.1-2.48 2.47-2.48 1.34 0 2.44 1.1 2.44 2.48v5.74c.37-.76 1.14-1.28 2.04-1.28 1.18 0 2.14.9 2.25 2.04.38-.43.94-.7 1.56-.7 1.16 0 2.1.95 2.1 2.11v3.25c0 3.88-2.66 6.34-6.52 6.34h-5.64c-.34 0-.65-.05-.86-.16Z" stroke-width="1.55"/>
-        <path d="M15.2 10.1v3.18m4.3-2.42v2.98" stroke-width="1.15"/>
-      </g>
-    """,
-    "icon-california": '<path d="M5.08 1.88 12.72 2l-.08 5.18 2.4 3.26 2.52 2.55 3.76 3.72-.82 3.7-3.26 1.46-1.96-2.28-2.72-1.3-1.83-2.38-1.83-1.02-.72-2.18-1.4-1.22.72-.86-.94-.68-.4-2.16-1.25-2.57-.13-2.48-1.1-1.54Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+APPROVED_ALTERNATE_SYMBOLS = {
+    "icon-rise": "alt-rise",
+    "icon-fall": "alt-fall",
+    "icon-followers-1": "alt-followers-1",
+    "icon-followers-3": "alt-followers-3",
+    "icon-sentiment-neutral": "alt-neutral",
+    "icon-hands-on-hammer": "alt-hand-point-up-right",
+    "icon-california": "alt-california-badge",
 }
 
 
@@ -155,6 +141,12 @@ def test_bilingual_dossier_has_the_same_complete_source_inventory() -> None:
 def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     source = SPRITE.read_text(encoding="utf-8")
     symbols = _symbols(source)
+    alternate_source = ALTERNATE_SOURCE.read_text(encoding="utf-8")
+    assert hashlib.sha256(alternate_source.encode()).hexdigest() == ALTERNATE_SOURCE_SHA256
+    alternate_symbols = {
+        symbol_id: re.sub(r"\s+", "", body)
+        for symbol_id, _, body in _symbols(alternate_source)
+    }
 
     assert tuple(symbol_id for symbol_id, _, _ in symbols) == RUNTIME_SYMBOLS
     assert len(set(RUNTIME_SYMBOLS)) == 33
@@ -180,7 +172,9 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
         symbol_id: re.sub(
             r"\s+",
             "",
-            APPROVED_RUNTIME_OVERRIDES.get(symbol_id, dossier_symbols[symbol_id]),
+            alternate_symbols[APPROVED_ALTERNATE_SYMBOLS[symbol_id]]
+            if symbol_id in APPROVED_ALTERNATE_SYMBOLS
+            else dossier_symbols[symbol_id],
         )
         for symbol_id in dossier_runtime_symbols
     }
@@ -189,7 +183,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
         for symbol_id, _, body in symbols
         if symbol_id != "icon-role-badge"
     } == expected_runtime_symbols
-    assert set(APPROVED_RUNTIME_OVERRIDES) == {
+    assert set(APPROVED_ALTERNATE_SYMBOLS) == {
         "icon-rise",
         "icon-fall",
         "icon-followers-1",
