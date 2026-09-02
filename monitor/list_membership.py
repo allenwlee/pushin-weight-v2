@@ -237,6 +237,12 @@ def reconcile_complete_snapshot(
             snapshot_id=snapshot_id,
             degraded=[snapshot.reason or "incomplete_snapshot"],
         )
+    if not snapshot.members:
+        return MembershipResult(
+            status="incomplete",
+            snapshot_id=snapshot_id,
+            degraded=["empty_snapshot"],
+        )
     wall_now = timezone.now()
     if completed_at is None or completed_at < wall_now:
         completed_at = wall_now

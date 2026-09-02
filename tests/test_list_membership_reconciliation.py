@@ -114,6 +114,25 @@ def test_incomplete_snapshot_does_not_change_last_complete_active_set():
     assert not TwitterListSyncState.objects.filter(list_id=42).exists()
 
 
+def test_empty_complete_snapshot_cannot_deactivate_known_members():
+    account = Account.objects.create(author_id="1", handle="kept")
+    membership = TwitterListMembership.objects.create(
+        list_id=42, account=account, active=True, source="call_a"
+    )
+
+    result = reconcile_complete_snapshot(
+        list_id=42,
+        snapshot=_snapshot([]),
+        snapshot_id="empty",
+    )
+
+    membership.refresh_from_db()
+    assert result.status == "incomplete"
+    assert result.degraded == ["empty_snapshot"]
+    assert membership.active is True
+    assert not TwitterListSyncState.objects.filter(list_id=42).exists()
+
+
 def test_identical_snapshot_is_idempotent_and_handle_change_keeps_identity():
     first = _snapshot([{"author_id": "1", "handle": "first"}])
     reconcile_complete_snapshot(list_id=42, snapshot=first, snapshot_id="one")

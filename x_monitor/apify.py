@@ -208,6 +208,7 @@ class TwitterApiClient:
                 body.get("tweets")
                 or body.get("quotes")
                 or body.get("followers")
+                or body.get("members")
                 or body.get("users")
                 or (body.get("data") if isinstance(body.get("data"), list) else [])
                 or []
@@ -471,6 +472,13 @@ class TwitterApiClient:
         members: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         cursor: str | None = None
+        if int(page_size) != 20:
+            return ListMembersSnapshot(
+                members=[],
+                complete=False,
+                pages_fetched=0,
+                reason="unsupported_page_size",
+            )
         request_envelope = float(request_timeout_seconds or self.timeout_s) * (
             self.max_retries + 1
         ) + 8.0
@@ -485,7 +493,6 @@ class TwitterApiClient:
                 )
             params: dict[str, Any] = {
                 "list_id": str(list_id),
-                "page_size": min(max(int(page_size), 1), 20),
             }
             if cursor:
                 params["cursor"] = cursor
@@ -494,6 +501,13 @@ class TwitterApiClient:
                 params,
                 timeout_s=request_timeout_seconds,
             )
+            if data.get("status") not in {None, "success"}:
+                return ListMembersSnapshot(
+                    members=members,
+                    complete=False,
+                    pages_fetched=page_number,
+                    reason="provider_status_error",
+                )
             raw_members = data.get("members")
             if not isinstance(raw_members, list):
                 return ListMembersSnapshot(
@@ -550,6 +564,13 @@ class TwitterApiClient:
                     complete=False,
                     pages_fetched=page_number,
                     reason="empty_continuation_page",
+                )
+            if page_number == 1 and not raw_members:
+                return ListMembersSnapshot(
+                    members=[],
+                    complete=False,
+                    pages_fetched=page_number,
+                    reason="empty_snapshot",
                 )
             if not has_next:
                 return ListMembersSnapshot(

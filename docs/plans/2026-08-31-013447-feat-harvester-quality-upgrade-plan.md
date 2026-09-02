@@ -78,6 +78,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - On 2026-08-31, the owner explicitly authorized committing and pushing the corrected M17 production pause-authorization rule to `main` before this plan is completed. This one-time exception is limited to `.claude/skills/change-harvester/SKILL.md`, `.claude/skills/avoiding-recurring-mistakes/SKILL.md`, and the corresponding incident entry in `docs/operations/pause-and-resume-harvest-cron.md`; it does not authorize deployment, cron mutation, other plan implementation, or changes to `feat/backfiller-selective-gaps`.
 - On 2026-09-02, after the first exact-SHA production cycle, the owner added `dotsstudioai` as the official dots account and `ChaoQiao42` as dots staff. One bounded on-demand TwitterAPI user-info lookup resolved the previously unknown canonical `dotsstudioai` author id; it did not run harvest search, pause the cron, or authorize unrelated provider calls.
 - On 2026-09-02 closeout, production evidence showed the sole Render cron invoked manual cycle semantics and had never completed the configured full X-list reconciliation. U12 is limited to adding explicit `--scheduled` semantics to that existing cron command; it does not pause the cron, change cadence, add a scheduler/call, or authorize a manual production provider run.
+- The first U12 production reconciliation sent undocumented `page_size=20`, accepted the provider's empty terminal page as a complete roster, and deactivated 49 known memberships. The parent workflow reactivated exactly those 49 rows. U13 fixes the request and makes empty/error snapshots non-destructive; verification remains a natural scheduled cycle, not a manual provider probe.
 
 ## Goal Capsule
 
@@ -166,6 +167,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 
 - R19. The tracked dots row maps canonical X author id `2085289191609716736` / handle `dotsstudioai` to role `official` and canonical X author id `2040060892176601088` / handle `ChaoQiao42` to role `staff`. `onboard_brand` atomically and idempotently persists the two `Account` rows plus `BrandAccount` edges, rejects handle/id conflicts, and never creates `handle:` or `synthetic:` ids. Both handles are owner-confirmed members of the curated X list and therefore use Call A; dots remains off B3 to avoid duplicate retrieval while the logical call count stays seven.
 - R20. The Render harvest cron invokes `run_cycle` with explicit scheduled semantics while plain operator invocations remain manual. Natural cron cycles therefore retain cursor-tip behavior, backlog replay, and due full-list reconciliation without adding a logical search call or changing the 15-minute cadence.
+- R21. List-member reconciliation sends only the vendor-documented `list_id` and optional `cursor` parameters (fixed page size 20), counts returned members in request telemetry, and rejects provider-error, malformed, partial, or empty snapshots before any active membership or last-complete sync state can change.
 
 ### Acceptance Examples
 
@@ -188,6 +190,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - AE17. Covers R18. Given the routed homepage contains both historical and database-only brands, when Chromium reads the rendered pills, chart payload, chart legend, and open-brand controls, their shared brands follow the established DeepSeek, Qwen, MiniMax-first order and database-only brands follow deterministically after the priority list.
 - AE18. Covers R19. Given the tracked dots row and the owner-confirmed curated-list membership, when `onboard_brand` runs twice, the first run creates or updates canonical accounts `2085289191609716736` and `2040060892176601088` and their official/staff dots links, the second run is unchanged, no placeholder account exists, Call A resolves both roles, and B3 remains unchanged.
 - AE19. Covers R20. Given the production Render blueprint, when its natural cron starts `run_cycle`, `CycleRunner` receives `cycle_kind="scheduled"`; a due curated-list reconciliation can persist quiet members, while plain `python manage.py run_cycle` remains manual and the planner still emits seven logical calls.
+- AE20. Covers R21. Given known active memberships and an empty/error first page, reconciliation returns incomplete and preserves every active row and the prior sync state; given a valid paginated roster, requests contain no `page_size`, every stable member is activated, and only then may absent members be deactivated.
 
 ### Success Criteria
 
@@ -600,6 +603,24 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Call-chain: the first due natural cycle records list-reconciliation output while planning exactly seven logical calls.
 - **Verification:** Targeted command/blueprint tests pass; production logs show `cycle_kind="scheduled"`; DB state records the configured list's completed reconciliation and both dots members are active.
 
+### U13. Make full-list reconciliation vendor-correct and fail-closed
+
+- **Goal:** Prevent an empty or malformed list-members response from deleting valid local membership while allowing a documented complete roster walk to preload quiet Call A members.
+- **Requirements:** R19–R21
+- **Dependencies:** U12
+- **Files:** `x_monitor/apify.py`, `monitor/list_membership.py`, `tests/test_apify.py`, `tests/test_list_membership_reconciliation.py`, `docs/external_vendors/twitterapi_docs/endpoint/get_list_members.md`, `docs/reference/twitterapi-io-calls.md`
+- **Approach:**
+  1. Match the vendor's fixed-page contract: send `list_id` and optional `cursor`, never the undocumented `page_size` parameter.
+  2. Validate provider status and every pagination invariant, and classify an empty first page as incomplete for this non-empty curated-list use case.
+  3. Add a second defensive guard at the snapshot-apply boundary so even a mistakenly marked complete empty snapshot cannot deactivate rows or advance sync state.
+  4. Include `members` in safe request-result counts so future empty-roster evidence is visible without retaining raw provider payloads.
+  5. Restore exactly the 49 rows deactivated by the bad snapshot, invalidate only that bad sync state after the corrected SHA is live, and inspect the next natural cycle; do not run an on-demand provider probe.
+- **Test scenarios:**
+  - Covers AE20. Multi-page success uses only documented params and completes with stable ids.
+  - Error: provider error status, empty first page, inconsistent cursor, deadline/page cap, malformed member, and duplicate/missing ids remain incomplete.
+  - Regression: a complete-empty object passed directly to the apply layer preserves known active rows and creates no last-complete state.
+- **Verification:** Targeted PostgreSQL and client tests pass; production natural-cycle request telemetry reports a nonzero member count and DB state contains a complete roster including the owner-confirmed dots accounts. If the vendor still returns empty, state remains preserved and the plan reports the upstream/private-list limitation instead of claiming quiet-member preload.
+
 ---
 
 ## Verification Contract
@@ -614,6 +635,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 | Single-brand browser refresh | `pytest tests/test_home_v22_browser.py::HomeV22BrowserTests::test_single_brand_chart_has_valid_htmx_refresh_trigger` | U7 |
 | Homepage brand order | `pytest tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_live_brand_pills_follow_chart_order_and_remain_accessible` | U10 |
 | Scheduled cron semantics | `pytest tests/test_relevancy_production_wiring.py tests/test_render_headline_topology.py`; assert blueprint command and `CycleRunner(cycle_kind="scheduled")` | U12 |
+| List roster safety | `pytest tests/test_apify.py::TestListMembers tests/test_list_membership_reconciliation.py`; assert no undocumented parameter and no mutation from empty/incomplete snapshots | U13 |
 | System check | `python manage.py check` | U4, U7–U9 |
 | Credit | `python -m scripts.harvest_cost` against representative summary fixtures; after authorized delivery, compare the first natural cycle's B1/C3 `n_results` with baseline | U5, post-delivery |
 | Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; verify canonical dots account roles; repeat on production only when production is the recorded delivery target | U4, U11, post-delivery |
@@ -635,9 +657,10 @@ Do not treat Render `cron_job_run_ended status="successful"` as done.
 - Homepage brand pills and chart projections retain the established DeepSeek, Qwen, MiniMax-first presentation order while database-only brands still appear automatically.
 - Canonical dots official/staff accounts and role edges apply idempotently with no placeholder identities, Call A resolves both roles, and B3 remains unchanged.
 - The sole Render cron starts with `--scheduled`; a natural production summary reports scheduled mode and a terminal full-list reconciliation state while retaining seven calls.
+- Full-list reconciliation uses only documented vendor parameters, and no empty/error/partial response can deactivate the local roster or advance complete state.
 - The owner instructed production promotion on 2026-09-02. Promote only the unchanged exact-SHA staging candidate and verify natural scheduled production cycles.
 
-Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills; U11 canonical dots account roles; U12 explicit scheduled cron semantics.
+Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills; U11 canonical dots account roles; U12 explicit scheduled cron semantics; U13 fail-closed full-list reconciliation.
 
 ---
 

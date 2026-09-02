@@ -62,7 +62,7 @@ spawns a fresh process.
 
 ---
 
-## The 6-call cycle
+## The 7-call cycle
 
 Each cycle fires up to 6 `advanced_search` calls. The calls are planned by
 `plan_calls()` in `x_monitor/query_plan.py` and rendered by the uniform
@@ -108,7 +108,7 @@ resolves each tweet to its actual brand).
 absent from the B-specs — they are covered exclusively by C1/C2 via
 co-occurrence AND-filter to avoid duplicate credit spend.
 
-### Calls C1/C2 — co-occurrence-constrained (kind: `brand_wide`, `is_wide_net: false`)
+### Calls C1/C2/C3 — co-occurrence-constrained (kind: `brand_wide`, `is_wide_net: false`)
 
 **Source:** `x_query_specs` entries in `config.yaml` with explicit
 `brands:` maps. These are the precision-oriented calls — each brand's
@@ -129,7 +129,7 @@ video app, "kimi" matches an F1 driver and a Turkish interrogative).
 
 ### 1. `GET /twitter/tweet/advanced_search` — the workhorse
 
-**Used by:** every cycle call (A + B1/B2/B3 + C1/C2).
+**Used by:** every cycle call (A + B1/B2/B3 + C1/C2/C3).
 
 **Method:** `TwitterApiClient.run_search(query, max_results, since, ...)`
 → `_walk_search(query, max_results, max_pages=5, max_per_page=20)`.
@@ -250,6 +250,22 @@ to 50 tweet IDs).
 **Query params:** `tweet_ids` (str) — comma-separated, no spaces.
 
 **Response shape:** `{ "tweets": [{ "id": "...", "quoteCount": N, ...}, ...] }`.
+
+### 7. `GET /twitter/list/members` — Call A roster reconciliation
+
+**Used by:** scheduled cycles when the configured six-hour reconciliation is due.
+
+**Method:** `TwitterApiClient.run_list_members(list_id, ...)`.
+
+**Vendor contract:** page size is fixed at 20. Send only required `list_id` and
+the optional `cursor`; `page_size` is not a supported query parameter. See the
+vendored contract at
+`docs/external_vendors/twitterapi_docs/endpoint/get_list_members.md`.
+
+**Safety:** provider error status, malformed/partial pagination, missing or
+duplicate stable ids, and an empty first page produce an incomplete snapshot.
+An incomplete snapshot cannot deactivate known members or advance the
+last-complete sync state.
 
 ---
 

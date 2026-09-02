@@ -915,6 +915,7 @@ class TestListMembers:
         assert [member["author_id"] for member in snapshot.members] == ["1", "2"]
         assert get.call_args_list[1].args[1]["cursor"] == "next-1"
         assert get.call_args_list[0].args[1]["list_id"] == "42"
+        assert "page_size" not in get.call_args_list[0].args[1]
 
     @pytest.mark.parametrize(
         ("page", "reason"),
@@ -927,6 +928,10 @@ class TestListMembers:
              "missing_member_id"),
             ({"members": "wrong", "has_next_page": False},
              "malformed_members"),
+            ({"members": [], "has_next_page": False, "next_cursor": None},
+             "empty_snapshot"),
+            ({"status": "error", "members": [], "has_next_page": False},
+             "provider_status_error"),
         ],
     )
     def test_rejects_partial_or_malformed_snapshot(self, page, reason):
@@ -968,7 +973,7 @@ class TestListMembers:
         assert snapshot.reason == "deadline_exhausted"
         get.assert_not_called()
 
-    def test_list_members_uses_configured_request_timeout(self):
+    def test_list_members_uses_configured_request_timeout_and_rejects_empty(self):
         client = TwitterApiClient(api_key="x", max_retries=0, timeout_s=60)
         body = {"members": [], "has_next_page": False, "next_cursor": None}
         with patch.object(
@@ -977,5 +982,23 @@ class TestListMembers:
             snapshot = client.run_list_members(
                 "42", request_timeout_seconds=7
             )
-        assert snapshot.complete is True
+        assert snapshot.complete is False
+        assert snapshot.reason == "empty_snapshot"
         assert get.call_args.kwargs["timeout"] == 7
+
+    def test_list_members_request_log_counts_members(self):
+        client = TwitterApiClient(api_key="x", max_retries=0)
+        body = {
+            "status": "success",
+            "members": [{"id": "1", "userName": "member"}],
+            "has_next_page": False,
+            "next_cursor": None,
+        }
+        with patch.object(
+            requests, "get", return_value=_mock_response(200, body)
+        ) as get:
+            snapshot = client.run_list_members("42")
+
+        assert snapshot.complete is True
+        assert client._request_log[-1]["n_results"] == 1
+        assert get.call_args.kwargs["params"] == {"list_id": "42"}
