@@ -27,9 +27,13 @@ from pathlib import Path
 import pytest
 import yaml
 
+from x_monitor.harvest_policy import load_policy
+from x_monitor.query_plan import plan_calls
+from x_monitor.specs_from_policy import primary_keywords_from_policy, specs_from_policy
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.yaml"
+POLICY_PATH = REPO_ROOT / "config" / "harvest_policy.yaml"
 
 
 # Pinned AFTER-state values (live as of 2026-07-30 post-U3)
@@ -52,6 +56,8 @@ EXPECTED_FORBIDDEN_CO_TERMS = {
 
 EXPECTED_CALL_IDS_AFTER_U3 = {"A", "B1", "B2", "B3", "C1", "C2", "C3"}
 
+EXPECTED_C3_AFTER_POLICY = '(((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR ("Ox Alpha" OR OxAlpha OR ox-alpha)) min_faves:0'
+
 
 def _load_config():
     with open(CONFIG_PATH) as f:
@@ -64,6 +70,31 @@ def _x_query_specs(cfg):
 
 def _call_b_groups(cfg):
     return cfg.get("call_b_groups", []) or []
+
+
+def test_policy_c3_is_glm_pack_with_bare_ox_alpha():
+    """U3 policy path: GLM joins C3; its aliases bypass the co gate."""
+    policy = load_policy(POLICY_PATH)
+    specs = specs_from_policy(policy)
+    calls = plan_calls(
+        "2067062923525275922",
+        specs,
+        primary_keywords=primary_keywords_from_policy(policy),
+    )
+    c3 = next(call for call in calls if call.call_id == "C3")
+    assert c3.query_string == EXPECTED_C3_AFTER_POLICY
+    assert c3.query_length == 247
+    assert "Zai_org" not in next(spec for spec in specs if spec.call_id == "B2").handles
+
+
+def test_policy_after_state_has_exact_seven_logical_calls():
+    policy = load_policy(POLICY_PATH)
+    calls = plan_calls(
+        "2067062923525275922",
+        specs_from_policy(policy),
+        primary_keywords=primary_keywords_from_policy(policy),
+    )
+    assert {call.call_id for call in calls} == EXPECTED_CALL_IDS_AFTER_U3
 
 
 

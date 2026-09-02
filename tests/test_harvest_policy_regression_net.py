@@ -52,11 +52,13 @@ from pathlib import Path
 import pytest
 
 from x_monitor.config import load_config
+from x_monitor.harvest_policy import load_policy
 from x_monitor.query_plan import plan_calls
-
+from x_monitor.specs_from_policy import primary_keywords_from_policy, specs_from_policy
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CFG_PATH = REPO_ROOT / "config.yaml"
+POLICY_PATH = REPO_ROOT / "config" / "harvest_policy.yaml"
 
 
 # -------------------------------------------------------------------------
@@ -129,7 +131,8 @@ EXPECTED_BRAND_TO_HANDLE: dict[str, str] = {
 
 
 # -------------------------------------------------------------------------
-# 4. B1 wide-net brand set (must survive under `paths: [bare]`)
+# 4. B1 wide-net brand set (must survive migration under
+# `paths: [bare]`)
 # -------------------------------------------------------------------------
 EXPECTED_B1_WIDE_NET_BRANDS: set[str] = {
     "minimax", "qwen", "deepseek", "stepfun", "hunyuan",
@@ -270,3 +273,142 @@ def test_glm_has_handle_only_path_before():
         "GLM's only search path is the @Zai_org handle. Changing this "
         "without updating the regression net is silent under-capture."
     )
+
+
+# -------------------------------------------------------------------------
+# U3 AFTER pins: policy loader/spec derivation + production renderer
+# -------------------------------------------------------------------------
+
+EXPECTED_AFTER_BRAND_TO_CALL_IDS = {
+    "minimax": {"B1", "B2"}, "qwen": {"B1", "B2"},
+    "deepseek": {"B1", "B2"}, "stepfun": {"B1", "B2"},
+    "hunyuan": {"B1", "B2"}, "dots": {"B1"},
+    "mimo": {"B3", "C1"}, "mistral": {"B2", "C1"},
+    "moonshot_kimi": {"B3", "C1"}, "yi": {"B3", "C1"},
+    "llama": {"B3", "C1"}, "ernie": {"B3", "C2"},
+    "upstage": {"B3", "C2"}, "doubao": {"B3", "C3"},
+    "sensechat": {"B3", "C3"}, "kuaishou": {"C3"},
+    "glm": {"C3"}, "inclusionai": {"B2"}, "sakana_ai": {"B2"},
+    "nemo_megatron": {"B2"}, "exaone": {"B2"},
+}
+
+EXPECTED_AFTER_CO_ALLOWLIST_SIZES = {
+    "B1": 0, "B2": 0, "B3": 0, "C1": 5, "C2": 7, "C3": 5,
+}
+
+EXPECTED_AFTER_B1_BRANDS = {
+    "minimax", "qwen", "deepseek", "stepfun", "hunyuan", "dots",
+}
+
+EXPECTED_AFTER_B2_HANDLES = (
+    "MiniMaxAgent", "MiniMax_AI", "hailuo_ai", "Ali_TongyiLab",
+    "Alibaba_Qwen", "deepseek_ai", "AntLingAGI", "TheInclusionAI",
+    "ZhihuFrontier", "robbyant_brain", "MistralAI", "StepFun_ai",
+    "stepfunai", "TencentHunyuan", "NVIDIAAI", "NVIDIAAIDev",
+    "LG_AI_Research", "SakanaAILabs",
+)
+
+EXPECTED_AFTER_B3_HANDLES = (
+    "XiaomiMiMo", "XiaomiMiMoDevs", "Kimi_Moonshot", "ErnieforDevs",
+    "PaddlePaddle", "AIatMeta", "BytePlusGlobal", "bytedanceoss",
+    "doubaoai", "01AI_Yi", "Kling_ai", "SenseTime_AI", "upstageai",
+)
+
+EXPECTED_AFTER_QUERIES = {
+    "B1": "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR dots3 OR dots4) OR (Hunyuan OR 混元 OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview OR Hy5-preview) OR (Hailuo OR MiniMax OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0",
+    "B2": "(@MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR @Ali_TongyiLab OR @Alibaba_Qwen OR @deepseek_ai OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain OR @MistralAI OR @StepFun_ai OR @stepfunai OR @TencentHunyuan OR @NVIDIAAI OR @NVIDIAAIDev OR @LG_AI_Research OR @SakanaAILabs) min_faves:0",
+    "B3": "(@XiaomiMiMo OR @XiaomiMiMoDevs OR @Kimi_Moonshot OR @ErnieforDevs OR @PaddlePaddle OR @AIatMeta OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @01AI_Yi OR @Kling_ai OR @SenseTime_AI OR @upstageai) min_faves:0",
+    "C1": "((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) OR (MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) (llm OR model OR api OR agentic OR huggingface) min_faves:0",
+    "C2": "((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) min_faves:0",
+    "C3": '(((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR ("Ox Alpha" OR OxAlpha OR ox-alpha)) min_faves:0',
+}
+
+EXPECTED_AFTER_QUERY_LENGTHS = {
+    "B1": 236, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
+}
+
+
+@pytest.fixture(scope="module")
+def harvest_policy():
+    return load_policy(POLICY_PATH)
+
+
+@pytest.fixture(scope="module")
+def policy_specs(harvest_policy):
+    return specs_from_policy(harvest_policy)
+
+
+@pytest.fixture(scope="module")
+def policy_calls(harvest_policy, policy_specs):
+    return plan_calls(
+        2067062923525275922,
+        policy_specs,
+        primary_keywords=primary_keywords_from_policy(harvest_policy),
+    )
+
+
+def _policy_coverage(policy, specs):
+    coverage: dict[str, set[str]] = {}
+    for spec in specs:
+        for nickname in spec.wide_net_brands:
+            coverage.setdefault(nickname, set()).add(spec.call_id)
+        for nickname in spec.brands:
+            coverage.setdefault(nickname, set()).add(spec.call_id)
+        if spec.handles:
+            for nickname, brand in policy.brands.items():
+                if "handle" in brand.paths and set(brand.handles) & set(spec.handles):
+                    coverage.setdefault(nickname, set()).add(spec.call_id)
+    return coverage
+
+
+def test_policy_after_brand_coverage_matches(harvest_policy, policy_specs):
+    assert _policy_coverage(harvest_policy, policy_specs) == EXPECTED_AFTER_BRAND_TO_CALL_IDS
+
+
+def test_policy_after_co_allowlist_sizes(policy_specs):
+    assert {
+        spec.call_id: len(spec.co_occurrence) for spec in policy_specs
+    } == EXPECTED_AFTER_CO_ALLOWLIST_SIZES
+
+
+def test_policy_after_b1_b2_b3_coverage(policy_specs):
+    by_id = {spec.call_id: spec for spec in policy_specs}
+    assert set(by_id["B1"].wide_net_brands) == EXPECTED_AFTER_B1_BRANDS
+    assert tuple(by_id["B2"].handles) == EXPECTED_AFTER_B2_HANDLES
+    assert tuple(by_id["B3"].handles) == EXPECTED_AFTER_B3_HANDLES
+    assert "Zai_org" not in by_id["B2"].handles
+
+
+def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
+    hunyuan = harvest_policy.brands["hunyuan"]
+    assert hunyuan.paths == frozenset({"bare", "handle"})
+    assert hunyuan.tokens == ("Hunyuan", "混元", "腾讯混元")
+    assert hunyuan.handles == ("TencentHunyuan",)
+    assert hunyuan.version_family is not None
+    assert (hunyuan.version_family.prefix, hunyuan.version_family.current_major) == ("Hy", 4)
+    assert (hunyuan.version_family.lookback, hunyuan.version_family.lookahead) == (1, 1)
+    assert hunyuan.version_family.extra_suffixes == ("-preview",)
+
+    glm = harvest_policy.brands["glm"]
+    assert glm.paths == frozenset({"co"})
+    assert not glm.handles
+    assert glm.tokens == ("glm", "ChatGLM", "Zhipu", "智谱", "Z.ai")
+    assert glm.c_bare_aliases == ('"Ox Alpha"', "OxAlpha", "ox-alpha")
+    assert glm.version_family is not None
+    assert (glm.version_family.prefix, glm.version_family.current_major) == ("GLM-", 5)
+    assert (glm.version_family.lookback, glm.version_family.lookahead) == (1, 1)
+
+    dots = harvest_policy.brands["dots"]
+    assert dots.paths == frozenset({"bare"})
+    assert not dots.handles
+    assert dots.tokens == ("dots3-note", "dots studio")
+    assert dots.version_family is not None
+    assert (dots.version_family.prefix, dots.version_family.current_major) == ("dots", 3)
+    assert (dots.version_family.lookback, dots.version_family.lookahead) == (0, 1)
+
+
+def test_policy_after_appendix_queries_are_exact(policy_calls):
+    actual = {call.call_id: call.query_string for call in policy_calls}
+    assert {call_id: actual[call_id] for call_id in EXPECTED_AFTER_QUERIES} == EXPECTED_AFTER_QUERIES
+    assert {call_id: len(query) for call_id, query in actual.items() if call_id != "A"} == EXPECTED_AFTER_QUERY_LENGTHS
+    assert all(call.query_length < 512 for call in policy_calls)

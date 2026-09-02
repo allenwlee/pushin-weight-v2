@@ -36,10 +36,29 @@ brands:
     - deepseek_ai
   glm:
     paths:
-    - handle
-    notes: Not present in any current spec; explicit opt-out pending review.
-    handles:
-    - Zai_org
+    - co
+    tokens:
+    - glm
+    - ChatGLM
+    - Zhipu
+    - 智谱
+    - Z.ai
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    c_bare_aliases:
+    - '"Ox Alpha"'
+    - OxAlpha
+    - ox-alpha
+    version_family:
+      prefix: GLM-
+      current_major: 5
+      lookback: 1
+      lookahead: 1
+    notes: 'Owning pack: C3.'
   mimo:
     paths:
     - co
@@ -170,6 +189,25 @@ brands:
     notes: B1 bare-keyword fan-out (live wire path).
     handles:
     - TencentHunyuan
+    version_family:
+      prefix: Hy
+      current_major: 4
+      lookback: 1
+      lookahead: 1
+      extra_suffixes:
+      - -preview
+  dots:
+    paths:
+    - bare
+    tokens:
+    - dots3-note
+    - dots studio
+    notes: B1 bare-keyword fan-out (live wire path).
+    version_family:
+      prefix: dots
+      current_major: 3
+      lookback: 0
+      lookahead: 1
   llama:
     paths:
     - co
@@ -331,3 +369,4 @@ co_packs:
 - - doubao
   - kuaishou
   - sensechat
+  - glm
