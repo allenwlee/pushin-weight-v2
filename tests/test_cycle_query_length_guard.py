@@ -21,16 +21,12 @@ strict would silently disable a real production call.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import pytest
 
 from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner, _cursor_key
 from x_monitor.queries import X_LENGTH_CAP
 from x_monitor.query_plan import PlannedCall
-
-
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -78,7 +74,7 @@ class FakeApi:
 
 
 @pytest.fixture
-def wired(monkeypatch):
+def wired(monkeypatch, seeded_policy_keywords):
     def _run(calls):
         api = FakeApi()
         monkeypatch.setattr(

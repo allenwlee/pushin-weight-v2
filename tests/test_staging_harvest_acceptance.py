@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from io import StringIO
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -625,11 +626,11 @@ def test_real_cycle_runner_filters_planning_to_the_selected_call():
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
-    monkeypatch, settings, tmp_path, caplog
+    monkeypatch, settings, tmp_path, caplog, seeded_policy_keywords
 ):
     from django.utils import timezone
 
-    from core.models import Brand, Post, PostEnrichmentState
+    from core.models import Post, PostEnrichmentState
     from monitor.cycle import CycleRunner
     from monitor.harvest_summary import HARVEST_COHORT_PREFIX
     from monitor.post_enrichment import post_persisted_output_complete
@@ -659,7 +660,6 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         database=_Connection(),
         policy=load_policy(POLICY_PATH),
     )
-    Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
     tweet_id = "999000000000001"
     now = timezone.now()
     provider_calls: list[dict] = []
@@ -724,6 +724,12 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
     monkeypatch.setattr(
         attribution, "classify_batch_pragmatics_full", classify
+    )
+    policy_dir = tmp_path / "config"
+    policy_dir.mkdir()
+    repo_policy = Path(__file__).resolve().parents[1] / "config" / "harvest_policy.yaml"
+    (policy_dir / "harvest_policy.yaml").write_text(
+        repo_policy.read_text(encoding="utf-8"), encoding="utf-8"
     )
     monkeypatch.chdir(tmp_path)
     settings.X_MONITOR_CYCLE_SINCE_TIME = int(now.timestamp()) - 120

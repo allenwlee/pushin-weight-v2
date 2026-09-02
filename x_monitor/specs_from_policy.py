@@ -67,7 +67,9 @@ from .query_plan import XQuerySpec
 __all__ = [
     "HANDLE_TIER_OTHER",
     "HANDLE_TIER_TOP",
+    "active_policy_tokens",
     "expand_version_family",
+    "normalize_policy_token",
     "primary_keywords_from_policy",
     "specs_from_policy",
     "validate_derived_call_ids",
@@ -140,6 +142,70 @@ def _dedupe_tokens(tokens: Iterable[str]) -> list[str]:
         if token not in seen:
             result.append(token)
             seen.add(token)
+    return result
+
+
+def normalize_policy_token(value: str) -> str:
+    """Normalize a policy/search token for DB coverage comparisons.
+
+    Quotes around a token are X query syntax (for example ``"Ox Alpha"``),
+    not part of the body token stored in ``BrandKeyword``.  Keep this helper
+    deliberately small and deterministic: trim, remove one matching pair of
+    surrounding query quotes, collapse internal whitespace, then casefold.
+    """
+    token = str(value).strip()
+    for quote in ('"', "'"):
+        if len(token) >= 2 and token.startswith(quote) and token.endswith(quote):
+            token = token[1:-1].strip()
+            break
+    return " ".join(token.split()).casefold()
+
+
+def active_policy_tokens(
+    policy: HarvestPolicy,
+    *,
+    brand_nicknames: Iterable[str] | None = None,
+) -> dict[str, set[str]]:
+    """Return normalized body/search tokens emitted by the live policy.
+
+    The map is keyed by brand nickname.  It includes ordinary tokens for
+    bare/versioned-bare paths, ordinary plus version-family tokens for co
+    paths, and C-call bare aliases.  Handles, co-occurrence terms, and
+    ``not_include`` filters are query controls rather than body-attribution
+    tokens and are intentionally excluded.
+
+    ``brand_nicknames`` narrows the result to the enabled runtime brands;
+    omitting it returns every non-skipped policy brand.
+    """
+    selected = (
+        set(brand_nicknames)
+        if brand_nicknames is not None
+        else set(policy.brands)
+    )
+    unknown = sorted(selected - set(policy.brands))
+    if unknown:
+        raise ValueError(
+            "enabled brands missing from harvest policy: "
+            + ", ".join(unknown)
+        )
+    result: dict[str, set[str]] = {}
+    for nickname in selected:
+        brand = policy.brands.get(nickname)
+        if brand is None or _is_skipped(brand):
+            continue
+        tokens: list[str] = []
+        if "bare" in brand.paths or "versioned_bare" in brand.paths:
+            tokens.extend(_bare_token_list(brand))
+        if "co" in brand.paths:
+            tokens.extend(_expand_tokens(brand.tokens, brand.version_family))
+            tokens.extend(brand.c_bare_aliases)
+        normalized = {
+            normalize_policy_token(token)
+            for token in tokens
+            if normalize_policy_token(token)
+        }
+        if normalized:
+            result[nickname] = normalized
     return result
 
 

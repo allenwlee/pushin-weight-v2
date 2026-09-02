@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone as django_timezone
 
@@ -759,21 +759,66 @@ def _load_brand_search_terms() -> dict[str, str]:
 def _build_brand_index(
     models: list[str],
 ) -> tuple[Any, dict[str, str]]:
-    """Build the per-cycle brand keyword index + search-term map.
+    """Build the live body-attribution index from enabled DB keywords.
 
-    Mirrors x_monitor/run.py:_build_brand_index. The keyword index is
-    self-brand-only (each enabled model name matches itself in post text).
-    Brand-specific multi-token lists are loaded separately from
-    brand_keywords (DB).
+    ``BrandKeyword`` is the attribution source of truth. Search policy is
+    loaded as the source of truth for what the cycle emits, then every active
+    policy token must have a literal DB mapping before this index is returned.
+    Do not synthesize nickname rows: that masks onboarding and schema drift.
+
+    The second return value is intentionally empty. ``BrandSearchTerm`` is
+    loaded by the caller only for query provenance; it is not a body-keyword
+    fallback.
     """
-    keyword_triples: list[tuple[str, str, bool]] = [
-        (m, m, False) for m in models
+    from collections import defaultdict
+
+    from x_monitor.harvest_policy import load_policy
+    from x_monitor.specs_from_policy import (
+        active_policy_tokens,
+        normalize_policy_token,
+    )
+
+    policy = load_policy(Path("config") / "harvest_policy.yaml")
+    expected = active_policy_tokens(policy, brand_nicknames=models)
+
+    try:
+        rows = list(
+            BrandKeyword.objects.filter(
+                brand_id__in=models,
+                brand__is_sentinel=False,
+            ).values_list("brand_id", "pattern", "is_regex")
+        )
+    except DatabaseError as exc:
+        logger.exception("_build_brand_index: BrandKeyword DB read failed")
+        raise RuntimeError(
+            "BrandKeyword DB read failed during attribution preflight"
+        ) from exc
+
+    literal_by_brand: dict[str, set[str]] = defaultdict(set)
+    for brand_id, pattern, is_regex in rows:
+        if not is_regex:
+            normalized = normalize_policy_token(pattern)
+            if normalized:
+                literal_by_brand[brand_id].add(normalized)
+
+    missing = sorted(
+        (brand_id, token)
+        for brand_id, tokens in expected.items()
+        for token in tokens
+        if token not in literal_by_brand.get(brand_id, set())
+    )
+    if missing:
+        formatted = ", ".join(f"{brand}/{token}" for brand, token in missing)
+        raise ValueError(
+            "BrandKeyword coverage is incomplete for active policy tokens: "
+            f"{formatted}"
+        )
+
+    keyword_triples = [
+        (str(brand_id), str(pattern), bool(is_regex))
+        for brand_id, pattern, is_regex in rows
     ]
-    index = compile_keyword_index(keyword_triples)
-    brand_search_terms: dict[str, str] = {
-        tok.lower(): bid for bid, tok, _ in keyword_triples
-    }
-    return index, brand_search_terms
+    return compile_keyword_index(keyword_triples), {}
 
 
 def _resolve_enabled_models(cfg: Config, brand_filter: list[str] | None = None) -> list[str]:
@@ -2696,9 +2741,20 @@ class CycleRunner:
 
         run_id = f"backlog-{uuid.uuid4().hex[:12]}"
         calls = self._plan_calls()
-        api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         enabled_models = _resolve_enabled_models(self.cfg, None)
-        index, search_terms = _build_brand_index(enabled_models)
+        try:
+            index, search_terms = _build_brand_index(enabled_models)
+        except Exception as exc:
+            logger.exception("backlog replay attribution preflight failed")
+            self._errors.append(f"attribution_preflight: {exc}")
+            return {
+                "run_id": run_id,
+                "status": "aborted",
+                "backlog_replays": [],
+                "post_fetch": {},
+                "errors": list(self._errors),
+            }
+        api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         search_terms = {**search_terms, **_load_brand_search_terms()}
         kept_all: list[dict[str, Any]] = []
         replay_started_monotonic = self._monotonic()
@@ -2831,7 +2887,26 @@ class CycleRunner:
             summary["status"] = "completed"
             return self._finish_summary(summary, started_monotonic=t0)
 
-        # Build TwitterAPI client from environment
+        # Build the attribution index before constructing the provider client.
+        # Missing policy/DB coverage must stop the cycle before any provider
+        # work can begin.
+        brand_filter_str = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+        brand_filter: list[str] | None = None
+        if brand_filter_str and isinstance(brand_filter_str, str):
+            brand_filter = [
+                b.strip() for b in brand_filter_str.split(",") if b.strip()
+            ]
+        enabled_models = _resolve_enabled_models(self.cfg, brand_filter)
+        try:
+            index, search_terms = _build_brand_index(enabled_models)
+        except Exception as exc:
+            logger.exception("CycleRunner.run: attribution preflight failed")
+            summary["status"] = "aborted"
+            summary["degraded"]["attribution_preflight"] = str(exc)
+            return self._finish_summary(summary, started_monotonic=t0)
+
+        # Build TwitterAPI client from environment only after attribution
+        # policy and database coverage have passed preflight.
         try:
             api = TwitterApiClient.from_env(self.twitterapi_credential_purpose)
         except RuntimeError as exc:
@@ -2840,15 +2915,6 @@ class CycleRunner:
             summary["degraded"]["api_client"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
-        # Load enabled models and build keyword index once per cycle
-        brand_filter_str = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
-        brand_filter: list[str] | None = None
-        if brand_filter_str and isinstance(brand_filter_str, str):
-            brand_filter = [
-                b.strip() for b in brand_filter_str.split(",") if b.strip()
-            ]
-        enabled_models = _resolve_enabled_models(self.cfg, brand_filter)
-        index, search_terms = _build_brand_index(enabled_models)
         # Merge DB-loaded brand_search_terms into the index-derived map
         db_search_terms = _load_brand_search_terms()
         search_terms = {**search_terms, **db_search_terms}

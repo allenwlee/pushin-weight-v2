@@ -90,7 +90,7 @@ def _tweet(tid: str):
 
 
 @pytest.fixture
-def cycle(monkeypatch):
+def cycle(monkeypatch, seeded_policy_keywords):
     """Run one full six-call scheduled cycle against a recording API."""
 
     def _run(results=None, calls=None):

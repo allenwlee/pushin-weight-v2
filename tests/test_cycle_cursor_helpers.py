@@ -310,7 +310,7 @@ def test_naive_cursor_value_does_not_abort_the_cycle(fake_cursor):
     assert since == naive.replace(tzinfo=timezone.utc) - _CURSOR_OVERLAP
 
 
-def test_operator_since_time_of_zero_is_honored(monkeypatch):
+def test_operator_since_time_of_zero_is_honored(settings):
     """Epoch 0 is a legitimate full-history backfill bound.
 
     A falsy check would silently swap it for the 2h cursor floor, shrinking
@@ -318,12 +318,8 @@ def test_operator_since_time_of_zero_is_honored(monkeypatch):
     """
     from monitor.cycle import CycleRunner
 
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_SINCE_TIME", 0, raising=False
-    )
-    monkeypatch.setattr(
-        cycle_mod.settings, "X_MONITOR_CYCLE_UNTIL_TIME", None, raising=False
-    )
+    settings.X_MONITOR_CYCLE_SINCE_TIME = 0
+    settings.X_MONITOR_CYCLE_UNTIL_TIME = None
     since, until, cursor_owned = CycleRunner(cycle_kind="manual")._resolve_window(
         _call(), now=NOW
     )

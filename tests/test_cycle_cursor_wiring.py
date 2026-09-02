@@ -72,7 +72,7 @@ def _tweet(tid: str = "1", handle: str | None = None):
 
 
 @pytest.fixture
-def wired(monkeypatch):
+def wired(monkeypatch, seeded_policy_keywords):
     """Run one cycle with a stubbed plan + API and no post-fetch LLM work."""
 
     def _run(

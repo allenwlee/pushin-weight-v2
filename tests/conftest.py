@@ -9,9 +9,9 @@ made non-green rather than silently accepted.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
-
 
 PYTEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -25,6 +25,40 @@ PYTEST_STORAGES = {
 def _use_finder_backed_staticfiles_storage(settings):
     """Keep ordinary tests independent of collected production manifests."""
     settings.STORAGES = PYTEST_STORAGES
+
+
+@pytest.fixture
+def seeded_policy_keywords(db):
+    """Seed the active policy's DB attribution rows for cycle tests.
+
+    Live ``CycleRunner`` preflight intentionally requires every normalized
+    literal emitted by the checked-in policy to have a ``BrandKeyword`` row.
+    Tests that exercise that path opt into this fixture explicitly; keeping it
+    non-autouse preserves focused unit tests that do not need Django data.
+    """
+    from core.models import Brand, BrandKeyword
+    from x_monitor.config import load_config
+    from x_monitor.harvest_policy import load_policy
+    from x_monitor.specs_from_policy import active_policy_tokens
+
+    repo_root = Path(__file__).resolve().parents[1]
+    cfg = load_config(repo_root / "config.yaml")
+    policy = load_policy(repo_root / "config" / "harvest_policy.yaml")
+    expected = active_policy_tokens(policy, brand_nicknames=cfg.enabled_models)
+
+    for nickname in cfg.enabled_models:
+        Brand.objects.get_or_create(
+            nickname=nickname,
+            defaults={"display_name": nickname, "is_sentinel": False},
+        )
+    for nickname, tokens in expected.items():
+        for token in tokens:
+            BrandKeyword.objects.get_or_create(
+                brand_id=nickname,
+                pattern=token,
+                defaults={"is_primary": False},
+            )
+    return expected
 
 
 def _database_url() -> str:

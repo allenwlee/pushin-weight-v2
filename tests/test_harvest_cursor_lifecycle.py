@@ -76,7 +76,7 @@ class ScriptedApi:
 
 
 @pytest.fixture
-def harvest(monkeypatch):
+def harvest(monkeypatch, seeded_policy_keywords):
     """Drive N sequential cycles, returning the window each one requested."""
 
     def _run_cycle(calls, script):

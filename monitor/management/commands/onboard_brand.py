@@ -15,6 +15,7 @@ from django.db import transaction
 from core.models import Brand, BrandCompany, BrandKeyword, Company, HFOrg, Product
 from monitor.country_codes import COUNTRY_NAMES
 from x_monitor.harvest_policy import load_policy
+from x_monitor.specs_from_policy import active_policy_tokens
 
 CSV_FIELDS = (
     "brand_nickname",
@@ -285,33 +286,8 @@ def read_csv(path: Path) -> list[BrandRow]:
 
 
 def _policy_tokens(policy_path: Path, nickname: str) -> set[str]:
-    with policy_path.open("r", encoding="utf-8") as stream:
-        raw = yaml.safe_load(stream) or {}
-    brand = (raw.get("brands") or {}).get(nickname) or {}
-    tokens: list[str] = []
-    for field_name in ("tokens", "versioned_tokens", "c_bare_aliases"):
-        values = brand.get(field_name) or []
-        if isinstance(values, str):
-            values = [values]
-        tokens.extend(str(v) for v in values)
-    version = brand.get("version_family") or {}
-    if isinstance(version, dict):
-        prefix, major = str(version.get("prefix") or ""), version.get("current_major")
-        if prefix and isinstance(major, int):
-            suffixes = version.get("extra_suffixes") or []
-            if isinstance(suffixes, str):
-                suffixes = [suffixes]
-            for number in range(
-                major - int(version.get("lookback", 1)),
-                major + int(version.get("lookahead", 1)) + 1,
-            ):
-                if number >= 0:
-                    tokens.append(f"{prefix}{number}")
-            for family_major in range(
-                major, major + int(version.get("lookahead", 1)) + 1
-            ):
-                tokens.extend(f"{prefix}{family_major}{suffix}" for suffix in suffixes)
-    return {_normalized_token(token) for token in tokens if str(token).strip()}
+    policy = load_policy(policy_path)
+    return active_policy_tokens(policy).get(nickname, set())
 
 
 def _enabled_models(config_path: Path) -> set[str]:

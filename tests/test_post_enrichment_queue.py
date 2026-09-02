@@ -393,7 +393,7 @@ def test_no_cutoff_preserves_legacy_fifty_row_capacity():
     [("manual", True), ("scheduled", True), ("backfill", False)],
 )
 def test_cycle_runner_threads_cutoff_to_normal_runs_but_not_backfill(
-    monkeypatch, cycle_kind, expects_cutoff
+    monkeypatch, cycle_kind, expects_cutoff, seeded_policy_keywords
 ):
     from datetime import UTC, datetime
 

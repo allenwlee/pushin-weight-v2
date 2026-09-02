@@ -1,265 +1,192 @@
-"""U7: brand_search_terms hybrid by design.
+"""U8 regression net for live Django BrandKeyword attribution."""
 
-Plan: docs/plans/2026-06-24-002-refactor-schema-modernization-batch-plan.md
-(Unit 7 of 9, R7).
+from __future__ import annotations
 
-Verifies the new contract:
-- yaml (data/queries/<brand>.yaml) is the single source for the
-  TwitterAPI.io query string.
-- DB (`brand_search_terms` table) is the single source for the
-  {term: brand_id} map used at post-fetch attribution time.
-- The yaml is NOT read at attribution time in the live fetch path.
-- The DB is NOT used to build the query string.
-- A startup-time drift check logs a warning when the yaml and DB
-  coverage disagree.
-
-Migration 017 is a no-op DDL-wise; its slot just records the cutover
-in the _migrations ledger.
-"""
-
-import logging
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from x_monitor.run import (
-    _build_brand_index,
-    _load_brand_search_terms_from_db,
-    _log_brand_search_terms_drift,
-)
-from x_monitor.store import Store
+from core.models import Brand, BrandKeyword, PostBrand
+from monitor import cycle as cycle_mod
+from monitor.cycle import CycleRunner, _build_brand_index
+from x_monitor.attribution import detect_brand_mentions
+from x_monitor.harvest_policy import load_policy
+from x_monitor.query_plan import PlannedCall
+from x_monitor.specs_from_policy import active_policy_tokens
+
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = REPO_ROOT / "config.yaml"
+POLICY_PATH = REPO_ROOT / "config" / "harvest_policy.yaml"
 
 
-# --- migration 017: no-op DDL ----------------------------------------
+def _enabled_models() -> list[str]:
+    from x_monitor.config import load_config
+
+    return list(load_config(CONFIG_PATH).enabled_models)
 
 
-def test_migration_017_applies_with_no_ddl_change(tmp_path):
-    """Migration 017 applies cleanly on a fresh DB. The DDL is a
-    no-op (BEGIN; COMMIT;) — the brand_search_terms table shape
-    is unchanged; what changes is the contract documented in the
-    migration comments and enforced in code."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        # brand_search_terms table still exists with the same shape.
-        rows = s._conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'brand_search_terms'"
-        ).fetchall()
-        assert rows, "brand_search_terms table missing after 017"
-
-        # brand_search_terms has the original 2 columns from migration 004.
-        cols = {
-            r[1] for r in s._conn.execute(
-                "PRAGMA table_info(brand_search_terms)"
-            ).fetchall()
-        }
-        assert {"brand_id", "term", "added_at"} <= cols
-    finally:
-        s.close()
+def _planned() -> PlannedCall:
+    return PlannedCall(
+        call_id="B1",
+        call_kind="brand_wide",
+        brand_id="dots",
+        bucket=None,
+        query_string="dots3-note min_faves:0",
+        query_length=23,
+    )
 
 
-def test_migration_017_records_version_in_ledger(tmp_path):
-    """Migration 017 inserts a row in _migrations (the only behavior
-    change in 017's DDL slot)."""
-    from x_monitor.store import Store
+def _tweet(tweet_id: str, text: str) -> dict[str, str]:
+    return {
+        "id": tweet_id,
+        "author_id": f"author-{tweet_id}",
+        "author_handle": f"user_{tweet_id}",
+        "text": text,
+        "lang": "en",
+        "created_at": "Sat Jul 25 12:00:00 +0000 2026",
+    }
 
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        applied = [
-            r[0]
-            for r in s._conn.execute(
-                "SELECT version FROM _migrations ORDER BY version"
-            ).fetchall()
+
+class FakeApi:
+    def __init__(self, results: list[dict[str, str]]):
+        self.results = results
+        self.searches: list[tuple[str, dict]] = []
+
+    def run_search(self, query: str, **kwargs):
+        self.searches.append((query, kwargs))
+        return list(self.results), False
+
+
+def test_active_policy_tokens_normalize_query_quotes_and_exclude_controls():
+    policy = load_policy(POLICY_PATH)
+    tokens = active_policy_tokens(policy, brand_nicknames=["glm"])["glm"]
+    assert "ox alpha" in tokens
+    assert "llm" not in tokens
+    assert "zai_org" not in tokens
+
+
+def test_build_brand_index_uses_all_enabled_db_keywords_and_regex(
+    seeded_policy_keywords,
+):
+    BrandKeyword.objects.create(
+        brand_id="glm", pattern=r"GLM-[0-9]+", is_regex=True
+    )
+    index, search_terms = _build_brand_index(_enabled_models())
+
+    assert search_terms == {}
+    assert "glm" in detect_brand_mentions("GLM-99", index)
+    assert "dots" in detect_brand_mentions("dots3-note Preview", index)
+    assert "hunyuan" in detect_brand_mentions("hy4 is genuinely unltd", index)
+    assert "glm" in detect_brand_mentions("Ox Alpha is available", index)
+
+
+def test_disabled_brand_keyword_is_not_compiled(seeded_policy_keywords):
+    Brand.objects.get_or_create(
+        nickname="disabled_brand",
+        defaults={"display_name": "Disabled", "is_sentinel": False},
+    )
+    BrandKeyword.objects.create(
+        brand_id="disabled_brand", pattern="disabled-token"
+    )
+    index, _ = _build_brand_index(_enabled_models())
+    assert detect_brand_mentions("disabled-token", index) == []
+
+
+def test_real_cycle_persists_db_only_dots_hy4_and_ox_alpha(
+    seeded_policy_keywords, monkeypatch
+):
+    api = FakeApi(
+        [
+            _tweet("u8-dots", "dots3-note Preview is out"),
+            _tweet("u8-hy", "hy4 is genuinely unltd"),
+            _tweet("u8-ox", "Ox Alpha is no longer available"),
         ]
-        assert applied.count(17) == 1, f"version 17 not applied once: {applied}"
-    finally:
-        s.close()
+    )
+    monkeypatch.setattr(
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
+    )
+    monkeypatch.setattr(
+        CycleRunner,
+        "_run_post_fetch",
+        lambda self, items, **kwargs: {},
+        raising=False,
+    )
+
+    stats = CycleRunner(cycle_kind="scheduled").run()
+
+    assert api.searches
+    assert stats["status"] in {"completed", "degraded"}
+    assert PostBrand.objects.filter(post_id="u8-dots", brand_id="dots").exists()
+    assert PostBrand.objects.filter(post_id="u8-hy", brand_id="hunyuan").exists()
+    assert PostBrand.objects.filter(post_id="u8-ox", brand_id="glm").exists()
 
 
-def test_migration_017_idempotent(tmp_path):
-    """Re-opening a DB that has 017 applied does not re-run it."""
-    from x_monitor.store import Store
+def test_missing_policy_mapping_blocks_provider_construction(
+    seeded_policy_keywords, monkeypatch
+):
+    BrandKeyword.objects.filter(brand_id="glm", pattern="ox alpha").delete()
+    constructed: list[object] = []
 
-    db = tmp_path / "x.db"
-    s1 = Store(db, auto_migrate=True)
-    s1.close()
-    s2 = Store(db, auto_migrate=True)
-    try:
-        applied = [
-            r[0]
-            for r in s2._conn.execute(
-                "SELECT version FROM _migrations ORDER BY version"
-            ).fetchall()
-        ]
-        assert applied.count(17) == 1
-    finally:
-        s2.close()
+    def _provider(cls, _purpose):
+        constructed.append(True)
+        raise AssertionError("provider must not be constructed")
 
+    monkeypatch.setattr(
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env", classmethod(_provider)
+    )
 
-def test_migration_017_full_stack_apply(tmp_path):
-    """All migrations 001-020 apply on a fresh DB; brand_search_terms
-    is in effect as the attribution-side store.
+    stats = CycleRunner(cycle_kind="scheduled").run()
 
-    U9: migration 021 was INTENTIONALLY SKIPPED (reserved for an
-    unrelated HF products crawler that never landed). After U9
-    migration 022 ships, the applied set is {1..20, 22} (21 is
-    missing). This test now asserts that gap rather than the
-    contiguous 1-20 range.
-    """
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        applied = sorted(
-            r[0] for r in s._conn.execute("SELECT version FROM _migrations").fetchall()
-        )
-        expected = sorted(set(range(1, 21)) | {22, 23})
-        assert applied == expected, (
-            f"unexpected versions: {applied} (expected {expected})"
-        )
-        rows = s._conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'brand_search_terms'"
-        ).fetchall()
-        assert rows, "brand_search_terms missing after full stack"
-    finally:
-        s.close()
+    assert constructed == []
+    assert "glm/ox alpha" in stats["degraded"]["attribution_preflight"]
 
 
-# --- _load_brand_search_terms_from_db --------------------------------
+def test_replay_missing_policy_mapping_blocks_provider_construction(
+    seeded_policy_keywords, monkeypatch
+):
+    BrandKeyword.objects.filter(brand_id="glm", pattern="ox alpha").delete()
+    constructed: list[object] = []
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: constructed.append(True)),
+    )
+
+    stats = CycleRunner(cycle_kind="backfill").replay_backlog_only()
+
+    assert constructed == []
+    assert stats["status"] == "aborted"
+    assert any("glm/ox alpha" in error for error in stats["errors"])
 
 
-def test_load_brand_search_terms_from_db_returns_seeded_map(tmp_path):
-    """_load_brand_search_terms_from_db returns the {term: brand_id}
-    map from the DB. With no seeded rows it returns an empty dict."""
-    from x_monitor.store import Store
+def test_unknown_enabled_brand_blocks_provider_construction(
+    seeded_policy_keywords, monkeypatch
+):
+    from x_monitor.config import load_config
 
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        # Seed 2 rows directly (the table is operator-curated; no
-        # auto-population in U7). INSERT OR IGNORE because migration
-        # 004 already seeded the 'minimax' brand.
-        s._conn.execute(
-            "INSERT OR IGNORE INTO brands(nickname, display_name, "
-            "accent_color, is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
-            ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
-        )
-        # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
-        brand_int = s._conn.execute(
-            "SELECT id FROM brands WHERE nickname = ?", ("minimax",)
-        ).fetchone()["id"]
-        s._conn.execute(
-            "INSERT INTO brand_search_terms(brand_id, term, added_at) "
-            "VALUES (?, ?, ?)",
-            (brand_int, "minimax", "2026-06-24T00:00:00+00:00"),
-        )
-        s._conn.execute(
-            "INSERT INTO brand_search_terms(brand_id, term, added_at) "
-            "VALUES (?, ?, ?)",
-            (brand_int, "海螺", "2026-06-24T00:00:00+00:00"),
-        )
-        terms = _load_brand_search_terms_from_db(s)
-        assert terms == {"minimax": "minimax", "海螺": "minimax"}
-    finally:
-        s.close()
+    cfg = load_config(CONFIG_PATH)
+    cfg.enabled_models.append("not_in_policy")
+    constructed: list[object] = []
+    monkeypatch.setattr(
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: constructed.append(True)),
+    )
 
+    stats = CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
 
-def test_load_brand_search_terms_from_db_empty_when_no_seeds(tmp_path):
-    """A fresh DB with no seeded brand_search_terms rows returns
-    an empty dict (not None, not raises)."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        terms = _load_brand_search_terms_from_db(s)
-        assert terms == {}
-    finally:
-        s.close()
-
-
-# --- _log_brand_search_terms_drift -----------------------------------
-
-
-def test_drift_no_warning_when_yaml_and_db_match(caplog):
-    """No warning is logged when the yaml and DB maps agree."""
-    m = {"minimax": "minimax", "海螺": "minimax"}
-    with caplog.at_level(logging.WARNING, logger="x_monitor.run"):
-        _log_brand_search_terms_drift(m, dict(m))
-    assert "drift" not in caplog.text.lower()
-
-
-def test_drift_warning_when_yaml_term_missing_from_db(caplog):
-    """A yaml term that's not in the DB triggers a warning."""
-    yaml_terms = {"minimax": "minimax", "海螺": "minimax", "ghost": "minimax"}
-    db_terms = {"minimax": "minimax", "海螺": "minimax"}
-    with caplog.at_level(logging.WARNING, logger="x_monitor.run"):
-        _log_brand_search_terms_drift(yaml_terms, db_terms)
-    assert "drift" in caplog.text.lower()
-    assert "yaml-only" in caplog.text.lower()
-
-
-def test_drift_warning_when_db_term_missing_from_yaml(caplog):
-    """A DB term that's not in the yaml triggers a warning."""
-    yaml_terms = {"minimax": "minimax"}
-    db_terms = {"minimax": "minimax", "leftover": "deepseek"}
-    with caplog.at_level(logging.WARNING, logger="x_monitor.run"):
-        _log_brand_search_terms_drift(yaml_terms, db_terms)
-    assert "db-only" in caplog.text.lower()
-
-
-def test_drift_warning_when_brand_id_mismatches(caplog):
-    """A term present in both maps with different brand_id triggers
-    a warning (DB wins at attribution time)."""
-    yaml_terms = {"minimax": "minimax"}
-    db_terms = {"minimax": "deepseek"}
-    with caplog.at_level(logging.WARNING, logger="x_monitor.run"):
-        _log_brand_search_terms_drift(yaml_terms, db_terms)
-    assert "mismatched" in caplog.text.lower()
-
-
-# --- contract: yaml and DB can diverge safely ------------------------
-
-
-def test_yaml_and_db_can_diverge_for_attribution_path(tmp_path):
-    """The yaml and DB are independent stores. Seeding only the DB
-    (the new contract) and reading it back via
-    _load_brand_search_terms_from_db returns the DB values. The yaml
-    is not consulted at attribution time — a yaml whose tokens
-    disagree with the DB is invisible to the attribution path."""
-    from x_monitor.store import Store
-
-    db = tmp_path / "x.db"
-    s = Store(db, auto_migrate=True)
-    try:
-        s._conn.execute(
-            "INSERT OR IGNORE INTO brands(nickname, display_name, "
-            "accent_color, is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
-            ("minimax", "MiniMax", "#a855f7", 0, "2026-06-24T00:00:00+00:00"),
-        )
-        # DB-side: only 'minimax' is a search term.
-        # brand_search_terms.brand_id is INTEGER (FK -> brands.id) post-020
-        brand_int = s._conn.execute(
-            "SELECT id FROM brands WHERE nickname = ?", ("minimax",)
-        ).fetchone()["id"]
-        s._conn.execute(
-            "INSERT INTO brand_search_terms(brand_id, term, added_at) "
-            "VALUES (?, ?, ?)",
-            (brand_int, "minimax", "2026-06-24T00:00:00+00:00"),
-        )
-        # _build_brand_index from yaml would add '海螺' to its map;
-        # the DB-side path does not.
-        yaml_tokens = {"minimax": ["minimax", "海螺"]}
-        _, yaml_map = _build_brand_index(yaml_tokens, ["minimax"])
-        assert "海螺" in yaml_map
-        db_map = _load_brand_search_terms_from_db(s)
-        assert "海螺" not in db_map
-        # The two maps diverge — the contract is that the DB wins
-        # at attribution time, so the live path uses db_map.
-    finally:
-        s.close()
+    assert constructed == []
+    assert "not_in_policy" in stats["degraded"]["attribution_preflight"]
