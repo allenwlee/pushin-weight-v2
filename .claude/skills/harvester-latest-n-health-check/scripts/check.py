@@ -447,11 +447,6 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
             signals = (
                 brand.get("signals") if isinstance(brand.get("signals"), list) else []
             )
-            discourses = (
-                brand.get("discourses")
-                if isinstance(brand.get("discourses"), list)
-                else []
-            )
             if not signals:
                 reasons.append(
                     _reason("classification", "missing_signal", brand_id=brand_id)
@@ -469,10 +464,8 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
                             "classification", "missing_sentiment", brand_id=brand_id
                         )
                     )
-            if not discourses:
-                reasons.append(
-                    _reason("classification", "missing_discourse", brand_id=brand_id)
-                )
+            # No discourse row is the canonical persisted form of
+            # ``uncategorized``; the UI supplies that fallback label.
 
     if reasons:
         state = "unhealthy"

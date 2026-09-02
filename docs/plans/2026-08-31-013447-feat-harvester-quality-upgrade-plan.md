@@ -639,7 +639,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 | System check | `python manage.py check` | U4, U7–U9 |
 | Credit | `python -m scripts.harvest_cost` against representative summary fixtures; after authorized delivery, compare the first natural cycle's B1/C3 `n_results` with baseline | U5, post-delivery |
 | Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; verify canonical dots account roles; repeat on production only when production is the recorded delivery target | U4, U11, post-delivery |
-| Runtime health | change-harvester latest-N health check after the first natural scheduled cycle on the authorized target. No cron pause or manual provider call. | post-delivery |
+| Runtime health | change-harvester latest-N health check after the first natural scheduled cycle on the authorized target. A succeeded classification still requires a per-brand signal with post type and sentiment; no discourse row is the canonical persisted `uncategorized` result and is not a failure. No cron pause or manual provider call. | post-delivery |
 
 Do not treat Render `cron_job_run_ended status="successful"` as done.
 
@@ -661,6 +661,17 @@ Do not treat Render `cron_job_run_ended status="successful"` as done.
 - The owner instructed production promotion on 2026-09-02. Promote only the unchanged exact-SHA staging candidate and verify natural scheduled production cycles.
 
 Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills; U11 canonical dots account roles; U12 explicit scheduled cron semantics; U13 fail-closed full-list reconciliation.
+
+---
+
+## Closeout Evidence
+
+- On 2026-09-02, the exact-ID production cohort below completed with 20 complete, 0 pending, and 0 unhealthy posts; both the regression and acceptance gates passed.
+- Ordered cohort tweet IDs: `2095063168045494596`, `2095064939417252229`, `2095065730907767260`, `2095065057730216374`, `2095063243089735683`, `2095063737606578306`, `2095063739024445775`, `2095063995954708698`, `2095065062067106085`, `2095065084167127391`, `2095065175430938753`, `2095065293311914296`, `2095065493787017511`, `2095065539597185338`, `2095065665841578222`, `2095065730366808259`, `2095065908977054180`, `2095065958150766762`, `2095066062916067681`, `2095066230638162360`.
+- The read-only rerun used one `--tweet-id` argument per ordered ID plus `--json` against `pushinweight-db-shadow`; it reported `transaction_read_only=true`. The deployed/base repository SHA was `8fb014e27f74417b59103ed779fa26edbc2e2025`, and the tested checker source SHA-256 was `d00bd94202b5d375f4ce3c40c1aa86c9207fc4fe96fcd87ba991c4fc57cd0856`.
+- Language detection and both commentary locales were present for 20/20 posts; required Simplified Chinese translations were present for 18/18 applicable non-`zh-Hans` posts.
+- The health checker regression suite passed 47 tests after aligning empty discourse persistence with the dashboard's `uncategorized` fallback.
+- The natural scheduled list-membership reconciliation remained fail-closed when the vendor returned an empty roster: the known local roster stayed active and no complete-sync marker advanced. Quiet-member preload remains unverified because the vendor returned no roster.
 
 ---
 

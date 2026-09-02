@@ -308,16 +308,6 @@ def test_succeeded_translation_requires_each_persisted_fact(checker, field, reas
             ],
             "missing_sentiment",
         ),
-        (
-            [
-                {
-                    "brand_id": "minimax",
-                    "signals": [{"post_type": "announcement", "sentiment": "positive"}],
-                    "discourses": [],
-                }
-            ],
-            "missing_discourse",
-        ),
     ],
 )
 def test_succeeded_classification_requires_per_brand_facts(checker, brands, reason):
@@ -330,6 +320,29 @@ def test_succeeded_classification_requires_per_brand_facts(checker, brands, reas
 
     assert exit_code == 1
     assert payload["posts"][0]["reasons"][0]["reason"] == reason
+
+
+def test_succeeded_classification_accepts_empty_discourse_as_uncategorized(checker):
+    post = _post(
+        brands=[
+            {
+                "brand_id": "minimax",
+                "signals": [{"post_type": "announcement", "sentiment": "positive"}],
+                "discourses": [],
+            }
+        ]
+    )
+
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(post),
+        latest=20,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    assert payload["posts"][0]["state"] == "complete"
+    assert payload["posts"][0]["reasons"] == []
 
 
 def test_failed_and_overdue_stages_are_unhealthy(checker):
@@ -482,7 +495,7 @@ def test_non_zh_hans_translation_rate_uses_only_eligible_posts(checker):
         _post(tweet_id="3", lang_detected="ja", has_text_zh_cn=False),
     ]
 
-    payload, exit_code = checker.evaluate_snapshot(
+    payload, _exit_code = checker.evaluate_snapshot(
         _snapshot(*posts), latest=3, requested_ids=None, grace_hours=24
     )
 
@@ -917,9 +930,7 @@ def test_main_unhealthy_report_still_writes_and_retains_exit_one(
                 "brand_id": "minimax",
                 "weight": 1.0,
                 "mentions": [],
-                "signals": [
-                    {"post_type": "announcement", "sentiment": "positive"}
-                ],
+                "signals": [],
                 "discourses": [],
             }
         ]
