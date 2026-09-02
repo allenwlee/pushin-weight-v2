@@ -11,8 +11,19 @@ from urllib.parse import urlparse
 import yaml
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
-from core.models import Brand, BrandCompany, BrandKeyword, Company, HFOrg, Product
+from core.models import (
+    Account,
+    Brand,
+    BrandAccount,
+    BrandCompany,
+    BrandKeyword,
+    Company,
+    HFOrg,
+    Product,
+    Role,
+)
 from monitor.country_codes import COUNTRY_NAMES
 from x_monitor.harvest_policy import load_policy
 from x_monitor.specs_from_policy import active_policy_tokens, normalize_policy_token
@@ -34,7 +45,9 @@ CSV_FIELDS = (
     "keyword_aliases",
     "c_bare_aliases",
     "official_x_handles",
+    "official_x_author_ids",
     "staff_x_handles",
+    "staff_x_author_ids",
     "harvest_paths",
     "co_pack",
     "version_family_prefix",
@@ -48,6 +61,7 @@ _NICKNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 _COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
 _HANDLE_RE = re.compile(r"^[A-Za-z0-9_]{1,15}$")
+_AUTHOR_ID_RE = re.compile(r"^[0-9]{1,20}$")
 _INTEGER_FIELDS = (
     "version_family_current_major",
     "version_family_lookback",
@@ -145,7 +159,9 @@ class BrandRow:
     keyword_aliases: list[str] = field(default_factory=list)
     c_bare_aliases: list[str] = field(default_factory=list)
     official_x_handles: list[str] = field(default_factory=list)
+    official_x_author_ids: list[str] = field(default_factory=list)
     staff_x_handles: list[str] = field(default_factory=list)
+    staff_x_author_ids: list[str] = field(default_factory=list)
     harvest_paths: list[str] = field(default_factory=list)
     co_pack: str = ""
     version_family_prefix: str = ""
@@ -162,6 +178,70 @@ class BrandRow:
             *((v, False) for v in self.keyword_aliases),
             *((v, False) for v in self.c_bare_aliases),
         ]
+
+    @property
+    def account_roles(self) -> list[tuple[str, str, str]]:
+        result: list[tuple[str, str, str]] = []
+        if self.official_x_author_ids:
+            result.extend(
+                (handle, author_id, "official")
+                for handle, author_id in zip(
+                    self.official_x_handles,
+                    self.official_x_author_ids,
+                    strict=True,
+                )
+            )
+        if self.staff_x_author_ids:
+            result.extend(
+                (handle, author_id, "staff")
+                for handle, author_id in zip(
+                    self.staff_x_handles,
+                    self.staff_x_author_ids,
+                    strict=True,
+                )
+            )
+        return result
+
+
+def _normalize_account_role_fields(
+    raw: dict[str, str], row_number: int
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    official_handles = _normalize_handles(
+        raw.get("official_x_handles"), "official_x_handles", row_number
+    )
+    staff_handles = _normalize_handles(
+        raw.get("staff_x_handles"), "staff_x_handles", row_number
+    )
+    official_ids = _split(raw.get("official_x_author_ids"))
+    staff_ids = _split(raw.get("staff_x_author_ids"))
+    for role, handles, author_ids in (
+        ("official", official_handles, official_ids),
+        ("staff", staff_handles, staff_ids),
+    ):
+        if author_ids and len(author_ids) != len(handles):
+            raise OnboardValidationError(
+                f"row {row_number}: {role} X handles and author ids must align"
+            )
+        for author_id in author_ids:
+            if not _AUTHOR_ID_RE.fullmatch(author_id):
+                raise OnboardValidationError(
+                    f"row {row_number}: {role}_x_author_ids has invalid canonical id {author_id!r}"
+                )
+    pairs = [
+        *(zip(official_handles, official_ids, strict=True) if official_ids else ()),
+        *(zip(staff_handles, staff_ids, strict=True) if staff_ids else ()),
+    ]
+    normalized_handles = [handle.casefold() for handle, _author_id in pairs]
+    author_ids = [author_id for _handle, author_id in pairs]
+    if len(normalized_handles) != len(set(normalized_handles)):
+        raise OnboardValidationError(
+            f"row {row_number}: duplicate X handle across account roles"
+        )
+    if len(author_ids) != len(set(author_ids)):
+        raise OnboardValidationError(
+            f"row {row_number}: duplicate X author id across account roles"
+        )
+    return official_handles, official_ids, staff_handles, staff_ids
 
 
 def _parse_row(raw: dict[str, str], row_number: int) -> BrandRow | None:
@@ -218,6 +298,12 @@ def _parse_row(raw: dict[str, str], row_number: int) -> BrandRow | None:
         field_name: _parse_nonnegative_int(value(field_name), field_name, row_number)
         for field_name in _INTEGER_FIELDS
     }
+    (
+        official_handles,
+        official_ids,
+        staff_handles,
+        staff_ids,
+    ) = _normalize_account_role_fields(raw, row_number)
     return BrandRow(
         row_number=row_number,
         nickname=nickname,
@@ -235,12 +321,10 @@ def _parse_row(raw: dict[str, str], row_number: int) -> BrandRow | None:
         keyword_primary=primary,
         keyword_aliases=_split(raw.get("keyword_aliases")),
         c_bare_aliases=_split(raw.get("c_bare_aliases")),
-        official_x_handles=_normalize_handles(
-            raw.get("official_x_handles"), "official_x_handles", row_number
-        ),
-        staff_x_handles=_normalize_handles(
-            raw.get("staff_x_handles"), "staff_x_handles", row_number
-        ),
+        official_x_handles=official_handles,
+        official_x_author_ids=official_ids,
+        staff_x_handles=staff_handles,
+        staff_x_author_ids=staff_ids,
         harvest_paths=_split(raw.get("harvest_paths")),
         co_pack=value("co_pack"),
         version_family_prefix=value("version_family_prefix"),
@@ -343,8 +427,19 @@ def _validate(
         policy_handles = {
             h.casefold().lstrip("@") for h in policy.brands[row.nickname].handles
         }
+        # Canonical-id pairs describe durable Call A roles, not dedicated
+        # B2/B3 search handles. Only handle-only metadata is expected to match
+        # the harvest policy's handle-query surface.
         supplied_handles = {
-            h.casefold() for h in (*row.official_x_handles, *row.staff_x_handles)
+            h.casefold()
+            for h in (
+                *(
+                    row.official_x_handles
+                    if not row.official_x_author_ids
+                    else ()
+                ),
+                *(row.staff_x_handles if not row.staff_x_author_ids else ()),
+            )
         }
         if supplied_handles != policy_handles:
             warnings.append(f"{row.nickname}: CSV X handles differ from harvest policy")
@@ -363,6 +458,25 @@ def _validate(
             )
             if row.co_pack != expected_pack:
                 warnings.append(f"{row.nickname}: co_pack differs from harvest policy")
+        for handle, author_id, _role in row.account_roles:
+            existing_by_id = Account.objects.filter(author_id=author_id).first()
+            if (
+                existing_by_id
+                and existing_by_id.handle
+                and existing_by_id.handle.casefold() != handle.casefold()
+            ):
+                raise OnboardValidationError(
+                    f"canonical X author id {author_id!r} is already bound to another handle"
+                )
+            conflicting_ids = list(
+                Account.objects.filter(handle__iexact=handle)
+                .exclude(author_id=author_id)
+                .values_list("author_id", flat=True)
+            )
+            if conflicting_ids:
+                raise OnboardValidationError(
+                    f"X handle {handle!r} is already bound to another author id"
+                )
     company_values: dict[str, tuple[str, str, str, str]] = {}
     hf_ownership: dict[str, str] = {}
     for row in rows:
@@ -483,6 +597,8 @@ class Command(BaseCommand):
                 "hf_orgs",
                 "brand_keywords",
                 "products",
+                "accounts",
+                "brands_accounts",
                 "unchanged",
             )
         }
@@ -560,6 +676,46 @@ class Command(BaseCommand):
                                 {"is_primary": is_primary, "is_regex": False},
                             )
                             else "brand_keywords"
+                        ] += 1
+                for handle, author_id, role_key in row.account_roles:
+                    Role.objects.get_or_create(key=role_key)
+                    outcome = Account.apply_observation(
+                        author_id=author_id,
+                        observed_author_id=author_id,
+                        source="seed",
+                        observed_at=timezone.now(),
+                        candidates={"handle": handle},
+                        present_fields={"handle"},
+                    )
+                    if (
+                        outcome.identity_rejected
+                        or outcome.account is None
+                        or outcome.rejected_fields
+                    ):
+                        raise CommandError(
+                            f"canonical X account {author_id!r}/{handle!r} was rejected"
+                        )
+                    counts[
+                        "accounts"
+                        if outcome.created or outcome.applied_fields
+                        else "unchanged"
+                    ] += 1
+                    edge = BrandAccount.objects.filter(
+                        brand=brand,
+                        account=outcome.account,
+                    ).first()
+                    if edge is None:
+                        BrandAccount.objects.create(
+                            brand=brand,
+                            account=outcome.account,
+                            role_id=role_key,
+                        )
+                        counts["brands_accounts"] += 1
+                    else:
+                        counts[
+                            "unchanged"
+                            if not _update(edge, {"role_id": role_key})
+                            else "brands_accounts"
                         ] += 1
                 for repo_id in row.products:
                     namespace = repo_id.split("/", 1)[0]

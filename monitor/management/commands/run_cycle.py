@@ -9,6 +9,7 @@ Usage:
     python manage.py run_cycle --limit-per-call 20       # cap tweets per API call
     python manage.py run_cycle --skip-fetch              # plan + attribute + persist only
     python manage.py run_cycle --max-pages-per-call 3    # pagination cap
+    python manage.py run_cycle --scheduled               # Render cron semantics
 
 `--brands`, `--limit-per-call`, `--skip-fetch`, and `--max-pages-per-call`
 are threaded through to CycleRunner via Django settings so cycle.py stays
@@ -80,6 +81,14 @@ class Command(BaseCommand):
             type=int,
             default=None,
             help="Cap pagination depth per TwitterAPI.io call (default: 5).",
+        )
+        parser.add_argument(
+            "--scheduled",
+            action="store_true",
+            help=(
+                "Run with scheduled-cycle semantics (cursor tip sweep, list "
+                "membership reconciliation, and backlog replay)."
+            ),
         )
         parser.add_argument(
             "--staging-acceptance",
@@ -235,7 +244,7 @@ class Command(BaseCommand):
         runner_options = {
             "cfg": cfg,
             "dry_run": options["dry_run"],
-            "cycle_kind": "manual",
+            "cycle_kind": "scheduled" if options["scheduled"] else "manual",
             "_relevancy_llm_call": relevancy_llm_call,
         }
         if prepared is not None:

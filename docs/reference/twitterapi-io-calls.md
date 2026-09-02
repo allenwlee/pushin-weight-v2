@@ -41,13 +41,13 @@ The Render cron job (`render.yaml`) fires the cycle every 15 minutes:
 
 ```yaml
 schedule: "*/15 * * * *"
-startCommand: python manage.py run_cycle --limit-per-call 50
+startCommand: python manage.py run_cycle --scheduled
 ```
 
 Each cycle:
 
 1. **Plan calls** via `x_monitor/query_plan.py::plan_calls()` — returns a
-   list of `PlannedCall` objects (typically 6: A + B1/B2/B3 + C1/C2).
+   list of `PlannedCall` objects (7: A + B1/B2/B3 + C1/C2/C3).
 2. **Fetch tweets** via `TwitterApiClient.run_search()` — shared library
    code that wraps the TwitterAPI.io REST API.
 3. **Attribute to brands** via `x_monitor/attribution.py::attribute_to_brands()`

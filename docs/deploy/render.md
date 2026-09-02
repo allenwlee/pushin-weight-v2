@@ -116,7 +116,7 @@ Production harvesting is synchronous and has one scheduler:
 | Resource | Current role |
 |---|---|
 | `pushinweight-web` | Django/Gunicorn dashboard |
-| `pushinweight-harvest` | Render cron, `*/15 * * * *`, `python manage.py run_cycle` |
+| `pushinweight-harvest` | Render cron, `*/15 * * * *`, `python manage.py run_cycle --scheduled` |
 | `pushinweight-db-shadow` | PostgreSQL used by the deployed web/cron services |
 | `pushinweight-headlines-broker` | Available owned Key Value broker for `trend-narratives` |
 | `pushinweight-headlines` | Active queue-only worker for `trend-narratives`, concurrency/prefetch one |

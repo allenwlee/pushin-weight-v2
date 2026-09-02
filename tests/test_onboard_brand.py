@@ -13,6 +13,7 @@ from django.core.management.base import CommandError
 from core.models import (
     Account,
     Brand,
+    BrandAccount,
     BrandCompany,
     BrandKeyword,
     Company,
@@ -37,7 +38,8 @@ HEADER = (
     "brand_display_name_zh_cn,accent_color,company_nickname,company_display_name,"
     "company_display_name_en,company_display_name_zh_cn,company_hq_country,hf_orgs,"
     "hf_product_repo_ids,keyword_primary,keyword_aliases,c_bare_aliases,"
-    "official_x_handles,staff_x_handles,harvest_paths,co_pack,version_family_prefix,"
+    "official_x_handles,official_x_author_ids,staff_x_handles,staff_x_author_ids,"
+    "harvest_paths,co_pack,version_family_prefix,"
     "version_family_current_major,version_family_lookback,version_family_lookahead,"
     "version_family_extra_suffixes,notes\n"
 )
@@ -250,6 +252,115 @@ def test_second_apply_is_idempotent_and_handles_are_metadata_only(tmp_path: Path
     ) == counts
     assert "unchanged" in output
     assert Account.objects.count() == 0
+
+
+def test_canonical_x_accounts_create_idempotent_role_links(tmp_path: Path):
+    csv_path = tmp_path / "brands.csv"
+    _write_input(
+        csv_path,
+        [
+            _row(
+                official_x_handles="@dotsstudioai",
+                official_x_author_ids="2085289191609716736",
+                staff_x_handles="ChaoQiao42",
+                staff_x_author_ids="2040060892176601088",
+            )
+        ],
+    )
+    config, policy = _config_and_policy(tmp_path)
+
+    first_output = _run(csv_path, config, policy)
+    second_output = _run(csv_path, config, policy)
+
+    assert "accounts=2" in first_output
+    assert "brands_accounts=2" in first_output
+    assert "accounts=0" in second_output
+    assert "brands_accounts=0" in second_output
+    assert Account.objects.get(author_id="2085289191609716736").handle == "dotsstudioai"
+    assert Account.objects.get(author_id="2040060892176601088").handle == "ChaoQiao42"
+    assert BrandAccount.objects.get(
+        brand_id="dots", account_id="2085289191609716736"
+    ).role_id == "official"
+    assert BrandAccount.objects.get(
+        brand_id="dots", account_id="2040060892176601088"
+    ).role_id == "staff"
+    assert not Account.objects.filter(
+        author_id__regex=r"^(handle:|synthetic:)"
+    ).exists()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (
+            {
+                "official_x_handles": "dotsstudioai|ChaoQiao42",
+                "official_x_author_ids": "2085289191609716736",
+            },
+            "must align",
+        ),
+        (
+            {
+                "official_x_handles": "dotsstudioai",
+                "official_x_author_ids": "not-numeric",
+            },
+            "invalid canonical id",
+        ),
+        (
+            {
+                "official_x_handles": "dotsstudioai",
+                "official_x_author_ids": "2085289191609716736",
+                "staff_x_handles": "DOTSSTUDIOAI",
+                "staff_x_author_ids": "2040060892176601088",
+            },
+            "duplicate X handle",
+        ),
+        (
+            {
+                "official_x_handles": "dotsstudioai",
+                "official_x_author_ids": "2085289191609716736",
+                "staff_x_handles": "ChaoQiao42",
+                "staff_x_author_ids": "2085289191609716736",
+            },
+            "duplicate X author id",
+        ),
+    ],
+)
+def test_invalid_canonical_account_pairs_fail_before_write(
+    tmp_path: Path,
+    overrides: dict[str, str],
+    message: str,
+):
+    csv_path = tmp_path / "brands.csv"
+    _write_input(csv_path, [_row(**overrides)])
+    config, policy = _config_and_policy(tmp_path)
+
+    with pytest.raises(CommandError, match=message):
+        _run(csv_path, config, policy)
+
+    assert not Brand.objects.filter(nickname="dots").exists()
+    assert not Account.objects.exists()
+
+
+def test_existing_account_handle_conflict_fails_before_write(tmp_path: Path):
+    Account.objects.create(author_id="999", handle="dotsstudioai")
+    csv_path = tmp_path / "brands.csv"
+    _write_input(
+        csv_path,
+        [
+            _row(
+                official_x_handles="dotsstudioai",
+                official_x_author_ids="2085289191609716736",
+            )
+        ],
+    )
+    config, policy = _config_and_policy(tmp_path)
+
+    with pytest.raises(CommandError, match="already bound to another author id"):
+        _run(csv_path, config, policy)
+
+    assert not Brand.objects.filter(nickname="dots").exists()
+    assert not BrandAccount.objects.exists()
 
 
 def test_dry_run_prints_normalized_handles_without_writing(tmp_path: Path):

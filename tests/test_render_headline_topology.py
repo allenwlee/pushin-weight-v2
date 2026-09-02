@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 PRODUCTION_BLUEPRINT_SHA256 = (
-    "2652df38ef32f11a37ed421ff0cb3185ef81dc47f5f6ea73e9262ab836b9a1b7"
+    "20f25c93fbd26c9d53e843c7ff0ff5f657f0dfd6348a795a471e3ef2e6d44583"
 )
 
 
@@ -79,7 +79,13 @@ def test_render_cron_is_the_only_declared_scheduler():
     assert [
         (service["name"], service["schedule"], service["startCommand"])
         for service in cron_services
-    ] == [("pushinweight-harvest", "*/15 * * * *", "python manage.py run_cycle")]
+    ] == [
+        (
+            "pushinweight-harvest",
+            "*/15 * * * *",
+            "python manage.py run_cycle --scheduled",
+        )
+    ]
     assert all(
         "beat" not in service.get("startCommand", "")
         for service in blueprint["services"]

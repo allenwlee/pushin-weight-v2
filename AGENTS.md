@@ -72,7 +72,7 @@ There is one production stack: v2.
 
 - **Web:** Django + gunicorn + WhiteNoise on Render, behind Google OAuth
   (URL: `https://pushinweight-web.onrender.com`).
-- **Harvest:** One Render cron runs `python manage.py run_cycle` every 15
+- **Harvest:** One Render cron runs `python manage.py run_cycle --scheduled` every 15
   minutes. Celery beat is not a production scheduler.
 - **Headline worker:** A dedicated queue-only Celery worker and owned broker
   are additive candidate resources; they never run harvesting or beat.

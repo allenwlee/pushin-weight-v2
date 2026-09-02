@@ -4,7 +4,8 @@
 
 The operator-facing identity input is `config/brands/brand-onboard.template.csv`.
 Harvest policy remains the search authoring surface; `onboard_brand` validates
-that policy and never edits it. X handles and harvest-path fields are metadata.
+that policy and never edits it. Handle-only rows and harvest-path fields are
+metadata; a handle paired with a canonical author id creates a durable role link.
 
 ## Workflow
 
@@ -67,10 +68,15 @@ requires a company. A failed later row rolls back earlier rows.
 are non-primary. Natural keys make reruns idempotent for brands, companies,
 links, HF orgs, keywords, and products.
 
-`official_x_handles` and `staff_x_handles` normalize an optional `@`, are shown
-in dry-run output, and create no Account or role-link records. `harvest_paths`,
-`co_pack`, and version-family columns are checked or warned as metadata. The
-command never rewrites `config/harvest_policy.yaml`.
+`official_x_handles` and `staff_x_handles` normalize an optional `@` and are
+shown in dry-run output. Their optional `official_x_author_ids` and
+`staff_x_author_ids` cells are pipe-aligned canonical numeric X ids. When ids
+are present, the command atomically upserts `Account` and `BrandAccount` rows
+with `official` or `staff` role; it rejects mismatched or conflicting pairs and
+never invents `handle:` or `synthetic:` ids. A handle with no id remains
+metadata-only. `harvest_paths`, `co_pack`, and version-family columns are
+checked or warned as metadata. The command never rewrites
+`config/harvest_policy.yaml`.
 
 For a deliberate identity-only load while policy is being prepared, use
 `--skip-search`; the normal command is strict and requires both enabled-model

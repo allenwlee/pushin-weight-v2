@@ -122,7 +122,7 @@ Rough extrapolation if this mix holds: on the order of **~$2/day** from the samp
 
 ### 5.1 Main harvest (minority of credits when healthy)
 
-- Cron: `render.yaml` → `python manage.py run_cycle` every 15 minutes.
+- Cron: `render.yaml` → `python manage.py run_cycle --scheduled` every 15 minutes.
 - Plans A + B1/B2/B3 + C1/C2/C3 via `plan_calls()`.
 - Fetches via `TwitterApiClient.run_search` → `GET /twitter/tweet/advanced_search`.
 - Default caps: ~50 results/call (C1 raised to 150); `max_lookback_hours: 0.25`; `cursor_overlap_seconds: 60`.

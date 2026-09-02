@@ -76,14 +76,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ## Delivery Exceptions
 
 - On 2026-08-31, the owner explicitly authorized committing and pushing the corrected M17 production pause-authorization rule to `main` before this plan is completed. This one-time exception is limited to `.claude/skills/change-harvester/SKILL.md`, `.claude/skills/avoiding-recurring-mistakes/SKILL.md`, and the corresponding incident entry in `docs/operations/pause-and-resume-harvest-cron.md`; it does not authorize deployment, cron mutation, other plan implementation, or changes to `feat/backfiller-selective-gaps`.
+- On 2026-09-02, after the first exact-SHA production cycle, the owner added `dotsstudioai` as the official dots account and `ChaoQiao42` as dots staff. One bounded on-demand TwitterAPI user-info lookup resolved the previously unknown canonical `dotsstudioai` author id; it did not run harvest search, pause the cron, or authorize unrelated provider calls.
+- On 2026-09-02 closeout, production evidence showed the sole Render cron invoked manual cycle semantics and had never completed the configured full X-list reconciliation. U12 is limited to adding explicit `--scheduled` semantics to that existing cron command; it does not pause the cron, change cadence, add a scheduler/call, or authorize a manual production provider run.
 
 ## Goal Capsule
 
 - **Objective:** Adding a tracked brand is filling one CSV template row (company, Hugging Face org/URL, keywords, display metadata) and loading it. The seven-call harvest then collects Hunyuan Hy-generation slang, Zhipu GLM keyword posts including Ox Alpha, and Xiaohongshu dots3-note talk, without an eighth TwitterAPI search call.
 - **Means:** Operator fills the brand-onboard CSV template; `onboard_brand` loads it before harvest-token work; then version-family tokens and GLM on C3 with a bare Ox Alpha OR (KTD7, KTD2, KTD3).
 - **Authority:** This plan, then `AGENTS.md` / change-harvester skill, then `config/brands/` identity files and `config/harvest_policy.yaml`.
-- **Stop conditions:** A new eighth call; pausing or mutating the production cron; unauthorized production writes; merging `feat/backfiller-selective-gaps`.
-- **Execution profile:** `production`. After exact-SHA staging acceptance, the owner selected production delivery on 2026-09-02. No live provider probe or manual production `run_cycle` is part of verification; production proof uses natural scheduled cycles.
+- **Stop conditions:** A new eighth call; pausing the production cron or changing its cadence/topology beyond U12's explicit `--scheduled` command; unauthorized production writes; merging `feat/backfiller-selective-gaps`.
+- **Execution profile:** `production`. After exact-SHA staging acceptance, the owner selected production delivery on 2026-09-02. Except for the bounded account-id lookup recorded above, no live provider probe or manual production `run_cycle` is part of verification; production proof uses natural scheduled cycles.
 - **Tail ownership:** Parent workflow after an explicit delivery request. Ollija does not ship.
 
 ---
@@ -119,6 +121,8 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - New brand `dots` with distinctive tokens only. `(session-settled: user-approved — chosen over a Xiaohongshu/RedNote/小红书 company brand: avoid social-app flood.)` Governs R6, R7.
 - Keep the seven-call shape. A new call is allowed only if a later 512-char check fails. `(session-settled: user-directed — chosen over a dedicated GLM call: existing C packs have headroom.)` Governs R8.
 - Brand identity is a CSV template the operator fills, loaded by `onboard_brand`. `(session-settled: user-directed — chosen over YAML-as-the-form the operator edits: one spreadsheet row instantiates company, HF URL, keywords, and related metadata.)` Governs R11, R12, R13, R14, R15.
+- Dots first-party identity is canonical account data, not handle-only metadata. `(session-settled: user-directed — `dotsstudioai` is official and `ChaoQiao42` is staff; chosen over placeholder accounts or unpersisted CSV annotations.)` Governs R19.
+- The Render cron declares scheduled semantics explicitly. `(implementation-discovered: production natural-cycle summaries were labeled `manual`, so the configured six-hour full-list reconciliation never ran; chosen over changing the management command's safe on-demand default.)` Governs R20.
 
 ### Requirements
 
@@ -147,7 +151,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 
 **Brand onboarding**
 
-- R11. The operator instantiates a new brand by copying `config/brands/brand-onboard.template.csv` (Appendix exhibit), filling one row, and saving it. The row covers display names, accent, optional company, Hugging Face org URL or namespace, optional product repo ids, attribution keywords, metadata-only X handles, and harvest-path hints.
+- R11. The operator instantiates a new brand by copying `config/brands/brand-onboard.template.csv` (Appendix exhibit), filling one row, and saving it. The row covers display names, accent, optional company, Hugging Face org URL or namespace, optional product repo ids, attribution keywords, optional X handles with aligned canonical author ids, and harvest-path hints.
 - R12. `python manage.py onboard_brand --csv <file>` atomically upserts `brands`, `companies` (when `company_nickname` is set), `brands_companies`, `hf_orgs`, `brand_keywords`, and optional `products`. Re-running is a no-op for unchanged rows. Empty `brand_nickname` and rows starting with `_` are skipped.
 - R13. The command validates the whole file before writes and fails loud if harvest search is incomplete, an HF org lacks a company, a product natural key conflicts, a country/color/value is malformed, or the nickname is missing from `harvest_policy.yaml` and `config.yaml` `enabled_models`.
 - R14. Every live Django brand label, accent, feed wire row, pulse, control, and single-brand chart projection reads `Brand` rows. `Brand.is_sentinel` is the sole runtime exclusion from production brand projections; a newly onboarded brand does not require a hardcoded display-name, color, selectable-inventory entry, or nickname blacklist edit.
@@ -157,6 +161,11 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 **Homepage presentation order**
 
 - R18. Homepage brand pills, chart series, chart legend, and brand-filter controls retain the established chart presentation order beginning DeepSeek, Qwen, MiniMax. The order is a priority, not an allowlist: every non-sentinel database brand still renders, and an unknown newly onboarded brand is appended alphabetically without a code edit.
+
+**Dots first-party accounts**
+
+- R19. The tracked dots row maps canonical X author id `2085289191609716736` / handle `dotsstudioai` to role `official` and canonical X author id `2040060892176601088` / handle `ChaoQiao42` to role `staff`. `onboard_brand` atomically and idempotently persists the two `Account` rows plus `BrandAccount` edges, rejects handle/id conflicts, and never creates `handle:` or `synthetic:` ids. Both handles are owner-confirmed members of the curated X list and therefore use Call A; dots remains off B3 to avoid duplicate retrieval while the logical call count stays seven.
+- R20. The Render harvest cron invokes `run_cycle` with explicit scheduled semantics while plain operator invocations remain manual. Natural cron cycles therefore retain cursor-tip behavior, backlog replay, and due full-list reconciliation without adding a logical search call or changing the 15-minute cadence.
 
 ### Acceptance Examples
 
@@ -177,6 +186,8 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - AE15. Covers R12, R15. Given the tracked four-row CSV, when it is applied twice to the selected target database, the second run reports no duplicate identity, link, keyword, HF org, or product rows, and `Solar LLM` plus `업스테이지` exist as non-primary Upstage keywords.
 - AE16. Covers R9. Given a fetched body that says `Moonshot AI's Kimi K3 climbed to third place` and only the `moonshot_kimi` database aliases match (the nickname itself does not appear), when the real `CycleRunner.run()` path attributes and persists it, `PostBrand(post, moonshot_kimi)` exists.
 - AE17. Covers R18. Given the routed homepage contains both historical and database-only brands, when Chromium reads the rendered pills, chart payload, chart legend, and open-brand controls, their shared brands follow the established DeepSeek, Qwen, MiniMax-first order and database-only brands follow deterministically after the priority list.
+- AE18. Covers R19. Given the tracked dots row and the owner-confirmed curated-list membership, when `onboard_brand` runs twice, the first run creates or updates canonical accounts `2085289191609716736` and `2040060892176601088` and their official/staff dots links, the second run is unchanged, no placeholder account exists, Call A resolves both roles, and B3 remains unchanged.
+- AE19. Covers R20. Given the production Render blueprint, when its natural cron starts `run_cycle`, `CycleRunner` receives `cycle_kind="scheduled"`; a due curated-list reconciliation can persist quiet members, while plain `python manage.py run_cycle` remains manual and the planner still emits seven logical calls.
 
 ### Success Criteria
 
@@ -186,6 +197,8 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - Logical call count stays at seven per cycle. Provider HTTP requests remain governed by the existing pagination and truncation caps; result volume may rise on B1 and C3.
 - The new body aliases survive the live Django attribution path, and every live dashboard and feed brand projection renders `dots` from DB data.
 - Homepage brand pills and chart projections retain the established DeepSeek, Qwen, MiniMax-first order while database-only brands remain automatic.
+- Dots' official and staff accounts resolve through canonical numeric author ids in `brands_accounts`, and both curated-list members are covered by Call A without changing B3 or the seven-call shape.
+- Natural Render cron summaries report `cycle_kind="scheduled"`, and the due curated-list reconciliation records a terminal state instead of remaining permanently absent.
 
 ### Scope Boundaries
 
@@ -200,9 +213,9 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 **Deferred for later**
 
 - Yi apostrophe / Turkish suffix false-positive handling from the 2026-08-31 incident.
-- Stamping `source_query_id` / cycle_kind fidelity (`scheduled` vs `manual`).
+- Stamping `source_query_id` fidelity beyond the existing call/cycle summaries.
 - Auto-discovery of the next unnamed stealth model (Ox Alpha’s successor).
-- `@dotsstudioai` / `@ChaoQiao42` on B2/B3 or the curated list.
+- `@dotsstudioai` / `@ChaoQiao42` on B2/B3; owner-confirmed curated-list membership is the Call A path.
 - Expanding the LLM relevancy gate beyond Call A.
 - `feat/backfiller-selective-gaps`.
 - Historical false-positive deletes or reattributes.
@@ -210,7 +223,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - Admin UI for onboarding (harvest policy 4/5).
 - Scraping the full HF product catalog for a new org (optional `repo_id` only).
 - Reworking the retired Flask/SQLite dashboard, legacy `x_monitor.store` registry, or historical CLI seeding paths.
-- Resolving X handles to account IDs or writing `BrandAccount` / `CompanyAccount` rows. The CSV handle columns remain metadata-only in this change.
+- Automatic vendor resolution from handles to account ids, and `CompanyAccount` writes. Handle-only CSV rows remain metadata-only; rows with aligned canonical ids write `BrandAccount` edges.
 
 **Outside this product**
 
@@ -220,9 +233,9 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 ### Assumptions
 
 - GLM neighborhood is C3 (Doubao / SenseChat / Kuaishou). Measured AFTER length 247 / headroom 265. C1 also fits (399 / 113) but is tighter.
-- `dots` is B1-only this change. No official-handle path.
+- `dots` has distinctive-token coverage on B1 and owner-managed first-party membership on Call A; it has no dedicated B2/B3 handle query.
 - Version-family lookback for dots is 0 (no `dots2`).
-- Call A list membership is unchanged. Dropping `@Zai_org` from B2 may miss third-party mentions that contain neither GLM tokens nor Ox Alpha.
+- Call A list content remains owner-managed. Scheduled cycles reconcile the full roster every six hours; posting authors are still observed inline every cycle. Dropping `@Zai_org` from B2 may miss third-party mentions that contain neither GLM tokens nor Ox Alpha.
 
 ---
 
@@ -239,10 +252,11 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - KTD7. Operator authoring surface is the CSV template in the Appendix (shipped as `config/brands/brand-onboard.template.csv`). `onboard_brand --csv` loads it. Harvest search SSOT stays `config/harvest_policy.yaml`. Multi-value cells use `|`. HF cells accept a namespace or a `https://huggingface.co/...` URL; the loader stores `hf_orgs.namespace` only. `(session-settled: user-directed — chosen over YAML as the form the operator edits: one spreadsheet row instantiates the brand.)` Instantiates R11, R12, R13.
 - KTD8. The live v2 enable-gate is `config.yaml` `enabled_models`. Config validates unique nickname-shaped values and cross-field overrides against that list; live `CycleRunner` does not filter through `KNOWN_MODELS`. The frozen registry remains only for explicitly deferred legacy consumers. Instantiates R13, R17.
 - KTD9. The seven-call contract is a logical planner invariant, not an HTTP-request count. Existing pagination and truncation caps remain the provider-spend boundary. Instantiates R8, R16.
+- KTD10. Plain `run_cycle` stays manual for safe operator use; `render.yaml` adds `--scheduled` to the sole production cron. This fixes scheduled-only full-list reconciliation and backlog behavior without changing call planning or reviving Celery beat. Instantiates R20.
 
 ### Assumptions
 
-- The `official_x_handles` and `staff_x_handles` CSV columns are metadata-only in this change. The loader normalizes them for dry-run/policy comparison but does not create accounts or role links because handles do not provide the required account IDs.
+- Handle-only `official_x_handles` and `staff_x_handles` cells remain metadata-only. When aligned canonical author-id cells are present, the loader validates and persists `Account` plus `BrandAccount` role links.
 - The tracked filled input is `config/brands/2026-08-31-013447-harvester-quality-upgrade.csv`. This makes the intended identity rows reviewable and deployable while keeping the reusable template instruction-only.
 - C3 is inserted before C2 and C1 in the degraded skip order: `B3`, `B2`, `B1`, `C3`, `C2`, `C1`, `A`. C3 has the broadest new result-volume risk among the constrained calls.
 - Identity rows are applied only to the owner-selected delivery target. Code rollback does not delete durable identity rows; the operational rollback is to disable the brand in policy/config and use an explicit data correction only if the loaded rows are proven wrong.
@@ -327,7 +341,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   3. Skip rows with empty `brand_nickname` or nickname starting with `_`.
   4. Parse and validate the entire file before writes. Require `company_nickname` when `hf_orgs` or an HF product URL is present. Validate country, color, integer fields, handle syntax, unique product ownership, policy membership, `enabled_models` membership, and coverage of every active policy token by the post-transaction keyword set.
   5. Use one transaction per file and natural-key upserts for `Brand`, `Company`, `BrandCompany`, `HFOrg`, `BrandKeyword`, and `Product`. A bad later row rolls back earlier rows. Empty `company_nickname` skips company only when no HF row needs it.
-  6. Treat X handle columns as metadata-only per the Planning Contract Assumptions. Normalize an optional leading `@`, warn on mismatch with policy handles, print them in `--dry-run`, and write no `Account` or role-link rows.
+  6. Keep X handle columns metadata-only for rows without canonical ids. When aligned `official_x_author_ids` / `staff_x_author_ids` are present, require one numeric canonical id per handle and atomically upsert `Account` plus `BrandAccount` with the named role. Reject missing, duplicate, or conflicting handle/id pairs and never synthesize `handle:` or `synthetic:` ids.
   7. `--dry-run` prints the complete row plan and every gate result without writes or external calls.
   8. Rewrite `docs/how-to/add-tracked-brand.md`: copy template, fill a dated input, review dry-run, apply it to the selected target, and verify idempotency. `load_seed` stays for roles and the original bootstrap until a follow-up.
   9. Harvest-path columns (`harvest_paths`, `co_pack`, version-family fields) remain operator metadata. The command fails when a mismatch would leave an active policy token without attribution, warns on other descriptive metadata drift, and never silently rewrites `harvest_policy.yaml`.
@@ -342,7 +356,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Covers AE12. HF org or HF product with empty company fails before writes.
   - Error: a product `repo_id` already owned by another brand/HF org fails without reassignment.
   - Error: an invalid second data row rolls back the valid first row.
-  - Edge: handles with or without `@` normalize in dry-run and create no account/link rows.
+  - Edge: handles with or without `@` normalize in dry-run; handle-only rows create no account/link rows, while aligned canonical ids create idempotent role links.
   - Edge: a blank row or row with an empty nickname is skipped; an invalid HQ country on a named row fails before writes.
 - **Verification:** `onboard_brand --csv config/brands/brand-onboard.template.csv --dry-run` skips `_TEMPLATE` and writes nothing. How-to names the template first.
 - **Execution note:** Land this before any dots harvest-token work.
@@ -470,10 +484,10 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 - **Dependencies:** U3, U6, U9
 - **Files:** `config/brands/2026-08-31-013447-harvester-quality-upgrade.csv`, `config.yaml`
 - **Approach:**
-  1. Add the three Appendix rows (`dots`, hunyuan keyword update, glm keyword update) plus the staging-discovered Upstage coverage row to the tracked dated CSV. The Upstage row persists `Solar LLM` and `업스테이지`, which its existing policy already emits. Keep `official_x_handles` empty for dots.
+  1. Add the three Appendix rows (`dots`, hunyuan keyword update, glm keyword update) plus the staging-discovered Upstage coverage row to the tracked dated CSV. The Upstage row persists `Solar LLM` and `업스테이지`, which its existing policy already emits. The owner-added dots follow-up sets `dotsstudioai` / `2085289191609716736` official and `ChaoQiao42` / `2040060892176601088` staff.
   2. `dots3-note` is the dots primary keyword. Hy-family / GLM-family / Ox Alpha aliases are `keyword_aliases` or `c_bare_aliases` with `is_primary=false`. Do not promote `glm` or `混元` to primary (migration 0007).
   3. Add `dots` to `enabled_models`. Harvest policy for `dots` is U3. Dry-run and apply the CSV only against the database selected by the delivery target.
-  4. Do not add `@dotsstudioai`. Do not add a `MODEL_DISPLAY_NAMES['dots']` key. Do not add a one-off BrandKeyword data migration.
+  4. Keep dots off B3 because both first-party handles are already curated-list members for Call A. Do not add a `MODEL_DISPLAY_NAMES['dots']` key or a one-off data migration.
   5. Re-run the command after apply and assert zero duplicate natural-key rows. If the delivery target is production, staging dry-run/apply/verification precedes production apply at the same candidate SHA.
 - **Patterns to follow:** U6 CSV contract. `0007` dirty-primary list.
 - **Test scenarios:**
@@ -550,22 +564,59 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Edge: fixture-only database brands not named in the priority tuple remain visible and sort alphabetically after prioritized brands.
 - **Verification:** The targeted PostgreSQL-backed Chromium regression is red before the runtime fix and green after it with zero required-test skips or errors.
 
+### U11. Persist dots official and staff account roles
+
+- **Goal:** Make the owner-selected dots account roles durable on Call A without placeholder identities or a new logical call.
+- **Requirements:** R8, R19
+- **Dependencies:** U6, U4, U9
+- **Files:** `config/brands/brand-onboard.template.csv`, `config/brands/2026-08-31-013447-harvester-quality-upgrade.csv`, `config/harvest_policy.yaml`, `monitor/management/commands/onboard_brand.py`, `tests/test_onboard_brand.py`, `tests/test_harvest_policy_regression_net.py`, `docs/how-to/add-tracked-brand.md`
+- **Approach:**
+  1. Add aligned official/staff canonical-author-id columns to the CSV contract; keep handle-only rows backward-compatible and metadata-only.
+  2. Validate all account pairs before the transaction: numeric canonical id, one id per handle, no duplicate handle/id across roles, and no conflict with an existing account's handle or id.
+  3. Apply canonical account observations with source `seed`, then natural-key `BrandAccount` links for `official` and `staff`; count account/link changes and preserve whole-file rollback.
+  4. Verify both canonical ids are active members of the configured curated list, then resolve their official/staff dots roles through the Call A membership path. Preserve dots' B1-only search policy and leave B3 unchanged.
+  5. Dry-run/apply/idempotency-test on staging, promote the exact revised candidate, then repeat on production before observing a natural cycle.
+- **Test scenarios:**
+  - Covers AE18. First apply creates two canonical accounts and role links; second apply changes nothing.
+  - Error: misaligned/non-numeric ids, duplicate cross-role handles or ids, an id already bound to another handle, or a handle already bound to another id fails before any row is written; handle-only rows remain metadata-only.
+  - Regression: a handle-only row remains metadata-only and creates no account or role link.
+  - Call-chain: Call A membership resolves both accounts to dots roles, B3 is byte-stable, all queries remain under 512 characters, and the planner still emits exactly A/B1/B2/B3/C1/C2/C3.
+- **Verification:** Staging and production DB reads show the exact canonical ids and roles; natural production harvest remains seven calls with no preflight or persistence errors.
+
+### U12. Restore scheduled semantics for the Render cron
+
+- **Goal:** Make the sole production scheduler run the scheduled-only cursor, backlog, and curated-list reconciliation paths that its 15-minute cron contract promises.
+- **Requirements:** R8, R20
+- **Dependencies:** U9, U11
+- **Files:** `render.yaml`, `monitor/management/commands/run_cycle.py`, `AGENTS.md`, `docs/deploy/render.md`, `docs/reference/twitterapi-io-calls.md`, `docs/external_vendors/x_twitter/2026-08-10-120136-twitterapi-credit-burn-and-engagement-half-life.md`, `tests/test_render_headline_topology.py`, `tests/test_relevancy_production_wiring.py`
+- **Approach:**
+  1. Add an explicit `--scheduled` management-command flag while preserving plain `run_cycle` as manual and staging acceptance as bounded manual execution.
+  2. Put `--scheduled` only on `pushinweight-harvest.startCommand`; retain the same cron, service, seven logical calls, and no beat.
+  3. Pin both ends of the production chain: the blueprint's exact command and the command's `cycle_kind="scheduled"` constructor argument.
+  4. Promote through staging without a manual provider probe, then inspect the first natural production summary and the persisted full-list reconciliation state.
+- **Test scenarios:**
+  - Covers AE19. The Render cron command includes `--scheduled`, and command parsing reaches `CycleRunner(cycle_kind="scheduled")`.
+  - Regression: plain `run_cycle` and staging acceptance remain manual; the production blueprint still declares one scheduler at a 15-minute cadence.
+  - Call-chain: the first due natural cycle records list-reconciliation output while planning exactly seven logical calls.
+- **Verification:** Targeted command/blueprint tests pass; production logs show `cycle_kind="scheduled"`; DB state records the configured list's completed reconciliation and both dots members are active.
+
 ---
 
 ## Verification Contract
 
 | Gate | Command / check | Applies |
 |---|---|---|
-| Onboard identity | `python manage.py onboard_brand --csv config/brands/brand-onboard.template.csv --dry-run`, then dry-run/apply/re-run the tracked filled CSV on a test DB | U6, U4 |
+| Onboard identity | `python manage.py onboard_brand --csv config/brands/brand-onboard.template.csv --dry-run`, then dry-run/apply/re-run the tracked filled CSV on a test DB; assert canonical account/role links and no placeholders | U6, U4, U11 |
 | Policy load + coverage | `python manage.py harvest_preview --fail-on-invariant-violation` | U3, U5 |
 | Config vocabulary | `pytest tests/test_config.py tests/test_cycle_runtime_constants.py tests/test_harvest_surface_regression_net.py tests/test_cmd_run_query_id.py` | U9 |
 | Unit / call-chain | `pytest tests/test_harvest_policy_load.py tests/test_version_family_expand.py tests/test_query_plan_c_bare_aliases.py tests/test_harvest_policy_regression_net.py tests/test_harvest_query_exhibit.py tests/test_cycle_regression_net.py tests/test_brand_search_terms_hybrid.py` | U1–U5, U8 |
 | Dashboard/feed DB projection | `pytest tests/test_home_chart.py tests/test_home_chart_pulse.py tests/test_single_brand_chart.py tests/test_home_v22_feed_row_shape.py tests/test_ui_assurance_brand_inventory.py` | U7 |
 | Single-brand browser refresh | `pytest tests/test_home_v22_browser.py::HomeV22BrowserTests::test_single_brand_chart_has_valid_htmx_refresh_trigger` | U7 |
 | Homepage brand order | `pytest tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_live_brand_pills_follow_chart_order_and_remain_accessible` | U10 |
+| Scheduled cron semantics | `pytest tests/test_relevancy_production_wiring.py tests/test_render_headline_topology.py`; assert blueprint command and `CycleRunner(cycle_kind="scheduled")` | U12 |
 | System check | `python manage.py check` | U4, U7–U9 |
 | Credit | `python -m scripts.harvest_cost` against representative summary fixtures; after authorized delivery, compare the first natural cycle's B1/C3 `n_results` with baseline | U5, post-delivery |
-| Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; repeat on production only when production is the recorded delivery target | U4, post-delivery |
+| Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; verify canonical dots account roles; repeat on production only when production is the recorded delivery target | U4, U11, post-delivery |
 | Runtime health | change-harvester latest-N health check after the first natural scheduled cycle on the authorized target. No cron pause or manual provider call. | post-delivery |
 
 Do not treat Render `cron_job_run_ended status="successful"` as done.
@@ -582,9 +633,11 @@ Do not treat Render `cron_job_run_ended status="successful"` as done.
 - The policy resolves to exactly the seven allowed logical calls and every active search token has a database attribution mapping before fetch. No production pause. No manual live provider probe. Production rows are written only when production is the owner-selected target.
 - Abandoned experimental policy keys are not left in `harvest_policy.yaml`.
 - Homepage brand pills and chart projections retain the established DeepSeek, Qwen, MiniMax-first presentation order while database-only brands still appear automatically.
+- Canonical dots official/staff accounts and role edges apply idempotently with no placeholder identities, Call A resolves both roles, and B3 remains unchanged.
+- The sole Render cron starts with `--scheduled`; a natural production summary reports scheduled mode and a terminal full-list reconciliation state while retaining seven calls.
 - The owner instructed production promotion on 2026-09-02. Promote only the unchanged exact-SHA staging candidate and verify natural scheduled production cycles.
 
-Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills.
+Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills; U11 canonical dots account roles; U12 explicit scheduled cron semantics.
 
 ---
 
@@ -599,6 +652,7 @@ Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins
 - Parallel branch `feat/backfiller-selective-gaps` overlaps `monitor/cycle.py`. Do not merge it here.
 - The feature worktree is behind `origin/main`; reconcile before code changes and preserve the current geography/feed work in `monitor/views.py`.
 - Durable identity rows outlive code rollback. Disable policy/config first and perform an explicit targeted correction rather than deleting rows as part of an application rollback.
+- Baseline caveat: retired `x_monitor.dashboard` deliberately lets an unclassified “no opinion” row pass a non-empty discourse filter, while `tests/test_home_chart.py::test_home_chart_filters_narrow_counts` still expects that row to be excluded. Both files are byte-identical to `origin/main`; this plan does not rework the retired surface. The closeout suite records that one deselection and keeps the live Django feed/chart filter nets required by U7.
 
 ---
 
@@ -618,16 +672,16 @@ Rules the loader must honor:
 - Empty `company_nickname` means no company row only when both HF cells are empty; an HF org or HF product requires a company.
 - Empty `brand_nickname`, or nickname starting with `_`, is skipped.
 - `keyword_primary` becomes `brand_keywords.is_primary=true`. `keyword_aliases` and version-family expansions are `is_primary=false`. `c_bare_aliases` are attribution aliases and also the C-query bare OR list for that brand.
-- X handle cells accept values with or without `@`, are normalized for policy comparison, and are metadata-only in this change. They create no account or role-link rows.
+- X handle cells accept values with or without `@` and are normalized for policy comparison. Handle-only rows are metadata-only; aligned canonical author-id cells atomically create or update accounts and role links.
 - `harvest_paths` / `co_pack` / version-family columns document the intended search shape. U3 still edits `harvest_policy.yaml`. The command warns on mismatch; it does not silently rewrite policy in U6.
 
 ```csv
-brand_nickname,brand_display_name,brand_display_name_en,brand_display_name_zh_cn,accent_color,company_nickname,company_display_name,company_display_name_en,company_display_name_zh_cn,company_hq_country,hf_orgs,hf_product_repo_ids,keyword_primary,keyword_aliases,c_bare_aliases,official_x_handles,staff_x_handles,harvest_paths,co_pack,version_family_prefix,version_family_current_major,version_family_lookback,version_family_lookahead,version_family_extra_suffixes,notes
-_TEMPLATE,required display,English display,Chinese display,#RRGGBB,company slug or empty,company display,company English,company Chinese,ISO-3166-1-alpha-2,hf namespace or URL pipe-separated,org/model pipe-separated,primary patterns pipe-separated,non-primary patterns pipe-separated,bare C-query aliases pipe-separated,x handles no @,staff handles no @,"bare|co|handle pipe-separated",C1 or C2 or C3 or empty,Hy or dots or GLM- or empty,integer or empty,integer default 1,integer default 1,-preview or empty,operator notes; this row is skipped
-dots,dots,dots,dots,#0ea5e9,xiaohongshu,Xiaohongshu,Xiaohongshu / RedNote,小红书,CN,https://huggingface.co/dots-studio,dots-studio/dots3-note-prev,dots3-note,dots3|dots4|dots studio,,,,bare,,dots,3,0,1,,Xiaohongshu social-app names are not search tokens
-hunyuan,Hunyuan,Hunyuan,混元,#ec4899,tencent,Tencent,Tencent,腾讯,CN,https://huggingface.co/tencent,,Hunyuan,混元|腾讯混元|Hy3|Hy4|Hy5|Hy4-preview|Hy5-preview,,TencentHunyuan,,bare|handle,,Hy,4,1,1,-preview,Do not set 混元 as keyword_primary
-glm,Zhipu GLM,Zhipu GLM,智谱 GLM,#a855f7,zhipu,Zhipu AI,Zhipu AI,智谱,CN,https://huggingface.co/zai-org,,ChatGLM,glm|GLM-4|GLM-5|GLM-6|Zhipu|智谱|Z.ai,Ox Alpha|OxAlpha|ox-alpha,,,co,C3,GLM-,5,1,1,,Do not set glm as keyword_primary; Ox Alpha is c_bare_aliases
-upstage,Upstage Solar,Upstage Solar,업스테이지,#22c55e,,,,,,,,Upstage,Solar Pro|Solar LLM|업스테이지,,upstageai,,co|handle,C2,,,,,,Rollout prerequisite: persist every active Upstage policy token before fail-closed cycle preflight
+brand_nickname,brand_display_name,brand_display_name_en,brand_display_name_zh_cn,accent_color,company_nickname,company_display_name,company_display_name_en,company_display_name_zh_cn,company_hq_country,hf_orgs,hf_product_repo_ids,keyword_primary,keyword_aliases,c_bare_aliases,official_x_handles,official_x_author_ids,staff_x_handles,staff_x_author_ids,harvest_paths,co_pack,version_family_prefix,version_family_current_major,version_family_lookback,version_family_lookahead,version_family_extra_suffixes,notes
+_TEMPLATE,required display,English display,Chinese display,#RRGGBB,company slug or empty,company display,company English,company Chinese,ISO-3166-1-alpha-2,hf namespace or URL pipe-separated,org/model pipe-separated,primary patterns pipe-separated,non-primary patterns pipe-separated,bare C-query aliases pipe-separated,x handles no @,canonical numeric ids aligned with official handles,staff handles no @,canonical numeric ids aligned with staff handles,"bare|co|handle pipe-separated",C1 or C2 or C3 or empty,Hy or dots or GLM- or empty,integer or empty,integer default 1,integer default 1,-preview or empty,operator notes; this row is skipped
+dots,dots,dots,dots,#0ea5e9,xiaohongshu,Xiaohongshu,Xiaohongshu / RedNote,小红书,CN,https://huggingface.co/dots-studio,dots-studio/dots3-note-prev,dots3-note,dots3|dots4|dots studio,,dotsstudioai,2085289191609716736,ChaoQiao42,2040060892176601088,bare,,dots,3,0,1,,Xiaohongshu social-app names are not search tokens
+hunyuan,Hunyuan,Hunyuan,混元,#ec4899,tencent,Tencent,Tencent,腾讯,CN,https://huggingface.co/tencent,,Hunyuan,混元|腾讯混元|Hy3|Hy4|Hy5|Hy4-preview|Hy5-preview,,TencentHunyuan,,,,bare|handle,,Hy,4,1,1,-preview,Do not set 混元 as keyword_primary
+glm,Zhipu GLM,Zhipu GLM,智谱 GLM,#a855f7,zhipu,Zhipu AI,Zhipu AI,智谱,CN,https://huggingface.co/zai-org,,ChatGLM,glm|GLM-4|GLM-5|GLM-6|Zhipu|智谱|Z.ai,Ox Alpha|OxAlpha|ox-alpha,,,,,co,C3,GLM-,5,1,1,,Do not set glm as keyword_primary; Ox Alpha is c_bare_aliases
+upstage,Upstage Solar,Upstage Solar,업스테이지,#22c55e,,,,,,,,Upstage,Solar Pro|Solar LLM|업스테이지,,upstageai,,,,co|handle,C2,,,,,,Rollout prerequisite: persist every active Upstage policy token before fail-closed cycle preflight
 ```
 
 Worked `dots` row maps to existing tables:
@@ -641,7 +695,8 @@ Worked `dots` row maps to existing tables:
 | `hf_product_repo_ids` | `products.repo_id` |
 | `keyword_primary` / `keyword_aliases` | `brand_keywords` |
 | `c_bare_aliases` | `brand_keywords` (non-primary) and C-query bare OR |
-| `official_x_handles` / `staff_x_handles` | metadata-only policy comparison; no account or role-link writes in this change |
+| `official_x_handles` + aligned author ids | `accounts` + `brands_accounts` with role `official` |
+| `staff_x_handles` + aligned author ids | `accounts` + `brands_accounts` with role `staff` |
 
 ### Exhibit: proposed verbatim TwitterAPI search queries
 
