@@ -21,9 +21,10 @@ What this function does
   contribute their `co` list to the secondary group (union — brands in a
   pack share the co chunk; per KTD5 this is intentional for 3/5, 4/5
   may refine). The pack's brands contribute their `tokens` to the
-  primary group (one paren per brand). `not_include` is the union of
-  brand-local `not_include` across brands in the pack (R4 — brand-local
-  bleed is contained because packs are operator-chosen).
+  primary group (one paren per brand), and their `c_bare_aliases` to
+  the bare OR branch (U2). `not_include` is the union of brand-local
+  `not_include` across brands in the pack (R4 — brand-local bleed is
+  contained because packs are operator-chosen).
 
 - Handle: emit one B-style spec per handle *tier* (R9). Two tiers for 3/5:
   "top-presence" (default) and "other". A brand declares its tier via
@@ -210,12 +211,24 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
                     not_include.append(term)
                     seen_ni.add(term)
 
+        # Bare aliases intentionally bypass the shared co-occurrence filter:
+        # they are the second disjunct of this C call, not another primary
+        # token. Preserve co-pack order and deduplicate shared aliases.
+        c_bare_aliases: list[str] = []
+        seen_bare: set[str] = set()
+        for b in pack_brands:
+            for alias in b.c_bare_aliases:
+                if alias not in seen_bare:
+                    c_bare_aliases.append(alias)
+                    seen_bare.add(alias)
+
         specs.append(XQuerySpec(
             call_id=f"C{idx}",
             brands=primary_brands,
             co_occurrence=co_terms,
             min_faves=0,
             not_include=not_include,
+            c_bare_aliases=c_bare_aliases,
         ))
 
     # --- Handle specs (one per tier) -----------------------------------------

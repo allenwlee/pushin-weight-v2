@@ -193,6 +193,10 @@ class XQuerySpec:
     Also `brands` and `co_occurrence` get empty-list defaults so a
     handle-only or list-only spec can be constructed without explicit
     args for those fields.
+
+    U2 (harvester quality upgrade): `c_bare_aliases` is an optional bare
+    alias OR branch for a C spec. When present, the constrained primary/co
+    disjunct and the bare aliases are wrapped in one outer OR group.
     """
     brands: dict[str, list[str]] = field(default_factory=dict)
     co_occurrence: list[str] = field(default_factory=list)
@@ -201,6 +205,7 @@ class XQuerySpec:
     is_wide_net: bool = False
     wide_net_brands: list[str] = field(default_factory=list)
     handles: list[str] = field(default_factory=list)
+    c_bare_aliases: list[str] = field(default_factory=list)
     not_include: list[str] = field(default_factory=list)
 
 
@@ -223,6 +228,9 @@ def _build_query(
                 → `(list:<x_monitor_list_id>) min_faves:1`
       - Call C-body (default co-occurrence-constrained):
                 → `(<spec.brands tokens>) (<co_occurrence>) min_faves:N`
+                When `spec.c_bare_aliases` is non-empty, this constrained
+                disjunct is OR'd with the bare-alias group inside one outer
+                pair of parentheses.
       - Wide-net B-call (plan 2026-07-11-002, `spec.is_wide_net=True`):
                 reads per-brand tokens from `primary_keywords` for
                 each brand in `spec.wide_net_brands`. Renders the same
@@ -299,10 +307,17 @@ def _build_query(
     # secondary paren entirely. The legacy renderer always emitted
     # `()` which is not a valid X advanced-search token.
     if not spec.co_occurrence:
+        if spec.c_bare_aliases:
+            bare_aliases = f"({' OR '.join(spec.c_bare_aliases)})"
+            return f"({primary} OR {bare_aliases}) min_faves:{spec.min_faves}"
         return f"{primary} min_faves:{spec.min_faves}"
 
     secondary = f"({' OR '.join(spec.co_occurrence)})"
-    return f"{primary} {secondary} min_faves:{spec.min_faves}"
+    constrained = f"{primary} {secondary}"
+    if spec.c_bare_aliases:
+        bare_aliases = f"({' OR '.join(spec.c_bare_aliases)})"
+        return f"({constrained} OR {bare_aliases}) min_faves:{spec.min_faves}"
+    return f"{constrained} min_faves:{spec.min_faves}"
 
 
 # Retired v1.7-era helpers — removed in plan 2026-07-11-001 (U2).

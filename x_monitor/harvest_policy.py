@@ -16,6 +16,7 @@ File shape (per-brand):
         tokens: [MiMo, Xiaomi MiMo]      # for bare/versioned_bare paths
         versioned_tokens: [Llama 4]      # optional alt for versioned_bare
         co: [llm, model, api]            # for co path
+        c_bare_aliases: ["Ox Alpha"]    # bare OR branch on the C call
         handles: [@MiniMaxAI]            # for handle path (no @ here; loader adds it)
         not_include: [f1, antonelli]     # brand-local (Kimi F1 hijack, etc.)
         notes: |
@@ -134,6 +135,7 @@ class BrandPolicy:
     tokens: tuple[str, ...] = ()
     versioned_tokens: tuple[str, ...] = ()
     co: tuple[str, ...] = ()
+    c_bare_aliases: tuple[str, ...] = ()
     handles: tuple[str, ...] = ()
     not_include: tuple[str, ...] = ()
     notes: str = ""
@@ -177,6 +179,10 @@ class BrandPolicy:
         if "co" in self.paths and not self.co:
             raise ValueError(
                 f"brand {self.nickname!r}: 'co' path requires non-empty co list."
+            )
+        if self.c_bare_aliases and "co" not in self.paths:
+            raise ValueError(
+                f"brand {self.nickname!r}: c_bare_aliases requires the 'co' path."
             )
         # handle path requires ≥1 handle (R2).
         if "handle" in self.paths and not self.handles:
@@ -270,6 +276,9 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
             raw.get("versioned_tokens", []), "versioned_tokens", nickname
         ),
         co=_coerce_str_list(raw.get("co", []), "co", nickname),
+        c_bare_aliases=_coerce_str_list(
+            raw.get("c_bare_aliases", []), "c_bare_aliases", nickname
+        ),
         handles=_coerce_str_list(raw.get("handles", []), "handles", nickname),
         not_include=_coerce_str_list(
             raw.get("not_include", []), "not_include", nickname
