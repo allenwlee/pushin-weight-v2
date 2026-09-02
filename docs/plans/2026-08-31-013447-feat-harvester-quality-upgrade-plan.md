@@ -97,6 +97,8 @@ The live Django cycle has a second gap: it compiles only each enabled nickname f
 
 Read-only production evidence from 2026-09-02 confirms that this is already a live Kimi attribution hole, not a new workstream. In `pushinweight-db-shadow`, `moonshot_kimi` had no insert after 2026-08-19 (`Kimi_Moonshot`), while 2,115 fetched posts in the same seven-day window contained the word `kimi` and none had `posts_brands.brand_id=moonshot_kimi`. Tweet `2094999721551225267` ("Moonshot AI's Kimi K3 climbed to third place…") was attributed only to `deepseek` and `qwen`. For C1 in cycle `20260902T043025`, `n_results=3`, `n_kept=2`, `n_inserted=0`, and `not_include_drops=0`, so the F1 exclusion was not the live cause. Current `main` emits the right C1 tokens but `_build_brand_index` compiles enabled nicknames instead of database aliases such as `Kimi`, `MoonshotAI`, and `月之暗面`; because `CycleRunner` also passes `search_query=[]`, `BrandSearchTerm` does not stamp the alias and the fetched Kimi-only post falls into `_unattributed`.
 
+Staging acceptance on 2026-09-02 also found a rollout prerequisite that unit fixtures had masked: the deployed policy emits Upstage tokens `Solar LLM` and `업스테이지`, but the staging `BrandKeyword` table lacked both. The new fail-closed preflight correctly rejected the incomplete database before any provider call. The tracked onboarding CSV therefore includes an idempotent Upstage coverage row for those existing policy tokens; this is target-data repair through the same reviewed loader, not a nickname fallback, migration, new call, or new workstream.
+
 Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so posts that only say `Hy4` never match. Adding only `Hy4` would miss `Hy5`. GLM is handle-only (`@Zai_org` on B2). Bare `glm` is also Genelec, fandom GLM/SLM, stats GLM, and handle-substring junk. Xiaohongshu shipped `dots3-note Preview`. Ox Alpha was confirmed as GLM-5.3-Flash.
 
 ### Key Decisions
@@ -140,7 +142,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - R12. `python manage.py onboard_brand --csv <file>` atomically upserts `brands`, `companies` (when `company_nickname` is set), `brands_companies`, `hf_orgs`, `brand_keywords`, and optional `products`. Re-running is a no-op for unchanged rows. Empty `brand_nickname` and rows starting with `_` are skipped.
 - R13. The command validates the whole file before writes and fails loud if harvest search is incomplete, an HF org lacks a company, a product natural key conflicts, a country/color/value is malformed, or the nickname is missing from `harvest_policy.yaml` and `config.yaml` `enabled_models`.
 - R14. Every live Django brand label, accent, feed wire row, pulse, control, and single-brand chart projection reads `Brand` rows. `Brand.is_sentinel` is the sole runtime exclusion from production brand projections; a newly onboarded brand does not require a hardcoded display-name, color, selectable-inventory entry, or nickname blacklist edit.
-- R15. `dots`, hunyuan metadata, and glm metadata ship in a tracked filled CSV and are applied through `onboard_brand`, not through `load_seed`, a migration, or an untracked local file. The loader is applied only to the delivery target selected by the owner.
+- R15. `dots`, hunyuan metadata, glm metadata, and the two missing existing Upstage policy aliases ship in a tracked filled CSV and are applied through `onboard_brand`, not through `load_seed`, a migration, or an untracked local file. The loader is applied only to the delivery target selected by the owner.
 - R17. `config.yaml` `enabled_models` is the live v2 allowlist. Adding a valid configured nickname does not require adding it to the legacy `KNOWN_MODELS` frozenset.
 
 ### Acceptance Examples
@@ -159,7 +161,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - AE12. Covers R13. Given an HF org or HF product URL but no company, when `onboard_brand --csv` runs, it exits non-zero before any row is written.
 - AE13. Covers R9. Given enabled-brand `BrandKeyword` rows for `Hy4`, `dots3-note`, and `Ox Alpha`, when the real `CycleRunner.run()` path scans matching bodies, each post receives the expected brand; removing any one mapping fails preflight before the fake provider is called.
 - AE14. Covers R16. Given default config and policy, when the derived call set and degraded skip order are validated, all seven current call IDs appear exactly once, C3 is skippable, no `Q*` ID appears, and a fourth co-pack is rejected instead of producing C4.
-- AE15. Covers R12, R15. Given the tracked three-row CSV, when it is applied twice to the selected target database, the second run reports no duplicate identity, link, keyword, HF org, or product rows.
+- AE15. Covers R12, R15. Given the tracked four-row CSV, when it is applied twice to the selected target database, the second run reports no duplicate identity, link, keyword, HF org, or product rows, and `Solar LLM` plus `업스테이지` exist as non-primary Upstage keywords.
 - AE16. Covers R9. Given a fetched body that says `Moonshot AI's Kimi K3 climbed to third place` and only the `moonshot_kimi` database aliases match (the nickname itself does not appear), when the real `CycleRunner.run()` path attributes and persists it, `PostBrand(post, moonshot_kimi)` exists.
 
 ### Success Criteria
@@ -189,7 +191,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - Expanding the LLM relevancy gate beyond Call A.
 - `feat/backfiller-selective-gaps`.
 - Historical false-positive deletes or reattributes.
-- Backfilling CSV rows for all 20 existing brands in one pass (this change needs rows for `dots`, `hunyuan`, and `glm`; others may keep `load_seed` until a follow-up).
+- Backfilling CSV rows for all 20 existing brands in one pass (this change needs rows for `dots`, `hunyuan`, `glm`, plus the staging-discovered Upstage coverage prerequisite; others may keep `load_seed` until a follow-up).
 - Admin UI for onboarding (harvest policy 4/5).
 - Scraping the full HF product catalog for a new org (optional `repo_id` only).
 - Reworking the retired Flask/SQLite dashboard, legacy `x_monitor.store` registry, or historical CLI seeding paths.
@@ -444,14 +446,14 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Error: a fixture policy with a fourth co-pack is rejected before it can emit C4.
 - **Verification:** Config, surface, and command tests agree on one seven-logical-call vocabulary.
 
-### U4. Onboard dots, hunyuan aliases, and glm aliases via the command
+### U4. Onboard dots, hunyuan, glm, and required Upstage aliases via the command
 
 - **Goal:** Identity rows for this change are created only by `onboard_brand --csv` from filled template rows.
 - **Requirements:** R6, R7, R9, R15
 - **Dependencies:** U3, U6, U9
 - **Files:** `config/brands/2026-08-31-013447-harvester-quality-upgrade.csv`, `config.yaml`
 - **Approach:**
-  1. Add the three Appendix rows (`dots`, hunyuan keyword update, glm keyword update) to the tracked dated CSV. Keep `official_x_handles` empty for dots.
+  1. Add the three Appendix rows (`dots`, hunyuan keyword update, glm keyword update) plus the staging-discovered Upstage coverage row to the tracked dated CSV. The Upstage row persists `Solar LLM` and `업스테이지`, which its existing policy already emits. Keep `official_x_handles` empty for dots.
   2. `dots3-note` is the dots primary keyword. Hy-family / GLM-family / Ox Alpha aliases are `keyword_aliases` or `c_bare_aliases` with `is_primary=false`. Do not promote `glm` or `混元` to primary (migration 0007).
   3. Add `dots` to `enabled_models`. Harvest policy for `dots` is U3. Dry-run and apply the CSV only against the database selected by the delivery target.
   4. Do not add `@dotsstudioai`. Do not add a `MODEL_DISPLAY_NAMES['dots']` key. Do not add a one-off BrandKeyword data migration.
@@ -586,8 +588,9 @@ Rules the loader must honor:
 brand_nickname,brand_display_name,brand_display_name_en,brand_display_name_zh_cn,accent_color,company_nickname,company_display_name,company_display_name_en,company_display_name_zh_cn,company_hq_country,hf_orgs,hf_product_repo_ids,keyword_primary,keyword_aliases,c_bare_aliases,official_x_handles,staff_x_handles,harvest_paths,co_pack,version_family_prefix,version_family_current_major,version_family_lookback,version_family_lookahead,version_family_extra_suffixes,notes
 _TEMPLATE,required display,English display,Chinese display,#RRGGBB,company slug or empty,company display,company English,company Chinese,ISO-3166-1-alpha-2,hf namespace or URL pipe-separated,org/model pipe-separated,primary patterns pipe-separated,non-primary patterns pipe-separated,bare C-query aliases pipe-separated,x handles no @,staff handles no @,"bare|co|handle pipe-separated",C1 or C2 or C3 or empty,Hy or dots or GLM- or empty,integer or empty,integer default 1,integer default 1,-preview or empty,operator notes; this row is skipped
 dots,dots,dots,dots,#0ea5e9,xiaohongshu,Xiaohongshu,Xiaohongshu / RedNote,小红书,CN,https://huggingface.co/dots-studio,dots-studio/dots3-note-prev,dots3-note,dots3|dots4|dots studio,,,,bare,,dots,3,0,1,,Xiaohongshu social-app names are not search tokens
-hunyuan,Hunyuan,Hunyuan,混元,#ec4899,tencent,Tencent,Tencent,腾讯,CN,https://huggingface.co/tencent,,"Hunyuan",腾讯混元|Hy3|Hy4|Hy5|Hy4-preview|Hy5-preview,,TencentHunyuan,,"bare|handle",,Hy,4,1,1,-preview,Do not set 混元 as keyword_primary
+hunyuan,Hunyuan,Hunyuan,混元,#ec4899,tencent,Tencent,Tencent,腾讯,CN,https://huggingface.co/tencent,,Hunyuan,混元|腾讯混元|Hy3|Hy4|Hy5|Hy4-preview|Hy5-preview,,TencentHunyuan,,bare|handle,,Hy,4,1,1,-preview,Do not set 混元 as keyword_primary
 glm,Zhipu GLM,Zhipu GLM,智谱 GLM,#a855f7,zhipu,Zhipu AI,Zhipu AI,智谱,CN,https://huggingface.co/zai-org,,ChatGLM,glm|GLM-4|GLM-5|GLM-6|Zhipu|智谱|Z.ai,Ox Alpha|OxAlpha|ox-alpha,,,co,C3,GLM-,5,1,1,,Do not set glm as keyword_primary; Ox Alpha is c_bare_aliases
+upstage,Upstage Solar,Upstage Solar,업스테이지,#22c55e,,,,,,,,Upstage,Solar Pro|Solar LLM|업스테이지,,upstageai,,co|handle,C2,,,,,,Rollout prerequisite: persist every active Upstage policy token before fail-closed cycle preflight
 ```
 
 Worked `dots` row maps to existing tables:

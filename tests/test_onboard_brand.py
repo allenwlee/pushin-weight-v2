@@ -430,8 +430,10 @@ def test_hf_org_values_are_normalized_and_deduplicated_after_url_parsing(
     assert parsed.hf_orgs == ["dots-studio"]
 
 
-def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary():
-    """The reviewed three-brand input is a complete, repeatable identity load."""
+def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
+    seeded_policy_keywords,
+):
+    """The reviewed rollout input is a complete, repeatable identity load."""
     repo_root = Path(__file__).parents[1]
     csv_path = (
         repo_root
@@ -440,6 +442,9 @@ def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
     config_path = repo_root / "config.yaml"
     policy_path = repo_root / "config/harvest_policy.yaml"
 
+    BrandKeyword.objects.filter(
+        brand_id="upstage", pattern__in=("Solar LLM", "업스테이지")
+    ).delete()
     first_output = _run(csv_path, config_path, policy_path)
     assert "onboard_brand complete" in first_output
 
@@ -450,12 +455,19 @@ def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
         ("hunyuan", "Hy4"),
         ("hunyuan", "混元"),
         ("glm", "Ox Alpha"),
+        ("upstage", "Solar LLM"),
+        ("upstage", "업스테이지"),
     ):
         assert not BrandKeyword.objects.get(
             brand_id=brand_id, pattern=pattern
         ).is_primary
 
-    tracked_brands = ("dots", "hunyuan", "glm")
+    brand_index = _build_brand_index(list(load_config(config_path).enabled_models))
+    assert detect_brand_mentions("Solar LLM by 업스테이지", brand_index) == [
+        "upstage"
+    ]
+
+    tracked_brands = ("dots", "hunyuan", "glm", "upstage")
 
     def identity_counts() -> dict[str, int]:
         return {
