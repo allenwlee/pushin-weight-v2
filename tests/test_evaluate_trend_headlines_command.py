@@ -20,7 +20,7 @@ def _manifest(tmp_path: Path) -> Path:
             {
                 "run_id": "command-test",
                 "reviewer": "codex:command-test",
-                "model": "deepseek-v4-pro",
+                "model": "deepseek-v4-flash",
                 "max_calls": 17,
                 "input_token_budget": 2_000_000,
                 "output_token_budget": 200_000,
@@ -105,7 +105,7 @@ def test_execute_is_explicit_and_writes_machine_and_editorial_artifacts(
     assert captured == {
         "reviewer": "codex:command-test",
         "snapshot_sizes": [1, 3, 5],
-        "model": "deepseek-v4-pro",
+        "model": "deepseek-v4-flash",
         "include_controls": True,
     }
     assert Path(payload["json"]).exists()

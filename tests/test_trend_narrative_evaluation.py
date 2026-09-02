@@ -33,7 +33,7 @@ def _manifest(**overrides) -> EvaluationManifest:
     values = {
         "run_id": "per-brand-eval-test",
         "reviewer": "codex:test",
-        "model": "deepseek-v4-pro",
+        "model": "deepseek-v4-flash",
         "max_calls": 17,
         "input_token_budget": 2_000_000,
         "output_token_budget": 200_000,

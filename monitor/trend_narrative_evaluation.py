@@ -45,7 +45,7 @@ from monitor.trend_narrative_generation import (
 )
 from x_monitor.config import HeadlineNarrativeConfig
 
-REQUIRED_MODEL = "deepseek-v4-pro"
+REQUIRED_MODEL = "deepseek-v4-flash"
 RUBRIC_FIELDS = (
     "why_first_relevance",
     "factual_support",

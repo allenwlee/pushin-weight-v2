@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -113,7 +114,7 @@ def test_u3_editor_contract_keeps_messages_boundary_and_closed_id_ownership():
     )
 
     assert envelope["manifest_brand_keys"] == ["deepseek"]
-    assert request["model"] == "deepseek-v4-pro"
+    assert request["model"] == "deepseek-v4-flash"
     assert request["thinking"] == {"type": "disabled"}
     assert set(request) == {"model", "max_tokens", "thinking", "system", "messages"}
     assert request["messages"] and request["messages"][0]["role"] == "user"
@@ -520,7 +521,7 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
 
     assert config.provider == "deepseek"
     assert config.base_url == "https://api.deepseek.com/anthropic"
-    assert config.model == "deepseek-v4-pro"
+    assert config.model == "deepseek-v4-flash"
     assert config.rank_prompt_version == "headline-rank-v1"
     assert config.editor_prompt_version == "headline-editor-v6"
     assert config.critic_prompt_version == "headline-critic-v6"
@@ -561,6 +562,9 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.per_brand_expected_max_brands == 40
     assert config.per_brand_input_token_cap == 700_000
     assert config.per_brand_cost_cap_usd == 1.5
+    assert config.per_brand_input_usd_per_million == Decimal("0.44")
+    assert config.per_brand_output_usd_per_million == Decimal("1.32")
+    assert config.per_brand_pricing_version == "deepseek-v4-flash-peak-2026-09-02"
     assert not config.serving_enabled
     assert not config.enqueue_enabled
     assert not config.provider_calls_enabled
@@ -568,6 +572,12 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert not config.serving_active
     assert not config.enqueue_active
     assert not config.provider_calls_active
+
+    with pytest.raises(
+        ValidationError,
+        match="headline provider, exact base_url, and evaluated model must match",
+    ):
+        HeadlineNarrativeConfig(model="deepseek-v4-pro")
 
 
 def test_headline_activation_state_requires_reviewed_materiality_or_owner_override():
@@ -622,7 +632,7 @@ def test_headline_config_yaml_non_null_wins_and_null_permits_env(
 enabled_models: [minimax]
 daily_ceiling: 100
 headline_narrative:
-  model: deepseek-v4-pro
+  model: deepseek-v4-flash
   timeout_seconds: null
   activation_state: null
 """,
@@ -631,6 +641,6 @@ headline_narrative:
 
     config = load_config(path).headline_narrative
 
-    assert config.model == "deepseek-v4-pro"
+    assert config.model == "deepseek-v4-flash"
     assert config.timeout_seconds == 33
     assert config.activation_state == "owner_override"

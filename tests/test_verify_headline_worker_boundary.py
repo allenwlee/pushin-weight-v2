@@ -52,7 +52,7 @@ def test_worker_boundary_rejects_request_signature_drift():
         bind_request(
             incompatible_create,
             {
-                "model": "deepseek-v4-pro",
+                "model": "deepseek-v4-flash",
                 "max_tokens": 1_600,
                 "messages": [],
                 "system": "closed prompt",

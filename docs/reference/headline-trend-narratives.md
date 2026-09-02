@@ -1,6 +1,6 @@
 # Per-brand trend narratives
 
-Current state as of 2026-08-28 JST.
+Current state as of 2026-09-02 JST.
 
 Push In Weight publishes a bilingual why-first trend narrative for every
 tracked, non-sentinel brand in each supported window. The default page shows
@@ -63,24 +63,24 @@ The provider route is pinned independently of translation and classification:
 | --- | --- |
 | Provider | DeepSeek |
 | Base URL | `https://api.deepseek.com/anthropic` |
-| Model | `deepseek-v4-pro` |
+| Model | `deepseek-v4-flash` |
 | Thinking | disabled |
 | SDK retries | zero |
 | Rank output cap | 2,400 tokens |
 | Editor output cap | 8,000 tokens |
 | Critic output cap | 9,000 tokens |
-| Timeout | 45 seconds |
-| Editor prompt | `headline-editor-v5` |
-| Critic prompt | `headline-critic-v5` |
+| Timeout | 60 seconds |
+| Editor prompt | `headline-editor-v6` |
+| Critic prompt | `headline-critic-v6` |
 | Editor batch | at most five brands |
 | Worker concurrency | one |
 
 The run ledger reserves call, input-token, output-token, and dollar capacity
 before each request. Completed provider usage replaces the reservation for
-later budget decisions. Current bounded defaults are 25 calls, 500,000 input
-tokens, 160,000 output tokens, and $1.00 per window run. The 2026-08-27
-pricing revision uses DeepSeek V4 Pro's conservative peak/cache-miss rates of
-$1.32 per million input tokens and $3.96 per million output tokens; off-peak or
+later budget decisions. Current bounded defaults are 25 calls, 700,000 input
+tokens, 160,000 output tokens, and $1.50 per window run. The 2026-09-02
+pricing revision uses DeepSeek V4 Flash's conservative peak/cache-miss rates of
+$0.44 per million input tokens and $1.32 per million output tokens; off-peak or
 cache-hit billing can only reduce actual cost. Pricing is versioned in
 configuration and must be reviewed when the provider changes pricing.
 
@@ -269,11 +269,11 @@ terminalized as `ambiguous`; lease expiry before `sent` may recover a lost
 broker handoff. An older cutoff cannot replace a newer visible cutoff.
 
 The work slot bounds backlog at concurrency one. Envelopes become due at the
-configured 30-, 60-, 360-, and 1,440-minute cadences for the 1/7/30/365-day
-windows. A newer due harvest replaces the single queued cutoff; an intervening
-harvest is ignored rather than creating obsolete runs. Snapshot construction
-also fails closed above the configured production brand cap before the
-all-brand detail/evidence queries begin.
+configured 60-, 1,440-, 10,080-, and 43,200-minute cadences for the
+1/7/30/365-day windows. A newer due harvest replaces the single queued cutoff;
+an intervening harvest is ignored rather than creating obsolete runs. Snapshot
+construction also fails closed above the configured production brand cap
+before the all-brand detail/evidence queries begin.
 
 If ranking fails, overlapping brands preserve the last visible successful
 order. New brands follow a deterministic fallback based on within-window

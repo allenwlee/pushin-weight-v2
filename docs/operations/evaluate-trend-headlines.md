@@ -16,7 +16,7 @@ source revision and check time. The manifest is a hard cap, not an estimate:
 {
   "run_id": "owner-chosen-run-id",
   "reviewer": "operator-or-agent-identity",
-  "model": "deepseek-v4-pro",
+  "model": "deepseek-v4-flash",
   "max_calls": 40,
   "input_token_budget": 2000000,
   "output_token_budget": 700000,
@@ -33,7 +33,7 @@ source revision and check time. The manifest is a hard cap, not an estimate:
 ```
 
 The command rejects incomplete, non-positive, or over-budget manifests; a
-model other than the explicit `deepseek-v4-pro` route; concurrency other than
+model other than the explicit `deepseek-v4-flash` route; concurrency other than
 one; more than 100 brands; a packet over the declared byte limit; or a request
 that exceeds the declared context window. It reserves the deterministic
 canonical request graph's calls, input estimates, maximum outputs, and cost

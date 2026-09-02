@@ -347,7 +347,7 @@ class HeadlineNarrativeConfig(BaseModel):
 
     provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
     base_url: str = "https://api.deepseek.com/anthropic"
-    model: str = "deepseek-v4-pro"
+    model: str = "deepseek-v4-flash"
     rank_prompt_version: str = Field(
         default="headline-rank-v1", min_length=1, max_length=64
     )
@@ -414,13 +414,13 @@ class HeadlineNarrativeConfig(BaseModel):
         default=Decimal("1.50"), gt=0, decimal_places=4
     )
     per_brand_input_usd_per_million: Decimal = Field(
-        default=Decimal("1.32"), ge=0, decimal_places=4
+        default=Decimal("0.44"), ge=0, decimal_places=4
     )
     per_brand_output_usd_per_million: Decimal = Field(
-        default=Decimal("3.96"), ge=0, decimal_places=4
+        default=Decimal("1.32"), ge=0, decimal_places=4
     )
     per_brand_pricing_version: str = Field(
-        default="deepseek-v4-pro-peak-2026-08-27", min_length=1, max_length=64
+        default="deepseek-v4-flash-peak-2026-09-02", min_length=1, max_length=64
     )
     per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
     per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
@@ -460,7 +460,7 @@ class HeadlineNarrativeConfig(BaseModel):
             ),
             "deepseek": (
                 "https://api.deepseek.com/anthropic",
-                "deepseek-v4-pro",
+                "deepseek-v4-flash",
             ),
             "minimax": (
                 "https://api.minimax.io/anthropic",
