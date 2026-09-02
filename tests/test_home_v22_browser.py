@@ -41,12 +41,55 @@ from tests.v22_support import (
 
 pytestmark = pytest.mark.requires_postgres
 
+_HOME_CHART_BRAND_PRIORITY = (
+    "deepseek",
+    "qwen",
+    "minimax",
+    "glm",
+    "mimo",
+    "moonshot_kimi",
+    "inclusionai",
+    "mistral",
+    "stepfun",
+    "ernie",
+    "hunyuan",
+    "llama",
+    "nemo_megatron",
+    "doubao",
+    "yi",
+    "sensechat",
+    "exaone",
+    "kuaishou",
+    "sakana_ai",
+    "upstage",
+    "chatglm",
+    "gemma",
+    "kwaiyii",
+    "seed",
+    "sensenova",
+    "step",
+    "wenxin",
+    "gemini",
+    "gpt",
+    "claude",
+    "grok",
+)
+_HOME_CHART_BRAND_RANK = {
+    nickname: index for index, nickname in enumerate(_HOME_CHART_BRAND_PRIORITY)
+}
+
 
 def _live_brand_nicknames() -> list[str]:
-    return list(
+    nicknames = list(
         Brand.objects.filter(is_sentinel=False)
-        .order_by("nickname")
         .values_list("nickname", flat=True)
+    )
+    return sorted(
+        nicknames,
+        key=lambda nickname: (
+            _HOME_CHART_BRAND_RANK.get(nickname, len(_HOME_CHART_BRAND_RANK)),
+            nickname,
+        ),
     )
 
 VIEWPORTS = {
@@ -4503,8 +4546,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_canonical_twenty_model_pulse_is_visible_and_accessible(self) -> None:
-        """Every canonical enabled model reaches the browser, including zeroes."""
+    def test_live_brand_pills_follow_chart_order_and_remain_accessible(self) -> None:
+        """Every live brand reaches the browser in the historical chart order."""
+        expected_brand_nicknames = _live_brand_nicknames()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -4514,11 +4558,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                     page.wait_for_function(
                         "nickname => Boolean(document.querySelector(`[data-pw-pulse-entry='${nickname}']`))",
-                        arg="upstage",
+                        arg="deepseek",
                     )
                     projection = page.evaluate(
                         """() => {
                           const bar = document.querySelector('[data-pw-pulse]');
+                          const chart = document.querySelector('canvas.home-chart');
+                          const chartPayload = JSON.parse(chart.dataset.home);
                           const rows = [...bar.querySelectorAll(':scope > li')];
                           const entries = [...bar.querySelectorAll('[data-pw-pulse-entry]')];
                           const details = Object.fromEntries(entries.map((button) => {
@@ -4536,6 +4582,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                           }));
                           return {
                             order: entries.map((button) => button.dataset.pwPulseEntry),
+                            seriesOrder: Object.keys(chartPayload.series),
+                            legendOrder: [...document.querySelectorAll('[data-pw-chart-legend] [data-pw-chart-brand]')]
+                              .map((entry) => entry.dataset.pwChartBrand),
                             details,
                             listItems: rows.length,
                             buttons: bar.querySelectorAll('button').length,
@@ -4555,8 +4604,18 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         }"""
                     )
 
-                    expected_brand_nicknames = _live_brand_nicknames()
                     self.assertEqual(projection["order"], expected_brand_nicknames)
+                    expected_series_order = [
+                        nickname
+                        for nickname in expected_brand_nicknames
+                        if nickname in projection["seriesOrder"]
+                    ]
+                    self.assertEqual(projection["seriesOrder"], expected_series_order)
+                    self.assertEqual(projection["legendOrder"], expected_series_order)
+                    self.assertEqual(
+                        projection["order"][:5],
+                        ["deepseek", "qwen", "minimax", "moonshot_kimi", "ernie"],
+                    )
                     self.assertEqual(projection["listItems"], len(expected_brand_nicknames))
                     self.assertEqual(projection["buttons"], len(expected_brand_nicknames))
                     self.assertEqual(projection["window"], "1")
@@ -4566,7 +4625,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertNotEqual(projection["scrollbarWidth"], "none")
                     self.assertNotEqual(projection["webkitScrollbarDisplay"], "none")
                     self.assertTrue(projection["reachesLast"])
-                    zero = projection["details"]["upstage"]
+                    zero = projection["details"]["pulse_absent"]
                     self.assertEqual(zero["text"], "0%")
                     self.assertEqual(zero["symbol"], "#icon-flat")
                     self.assertIn("flat 0 percent", zero["aria"])
@@ -4584,6 +4643,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     closed_models = dropdown.locator(
                         '[data-tier-grid="closed"] [data-pw-filter-group="brands"]'
                     ).evaluate_all("inputs => inputs.map(input => input.value)")
+                    self.assertEqual(open_models, expected_series_order)
                     self.assertEqual(closed_models, ["gemini", "gpt", "claude", "grok"])
                     self.assertTrue(set(open_models).isdisjoint(closed_models))
                 finally:

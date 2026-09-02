@@ -11,7 +11,7 @@ ollija:
   change_id: feat-harvester-quality-upgrade-2026-08-31-013447
   branch: feat/harvester-quality-upgrade
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 # Harvester quality upgrade - Plan
@@ -42,7 +42,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -53,6 +53,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/harvester-quality-upgrade` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/harvester-quality-upgrade` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -76,7 +83,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - **Means:** Operator fills the brand-onboard CSV template; `onboard_brand` loads it before harvest-token work; then version-family tokens and GLM on C3 with a bare Ox Alpha OR (KTD7, KTD2, KTD3).
 - **Authority:** This plan, then `AGENTS.md` / change-harvester skill, then `config/brands/` identity files and `config/harvest_policy.yaml`.
 - **Stop conditions:** A new eighth call; pausing or mutating the production cron; unauthorized production writes; merging `feat/backfiller-selective-gaps`.
-- **Execution profile:** `staging`. The owner selected staging-only delivery on 2026-09-02. No live provider probe or manual production `run_cycle` is part of verification.
+- **Execution profile:** `production`. After exact-SHA staging acceptance, the owner selected production delivery on 2026-09-02. No live provider probe or manual production `run_cycle` is part of verification; production proof uses natural scheduled cycles.
 - **Tail ownership:** Parent workflow after an explicit delivery request. Ollija does not ship.
 
 ---
@@ -147,6 +154,10 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - R15. `dots`, hunyuan metadata, glm metadata, and the two missing existing Upstage policy aliases ship in a tracked filled CSV and are applied through `onboard_brand`, not through `load_seed`, a migration, or an untracked local file. The loader is applied only to the delivery target selected by the owner.
 - R17. `config.yaml` `enabled_models` is the live v2 allowlist. Adding a valid configured nickname does not require adding it to the legacy `KNOWN_MODELS` frozenset.
 
+**Homepage presentation order**
+
+- R18. Homepage brand pills, chart series, chart legend, and brand-filter controls retain the established chart presentation order beginning DeepSeek, Qwen, MiniMax. The order is a priority, not an allowlist: every non-sentinel database brand still renders, and an unknown newly onboarded brand is appended alphabetically without a code edit.
+
 ### Acceptance Examples
 
 - AE1. Covers R1, R2. Given a post that says only `hy4 is genuinely unltd`, when the next cycle runs, the post is fetched on B1 and attributed to hunyuan.
@@ -165,6 +176,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - AE14. Covers R16. Given default config and policy, when the derived call set and degraded skip order are validated, all seven current call IDs appear exactly once, C3 is skippable, no `Q*` ID appears, and a fourth co-pack is rejected instead of producing C4.
 - AE15. Covers R12, R15. Given the tracked four-row CSV, when it is applied twice to the selected target database, the second run reports no duplicate identity, link, keyword, HF org, or product rows, and `Solar LLM` plus `업스테이지` exist as non-primary Upstage keywords.
 - AE16. Covers R9. Given a fetched body that says `Moonshot AI's Kimi K3 climbed to third place` and only the `moonshot_kimi` database aliases match (the nickname itself does not appear), when the real `CycleRunner.run()` path attributes and persists it, `PostBrand(post, moonshot_kimi)` exists.
+- AE17. Covers R18. Given the routed homepage contains both historical and database-only brands, when Chromium reads the rendered pills, chart payload, chart legend, and open-brand controls, their shared brands follow the established DeepSeek, Qwen, MiniMax-first order and database-only brands follow deterministically after the priority list.
 
 ### Success Criteria
 
@@ -173,6 +185,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - `harvest_preview` AFTER strings match the Appendix exhibit (byte-stable aside from Call A list id).
 - Logical call count stays at seven per cycle. Provider HTTP requests remain governed by the existing pagination and truncation caps; result volume may rise on B1 and C3.
 - The new body aliases survive the live Django attribution path, and every live dashboard and feed brand projection renders `dots` from DB data.
+- Homepage brand pills and chart projections retain the established DeepSeek, Qwen, MiniMax-first order while database-only brands remain automatic.
 
 ### Scope Boundaries
 
@@ -520,6 +533,23 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Cost: fixture comparison keeps seven logical calls and makes any B1/C3 result-count increase visible in estimated credits.
 - **Verification:** Named tests, preview output, fake-provider captures, and fixture cost report agree.
 
+### U10. Restore homepage brand-pill presentation order
+
+- **Goal:** Reverse the candidate's unintended alphabetical pill-order regression while preserving database-backed brand discovery.
+- **Requirements:** R14, R18
+- **Dependencies:** U7
+- **Files:** `monitor/views.py`, `tests/test_home_v22_browser.py`
+- **Approach:**
+  1. Preserve the chart order established by `4067865`, beginning DeepSeek, Qwen, MiniMax, as a presentation-priority tuple only.
+  2. Apply the same sort key to the database-backed brand projection and pulse projection so pills, chart series, legend, and filter controls cannot drift.
+  3. Append every non-sentinel brand absent from the priority tuple alphabetically; do not restore a selectable-brand allowlist or hardcoded display metadata.
+  4. Pin the real anonymous URL -> view -> template -> Chromium path, including nonzero pill geometry and the shared ordering across rendered surfaces.
+- **Test scenarios:**
+  - Regression: the current alphabetical order fails because `claude` precedes `deepseek`; the corrected route begins DeepSeek, Qwen, MiniMax.
+  - Integration: pulse pills, chart payload series, chart legend, and open-brand inputs share one order for common brands.
+  - Edge: fixture-only database brands not named in the priority tuple remain visible and sort alphabetically after prioritized brands.
+- **Verification:** The targeted PostgreSQL-backed Chromium regression is red before the runtime fix and green after it with zero required-test skips or errors.
+
 ---
 
 ## Verification Contract
@@ -532,6 +562,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 | Unit / call-chain | `pytest tests/test_harvest_policy_load.py tests/test_version_family_expand.py tests/test_query_plan_c_bare_aliases.py tests/test_harvest_policy_regression_net.py tests/test_harvest_query_exhibit.py tests/test_cycle_regression_net.py tests/test_brand_search_terms_hybrid.py` | U1–U5, U8 |
 | Dashboard/feed DB projection | `pytest tests/test_home_chart.py tests/test_home_chart_pulse.py tests/test_single_brand_chart.py tests/test_home_v22_feed_row_shape.py tests/test_ui_assurance_brand_inventory.py` | U7 |
 | Single-brand browser refresh | `pytest tests/test_home_v22_browser.py::HomeV22BrowserTests::test_single_brand_chart_has_valid_htmx_refresh_trigger` | U7 |
+| Homepage brand order | `pytest tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_live_brand_pills_follow_chart_order_and_remain_accessible` | U10 |
 | System check | `python manage.py check` | U4, U7–U9 |
 | Credit | `python -m scripts.harvest_cost` against representative summary fixtures; after authorized delivery, compare the first natural cycle's B1/C3 `n_results` with baseline | U5, post-delivery |
 | Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; repeat on production only when production is the recorded delivery target | U4, post-delivery |
@@ -550,9 +581,10 @@ Do not treat Render `cron_job_run_ended status="successful"` as done.
 - `dots` is enabled, attributed, and visible as its own brand.
 - The policy resolves to exactly the seven allowed logical calls and every active search token has a database attribution mapping before fetch. No production pause. No manual live provider probe. Production rows are written only when production is the owner-selected target.
 - Abandoned experimental policy keys are not left in `harvest_policy.yaml`.
-- Delivery stops after staging verification; production promotion requires a separate owner instruction.
+- Homepage brand pills and chart projections retain the established DeepSeek, Qwen, MiniMax-first presentation order while database-only brands still appear automatically.
+- The owner instructed production promotion on 2026-09-02. Promote only the unchanged exact-SHA staging candidate and verify natural scheduled production cycles.
 
-Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain.
+Per unit: U6 CSV template + command; U7 live dashboard-from-DB; U1 expander pins; U2 mixed-query pins; U3 coverage map; U9 seven-call config; U4 tracked rows; U8 live keyword attribution; U5 exhibit + full call-chain; U10 chart-ordered homepage brand pills.
 
 ---
 

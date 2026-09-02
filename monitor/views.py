@@ -191,6 +191,46 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
     "gemini", "gpt", "claude", "grok",
 )
 
+# Presentation order established by the chart. This is a priority list, not a
+# selectable-brand allowlist: newly onboarded database brands still render and
+# are appended alphabetically without a code change.
+_HOME_CHART_BRAND_PRIORITY: tuple[str, ...] = (
+    "deepseek",
+    "qwen",
+    "minimax",
+    "glm",
+    "mimo",
+    "moonshot_kimi",
+    "inclusionai",
+    "mistral",
+    "stepfun",
+    "ernie",
+    "hunyuan",
+    "llama",
+    "nemo_megatron",
+    "doubao",
+    "yi",
+    "sensechat",
+    "exaone",
+    "kuaishou",
+    "sakana_ai",
+    "upstage",
+    "chatglm",
+    "gemma",
+    "kwaiyii",
+    "seed",
+    "sensenova",
+    "step",
+    "wenxin",
+    "gemini",
+    "gpt",
+    "claude",
+    "grok",
+)
+_HOME_CHART_BRAND_RANK = {
+    nickname: index for index, nickname in enumerate(_HOME_CHART_BRAND_PRIORITY)
+}
+
 _DEFAULT_BRAND_ACCENT = "#9ca3af"
 
 
@@ -222,12 +262,21 @@ def _brand_projection_fields(
     }
 
 
-def _live_brand_projection() -> list[dict[str, str]]:
-    """Load every non-sentinel brand in deterministic DB order."""
-    return [
-        _brand_projection_fields(brand)
-        for brand in Brand.objects.filter(is_sentinel=False).order_by("nickname")
+def _home_chart_brand_sort_key(nickname: str) -> tuple[int, str]:
+    return (
+        _HOME_CHART_BRAND_RANK.get(nickname, len(_HOME_CHART_BRAND_RANK)),
+        nickname,
+    )
+
+
+def _live_brand_projection(locale: str | None = None) -> list[dict[str, str]]:
+    """Load every non-sentinel brand in the chart's presentation order."""
+    brands = [
+        _brand_projection_fields(brand, locale)
+        for brand in Brand.objects.filter(is_sentinel=False)
     ]
+    brands.sort(key=lambda brand: _home_chart_brand_sort_key(brand["nickname"]))
+    return brands
 
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
@@ -2332,7 +2381,6 @@ def _build_home_pulse_payload(
         rows = list(
             Brand.objects
             .filter(is_sentinel=False)
-            .order_by("nickname")
             .values(
                 "nickname",
                 "display_name",
@@ -2345,6 +2393,7 @@ def _build_home_pulse_payload(
                 prior_count=Coalesce(Subquery(prior_counts), 0),
             )
         )
+        rows.sort(key=lambda row: _home_chart_brand_sort_key(row["nickname"]))
         entries: list[dict[str, Any]] = []
         for row in rows:
             current = row.get("current_count") or 0
@@ -2435,17 +2484,13 @@ def _build_brands_context(locale: str | None = None) -> list[dict[str, Any]]:
     Each dict has nickname, display_name, accent_color — so templates
     can iterate without needing dict-lookup filters.
 
-    Brands are ordered by their database nickname ordering.
+    Brands are ordered by the chart's established presentation order, with
+    newly onboarded brands appended alphabetically.
 
     Pulse values are intentionally absent here; they live in the chart payload
     so initial and refreshed chart/pulse projections share one timestamp.
     """
-    if locale is None:
-        return _live_brand_projection()
-    return [
-        _brand_projection_fields(brand, locale)
-        for brand in Brand.objects.filter(is_sentinel=False).order_by("nickname")
-    ]
+    return _live_brand_projection(locale)
 
 
 def _partition_home_brands(
