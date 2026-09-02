@@ -75,52 +75,6 @@ log = logging.getLogger(__name__)
 # Constants ported from x_monitor/dashboard.py
 # ============================================================================
 
-MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "deepseek": "DeepSeek",
-    "qwen": "Qwen",
-    "minimax": "MiniMax AI",
-    "glm": "Zhipu GLM",
-    "mimo": "Xiaomi MiMo",
-    "moonshot_kimi": "Moonshot Kimi",
-    "inclusionai": "InclusionAI",
-    "mistral": "Mistral",
-    "stepfun": "StepFun",
-    "ernie": "Baidu ERNIE",
-    "hunyuan": "Tencent Hunyuan",
-    "llama": "Meta Llama",
-    "nemo_megatron": "NVIDIA Megatron",
-    "doubao": "ByteDance Doubao",
-    "yi": "01.AI Yi",
-    "sensechat": "SenseTime SenseChat",
-    "exaone": "LG EXAONE",
-    "kuaishou": "Kuaishou Kling",
-    "sakana_ai": "Sakana AI",
-    "upstage": "Upstage Solar",
-}
-
-MODEL_ACCENT_COLORS: dict[str, str] = {
-    "minimax": "#3b82f6",
-    "qwen": "#f97316",
-    "deepseek": "#10b981",
-    "glm": "#a855f7",
-    "mimo": "#eab308",
-    "moonshot_kimi": "#ec4899",
-    "inclusionai": "#06b6d4",
-    "mistral": "#facc15",
-    "stepfun": "#22c55e",
-    "ernie": "#0ea5e9",
-    "hunyuan": "#ec4899",
-    "llama": "#14b8a6",
-    "nemo_megatron": "#84cc16",
-    "doubao": "#f43f5e",
-    "yi": "#8b5cf6",
-    "sensechat": "#d946ef",
-    "exaone": "#0d9488",
-    "kuaishou": "#fb923c",
-    "sakana_ai": "#6366f1",
-    "upstage": "#dc2626",
-}
-
 APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
@@ -237,28 +191,43 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
     "gemini", "gpt", "claude", "grok",
 )
 
-# Explicit current UI inventory. New production brands require a declaration
-# update, while the known fixture-only row is never rendered as a control.
-HOME_SELECTABLE_BRAND_NICKNAMES: tuple[str, ...] = (
-    *MODEL_DISPLAY_NAMES,
-    "chatglm",
-    "gemma",
-    "kwaiyii",
-    "seed",
-    "sensenova",
-    "step",
-    "wenxin",
-    *_HOME_CLOSED_BRAND_NICKNAMES,
-)
-_HOME_EXCLUDED_BRAND_NICKNAMES: tuple[str, ...] = ("test_brand",)
-_HOME_BRAND_ORDER = {
-    nickname: index
-    for index, nickname in enumerate(HOME_SELECTABLE_BRAND_NICKNAMES)
-}
+_DEFAULT_BRAND_ACCENT = "#9ca3af"
 
 
-def _home_brand_sort_key(nickname: str) -> tuple[int, str]:
-    return _HOME_BRAND_ORDER.get(nickname, 999), nickname
+def _brand_projection_fields(
+    brand: Brand | dict[str, Any],
+    locale: str | None = None,
+) -> dict[str, str]:
+    """Return the single DB-backed identity projection used by live views."""
+    def value(name: str) -> str | None:
+        if isinstance(brand, dict):
+            return brand.get(name)
+        return getattr(brand, name, None)
+
+    nickname = value("nickname") or ""
+    fallback_name = value("display_name") or nickname
+    display_name_en = value("display_name_en") or fallback_name
+    display_name_zh_cn = value("display_name_zh_cn") or fallback_name
+    display_name = (
+        display_name_zh_cn
+        if locale and _is_zh_locale(locale)
+        else display_name_en
+    )
+    return {
+        "nickname": nickname,
+        "display_name": display_name,
+        "display_name_en": display_name_en,
+        "display_name_zh_cn": display_name_zh_cn,
+        "accent_color": value("accent_color") or _DEFAULT_BRAND_ACCENT,
+    }
+
+
+def _live_brand_projection() -> list[dict[str, str]]:
+    """Load every non-sentinel brand in deterministic DB order."""
+    return [
+        _brand_projection_fields(brand)
+        for brand in Brand.objects.filter(is_sentinel=False).order_by("nickname")
+    ]
 
 ALLOWED_HOME_WINDOWS: tuple[int, ...] = (1, 7, 30, 365)
 HOME_WINDOW_DEFAULT: int = 1  # U2 default: 24h window per plan § U2. Was 7; intentional AFTER change.
@@ -1320,14 +1289,11 @@ def _post_to_wire(
         return {"key": key, "label": label if label is not None else key}
 
     for pb in post.brands.all():
+        if pb.brand.is_sentinel:
+            continue
         nick = pb.brand.nickname
         brand_nicknames.append(nick)
-        brands_wire.append({
-            "nickname": nick,
-            "display_name": pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick),
-            "display_name_en": pb.brand.display_name_en or pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick),
-            "display_name_zh_cn": pb.brand.display_name_zh_cn or pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick),
-        })
+        brands_wire.append(_brand_projection_fields(pb.brand, locale))
 
         # Per-brand classifications - from enrichment when available.
         # Each value is reshaped into {key, label} so the JS / template
@@ -1357,7 +1323,6 @@ def _post_to_wire(
             "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
             "role_label": cls.get("role_label"),
         }
-
 
     # Account data — from enrichment when available
     if enriched and enriched.get("account"):
@@ -1683,25 +1648,12 @@ def _enrich_posts_with_classifications(
 
         # Merge per-brand data from PostBrand junction + classifications
         for pb in post.brands.all():
+            if pb.brand.is_sentinel:
+                continue
             nick = pb.brand.nickname
             if nick not in row["brand_nicknames"]:
                 row["brand_nicknames"].append(nick)
-            row["brands"].append({
-                "nickname": nick,
-                "display_name": (
-                    pb.brand.display_name or MODEL_DISPLAY_NAMES.get(nick, nick)
-                ),
-                "display_name_en": (
-                    pb.brand.display_name_en
-                    or pb.brand.display_name
-                    or MODEL_DISPLAY_NAMES.get(nick, nick)
-                ),
-                "display_name_zh_cn": (
-                    pb.brand.display_name_zh_cn
-                    or pb.brand.display_name
-                    or MODEL_DISPLAY_NAMES.get(nick, nick)
-                ),
-            })
+            row["brands"].append(_brand_projection_fields(pb.brand))
 
             cls_data: dict[str, Any] = {
                 "discourse": list(row["discourse"]),
@@ -2156,14 +2108,11 @@ def _build_home_chart_payload(
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
 
-    # Exclude only the known fixture leak. The assurance inventory gate reports
-    # any other production drift instead of changing runtime query semantics.
-    brand_nicknames = list(
-        Brand.objects.filter(is_sentinel=False)
-        .exclude(nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES)
-        .values_list("nickname", flat=True)
-    )
-    brand_nicknames.sort(key=_home_brand_sort_key)
+    brand_projection = _live_brand_projection()
+    brand_nicknames = [brand["nickname"] for brand in brand_projection]
+    projection_by_nickname = {
+        brand["nickname"]: brand for brand in brand_projection
+    }
 
     # Brand narrowing from filter
     brands_filter = normalized_filters.get("brands")
@@ -2171,7 +2120,7 @@ def _build_home_chart_payload(
         brand_nicknames = [b for b in brand_nicknames if b in brands_filter]
 
     colors: dict[str, str] = {
-        brand: MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
+        brand: projection_by_nickname[brand]["accent_color"]
         for brand in brand_nicknames
     }
     totals: dict[str, int] = {brand: 0 for brand in brand_nicknames}
@@ -2342,7 +2291,7 @@ def _build_home_pulse_payload(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Aggregate equal windows for every canonical enabled model in one query."""
+    """Aggregate equal windows for every non-sentinel DB brand in one query."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     now = now or django_timezone.now()
@@ -2354,7 +2303,6 @@ def _build_home_pulse_payload(
 
         midpoint = now - timedelta(days=window_days)
         start = now - timedelta(days=window_days * 2)
-        canonical_nicknames = list(MODEL_DISPLAY_NAMES)
         current_counts = (
             PostBrand.objects
             .filter(
@@ -2381,7 +2329,8 @@ def _build_home_pulse_payload(
         )
         rows = list(
             Brand.objects
-            .filter(is_sentinel=False, nickname__in=canonical_nicknames)
+            .filter(is_sentinel=False)
+            .order_by("nickname")
             .values(
                 "nickname",
                 "display_name",
@@ -2394,10 +2343,8 @@ def _build_home_pulse_payload(
                 prior_count=Coalesce(Subquery(prior_counts), 0),
             )
         )
-        rows_by_nickname = {row["nickname"]: row for row in rows}
         entries: list[dict[str, Any]] = []
-        for nickname in canonical_nicknames:
-            row = rows_by_nickname.get(nickname, {})
+        for row in rows:
             current = row.get("current_count") or 0
             prior = row.get("prior_count") or 0
             delta = _round_pulse_percent(current, prior)
@@ -2411,11 +2358,7 @@ def _build_home_pulse_payload(
                 else "flat"
             )
             entries.append({
-                "nickname": nickname,
-                "display_name": row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "display_name_en": row.get("display_name_en") or row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "display_name_zh_cn": row.get("display_name_zh_cn") or row.get("display_name") or MODEL_DISPLAY_NAMES.get(nickname, nickname),
-                "accent_color": row.get("accent_color") or MODEL_ACCENT_COLORS.get(nickname, "#9ca3af"),
+                **_brand_projection_fields(row),
                 "current_count": current,
                 "prior_count": prior,
                 "delta_percent": delta,
@@ -2484,32 +2427,23 @@ def _multi_top_voices(
     return deepcopy(result)
 
 
-def _build_brands_context() -> list[dict[str, Any]]:
+def _build_brands_context(locale: str | None = None) -> list[dict[str, Any]]:
     """Return pre-merged brand data list for templates.
 
     Each dict has nickname, display_name, accent_color — so templates
     can iterate without needing dict-lookup filters.
 
-    Brands are ordered by post volume (descending) for the top 15,
-    then alphabetically for any remaining brands.
+    Brands are ordered by their database nickname ordering.
 
     Pulse values are intentionally absent here; they live in the chart payload
     so initial and refreshed chart/pulse projections share one timestamp.
     """
-    brand_qs = Brand.objects.filter(is_sentinel=False).exclude(
-        nickname__in=_HOME_EXCLUDED_BRAND_NICKNAMES
-    )
-    brands = []
-    for b in brand_qs:
-        brands.append({
-            "nickname": b.nickname,
-            "display_name": b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
-            "accent_color": b.accent_color or MODEL_ACCENT_COLORS.get(b.nickname, "#9ca3af"),
-            "display_name_en": b.display_name_en or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
-            "display_name_zh_cn": b.display_name_zh_cn or b.display_name or MODEL_DISPLAY_NAMES.get(b.nickname, b.nickname),
-        })
-    brands.sort(key=lambda brand: _home_brand_sort_key(brand["nickname"]))
-    return brands
+    if locale is None:
+        return _live_brand_projection()
+    return [
+        _brand_projection_fields(brand, locale)
+        for brand in Brand.objects.filter(is_sentinel=False).order_by("nickname")
+    ]
 
 
 def _partition_home_brands(
@@ -2547,7 +2481,7 @@ def home(request: HttpRequest) -> HttpResponse:
     window_days = _resolve_home_window(request)
 
     # Pre-merged brand data for template iteration
-    brands_data = _build_brands_context()
+    brands_data = _build_brands_context(locale)
     brand_nicknames = [b["nickname"] for b in brands_data]
     open_brands, closed_brands = _partition_home_brands(brands_data)
     initial_filters = {
@@ -2626,7 +2560,7 @@ def home_internal(request: HttpRequest) -> HttpResponse:
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
 
-    brands_data = _build_brands_context()
+    brands_data = _build_brands_context(locale)
     brand_nicknames = [b["nickname"] for b in brands_data]
 
     feed_rows, feed_cursor, feed_has_more, _normalized_feed_filters = _feed_page_wire(
@@ -2687,11 +2621,14 @@ def brand_home(
         brand_nickname=brand,
     )
 
-    display_name = brand_obj.display_name or MODEL_DISPLAY_NAMES.get(brand, brand)
-    accent_color = brand_obj.accent_color or MODEL_ACCENT_COLORS.get(brand, "#9ca3af")
+    brand_projection = _brand_projection_fields(brand_obj, locale)
+    display_name = brand_projection["display_name"]
+    accent_color = brand_projection["accent_color"]
 
     # Initial chart payload so the canvas renders on first load (no placeholder flash)
-    initial_brand_chart_payload = _build_brand_chart_payload(brand, window_days, {}, "post_type")
+    initial_brand_chart_payload = _build_brand_chart_payload(
+        brand, window_days, {}, "post_type", locale=locale
+    )
     initial_brand_chart_payload["applied_filters"] = {}
 
     context = {
@@ -2799,6 +2736,11 @@ def _serialize_feed_row(
             "role_label": cls.get("role_label"),
         }
 
+    brands = [
+        _brand_projection_fields(brand, locale)
+        for brand in (post.get("brands") or [])
+    ]
+
     account_wire = dict(post.get("account") or {})
     geography_source = account_wire.pop("_geography_source", None)
     account_handle = account_wire.get("handle") or post.get("author_handle") or "@unknown"
@@ -2832,7 +2774,7 @@ def _serialize_feed_row(
     unsanctioned = post.get("unsanctioned", False)
     signal_inspections = _feed_signal_inspections(
         classifications,
-        post.get("brands", []),
+        brands,
         locale,
         unsanctioned=unsanctioned,
     )
@@ -2856,7 +2798,7 @@ def _serialize_feed_row(
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
-        "brands": post.get("brands", []),
+        "brands": brands,
         "brand_nicknames": post.get("brand_nicknames", []),
         "classifications": classifications,
         "signal_inspections": signal_inspections,
@@ -3225,12 +3167,18 @@ def _build_brand_chart_payload(
     window_days: int,
     filters: dict[str, Any],
     tab: str = "post_type",
+    *,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """Build single-brand chart payload dict — shared by brand_chart_json and brand_chart_html.
 
     Returns the full payload dict (not rendered HTML).
     """
     now = django_timezone.now()
+
+    brand_obj = Brand.objects.filter(nickname=brand_nickname).first()
+    if brand_obj is not None and brand_obj.is_sentinel:
+        raise Http404("Brand not found")
 
     posts = _get_feed_posts(
         window_days=window_days,
@@ -3278,10 +3226,20 @@ def _build_brand_chart_payload(
             idx = window_days - 1 - days_ago
         series[idx] += 1
 
+    brand_obj = (
+        brand_obj
+        if brand_obj is not None and not brand_obj.is_sentinel
+        else None
+    )
+    brand_projection = (
+        _brand_projection_fields(brand_obj, locale)
+        if brand_obj is not None
+        else _brand_projection_fields({"nickname": brand_nickname}, locale)
+    )
     return {
         "brand_id": brand_nickname,
-        "display_name": MODEL_DISPLAY_NAMES.get(brand_nickname, brand_nickname),
-        "accent_color": MODEL_ACCENT_COLORS.get(brand_nickname, "#9ca3af"),
+        "display_name": brand_projection["display_name"],
+        "accent_color": brand_projection["accent_color"],
         "days": days,
         "granularity": granularity,
         "tab": tab,
@@ -3306,7 +3264,9 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
     tab = request.GET.get("tab", "post_type")
-    payload = _build_brand_chart_payload(brand_nickname, window_days, filters, tab)
+    payload = _build_brand_chart_payload(
+        brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
+    )
     payload["applied_filters"] = filters
     return JsonResponse(payload)
 
@@ -3325,7 +3285,9 @@ def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
     window_days = _resolve_home_window(request)
     filters = _parse_filters_from_request(request)
     tab = request.GET.get("tab", "post_type")
-    payload = _build_brand_chart_payload(brand_nickname, window_days, filters, tab)
+    payload = _build_brand_chart_payload(
+        brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
+    )
     payload["applied_filters"] = filters
     return render(
         request,

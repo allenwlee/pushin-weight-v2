@@ -13,14 +13,13 @@ _build_brands_context, _build_home_chart_payload, _multi_top_voices,
 _post_to_wire). The shape we test is the view→template→HTML path
 which is where the iter 13 P0 drift lived.
 """
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
-from datetime import datetime, timezone
 
 import pytest
 
 from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
-
 
 pytestmark = pytest.mark.requires_postgres
 
@@ -102,7 +101,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         for p in cm:
             p.start()
         try:
-            r = self.client.get("/?locale=en")
+            r = self.client.get("/?locale=en", secure=True)
         finally:
             for p in cm:
                 p.stop()
@@ -215,7 +214,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         ]
         for p in patches: p.start()
         try:
-            r = self.client.get("/internal/")
+            r = self.client.get("/internal/", secure=True)
         finally:
             for p in patches: p.stop()
         self.assertEqual(r.status_code, 200, r.content[:500].decode("utf-8", errors="replace"))

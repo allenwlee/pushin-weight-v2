@@ -5,18 +5,26 @@ from __future__ import annotations
 import pytest
 
 from monitor.views import (
-    MODEL_DISPLAY_NAMES,
     _decode_cursor,
     _feed_tint_class,
     _follower_bin,
+    _parse_filters_from_request,
     _partition_home_brands,
     _serialize_feed_row,
-    _parse_filters_from_request,
 )
 
 
-def test_home_model_order_starts_with_owner_fixed_top_three():
-    assert list(MODEL_DISPLAY_NAMES)[:3] == ["deepseek", "qwen", "minimax"]
+def test_home_brand_partition_keeps_authored_closed_tier():
+    brands = [{"nickname": nickname} for nickname in (
+        "deepseek", "gemini", "gpt", "dots",
+    )]
+    open_brands, closed_brands = _partition_home_brands(brands)
+    assert [brand["nickname"] for brand in open_brands] == [
+        "deepseek", "dots",
+    ]
+    assert [brand["nickname"] for brand in closed_brands] == [
+        "gemini", "gpt",
+    ]
 
 
 # ============================================================================
@@ -141,7 +149,13 @@ class TestSerializeFeedRow:
             brand_nicknames=["deepseek"],
         )
         row = _serialize_feed_row(post, "en")
-        assert row["brands"] == [{"nickname": "deepseek", "display_name": "DeepSeek"}]
+        assert row["brands"] == [{
+            "nickname": "deepseek",
+            "display_name": "DeepSeek",
+            "display_name_en": "DeepSeek",
+            "display_name_zh_cn": "DeepSeek",
+            "accent_color": "#9ca3af",
+        }]
         assert row["brand_nicknames"] == ["deepseek"]
 
     def test_includes_classifications(self):
@@ -394,7 +408,7 @@ class TestFeedViewIntegration:
             username="testuser", password="pass",
         )
         client.force_login(user)
-        resp = client.get("/feed/")
+        resp = client.get("/feed/", secure=True)
         assert resp.status_code == 200
         data = resp.json()
         assert "rows" in data
@@ -511,7 +525,7 @@ class TestFeedViewIntegration:
                 assert f'data-tweet-id="{hidden.tweet_id}"' not in html
 
     def test_feed_is_public_for_the_anonymous_home(self, client):
-        resp = client.get("/feed/")
+        resp = client.get("/feed/", secure=True)
         assert resp.status_code == 200
 
     def test_home_internal_canvas_chart_is_not_owned_by_htmx(self, client, django_user_model):
@@ -519,7 +533,7 @@ class TestFeedViewIntegration:
             username="internal-chart-user", password="pass",
         )
         client.force_login(user)
-        resp = client.get("/internal/")
+        resp = client.get("/internal/", secure=True)
         assert resp.status_code == 200
         html = resp.content.decode("utf-8")
         chart_start = html.index('<section class="home-chart-wrap" id="home-chart"')
@@ -535,7 +549,9 @@ class TestFeedViewIntegration:
             username="testuser2", password="pass",
         )
         client.force_login(user)
-        resp = client.get("/feed/?sort=like_count&order=asc&limit=5")
+        resp = client.get(
+            "/feed/?sort=like_count&order=asc&limit=5", secure=True
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["applied_filters"] == {}
@@ -545,7 +561,9 @@ class TestFeedViewIntegration:
             username="testuser3", password="pass",
         )
         client.force_login(user)
-        resp = client.get("/feed/?cursor=2026-07-20T10:00:00Z|999&limit=10")
+        resp = client.get(
+            "/feed/?cursor=2026-07-20T10:00:00Z|999&limit=10", secure=True
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "rows" in data
@@ -559,7 +577,7 @@ class TestFeedViewIntegration:
         # brand_feed_json view requires a brand kwarg (from URL)
         # With the new URL scheme, brand comes as kwarg from the URL pattern
         # The view also accepts ?brand= query param
-        resp = client.get("/feed/?brand=nonexistent&limit=5")
+        resp = client.get("/feed/?brand=nonexistent&limit=5", secure=True)
         assert resp.status_code == 200
 
     def test_feed_with_invalid_limit_clamps_to_request_max(self, client, django_user_model):
@@ -567,7 +585,7 @@ class TestFeedViewIntegration:
             username="testuser5", password="pass",
         )
         client.force_login(user)
-        resp = client.get("/feed/?limit=9999")
+        resp = client.get("/feed/?limit=9999", secure=True)
         assert resp.status_code == 200
         # One response stays bounded even though total traversal has no ceiling.
         data = resp.json()

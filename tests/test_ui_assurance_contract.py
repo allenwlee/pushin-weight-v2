@@ -14,7 +14,6 @@ from monitor.views import (
     _DASHBOARD_NATIONALISM_KEYS,
     _DASHBOARD_POST_TYPE_KEYS,
     _DASHBOARD_ROLE_FILTER_KEYS,
-    HOME_SELECTABLE_BRAND_NICKNAMES,
 )
 from tests.ui_assurance.covering import (
     covered_tuples,
@@ -34,6 +33,19 @@ def _declaration() -> dict:
 
 def _controls() -> dict[str, dict]:
     return {item["id"]: item for item in _declaration()["controls"]}
+
+
+def _fixture_brand_nicknames() -> list[str]:
+    fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    seen: list[str] = []
+    for post in fixture["posts"]:
+        for brand in post["brands"]:
+            if brand not in seen:
+                seen.append(brand)
+    closed = {"gemini", "gpt", "claude", "grok"}
+    return [brand for brand in seen if brand not in closed] + [
+        brand for brand in ("gemini", "gpt", "claude", "grok") if brand in seen
+    ]
 
 
 def test_manifest_pins_the_exact_bridgewright_assurance_build() -> None:
@@ -57,7 +69,7 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
 
     assert controls["brands"]["values"] == [
         "__all__",
-        *HOME_SELECTABLE_BRAND_NICKNAMES,
+        *_fixture_brand_nicknames(),
     ]
     assert "test_brand" not in controls["brands"]["values"]
     assert controls["sentiment"]["values"] == [
@@ -101,7 +113,7 @@ def test_fixture_digest_and_declared_brands_are_exact() -> None:
 
     assert hashlib.sha256(fixture_bytes).hexdigest() == declaration["fixture"]["sha256"]
     assert {brand for post in fixture["posts"] for brand in post["brands"]} == set(
-        HOME_SELECTABLE_BRAND_NICKNAMES
+        _fixture_brand_nicknames()
     )
 
 

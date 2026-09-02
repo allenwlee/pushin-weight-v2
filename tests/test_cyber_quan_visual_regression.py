@@ -165,7 +165,10 @@ def _release_a_mask(page: Page) -> bytes:
               Math.ceil(rect.height + pad * 2)
             );
           };
-          document.querySelectorAll('.headline-strip, .feed-strip, canvas.home-chart')
+          // U7 intentionally moved the pulse inventory from the retired
+          // Python registry to live non-sentinel Brand rows.  This older
+          // Cyber-Quan-only golden therefore does not own pulse-strip pixels.
+          document.querySelectorAll('.pulse-bar-wrap, .home-chart-wrap, .headline-strip, .feed-strip')
             .forEach(node => paint(node));
           // Preserve the same known Chromium rounded-edge seam allowance as
           // the reviewed icon mask above. This is a two-pixel raster boundary,

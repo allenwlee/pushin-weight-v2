@@ -27,7 +27,6 @@ from core.models import (
     SentimentKey,
 )
 from monitor.views import (
-    MODEL_DISPLAY_NAMES,
     _HOME_CHART_CACHE,
     _HOME_PULSE_CACHE,
     _HOME_TOP_VOICES_CACHE,
@@ -108,45 +107,37 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         _clear_home_pulse_cache()
 
     def test_ae11_exact_equal_window_projection_and_single_query_cache(self):
-        canonical = {
-            "up": "Up",
-            "down": "Down",
-            "flat": "Flat",
-            "new": "New",
-            "absent": "Absent",
-        }
-        with patch.dict("monitor.views.MODEL_DISPLAY_NAMES", canonical, clear=True):
-            with self.assertNumQueries(1):
-                pulse = _build_home_pulse_payload(1, now=ANCHOR)
+        with self.assertNumQueries(1):
+            pulse = _build_home_pulse_payload(1, now=ANCHOR)
 
-            by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
-            self.assertEqual(list(by_nickname), list(canonical))
-            self.assertEqual(
-                (by_nickname["up"]["current_count"], by_nickname["up"]["prior_count"], by_nickname["up"]["delta_percent"], by_nickname["up"]["direction"]),
-                (6, 4, 50, "up"),
-            )
-            self.assertEqual(
-                (by_nickname["down"]["current_count"], by_nickname["down"]["prior_count"], by_nickname["down"]["delta_percent"], by_nickname["down"]["direction"]),
-                (2, 4, -50, "down"),
-            )
-            self.assertEqual(
-                (by_nickname["flat"]["current_count"], by_nickname["flat"]["prior_count"], by_nickname["flat"]["delta_percent"], by_nickname["flat"]["direction"]),
-                (4, 4, 0, "flat"),
-            )
-            self.assertEqual(
-                (by_nickname["new"]["current_count"], by_nickname["new"]["prior_count"], by_nickname["new"]["delta_percent"], by_nickname["new"]["direction"]),
-                (3, 0, None, None),
-            )
-            self.assertEqual(by_nickname["new"]["status"], "new")
-            self.assertEqual(
-                (by_nickname["absent"]["current_count"], by_nickname["absent"]["prior_count"], by_nickname["absent"]["delta_percent"], by_nickname["absent"]["direction"]),
-                (0, 0, 0, "flat"),
-            )
-            self.assertEqual(pulse["window_days"], 1)
-            self.assertEqual(pulse["computed_at"], ANCHOR.isoformat())
+        by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
+        self.assertEqual(list(by_nickname), sorted(("up", "down", "flat", "new", "absent")))
+        self.assertEqual(
+            (by_nickname["up"]["current_count"], by_nickname["up"]["prior_count"], by_nickname["up"]["delta_percent"], by_nickname["up"]["direction"]),
+            (6, 4, 50, "up"),
+        )
+        self.assertEqual(
+            (by_nickname["down"]["current_count"], by_nickname["down"]["prior_count"], by_nickname["down"]["delta_percent"], by_nickname["down"]["direction"]),
+            (2, 4, -50, "down"),
+        )
+        self.assertEqual(
+            (by_nickname["flat"]["current_count"], by_nickname["flat"]["prior_count"], by_nickname["flat"]["delta_percent"], by_nickname["flat"]["direction"]),
+            (4, 4, 0, "flat"),
+        )
+        self.assertEqual(
+            (by_nickname["new"]["current_count"], by_nickname["new"]["prior_count"], by_nickname["new"]["delta_percent"], by_nickname["new"]["direction"]),
+            (3, 0, None, None),
+        )
+        self.assertEqual(by_nickname["new"]["status"], "new")
+        self.assertEqual(
+            (by_nickname["absent"]["current_count"], by_nickname["absent"]["prior_count"], by_nickname["absent"]["delta_percent"], by_nickname["absent"]["direction"]),
+            (0, 0, 0, "flat"),
+        )
+        self.assertEqual(pulse["window_days"], 1)
+        self.assertEqual(pulse["computed_at"], ANCHOR.isoformat())
 
-            with self.assertNumQueries(0):
-                self.assertEqual(_build_home_pulse_payload(1, now=ANCHOR), pulse)
+        with self.assertNumQueries(0):
+            self.assertEqual(_build_home_pulse_payload(1, now=ANCHOR), pulse)
 
     def test_canonical_twenty_model_query_is_date_bounded_and_single_query(self):
         with CaptureQueriesContext(connection) as queries:
@@ -155,9 +146,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(len(queries), 1)
         self.assertEqual(
             [entry["nickname"] for entry in pulse["entries"]],
-            list(MODEL_DISPLAY_NAMES),
+            ["absent", "down", "flat", "new", "up"],
         )
-        self.assertEqual(len(pulse["entries"]), 20)
+        self.assertEqual(len(pulse["entries"]), 5)
         sql = queries.captured_queries[0]["sql"].upper()
         self.assertGreaterEqual(sql.count("SELECT COUNT"), 2)
         self.assertNotIn("FILTER (WHERE", sql)
@@ -456,26 +447,28 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
 
     @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
     def test_root_and_chart_partial_share_canvas_payload_with_pulse(self, _now):
-        root = self.client.get("/")
+        root = self.client.get("/", secure=True)
         self.assertEqual(root.status_code, 200)
         self.assertContains(root, '<canvas class="home-chart"', html=False)
         self.assertContains(root, "data-pw-pulse", html=False)
         self.assertContains(root, 'class="pw-icon-sprite"', html=False)
         self.assertNotContains(root, '<svg class="home-chart"', html=False)
 
-        partial = self.client.get("/chart.html?renderer=canvas")
+        partial = self.client.get("/chart.html?renderer=canvas", secure=True)
         self.assertEqual(partial.status_code, 200)
         self.assertContains(partial, '<canvas class="home-chart"', html=False)
         self.assertNotContains(partial, "<svg", html=False)
 
-        chart = self.client.get("/chart/").json()
+        chart = self.client.get("/chart/", secure=True).json()
         self.assertIn("pulse", chart)
         self.assertEqual(chart["computed_at"], chart["pulse"]["computed_at"])
 
     def test_chart_payload_attribute_autoescapes_untrusted_filter_values(self):
         hostile = "O'Reilly <img src=x onerror=alert(1)> & onmouseover=alert(2)"
         filters = {"brands": [hostile]}
-        response = self.client.get("/chart.html", {"filters": json.dumps(filters)})
+        response = self.client.get(
+            "/chart.html", {"filters": json.dumps(filters)}, secure=True
+        )
         self.assertEqual(response.status_code, 200)
 
         parser = _ChartFragmentParser()

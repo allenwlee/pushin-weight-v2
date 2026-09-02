@@ -28,8 +28,8 @@ from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
-from core.models import Post, PostBrand
-from monitor.views import MODEL_DISPLAY_NAMES, _clear_home_pulse_cache
+from core.models import Brand, Post, PostBrand
+from monitor.views import _clear_home_pulse_cache
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
 from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
 from tests.v22_support import (
@@ -40,6 +40,14 @@ from tests.v22_support import (
 )
 
 pytestmark = pytest.mark.requires_postgres
+
+
+def _live_brand_nicknames() -> list[str]:
+    return list(
+        Brand.objects.filter(is_sentinel=False)
+        .order_by("nickname")
+        .values_list("nickname", flat=True)
+    )
 
 VIEWPORTS = {
     "desktop": {"width": 1440, "height": 960},
@@ -836,7 +844,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["chart"]["computed_at"], projection["pulseComputedAt"])
                     self.assertEqual(
                         projection["pulseCount"],
-                        len(MODEL_DISPLAY_NAMES),
+                        len(_live_brand_nicknames()),
                     )
                     refreshed_legend = page.locator("[data-pw-chart-legend]")
                     self.assertEqual(
@@ -3089,7 +3097,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         return context
 
     def _feed_payload(self, **query: object) -> dict[str, object]:
-        response = Client(HTTP_HOST="localhost").get("/feed/?" + urlencode(query))
+        response = Client(HTTP_HOST="localhost").get(
+            "/feed/?" + urlencode(query), secure=True
+        )
         self.assertEqual(response.status_code, 200)
         return response.json()
 
@@ -4488,9 +4498,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         }"""
                     )
 
-                    self.assertEqual(projection["order"], list(MODEL_DISPLAY_NAMES))
-                    self.assertEqual(projection["listItems"], 20)
-                    self.assertEqual(projection["buttons"], 20)
+                    expected_brand_nicknames = _live_brand_nicknames()
+                    self.assertEqual(projection["order"], expected_brand_nicknames)
+                    self.assertEqual(projection["listItems"], len(expected_brand_nicknames))
+                    self.assertEqual(projection["buttons"], len(expected_brand_nicknames))
                     self.assertEqual(projection["window"], "1")
                     self.assertRegex(projection["computedAt"], r"^\d{4}-\d{2}-\d{2}T")
                     self.assertEqual(projection["overflowX"], "auto")
@@ -4502,7 +4513,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(zero["text"], "0%")
                     self.assertEqual(zero["symbol"], "#icon-flat")
                     self.assertIn("flat 0 percent", zero["aria"])
-                    for nickname in MODEL_DISPLAY_NAMES:
+                    for nickname in expected_brand_nicknames:
                         with self.subTest(nickname=nickname):
                             actual = projection["details"][nickname]
                             self.assertEqual(actual["pressed"], "false")
