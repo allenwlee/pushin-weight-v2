@@ -19,6 +19,23 @@ def _write(tmp: Path, body: str) -> Path:
     return p
 
 
+def test_live_headline_cadences_pin_hourly_one_day_and_slow_long_windows():
+    config = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+
+    assert config.headline_narrative.cadence_minutes == {
+        1: 60,
+        7: 1_440,
+        30: 10_080,
+        365: 43_200,
+    }
+    assert config.headline_narrative.stale_minutes == {
+        1: 120,
+        7: 2_880,
+        30: 20_160,
+        365: 86_400,
+    }
+
+
 def test_loads_all_known_models():
     with tempfile.TemporaryDirectory() as d:
         path = _write(

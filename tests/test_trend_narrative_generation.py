@@ -538,7 +538,18 @@ def test_headline_config_defaults_are_pinned_and_fail_closed():
     assert config.materiality_policy_version == "pending-live-review-v1"
     assert config.lease_seconds == 900
     assert config.max_body_zh_cn_chars == 120
-    assert config.cadence_minutes == {1: 30, 7: 60, 30: 360, 365: 1440}
+    assert config.cadence_minutes == {
+        1: 60,
+        7: 1_440,
+        30: 10_080,
+        365: 43_200,
+    }
+    assert config.stale_minutes == {
+        1: 120,
+        7: 2_880,
+        30: 20_160,
+        365: 86_400,
+    }
     assert config.call_cap == 4
     assert config.evidence_policy_version == "adaptive-v1"
     assert config.evidence_reservoir_rank_limit == 32
