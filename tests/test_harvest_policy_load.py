@@ -12,12 +12,11 @@ import pytest
 import yaml
 
 from x_monitor.harvest_policy import (
-    BrandPolicy,
     CoPack,
     HarvestPolicy,
+    VersionFamily,
     load_policy,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -215,3 +214,113 @@ def test_brand_entry_must_be_mapping(tmp_path):
     p = _write(tmp_path, "policy.yaml", doc)
     with pytest.raises(TypeError, match="must be a mapping"):
         load_policy(p)
+
+
+def test_loads_version_family_with_defaults(tmp_path):
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["bare"],
+                "tokens": ["Hunyuan"],
+                "version_family": {"prefix": "Hy", "current_major": 4},
+            }
+        }
+    }
+    policy = load_policy(_write(tmp_path, "policy.yaml", doc))
+
+    assert policy.brand("hunyuan").version_family == VersionFamily(
+        prefix="Hy", current_major=4, lookback=1, lookahead=1
+    )
+
+
+def test_version_family_requires_non_empty_prefix(tmp_path):
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["bare"],
+                "tokens": ["Hunyuan"],
+                "version_family": {"prefix": "", "current_major": 4},
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="version_family.*prefix"):
+        load_policy(_write(tmp_path, "policy.yaml", doc))
+
+
+def test_versioned_bare_family_is_a_valid_token_source(tmp_path):
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["versioned_bare"],
+                "version_family": {
+                    "prefix": "Hy",
+                    "current_major": 4,
+                    "lookback": 1,
+                    "lookahead": 1,
+                },
+            }
+        }
+    }
+
+    policy = load_policy(_write(tmp_path, "policy.yaml", doc))
+
+    assert policy.brand("hunyuan").tokens == ()
+    assert policy.brand("hunyuan").version_family is not None
+
+
+def test_version_family_rejects_lookback_beyond_current_major(tmp_path):
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["bare"],
+                "version_family": {
+                    "prefix": "Hy",
+                    "current_major": 1,
+                    "lookback": 2,
+                },
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="lookback cannot exceed current_major"):
+        load_policy(_write(tmp_path, "policy.yaml", doc))
+
+
+@pytest.mark.parametrize("prefix", ["   ", " Hy"])
+def test_version_family_rejects_prefix_whitespace(tmp_path, prefix):
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["bare"],
+                "tokens": ["Hunyuan"],
+                "version_family": {"prefix": prefix, "current_major": 4},
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="version_family.*prefix"):
+        load_policy(_write(tmp_path, "policy.yaml", doc))
+
+
+@pytest.mark.parametrize("field", ["current_major", "lookback", "lookahead"])
+def test_version_family_rejects_negative_numeric_values(tmp_path, field):
+    version_family = {
+        "prefix": "Hy",
+        "current_major": 4,
+        "lookback": 1,
+        "lookahead": 1,
+    }
+    version_family[field] = -1
+    doc = {
+        "brands": {
+            "hunyuan": {
+                "paths": ["bare"],
+                "tokens": ["Hunyuan"],
+                "version_family": version_family,
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="version_family.*non-negative"):
+        load_policy(_write(tmp_path, "policy.yaml", doc))

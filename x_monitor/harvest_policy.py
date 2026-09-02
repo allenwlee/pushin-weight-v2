@@ -35,12 +35,11 @@ in 4/5.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-
 
 # Authoritative path names (R1, R2). Adding a new path requires:
 #   (a) extending _VALID_PATH_NAMES
@@ -71,6 +70,48 @@ _HANDLE_TIERS: frozenset[str] = frozenset({HANDLE_TIER_TOP, HANDLE_TIER_OTHER})
 
 
 @dataclass(frozen=True)
+class VersionFamily:
+    """Validated declaration for adjacent numbered model names.
+
+    ``lookback`` and ``lookahead`` describe the numeric range around
+    ``current_major``.  ``extra_suffixes`` are emitted for the current and
+    lookahead majors only; previous majors retain their plain numeric token.
+    Expansion itself lives in ``specs_from_policy`` so every call shape uses
+    the same token derivation.
+    """
+
+    prefix: str
+    current_major: int
+    lookback: int = 1
+    lookahead: int = 1
+    extra_suffixes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.prefix, str) or not self.prefix.strip():
+            raise ValueError("version_family prefix must be non-empty")
+        if self.prefix != self.prefix.strip():
+            raise ValueError(
+                "version_family prefix must not have surrounding whitespace"
+            )
+        for field_name in ("current_major", "lookback", "lookahead"):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(
+                    f"version_family {field_name} must be an integer"
+                )
+            if value < 0:
+                raise ValueError(
+                    f"version_family {field_name} must be non-negative"
+                )
+        if self.lookback > self.current_major:
+            raise ValueError(
+                "version_family lookback cannot exceed current_major"
+            )
+        if any(not isinstance(suffix, str) for suffix in self.extra_suffixes):
+            raise TypeError("version_family extra_suffixes must be list[str]")
+
+
+@dataclass(frozen=True)
 class BrandPolicy:
     """Per-brand authoring block.
 
@@ -97,8 +138,15 @@ class BrandPolicy:
     not_include: tuple[str, ...] = ()
     notes: str = ""
     handle_tier: str = HANDLE_TIER_TOP
+    version_family: VersionFamily | None = None
 
     def __post_init__(self) -> None:
+        if self.version_family is not None and not isinstance(
+            self.version_family, VersionFamily
+        ):
+            raise TypeError(
+                f"brand {self.nickname!r} version_family must be VersionFamily"
+            )
         unknown = self.paths - _VALID_PATH_NAMES
         if unknown:
             raise ValueError(
@@ -112,13 +160,14 @@ class BrandPolicy:
                 f"brand {self.nickname!r}: 'none' path is mutually exclusive "
                 f"with other paths; got {sorted(self.paths)}."
             )
-        # bare / versioned_bare require tokens (R2).
-        if "bare" in self.paths and not self.tokens:
+        # bare / versioned_bare require tokens (R2), unless the version family
+        # itself supplies the numbered tokens.
+        if "bare" in self.paths and not (self.tokens or self.version_family):
             raise ValueError(
                 f"brand {self.nickname!r}: 'bare' path requires non-empty tokens."
             )
         if "versioned_bare" in self.paths and not (
-            self.tokens or self.versioned_tokens
+            self.tokens or self.versioned_tokens or self.version_family
         ):
             raise ValueError(
                 f"brand {self.nickname!r}: 'versioned_bare' path requires "
@@ -210,6 +259,9 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
             "Use ['none'] for an explicit opt-out with documented reason."
         )
     paths = frozenset(paths_raw)
+    version_family = _load_version_family(
+        nickname, raw.get("version_family")
+    )
     return BrandPolicy(
         nickname=nickname,
         paths=paths,
@@ -224,7 +276,44 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
         ),
         notes=str(raw.get("notes", "") or ""),
         handle_tier=str(raw.get("handle_tier", HANDLE_TIER_TOP) or HANDLE_TIER_TOP),
+        version_family=version_family,
     )
+
+
+def _load_version_family(
+    nickname: str, raw: Any
+) -> VersionFamily | None:
+    """Load an optional, strictly typed version-family declaration."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise TypeError(
+            f"brand {nickname!r} version_family must be a mapping; "
+            f"got {type(raw).__name__}"
+        )
+    if "prefix" not in raw or "current_major" not in raw:
+        raise ValueError(
+            f"brand {nickname!r} version_family requires prefix and current_major"
+        )
+    prefix = raw["prefix"]
+    current_major = raw["current_major"]
+    lookback = raw.get("lookback", 1)
+    lookahead = raw.get("lookahead", 1)
+    suffixes = _coerce_str_list(
+        raw.get("extra_suffixes", []), "version_family.extra_suffixes", nickname
+    )
+    try:
+        return VersionFamily(
+            prefix=prefix,
+            current_major=current_major,
+            lookback=lookback,
+            lookahead=lookahead,
+            extra_suffixes=suffixes,
+        )
+    except (TypeError, ValueError) as exc:
+        raise type(exc)(
+            f"brand {nickname!r} {exc}"
+        ) from exc
 
 
 def _load_co_packs(raw: Any) -> tuple[CoPack, ...]:

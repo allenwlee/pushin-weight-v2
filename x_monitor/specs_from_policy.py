@@ -50,26 +50,75 @@ sets and stable co_pack order keep the rendered queries byte-stable.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable
+from collections.abc import Iterable
 
 from .harvest_policy import (
     HANDLE_TIER_OTHER,
     HANDLE_TIER_TOP,
     BrandPolicy,
-    CoPack,
     HarvestPolicy,
+    VersionFamily,
 )
 from .query_plan import XQuerySpec
-
 
 # Handle tier names (R9). 3/5 has two tiers matching the legacy B2/B3 split;
 # 4/5 may add more. Re-exported for tests.
 __all__ = [
-    "HANDLE_TIER_TOP",
     "HANDLE_TIER_OTHER",
-    "specs_from_policy",
+    "HANDLE_TIER_TOP",
+    "expand_version_family",
     "primary_keywords_from_policy",
+    "specs_from_policy",
 ]
+
+
+def expand_version_family(family: VersionFamily | None) -> list[str]:
+    """Expand one version-family declaration in stable, duplicate-free order."""
+    if family is None:
+        return []
+
+    tokens: list[str] = [
+        f"{family.prefix}{major}"
+        for major in range(
+            family.current_major - family.lookback,
+            family.current_major + family.lookahead + 1,
+        )
+    ]
+    for major in range(
+        family.current_major, family.current_major + family.lookahead + 1
+    ):
+        tokens.extend(
+            f"{family.prefix}{major}{suffix}"
+            for suffix in family.extra_suffixes
+        )
+
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        if token not in seen:
+            deduplicated.append(token)
+            seen.add(token)
+    return deduplicated
+
+
+def _dedupe_tokens(tokens: Iterable[str]) -> list[str]:
+    """Keep the first occurrence of each token while preserving policy order."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        if token not in seen:
+            result.append(token)
+            seen.add(token)
+    return result
+
+
+def _expand_tokens(tokens: Iterable[str], family: VersionFamily | None) -> list[str]:
+    """Append family tokens to declared tokens with stable first-win dedupe."""
+    if family is None:
+        # Preserve the pre-family policy behavior byte-for-byte when the
+        # optional declaration is absent, including its declared ordering.
+        return list(tokens)
+    return _dedupe_tokens([*tokens, *expand_version_family(family)])
 
 
 def _bare_token_list(brand: BrandPolicy) -> list[str]:
@@ -79,13 +128,13 @@ def _bare_token_list(brand: BrandPolicy) -> list[str]:
     more specific token matches first), then bare tokens. Bare brands
     contribute just tokens.
     """
-    if "bare" in brand.paths and "versioned_bare" in brand.paths:
-        return list(brand.versioned_tokens) + list(brand.tokens)
     if "versioned_bare" in brand.paths:
-        return list(brand.versioned_tokens) + list(brand.tokens)
-    if "bare" in brand.paths:
-        return list(brand.tokens)
-    return []
+        base_tokens = [*brand.versioned_tokens, *brand.tokens]
+    elif "bare" in brand.paths:
+        base_tokens = list(brand.tokens)
+    else:
+        base_tokens = []
+    return _expand_tokens(base_tokens, brand.version_family)
 
 
 def _brand_handle_tier(brand: BrandPolicy) -> str:
@@ -137,11 +186,13 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
             policy.brands[n] for n in pack.brand_nicknames
         ]
         # Primary group: one paren per brand, OR-joined into the outer paren.
-        # Tokens per brand = brand.tokens (each brand contributes one entry;
-        # the planner joins them via _build_query's existing OR-of-paren path).
+        # Tokens per brand = declared tokens plus any version-family expansion;
+        # the planner joins them via _build_query's existing OR-of-paren path.
         primary_brands: dict[str, list[str]] = {}
         for b in pack_brands:
-            primary_brands[b.nickname] = list(b.tokens)
+            primary_brands[b.nickname] = _expand_tokens(
+                b.tokens, b.version_family
+            )
         # Co group: union of brand.co across the pack (R4 + KTD5).
         co_terms: list[str] = []
         seen: set[str] = set()
