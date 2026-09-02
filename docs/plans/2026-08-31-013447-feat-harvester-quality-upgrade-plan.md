@@ -99,6 +99,8 @@ Read-only production evidence from 2026-09-02 confirms that this is already a li
 
 Staging acceptance on 2026-09-02 also found a rollout prerequisite that unit fixtures had masked: the deployed policy emits Upstage tokens `Solar LLM` and `업스테이지`, but the staging `BrandKeyword` table lacked both. The new fail-closed preflight correctly rejected the incomplete database before any provider call. The tracked onboarding CSV therefore includes an idempotent Upstage coverage row for those existing policy tokens; this is target-data repair through the same reviewed loader, not a nickname fallback, migration, new call, or new workstream.
 
+The same exact-SHA staging browser pass found six `htmx:syntax:error` console events on the single-brand dots page. Both timed refresh elements used the invalid combined trigger `load every 60s`; HTMX requires separate trigger specifications (`load, every 60s`). U7 corrects only those two single-brand attributes and pins the deployed route in Chromium, without changing refresh timing, endpoints, filters, or the preserved `/internal/` surface.
+
 Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so posts that only say `Hy4` never match. Adding only `Hy4` would miss `Hy5`. GLM is handle-only (`@Zai_org` on B2). Bare `glm` is also Genelec, fandom GLM/SLM, stats GLM, and handle-substring junk. Xiaohongshu shipped `dots3-note Preview`. Ox Alpha was confirmed as GLM-5.3-Flash.
 
 ### Key Decisions
@@ -337,12 +339,13 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 - **Goal:** A newly onboarded brand shows in every live dashboard and feed projection from `brands` rows, not from a Python dict edit.
 - **Requirements:** R14
 - **Dependencies:** U6
-- **Files:** `monitor/views.py`, `tests/test_home_chart.py`, `tests/test_home_chart_pulse.py`, `tests/test_single_brand_chart.py`, `tests/test_home_v22_feed_row_shape.py`, `tests/test_ui_assurance_brand_inventory.py`
+- **Files:** `monitor/views.py`, `monitor/templates/monitor/brand_home.html`, `tests/test_home_chart.py`, `tests/test_home_chart_pulse.py`, `tests/test_single_brand_chart.py`, `tests/test_home_v22_feed_row_shape.py`, `tests/test_ui_assurance_brand_inventory.py`, `tests/test_home_v22_browser.py`
 - **Approach:**
   1. Introduce one live Django brand projection for nickname, locale-aware display name, accent, and ordering from non-sentinel `Brand` rows.
   2. Reuse it for home controls, `_build_home_pulse_payload`, home chart colors, brand detail labels/colors, single-brand chart payloads, and both feed serialization paths (`_post_to_wire` plus `_enrich_posts_with_classifications` / `_serialize_feed_row`). Fallback for missing display is nickname; fallback for missing accent is the neutral default.
   3. Remove production dependence on `MODEL_DISPLAY_NAMES`, `MODEL_ACCENT_COLORS`, `HOME_SELECTABLE_BRAND_NICKNAMES`, and `_HOME_EXCLUDED_BRAND_NICKNAMES`. Keep deterministic Bridgewright fixture data in tests, mark fixture-only brands `is_sentinel=True`, and use that field as the sole runtime exclusion.
   4. Preserve the four-brand open/closed presentation lens; no new persistence field is introduced.
+  5. On the single-brand page only, express the existing chart and spend timers as two valid HTMX trigger specifications: `load, every 60s`. Do not change their endpoints or cadence and do not broaden this follow-up to `/internal/`.
 
   | Legacy surface | Disposition | Reason |
   |---|---|---|
@@ -358,7 +361,8 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Edge: brand with null display_name renders nickname.
   - Edge: brand with null accent renders the neutral default.
   - Error: a fixture-only row marked `is_sentinel=True` remains absent from production controls and feed brand metadata; a non-sentinel `test_brand` is not silently excluded by nickname.
-- **Verification:** Live Django dashboard and feed projections render a DB-only dots brand, and no production view requires a `dots` constant or nickname exclusion.
+  - Browser regression: the real `/brands/minimax/` route loads HTMX 1.9.10, renders a nonzero chart region, exposes both timed triggers as `load, every 60s`, and emits zero `htmx:syntax:error` events.
+- **Verification:** Live Django dashboard and feed projections render a DB-only dots brand, no production view requires a `dots` constant or nickname exclusion, and the single-brand browser route has no HTMX syntax errors.
 
 ### U1. Version-family expansion in harvest policy
 
@@ -527,6 +531,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 | Config vocabulary | `pytest tests/test_config.py tests/test_cycle_runtime_constants.py tests/test_harvest_surface_regression_net.py tests/test_cmd_run_query_id.py` | U9 |
 | Unit / call-chain | `pytest tests/test_harvest_policy_load.py tests/test_version_family_expand.py tests/test_query_plan_c_bare_aliases.py tests/test_harvest_policy_regression_net.py tests/test_harvest_query_exhibit.py tests/test_cycle_regression_net.py tests/test_brand_search_terms_hybrid.py` | U1–U5, U8 |
 | Dashboard/feed DB projection | `pytest tests/test_home_chart.py tests/test_home_chart_pulse.py tests/test_single_brand_chart.py tests/test_home_v22_feed_row_shape.py tests/test_ui_assurance_brand_inventory.py` | U7 |
+| Single-brand browser refresh | `pytest tests/test_home_v22_browser.py::HomeV22BrowserTests::test_single_brand_chart_has_valid_htmx_refresh_trigger` | U7 |
 | System check | `python manage.py check` | U4, U7–U9 |
 | Credit | `python -m scripts.harvest_cost` against representative summary fixtures; after authorized delivery, compare the first natural cycle's B1/C3 `n_results` with baseline | U5, post-delivery |
 | Target data apply | Dry-run, apply, and idempotent re-run of the tracked CSV on staging; repeat on production only when production is the recorded delivery target | U4, post-delivery |

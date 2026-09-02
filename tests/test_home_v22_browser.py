@@ -473,6 +473,63 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         context.add_cookies(cookies)
         return context
 
+    def test_single_brand_chart_has_valid_htmx_refresh_trigger(self) -> None:
+        cookies = self._authenticated_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser,
+                    cookies,
+                    VIEWPORTS["desktop"],
+                )
+                context.add_init_script(
+                    """
+                    window.__pwHtmxSyntaxErrors = [];
+                    document.addEventListener('htmx:syntax:error', (event) => {
+                      const detail = event.detail || {};
+                      window.__pwHtmxSyntaxErrors.push({
+                        token: detail.token || null,
+                        source: detail.source || null,
+                        message: detail.error ? detail.error.message : null,
+                      });
+                    }, true);
+                    """
+                )
+                page = context.new_page()
+                try:
+                    response = page.goto(
+                        f"{self.live_server_url}/brands/minimax/?locale=en",
+                        wait_until="networkidle",
+                    )
+                    self.assertIsNotNone(response)
+                    self.assertEqual(response.status, 200)
+                    page.wait_for_function(
+                        "() => window.htmx && window.htmx.version === '1.9.10'"
+                    )
+                    chart = page.locator("#brand-chart")
+                    self.assertEqual(chart.count(), 1)
+                    self.assertEqual(
+                        chart.get_attribute("hx-trigger"),
+                        "load, every 60s",
+                    )
+                    self.assertEqual(
+                        page.locator("#api-spend").get_attribute("hx-trigger"),
+                        "load, every 60s",
+                    )
+                    geometry = chart.bounding_box()
+                    self.assertIsNotNone(geometry)
+                    self.assertGreater(geometry["width"], 0)
+                    self.assertGreater(geometry["height"], 0)
+                    self.assertEqual(
+                        page.evaluate("() => window.__pwHtmxSyntaxErrors"),
+                        [],
+                    )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def _publish_why_first_browser_narrative(
         self,
         *,

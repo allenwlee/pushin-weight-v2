@@ -60,7 +60,7 @@
       </nav>
       <div class="home-chart-wrap" id="brand-chart"
            hx-get="/brand-chart/{{ brand_id }}.html"
-           hx-trigger="load every 60s"
+           hx-trigger="load, every 60s"
            hx-vals='js:{filters: JSON.stringify(window.pwFilter ? window.pwFilter.get() : {})}'
            hx-swap="innerHTML">
         {% include "monitor/_brand_chart.html" %}
@@ -175,7 +175,7 @@
 
   <aside id="api-spend" class="spend-panel-wrap"
          hx-get="/spend.html"
-         hx-trigger="load every 60s"
+         hx-trigger="load, every 60s"
          hx-swap="innerHTML">
     <div class="spend-panel" style="padding: 1rem; color: #6b7280;">
       {% trans "Spend panel — stubbed for U7." %}
