@@ -60,8 +60,8 @@ def test_account_call_query_id_is_a() -> None:
 
 
 def test_brand_wide_call_query_id_uses_planner_call_id() -> None:
-    """brand_wide calls report their planner-issued call_id (B1/B2/B3/C1/C2)."""
-    for cid in ("B1", "B2", "B3", "C1", "C2"):
+    """brand_wide calls report their planner-issued A/B/C call_id."""
+    for cid in ("B1", "B2", "B3", "C1", "C2", "C3"):
         row = _build_query_row("brand_wide", cid)
         assert row["query_id"] == cid, (
             f"Expected query_id={cid!r}, got {row['query_id']!r}"
@@ -71,8 +71,8 @@ def test_brand_wide_call_query_id_uses_planner_call_id() -> None:
 
 def test_no_q_string_in_per_row_query_id() -> None:
     """Regression net for U2: ensure no Q-string literal sneaks back into
-    the per-row query_id field across all 6 call_id values."""
-    for cid in ("A", "B1", "B2", "B3", "C1", "C2"):
+    the per-row query_id field across all 7 call_id values."""
+    for cid in ("A", "B1", "B2", "B3", "C1", "C2", "C3"):
         kind = "account" if cid == "A" else "brand_wide"
         row = _build_query_row(kind, cid)
         assert row["query_id"] == cid
@@ -85,17 +85,20 @@ def test_no_q_string_in_per_row_query_id() -> None:
 
 
 def test_cli_help_text_uses_new_call_id_strings() -> None:
-    """`x_monitor run --queries --help` mentions A/B1/B2/B3/C1/C2, not Q1..Q6."""
+    """`x_monitor run --queries --help` uses current A/B/C call IDs."""
     import subprocess
     import sys
     result = subprocess.run(
         [sys.executable, "-m", "x_monitor", "run", "--help"],
-        capture_output=True, text=True, cwd="/Users/fuchitalee/development/minimax-marketing/x-monitoring",
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=Path(__file__).resolve().parent.parent,
     )
     assert result.returncode == 0, result.stderr
     # argparse wraps help text, so check the new strings are present and
     # the old Q-strings are not.
-    for token in ("A", "B1", "B2", "B3", "C1", "C2"):
+    for token in ("A", "B1", "B2", "B3", "C1", "C2", "C3"):
         assert token in result.stdout, (
             f"--queries help text missing {token!r}: {result.stdout!r}"
         )

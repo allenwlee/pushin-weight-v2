@@ -11,6 +11,8 @@ Pins:
 """
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.yaml"
 
@@ -183,3 +185,101 @@ def test_seven_call_shape_preserved_post_refactor():
         f"x_query_specs call_ids must be {sorted(EXPECTED_CALL_IDS_AFTER_U3 - {'A'})} (A is implicit), "
         f"got {sorted(actual_spec_ids)}"
     )
+
+
+def test_live_policy_resolution_does_not_fallback_to_config_specs(
+    tmp_path, monkeypatch
+):
+    """A missing policy must fail before any provider can be planned."""
+    from monitor.cycle import _resolve_x_query_specs
+    from x_monitor.config import Config
+    from x_monitor.query_plan import XQuerySpec
+
+    monkeypatch.chdir(tmp_path)
+    cfg = Config(
+        enabled_models=["dots"],
+        daily_ceiling=100,
+        x_query_specs=[XQuerySpec(call_id="C1", brands={"dots": ["dots"]})],
+    )
+    with pytest.raises(FileNotFoundError):
+        _resolve_x_query_specs(cfg)
+
+
+def test_cycle_aborts_before_provider_when_live_policy_is_missing(tmp_path, monkeypatch):
+    """A missing policy cannot reach TwitterApiClient construction/search."""
+    import os
+
+    os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
+    os.environ.setdefault("TWITTERAPI_IO_SCHEDULED_API_KEY", "dummy_for_smoketest")
+    import django
+
+    django.setup()
+    import monitor.cycle as cycle_module
+    import scripts.harvest_cost.emit as harvest_emit
+    from monitor.cycle import CycleRunner
+    from x_monitor.config import Config
+
+    monkeypatch.chdir(tmp_path)
+    provider_constructions: list[object] = []
+
+    def fake_from_env(cls, purpose):
+        provider_constructions.append(purpose)
+        raise AssertionError("provider must not be constructed on policy failure")
+
+    monkeypatch.setattr(
+        cycle_module.TwitterApiClient,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+    monkeypatch.setattr(harvest_emit, "finalize_and_persist", lambda summary, api: summary)
+    cfg = Config(
+        enabled_models=["dots"], daily_ceiling=100, x_monitor_list_id=123
+    )
+    summary = CycleRunner(cfg=cfg, dry_run=False).run()
+
+    assert provider_constructions == []
+    assert summary["status"] == "aborted"
+    assert "harvest_policy.yaml" in summary["degraded"]["plan"]
+
+
+def test_live_policy_resolution_rejects_fourth_co_pack(tmp_path, monkeypatch):
+    """Derived policy IDs must reject C4 before provider planning."""
+    import yaml
+
+    from monitor.cycle import _resolve_x_query_specs
+    from x_monitor.config import Config
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    policy = {
+        "brands": {
+            name: {"paths": ["co"], "tokens": [name], "co": ["model"]}
+            for name in ("a", "b", "c", "d")
+        },
+        "co_packs": [["a"], ["b"], ["c"], ["d"]],
+    }
+    (config_dir / "harvest_policy.yaml").write_text(
+        yaml.safe_dump(policy), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    cfg = Config(enabled_models=["a"], daily_ceiling=100)
+    with pytest.raises(ValueError, match="C4|call IDs"):
+        _resolve_x_query_specs(cfg)
+
+
+@pytest.mark.parametrize(
+    "call_ids",
+    [
+        ["B1", "B2", "B3", "C1", "C2"],
+        ["B1", "B2", "B3", "C1", "C2", "C3", "C3"],
+        ["B1", "B2", "B3", "C1", "C2", "C3", "C4"],
+    ],
+)
+def test_derived_policy_call_ids_reject_omission_duplicate_or_unknown(call_ids):
+    from x_monitor.query_plan import XQuerySpec
+    from x_monitor.specs_from_policy import validate_derived_call_ids
+
+    specs = [XQuerySpec(call_id=call_id) for call_id in call_ids]
+    with pytest.raises(ValueError, match="call IDs"):
+        validate_derived_call_ids(specs)

@@ -34,9 +34,8 @@ enabled_models:
   - sakana_ai
   - upstage
 # v1.7.x Call B group split. The union of all enabled_models' brand
-# tokens (loaded from data/queries/<brand>.yaml Q2/Q3/Q5/Q6 first
-# paren) exceeds the 512-char X advanced-search cap once we add the
-# 9 new brands (Llama, NeMo, Doubao, Yi, SenseChat, EXAONE, Karakuri,
+# tokens from all enabled brands exceeds the 512-char X advanced-search cap
+# after adding the 9 brands (Llama, NeMo, Doubao, Yi, SenseChat, EXAONE, Karakuri,
 # Kuaishou, Upstage). Splitting into three semantic groups keeps each
 # Call B under cap:
 #   B1: top-presence / global brands (6 brands)
@@ -64,7 +63,7 @@ call_b_groups:
 # from SC1. At $0.15/1k tweets, a full 333/day is ~$0.05/day = ~$1.50/mo.
 daily_ceiling: 333
 
-# Reply-chain cluster threshold (Q3). Tune via PR.
+# Reply-chain cluster threshold. Tune via PR.
 clustering:
   min_commenters: 3
   min_posts: 2
@@ -219,7 +218,7 @@ review_reasons:
   - ambiguous_role
 
 # Skip order when budget is exhausted mid-run. Plan 2026-07-11-002 (U3)
-# reorders from the legacy Q1-Q6 keys to the post-consolidation call ids.
+# uses the post-consolidation logical call IDs.
 # Lowest-recall per-brand wide-net calls drop first under credit pressure;
 # Call A (the curated X-list) is last because it carries the highest
 # signal-per-tweet ratio.
@@ -227,6 +226,7 @@ degraded_skip_order:
   - B3
   - B2
   - B1
+  - C3
   - C2
   - C1
   - A

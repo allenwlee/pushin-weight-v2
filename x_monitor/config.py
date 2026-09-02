@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -54,15 +55,12 @@ VALID_REVIEW_REASONS: frozenset[str] = frozenset(
     }
 )
 
-VALID_QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
-# Plan 2026-07-11-002 (U3): post-consolidation the per-cycle call set is
-# (Call A + C1 + C2 + B1 + B2 + B3). The skip order keys on call_id
-# instead of the retired Q-IDs — Call A is the curated-list wide net
-# (highest signal), the B-specs are wide-net per-brand (lowest recall),
-# the C-specs are co-occurrence-constrained (middle). Skip order is
-# B3 → B2 → B1 → C2 → C1 → A so lowest-recall calls drop first under
-# credit pressure.
-VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2")
+# The v2 scheduler has seven logical calls. This is deliberately independent
+# of KNOWN_MODELS: the latter is a frozen compatibility registry for legacy
+# consumers, while policy/config own the live call vocabulary.
+VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2", "C3")
+# Keep this in lockstep with onboard_brand's existing natural-key contract.
+_NICKNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
 
 class ClusteringConfig(BaseModel):
@@ -561,17 +559,11 @@ class Config(BaseModel):
     review_reasons: list[str] = Field(
         default_factory=lambda: list(VALID_REVIEW_REASONS)
     )
-    # R17 (legacy): skip order was Q6 → Q5 → Q3 → Q2 → Q4 → Q1 (Q6
-    # praise is high-volume / low-decision-signal).
-    #
-    # Plan 2026-07-11-002 (U3): post-consolidation the per-cycle call
-    # set is (A + B1 + B2 + B3 + C1 + C2). Skip order is
-    # B3 → B2 → B1 → C2 → C1 → A so the lowest-recall per-brand
-    # wide-net calls drop first under credit pressure; the curated
-    # X-list (Call A) is last because it carries the highest
+    # C3 is first among the constrained calls because its new aliases have
+    # the broadest result-volume risk. Call A remains last: it has the best
     # signal-per-tweet ratio.
-    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2"]] = Field(
-        default_factory=lambda: ["B3", "B2", "B1", "C2", "C1", "A"]
+    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2", "C3"]] = Field(
+        default_factory=lambda: ["B3", "B2", "B1", "C3", "C2", "C1", "A"]
     )
     # v1.7: x.com list ID for Call A (list-based fan-in). The list is
     # operator-managed (see v1.7 plan §"Operator manual step"). When
@@ -647,14 +639,15 @@ class Config(BaseModel):
     def _validate_models(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("enabled_models must be non-empty (operator must opt in)")
-        seen = set()
+        seen: set[str] = set()
         for m in v:
-            if m not in KNOWN_MODELS:
+            if not isinstance(m, str) or not _NICKNAME_RE.fullmatch(m):
                 raise ValueError(
-                    f"unknown brand_id '{m}'. Known: {sorted(KNOWN_MODELS)}"
+                    f"enabled_models entry {m!r} must be a lowercase nickname "
+                    "(letters, numbers, and underscores)"
                 )
             if m in seen:
-                raise ValueError(f"duplicate brand_id '{m}' in enabled_models")
+                raise ValueError(f"duplicate nickname '{m}' in enabled_models")
             seen.add(m)
         return v
 
@@ -672,7 +665,7 @@ class Config(BaseModel):
     @classmethod
     def _validate_skip_order(cls, v: list[str]) -> list[str]:
         # Plan 2026-07-11-002 (U3): skip-order keys on call_ids now
-        # (was Q1-Q6 in v1.6 / v1.7).
+        # (the legacy Q IDs are no longer valid here).
         if set(v) != set(VALID_CALL_IDS):
             raise ValueError(
                 f"degraded_skip_order must contain exactly {list(VALID_CALL_IDS)}, got {v}"
@@ -722,15 +715,28 @@ class Config(BaseModel):
     @classmethod
     def _validate_rot_per_model(cls, v: dict[str, int]) -> dict[str, int]:
         for m, t in v.items():
-            if m not in KNOWN_MODELS:
-                raise ValueError(
-                    f"query_rot_streak_threshold_per_model: unknown brand_id '{m}'"
-                )
             if t < 1:
                 raise ValueError(
                     f"query_rot_streak_threshold_per_model[{m}] must be >= 1, got {t}"
                 )
         return v
+
+    @model_validator(mode="after")
+    def _validate_rot_override_models(self) -> Config:
+        """Per-brand overrides must belong to this config instance.
+
+        This intentionally does not consult ``KNOWN_MODELS``. A newly
+        onboarded brand is valid as soon as its nickname is enabled here.
+        """
+        unknown = sorted(
+            set(self.query_rot_streak_threshold_per_model) - set(self.enabled_models)
+        )
+        if unknown:
+            raise ValueError(
+                "query_rot_streak_threshold_per_model contains brands not enabled "
+                f"in this config: {unknown}"
+            )
+        return self
 
 
 def load_config(path: Path) -> Config:

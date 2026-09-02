@@ -63,13 +63,13 @@ def test_rejects_unknown_brand_id():
 daily_ceiling: 333
 enabled_models:
   - minimax
-  - bogus_model
+  - bogus model
 daily_ceiling: 100
 """,
         )
         with pytest.raises(ValidationError) as exc_info:
             load_config(path)
-        assert "bogus_model" in str(exc_info.value)
+        assert "bogus model" in str(exc_info.value)
 
 
 def test_rejects_daily_ceiling_zero():
@@ -133,10 +133,9 @@ daily_ceiling: 100
 
 
 def test_default_skip_order_is_r17():
-    """R17: skip order is Q6, Q5, Q3, Q2, Q4, Q1 (Q1 last because release has the
-    highest signal-per-tweet ratio)."""
+    """The seven logical calls have one deterministic degraded skip order."""
     c = Config(enabled_models=["minimax"], daily_ceiling=100)
-    assert c.degraded_skip_order == ["Q6", "Q5", "Q3", "Q2", "Q4", "Q1"]
+    assert c.degraded_skip_order == ["B3", "B2", "B1", "C3", "C2", "C1", "A"]
 
 
 def test_skip_order_must_contain_all_query_ids():
@@ -168,6 +167,27 @@ query_rot_streak_threshold_per_model:
         )
         with pytest.raises(ValidationError):
             load_config(path)
+
+
+def test_accepts_enabled_nickname_outside_legacy_registry():
+    """The v2 config gate is data-driven, not tied to KNOWN_MODELS."""
+    c = Config(enabled_models=["dots"], daily_ceiling=100)
+    assert c.enabled_models == ["dots"]
+
+
+@pytest.mark.parametrize("nickname", ["Dots", "dots model", "-dots", "dots-"])
+def test_rejects_non_nickname_shaped_enabled_model(nickname):
+    with pytest.raises(ValidationError):
+        Config(enabled_models=[nickname], daily_ceiling=100)
+
+
+def test_per_model_rot_threshold_must_use_enabled_nickname():
+    with pytest.raises(ValidationError, match="not enabled"):
+        Config(
+            enabled_models=["dots"],
+            daily_ceiling=100,
+            query_rot_streak_threshold_per_model={"minimax": 5},
+        )
 
 
 def test_rejects_unknown_review_reason():
@@ -279,7 +299,6 @@ def test_search_rejects_non_positive(tmp_path, field):
 def test_call_b_groups_dedup_shape_pinned():
     """The live config.yaml's call_b_groups is the 6/4/4 dedup'd
     shape — the 6 polysemous brands are absent."""
-    import logging
     with tempfile.TemporaryDirectory() as d:
         # Mirror the live config.yaml structure: 4 polysemous brands
         # in C1, 2 in C2, and a dedup'd call_b_groups.

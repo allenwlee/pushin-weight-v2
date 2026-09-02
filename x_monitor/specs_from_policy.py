@@ -70,7 +70,37 @@ __all__ = [
     "expand_version_family",
     "primary_keywords_from_policy",
     "specs_from_policy",
+    "validate_derived_call_ids",
 ]
+
+
+CURRENT_DERIVED_CALL_IDS: frozenset[str] = frozenset(
+    {"B1", "B2", "B3", "C1", "C2", "C3"}
+)
+
+
+def validate_derived_call_ids(specs: Iterable[XQuerySpec]) -> list[XQuerySpec]:
+    """Validate the live policy's B/C shape before provider planning.
+
+    ``specs_from_policy`` remains useful for small fixture policies and thus
+    intentionally stays generic. The Django scheduled path calls this gate
+    after deriving the production policy, where exactly six B/C specs plus
+    synthesized Call A are required.
+    """
+    resolved = list(specs)
+    actual = [spec.call_id for spec in resolved]
+    expected = sorted(CURRENT_DERIVED_CALL_IDS)
+    if len(actual) != len(set(actual)):
+        raise ValueError(
+            "derived harvest policy contains duplicate call IDs: "
+            f"{actual}"
+        )
+    if set(actual) != CURRENT_DERIVED_CALL_IDS:
+        raise ValueError(
+            "derived harvest policy call IDs must be exactly "
+            f"{expected}; got {actual}"
+        )
+    return resolved
 
 
 def expand_version_family(family: VersionFamily | None) -> list[str]:

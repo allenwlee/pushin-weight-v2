@@ -96,7 +96,7 @@ from x_monitor.attribution import (
     attribute_to_brands,
     compile_keyword_index,
 )
-from x_monitor.config import KNOWN_MODELS, Config, CycleConfig, load_config
+from x_monitor.config import Config, CycleConfig, load_config
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -589,7 +589,7 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
     Note that `brand_id` here is the *planner's placeholder*, not a real
     brand: "*" for the list-based Call A, and the first brand in iteration
     order for the B/C specs (x_monitor/query_plan.py:351, 370-379).
-    Disambiguation between the six rows is owned by `call_id`.  Never
+    Disambiguation between the seven rows is owned by `call_id`.  Never
     re-derive brand_id from post-attribution -- that would collapse several
     B/C specs onto one cursor row.
 
@@ -634,7 +634,7 @@ def _read_cursor_since(
         # Defensive: a naive value (USE_TZ flipped, a raw SQL insert, or a
         # value carried over from v1's ISO-string storage) would make the
         # comparison below raise TypeError. The per-call loop has no
-        # try/except, so that would abort the WHOLE cycle -- all six calls --
+        # try/except, so that would abort the WHOLE cycle -- all seven calls --
         # rather than degrade one. Coerce to UTC instead.
         if prior.tzinfo is None:
             logger.warning(
@@ -767,7 +767,7 @@ def _build_brand_index(
     brand_keywords (DB).
     """
     keyword_triples: list[tuple[str, str, bool]] = [
-        (m, m, False) for m in models if m in KNOWN_MODELS
+        (m, m, False) for m in models
     ]
     index = compile_keyword_index(keyword_triples)
     brand_search_terms: dict[str, str] = {
@@ -807,24 +807,29 @@ def _resolve_x_monitor_list_id(cfg: Config) -> int | None:
 def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
     """Resolve per-cycle XQuerySpec list.
 
-    Plan 2026-08-05-001 (3/5): prefer the brand-centric harvest policy
-    (config/harvest_policy.yaml) when present. Fall back to legacy
-    `cfg.x_query_specs` only if the policy file is absent (pre-U5 mode;
-    the migration cutover removes this fallback).
+    The brand-centric harvest policy is the only live Django search source.
+    Missing or invalid policy is a preflight error; checked-in
+    ``cfg.x_query_specs`` remains available for explicitly injected local
+    fixtures and legacy CLI consumers, but is never a production fallback.
 
     Returns:
         list[XQuerySpec] ready for plan_calls(). Already validated by
         the policy loader.
     """
-    # 3/5: try policy first
     policy_path = Path("config") / "harvest_policy.yaml"
-    if policy_path.exists():
-        from x_monitor.harvest_policy import load_policy
-        from x_monitor.specs_from_policy import specs_from_policy
-        policy = load_policy(policy_path)
-        return list(specs_from_policy(policy))
-    # Pre-U5 fallback: legacy x_query_specs
-    return list(cfg.x_query_specs)
+    from x_monitor.harvest_policy import load_policy
+    from x_monitor.specs_from_policy import (
+        specs_from_policy,
+        validate_derived_call_ids,
+    )
+
+    # Do not check exists() and silently select a second source. Let the
+    # missing-file exception identify the failed live preflight explicitly.
+    policy = load_policy(policy_path)
+    specs = validate_derived_call_ids(specs_from_policy(policy))
+    return list(specs)
+
+
 def _upsert_account(raw: dict[str, Any]) -> Account | None:
     """Create or update an Account row from a normalized tweet dict.
 
