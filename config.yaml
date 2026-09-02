@@ -33,10 +33,10 @@ enabled_models:
   - kuaishou
   - sakana_ai
   - upstage
+  - dots
 # v1.7.x Call B group split. The union of all enabled_models' brand
 # tokens from all enabled brands exceeds the 512-char X advanced-search cap
-# after adding the 9 brands (Llama, NeMo, Doubao, Yi, SenseChat, EXAONE, Karakuri,
-# Kuaishou, Upstage). Splitting into three semantic groups keeps each
+# as the enabled brand set grows. Splitting into three semantic groups keeps each
 # Call B under cap:
 #   B1: top-presence / global brands (6 brands)
 #   B2: Chinese-language brands (4 brands)

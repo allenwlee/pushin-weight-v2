@@ -364,3 +364,57 @@ def test_hf_org_values_are_normalized_and_deduplicated_after_url_parsing(
     parsed = read_csv(csv_path)[0]
 
     assert parsed.hf_orgs == ["dots-studio"]
+
+
+def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary():
+    """The reviewed three-brand input is a complete, repeatable identity load."""
+    repo_root = Path(__file__).parents[1]
+    csv_path = (
+        repo_root
+        / "config/brands/2026-08-31-013447-harvester-quality-upgrade.csv"
+    )
+    config_path = repo_root / "config.yaml"
+    policy_path = repo_root / "config/harvest_policy.yaml"
+
+    first_output = _run(csv_path, config_path, policy_path)
+    assert "onboard_brand complete" in first_output
+
+    assert BrandKeyword.objects.get(
+        brand_id="dots", pattern="dots3-note"
+    ).is_primary
+    for brand_id, pattern in (
+        ("hunyuan", "Hy4"),
+        ("hunyuan", "混元"),
+        ("glm", "Ox Alpha"),
+    ):
+        assert not BrandKeyword.objects.get(
+            brand_id=brand_id, pattern=pattern
+        ).is_primary
+
+    tracked_brands = ("dots", "hunyuan", "glm")
+
+    def identity_counts() -> dict[str, int]:
+        return {
+            "brands": Brand.objects.filter(nickname__in=tracked_brands).count(),
+            "brand_companies": BrandCompany.objects.filter(
+                brand_id__in=tracked_brands,
+                company_id__in=("xiaohongshu", "tencent", "zhipu"),
+            ).count(),
+            "companies": Company.objects.filter(
+                nickname__in=("xiaohongshu", "tencent", "zhipu")
+            ).count(),
+            "keywords": BrandKeyword.objects.filter(
+                brand_id__in=tracked_brands
+            ).count(),
+            "hf_orgs": HFOrg.objects.filter(
+                namespace__in=("dots-studio", "tencent", "zai-org")
+            ).count(),
+            "products": Product.objects.filter(
+                repo_id="dots-studio/dots3-note-prev"
+            ).count(),
+        }
+
+    snapshot = identity_counts()
+    second_output = _run(csv_path, config_path, policy_path)
+    assert "unchanged" in second_output
+    assert snapshot == identity_counts()
