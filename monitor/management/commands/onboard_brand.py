@@ -307,9 +307,11 @@ def _validate(
 ) -> list[str]:
     enabled = _enabled_models(config_path)
     policy = None
+    policy_tokens: dict[str, set[str]] = {}
     if not skip_search:
         try:
             policy = load_policy(policy_path)
+            policy_tokens = active_policy_tokens(policy)
         except (OSError, ValueError, TypeError) as exc:
             raise OnboardValidationError(f"invalid harvest policy: {exc}") from exc
     warnings: list[str] = []
@@ -325,7 +327,7 @@ def _validate(
             raise OnboardValidationError(
                 f"brand {row.nickname!r} is not present in harvest policy"
             )
-        expected = _policy_tokens(policy_path, row.nickname)
+        expected = policy_tokens.get(row.nickname, set())
         actual = {_normalized_token(value) for value, _ in row.keywords}
         actual.update(
             _normalized_token(value)

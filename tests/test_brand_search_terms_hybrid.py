@@ -73,9 +73,7 @@ def test_build_brand_index_uses_all_enabled_db_keywords_and_regex(
     BrandKeyword.objects.create(
         brand_id="glm", pattern=r"GLM-[0-9]+", is_regex=True
     )
-    index, search_terms = _build_brand_index(_enabled_models())
-
-    assert search_terms == {}
+    index = _build_brand_index(_enabled_models())
     assert "glm" in detect_brand_mentions("GLM-99", index)
     assert "dots" in detect_brand_mentions("dots3-note Preview", index)
     assert "hunyuan" in detect_brand_mentions("hy4 is genuinely unltd", index)
@@ -90,7 +88,7 @@ def test_disabled_brand_keyword_is_not_compiled(seeded_policy_keywords):
     BrandKeyword.objects.create(
         brand_id="disabled_brand", pattern="disabled-token"
     )
-    index, _ = _build_brand_index(_enabled_models())
+    index = _build_brand_index(_enabled_models())
     assert detect_brand_mentions("disabled-token", index) == []
 
 

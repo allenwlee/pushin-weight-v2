@@ -2078,6 +2078,7 @@ def _build_home_chart_payload(
     *,
     now: datetime | None = None,
     locale: str = "en",
+    brand_projection: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
@@ -2108,7 +2109,8 @@ def _build_home_chart_payload(
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
 
-    brand_projection = _live_brand_projection()
+    if brand_projection is None:
+        brand_projection = _live_brand_projection()
     brand_nicknames = [brand["nickname"] for brand in brand_projection]
     projection_by_nickname = {
         brand["nickname"]: brand for brand in brand_projection
@@ -2506,6 +2508,7 @@ def home(request: HttpRequest) -> HttpResponse:
         window_days,
         initial_filters,
         locale=locale,
+        brand_projection=brands_data,
     )
     initial_chart_payload["applied_filters"] = initial_filters
     sentiment_keys = list(
@@ -2569,7 +2572,11 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         filters={"unsanctioned": "any"},
     )
 
-    initial_chart_payload = _build_home_chart_payload(window_days, {})
+    initial_chart_payload = _build_home_chart_payload(
+        window_days,
+        {},
+        brand_projection=brands_data,
+    )
     initial_chart_payload["applied_filters"] = {}
 
     context = {

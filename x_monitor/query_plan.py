@@ -72,10 +72,9 @@ Tests assert their absence (see test_query_plan_uniform.py).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal
 
-from .queries import X_LENGTH_CAP, assert_under_length_cap
+from .queries import assert_under_length_cap
 
 # Centralized min_faves floor for Call A (the curated-handles list call).
 # Defined here (not in run.py) to avoid the circular import — query_plan
@@ -287,7 +286,7 @@ def _build_query(
             parts.append(f"({' OR '.join(toks)})")
     else:
         parts = []
-        for _brand_id, toks in spec.brands.items():
+        for toks in spec.brands.values():
             if not toks:
                 continue
             parts.append(f"({' OR '.join(toks)})")
@@ -306,17 +305,13 @@ def _build_query(
     # Plan 2026-07-30-002 U2 (R17/KTD4): empty co_occurrence omits the
     # secondary paren entirely. The legacy renderer always emitted
     # `()` which is not a valid X advanced-search token.
-    if not spec.co_occurrence:
-        if spec.c_bare_aliases:
-            bare_aliases = f"({' OR '.join(spec.c_bare_aliases)})"
-            return f"({primary} OR {bare_aliases}) min_faves:{spec.min_faves}"
-        return f"{primary} min_faves:{spec.min_faves}"
-
-    secondary = f"({' OR '.join(spec.co_occurrence)})"
-    constrained = f"{primary} {secondary}"
+    constrained = primary
+    if spec.co_occurrence:
+        secondary = f"({' OR '.join(spec.co_occurrence)})"
+        constrained = f"{primary} {secondary}"
     if spec.c_bare_aliases:
         bare_aliases = f"({' OR '.join(spec.c_bare_aliases)})"
-        return f"({constrained} OR {bare_aliases}) min_faves:{spec.min_faves}"
+        constrained = f"({constrained} OR {bare_aliases})"
     return f"{constrained} min_faves:{spec.min_faves}"
 
 

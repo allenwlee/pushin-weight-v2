@@ -97,6 +97,7 @@ from x_monitor.attribution import (
     compile_keyword_index,
 )
 from x_monitor.config import Config, CycleConfig, load_config
+from x_monitor.harvest_policy import HarvestPolicy
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -758,7 +759,7 @@ def _load_brand_search_terms() -> dict[str, str]:
 
 def _build_brand_index(
     models: list[str],
-) -> tuple[Any, dict[str, str]]:
+) -> Any:
     """Build the live body-attribution index from enabled DB keywords.
 
     ``BrandKeyword`` is the attribution source of truth. Search policy is
@@ -766,9 +767,8 @@ def _build_brand_index(
     policy token must have a literal DB mapping before this index is returned.
     Do not synthesize nickname rows: that masks onboarding and schema drift.
 
-    The second return value is intentionally empty. ``BrandSearchTerm`` is
-    loaded by the caller only for query provenance; it is not a body-keyword
-    fallback.
+    ``BrandSearchTerm`` is loaded separately by the caller only for query
+    provenance; it is not a body-keyword fallback.
     """
     from collections import defaultdict
 
@@ -818,7 +818,7 @@ def _build_brand_index(
         (str(brand_id), str(pattern), bool(is_regex))
         for brand_id, pattern, is_regex in rows
     ]
-    return compile_keyword_index(keyword_triples), {}
+    return compile_keyword_index(keyword_triples)
 
 
 def _resolve_enabled_models(cfg: Config, brand_filter: list[str] | None = None) -> list[str]:
@@ -849,7 +849,13 @@ def _resolve_x_monitor_list_id(cfg: Config) -> int | None:
         return int(list_id)
     except (TypeError, ValueError):
         return None
-def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
+
+
+def _resolve_x_query_specs(
+    cfg: Config,
+    *,
+    policy: HarvestPolicy | None = None,
+) -> list[XQuerySpec]:
     """Resolve per-cycle XQuerySpec list.
 
     The brand-centric harvest policy is the only live Django search source.
@@ -861,7 +867,6 @@ def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
         list[XQuerySpec] ready for plan_calls(). Already validated by
         the policy loader.
     """
-    policy_path = Path("config") / "harvest_policy.yaml"
     from x_monitor.harvest_policy import load_policy
     from x_monitor.specs_from_policy import (
         specs_from_policy,
@@ -870,7 +875,8 @@ def _resolve_x_query_specs(cfg: Config) -> list[XQuerySpec]:
 
     # Do not check exists() and silently select a second source. Let the
     # missing-file exception identify the failed live preflight explicitly.
-    policy = load_policy(policy_path)
+    if policy is None:
+        policy = load_policy(Path("config") / "harvest_policy.yaml")
     specs = validate_derived_call_ids(specs_from_policy(policy))
     return list(specs)
 
@@ -1244,20 +1250,12 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         )
         return []
 
-    x_query_specs = _resolve_x_query_specs(cfg) or []
+    from x_monitor.harvest_policy import load_policy
+    from x_monitor.specs_from_policy import primary_keywords_from_policy
 
-    # 3/5: prefer policy-derived primary_keywords over the DB-backed
-    # keyword table for search-token sourcing (R8). DB remains for
-    # attribution.
-    primary_keywords: dict[str, list[str]] | None = None
-    policy_path = Path("config") / "harvest_policy.yaml"
-    if policy_path.exists():
-        from x_monitor.harvest_policy import load_policy
-        from x_monitor.specs_from_policy import primary_keywords_from_policy
-        policy = load_policy(policy_path)
-        primary_keywords = primary_keywords_from_policy(policy)
-    else:
-        primary_keywords = _load_primary_keywords()
+    policy = load_policy(Path("config") / "harvest_policy.yaml")
+    x_query_specs = _resolve_x_query_specs(cfg, policy=policy)
+    primary_keywords = primary_keywords_from_policy(policy)
 
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
     if brand_filter_raw and isinstance(brand_filter_raw, str):
@@ -2743,7 +2741,7 @@ class CycleRunner:
         calls = self._plan_calls()
         enabled_models = _resolve_enabled_models(self.cfg, None)
         try:
-            index, search_terms = _build_brand_index(enabled_models)
+            index = _build_brand_index(enabled_models)
         except Exception as exc:
             logger.exception("backlog replay attribution preflight failed")
             self._errors.append(f"attribution_preflight: {exc}")
@@ -2755,7 +2753,7 @@ class CycleRunner:
                 "errors": list(self._errors),
             }
         api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
-        search_terms = {**search_terms, **_load_brand_search_terms()}
+        search_terms = _load_brand_search_terms()
         kept_all: list[dict[str, Any]] = []
         replay_started_monotonic = self._monotonic()
         deadline = self.cfg.harvest.start_deadline()
@@ -2898,7 +2896,7 @@ class CycleRunner:
             ]
         enabled_models = _resolve_enabled_models(self.cfg, brand_filter)
         try:
-            index, search_terms = _build_brand_index(enabled_models)
+            index = _build_brand_index(enabled_models)
         except Exception as exc:
             logger.exception("CycleRunner.run: attribution preflight failed")
             summary["status"] = "aborted"
@@ -2915,9 +2913,7 @@ class CycleRunner:
             summary["degraded"]["api_client"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
-        # Merge DB-loaded brand_search_terms into the index-derived map
-        db_search_terms = _load_brand_search_terms()
-        search_terms = {**search_terms, **db_search_terms}
+        search_terms = _load_brand_search_terms()
         list_id = _resolve_x_monitor_list_id(self.cfg)
 
         kept_all: list[dict[str, Any]] = []

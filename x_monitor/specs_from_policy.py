@@ -53,6 +53,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable
 
+from .config import VALID_CALL_IDS
 from .harvest_policy import (
     HANDLE_TIER_OTHER,
     HANDLE_TIER_TOP,
@@ -76,9 +77,7 @@ __all__ = [
 ]
 
 
-CURRENT_DERIVED_CALL_IDS: frozenset[str] = frozenset(
-    {"B1", "B2", "B3", "C1", "C2", "C3"}
-)
+CURRENT_DERIVED_CALL_IDS: frozenset[str] = frozenset(VALID_CALL_IDS) - {"A"}
 
 
 def validate_derived_call_ids(specs: Iterable[XQuerySpec]) -> list[XQuerySpec]:
@@ -125,13 +124,7 @@ def expand_version_family(family: VersionFamily | None) -> list[str]:
             for suffix in family.extra_suffixes
         )
 
-    deduplicated: list[str] = []
-    seen: set[str] = set()
-    for token in tokens:
-        if token not in seen:
-            deduplicated.append(token)
-            seen.add(token)
-    return deduplicated
+    return _dedupe_tokens(tokens)
 
 
 def _dedupe_tokens(tokens: Iterable[str]) -> list[str]:
@@ -199,11 +192,11 @@ def active_policy_tokens(
         if "co" in brand.paths:
             tokens.extend(_expand_tokens(brand.tokens, brand.version_family))
             tokens.extend(brand.c_bare_aliases)
-        normalized = {
-            normalize_policy_token(token)
-            for token in tokens
-            if normalize_policy_token(token)
-        }
+        normalized = set()
+        for token in tokens:
+            normalized_token = normalize_policy_token(token)
+            if normalized_token:
+                normalized.add(normalized_token)
         if normalized:
             result[nickname] = normalized
     return result
@@ -291,32 +284,20 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
                 b.tokens, b.version_family
             )
         # Co group: union of brand.co across the pack (R4 + KTD5).
-        co_terms: list[str] = []
-        seen: set[str] = set()
-        for b in pack_brands:
-            for term in b.co:
-                if term not in seen:
-                    co_terms.append(term)
-                    seen.add(term)
+        co_terms = _dedupe_tokens(
+            term for brand in pack_brands for term in brand.co
+        )
         # not_include: union across the pack (R4 brand-local bleed control).
-        not_include: list[str] = []
-        seen_ni: set[str] = set()
-        for b in pack_brands:
-            for term in b.not_include:
-                if term not in seen_ni:
-                    not_include.append(term)
-                    seen_ni.add(term)
+        not_include = _dedupe_tokens(
+            term for brand in pack_brands for term in brand.not_include
+        )
 
         # Bare aliases intentionally bypass the shared co-occurrence filter:
         # they are the second disjunct of this C call, not another primary
         # token. Preserve co-pack order and deduplicate shared aliases.
-        c_bare_aliases: list[str] = []
-        seen_bare: set[str] = set()
-        for b in pack_brands:
-            for alias in b.c_bare_aliases:
-                if alias not in seen_bare:
-                    c_bare_aliases.append(alias)
-                    seen_bare.add(alias)
+        c_bare_aliases = _dedupe_tokens(
+            alias for brand in pack_brands for alias in brand.c_bare_aliases
+        )
 
         specs.append(XQuerySpec(
             call_id=f"C{idx}",
@@ -339,13 +320,9 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
         brands = handle_brands_by_tier.get(tier, [])
         if not brands:
             continue
-        all_handles: list[str] = []
-        seen_h: set[str] = set()
-        for b in brands:
-            for h in b.handles:
-                if h not in seen_h:
-                    all_handles.append(h)
-                    seen_h.add(h)
+        all_handles = _dedupe_tokens(
+            handle for brand in brands for handle in brand.handles
+        )
         specs.append(XQuerySpec(
             call_id="B2" if tier == HANDLE_TIER_TOP else "B3",
             handles=tuple(all_handles),
