@@ -15,17 +15,10 @@ import pytest
 from x_monitor.config import load_config
 from x_monitor.query_plan import (
     CallCBrandSpec,  # backwards-compat alias for XQuerySpec
-    PlannedCall,
     XQuerySpec,
     _build_query,
     plan_calls,
 )
-
-
-GOLDEN_PATH = (
-    Path(__file__).parent / "golden" / "query_plan_v17_strings.txt"
-)
-
 
 # ----------------------------------------------------------------------
 # 1. Backwards-compat alias — CallCBrandSpec is XQuerySpec.
@@ -67,43 +60,22 @@ def test_build_query_call_a_requires_list_id() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_build_query_call_c_body_matches_golden() -> None:
-    """The Call C body shape produced by `_build_query` is byte-equal
-    to the v1.7.x `_build_call_c_query` output captured in the golden
-    file at U1 time. The two C1 + C2 specs in the live config each
-    pin to one line of the golden file."""
-    text = GOLDEN_PATH.read_text(encoding="utf-8")
-    # Parse the golden file lines starting with "CALLC".
-    c_lines = {
-        line.split("call_id=")[1].split(" ")[0]: line
-        for line in text.splitlines()
-        if line.startswith("CALLC call_id=")
-    }
-    assert "C1" in c_lines and "C2" in c_lines, (
-        f"golden file missing C1/C2 lines: {list(c_lines)}"
-    )
+def test_build_query_call_c_body_uses_uniform_renderer() -> None:
+    """C calls retain one generic renderer, independent of old golden text.
 
-    cfg = load_config(Path("config.yaml"))
-    by_id = {s.call_id: s for s in cfg.x_query_specs}
-    for spec_id, golden_line in c_lines.items():
-        spec = by_id[spec_id]
-        # The golden line embeds the rendered query as a Python repr
-        # string (because the U1 generator used `!r`). The repr starts
-        # and ends with `'` — strip both.
-        rendered = _build_query(spec)
-        # Format: `CALLC call_id=... min_faves=N: '<repr-of-query>'`
-        # Find the `: '` separator and the trailing `'`.
-        idx = golden_line.rfind(": '")
-        assert idx > 0
-        repr_str = golden_line[idx + 3 :]  # skip `: '`
-        # Strip trailing newline / whitespace, then the closing `'`.
-        expected = repr_str.rstrip()
-        if expected.endswith("'"):
-            expected = expected[:-1]
-        assert rendered == expected, (
-            f"Call {spec_id} query differs from golden: "
-            f"expected {expected!r}, got {rendered!r}"
-        )
+    The current policy's exact query exhibit is pinned by
+    ``test_harvest_query_exhibit.py``. This test intentionally checks only
+    renderer grammar so a historical v1.7 golden cannot reject the current
+    policy's legitimate token and pack changes.
+    """
+    spec = XQuerySpec(
+        brands={"mimo": ["MiMo"], "glm": ["glm"]},
+        co_occurrence=["llm", "model"],
+        min_faves=0,
+        call_id="C1",
+    )
+    rendered = _build_query(spec)
+    assert rendered == "((MiMo) OR (glm)) (llm OR model) min_faves:0"
 
 
 # ----------------------------------------------------------------------
@@ -428,8 +400,8 @@ def test_plan_calls_emits_six_calls_with_three_wide_net_specs() -> None:
 def test_plan_calls_wide_net_query_under_cap_with_live_primary_subset() -> None:
     """The live `brand_keywords.is_primary=1` subset produces B-call
     query strings under 512 chars (the X advanced-search cap)."""
-    from x_monitor.store import Store
     from x_monitor.config import load_config
+    from x_monitor.store import Store
 
     cfg = load_config(Path("config.yaml"))
     # Live DB after migration 036.

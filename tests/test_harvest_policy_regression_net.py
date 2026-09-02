@@ -51,6 +51,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_harvest_query_exhibit import EXPECTED_QUERY_EXHIBIT
 from x_monitor.config import load_config
 from x_monitor.harvest_policy import load_policy
 from x_monitor.query_plan import plan_calls
@@ -315,12 +316,9 @@ EXPECTED_AFTER_B3_HANDLES = (
 )
 
 EXPECTED_AFTER_QUERIES = {
-    "B1": "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR dots3 OR dots4) OR (Hunyuan OR 混元 OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview OR Hy5-preview) OR (Hailuo OR MiniMax OR 海螺) OR (Qwen OR Qwen3 OR 通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0",
-    "B2": "(@MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR @Ali_TongyiLab OR @Alibaba_Qwen OR @deepseek_ai OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain OR @MistralAI OR @StepFun_ai OR @stepfunai OR @TencentHunyuan OR @NVIDIAAI OR @NVIDIAAIDev OR @LG_AI_Research OR @SakanaAILabs) min_faves:0",
-    "B3": "(@XiaomiMiMo OR @XiaomiMiMoDevs OR @Kimi_Moonshot OR @ErnieforDevs OR @PaddlePaddle OR @AIatMeta OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @01AI_Yi OR @Kling_ai OR @SenseTime_AI OR @upstageai) min_faves:0",
-    "C1": "((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) OR (MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) (llm OR model OR api OR agentic OR huggingface) min_faves:0",
-    "C2": "((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) min_faves:0",
-    "C3": '(((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR ("Ox Alpha" OR OxAlpha OR ox-alpha)) min_faves:0',
+    call_id: query
+    for call_id, query in EXPECTED_QUERY_EXHIBIT.items()
+    if call_id != "A"
 }
 
 EXPECTED_AFTER_QUERY_LENGTHS = {
