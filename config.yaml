@@ -159,8 +159,8 @@ headline_narrative:
   prompt_version: "headline-v10-why-first-quantitative-color"
   publication_epoch: 10
   materiality_policy_version: "pending-live-review-v1"
-  cadence_minutes: {1: 30, 7: 60, 30: 360, 365: 1440}
-  stale_minutes: {1: 60, 7: 120, 30: 720, 365: 2880}
+  cadence_minutes: {1: 60, 7: 1440, 30: 10080, 365: 43200}
+  stale_minutes: {1: 120, 7: 2880, 30: 20160, 365: 86400}
   min_posts: 20
   min_authors: 10
   contested_ratio: "0.80"

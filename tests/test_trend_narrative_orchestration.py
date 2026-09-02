@@ -204,8 +204,8 @@ def test_work_slots_keep_one_active_and_only_the_latest_queued_cutoff(monkeypatc
         )
     slots = {slot.window_days: slot for slot in TrendNarrativeWorkSlot.objects.all()}
     assert slots[1].queued_source_cycle_id == "cycle-f"
-    assert slots[7].queued_source_cycle_id == "cycle-f"
-    assert slots[30].queued_source_cycle_id == "cycle-f"
+    assert slots[7].queued_source_cycle_id == ""
+    assert slots[30].queued_source_cycle_id == ""
     assert slots[365].queued_source_cycle_id == ""
 
     reconcile_per_brand_trend_narratives(
@@ -213,9 +213,31 @@ def test_work_slots_keep_one_active_and_only_the_latest_queued_cutoff(monkeypatc
         now=NOW + timedelta(minutes=1440),
         enqueue=enqueue,
     )
+    slots = {slot.window_days: slot for slot in TrendNarrativeWorkSlot.objects.all()}
+    assert slots[1].queued_source_cycle_id == "cycle-g"
+    assert slots[7].queued_source_cycle_id == "cycle-g"
+    assert slots[30].queued_source_cycle_id == ""
+    assert slots[365].queued_source_cycle_id == ""
+
+    reconcile_per_brand_trend_narratives(
+        _envelope("cycle-h", NOW + timedelta(minutes=10080)),
+        now=NOW + timedelta(minutes=10080),
+        enqueue=enqueue,
+    )
+    slots = {slot.window_days: slot for slot in TrendNarrativeWorkSlot.objects.all()}
+    assert slots[1].queued_source_cycle_id == "cycle-h"
+    assert slots[7].queued_source_cycle_id == "cycle-h"
+    assert slots[30].queued_source_cycle_id == "cycle-h"
+    assert slots[365].queued_source_cycle_id == ""
+
+    reconcile_per_brand_trend_narratives(
+        _envelope("cycle-i", NOW + timedelta(minutes=43200)),
+        now=NOW + timedelta(minutes=43200),
+        enqueue=enqueue,
+    )
     assert {
         slot.queued_source_cycle_id for slot in TrendNarrativeWorkSlot.objects.all()
-    } == {"cycle-g"}
+    } == {"cycle-i"}
 
 
 def test_expired_and_provider_disabled_envelopes_create_no_runtime_state(monkeypatch):
@@ -655,4 +677,8 @@ def test_budget_counts_reserved_work_and_stops_before_the_next_transport():
 
 def test_active_capacity_fails_closed_when_p95_drain_exceeds_arrival_rate():
     with pytest.raises(ValueError, match="drain rate"):
-        _config(per_brand_p95_latency_seconds="120")
+        _config(
+            cadence_minutes={1: 30, 7: 60, 30: 360, 365: 1440},
+            stale_minutes={1: 60, 7: 120, 30: 720, 365: 2880},
+            per_brand_p95_latency_seconds="120",
+        )

@@ -373,10 +373,10 @@ class HeadlineNarrativeConfig(BaseModel):
         max_length=64,
     )
     cadence_minutes: dict[int, int] = Field(
-        default_factory=lambda: {1: 30, 7: 60, 30: 360, 365: 1440}
+        default_factory=lambda: {1: 60, 7: 1_440, 30: 10_080, 365: 43_200}
     )
     stale_minutes: dict[int, int] = Field(
-        default_factory=lambda: {1: 60, 7: 120, 30: 720, 365: 2880}
+        default_factory=lambda: {1: 120, 7: 2_880, 30: 20_160, 365: 86_400}
     )
     min_posts: int = Field(default=20, ge=1)
     min_authors: int = Field(default=10, ge=1)
