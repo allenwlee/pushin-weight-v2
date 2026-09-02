@@ -795,11 +795,18 @@ def _build_brand_index(
         ) from exc
 
     literal_by_brand: dict[str, set[str]] = defaultdict(set)
+    keyword_triples: list[tuple[str, str, bool]] = []
     for brand_id, pattern, is_regex in rows:
+        compiled_pattern = (
+            str(pattern) if is_regex else normalize_policy_token(pattern)
+        )
+        if not compiled_pattern:
+            continue
+        keyword_triples.append(
+            (str(brand_id), compiled_pattern, bool(is_regex))
+        )
         if not is_regex:
-            normalized = normalize_policy_token(pattern)
-            if normalized:
-                literal_by_brand[brand_id].add(normalized)
+            literal_by_brand[brand_id].add(compiled_pattern)
 
     missing = sorted(
         (brand_id, token)
@@ -814,10 +821,6 @@ def _build_brand_index(
             f"{formatted}"
         )
 
-    keyword_triples = [
-        (str(brand_id), str(pattern), bool(is_regex))
-        for brand_id, pattern, is_regex in rows
-    ]
     return compile_keyword_index(keyword_triples)
 
 
@@ -877,7 +880,9 @@ def _resolve_x_query_specs(
     # missing-file exception identify the failed live preflight explicitly.
     if policy is None:
         policy = load_policy(Path("config") / "harvest_policy.yaml")
-    specs = validate_derived_call_ids(specs_from_policy(policy))
+    specs = validate_derived_call_ids(
+        specs_from_policy(policy, brand_nicknames=cfg.enabled_models)
+    )
     return list(specs)
 
 
@@ -1255,7 +1260,10 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
 
     policy = load_policy(Path("config") / "harvest_policy.yaml")
     x_query_specs = _resolve_x_query_specs(cfg, policy=policy)
-    primary_keywords = primary_keywords_from_policy(policy)
+    primary_keywords = primary_keywords_from_policy(
+        policy,
+        brand_nicknames=cfg.enabled_models,
+    )
 
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
     if brand_filter_raw and isinstance(brand_filter_raw, str):

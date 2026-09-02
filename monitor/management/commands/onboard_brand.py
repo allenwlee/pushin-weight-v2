@@ -15,7 +15,7 @@ from django.db import transaction
 from core.models import Brand, BrandCompany, BrandKeyword, Company, HFOrg, Product
 from monitor.country_codes import COUNTRY_NAMES
 from x_monitor.harvest_policy import load_policy
-from x_monitor.specs_from_policy import active_policy_tokens
+from x_monitor.specs_from_policy import active_policy_tokens, normalize_policy_token
 
 CSV_FIELDS = (
     "brand_nickname",
@@ -71,7 +71,7 @@ def _split(value: str | None) -> list[str]:
 
 
 def _normalized_token(value: str) -> str:
-    return " ".join(value.strip().strip('"').strip("'").split()).casefold()
+    return normalize_policy_token(value)
 
 
 def _normalize_handles(
@@ -548,14 +548,17 @@ class Command(BaseCommand):
                     keyword, keyword_created = BrandKeyword.objects.get_or_create(
                         brand=brand,
                         pattern=pattern,
-                        defaults={"is_primary": is_primary},
+                        defaults={"is_primary": is_primary, "is_regex": False},
                     )
                     if keyword_created:
                         counts["brand_keywords"] += 1
                     else:
                         counts[
                             "unchanged"
-                            if not _update(keyword, {"is_primary": is_primary})
+                            if not _update(
+                                keyword,
+                                {"is_primary": is_primary, "is_regex": False},
+                            )
                             else "brand_keywords"
                         ] += 1
                 for repo_id in row.products:

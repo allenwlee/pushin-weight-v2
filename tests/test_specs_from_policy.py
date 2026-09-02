@@ -9,18 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml
 
 from x_monitor.harvest_policy import BrandPolicy, CoPack, HarvestPolicy, load_policy
-from x_monitor.query_plan import (
-    XQuerySpec,
-    plan_calls,
-)
+from x_monitor.query_plan import XQuerySpec, plan_calls
 from x_monitor.specs_from_policy import (
     primary_keywords_from_policy,
     specs_from_policy,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CFG_PATH = REPO_ROOT / "config.yaml"
@@ -246,6 +241,29 @@ def test_none_path_brand_emits_no_specs():
     assert specs[0].call_id == "B1"
     assert "exaone" not in specs[0].wide_net_brands
     assert "exaone" not in pkws
+
+
+def test_runtime_enabled_models_filter_every_policy_query_contributor(live_policy):
+    enabled = set(live_policy.brands) - {"dots"}
+    specs = specs_from_policy(live_policy, brand_nicknames=enabled)
+    pkws = primary_keywords_from_policy(
+        live_policy,
+        brand_nicknames=enabled,
+    )
+    calls = plan_calls(
+        x_monitor_list_id="1234567890",
+        x_query_specs=specs,
+        primary_keywords=pkws,
+    )
+
+    assert "dots" not in pkws
+    assert all("dots3-note" not in call.query_string for call in calls)
+    assert all("dots" not in spec.wide_net_brands for spec in specs)
+
+
+def test_runtime_enabled_models_reject_unknown_policy_brand(live_policy):
+    with pytest.raises(ValueError, match="missing from harvest policy"):
+        specs_from_policy(live_policy, brand_nicknames=["not_in_policy"])
 
 
 # -------------------------------------------------------------------------

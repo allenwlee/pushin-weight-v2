@@ -19,7 +19,15 @@ from core.models import (
     HFOrg,
     Product,
 )
-from monitor.management.commands.onboard_brand import _policy_tokens, read_csv
+from monitor.cycle import _build_brand_index
+from monitor.management.commands.onboard_brand import (
+    _normalized_token,
+    _policy_tokens,
+    read_csv,
+)
+from x_monitor.attribution import detect_brand_mentions
+from x_monitor.config import load_config
+from x_monitor.specs_from_policy import normalize_policy_token
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -59,12 +67,17 @@ def _row(**overrides: str) -> dict[str, str]:
     return row
 
 
-def _config_and_policy(tmp_path: Path, *, nickname: str = "dots") -> tuple[Path, Path]:
+def _config_and_policy(
+    tmp_path: Path,
+    *,
+    nickname: str = "dots",
+    token: str = "dots3-note",
+) -> tuple[Path, Path]:
     config = tmp_path / "config.yaml"
     config.write_text(f"enabled_models:\n  - {nickname}\n", encoding="utf-8")
     policy = tmp_path / "harvest_policy.yaml"
     policy.write_text(
-        f"brands:\n  {nickname}:\n    paths: [bare]\n    tokens: [dots3-note]\n",
+        f"brands:\n  {nickname}:\n    paths: [bare]\n    tokens: [{token}]\n",
         encoding="utf-8",
     )
     return config, policy
@@ -125,6 +138,57 @@ def test_dots_row_creates_identity_tables(tmp_path: Path):
     assert (
         BrandKeyword.objects.get(brand=brand, pattern="dots3-note").is_primary is True
     )
+    assert (
+        BrandKeyword.objects.get(brand=brand, pattern="dots3-note").is_regex is False
+    )
+
+
+def test_csv_onboarding_repairs_regex_keyword_for_live_attribution(
+    tmp_path: Path, seeded_policy_keywords
+):
+    """PostgreSQL regression: onboarding must make DB keywords literal.
+
+    The live cycle compiles ``BrandKeyword`` rows, so a stale regex flag can
+    make an otherwise valid keyword fail body attribution.
+    """
+    csv_path = tmp_path / "brands.csv"
+    _write_input(
+        csv_path,
+        [
+            _row(
+                brand_nickname="moonshot_kimi",
+                brand_display_name="Kimi",
+                brand_display_name_en="Kimi",
+                keyword_primary="Kimi",
+            )
+        ],
+    )
+    config, policy = _config_and_policy(
+        tmp_path, nickname="moonshot_kimi", token="Kimi"
+    )
+
+    BrandKeyword.objects.filter(
+        brand_id="moonshot_kimi", pattern__iexact="Kimi"
+    ).delete()
+    BrandKeyword.objects.create(
+        brand_id="moonshot_kimi", pattern="Kimi", is_regex=True
+    )
+
+    _run(csv_path, config, policy)
+
+    keyword = BrandKeyword.objects.get(brand_id="moonshot_kimi", pattern="Kimi")
+    assert keyword.is_regex is False
+    repo_root = Path(__file__).parents[1]
+    enabled_models = load_config(repo_root / "config.yaml").enabled_models
+    index = _build_brand_index(list(enabled_models))
+    assert "moonshot_kimi" in detect_brand_mentions(
+        "Moonshot AI's Kimi K3 climbed to third place", index
+    )
+
+
+def test_onboard_token_normalization_matches_policy_normalization():
+    for value in ('  "Ox Alpha"  ', "  Moonshot   AI ", "Kimi"):
+        assert _normalized_token(value) == normalize_policy_token(value)
 
 
 def test_missing_policy_fails_before_any_identity_write(tmp_path: Path):

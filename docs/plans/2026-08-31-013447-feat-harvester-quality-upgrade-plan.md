@@ -95,6 +95,8 @@ Brand identity is not one process today. `load_seed` upserts brand and company f
 
 The live Django cycle has a second gap: it compiles only each enabled nickname for body attribution. It does not compile the `BrandKeyword` aliases that this onboarding flow writes. Without correcting that path, `Hy4`, `dots3-note`, and `Ox Alpha` can be fetched but discarded as unattributed.
 
+Read-only production evidence from 2026-09-02 confirms that this is already a live Kimi attribution hole, not a new workstream. In `pushinweight-db-shadow`, `moonshot_kimi` had no insert after 2026-08-19 (`Kimi_Moonshot`), while 2,115 fetched posts in the same seven-day window contained the word `kimi` and none had `posts_brands.brand_id=moonshot_kimi`. Tweet `2094999721551225267` ("Moonshot AI's Kimi K3 climbed to third place…") was attributed only to `deepseek` and `qwen`. For C1 in cycle `20260902T043025`, `n_results=3`, `n_kept=2`, `n_inserted=0`, and `not_include_drops=0`, so the F1 exclusion was not the live cause. Current `main` emits the right C1 tokens but `_build_brand_index` compiles enabled nicknames instead of database aliases such as `Kimi`, `MoonshotAI`, and `月之暗面`; because `CycleRunner` also passes `search_query=[]`, `BrandSearchTerm` does not stamp the alias and the fetched Kimi-only post falls into `_unattributed`.
+
 Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so posts that only say `Hy4` never match. Adding only `Hy4` would miss `Hy5`. GLM is handle-only (`@Zai_org` on B2). Bare `glm` is also Genelec, fandom GLM/SLM, stats GLM, and handle-substring junk. Xiaohongshu shipped `dots3-note Preview`. Ox Alpha was confirmed as GLM-5.3-Flash.
 
 ### Key Decisions
@@ -158,6 +160,7 @@ Separately, Hunyuan B1 tokens are `Hunyuan` / `混元` / `腾讯混元`, so post
 - AE13. Covers R9. Given enabled-brand `BrandKeyword` rows for `Hy4`, `dots3-note`, and `Ox Alpha`, when the real `CycleRunner.run()` path scans matching bodies, each post receives the expected brand; removing any one mapping fails preflight before the fake provider is called.
 - AE14. Covers R16. Given default config and policy, when the derived call set and degraded skip order are validated, all seven current call IDs appear exactly once, C3 is skippable, no `Q*` ID appears, and a fourth co-pack is rejected instead of producing C4.
 - AE15. Covers R12, R15. Given the tracked three-row CSV, when it is applied twice to the selected target database, the second run reports no duplicate identity, link, keyword, HF org, or product rows.
+- AE16. Covers R9. Given a fetched body that says `Moonshot AI's Kimi K3 climbed to third place` and only the `moonshot_kimi` database aliases match (the nickname itself does not appear), when the real `CycleRunner.run()` path attributes and persists it, `PostBrand(post, moonshot_kimi)` exists.
 
 ### Success Criteria
 
@@ -474,11 +477,13 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   3. Do not synthesize nickname fallback rows. A missing mapping blocks the cycle with the brand and token named; additional database aliases remain valid for posts reached through other collection paths.
   4. Keep `BrandSearchTerm` limited to search-query provenance. Do not duplicate new aliases into that table to compensate for the compiler input.
   5. Remove the live `CycleRunner` filter through `KNOWN_MODELS`; U9 owns config validation.
+  6. Treat the 2026-09-02 production Kimi miss as the concrete live regression that this unit closes: compile `Kimi`, `MoonshotAI`, and `月之暗面` from `BrandKeyword`; do not add a nickname/search-term fallback.
 - **Patterns to follow:** `compile_keyword_index` already accepts `(brand_id, pattern, is_regex)` rows and `Store.read_brand_keywords` documents the intended shape.
 - **Test scenarios:**
   - Covers AE13. A fake-provider `CycleRunner.run()` persists `PostBrand(dots)` for a body containing `dots3-note` after the keyword is seeded only in DB.
   - Covers AE1. The same full path persists hunyuan for a body containing `Hy4` without the word Hunyuan.
   - Covers AE5. The same full path persists glm for a body containing `Ox Alpha` without a co word.
+  - Covers AE16. The same full path persists `moonshot_kimi` for `Moonshot AI's Kimi K3 climbed to third place` using DB keywords only, with no `moonshot_kimi` nickname in the body.
   - Edge: a keyword belonging to a disabled brand is not compiled or attributed.
   - Edge: a regex keyword is compiled with its existing `is_regex` semantics.
   - Error: remove only the `Ox Alpha` database mapping while policy still emits it; preflight names glm/Ox Alpha and the fake provider receives zero calls.
@@ -493,7 +498,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
 - **Files:** `tests/test_harvest_policy_regression_net.py`, `tests/test_harvest_surface_regression_net.py`, `tests/test_harvest_query_exhibit.py`, `tests/test_cycle_regression_net.py`, `tests/test_cmd_run_query_id.py`, `docs/how-to/add-tracked-brand.md`
 - **Approach:**
   1. Golden-pin B1, B2, C3 AFTER strings from the Appendix.
-  2. Fake TwitterAPI on the real `plan_calls_for_cycle` / `CycleRunner.run()` path captures `query=` kwargs for all logical calls and persists the three new attribution examples (M18).
+  2. Fake TwitterAPI on the real `plan_calls_for_cycle` / `CycleRunner.run()` path captures `query=` kwargs for all logical calls and persists the three new attribution examples plus the production-derived Kimi-only example (M18).
   3. Pin logical call count == 7, current IDs only, per-call pagination/search caps, and length cap. Do not assert that the provider receives only seven HTTP requests.
   4. Pin the active policy-token set as a normalized subset of enabled-brand `BrandKeyword` rows and prove that a missing mapping stops before the fake provider call while attribution-only aliases remain allowed.
   5. Run `scripts.harvest_cost` against representative summary fixtures to record the expected B1/C3 result-volume sensitivity without consuming provider credits.
@@ -505,6 +510,7 @@ Reconcile this worktree with `origin/main` before editing because the branch pre
   - Edge: adding a token that pushes C3 over 512 fails the length cap test, not a silent truncate.
   - Edge: adding a fourth co-pack fails the exact call-set preflight, not a C4 provider request.
   - Edge: deleting a database mapping for any active version-family or bare-alias token prevents every provider request in that cycle.
+  - Regression: the production-derived Kimi-only body persists `PostBrand(moonshot_kimi)` from DB keywords, proving the fetched result no longer falls into `_unattributed`.
   - Cost: fixture comparison keeps seven logical calls and makes any B1/C3 result-count increase visible in estimated credits.
 - **Verification:** Named tests, preview output, fake-provider captures, and fixture cost report agree.
 

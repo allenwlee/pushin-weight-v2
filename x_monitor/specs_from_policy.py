@@ -242,17 +242,44 @@ def _is_skipped(brand: BrandPolicy) -> bool:
     return brand.paths == frozenset({"none"})
 
 
-def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
+def _selected_brand_nicknames(
+    policy: HarvestPolicy,
+    brand_nicknames: Iterable[str] | None,
+) -> set[str]:
+    selected = (
+        {str(nickname) for nickname in brand_nicknames}
+        if brand_nicknames is not None
+        else set(policy.brands)
+    )
+    unknown = sorted(selected - set(policy.brands))
+    if unknown:
+        raise ValueError(
+            "enabled brands missing from harvest policy: "
+            + ", ".join(unknown)
+        )
+    return selected
+
+
+def specs_from_policy(
+    policy: HarvestPolicy,
+    *,
+    brand_nicknames: Iterable[str] | None = None,
+) -> list[XQuerySpec]:
     """Derive XQuerySpec list from a loaded HarvestPolicy.
 
     See module docstring for ordering and tier semantics. Does NOT load
     primary keywords — those are passed at render time by the caller
     (same pattern as the current `_load_primary_keywords` call in
-    plan_calls_for_cycle).
+    plan_calls_for_cycle). When ``brand_nicknames`` is supplied, only that
+    runtime-enabled set contributes tokens or handles. Empty required packs
+    are omitted so the live exact-call-set gate fails closed.
     """
     specs: list[XQuerySpec] = []
+    selected = _selected_brand_nicknames(policy, brand_nicknames)
     eligible_brands: list[BrandPolicy] = [
-        b for b in policy.brands.values() if not _is_skipped(b)
+        b
+        for b in policy.brands.values()
+        if b.nickname in selected and not _is_skipped(b)
     ]
 
     # --- B1 (wide-net bare/versioned_bare fan-out) ----------------------------
@@ -273,8 +300,12 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
     # --- C-specs (one per co_pack) -------------------------------------------
     for idx, pack in enumerate(policy.co_packs, start=1):
         pack_brands: list[BrandPolicy] = [
-            policy.brands[n] for n in pack.brand_nicknames
+            policy.brands[n]
+            for n in pack.brand_nicknames
+            if n in selected
         ]
+        if not pack_brands:
+            continue
         # Primary group: one paren per brand, OR-joined into the outer paren.
         # Tokens per brand = declared tokens plus any version-family expansion;
         # the planner joins them via _build_query's existing OR-of-paren path.
@@ -333,15 +364,20 @@ def specs_from_policy(policy: HarvestPolicy) -> list[XQuerySpec]:
     return specs
 
 
-def primary_keywords_from_policy(policy: HarvestPolicy) -> dict[str, list[str]]:
+def primary_keywords_from_policy(
+    policy: HarvestPolicy,
+    *,
+    brand_nicknames: Iterable[str] | None = None,
+) -> dict[str, list[str]]:
     """Build the `primary_keywords` dict the renderer needs for wide-net specs.
 
     For 3/5 the source is the policy file (R8); the DB keyword table
     remains for attribution. Order is alphabetical for determinism.
     """
+    selected = _selected_brand_nicknames(policy, brand_nicknames)
     out: dict[str, list[str]] = {}
     for b in policy.brands.values():
-        if _is_skipped(b):
+        if b.nickname not in selected or _is_skipped(b):
             continue
         if ("bare" in b.paths) or ("versioned_bare" in b.paths):
             out[b.nickname] = _bare_token_list(b)

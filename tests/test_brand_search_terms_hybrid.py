@@ -92,7 +92,7 @@ def test_disabled_brand_keyword_is_not_compiled(seeded_policy_keywords):
     assert detect_brand_mentions("disabled-token", index) == []
 
 
-def test_real_cycle_persists_db_only_dots_hy4_and_ox_alpha(
+def test_real_cycle_persists_db_only_aliases_including_production_kimi_miss(
     seeded_policy_keywords, monkeypatch
 ):
     api = FakeApi(
@@ -100,6 +100,10 @@ def test_real_cycle_persists_db_only_dots_hy4_and_ox_alpha(
             _tweet("u8-dots", "dots3-note Preview is out"),
             _tweet("u8-hy", "hy4 is genuinely unltd"),
             _tweet("u8-ox", "Ox Alpha is no longer available"),
+            _tweet(
+                "2094999721551225267",
+                "Moonshot AI's Kimi K3 climbed to third place",
+            ),
         ]
     )
     monkeypatch.setattr(
@@ -124,6 +128,50 @@ def test_real_cycle_persists_db_only_dots_hy4_and_ox_alpha(
     assert PostBrand.objects.filter(post_id="u8-dots", brand_id="dots").exists()
     assert PostBrand.objects.filter(post_id="u8-hy", brand_id="hunyuan").exists()
     assert PostBrand.objects.filter(post_id="u8-ox", brand_id="glm").exists()
+    assert PostBrand.objects.filter(
+        post_id="2094999721551225267",
+        brand_id="moonshot_kimi",
+    ).exists()
+
+
+def test_real_cycle_normalizes_quoted_literal_before_compilation(
+    seeded_policy_keywords, monkeypatch
+):
+    BrandKeyword.objects.filter(
+        brand_id="moonshot_kimi",
+        pattern="kimi",
+    ).update(pattern='  "Kimi"  ')
+    api = FakeApi(
+        [
+            _tweet(
+                "u8-kimi-normalized",
+                "Moonshot AI's Kimi K3 climbed to third place",
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient,
+        "from_env",
+        classmethod(lambda cls, _purpose: api),
+    )
+    monkeypatch.setattr(
+        CycleRunner,
+        "_run_post_fetch",
+        lambda self, items, **kwargs: {},
+        raising=False,
+    )
+
+    stats = CycleRunner(cycle_kind="scheduled").run()
+
+    assert api.searches
+    assert stats["status"] in {"completed", "degraded"}
+    assert PostBrand.objects.filter(
+        post_id="u8-kimi-normalized",
+        brand_id="moonshot_kimi",
+    ).exists()
 
 
 def test_missing_policy_mapping_blocks_provider_construction(

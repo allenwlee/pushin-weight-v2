@@ -58,6 +58,23 @@ def test_plan_calls_for_cycle_accepts_cfg_kwarg():
     assert isinstance(result, list)
 
 
+def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
+    """The production planner and attribution preflight use one brand set."""
+    _django_setup()
+    from monitor.cycle import plan_calls_for_cycle
+    from x_monitor.config import load_config
+
+    cfg = load_config(CONFIG_PATH)
+    cfg.enabled_models.remove("dots")
+
+    calls = plan_calls_for_cycle(cfg=cfg)
+
+    assert {call.call_id for call in calls} == {
+        "A", "B1", "B2", "B3", "C1", "C2", "C3"
+    }
+    assert all("dots3-note" not in call.query_string for call in calls)
+
+
 def test_cycle_runner_plan_calls_does_not_abort_with_self_undefined():
     """CycleRunner._plan_calls() must return the 7-call layout, not [].
 
@@ -147,6 +164,14 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
                     "lang": "en",
                     "created_at": "Sat Jul 25 12:00:02 +0000 2026",
                 },
+                {
+                    "id": "2094999721551225267",
+                    "author_id": "u5-author-kimi",
+                    "author_handle": "u5_kimi",
+                    "text": "Moonshot AI's Kimi K3 climbed to third place",
+                    "lang": "en",
+                    "created_at": "Sat Jul 25 12:00:03 +0000 2026",
+                },
             ], False
 
     api = FakeApi()
@@ -188,3 +213,6 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
     assert PostBrand.objects.filter(post_id="u5-dots", brand_id="dots").exists()
     assert PostBrand.objects.filter(post_id="u5-hy", brand_id="hunyuan").exists()
     assert PostBrand.objects.filter(post_id="u5-ox", brand_id="glm").exists()
+    assert PostBrand.objects.filter(
+        post_id="2094999721551225267", brand_id="moonshot_kimi"
+    ).exists()
