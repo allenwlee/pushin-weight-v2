@@ -10,6 +10,7 @@ from monitor.views import (
     _feed_geography_wire,
     _feed_signal_inspections,
     _localize_classification_value,
+    _post_matches_filter,
 )
 
 GUIDING_COUNTRIES = {
@@ -143,8 +144,8 @@ def test_english_region_direction_is_compact_presentation_only(
     ("language", "en", "zh_cn"),
     (
         ("en-US", "en", "英语"),
-        ("zh-Hans", "zh", "简体中文"),
-        ("zh-Hant", "zh", "繁体中文"),
+        ("zh-Hans", "zh-Hans", "zh-Hans"),
+        ("zh-Hant", "zh-Hant", "zh-Hant"),
         ("other", "other", "其他"),
         (None, "undetected", "未检测"),
     ),
@@ -156,6 +157,18 @@ def test_language_projection_uses_persisted_value_only(
 ) -> None:
     assert _compact_language_display(language, "en") == en
     assert _compact_language_display(language, "zh_cn") == zh_cn
+
+
+def test_language_filter_maps_persisted_simplified_and_keeps_traditional_other() -> None:
+    assert _post_matches_filter(
+        {"lang_detected": "zh-Hans"}, {"lang": ["zh-hans"]}
+    )
+    assert not _post_matches_filter(
+        {"lang_detected": "zh-Hant"}, {"lang": ["zh-hans"]}
+    )
+    assert _post_matches_filter(
+        {"lang_detected": "zh-Hant"}, {"lang": ["other"]}
+    )
 
 
 def test_deduplicated_signal_inspection_retains_every_brand() -> None:

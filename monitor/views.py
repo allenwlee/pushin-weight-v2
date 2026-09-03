@@ -122,6 +122,18 @@ _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "undetected", "other",
 )
 
+_DASHBOARD_LANG_PERSISTED_VALUES: dict[str, str] = {
+    "zh-hans": "zh-Hans",
+}
+_DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE: dict[str, str] = {
+    persisted_value: filter_key
+    for filter_key, persisted_value in _DASHBOARD_LANG_PERSISTED_VALUES.items()
+}
+_DASHBOARD_LANG_KNOWN_PERSISTED_VALUES: tuple[str, ...] = tuple(
+    _DASHBOARD_LANG_PERSISTED_VALUES.get(value, value)
+    for value in _DASHBOARD_LANG_FILTER_KEYS
+)
+
 _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
     "en": "English",
     "zh-hans": "简体中文",
@@ -935,16 +947,16 @@ def _compact_language_display(lang_detected: str | None, locale: str) -> str:
         return "其他" if use_zh else "other"
     if normalized in {"und", "unknown", "undetected"}:
         return "未检测" if use_zh else "undetected"
+    if normalized in {"zh", "zh-cn", "zh-hans"}:
+        return "zh-Hans"
+    if normalized in {"zh-hant", "zh-tw", "zh-hk", "zh-mo"}:
+        return "zh-Hant"
 
     primary = normalized.split("-", 1)[0]
     if not re.fullmatch(r"[a-z]{2}", primary):
         return "其他" if use_zh else "other"
     if not use_zh:
         return primary
-    if normalized in {"zh-hant", "zh-tw", "zh-hk", "zh-mo"}:
-        return "繁体中文"
-    if primary == "zh":
-        return "简体中文"
     return _COMPACT_LANG_NAMES_ZH_CN.get(primary, "其他")
 
 
@@ -1962,6 +1974,9 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             return False
         else:
             post_lang = post.get("lang_detected")
+            post_lang = _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE.get(
+                post_lang, post_lang
+            )
             if not post_lang:
                 if "undetected" not in lang:
                     return False
@@ -2018,13 +2033,17 @@ def _filter_home_posts_queryset(
         if not active:
             return queryset.none()
         if axis == "lang":
-            known = [value for value in active if value not in {"other", "undetected"}]
+            known = [
+                _DASHBOARD_LANG_PERSISTED_VALUES.get(value, value)
+                for value in active
+                if value not in {"other", "undetected"}
+            ]
             condition = Q(lang_detected__in=known)
             if "undetected" in active:
                 condition |= Q(lang_detected__isnull=True) | Q(lang_detected="")
             if "other" in active:
                 condition |= (
-                    ~Q(lang_detected__in=_DASHBOARD_LANG_FILTER_KEYS)
+                    ~Q(lang_detected__in=_DASHBOARD_LANG_KNOWN_PERSISTED_VALUES)
                     & ~Q(lang_detected="")
                     & Q(lang_detected__isnull=False)
                 )

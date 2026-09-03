@@ -528,6 +528,64 @@ class TestFeedViewIntegration:
         resp = client.get("/feed/", secure=True)
         assert resp.status_code == 200
 
+    @pytest.mark.requires_postgres
+    def test_feed_filters_canonical_chinese_scripts_without_merging_them(
+        self, client
+    ):
+        import json
+
+        from django.utils import timezone
+
+        from core.models import Post
+
+        complete = {
+            "created_at": timezone.now(),
+            "text_en": "English translation",
+            "text_zh_cn": "中文翻译",
+            "commentary_en": "English commentary",
+            "commentary_zh_cn": "中文评论",
+        }
+        Post.objects.create(
+            tweet_id="language-filter-hans",
+            text="简体中文原文",
+            lang_detected="zh-Hans",
+            **complete,
+        )
+        Post.objects.create(
+            tweet_id="language-filter-hant",
+            text="繁體中文原文",
+            lang_detected="zh-Hant",
+            **complete,
+        )
+
+        simplified = client.get(
+            "/feed/",
+            {
+                "locale": "en",
+                "window": 1,
+                "filters": json.dumps({"lang": ["zh-hans"], "window": 1}),
+            },
+            secure=True,
+        ).json()
+        assert [row["tweet_id"] for row in simplified["rows"]] == [
+            "language-filter-hans"
+        ]
+        assert simplified["rows"][0]["language_display"] == "zh-Hans"
+
+        other = client.get(
+            "/feed/",
+            {
+                "locale": "zh_cn",
+                "window": 1,
+                "filters": json.dumps({"lang": ["other"], "window": 1}),
+            },
+            secure=True,
+        ).json()
+        assert [row["tweet_id"] for row in other["rows"]] == [
+            "language-filter-hant"
+        ]
+        assert other["rows"][0]["language_display"] == "zh-Hant"
+
     def test_home_internal_canvas_chart_is_not_owned_by_htmx(self, client, django_user_model):
         user = django_user_model.objects.create_user(
             username="internal-chart-user", password="pass",
