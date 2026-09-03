@@ -202,6 +202,11 @@ brands:
     tokens:
     - dots3-note
     - dots studio
+    - dots.ocr
+    - dots.tts
+    - dots.llm1
+    - dots.vlm
+    - dots.mocr
     notes: B1 bare-keyword fan-out (live wire path).
     version_family:
       prefix: dots

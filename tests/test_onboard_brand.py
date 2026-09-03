@@ -562,6 +562,16 @@ def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
     assert BrandKeyword.objects.get(
         brand_id="dots", pattern="dots3-note"
     ).is_primary
+    for pattern in (
+        "dots.ocr",
+        "dots.tts",
+        "dots.llm1",
+        "dots.vlm",
+        "dots.mocr",
+    ):
+        keyword = BrandKeyword.objects.get(brand_id="dots", pattern=pattern)
+        assert keyword.is_primary is False
+        assert keyword.is_regex is False
     for brand_id, pattern in (
         ("hunyuan", "Hy4"),
         ("hunyuan", "混元"),

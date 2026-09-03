@@ -35,7 +35,8 @@ EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "B2", "B3")
 EXPECTED_QUERY_EXHIBIT = {
     "A": "(list:2067062923525275922) min_faves:0",
     "B1": (
-        "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR dots3 OR dots4) "
+        "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR dots.ocr OR "
+        "dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR dots3 OR dots4) "
         "OR (Hunyuan OR 混元 OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview "
         "OR Hy5-preview) OR (Hailuo OR MiniMax OR 海螺) OR (Qwen OR Qwen3 OR "
         "通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0"
@@ -90,6 +91,29 @@ def test_current_planner_order_and_exact_queries_match_exhibit() -> None:
     assert tuple(call.call_id for call in calls) == EXPECTED_PLANNER_CALL_ORDER
     assert {call.call_id: call.query_string for call in calls} == EXPECTED_QUERY_EXHIBIT
     assert all(call.query_length == len(call.query_string) for call in calls)
+
+
+def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:
+    """Call-chain pin: family product names ride B1; bare 'dots' does not."""
+    import csv
+
+    calls = _planned_calls()
+    b1 = next(call.query_string for call in calls if call.call_id == "B1")
+    for token in ("dots.ocr", "dots.tts", "dots.llm1", "dots.vlm", "dots.mocr"):
+        assert token in b1
+    policy = load_policy(POLICY_PATH)
+    assert "dots" not in policy.brands["dots"].tokens
+
+    csv_path = REPO_ROOT / "config/brands/2026-08-31-013447-harvester-quality-upgrade.csv"
+    with csv_path.open(newline="", encoding="utf-8") as stream:
+        dots_row = next(
+            row for row in csv.DictReader(stream) if row["brand_nickname"] == "dots"
+        )
+    aliases = dots_row["keyword_aliases"].split("|")
+    for token in ("dots.ocr", "dots.tts", "dots.llm1", "dots.vlm", "dots.mocr"):
+        assert token in aliases
+    assert "dots" not in aliases
+    assert "dots" != dots_row["keyword_primary"]
 
 
 def test_exhibit_keeps_the_seven_logical_call_contract() -> None:

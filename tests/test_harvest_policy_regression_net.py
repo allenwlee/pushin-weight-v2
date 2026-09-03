@@ -322,7 +322,7 @@ EXPECTED_AFTER_QUERIES = {
 }
 
 EXPECTED_AFTER_QUERY_LENGTHS = {
-    "B1": 236, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
+    "B1": 298, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
 }
 
 
@@ -399,7 +399,16 @@ def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     dots = harvest_policy.brands["dots"]
     assert dots.paths == frozenset({"bare"})
     assert not dots.handles
-    assert dots.tokens == ("dots3-note", "dots studio")
+    assert dots.tokens == (
+        "dots3-note",
+        "dots studio",
+        "dots.ocr",
+        "dots.tts",
+        "dots.llm1",
+        "dots.vlm",
+        "dots.mocr",
+    )
+    assert "dots" not in dots.tokens
     assert dots.version_family is not None
     assert (dots.version_family.prefix, dots.version_family.current_major) == ("dots", 3)
     assert (dots.version_family.lookback, dots.version_family.lookahead) == (0, 1)
