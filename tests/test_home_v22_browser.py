@@ -4318,6 +4318,18 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 page.locator(".app-name > .app-mark use").get_attribute("href"),
                                 "#mark-quiet",
                             )
+                            mark_geometry = page.locator(".app-name > .app-mark").evaluate(
+                                """icon => {
+                                  const iconBox = icon.getBoundingClientRect();
+                                  const markBox = icon.querySelector('use').getBoundingClientRect();
+                                  return {iconHeight: iconBox.height, markHeight: markBox.height};
+                                }"""
+                            )
+                            self.assertAlmostEqual(
+                                mark_geometry["markHeight"],
+                                mark_geometry["iconHeight"],
+                                delta=0.02,
+                            )
                             self.assertEqual(
                                 page.locator(".app-name").evaluate(
                                     "node => [...node.children].map(child => child.classList[0])"

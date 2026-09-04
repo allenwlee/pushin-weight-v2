@@ -147,10 +147,16 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, _, body in _symbols(alternate_source)
     }
+    view_boxes = {symbol_id: view_box for symbol_id, view_box, _ in symbols}
 
     assert tuple(symbol_id for symbol_id, _, _ in symbols) == RUNTIME_SYMBOLS
     assert len(set(RUNTIME_SYMBOLS)) == 33
-    assert all(view_box == "0 0 24 24" for _, view_box, _ in symbols)
+    assert view_boxes["mark-quiet"] == "4.24 2.3494 15.55 19.2724"
+    assert all(
+        view_box == "0 0 24 24"
+        for symbol_id, view_box, _ in symbols
+        if symbol_id != "mark-quiet"
+    )
     assert all(re.search(r"<(?:path|circle|line|polyline|polygon|rect)\b", body) for _, _, body in symbols)
     assert set(SOURCE_SYMBOLS) - set(RUNTIME_SYMBOLS) == {
         "mark-cast",
