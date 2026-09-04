@@ -152,20 +152,20 @@ def test_post_checkout_missing_cli_is_nonblocking_and_actionable(
 
 
 def test_post_checkout_passes_metacharacter_paths_as_data(tmp_path: Path) -> None:
-    sentinel = tmp_path / "should-not-exist"
     primary, linked = _linked_worktree(
         tmp_path,
         linked_name="linked worktree $(touch should-not-exist)",
     )
+    sentinel = linked / "should-not-exist"
     log = tmp_path / "ollija.log"
     cli_dir = _write_fake_cli(tmp_path / "fake-bin", log=log)
 
     result = _run_hook(linked, path=_path_with(cli_dir))
 
     assert result.returncode == 0
-    logged = log.read_text(encoding="utf-8")
-    assert str(linked) in logged
-    assert str(primary) in logged
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        f"standalone|{linked}|annotate-plan||{linked}|{primary}|1"
+    ]
     assert not sentinel.exists()
 
 
