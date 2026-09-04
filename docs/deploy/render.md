@@ -12,7 +12,7 @@ verification; the Ollija plan guide owns delivery coordination only.
 
 The parent delivery workflow reads the selected target and current Ollija
 Delivery Guide from its plan before making Git or Render changes, and refreshes
-it with `./bin/ollija annotate-plan <plan-path> --check`. It pushes the exact
+it with `ollija annotate-plan <plan-path> --check`. It pushes the exact
 candidate SHA to `staging`, confirms the staging deployment reports that same
 SHA, and, only when the plan's recorded target is production, promotes the
 unchanged SHA to `main` after staging passes. The workflow confirms the

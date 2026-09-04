@@ -48,7 +48,7 @@ key is preferred, but it still consumes the shared account quota.
 Stop at the first failed gate. Do not Trigger Run and do not try a plain
 command as a workaround.
 
-1. Run `./bin/ollija annotate-plan <plan-path> --check`; confirm the recorded
+1. Run `ollija annotate-plan <plan-path> --check`; confirm the recorded
    target matches the owner's current selection and the candidate
    worktree/branch are canonical. A production target still requires every
    staging-first gate in the generated guide.

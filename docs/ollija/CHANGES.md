@@ -5,6 +5,10 @@ rule changes. It explains why a change was necessary, what changed, how it was
 proved, and its delivery impact. It complements Git history and plans; no
 Ollija command reads, validates, or enforces this file.
 
+This ledger now records PushinWeight consumer-policy history. Future Ollija
+engine, packaging, initialization, and neutral-skill changes belong in the
+standalone Ollija repository's changelog.
+
 Use this compact template:
 
 ```md
@@ -22,6 +26,32 @@ Release impact: Application, database, production-data, staging, or approval eff
 
 Related: Optional issue, plan, or solution link.
 ```
+
+## 2026-09-04 — Adopt standalone Ollija
+
+Type: Refactor
+
+Problem: PushinWeight carried a second Ollija implementation, wrapper, local
+skill, and duplicate engine tests after Ollija moved to its own repository.
+The two copies could drift, and current guidance still selected the embedded
+command.
+
+New behavior: Humans, agents, and the tracked post-checkout hook invoke the
+separately installed `ollija` command. PushinWeight retains only its
+project-specific `.ollija/` delivery contract, focused consumer integration
+tests, current operating guidance, and ignored local state.
+
+Proof: The embedded 74-test baseline and the standalone 109-test suite pass
+before deletion. The final `pytest tests/ollija` suite, standalone
+`annotate-plan --check`, installation-provenance check, and repository
+hygiene scan prove the consumer boundary after deletion.
+
+Release impact: No application, database, production-data, harvester, UI, or
+Render topology behavior changes. The exact candidate still follows the
+ordinary staging-first production guide.
+
+Related:
+`docs/plans/2026-09-04-055757-feat-use-standalone-ollija-plan.md`
 
 ## 2026-08-18 — Add bounded autonomous task control
 

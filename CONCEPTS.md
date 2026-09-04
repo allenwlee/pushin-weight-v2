@@ -4,16 +4,23 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 ## Ollija plan guidance
 
+### Standalone Ollija
+
+The separately installed planning tool whose source lives in the standalone
+Ollija repository. Humans, agents, and the tracked Git hook invoke its
+`ollija` console command. PushinWeight does not carry an Ollija runtime; it
+retains the consumer-specific `.ollija/` delivery contract and ignored state.
+
 ### Authoritative host
 
 `fuchitalee`, the authoritative host for PushinWeight's repository and Ollija
-configuration. `allenwlee` is a keyboard/browser endpoint, not a second
-authoritative checkout.
+installation, configuration, and runtime state. `allenwlee` is a
+keyboard/browser endpoint, not a second authoritative checkout.
 
 ### Ollija delivery guide
 
 The generated, read-only block in one shared Markdown plan, created by
-`./bin/ollija annotate-plan`. It resolves the worktree, Git branch,
+`ollija annotate-plan`. It resolves the worktree, Git branch,
 environment paths, delivery target, and parent-owned staging/production
 sequence from tracked configuration. Human changes belong in the plan's
 separate Delivery Exceptions section.

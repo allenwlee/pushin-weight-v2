@@ -1,98 +1,106 @@
-# Ollija plan guide
+# Ollija consumer guide
 
-Ollija is a small planning aid for PushinWeight. It gives every agent and
-person working on one change the same delivery instructions in the same plan.
-It solves a coordination problem—not a product or deployment problem: without
-one shared plan, an implementation can be built in one place, reviewed against
-different assumptions, and delivered without a clear record of what was
-intended.
+PushinWeight consumes the standalone Ollija command. Ollija keeps deterministic
+delivery guidance inside the branch's shared Markdown plan; it does not
+implement, approve, commit, push, deploy, or supervise the change.
 
-Ollija sits beside Git (the code-history system) and Render (the hosting
-platform). It does not replace either. Git records commits; Render deploys
-them; the parent workflow performs those actions. Ollija only writes the
-concrete guide that tells that workflow what its selected delivery path is.
+The engine and neutral agent skill are owned by the standalone checkout at
+`/Users/fuchitalee/development/ollija`. This repository owns only its
+project-specific `.ollija/` delivery contract, hook, guide template, and
+ignored local state.
 
-## The one command
+## Install or refresh the command
+
+The standalone repository is a private preview, so its supported installation
+is an isolated user tool built from the authoritative local checkout:
 
 ```bash
-./bin/ollija annotate-plan [optional-plan-path]
+uv tool install --force /Users/fuchitalee/development/ollija
+command -v ollija
+uv tool list --show-paths
+ollija --help
 ```
 
-Run it before selecting or creating a plan. With no path, it finds the one plan
-for the active branch or creates a minimal shared stub. Its JSON result includes
-the exact `plan_path`; use that same file for planning. Do not start a second
-plan for the branch.
+The executable must resolve outside this repository. The installed
+distribution's `direct_url.json` must name the standalone checkout before an
+embedded-copy migration or standalone upgrade is accepted.
+
+Run `ollija init` from the primary PushinWeight checkout when the managed
+neutral skill under `~/.agents/skills/ollija` needs to be installed or
+refreshed. Initialization recognizes the existing version-one delivery
+profile, leaves `.ollija/project.yaml` and its delivery template unchanged,
+and updates only unmodified managed skill files.
+
+## Select and annotate one plan
+
+Before selecting or creating a plan, run:
+
+```bash
+ollija annotate-plan
+```
+
+Read the exact `plan_path` from the structured result. Use that file for the
+whole change; do not create a parallel plan for the same branch.
 
 After the final plan write or document review, refresh the same file:
 
 ```bash
-./bin/ollija annotate-plan <plan-path>
+ollija annotate-plan <plan-path>
 ```
 
-Before Git or deployment mutations, check that the guide is current:
+Before any Git or deployment mutation, verify that the generated guide is
+current without changing the plan:
 
 ```bash
-./bin/ollija annotate-plan <plan-path> --check
+ollija annotate-plan <plan-path> --check
 ```
 
-The command uses tracked configuration, the Git branch, and the active
-worktree to write one generated block between `BEGIN OLLIJA DELIVERY GUIDE` and
-`END OLLIJA DELIVERY GUIDE`. Text outside those markers is preserved. Put a
-human or owner-directed exception in `## Delivery Exceptions`, which is outside
-the generated block and survives every refresh.
+The generated block lies between the Ollija delivery-guide markers. Do not edit
+it directly. Put owner-directed departures in `## Delivery Exceptions`,
+outside those markers.
 
-## Where work belongs
+## Project-owned delivery policy
 
-The Ollija release worktree area is:
+PushinWeight retains these consumer assets:
 
-```text
-<authoritative-repo>/.worktrees/<branch>
-```
+- `.ollija/project.yaml` — authoritative host, repository, branches,
+  environments, worktree area, test commands, and failure routes;
+- `.ollija/templates/delivery-guide.md` — PushinWeight's delivery wording;
+- `.ollija/hooks/post-checkout` — the nonblocking linked-worktree
+  integration; and
+- ignored `.ollija/state/` — local consumer runtime state, when present.
 
-For this repository, the authoritative host is `fuchitalee` and the base path
-is `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`. A worktree
-outside that area receives relocation guidance in its plan. Ollija does not
-prompt, move, reject, or block it.
+The repository does not carry an Ollija Python package, wrapper, or local
+Ollija skill. Both humans and agents call the same installed executable.
 
-The tracked post-checkout hook is deliberately nonblocking. In a named linked
-worktree it runs the same annotation command to create or reuse the shared
-stub; primary and detached checkouts are skipped. If annotation fails, Git
-continues and the hook prints the recovery command.
+## Linked-worktree hook
 
-Enable that tracked hook once in every fresh clone, from its primary checkout:
+Enable the tracked hook once per fresh clone from the primary checkout:
 
 ```bash
 git config core.hooksPath "$(git rev-parse --show-toplevel)/.ollija/hooks"
 ```
 
-This only makes Git find the tracked hook. It neither creates a background
-process nor changes how worktrees are allowed to proceed after an annotation
-failure.
+The hook skips primary and detached checkouts. In a named linked worktree, it
+invokes `ollija annotate-plan` through `PATH`, passes quoted Git-derived
+paths, and never forwards caller stdin. A missing, busy, or failing command
+does not block Git; the hook prints an installation or recovery message.
 
 ## Delivery choices
 
-Ordinary planning is `on-request`: making a plan does not authorize a commit,
-push, staging deployment, or production promotion.
+Ordinary planning uses `delivery_target: on-request`. LFG and goal ask the
+owner once whether to stop after staging or continue through production, then
+persist `delivery_selected_by_user: true` and the selected target.
 
-LFG and goal ask the owner once, before implementation, whether the change
-stops after staging or continues through production. The planner stores that
-choice in the shared plan as `delivery_target: staging|production` and
-`delivery_selected_by_user: true`, then annotates it. Ollija never infers
-production authority from the branch or a conversation, and it does not ask a
-second delivery question later.
+The parent workflow reads the selected target, generated guide, and Delivery
+Exceptions before acting. It owns tests, commits, feature-branch pushes,
+exact-SHA staging, production promotion, verification, and guarded final
+worktree cleanup.
 
-Before acting, the parent workflow reads the selected target, generated guide,
-and Delivery Exceptions. It then implements, tests, commits, pushes the
-feature, stages the exact candidate, and—when the recorded target is
-production—promotes that same candidate to `main` after staging passes.
+## Change ownership
 
-## What Ollija does not do
-
-Ollija does not approve, commit, push, deploy, supervise agents, start a
-background process, retry forever, copy databases, capture browser state, or
-persist release state. It is a deterministic guide, not a gatekeeper.
-
-If a guide is wrong, correct the tracked configuration, template, or agent
-instructions that supplied the bad fact, then rerun annotation. Record material
-Ollija behavior changes in [CHANGES.md](CHANGES.md); it is an advisory human
-history, not an enforcement mechanism.
+This directory's [CHANGES.md](CHANGES.md) preserves PushinWeight's historical
+Ollija decisions and records the final consumer migration. Future engine,
+packaging, initialization, and neutral-skill changes belong in the standalone
+repository's changelog. PushinWeight records later entries here only when its
+consumer delivery policy changes.

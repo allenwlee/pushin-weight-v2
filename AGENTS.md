@@ -34,10 +34,16 @@ including Claude Code and Codex.
 
 ## Plans and delivery
 
+Ollija's implementation lives in the standalone checkout at
+`/Users/fuchitalee/development/ollija`. Install or refresh its console command
+with `uv tool install --force /Users/fuchitalee/development/ollija`; this
+repository owns only its project-specific `.ollija/` contract and ignored
+state.
+
 Before selecting or creating a PushinWeight plan, run
-`./bin/ollija annotate-plan`. Use the exact `plan_path` it returns and enrich
+`ollija annotate-plan`. Use the exact `plan_path` it returns and enrich
 that same plan; do not create a parallel plan. After the final plan write or
-document review, rerun `./bin/ollija annotate-plan <plan-path>`.
+document review, rerun `ollija annotate-plan <plan-path>`.
 
 For LFG and goal, ask the owner once before implementation whether to stop
 after staging or continue through production. Persist that explicit choice in
@@ -47,11 +53,12 @@ remain `delivery_target: on-request` and ask nothing.
 
 Before any Git or deployment mutation, the parent workflow must read the
 selected delivery target, generated Ollija Delivery Guide, and editable
-`Delivery Exceptions`, then run `./bin/ollija annotate-plan <plan-path>
+`Delivery Exceptions`, then run `ollija annotate-plan <plan-path>
 --check`. Resolve conflicts instead of silently bypassing the guide. Ollija is
 guidance only: it does not approve, commit, push, deploy, move worktrees, or
-run a persistent release process. Read `.claude/skills/ollija/SKILL.md` for the
-same portable contract.
+run a persistent release process. Read the installed `ollija` skill for the
+portable command contract; the rules here and `.ollija/` add PushinWeight's
+delivery policy.
 
 After exact-SHA production verification, the generated guide directs the
 parent workflow to run guarded `git worktree remove` cleanup only for the

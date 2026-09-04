@@ -85,96 +85,66 @@ def test_claude_policy_imports_canonical_agent_rules() -> None:
     assert (REPO_ROOT / "CLAUDE.md").read_text().strip() == "@AGENTS.md"
 
 
-def test_current_ollija_boundary_has_no_retired_runtime_or_command_paths() -> None:
-    retained_runtime = {
-        "__init__.py",
-        "__main__.py",
-        "annotate_plan.py",
-        "cli.py",
-        "config.py",
-        "worktrees.py",
-    }
-    runtime = REPO_ROOT / "scripts" / "ollija"
-    assert {path.name for path in runtime.glob("*.py")} == retained_runtime
-    assert not (runtime / "agents").exists()
-    assert not (runtime / "adapters").exists()
-
-    retired_modules = {
-        "approvals",
-        "bridgewright",
-        "checkpoint",
-        "changes",
-        "database",
-        "git",
-        "hosted_database",
-        "impact",
-        "incidents",
-        "preview",
-        "processes",
-        "redaction",
-        "release",
-        "render",
-        "results",
-        "state",
-        "status",
-        "supervisor",
-        "task_control",
-        "tasks",
-        "verification",
-        "versioning",
-        "workspaces",
-    }
-    retired_commands = {
-        "approve",
-        "doctor",
-        "go",
-        "preview",
-        "refresh-local",
-        "refresh-staging",
-        "release",
-        "stage",
-        "status",
-        "stop",
-        "worktree",
-    }
-    current_paths = [
-        REPO_ROOT / "AGENTS.md",
+def test_current_ollija_boundary_uses_only_the_standalone_runtime() -> None:
+    embedded_paths = (
         REPO_ROOT / "bin" / "ollija",
-        REPO_ROOT / "build.sh",
-        REPO_ROOT / "render-staging.yaml",
-        REPO_ROOT / "scripts" / "render_migrate.py",
-        REPO_ROOT / "project" / "staging.py",
-        REPO_ROOT / ".ollija" / "hooks" / "post-checkout",
-        *(runtime.glob("*.py")),
-    ]
+        REPO_ROOT / "scripts" / "ollija",
+        REPO_ROOT / ".claude" / "skills" / "ollija",
+        REPO_ROOT / ".agents" / "skills" / "ollija",
+    )
+    retained_consumer_paths = {
+        ".ollija/hooks/post-checkout",
+        ".ollija/project.yaml",
+        ".ollija/templates/delivery-guide.md",
+    }
 
+    assert all(not path.exists() and not path.is_symlink() for path in embedded_paths)
+    assert {
+        path for path in _tracked_files() if path.startswith(".ollija/")
+    } == retained_consumer_paths
+
+    current_paths = (
+        REPO_ROOT / "AGENTS.md",
+        REPO_ROOT / "CONCEPTS.md",
+        REPO_ROOT / ".ollija" / "hooks" / "post-checkout",
+        REPO_ROOT / ".ollija" / "templates" / "delivery-guide.md",
+        REPO_ROOT / "docs" / "ollija" / "README.md",
+        REPO_ROOT / "docs" / "operations" / "ollija.md",
+        REPO_ROOT / "docs" / "deploy" / "render.md",
+        REPO_ROOT
+        / "docs"
+        / "operations"
+        / "2026-08-27-171845-staging-harvester-acceptance.md",
+    )
     for path in current_paths:
         text = path.read_text(encoding="utf-8")
-        for module in retired_modules:
-            assert f"scripts.ollija.{module}" not in text, path
-        for command in retired_commands:
-            assert f"./bin/ollija {command}" not in text, path
+        assert "scripts.ollija" not in text, path
+        assert "./bin/ollija" not in text, path
 
 
 def test_staging_refresh_is_independent_from_ollija_runtime() -> None:
     refresh_runtime = REPO_ROOT / "scripts" / "staging_refresh"
 
     assert refresh_runtime.is_dir()
-    for path in [REPO_ROOT / "bin" / "refresh-staging-data", *refresh_runtime.glob("*.py")]:
+    for path in [
+        REPO_ROOT / "bin" / "refresh-staging-data",
+        *refresh_runtime.glob("*.py"),
+    ]:
         assert "scripts.ollija" not in path.read_text(encoding="utf-8"), path
 
 
-def test_ollija_documentation_classifies_current_guidance_and_superseded_history() -> None:
+def test_ollija_documentation_classifies_current_guidance_and_superseded_history() -> (
+    None
+):
     current_paths = (
-        ".claude/skills/ollija/SKILL.md",
         ".ollija/templates/delivery-guide.md",
         "AGENTS.md",
         "docs/ollija/README.md",
         "docs/ollija/CHANGES.md",
         "docs/operations/ollija.md",
         "docs/deploy/render.md",
+        "docs/operations/2026-08-27-171845-staging-harvester-acceptance.md",
         "CONCEPTS.md",
-        "docs/plans/2026-08-14-195746-feat-why-first-trend-headlines-plan.md",
     )
     historical_paths = (
         "docs/ollija/2026-08-15-repeatable-hosted-refresh-fix.md",
@@ -203,6 +173,7 @@ def test_ollija_documentation_classifies_current_guidance_and_superseded_history
     for relative_path in current_paths:
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         assert "annotate-plan" in text, relative_path
+        assert "./bin/ollija" not in text, relative_path
         for command in retired_commands:
             assert f"./bin/ollija {command}" not in text, relative_path
 
@@ -222,12 +193,11 @@ def test_ollija_documentation_classifies_current_guidance_and_superseded_history
 def test_change_history_is_advisory_and_concepts_describe_the_guide_model() -> None:
     changes = (REPO_ROOT / "docs/ollija/CHANGES.md").read_text(encoding="utf-8")
     concepts = (REPO_ROOT / "CONCEPTS.md").read_text(encoding="utf-8")
-    runtime_sources = (REPO_ROOT / "scripts" / "ollija").glob("*.py")
 
+    assert "Adopt standalone Ollija" in changes
     assert "Retire the stateful release engine" in changes
     assert "advisory human history" in changes
     assert "validates, or enforces this file" in changes
-    assert all("CHANGES.md" not in path.read_text(encoding="utf-8") for path in runtime_sources)
     for required in (
         "Ollija delivery guide",
         "Ollija release worktree area",
@@ -268,4 +238,6 @@ def test_tracked_text_contains_no_literal_credentials() -> None:
                 findings.append(relative_path)
                 break
 
-    assert not findings, "credential-shaped values found in: " + ", ".join(sorted(findings))
+    assert not findings, "credential-shaped values found in: " + ", ".join(
+        sorted(findings)
+    )
