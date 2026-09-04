@@ -563,6 +563,11 @@ def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
         brand_id="dots", pattern="dots3-note"
     ).is_primary
     for pattern in (
+        "dots 3 note",
+        "dots-3-note",
+        "dots.3-note",
+        "dots3 note",
+        "dots-studio",
         "dots.ocr",
         "dots.tts",
         "dots.llm1",

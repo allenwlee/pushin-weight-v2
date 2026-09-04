@@ -124,6 +124,19 @@ def test_backfill_cycle_requests_only_on_demand_credential(wired):
     assert api.credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
 
 
+def test_backfill_cycle_skips_unrelated_metrics_refresh(wired, monkeypatch):
+    refresh_calls = []
+    monkeypatch.setattr(
+        "monitor.metrics_refresh.run_metrics_refresh",
+        lambda *args, **kwargs: refresh_calls.append((args, kwargs)),
+    )
+
+    _, stats = wired(results=[], cycle_kind="backfill")
+
+    assert refresh_calls == []
+    assert "metrics_refresh" not in stats
+
+
 def test_scheduled_call_passes_both_time_bounds(wired):
     """THE BUG. v2 passed since_time=None/until_time=None in production."""
     api, _ = wired(results=[_tweet()])

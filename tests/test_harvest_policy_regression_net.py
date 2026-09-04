@@ -322,7 +322,7 @@ EXPECTED_AFTER_QUERIES = {
 }
 
 EXPECTED_AFTER_QUERY_LENGTHS = {
-    "B1": 298, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
+    "B1": 382, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
 }
 
 
@@ -402,6 +402,11 @@ def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     assert dots.tokens == (
         "dots3-note",
         "dots studio",
+        '"dots 3 note"',
+        '"dots-3-note"',
+        '"dots.3-note"',
+        '"dots3 note"',
+        '"dots-studio"',
         "dots.ocr",
         "dots.tts",
         "dots.llm1",

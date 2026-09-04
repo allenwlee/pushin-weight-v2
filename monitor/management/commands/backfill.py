@@ -15,17 +15,22 @@ Usage:
     # Run with larger batch size
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --batch-size 6
 
+    # Plan a single-brand, single-call historical recovery
+    python manage.py backfill --since 2026-08-13 --until 2026-08-15 \
+        --brands dots --call-ids B1 --dry-run
+
     # Resume from previous state automatically (state file keyed on since/until)
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
 
     # Reset and start over
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --reset
 
-State file: data/backfill/<since_epoch>-<until_epoch>.json
+State file: data/backfill/<since_epoch>-<until_epoch>[-<scope_hash>].json
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time as _time
 from datetime import datetime, timezone
@@ -49,6 +54,15 @@ _MAX_RESULTS_CEILING = 1_000
 _SAFETY_MARGIN = 2.0
 # Where state files live.
 _STATE_DIR = Path("data/backfill")
+_RUNTIME_SETTING_NAMES = (
+    "X_MONITOR_CYCLE_SINCE_TIME",
+    "X_MONITOR_CYCLE_UNTIL_TIME",
+    "X_MONITOR_CYCLE_LIMIT_PER_CALL",
+    "X_MONITOR_CYCLE_MAX_PAGES_PER_CALL",
+    "X_MONITOR_CYCLE_BRAND_FILTER",
+)
+_MISSING_SETTING = object()
+_COMPLETE_CALL_STATUSES = frozenset({"completed", "no_results"})
 
 
 def _parse_iso(ts: str) -> int:
@@ -64,8 +78,28 @@ def _parse_iso(ts: str) -> int:
     )
 
 
-def _state_path(since_epoch: int, until_epoch: int) -> Path:
-    return _STATE_DIR / f"{since_epoch}-{until_epoch}.json"
+def _state_path(
+    since_epoch: int,
+    until_epoch: int,
+    scope_key: str | None = None,
+) -> Path:
+    suffix = f"-{scope_key}" if scope_key else ""
+    return _STATE_DIR / f"{since_epoch}-{until_epoch}{suffix}.json"
+
+
+def _scope_key(*, brands: list[str], call_ids: list[str]) -> str | None:
+    """Keep independently scoped backfills from sharing completion state."""
+    if not brands and not call_ids:
+        return None
+    payload = json.dumps(
+        {
+            "brands": sorted(set(brands)),
+            "call_ids": sorted(set(call_ids)),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def _load_state(state_file: Path) -> dict | None:
@@ -77,6 +111,20 @@ def _load_state(state_file: Path) -> dict | None:
 def _save_state(state_file: Path, state: dict) -> None:
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(json.dumps(state, indent=2, default=str))
+
+
+def _selected_call_status(stats: dict, call_id: str) -> str:
+    """Return one call receipt status, or a safe incomplete sentinel."""
+    matching_calls = [
+        call
+        for call in stats.get("calls", [])
+        if str(call.get("call_id") or "") == call_id
+    ]
+    if not matching_calls:
+        return "missing_call_receipt"
+    if len(matching_calls) != 1:
+        return "ambiguous_call_receipt"
+    return str(matching_calls[0].get("status") or "missing_call_status")
 
 
 def _compute_params(
@@ -119,7 +167,11 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--brands", type=str, default=None,
-            help="Comma-separated brand nicknames to filter.",
+            help="Comma-separated brand nicknames; selects only their B/C calls.",
+        )
+        parser.add_argument(
+            "--call-ids", type=str, default=None,
+            help="Comma-separated logical call IDs to run (for example B1).",
         )
         parser.add_argument(
             "--batch-size", type=int, default=3,
@@ -155,6 +207,23 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
+        previous_settings = {
+            name: getattr(settings, name, _MISSING_SETTING)
+            for name in _RUNTIME_SETTING_NAMES
+        }
+        try:
+            return self._handle_guarded(*args, **options)
+        finally:
+            for name, value in previous_settings.items():
+                if value is _MISSING_SETTING:
+                    try:
+                        delattr(settings, name)
+                    except AttributeError:
+                        pass
+                else:
+                    setattr(settings, name, value)
+
+    def _handle_guarded(self, *args, **options) -> None:
         # Status and dry-run are read-only. Every explicit write-capable
         # historical run holds the same PostgreSQL lock as live harvesting.
         if options["status"] or options["dry_run"]:
@@ -191,7 +260,30 @@ class Command(BaseCommand):
             if options["until"]
             else int(datetime.now(timezone.utc).timestamp())
         )
-        state_file = _state_path(since_epoch, until_epoch)
+        brand_filter = [
+            value.strip()
+            for value in str(options.get("brands") or "").split(",")
+            if value.strip()
+        ]
+        requested_call_ids = [
+            value.strip().upper()
+            for value in str(options.get("call_ids") or "").split(",")
+            if value.strip()
+        ]
+        if len(requested_call_ids) != len(set(requested_call_ids)):
+            raise CommandError("--call-ids contains duplicates")
+        from x_monitor.config import VALID_CALL_IDS
+
+        unknown_call_ids = sorted(set(requested_call_ids) - set(VALID_CALL_IDS))
+        if unknown_call_ids:
+            raise CommandError(
+                "unknown --call-ids: " + ", ".join(unknown_call_ids)
+            )
+        state_file = _state_path(
+            since_epoch,
+            until_epoch,
+            _scope_key(brands=brand_filter, call_ids=requested_call_ids),
+        )
 
         # --- status-only ---
         if options["status"]:
@@ -239,8 +331,13 @@ class Command(BaseCommand):
         settings.X_MONITOR_CYCLE_UNTIL_TIME = until_epoch
         settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = max_results
         settings.X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = max_pages
-        if options["brands"]:
-            settings.X_MONITOR_CYCLE_BRAND_FILTER = options["brands"]
+        if brand_filter:
+            settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(brand_filter)
+        else:
+            try:
+                delattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER")
+            except AttributeError:
+                pass
 
         since_label = options["since"]
         until_label = options["until"] or "now"
@@ -250,7 +347,36 @@ class Command(BaseCommand):
         # Plan calls using the shared function — same as regular harvest.
         # Pass cfg explicitly to avoid a second config.yaml disk read.
         cfg = load_config(Path("config.yaml"))
+        disabled_brands = (
+            sorted(set(brand_filter) - set(cfg.enabled_models))
+            if brand_filter
+            else []
+        )
+        if disabled_brands:
+            raise CommandError(
+                "--brands must be enabled models: " + ", ".join(disabled_brands)
+            )
         calls = plan_calls_for_cycle(cfg)
+        if brand_filter:
+            # Brand-scoped planning has already narrowed the B/C query
+            # contents. Call A is list-wide, so it is never part of a
+            # single-brand historical recovery.
+            calls = [call for call in calls if call.call_id != "A"]
+            if requested_call_ids:
+                inapplicable = sorted(
+                    set(requested_call_ids) - {call.call_id for call in calls}
+                )
+                if inapplicable:
+                    raise CommandError(
+                        f"call IDs {', '.join(inapplicable)} are not applicable "
+                        f"to brands {', '.join(brand_filter)}"
+                    )
+        if requested_call_ids:
+            calls = [
+                call for call in calls if call.call_id in requested_call_ids
+            ]
+        if not calls and (brand_filter or requested_call_ids):
+            raise CommandError("backfill scope selects no logical calls")
         call_ids = [c.call_id for c in calls]
 
         # --- load or init state ---
@@ -269,6 +395,8 @@ class Command(BaseCommand):
                 "max_results": max_results,
                 "max_pages": max_pages,
                 "calls_total": len(call_ids),
+                "brands": brand_filter,
+                "call_ids_requested": requested_call_ids,
                 "calls_completed_ids": [],
                 "calls_completed": 0,
                 "total_inserted": 0,
@@ -330,8 +458,8 @@ class Command(BaseCommand):
 
             self.stdout.write(f"  Executing call {call_id} ({i+1}/{len(batch)})…")
             try:
-                cfg = load_config(Path("config.yaml"))
-                runner = CycleRunner(cfg=cfg, 
+                runner = CycleRunner(
+                    cfg=cfg,
                     dry_run=False,
                     cycle_kind="backfill",
                     _backfill_call_ids=[call_id],
@@ -341,23 +469,37 @@ class Command(BaseCommand):
                 stats = runner.run()
 
                 inserted = stats["totals"].get("n_inserted", 0)
-                state["calls_completed_ids"].append(call_id)
-                state["calls_completed"] = len(state["calls_completed_ids"])
+                call_status = _selected_call_status(stats, call_id)
+                call_completed = call_status in _COMPLETE_CALL_STATUSES
+                if call_completed:
+                    state["calls_completed_ids"].append(call_id)
+                    state["calls_completed"] = len(
+                        state["calls_completed_ids"]
+                    )
                 state["total_inserted"] = state.get("total_inserted", 0) + inserted
                 state["runs"].append({
                     "call_id": call_id,
                     "run_id": stats["run_id"],
                     "status": stats["status"],
+                    "call_status": call_status,
                     "n_inserted": inserted,
                     "n_calls_run": stats["totals"].get("n_calls_run", 0),
                     "errors": stats.get("errors", []),
                 })
                 _save_state(state_file, state)
 
-                self.stdout.write(
-                    f"    {call_id}: {inserted} inserted  "
-                    f"(total so far: {state['total_inserted']})"
-                )
+                if call_completed:
+                    self.stdout.write(
+                        f"    {call_id}: {inserted} inserted  "
+                        f"(total so far: {state['total_inserted']})"
+                    )
+                else:
+                    self.stderr.write(
+                        self.style.WARNING(
+                            f"    {call_id}: {call_status}; remains pending "
+                            f"({inserted} inserted this attempt)"
+                        )
+                    )
             except Exception as exc:
                 self.stderr.write(f"    {call_id}: FAILED — {exc}")
                 state["runs"].append({

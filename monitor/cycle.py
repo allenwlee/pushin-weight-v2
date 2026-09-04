@@ -1256,23 +1256,34 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         return []
 
     from x_monitor.harvest_policy import load_policy
-    from x_monitor.specs_from_policy import primary_keywords_from_policy
-
-    policy = load_policy(Path("config") / "harvest_policy.yaml")
-    x_query_specs = _resolve_x_query_specs(cfg, policy=policy)
-    primary_keywords = primary_keywords_from_policy(
-        policy,
-        brand_nicknames=cfg.enabled_models,
+    from x_monitor.specs_from_policy import (
+        primary_keywords_from_policy,
+        specs_from_policy,
     )
 
+    policy = load_policy(Path("config") / "harvest_policy.yaml")
     brand_filter_raw = getattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER", None)
+    brand_filter: list[str] = []
     if brand_filter_raw and isinstance(brand_filter_raw, str):
         brand_filter = [b.strip() for b in brand_filter_raw.split(",") if b.strip()]
-        if brand_filter:
-            primary_keywords = {
-                k: v for k, v in primary_keywords.items() if k in brand_filter
-            }
-            logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
+    if brand_filter:
+        # A historical backfill must narrow both the query contents and the
+        # attribution index. Full scheduled runs retain the exact-call-set
+        # validation in _resolve_x_query_specs; a deliberate brand subset is
+        # allowed to emit only the paths that apply to that subset.
+        x_query_specs = specs_from_policy(
+            policy,
+            brand_nicknames=brand_filter,
+        )
+        selected_models = brand_filter
+        logger.info("plan_calls_for_cycle: brand filter active — %s", brand_filter)
+    else:
+        x_query_specs = _resolve_x_query_specs(cfg, policy=policy)
+        selected_models = list(cfg.enabled_models)
+    primary_keywords = primary_keywords_from_policy(
+        policy,
+        brand_nicknames=selected_models,
+    )
 
     return plan_calls(
         list_id,
@@ -3336,7 +3347,7 @@ class CycleRunner:
         # ---- One-shot metrics refresh (plan 2026-08-10-002) ----
         # Replaces continuous official/staff + daily QT recheck. Never
         # aborts the cycle — refresh failures are degraded stats.
-        if summary["status"] != "aborted":
+        if summary["status"] != "aborted" and self.cycle_kind != "backfill":
             try:
                 from monitor.metrics_refresh import run_metrics_refresh
 

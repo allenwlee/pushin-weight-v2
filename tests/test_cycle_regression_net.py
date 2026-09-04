@@ -75,6 +75,25 @@ def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
     assert all("dots3-note" not in call.query_string for call in calls)
 
 
+def test_plan_calls_for_cycle_brand_filter_builds_only_that_brands_calls():
+    """Historical brand filters narrow call contents, not only attribution."""
+    _django_setup()
+    from django.test import override_settings
+
+    from monitor.cycle import plan_calls_for_cycle
+    from x_monitor.config import load_config
+
+    cfg = load_config(CONFIG_PATH)
+    with override_settings(X_MONITOR_CYCLE_BRAND_FILTER="dots"):
+        calls = plan_calls_for_cycle(cfg=cfg)
+
+    assert [call.call_id for call in calls] == ["A", "B1"]
+    b1 = calls[1].query_string
+    assert '"dots 3 note"' in b1
+    assert "DeepSeek" not in b1
+    assert "Hunyuan" not in b1
+
+
 def test_cycle_runner_plan_calls_does_not_abort_with_self_undefined():
     """CycleRunner._plan_calls() must return the 7-call layout, not [].
 
@@ -144,7 +163,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
                     "id": "u5-dots",
                     "author_id": "u5-author-dots",
                     "author_handle": "u5_dots",
-                    "text": "dots3-note Preview is out",
+                    "text": "Dots 3 Note Preview is out",
                     "lang": "en",
                     "created_at": "Sat Jul 25 12:00:00 +0000 2026",
                 },

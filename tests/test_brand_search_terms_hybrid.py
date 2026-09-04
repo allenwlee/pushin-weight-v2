@@ -98,6 +98,12 @@ def test_real_cycle_persists_db_only_aliases_including_production_kimi_miss(
     api = FakeApi(
         [
             _tweet("u8-dots", "dots3-note Preview is out"),
+            _tweet("u8-dots-spaced", "Dots 3 Note Preview is out"),
+            _tweet("u8-dots-dotted", "Try Dots.3-Note today"),
+            _tweet(
+                "u8-dots-repo",
+                "Model files: dots-studio/dots-3-note-preview",
+            ),
             _tweet("u8-hy", "hy4 is genuinely unltd"),
             _tweet("u8-ox", "Ox Alpha is no longer available"),
             _tweet(
@@ -126,6 +132,15 @@ def test_real_cycle_persists_db_only_aliases_including_production_kimi_miss(
     assert api.searches
     assert stats["status"] in {"completed", "degraded"}
     assert PostBrand.objects.filter(post_id="u8-dots", brand_id="dots").exists()
+    assert PostBrand.objects.filter(
+        post_id="u8-dots-spaced", brand_id="dots"
+    ).exists()
+    assert PostBrand.objects.filter(
+        post_id="u8-dots-dotted", brand_id="dots"
+    ).exists()
+    assert PostBrand.objects.filter(
+        post_id="u8-dots-repo", brand_id="dots"
+    ).exists()
     assert PostBrand.objects.filter(post_id="u8-hy", brand_id="hunyuan").exists()
     assert PostBrand.objects.filter(post_id="u8-ox", brand_id="glm").exists()
     assert PostBrand.objects.filter(

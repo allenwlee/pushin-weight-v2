@@ -77,6 +77,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Do not change the 7-call shape (A + B1 + B2 + B3 + C1 + C2 + C3).
 - Do not rewrite B1 truncation/backlog ownership in this change. Token expansion only. Production still needs a later coverage fix if B1 remains tip-capped.
 - After production SHA verification, run onboard for the updated dots aliases so BrandKeyword rows exist before fail-closed cycle preflight. That onboard is a bounded Render management command, not a harvest run.
+- Any historical provider recovery must be a Dots-only B1 run over an explicit time window, dry-run and priced first; do not pause the production cron or run the other six calls.
 
 # Goal
 
@@ -153,3 +154,55 @@ Append the same five strings to `keyword_aliases` on the dots row of `config/bra
 ## Credit / risk
 
 Adding five OR tokens to shared B1 does not add a call. It slightly widens the B1 match set. Cost per scheduled cycle stays one B1 page unless truncation walks fire. No `scripts.harvest_cost` volume increase from extra logical calls.
+
+## 2026-09-04 production follow-up: spelling recovery
+
+### Evidence
+
+- Production has zero `posts_brands` rows for `dots`, including five already-stored Dots-like posts found after onboarding.
+- The live matcher is literal: `Dots 3 Note Preview`, `Dots.3-Note`, and `dots-studio/dots-3-note-preview` do not match the primary `dots3-note` spelling.
+- The two launch accounts are present in `BrandAccount`, but the scheduled 15-minute window cannot recover launch posts that predate Dots onboarding.
+- This is a Dots search/attribution recovery inside the existing workstream, not a call-shape or general harvester redesign.
+
+### U4 — Specific Dots spelling aliases
+
+- Add quoted B1 search phrases for the observed separator spellings while retaining every existing Dots family token.
+- Persist the corresponding unquoted literal aliases through the tracked onboarding CSV so policy preflight and runtime body attribution agree.
+- Keep the bare word `dots` forbidden.
+- Regression examples must cover `Dots 3 Note Preview`, `Dots.3-Note`, and `dots-studio/dots-3-note-preview` through the real `CycleRunner` provider-to-PostBrand path.
+
+### U5 — Existing-row reattribution
+
+- Add a bounded, idempotent Django management command that reuses `_build_brand_index`, `CycleRunner._attribute_items`, and `_persist_attribution` rather than implementing a second matcher.
+- Require `--brand` and `--since`; support `--until`, `--limit`, dry-run by default, and an explicit `--apply` write gate.
+- Reattach only the requested brand, preserve all existing brand links and post/account values, and recognize official-account ownership without auto-accepting staff posts.
+- When a new brand link is added, reopen only classification state so the normal enrichment worker can create that brand's signal rows without retranslating completed text.
+- Report scanned, matched, newly linked, and newly mentioned counts; a second apply must produce zero new rows.
+
+### U6 — Dots-only historical provider path
+
+- Add a validated `--call-ids` filter to the existing shared `backfill` command so `--brands dots --call-ids B1` plans and executes only the Dots-only B1 query.
+- Keep `CycleRunner` as the sole fetch/attribute/persist path and retain its shared PostgreSQL writer lock, pagination ceilings, state, and cost receipt.
+- Test that a dry run exposes only B1 and that invalid/non-Dots call selections fail before provider construction.
+- Before any production provider run, dry-run the exact bounded launch window and price the maximum returned-tweet budget; execution remains a separate, observable operator step after the candidate is deployed and onboarded.
+
+### U7 — Review hardening for safe recovery
+
+- Treat only a single-call receipt with `completed` or `no_results` as finished; truncated, persistence-incomplete, errored, missing, or ambiguous receipts remain resumable in the scoped state file while retaining the count of rows already inserted.
+- Suppress the unrelated one-shot metrics refresh during `cycle_kind=backfill`; preserve the normal bounded post-fetch translation/classification queue for recovered posts.
+- Preserve a post's already-complete persisted translation when reattribution must create a missing enrichment-state row, and skip all mutation while another worker owns an unexpired enrichment claim.
+- Restore every temporary Django runtime setting after the backfill command exits, including validation failures, so a management-command call cannot leak scope into a later in-process invocation.
+
+### Follow-up verification contract
+
+- Focused unit and PostgreSQL tests pass for policy rendering, onboarding, real-cycle attribution, existing-row reattribution, and B1-only backfill selection.
+- Full harvester regression tests preserve the seven scheduled calls and all non-Dots query strings.
+- Staging proves the onboarding command, existing-row reattribution dry-run/apply/idempotency, and B1-only backfill dry-run without paid provider execution.
+- Production completion requires exact-SHA deployment, onboarding aliases, bounded existing-row reattribution, and read-only SQL showing Dots links for the known stored examples; provider history recovery is separately cost-gated as described above.
+
+### Local verification evidence (2026-09-04)
+
+- Focused policy, onboarding, cycle, lock, reattribution, and backfill suite: `92 passed`; PostgreSQL-required verification: `72 executed, 0 skipped, 0 errors`.
+- Django system check: no issues; `git diff --check`: clean; Ruff: all checks pass for the new command and its new focused tests (unchanged legacy lint remains outside this change).
+- Browser route mapping: skipped because the diff contains no UI route, template, static asset, or browser interaction change.
+- Pre-delivery production latest-20 health snapshot: `healthy_with_pending`, `20 pending`, `0 unhealthy`; the exact cohort is retained for the required maturation recheck.
