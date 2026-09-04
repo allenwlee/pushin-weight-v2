@@ -67,7 +67,7 @@ class FaviconTests(SimpleTestCase):
                 )
             return self.client.get("/", secure=True)
 
-    def test_public_home_serves_inverted_existing_logo_as_favicon(self) -> None:
+    def test_public_home_serves_transparent_existing_logo_as_favicon(self) -> None:
         response = self._get_public_home()
 
         self.assertEqual(response.status_code, 200)
@@ -80,13 +80,12 @@ class FaviconTests(SimpleTestCase):
         favicon_path = finders.find("favicon.svg")
         self.assertIsNotNone(favicon_path)
         root = ElementTree.parse(Path(favicon_path)).getroot()
-        self.assertEqual(root.attrib["viewBox"], "0 0 64 64")
+        self.assertEqual(root.attrib["viewBox"], "4.24 2.3494 15.55 19.2724")
 
         namespace = {"svg": "http://www.w3.org/2000/svg"}
-        background = root.find("svg:rect", namespace)
         mark = root.find("svg:path", namespace)
-        self.assertIsNotNone(background)
+        self.assertIsNone(root.find("svg:rect", namespace))
         self.assertIsNotNone(mark)
-        self.assertEqual(background.attrib["fill"], "#f3f4f6")
         self.assertEqual(mark.attrib["fill"], "#0b1220")
+        self.assertNotIn("transform", mark.attrib)
         self.assertEqual(mark.attrib["d"], LOGO_PATH)

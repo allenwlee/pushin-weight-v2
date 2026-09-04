@@ -77,17 +77,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 # Goal
 
-Create a favicon from the existing Cyber-Quan `mark-quiet` logo, invert the
-site foreground/background palette for legibility in browser chrome, add it to
-every full-page website template, and deliver the exact tested SHA through
-staging to production.
+Create a transparent, tightly cropped favicon from the existing Cyber-Quan
+`mark-quiet` logo, add it to every full-page website template, and deliver the
+exact tested SHA through staging to production.
 
 ## Product Contract
 
 - `monitor/static/favicon.svg` reuses the exact existing `mark-quiet` vector
   path; it is not redrawn or replaced with a generated approximation.
-- The favicon uses the site text color `#f3f4f6` as its tile and the site
-  background color `#0b1220` as its inverted mark.
+- The favicon has no background fill; its `#0b1220` mark spans the full height
+  and maximum proportional width of the canvas.
 - `/`, `/internal/`, and `/brands/<brand>/` declare the same SVG favicon via
   Django's `{% static %}` tag.
 - The existing logo, layout, behavior, locale copy, routes, authentication,
@@ -106,7 +105,7 @@ staging to production.
 - Exercise the real anonymous `/` URL, view, and template with only data-source
   calls replaced by deterministic values.
 - Resolve the favicon through Django's static finder and assert its SVG
-  dimensions, exact logo path, and inverted colors.
+  tight viewBox, transparent background, exact logo path, and mark color.
 
 ### U3 — Delivery and exact-SHA verification
 
