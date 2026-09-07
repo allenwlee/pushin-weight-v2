@@ -74,13 +74,13 @@ None.
 
 # Goal
 
-Adopt the deterministic browser assurance contract from Bridgewright PR #9 at exact head `00d0089f7bf3cb863bf7d71bce827e08325feaa2` in PushinWeight, then deliver the first-adopter proof through staging and production without changing unrelated product behavior. The umbrella contract is the Bridgewright integrated performance assurance plan (`docs/plans/2026-09-07-151016-feat-integrated-performance-assurance-plan.md`) represented by [Bridgewright PR #9](https://github.com/allenwlee/bridgewright/pull/9); this plan is its PushinWeight U5-U8 adoption and delivery slice.
+Adopt the deterministic browser assurance contract from Bridgewright PR #9 at exact head `611105319bed1aaf563b28e0a61efbe817314f3b` in PushinWeight, then deliver the first-adopter proof through staging and production without changing unrelated product behavior. The umbrella contract is the Bridgewright integrated performance assurance plan (`docs/plans/2026-09-07-151016-feat-integrated-performance-assurance-plan.md`) represented by [Bridgewright PR #9](https://github.com/allenwlee/bridgewright/pull/9); this plan is its PushinWeight U5-U8 adoption and delivery slice.
 
 ## Product Contract
 
 ### U5. Pin the reviewed Bridgewright contract and establish the baseline
 
-- Pin Bridgewright's exact reviewed head `00d0089f7bf3cb863bf7d71bce827e08325feaa2`, build identity, schema digest, skill digest, and `performance-assurance/v1` profile in the adopter declaration and project manifest. Do not use a moving branch, short SHA, or local package fallback.
+- Pin Bridgewright's exact reviewed head `611105319bed1aaf563b28e0a61efbe817314f3b`, build identity, schema digest, skill digest, and `performance-assurance/v1` profile in the adopter declaration and project manifest. Do not use a moving branch, short SHA, or local package fallback.
 - Capture the current `origin/main` desktop and mobile baselines before product edits. Include the existing semantics, accessibility behavior, Taiwan (`TW`) handling, geometry, and the current expensive-state behavior.
 - Run the first adopter declaration against the baseline and retain the expected red proof for each intentional missing obligation. The red proof must fail for the missing saved-state migration, missing exact sprite/cache contract, missing served-revision header, and any missing desktop/mobile evidence; it must not be replaced with a synthetic clean result.
 - Keep baseline evidence separate from candidate evidence and identify both by their exact Git revisions.

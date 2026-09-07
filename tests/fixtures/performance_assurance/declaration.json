@@ -61,7 +61,7 @@
           "value": "{\"version\":1,\"locale\":\"en\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
         }
       ],
-      "actions": [{"kind": "click", "target": "[data-tz-widget]"}],
+      "actions": [{"kind": "click", "target": ".follower-magnitude.pw-inspection-trigger"}],
       "required_metrics": ["lcp", "cls", "inp"],
       "metric_engines": {"lcp": "lighthouse", "cls": "lighthouse", "inp": "web-vitals"},
       "web_vitals_metrics": ["lcp", "cls", "inp"],
@@ -93,7 +93,7 @@
           "value": "{\"version\":1,\"locale\":\"en\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
         }
       ],
-      "actions": [{"kind": "click", "target": "[data-tz-widget]"}],
+      "actions": [{"kind": "click", "target": ".follower-magnitude.pw-inspection-trigger"}],
       "required_metrics": ["lcp", "cls", "inp"],
       "metric_engines": {"lcp": "lighthouse", "cls": "lighthouse", "inp": "web-vitals"},
       "web_vitals_metrics": ["lcp", "cls", "inp"],

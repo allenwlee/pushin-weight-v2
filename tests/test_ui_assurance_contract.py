@@ -64,6 +64,13 @@ def test_manifest_pins_the_exact_bridgewright_assurance_build() -> None:
     }
 
 
+def test_ui_assurance_source_revision_is_the_reviewed_product_source_revision() -> None:
+    declaration = json.loads(
+        (ROOT / "tests/fixtures/ui_assurance/declaration.json").read_text(encoding="utf-8")
+    )
+    assert declaration["source_revision"] == "e0bd1e20f0522cdbf52172b013eddace8cd55da1"
+
+
 def test_declaration_inventory_matches_the_production_control_vocabulary() -> None:
     controls = _controls()
 

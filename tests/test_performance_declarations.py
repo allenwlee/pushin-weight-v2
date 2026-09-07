@@ -29,3 +29,14 @@ def test_staging_declaration_only_changes_deployment_scope() -> None:
     assert staging["base_origin"] == "https://pushinweight-staging-web.onrender.com"
     assert staging["asset_origins"] == production["asset_origins"]
     assert {profile["destination_scope"] for profile in staging["profiles"]} == {"remote"}
+
+
+def test_performance_actions_use_inert_inspection_click() -> None:
+    expected = ".follower-magnitude.pw-inspection-trigger"
+    for name in ("declaration.json", "declaration.staging.json"):
+        declaration = _load(name)
+        assert all(
+            action == {"kind": "click", "target": expected}
+            for scenario in declaration["scenarios"]
+            for action in scenario["actions"]
+        )

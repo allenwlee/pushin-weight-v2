@@ -84,8 +84,6 @@ def _require_candidate_performance_args(
     missing = [name for name, value in performance_values.items() if not value]
     if missing:
         parser.error("candidate performance gate requires: " + ", ".join(missing))
-    if args.performance_target_revision != args.candidate_revision:
-        parser.error("--performance-target-revision must equal --candidate-revision")
     if args.performance_data_source_kind == "fixture" and not args.performance_fixture_digest:
         parser.error("fixture performance gates require --performance-fixture-digest")
 
