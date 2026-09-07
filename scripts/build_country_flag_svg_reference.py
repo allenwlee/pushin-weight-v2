@@ -25,9 +25,7 @@ SPRITE_PATH = (
 HTML_PATH = (
     REPO_ROOT / "docs/reference/2026-08-29-162947-country-flag-svg-reference.html"
 )
-RUNTIME_TEMPLATE_PATH = (
-    REPO_ROOT / "monitor/templates/monitor/_country_flag_sprite.html"
-)
+RUNTIME_STATIC_PATH = REPO_ROOT / "monitor/static/country-flags.svg"
 RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
 GEOGRAPHY_MANIFEST_PATH = REPO_ROOT / "monitor/data/account_geography.json"
 REVISION_SOURCE_PATH = (
@@ -709,18 +707,6 @@ def render_runtime_module(manifest: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_runtime_template(manifest: dict) -> str:
-    """Render the inline Django sprite consumed by homepage flag instances."""
-
-    sprite = render_sprite(manifest)
-    sprite = sprite.removeprefix('<?xml version="1.0" encoding="UTF-8"?>\n')
-    return sprite.replace(
-        "<svg ",
-        '<svg class="pw-country-flag-sprite" style="display:none" ',
-        1,
-    )
-
-
 def _embedded_sprite(manifest: dict) -> str:
     sprite = render_sprite(manifest)
     sprite = sprite.removeprefix('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -1069,25 +1055,24 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_manifest()
     sprite = render_sprite(manifest)
     dossier = render_html(manifest)
-    runtime_template = render_runtime_template(manifest)
     runtime_data = render_runtime_module(manifest)
     if args.check:
         checks = (
             _check_file(SPRITE_PATH, sprite),
             _check_file(HTML_PATH, dossier),
-            _check_file(RUNTIME_TEMPLATE_PATH, runtime_template),
+            _check_file(RUNTIME_STATIC_PATH, sprite),
             _check_file(RUNTIME_DATA_PATH, runtime_data),
         )
         return 0 if all(checks) else 1
 
     SPRITE_PATH.write_text(sprite, encoding="utf-8")
     HTML_PATH.write_text(dossier, encoding="utf-8")
-    RUNTIME_TEMPLATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RUNTIME_TEMPLATE_PATH.write_text(runtime_template, encoding="utf-8")
+    RUNTIME_STATIC_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME_STATIC_PATH.write_text(sprite, encoding="utf-8")
     RUNTIME_DATA_PATH.write_text(runtime_data, encoding="utf-8")
     print(f"wrote {SPRITE_PATH.relative_to(REPO_ROOT)}")
     print(f"wrote {HTML_PATH.relative_to(REPO_ROOT)}")
-    print(f"wrote {RUNTIME_TEMPLATE_PATH.relative_to(REPO_ROOT)}")
+    print(f"wrote {RUNTIME_STATIC_PATH.relative_to(REPO_ROOT)}")
     print(f"wrote {RUNTIME_DATA_PATH.relative_to(REPO_ROOT)}")
     return 0
 

@@ -105,6 +105,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "project.middleware.StagingOwnerOnlyMiddleware",
+    "project.revision.BridgewrightRevisionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     # django-allauth
     "allauth.account.middleware.AccountMiddleware",

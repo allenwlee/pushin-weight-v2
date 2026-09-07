@@ -57,10 +57,10 @@ def test_manifest_pins_the_exact_bridgewright_assurance_build() -> None:
     }
     assert manifest["requires"] == {
         "bridgewright_version": "0.1.0",
-        "source_revision": "e94b04a9511b3ef494478b84a970035861ab4400",
+        "source_revision": "0390f3c42195856a67afcb1d62464052cebf3476",
         "capability_schema": "bridgewright.capabilities/v1",
-        "schema_set_digest": "b0d89d3fadb4ccd8d736af2375bc98d1fd50070fe38f3da9ec25fa0558007509",
-        "skill_digest": "2504868d2eacb21828ac0b68487cd760f9741c9955810f932e4c9c915d9abc37",
+        "schema_set_digest": "b1b826537458c138fb88a062f0521c77404dcfad6244b91fc4a02aaefc38bda9",
+        "skill_digest": "befdf704fb1ce6b425f3f8825d2c88584f03087aa243fcbad69bf0346b789b3e",
     }
 
 

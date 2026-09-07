@@ -151,7 +151,10 @@ console.log('\n--- feed row identity and follower lead ---');
 assertEq(typeof renderRowHtml, 'function', 'renderRowHtml is available to contract tests');
 if (typeof renderRowHtml === 'function') {
   global.document = {
-    body: { getAttribute: () => 'en' },
+    body: { getAttribute: (name) => ({
+      'data-pw-country-flag-sprite-url': '/static/country-flags.svg',
+      'data-pw-country-flag-codes': JSON.stringify(['CN', 'HK', 'US']),
+    }[name] || null) },
     querySelector: () => null,
     getElementById: (id) => ['flag-cn', 'flag-hk', 'flag-us'].includes(id) ? {} : null,
   };
@@ -205,7 +208,7 @@ if (typeof renderRowHtml === 'function') {
     'role badge uses the shared inspection popover without a native tooltip');
   assertEq(rowHtml.includes('class="account-geography geography-hierarchy"'), true,
     'guiding-country geography is rendered in the follower lead');
-  assertEq(rowHtml.includes('href="#flag-cn"') && rowHtml.includes('href="#flag-hk"'), true,
+  assertEq(rowHtml.includes('href="/static/country-flags.svg#flag-cn"') && rowHtml.includes('href="/static/country-flags.svg#flag-hk"'), true,
     'guiding flag precedes the child flag');
   assertEq(rowHtml.indexOf('role-official') < rowHtml.indexOf('account-geography'), true,
     'official role precedes geography');
@@ -249,7 +252,7 @@ if (typeof renderRowHtml === 'function') {
     follower_bin: '0-1k',
     engagement_pretty: { followers: '0' },
   });
-  assertEq(nonOfficialTaiwanHtml.includes('href="#flag-tw"'), false,
+  assertEq(nonOfficialTaiwanHtml.includes('country-flags.svg#flag-tw'), false,
     'Taiwan signal never references the Taiwan flag');
   assertEq(nonOfficialTaiwanHtml.includes('TW · Taiwan'), true,
     'Taiwan signal remains visibly explicit');
@@ -273,7 +276,7 @@ if (typeof renderRowHtml === 'function') {
     follower_bin: '0-1k',
     engagement_pretty: { followers: '0' },
   });
-  assertEq(unknownFlagHtml.includes('href="#flag-zz"'), false,
+  assertEq(unknownFlagHtml.includes('country-flags.svg#flag-zz'), false,
     'unknown runtime symbols never reach an SVG use href');
   assertEq(unknownFlagHtml.includes('class="account-geography'), false,
     'an invalid geography object reserves no metadata slot');

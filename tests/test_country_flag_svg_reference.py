@@ -28,9 +28,7 @@ HTML_PATH = (
 OLD_HTML_PATH = (
     REPO_ROOT / "docs/ideation/2026-08-29-162947-country-flag-svg-reference.html"
 )
-RUNTIME_TEMPLATE_PATH = (
-    REPO_ROOT / "monitor/templates/monitor/_country_flag_sprite.html"
-)
+RUNTIME_STATIC_PATH = REPO_ROOT / "monitor/static/country-flags.svg"
 RUNTIME_DATA_PATH = REPO_ROOT / "monitor/country_flags.py"
 REVISION_SOURCE_PATH = (
     REPO_ROOT / "docs/ideation/2026-09-01-112642-cn-au-flag-revisions.html"
@@ -477,9 +475,7 @@ def test_generated_sprite_reconstructs_all_manifest_pixels() -> None:
     committed = SPRITE_PATH.read_text(encoding="utf-8")
 
     assert generator.render_sprite(manifest) == committed
-    runtime_template = RUNTIME_TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert generator.render_runtime_template(manifest) == runtime_template
-    assert _symbol_bodies(runtime_template) == _symbol_bodies(committed)
+    assert RUNTIME_STATIC_PATH.read_text(encoding="utf-8") == committed
 
     root = ET.fromstring(committed)
     assert root.tag == f"{{{SVG_NAMESPACE}}}svg"
@@ -550,7 +546,7 @@ def test_runtime_uses_approved_cn_v4_and_au_revised_artwork() -> None:
     source = REVISION_SOURCE_PATH.read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode()).hexdigest() == REVISION_SOURCE_SHA256
 
-    runtime = RUNTIME_TEMPLATE_PATH.read_text(encoding="utf-8")
+    runtime = RUNTIME_STATIC_PATH.read_text(encoding="utf-8")
     runtime_bodies = _symbol_bodies(runtime)
     assert {
         symbol_id: hashlib.sha256(runtime_bodies[symbol_id].encode()).hexdigest()
@@ -579,7 +575,7 @@ def test_revision_source_drift_fails_generation(
     monkeypatch.setattr(generator, "REVISION_SOURCE_PATH", changed_source)
 
     with pytest.raises(ValueError, match="revision source digest"):
-        generator.render_runtime_template(manifest)
+        generator.render_sprite(manifest)
 
 
 def test_sprite_inventory_is_complete_and_excludes_sentinels() -> None:
@@ -681,17 +677,15 @@ def test_check_mode_fails_loudly_after_controlled_output_drift(
     manifest = _load_manifest()
     sprite_path = tmp_path / SPRITE_PATH.name
     html_path = tmp_path / HTML_PATH.name
-    runtime_template_path = tmp_path / RUNTIME_TEMPLATE_PATH.name
     runtime_data_path = tmp_path / RUNTIME_DATA_PATH.name
     sprite_path.write_text(generator.render_sprite(manifest), encoding="utf-8")
     html_path.write_text(generator.render_html(manifest), encoding="utf-8")
-    runtime_template_path.write_text(
-        generator.render_runtime_template(manifest), encoding="utf-8"
-    )
+    runtime_static_path = tmp_path / RUNTIME_STATIC_PATH.name
+    runtime_static_path.write_text(generator.render_sprite(manifest), encoding="utf-8")
     runtime_data_path.write_text(generator.render_runtime_module(manifest), encoding="utf-8")
     monkeypatch.setattr(generator, "SPRITE_PATH", sprite_path)
     monkeypatch.setattr(generator, "HTML_PATH", html_path)
-    monkeypatch.setattr(generator, "RUNTIME_TEMPLATE_PATH", runtime_template_path)
+    monkeypatch.setattr(generator, "RUNTIME_STATIC_PATH", runtime_static_path)
     monkeypatch.setattr(generator, "RUNTIME_DATA_PATH", runtime_data_path)
 
     assert generator.main(["--check"]) == 0

@@ -48,15 +48,79 @@ def _run(*command: str, env_overrides: dict[str, str] | None = None) -> None:
     subprocess.run(command, cwd=ROOT, check=True, env=environment)
 
 
+def _run_json(*command: str) -> dict[str, object]:
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"{command[1]} did not return JSON") from error
+    if not isinstance(payload, dict):
+        raise TypeError(f"{command[1]} returned a non-object result")
+    return payload
+
+
+def _require_candidate_performance_args(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    if args.scope != "candidate":
+        return
+    if not args.candidate_revision:
+        parser.error("--candidate-revision is required for candidate scope")
+    performance_values = {
+        "--performance-state-home": args.performance_state_home,
+        "--performance-runtime": args.performance_runtime,
+        "--performance-target-revision": args.performance_target_revision,
+        "--performance-installed-package-commit": args.performance_installed_package_commit,
+        "--performance-data-source-identity": args.performance_data_source_identity,
+        "--performance-data-source-kind": args.performance_data_source_kind,
+        "--performance-declaration": args.performance_declaration,
+    }
+    missing = [name for name, value in performance_values.items() if not value]
+    if missing:
+        parser.error("candidate performance gate requires: " + ", ".join(missing))
+    if args.performance_target_revision != args.candidate_revision:
+        parser.error("--performance-target-revision must equal --candidate-revision")
+    if args.performance_data_source_kind == "fixture" and not args.performance_fixture_digest:
+        parser.error("fixture performance gates require --performance-fixture-digest")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", choices=("affected", "candidate"), required=True)
     parser.add_argument("--candidate-revision")
     parser.add_argument("--bridgewright", default="bridgewright")
+    parser.add_argument("--performance-state-home")
+    parser.add_argument("--performance-runtime")
+    parser.add_argument("--performance-target-revision")
+    parser.add_argument("--performance-installed-package-commit")
+    parser.add_argument("--performance-data-source-identity")
+    parser.add_argument("--performance-data-source-kind", choices=("fixture", "environment"))
+    parser.add_argument("--performance-fixture-digest")
+    parser.add_argument("--performance-declaration")
     args = parser.parse_args(argv)
+    _require_candidate_performance_args(args, parser)
 
     _run(args.bridgewright, "assurance-validate", "--project-root", str(ROOT))
     _run(args.bridgewright, "assurance-prescribe", "--project-root", str(ROOT))
+    performance_declaration = (
+        args.performance_declaration
+        if args.scope == "candidate"
+        else "tests/fixtures/performance_assurance/declaration.json"
+    )
+    _run(
+        args.bridgewright,
+        "performance-validate",
+        "--project-root",
+        str(ROOT),
+        "--declaration",
+        performance_declaration,
+    )
     tests = FOCUSED_TESTS + (FULL_ADDITIONAL_TESTS if args.scope == "candidate" else [])
     # The existing Django browser suites intentionally use HTTP live-server
     # URLs; isolate their test-only DEBUG setting from Bridgewright and Node.
@@ -71,8 +135,6 @@ def main(argv: list[str] | None = None) -> int:
     _run("node", "tests/test_pw_tz.js")
 
     if args.scope == "candidate":
-        if not args.candidate_revision:
-            parser.error("--candidate-revision is required for candidate scope")
         evidence = build_evidence(
             ROOT,
             candidate_revision=args.candidate_revision,
@@ -92,6 +154,42 @@ def main(argv: list[str] | None = None) -> int:
             "--evidence",
             str(EVIDENCE_RELATIVE_PATH),
         )
+        performance_run = _run_json(
+            args.bridgewright,
+            "performance-run",
+            "--project-root",
+            str(ROOT),
+            "--state-home",
+            args.performance_state_home,
+            "--runtime",
+            args.performance_runtime,
+            "--target-revision",
+            args.performance_target_revision,
+            "--installed-package-commit",
+            args.performance_installed_package_commit,
+            "--data-source-identity",
+            args.performance_data_source_identity,
+            "--data-source-kind",
+            args.performance_data_source_kind,
+            "--declaration",
+            args.performance_declaration,
+            *((["--fixture-digest", args.performance_fixture_digest]) if args.performance_fixture_digest else []),
+        )
+        attempt_id = performance_run.get("attempt_id")
+        if not isinstance(attempt_id, str) or not attempt_id:
+            raise RuntimeError("performance-run did not return an attempt_id")
+        performance_result = _run_json(
+            args.bridgewright,
+            "performance-result",
+            "--state-home",
+            args.performance_state_home,
+            "--attempt-id",
+            attempt_id,
+        )
+        if performance_result.get("attempt_id") != attempt_id:
+            raise RuntimeError("performance-result did not return the performance-run attempt")
+        if performance_result.get("status") != "clean":
+            raise RuntimeError("performance-result was not clean")
     return 0
 
 

@@ -3,8 +3,9 @@
 (function () {
   'use strict';
 
-  var STORAGE_VERSION = 1;
-  var STORAGE_PREFIX = 'pushinweight.home.preferences.v1:';
+  var STORAGE_VERSION = 2;
+  var STORAGE_PREFIX = 'pushinweight.home.preferences.v2:';
+  var LEGACY_STORAGE_PREFIX = 'pushinweight.home.preferences.v1:';
   var MULTI_VALUE_KEYS = [
     'brands', 'discourse', 'post_types', 'role', 'lang', 'sentiment',
     'cn_nationalism', 'us_nationalism',
@@ -19,6 +20,7 @@
     ? (body.getAttribute('data-pw-preferences-namespace') || 'anonymous')
     : 'anonymous';
   var storageKey = STORAGE_PREFIX + namespace;
+  var legacyStorageKey = LEGACY_STORAGE_PREFIX + namespace;
 
   function defaultFilters() {
     return {
@@ -101,14 +103,33 @@
 
   function readStoredPreferences() {
     if (!storageEnabled) return null;
+    var parsed = null;
     try {
       var raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      var parsed = JSON.parse(raw);
-      if (!parsed || parsed.version !== STORAGE_VERSION || typeof parsed !== 'object') {
-        return null;
+      if (raw) {
+        parsed = JSON.parse(raw);
       }
-      return parsed;
+    } catch (_error) {
+      parsed = null;
+    }
+    try {
+      if (parsed && parsed.version === STORAGE_VERSION && typeof parsed === 'object') {
+        window.localStorage.removeItem(legacyStorageKey);
+        return parsed;
+      }
+      var legacyRaw = window.localStorage.getItem(legacyStorageKey);
+      if (!legacyRaw) return null;
+      var legacy = JSON.parse(legacyRaw);
+      if (!legacy || legacy.version !== 1 || typeof legacy !== 'object') return null;
+      var migrated = {
+        version: STORAGE_VERSION,
+        locale: normalizeLocale(legacy.locale, 'zh_cn'),
+        timezone: legacy.timezone === 'ca' ? 'ca' : 'local',
+        lens: normalizeLenses(legacy.lens),
+      };
+      window.localStorage.setItem(storageKey, JSON.stringify(migrated));
+      window.localStorage.removeItem(legacyStorageKey);
+      return migrated;
     } catch (error) {
       console.warn('pw-filter-store: preferences unavailable', error);
       return null;
@@ -198,19 +219,6 @@
     return result;
   }
 
-  function pulseInventory() {
-    return Array.prototype.slice.call(document.querySelectorAll('[data-pw-pulse-entry]'))
-      .map(function (button) { return button.getAttribute('data-pw-pulse-entry'); });
-  }
-
-  function normalizePulseBrands(raw) {
-    if (!Array.isArray(raw)) return [];
-    var allowed = pulseInventory();
-    return raw.filter(function (nickname, index) {
-      return allowed.indexOf(nickname) !== -1 && raw.indexOf(nickname) === index;
-    });
-  }
-
   function normalizeLocale(value, fallback) {
     if (['zh_cn', 'zh-CN', 'zh_hans', 'en', 'original'].indexOf(value) !== -1) return value;
     return fallback;
@@ -220,16 +228,8 @@
   var stored = readStoredPreferences();
   var state = storageEnabled ? clone(serverState) : hydrateFromControlPanel(clone(serverState));
   var urlFilterKeys = explicitFilterKeys();
-  if (storageEnabled && stored) {
-    state = normalizeFilters(stored.filters || {}, serverState);
-    if (ALLOWED_WINDOWS.indexOf(Number(stored.window)) !== -1) {
-      state.window = Number(stored.window);
-    }
-    urlFilterKeys.forEach(function (key) { state[key] = clone(serverState[key]); });
-  }
-  var pulseBrands = stored ? normalizePulseBrands(stored.pulseBrands) : [];
-  if (urlFilterKeys.indexOf('brands') !== -1) pulseBrands = [];
-  else if (pulseBrands.length) state.brands = clone(pulseBrands);
+  urlFilterKeys.forEach(function (key) { state[key] = clone(serverState[key]); });
+  var pulseBrands = [];
   var lenses = normalizeLenses(stored && stored.lens);
   var explicitLocale = queryHas('locale');
   var authoredLocale = normalizeLocale(
@@ -240,17 +240,12 @@
     ? authoredLocale
     : normalizeLocale(stored && stored.locale, authoredLocale);
   var preferenceTimezone = (stored && stored.timezone) === 'ca' ? 'ca' : 'local';
-  var restoredFiltersDiffer = JSON.stringify(state) !== JSON.stringify(serverState);
-
   function preferencePayload() {
     return {
       version: STORAGE_VERSION,
       locale: preferenceLocale,
-      window: Number(state.window),
       timezone: preferenceTimezone,
       lens: clone(lenses),
-      filters: clone(state),
-      pulseBrands: clone(pulseBrands),
     };
   }
 
@@ -258,6 +253,7 @@
     if (!storageEnabled) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(preferencePayload()));
+      window.localStorage.removeItem(legacyStorageKey);
     } catch (error) {
       console.warn('pw-filter-store: preferences unavailable', error);
     }
@@ -419,9 +415,6 @@
     syncWindowControls();
     syncLenses();
     updatePulsePressed();
-    if (restoredFiltersDiffer) {
-      window.setTimeout(function () { emitChange('restore', false); }, 0);
-    }
   }
 
   window.pwFilter = {

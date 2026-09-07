@@ -199,11 +199,28 @@
     if (!/^[A-Z]{2}$/.test(code) || symbolId !== 'flag-' + code.toLowerCase() || !label) {
       return null;
     }
-    if (typeof document !== 'undefined' && typeof document.getElementById === 'function' &&
-        !document.getElementById(symbolId)) {
+    if (countryFlagSpriteUrl()) {
+      var body = document.body;
+      var rawCodes = body && body.getAttribute('data-pw-country-flag-codes');
+      var codes;
+      try { codes = JSON.parse(rawCodes || '[]'); } catch (_error) { codes = []; }
+      if (!Array.isArray(codes) || codes.indexOf(code) === -1) return null;
+    } else if (typeof document !== 'undefined' &&
+               typeof document.getElementById === 'function' &&
+               !document.getElementById(symbolId)) {
       return null;
     }
     return { code: code, symbolId: symbolId, label: label };
+  }
+
+  function countryFlagSpriteUrl() {
+    var body = typeof document !== 'undefined' ? document.body : null;
+    var spriteUrl = body && body.getAttribute('data-pw-country-flag-sprite-url');
+    return spriteUrl && spriteUrl.indexOf('country-flags.svg') !== -1 ? spriteUrl : '';
+  }
+
+  function countryFlagHref(symbolId) {
+    return countryFlagSpriteUrl() + '#' + symbolId;
   }
 
   function accountGeographyHtml(row) {
@@ -241,7 +258,7 @@
         ' aria-label="' + escapeHtml(flag.label) + '" aria-expanded="false">' +
         '<svg class="account-country-flag" viewBox="0 0 16 9"' +
         ' preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">' +
-        '<use href="#' + flag.symbolId + '"></use></svg></button>';
+        '<use href="' + escapeHtml(countryFlagHref(flag.symbolId)) + '"></use></svg></button>';
       if (kind === 'taiwan' && text) {
         content += '<span class="account-geography-connector" aria-hidden="true"></span>';
       }

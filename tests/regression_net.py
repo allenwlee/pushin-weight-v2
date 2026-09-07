@@ -520,14 +520,15 @@ class RegressionNet:
 
     def _check_account_geography_contract(self, html):
         """Net G — geography assets and fail-closed Taiwan presentation."""
-        self.assert_("country flag sprite is embedded once",
-                     html.count('class="pw-country-flag-sprite"') == 1,
-                     "public homepage must expose exactly one runtime flag sprite")
-        self.assert_("country flag sprite contains approved symbols",
-                     all(f'id="flag-{code}"' in html for code in ("cn", "hk", "mo", "tw", "us")),
-                     "approved country symbols are missing from the runtime sprite")
+        self.assert_("country flag sprite is external",
+                     'data-pw-country-flag-sprite-url="' in html and
+                     "country-flags.svg" in html,
+                     "public homepage must reference the external runtime flag sprite")
+        self.assert_("country flag sprite is not inlined",
+                     'class="pw-country-flag-sprite"' not in html,
+                     "country symbols must not inflate every homepage response")
         self.assert_("Taiwan flag is not presented in feed geography",
-                     '<use href="#flag-tw"' not in html,
+                     'country-flags.svg#flag-tw' not in html,
                      "Taiwan geography must use CN plus a neutral text signal")
 
         wrappers = re.findall(

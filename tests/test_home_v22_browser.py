@@ -2527,8 +2527,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_home_preferences_survive_locale_navigation_reload_and_new_page(self) -> None:
-        """Last-used homepage state is restored before chart/feed refresh."""
+    def test_home_preferences_migrate_safe_fields_without_restoring_expensive_state(self) -> None:
+        """v1 storage migrates only safe preferences and never restores filters."""
         cookies = self._anonymous_cookies("en")
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -2538,103 +2538,144 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     cookies,
                     VIEWPORTS["desktop"],
                 )
+                legacy = {
+                    "version": 1,
+                    "locale": "en",
+                    "timezone": "ca",
+                    "lens": {"brands": "closed", "nationalism": "cn"},
+                    "window": 365,
+                    "filters": {"brands": ["qwen"], "window": 365},
+                    "pulseBrands": ["qwen"],
+                }
+                context.add_init_script(
+                    f"localStorage.setItem({json.dumps('pushinweight.home.preferences.v1:anonymous')}, "
+                    f"JSON.stringify({json.dumps(legacy)})); "
+                    "window.__pwPreferenceEvents = []; "
+                    "document.addEventListener('pw:filter-change', event => "
+                    "window.__pwPreferenceEvents.push(event.detail.key));"
+                )
                 page = context.new_page()
+                runtime_requests: list[str] = []
+                page.on(
+                    "request",
+                    lambda request: runtime_requests.append(request.url)
+                    if "/chart.html?" in request.url or "/feed/?" in request.url
+                    else None,
+                )
                 try:
                     page.goto(f"{self.live_server_url}/", wait_until="networkidle")
                     page.wait_for_function("() => window.pwFilter && window.__pwTz")
-
-                    with page.expect_response(lambda response: "/chart.html?" in response.url):
-                        page.locator("[data-pw-window-btn='30']").click()
-                    page.evaluate("() => window.pwFilter.set('brands', ['qwen'])")
-                    page.locator("[data-tz-widget]").click()
-                    page.locator('[data-group="brands"]').click()
-                    page.locator('body > .filter-dropdown [data-lens="closed"]').click()
-
-                    with page.expect_navigation(wait_until="networkidle"):
-                        page.locator('[data-pw-locale-btn="zh_cn"]').click()
-                    page.wait_for_function(
-                        "() => window.pwFilter && window.__pwTz && "
-                        "JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 30"
-                    )
-
                     state = page.evaluate(
                         """() => ({
                           filters: window.pwFilter.get(),
                           preferences: window.pwFilter.getPreferences(),
-                          timezone: window.__pwTz.mode,
-                          locale: document.body.dataset.pwLocale,
-                          brandLens: document.querySelector('[data-lens-pair="open,closed"] .dd-lens-body')?.dataset.activeLens,
-                          storageKeys: Object.keys(localStorage).filter((key) => key.startsWith('pushinweight.home.preferences.v1:')),
+                          storage: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
+                          pressed: [...document.querySelectorAll('[data-pw-pulse-entry][aria-pressed="true"]')].map(node => node.dataset.pwPulseEntry),
+                          events: window.__pwPreferenceEvents,
                         })"""
                     )
-                    self.assertEqual(state["filters"]["window"], 30)
-                    self.assertEqual(state["filters"]["brands"], ["qwen"])
-                    self.assertEqual(state["timezone"], "ca")
-                    self.assertEqual(state["locale"], "zh_cn")
-                    self.assertEqual(state["brandLens"], "closed")
-                    self.assertEqual(state["preferences"]["version"], 1)
-                    self.assertEqual(len(state["storageKeys"]), 1)
+                    self.assertEqual(state["filters"]["window"], 1)
+                    self.assertEqual(state["preferences"]["version"], 2)
+                    self.assertEqual(state["preferences"]["timezone"], "ca")
+                    self.assertEqual(state["preferences"]["lens"], {"brands": "closed", "nationalism": "cn"})
+                    self.assertNotIn("filters", state["preferences"])
+                    self.assertNotIn("window", state["preferences"])
+                    self.assertNotIn("pulseBrands", state["preferences"])
+                    self.assertEqual(state["pressed"], [])
+                    self.assertIn("pushinweight.home.preferences.v2:anonymous", state["storage"])
+                    self.assertNotIn("pushinweight.home.preferences.v1:anonymous", state["storage"])
+                    self.assertNotIn("restore", state["events"])
+                    startup_requests = list(runtime_requests)
+                    self.assertEqual(
+                        startup_requests,
+                        [],
+                        "migrating v1 expensive state must not trigger startup data requests",
+                    )
 
-                    runtime_requests: list[str] = []
-                    page.on(
-                        "request",
-                        lambda request: runtime_requests.append(request.url)
-                        if "/chart.html?" in request.url or "/feed/?" in request.url
-                        else None,
+                    page.evaluate(
+                        "() => { window.pwFilter.set('window', 30); window.pwFilter.set('brands', ['qwen']); }"
                     )
+                    page.wait_for_timeout(100)
                     page.reload(wait_until="networkidle")
-                    page.wait_for_function(
-                        "() => window.pwFilter?.get().window === 30 && window.__pwTz?.mode === 'ca'"
+                    reloaded = page.evaluate(
+                        "() => ({filters: window.pwFilter.get(), preferences: window.pwFilter.getPreferences()})"
                     )
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["qwen"])
-                    for endpoint in ("/chart.html?", "/feed/?"):
-                        first_request = next(
-                            url for url in runtime_requests if endpoint in url
-                        )
-                        query = parse_qs(urlparse(first_request).query)
-                        first_filters = json.loads(query["filters"][0])
-                        self.assertEqual(first_filters["window"], 30)
-                        self.assertEqual(first_filters["brands"], ["qwen"])
-                        self.assertEqual(query["locale"], ["zh_cn"])
+                    self.assertEqual(reloaded["filters"]["window"], 1)
+                    self.assertNotEqual(reloaded["filters"]["window"], 30)
+                    self.assertEqual(reloaded["preferences"]["version"], 2)
+                    self.assertEqual(reloaded["preferences"]["timezone"], "ca")
+
+                    page.evaluate(
+                        "() => { window.pwFilter.setPreference('locale', 'zh_cn'); window.pwFilter.setLens('brands', 'closed'); window.pwFilter.setLens('nationalism', 'cn'); }"
+                    )
+                    with page.expect_navigation(wait_until="networkidle"):
+                        page.locator('[data-pw-locale-btn="zh_cn"]').click()
+                    self.assertEqual(page.locator('[data-pw-locale-btn].is-active').inner_text(), "中文")
+                    page.reload(wait_until="networkidle")
+                    safe_reload = page.evaluate(
+                        "() => ({preferences: window.pwFilter.getPreferences(), locale: document.body.dataset.pwLocale})"
+                    )
+                    self.assertEqual(safe_reload["locale"], "zh_cn")
+                    self.assertEqual(safe_reload["preferences"]["timezone"], "ca")
+                    self.assertEqual(safe_reload["preferences"]["lens"], {"brands": "closed", "nationalism": "cn"})
 
                     override = json.dumps({"brands": ["minimax"], "window": 7})
                     page.goto(
                         f"{self.live_server_url}/?{urlencode({'filters': override})}",
                         wait_until="networkidle",
                     )
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["minimax"])
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 7)
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["minimax"])
                     page.goto(f"{self.live_server_url}/", wait_until="networkidle")
-                    page.wait_for_function("() => window.pwFilter?.get().window === 30")
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), ["qwen"])
-
+                    self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 1)
                     next_page = context.new_page()
                     try:
                         next_page.goto(f"{self.live_server_url}/", wait_until="networkidle")
-                        next_page.wait_for_function(
-                            "() => window.pwFilter?.get().window === 30 && window.__pwTz?.mode === 'ca'"
-                        )
-                        self.assertEqual(
-                            next_page.evaluate("() => window.pwFilter.get().brands"),
-                            ["qwen"],
-                        )
+                        self.assertEqual(next_page.evaluate("() => window.pwFilter.get().window"), 1)
+                        self.assertEqual(next_page.evaluate("() => window.pwFilter.getPreferences().timezone"), "ca")
                     finally:
                         next_page.close()
-
-                    # A URL locale is a transient override. Choosing a locale
-                    # consumes that override instead of redirecting back into it.
-                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
-                    self.assertEqual(page.locator('[data-pw-locale-btn].is-active').inner_text(), "en")
-                    with page.expect_navigation(wait_until="networkidle"):
-                        page.locator('[data-pw-locale-btn="zh_cn"]').click()
-                    self.assertNotIn("locale=", page.url)
-                    self.assertEqual(page.locator('[data-pw-locale-btn].is-active').inner_text(), "中文")
                 finally:
                     context.close()
             finally:
                 browser.close()
 
-    def test_locale_only_restore_refetches_data_and_invalid_storage_falls_back(self) -> None:
+    def test_home_response_binds_the_deployed_revision_header(self) -> None:
+        candidate = "d" * 40
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RENDER_GIT_COMMIT", None)
+            os.environ["BRIDGEWRIGHT_TARGET_REVISION"] = candidate
+            response = Client(HTTP_HOST="localhost").get("/", secure=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["X-Bridgewright-Revision"], candidate)
+            cookies = self._anonymous_cookies("en")
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    context = self._context_with_cookies(
+                        browser,
+                        cookies,
+                        VIEWPORTS["desktop"],
+                    )
+                    page = context.new_page()
+                    try:
+                        navigation = page.goto(
+                            f"{self.live_server_url}/",
+                            wait_until="domcontentloaded",
+                        )
+                        self.assertIsNotNone(navigation)
+                        self.assertEqual(navigation.status, 200)
+                        self.assertEqual(
+                            navigation.headers.get("x-bridgewright-revision"),
+                            candidate,
+                        )
+                    finally:
+                        context.close()
+                finally:
+                    browser.close()
+
+    def test_safe_preferences_and_invalid_storage_fall_back(self) -> None:
         cookies = self._anonymous_cookies("en")
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -2650,6 +2691,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     storage_key = page.evaluate("() => window.pwFilter.storageKey")
                     preferences = page.evaluate("() => window.pwFilter.getPreferences()")
                     preferences["locale"] = "zh_cn"
+                    preferences["timezone"] = "ca"
+                    preferences["lens"] = {"brands": "closed", "nationalism": "cn"}
                     page.evaluate(
                         "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
                         [storage_key, preferences],
@@ -2675,16 +2718,44 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             ["zh_cn"],
                         )
 
+                    legacy = {
+                        "version": 1,
+                        "locale": "en",
+                        "timezone": "local",
+                        "lens": {"brands": "open", "nationalism": "us"},
+                        "window": 365,
+                        "filters": {"window": 365, "brands": ["qwen"]},
+                        "pulseBrands": ["qwen"],
+                    }
+                    page.evaluate(
+                        "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
+                        ["pushinweight.home.preferences.v1:anonymous", legacy],
+                    )
+                    page.reload(wait_until="networkidle")
+                    coexistence = page.evaluate(
+                        "() => ({keys: Object.keys(localStorage), preferences: window.pwFilter.getPreferences()})"
+                    )
+                    self.assertIn(storage_key, coexistence["keys"])
+                    self.assertNotIn("pushinweight.home.preferences.v1:anonymous", coexistence["keys"])
+                    self.assertEqual(coexistence["preferences"]["timezone"], "ca")
+
+                    page.evaluate(
+                        "([key, legacyKey, value]) => { localStorage.setItem(key, '{malformed'); localStorage.setItem(legacyKey, JSON.stringify(value)); }",
+                        [storage_key, "pushinweight.home.preferences.v1:anonymous", legacy],
+                    )
+                    page.reload(wait_until="networkidle")
+                    migrated = page.evaluate(
+                        "() => ({keys: Object.keys(localStorage), preferences: window.pwFilter.getPreferences()})"
+                    )
+                    self.assertNotIn("pushinweight.home.preferences.v1:anonymous", migrated["keys"])
+                    self.assertEqual(migrated["preferences"]["version"], 2)
+                    self.assertEqual(migrated["preferences"]["timezone"], "local")
+                    self.assertNotIn("filters", migrated["preferences"])
+
                     invalid = {
                         **preferences,
                         "locale": "not-a-locale",
-                        "window": 999,
                         "timezone": "mars",
-                        "filters": {
-                            **preferences["filters"],
-                            "brands": ["removed-model"],
-                            "window": 999,
-                        },
                     }
                     page.evaluate(
                         "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
@@ -2705,7 +2776,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     page.reload(wait_until="networkidle")
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().window"), 1)
 
-                    stale = {**preferences, "version": 0, "window": 365}
+                    stale = {**preferences, "version": 0}
                     page.evaluate(
                         "([key, value]) => localStorage.setItem(key, JSON.stringify(value))",
                         [storage_key, stale],
@@ -3970,11 +4041,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(
                                 initial["country"]["geography"]["flags"],
-                                ["#flag-us"],
+                                ["/static/country-flags.svg#flag-us"],
                             )
                             self.assertEqual(
                                 initial["australia"]["geography"]["flags"],
-                                ["#flag-au"],
+                                ["/static/country-flags.svg#flag-au"],
                             )
                             self.assertEqual(
                                 initial["australia"]["geography"][
@@ -4000,7 +4071,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(
                                 initial["hierarchy"]["geography"]["flags"],
-                                ["#flag-cn", "#flag-hk"],
+                                [
+                                    "/static/country-flags.svg#flag-cn",
+                                    "/static/country-flags.svg#flag-hk",
+                                ],
                             )
                             self.assertEqual(
                                 initial["hierarchy"]["geography"]["flagInspections"][-1],
@@ -4012,7 +4086,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(
                                 initial["taiwan"]["geography"]["flags"],
-                                ["#flag-cn"],
+                                ["/static/country-flags.svg#flag-cn"],
                             )
                             self.assertNotIn(
                                 "#flag-tw", initial["taiwan"]["geography"]["flags"]
@@ -4091,23 +4165,34 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 4,
                             )
                             self.assertEqual(
+                                page.locator("body").get_attribute(
+                                    "data-pw-country-flag-sprite-url"
+                                ),
+                                "/static/country-flags.svg",
+                            )
+                            self.assertEqual(
                                 page.locator(".account-geography use").evaluate_all(
                                     """nodes => nodes.map(node => node.getAttribute('href'))
-                                      .filter(href => !href || !document.querySelector(href))"""
+                                      .filter(href => !href || !href.startsWith('/static/country-flags.svg#flag-'))"""
                                 ),
                                 [],
                             )
                             revised_symbols = page.evaluate(
-                                """() => ({
-                                  auOverlay: Boolean(document.querySelector(
-                                    '#flag-au g[shape-rendering="geometricPrecision"]'
-                                  )),
-                                  cnBackground: document.querySelector('#flag-cn rect')
-                                    ?.getAttribute('fill'),
-                                  cnStars: document.querySelectorAll(
-                                    '#flag-cn > g > g > path'
-                                  ).length,
-                                })"""
+                                """async () => {
+                                  const url = document.body.dataset.pwCountryFlagSpriteUrl;
+                                  const source = await fetch(url).then(response => response.text());
+                                  const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
+                                  return {
+                                    auOverlay: Boolean(doc.querySelector(
+                                      '#flag-au g[shape-rendering="geometricPrecision"]'
+                                    )),
+                                    cnBackground: doc.querySelector('#flag-cn rect')
+                                      ?.getAttribute('fill'),
+                                    cnStars: doc.querySelectorAll(
+                                      '#flag-cn > g > g > path'
+                                    ).length,
+                                  };
+                                }"""
                             )
                             self.assertEqual(
                                 revised_symbols,
@@ -4119,7 +4204,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(
                                 page.locator(
-                                    ".account-geography use[href='#flag-tw']"
+                                    ".account-geography use[href='/static/country-flags.svg#flag-tw']"
                                 ).count(),
                                 0,
                             )

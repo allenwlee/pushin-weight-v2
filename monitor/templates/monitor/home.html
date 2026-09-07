@@ -25,6 +25,8 @@
       data-pw-brands='{{ brand_nicknames_json|safe }}'
       data-pw-locale="{{ active_locale }}"
       data-pw-preferences-namespace="{{ home_preferences_namespace }}"
+      data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
+      data-pw-country-flag-codes='{{ country_flag_codes_json|safe }}'
       data-pw-window="{{ home_window_days }}"
       data-pw-page="multi"
       data-pw-shell="v20"
@@ -33,7 +35,6 @@
       data-pw-variant="v20">
 
 {% include "monitor/_cyber_quan_sprite.html" %}
-{% include "monitor/_country_flag_sprite.html" %}
 
 <div class="app-shell">
 

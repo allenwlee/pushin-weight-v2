@@ -66,7 +66,7 @@ from core.models import (
     SentimentKey,
     SentimentLabel,
 )
-from monitor.country_flags import country_flag_symbol_id
+from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
 from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
@@ -2602,6 +2602,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
         "home_preferences_namespace": _home_preferences_namespace(request),
+        "country_flag_codes_json": json.dumps(sorted(COUNTRY_FLAG_CODES)),
         **filter_entries,
         "pulse": initial_chart_payload["pulse"],
         "payload": json.dumps(initial_chart_payload),
