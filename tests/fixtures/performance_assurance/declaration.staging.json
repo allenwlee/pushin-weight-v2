@@ -55,6 +55,7 @@
       "profile": "desktop",
       "runs": 2,
       "state_seeds": [
+        {"storage": "cookie", "name": "locale", "value": "en"},
         {
           "storage": "local_storage",
           "name": "pushinweight.home.preferences.v1:anonymous",
@@ -87,6 +88,7 @@
       "profile": "mobile",
       "runs": 2,
       "state_seeds": [
+        {"storage": "cookie", "name": "locale", "value": "en"},
         {
           "storage": "local_storage",
           "name": "pushinweight.home.preferences.v1:anonymous",

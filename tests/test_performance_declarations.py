@@ -40,3 +40,28 @@ def test_performance_actions_use_inert_inspection_click() -> None:
             for scenario in declaration["scenarios"]
             for action in scenario["actions"]
         )
+
+
+def test_performance_scenarios_seed_coherent_locale_and_legacy_state() -> None:
+    for name in ("declaration.json", "declaration.staging.json"):
+        declaration = _load(name)
+        for scenario in declaration["scenarios"]:
+            seeds = scenario["state_seeds"]
+            locale_seeds = [seed for seed in seeds if seed["storage"] == "cookie" and seed["name"] == "locale"]
+            legacy_seeds = [
+                seed
+                for seed in seeds
+                if seed["storage"] == "local_storage"
+                and seed["name"] == "pushinweight.home.preferences.v1:anonymous"
+            ]
+            assert len(seeds) == 2
+            assert locale_seeds == [{"storage": "cookie", "name": "locale", "value": "en"}]
+            assert len(legacy_seeds) == 1
+            legacy = json.loads(legacy_seeds[0]["value"])
+            assert legacy["version"] == 1
+            assert legacy["locale"] == "en"
+            assert legacy["timezone"] == "ca"
+            assert legacy["lens"] == {"brands": "closed", "nationalism": "cn"}
+            assert legacy["window"] == 365
+            assert legacy["filters"] == {"brands": ["qwen"], "window": 365}
+            assert legacy["pulseBrands"] == ["qwen"]
