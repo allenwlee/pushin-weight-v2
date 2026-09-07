@@ -1,0 +1,16 @@
+{
+  "id": 9,
+  "jsonrpc": "2.0",
+  "result": {
+    "description": "A short written summary of the week, suitable for pasting into a team channel.",
+    "messages": [
+      {
+        "content": {
+          "text": "Write this week's mention digest for the last_7_days window.\n\nUse get_mention_analytics for the totals, then list_mentions to pull the few\nposts worth quoting.\n\nStructure it as:\n- one sentence on volume and whether it moved\n- what people praised, with one real quote and its link\n- what people complained about, grouped by theme\n- product ideas that came up more than once\n- anything still unhandled that needs an owner\n\nKeep it under 200 words. Quote real posts rather than paraphrasing them, and\nlink every quote. If the relevance rate is below 50%, say so and suggest which\nkeyword is bringing in noise.",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  }
+}

@@ -1,0 +1,155 @@
+[HerculeRadar](https://herculeradar.com/) [Use cases](https://herculeradar.com/use-cases/product-feedback) [Sources](https://herculeradar.com/listening/reddit) [Pricing](https://herculeradar.com/#pricing) [Docs](https://herculeradar.com/docs)
+
+[Sign in](https://herculeradar.com/login) [Start free](https://herculeradar.com/login)
+
+[Use cases](https://herculeradar.com/use-cases/product-feedback) [Sources](https://herculeradar.com/listening/reddit) [Pricing](https://herculeradar.com/#pricing) [Docs](https://herculeradar.com/docs)
+
+Developers
+
+[OpenAPI](https://herculeradar.com/openapi.json)
+
+Guides
+
+- [Overview](https://herculeradar.com/docs)
+- [Quickstart](https://herculeradar.com/docs/quickstart)
+- [Authentication](https://herculeradar.com/docs/authentication)
+- [REST API](https://herculeradar.com/docs/api)
+- [MCP](https://herculeradar.com/docs/mcp)
+- [Webhooks](https://herculeradar.com/docs/webhooks)
+- [Errors & limits](https://herculeradar.com/docs/errors)
+
+Projects
+
+- [list\_projects](https://herculeradar.com/docs/reference/list_projects)
+- [create\_project](https://herculeradar.com/docs/reference/create_project)
+- [get\_project](https://herculeradar.com/docs/reference/get_project)
+
+Monitors
+
+- [list\_monitors](https://herculeradar.com/docs/reference/list_monitors)
+- [create\_monitor](https://herculeradar.com/docs/reference/create_monitor)
+- [update\_monitor](https://herculeradar.com/docs/reference/update_monitor)
+- [delete\_monitor](https://herculeradar.com/docs/reference/delete_monitor)
+
+Mentions
+
+- [list\_mentions](https://herculeradar.com/docs/reference/list_mentions)
+- [get\_mention](https://herculeradar.com/docs/reference/get_mention)
+- [update\_mention\_status](https://herculeradar.com/docs/reference/update_mention_status)
+- [get\_mention\_analytics](https://herculeradar.com/docs/reference/get_mention_analytics)
+
+Alerts
+
+- [list\_alerts](https://herculeradar.com/docs/reference/list_alerts)
+- [create\_alert](https://herculeradar.com/docs/reference/create_alert)
+- [delete\_alert](https://herculeradar.com/docs/reference/delete_alert)
+
+Usage
+
+- [get\_usage](https://herculeradar.com/docs/reference/get_usage)
+
+# Quickstart
+
+Two minutes to a first call, five to a connected agent.
+
+## 1\. Create a key
+
+In [Developer](https://herculeradar.com/app/developer), create an API key. Choose read-only if the integration only reads. The plaintext is shown once.
+
+## 2\. Read your feed
+
+```
+curl "https://herculeradar.com/api/v1/mentions?date_preset=last_24_hours&min_urgency=70" \
+  --header "Authorization: Bearer hr_live_…"
+```
+
+Every parameter is optional. Calling `/api/v1/mentions` with none returns the most recent 50.
+
+## 3\. Start watching something
+
+```
+curl "https://herculeradar.com/api/v1/monitors" \
+  --request POST \
+  --header "Authorization: Bearer hr_live_…" \
+  --header "Content-Type: application/json" \
+  --header "Idempotency-Key: $(uuidgen)" \
+  --data '{
+    "name": "Acme",
+    "keywords": ["Acme", "acme.dev", "@acmehq"],
+    "sources": ["x", "reddit", "youtube"]
+  }'
+```
+
+Matching is literal, so include the domain and the handle. The idempotency key means a retried request cannot create a second monitor.
+
+## 4\. Connect an agent
+
+```
+{
+  "mcpServers": {
+    "herculeradar": {
+      "url": "https://herculeradar.com/api/mcp",
+      "headers": { "Authorization": "Bearer hr_live_…" }
+    }
+  }
+}
+```
+
+Then ask it something real: _“What did people complain about this week, and is any of it the same complaint twice?”_
+
+## Next
+
+- [REST conventions](https://herculeradar.com/docs/api) — the envelope, cursors, idempotency
+- [MCP](https://herculeradar.com/docs/mcp) — tools, resources and prompts
+- [Errors & limits](https://herculeradar.com/docs/errors) — codes and retry rules
+
+[HerculeRadar](https://herculeradar.com/)
+
+AI that watches the internet for your business.
+
+in
+
+[Use cases](https://herculeradar.com/use-cases)
+
+- [Customer support](https://herculeradar.com/use-cases/customer-support)
+- [Product feedback](https://herculeradar.com/use-cases/product-feedback)
+- [Testimonials](https://herculeradar.com/use-cases/testimonials)
+- [Social selling](https://herculeradar.com/use-cases/social-selling)
+- [Competitor monitoring](https://herculeradar.com/use-cases/competitor-monitoring)
+- [PR monitoring](https://herculeradar.com/use-cases/pr-monitoring)
+- [Reputation management](https://herculeradar.com/use-cases/reputation-management)
+- [Agencies](https://herculeradar.com/use-cases/agencies)
+- [Brand monitoring](https://herculeradar.com/use-cases/brand-monitoring)
+- [Launches](https://herculeradar.com/use-cases/launch-monitoring)
+
+[Sources](https://herculeradar.com/listening)
+
+- [X monitoring](https://herculeradar.com/listening/x)
+- [Reddit monitoring](https://herculeradar.com/listening/reddit)
+- [YouTube monitoring](https://herculeradar.com/listening/youtube)
+- [LinkedIn monitoring](https://herculeradar.com/listening/linkedin)
+- [Threads monitoring](https://herculeradar.com/listening/threads)
+
+Developers
+
+- [Pricing](https://herculeradar.com/#pricing)
+- [Documentation](https://herculeradar.com/docs)
+- [OpenAPI 3.1](https://herculeradar.com/openapi.json)
+- [llms.txt](https://herculeradar.com/llms.txt)
+- [Privacy](https://herculeradar.com/privacy)
+- [Terms](https://herculeradar.com/terms)
+
+My projects
+
+- [![](https://herculeradar.com/projects/metricmap.ico)MetricMap](https://metricmap.app/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Affiliate analytics — every click, conversion and commission in one map.")
+- · [![](https://herculeradar.com/projects/reelsradar.ico)ReelsRadar.io](https://reelsradar.io/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Find the short-form videos taking off before everyone else does.")
+- · [![](https://herculeradar.com/projects/videototext.png)VideoToText](https://videototext.click/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Turn any video into a transcript you can search and quote.")
+- · [![](https://herculeradar.com/projects/commenthunter.ico)CommentHunter.click](https://commenthunter.click/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Find the comment threads where your product belongs.")
+- · [![](https://herculeradar.com/projects/humantext.png)HumanText.click](https://humantext.click/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Rewrite AI drafts into something a person would actually send.")
+- · [![](https://herculeradar.com/projects/kpiboard.png)KpiBoard.io](https://kpiboard.io/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "One board for the handful of numbers that decide the week.")
+- · [![](https://herculeradar.com/projects/postroutine.ico)PostRoutine.io](https://postroutine.io/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Publish on a schedule you can keep, across every network.")
+- · [![](https://herculeradar.com/projects/viralclone.ico)ViralClone.click](https://viralclone.click/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Take what worked once and make it work again.")
+- · [![](https://herculeradar.com/projects/seoroutine.ico)SeoRoutine.com](https://seoroutine.com/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "SEO work broken into a routine instead of a project.")
+- · [![](https://herculeradar.com/projects/heritagecars.ico)HeritageCars](https://heritagecars.online/?utm_source=herculeradar.com&utm_medium=referral&utm_campaign=footer "Classic cars, catalogued properly.")
+
+© 2026HerculeRadar. Public data only. [Built by![](https://pbs.twimg.com/profile_images/1933039915337408512/D98C7Znz_400x400.jpg)Max Hamal](https://x.com/maksgamal)

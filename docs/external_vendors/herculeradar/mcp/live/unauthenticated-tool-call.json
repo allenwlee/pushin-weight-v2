@@ -1,0 +1,21 @@
+{
+  "id": 12,
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "text": "{\n  \"error\": {\n    \"code\": \"UNAUTHORIZED\",\n    \"message\": \"Missing API key or session\",\n    \"requestId\": \"req_AxHGMFZcR63rJObB\",\n    \"docs\": \"https://herculeradar.com/docs/reference/list_projects\"\n  }\n}",
+        "type": "text"
+      }
+    ],
+    "isError": true,
+    "structuredContent": {
+      "error": {
+        "code": "UNAUTHORIZED",
+        "docs": "https://herculeradar.com/docs/reference/list_projects",
+        "message": "Missing API key or session",
+        "requestId": "<redacted>"
+      }
+    }
+  }
+}

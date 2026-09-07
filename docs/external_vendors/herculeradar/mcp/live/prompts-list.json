@@ -1,0 +1,57 @@
+{
+  "id": 4,
+  "jsonrpc": "2.0",
+  "result": {
+    "prompts": [
+      {
+        "arguments": [
+          {
+            "description": "A date_preset, e.g. last_24_hours",
+            "name": "window",
+            "required": false
+          }
+        ],
+        "description": "Review everything new and hand back a short, prioritised list of what to act on.",
+        "name": "triage_inbox"
+      },
+      {
+        "arguments": [
+          {
+            "description": "A date_preset, default last_7_days",
+            "name": "window",
+            "required": false
+          }
+        ],
+        "description": "A short written summary of the week, suitable for pasting into a team channel.",
+        "name": "weekly_digest"
+      },
+      {
+        "arguments": [
+          {
+            "description": "The brand or product name",
+            "name": "brand",
+            "required": true
+          },
+          {
+            "description": "Its website, if known",
+            "name": "website",
+            "required": false
+          }
+        ],
+        "description": "Set up monitoring for a brand from scratch, including competitors.",
+        "name": "set_up_monitoring"
+      },
+      {
+        "arguments": [
+          {
+            "description": "A date_preset, default last_7_days",
+            "name": "window",
+            "required": false
+          }
+        ],
+        "description": "Find people publicly asking for what this product does.",
+        "name": "find_leads"
+      }
+    ]
+  }
+}

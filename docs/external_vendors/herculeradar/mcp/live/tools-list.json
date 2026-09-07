@@ -1,0 +1,583 @@
+{
+  "id": 2,
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "_meta": {
+          "scope": "projects:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "List projects"
+        },
+        "description": "List the projects this credential can reach. Start here when you do not know the project id.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "list_projects"
+      },
+      {
+        "_meta": {
+          "scope": "projects:write"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Create project"
+        },
+        "description": "Create a workspace for a brand. Only needed once per brand you monitor.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Brand or product name",
+              "type": "string"
+            },
+            "website": {
+              "description": "Optional website URL",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "name": "create_project"
+      },
+      {
+        "_meta": {
+          "scope": "monitors:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "List monitors"
+        },
+        "description": "List what is currently being watched: keywords, aliases, sources and whether each monitor is active.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "list_monitors"
+      },
+      {
+        "_meta": {
+          "scope": "monitors:write"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Create monitor"
+        },
+        "description": "Start watching a brand, product or competitor. Include every spelling people actually use — the domain and the @handle as well as the name — because matching is literal.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "exclude_keywords": {
+              "description": "Drop anything containing these, for a name that collides with something else.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "group_name": {
+              "enum": [
+                "my_brand",
+                "competitors",
+                "custom"
+              ],
+              "type": "string"
+            },
+            "keywords": {
+              "description": "Names, handles and domains. All spellings you want matched.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "name": {
+              "type": "string"
+            },
+            "sources": {
+              "items": {
+                "enum": [
+                  "x",
+                  "reddit",
+                  "youtube",
+                  "linkedin",
+                  "threads"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "keywords"
+          ],
+          "type": "object"
+        },
+        "name": "create_monitor"
+      },
+      {
+        "_meta": {
+          "scope": "monitors:write"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Update monitor"
+        },
+        "description": "Change a monitor’s keywords, sources or active state. Only the fields you pass change.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "description": "false pauses collection without deleting history",
+              "type": "boolean"
+            },
+            "exclude_keywords": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "keywords": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "monitor_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "sources": {
+              "items": {
+                "enum": [
+                  "x",
+                  "reddit",
+                  "youtube",
+                  "linkedin",
+                  "threads"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "monitor_id"
+          ],
+          "type": "object"
+        },
+        "name": "update_monitor"
+      },
+      {
+        "_meta": {
+          "scope": "monitors:write"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Delete monitor"
+        },
+        "description": "Permanently remove a monitor. Mentions already collected are kept. Prefer update_monitor with active:false if the user may want it back.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "monitor_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "monitor_id"
+          ],
+          "type": "object"
+        },
+        "name": "delete_monitor"
+      },
+      {
+        "_meta": {
+          "scope": "mentions:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "List mentions"
+        },
+        "description": "The main read tool. Returns collected posts newest first, already classified. Call with no arguments for the latest, or filter by category, sentiment, urgency, source or a named time window. Page with the returned nextCursor.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "author_handle": {
+              "description": "Exact handle, without the @",
+              "type": "string"
+            },
+            "category": {
+              "enum": [
+                "bug_report",
+                "complaint",
+                "misinformation",
+                "product_idea",
+                "testimonial",
+                "other"
+              ],
+              "type": "string"
+            },
+            "cursor": {
+              "description": "nextCursor from the previous page",
+              "type": "string"
+            },
+            "date_preset": {
+              "enum": [
+                "today",
+                "last_24_hours",
+                "last_7_days",
+                "last_30_days",
+                "last_90_days",
+                "month_to_date",
+                "all_time"
+              ],
+              "type": "string"
+            },
+            "limit": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "max_urgency": {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "min_urgency": {
+              "description": "70+ is worth interrupting someone for",
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "monitor_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "search": {
+              "description": "Case-insensitive substring of the post text",
+              "type": "string"
+            },
+            "sentiment": {
+              "enum": [
+                "positive",
+                "neutral",
+                "negative"
+              ],
+              "type": "string"
+            },
+            "since": {
+              "description": "Overrides date_preset",
+              "format": "date-time",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "x",
+                "reddit",
+                "youtube",
+                "linkedin",
+                "threads"
+              ],
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "new",
+                "reviewed",
+                "done",
+                "ignored"
+              ],
+              "type": "string"
+            },
+            "until": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": "list_mentions"
+      },
+      {
+        "_meta": {
+          "scope": "mentions:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "Get mention"
+        },
+        "description": "Fetch one mention in full, with its AI classification and a link to the original post.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "mention_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mention_id"
+          ],
+          "type": "object"
+        },
+        "name": "get_mention"
+      },
+      {
+        "_meta": {
+          "scope": "mentions:write"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Update mention status"
+        },
+        "description": "Move a mention through triage. Use done once it has been handled and ignored when it is not really about the brand.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "mention_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "new",
+                "reviewed",
+                "done",
+                "ignored"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "mention_id",
+            "status"
+          ],
+          "type": "object"
+        },
+        "name": "update_mention_status"
+      },
+      {
+        "_meta": {
+          "scope": "mentions:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "Get mention analytics"
+        },
+        "description": "Counts for a window — totals, relevance rate, how many need attention, and breakdowns by category, sentiment and source. Use this to answer \"how are we doing\" without paging the whole feed.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "date_preset": {
+              "enum": [
+                "today",
+                "last_24_hours",
+                "last_7_days",
+                "last_30_days",
+                "last_90_days",
+                "month_to_date",
+                "all_time"
+              ],
+              "type": "string"
+            },
+            "monitor_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": "get_mention_analytics"
+      },
+      {
+        "_meta": {
+          "scope": "alerts:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "List alerts"
+        },
+        "description": "List alert rules — what triggers a notification and where it is sent.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "list_alerts"
+      },
+      {
+        "_meta": {
+          "scope": "alerts:write"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Create alert"
+        },
+        "description": "Notify an email address or https webhook when a matching mention arrives. Empty filter arrays mean \"any\".",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "categories": {
+              "items": {
+                "enum": [
+                  "bug_report",
+                  "complaint",
+                  "misinformation",
+                  "product_idea",
+                  "testimonial",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "channel": {
+              "enum": [
+                "email",
+                "webhook"
+              ],
+              "type": "string"
+            },
+            "destination": {
+              "description": "Email address, or https URL when channel is webhook",
+              "type": "string"
+            },
+            "min_urgency": {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "sentiments": {
+              "items": {
+                "enum": [
+                  "positive",
+                  "neutral",
+                  "negative"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "sources": {
+              "items": {
+                "enum": [
+                  "x",
+                  "reddit",
+                  "youtube",
+                  "linkedin",
+                  "threads"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "destination"
+          ],
+          "type": "object"
+        },
+        "name": "create_alert"
+      },
+      {
+        "_meta": {
+          "scope": "alerts:write"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false,
+          "title": "Delete alert"
+        },
+        "description": "Permanently remove an alert rule. Notifications stop immediately.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "alert_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "alert_id"
+          ],
+          "type": "object"
+        },
+        "name": "delete_alert"
+      },
+      {
+        "_meta": {
+          "scope": "usage:read"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "Get usage"
+        },
+        "description": "Plan, mentions used against the quota, and what collection cost this period. Check before creating monitors if the user is near their limit.",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "get_usage"
+      }
+    ]
+  }
+}

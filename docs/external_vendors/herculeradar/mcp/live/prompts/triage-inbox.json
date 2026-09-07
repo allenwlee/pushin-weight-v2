@@ -1,0 +1,16 @@
+{
+  "id": 8,
+  "jsonrpc": "2.0",
+  "result": {
+    "description": "Review everything new and hand back a short, prioritised list of what to act on.",
+    "messages": [
+      {
+        "content": {
+          "text": "Triage the mention inbox for the last_24_hours window.\n\n1. Call get_mention_analytics for the window to see the shape of it.\n2. Call list_mentions with status \"new\", sorted by what matters: start with\n   min_urgency 70, then work down. Page with nextCursor if needed.\n3. Group what you find by category.\n\nThen give me, in plain prose:\n- anything that needs a reply today, with the link and one line on why\n- what people are asking for, if a request came up more than once\n- anything that looks like a factual error about us\n\nDo not list every mention. If nothing needs action, say so in one sentence.\nDo not change any statuses unless I ask.",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  }
+}

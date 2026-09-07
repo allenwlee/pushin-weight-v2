@@ -1,0 +1,202 @@
+{
+  "data": {
+    "links": [
+      {
+        "url": "https://herculeradar.com"
+      },
+      {
+        "url": "https://herculeradar.com/pricing"
+      },
+      {
+        "description": "Ten ways teams use HerculeRadar: support, product feedback, competitor tracking, testimonials, crisis detection and more.",
+        "title": "Social listening use cases - HerculeRadar",
+        "url": "https://herculeradar.com/use-cases"
+      },
+      {
+        "description": "HerculeRadar collects mentions from X, Reddit, YouTube, LinkedIn and Threads — what each source covers, and what it cannot. We search post titles and bodies ...",
+        "title": "Where we listen - HerculeRadar",
+        "url": "https://herculeradar.com/listening"
+      },
+      {
+        "description": "The three surfaces REST — for scripts, backends and scheduled jobs. HerculeRadar AI that watches the internet for your business.",
+        "title": "Documentation - HerculeRadar",
+        "url": "https://herculeradar.com/docs"
+      },
+      {
+        "url": "https://herculeradar.com/docs/quickstart"
+      },
+      {
+        "description": "Scoped API keys, how credentials are stored, and what each scope grants.",
+        "title": "Authentication · HerculeRadar",
+        "url": "https://herculeradar.com/docs/authentication"
+      },
+      {
+        "description": "REST API ; Projects. A workspace holding monitors, mentions and alerts. list_projects ; Monitors. A keyword set watched across one or more sources. list_monitors ...",
+        "title": "REST API - HerculeRadar",
+        "url": "https://herculeradar.com/docs/api"
+      },
+      {
+        "description": "Connect HerculeRadar to Claude, ChatGPT or your own agent over the Model Context Protocol.",
+        "title": "MCP - HerculeRadar",
+        "url": "https://herculeradar.com/docs/mcp"
+      },
+      {
+        "description": "Receive every classified mention the moment it is ready, with a signed payload.",
+        "title": "Webhooks · HerculeRadar",
+        "url": "https://herculeradar.com/docs/webhooks"
+      },
+      {
+        "description": "Error codes, idempotency, retry rules, rate limits and quota behaviour.",
+        "title": "Errors & limits - HerculeRadar",
+        "url": "https://herculeradar.com/docs/errors"
+      },
+      {
+        "description": "How HerculeRadar collects, processes and stores data — including publicly available social content. correct or delete your data at any time.",
+        "title": "Privacy Policy - HerculeRadar",
+        "url": "https://herculeradar.com/privacy"
+      },
+      {
+        "description": "The service HerculeRadar collects publicly available posts matching keywords you configure, classifies them with AI, It is a listening tool.",
+        "title": "Terms of Service - HerculeRadar",
+        "url": "https://herculeradar.com/terms"
+      },
+      {
+        "description": "Returns every project the credential can reach. An API key is scoped to one project and always returns exactly that project.",
+        "title": "List projects - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/list_projects"
+      },
+      {
+        "description": "Tool name create_project . It takes the same input and returns the same { data, meta } envelope as REST, because both call the same function.",
+        "title": "Create a project - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/create_project"
+      },
+      {
+        "description": "Retrieve a project ... One project, including its plan and mention quota. Write. REST. get /api/v1/projects/{id}.",
+        "title": "Retrieve a project - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/get_project"
+      },
+      {
+        "url": "https://herculeradar.com/docs/reference/list_monitors"
+      },
+      {
+        "url": "https://herculeradar.com/docs/reference/create_monitor"
+      },
+      {
+        "url": "https://herculeradar.com/docs/reference/update_monitor"
+      },
+      {
+        "description": "Permanently remove a monitor. Mentions already collected are kept. Prefer update_monitor with active:false if the user may want it back. Parameters. idrequired ...",
+        "title": "Delete a monitor - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/delete_monitor"
+      },
+      {
+        "description": "The core read capability. Newest first, already classified. Every parameter is optional — call it with nothing for the latest.",
+        "title": "List mentions - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/list_mentions"
+      },
+      {
+        "url": "https://herculeradar.com/docs/reference/get_mention"
+      },
+      {
+        "description": "Move a mention through triage. Status is the only mutable field — everything else is a fact about the post.",
+        "title": "Update mention status - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/update_mention_status"
+      },
+      {
+        "description": "Counts for one window: totals, relevance rate, how many need attention, and breakdowns by category, sentiment, source and status.",
+        "title": "Mention analytics - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/get_mention_analytics"
+      },
+      {
+        "description": "Tool name list_alerts . It takes the same input and returns the same { data, meta } envelope as REST, because both call the same function.",
+        "title": "List alert rules - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/list_alerts"
+      },
+      {
+        "description": "Empty filter arrays mean \"any\". A rule fires at most once per mention, so overlapping rules do not double-send.",
+        "title": "Create an alert rule - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/create_alert"
+      },
+      {
+        "description": "Permanently remove an alert rule. Notifications stop immediately. Parameters. idrequired, string, Alert id. Response.",
+        "title": "Delete an alert rule - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/delete_alert"
+      },
+      {
+        "description": "Plan, mentions used against the quota, and what collection cost this period. Check it before creating monitors if the project is near its limit.",
+        "title": "Plan usage and cost - HerculeRadar",
+        "url": "https://herculeradar.com/docs/reference/get_usage"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/customer-support"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/product-feedback"
+      },
+      {
+        "description": "Build a wall of proof from real posts. Filter to testimonials, open the original, ask for permission to quote. Two minutes per asset.",
+        "title": "Find testimonials people already wrote - HerculeRadar",
+        "url": "https://herculeradar.com/use-cases/testimonials"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/social-selling"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/competitor-monitoring"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/pr-monitoring"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/reputation-management"
+      },
+      {
+        "description": "An agency watching eight brands is running eight of everything: eight logins, eight exports, eight monthly decks assembled the night before the call.",
+        "title": "Social listening for agencies · HerculeRadar",
+        "url": "https://herculeradar.com/use-cases/agencies"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/brand-monitoring"
+      },
+      {
+        "url": "https://herculeradar.com/use-cases/launch-monitoring"
+      },
+      {
+        "description": "X monitoring Every post about you, including the ones that never tag you. Solo $29/mo billed … 3 monitors 1,000 mentions / month",
+        "title": "X (Twitter) mention monitoring - HerculeRadar",
+        "url": "https://herculeradar.com/listening/x"
+      },
+      {
+        "description": "Reddit is where your category gets compared honestly. We search post titles and bodies across every public subreddit.",
+        "title": "Reddit mention monitoring - HerculeRadar",
+        "url": "https://herculeradar.com/listening/reddit"
+      },
+      {
+        "description": "Unlike X and Reddit, YouTube is read through the official Data API rather than a scraper — it is free at our volume, stable, and keeps us inside YouTube's terms ...",
+        "title": "YouTube mention monitoring - HerculeRadar",
+        "url": "https://herculeradar.com/listening/youtube"
+      },
+      {
+        "description": "LinkedIn monitoring The posts your buyers actually read at work. Posts keep their author, company, reactions, comments and reposts. Solo $29/mo billed monthly ...",
+        "title": "LinkedIn mention monitoring - HerculeRadar",
+        "url": "https://herculeradar.com/listening/linkedin"
+      },
+      {
+        "description": "Threads carries the same short, unfiltered product talk as X — and far fewer brands are listening to it.",
+        "title": "Threads mention monitoring - HerculeRadar",
+        "url": "https://herculeradar.com/listening/threads"
+      },
+      {
+        "description": "HerculeRadar monitors public mentions of your brand, products and competitors. AI sorts every mention into bug reports, complaints, product ...",
+        "title": "HerculeRadar — AI that watches the internet for your business.",
+        "url": "http://herculeradar.com"
+      },
+      {
+        "description": "HerculeRadar monitors public mentions of your brand, products and competitors across X, Reddit, YouTube, LinkedIn and Threads, then uses AI to tell you ...",
+        "title": "Sign in - HerculeRadar",
+        "url": "https://herculeradar.com/login"
+      }
+    ]
+  },
+  "success": true
+}

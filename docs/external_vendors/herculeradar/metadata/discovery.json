@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "capture_completed_at": "2026-09-07T01:26:44Z",
+  "canonical_origin": "https://herculeradar.com",
+  "coverage": {
+    "sitemap_urls": 43,
+    "accepted_public_pages": 43,
+    "captured_public_pages": 43,
+    "failed_public_pages": 0,
+    "public_discovery_and_spec_files": 8,
+    "live_mcp_protocol_snapshots": 12
+  },
+  "discovery": {
+    "firecrawl_map": {
+      "status": "success",
+      "urls": 45,
+      "options": {
+        "limit": 1000,
+        "sitemap": "include",
+        "include_subdomains": true,
+        "ignore_query_parameters": true
+      },
+      "artifact": "firecrawl-map.json"
+    },
+    "firecrawl_download": {
+      "status": "partial_then_completed",
+      "reported_candidates": 46,
+      "selected_for_scrape": 45,
+      "initial_successes": 10,
+      "initial_rate_limited": 35,
+      "completion": "Only missing canonical sitemap pages were retried through paced Firecrawl scrape batches. The HTTP alias was reconciled by direct redirect inspection instead of duplicate scraping."
+    },
+    "firecrawl_crawl": {
+      "status": "unavailable",
+      "job_created": false,
+      "attempts": [
+        {
+          "scope": "public site with robots-disallowed paths excluded",
+          "result": "Bad Request"
+        },
+        {
+          "scope": "/docs only, one worker, delayed requests",
+          "result": "Bad Request"
+        }
+      ]
+    },
+    "context7": {
+      "query": "HerculeRadar official MCP documentation and endpoint corpus",
+      "result": "No libraries found for HerculeRadar"
+    },
+    "firecrawl_search": {
+      "query": "\"HerculeRadar\" MCP",
+      "result": "No separate authoritative package or documentation corpus; results were canonical HerculeRadar pages or unrelated name collisions."
+    },
+    "web_search": {
+      "queries": [
+        "\"https://herculeradar.com/api/mcp\"",
+        "site:npmjs.com \"herculeradar.com\" MCP",
+        "site:github.com \"herculeradar.com\" \"api/mcp\""
+      ],
+      "result": "No results"
+    },
+    "direct_http": {
+      "checked_urls": 54,
+      "successful_final_statuses": 54,
+      "non_200_final_statuses": 0
+    },
+    "nextjs_assets": {
+      "result": "Shipped public bundles confirmed /openapi.json, /api/mcp, and /llms-full.txt; no additional public MCP documentation endpoint was accepted without first-party corroboration."
+    }
+  },
+  "canonical_aliases": [
+    {
+      "requested": "http://herculeradar.com",
+      "effective": "https://herculeradar.com/",
+      "final_status": 200,
+      "redirects": 1
+    },
+    {
+      "requested": "https://www.herculeradar.com",
+      "effective": "https://herculeradar.com/",
+      "final_status": 200,
+      "redirects": 1
+    },
+    {
+      "requested": "https://herculradar.com",
+      "effective": "https://herculeradar.com/",
+      "final_status": 200,
+      "redirects": 1
+    }
+  ],
+  "excluded": [
+    {
+      "path": "/login",
+      "reason": "Explicitly disallowed by robots.txt and requires user authentication."
+    },
+    {
+      "path": "/app/",
+      "reason": "Explicitly disallowed by robots.txt and contains authenticated product data."
+    },
+    {
+      "path": "/onboarding",
+      "reason": "Explicitly disallowed by robots.txt."
+    },
+    {
+      "path": "/auth/",
+      "reason": "Explicitly disallowed by robots.txt."
+    },
+    {
+      "path": "/api/",
+      "reason": "Excluded from crawling by robots.txt. The documented /api/mcp transport received only non-mutating discovery and authentication probes requested for the MCP inventory."
+    }
+  ]
+}

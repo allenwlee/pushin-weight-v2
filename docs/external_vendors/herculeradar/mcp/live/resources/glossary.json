@@ -1,0 +1,13 @@
+{
+  "id": 7,
+  "jsonrpc": "2.0",
+  "result": {
+    "contents": [
+      {
+        "mimeType": "text/markdown",
+        "text": "# HerculeRadar glossary\n\n## Mention\n\nOne public post that matched a monitor's keywords. Deduplicated on\n(project, source, external id), so a post matching three aliases is one mention.\n\n## Categories\n\n- `bug_report` — Bug report. Something is broken. Usually the most time-sensitive category.\n- `complaint` — Complaint. Unhappy, but not a defect — pricing, support, policy.\n- `misinformation` — Misinformation. A factual claim about the product that appears untrue.\n- `product_idea` — Product idea. A feature request or a wish, however casually phrased.\n- `testimonial` — Testimonial. Unprompted praise, quotable with the author’s permission.\n- `other` — Other. Relevant but none of the above. The model is never forced to guess.\n\n## Sentiment\n\n`positive` / `neutral` / `negative`, from the author's point of view about\nthe brand — not the tone of the post in general.\n\n## Urgency\n\n0-100, scored by consequence rather than by tone. Public outrage, security\nclaims, viral misinformation and blocked paying customers score high. A passing\npositive remark scores low. 70 and above is worth interrupting a person for.\n\n## Relevance\n\n`is_relevant: false` means the keyword matched by coincidence — a different\ncompany, a common word, spam. These are stored with status `ignored` and are\nexcluded from alerts and webhooks. Relevance rate is the honest measure of\nwhether the monitor's keywords are well chosen.\n\n## Status\n\n`new` → `reviewed` → `done`, or `ignored`. Status is the only mutable\nfield on a mention; everything else is a fact about the post.\n\n## Sources\n\n- `x` — X\n- `reddit` — Reddit\n- `youtube` — YouTube\n- `linkedin` — LinkedIn\n- `threads` — Threads\n\n## Limits\n\nCollection is capped by the plan's mention quota. Reaching it pauses collection\nand returns `USAGE_LIMIT` (HTTP 402) on writes that would collect more; reads\nkeep working. Nothing is billed as overage automatically.\n",
+        "uri": "herculeradar://glossary"
+      }
+    ]
+  }
+}

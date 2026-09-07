@@ -1,0 +1,16 @@
+{
+  "id": 11,
+  "jsonrpc": "2.0",
+  "result": {
+    "description": "Find people publicly asking for what this product does.",
+    "messages": [
+      {
+        "content": {
+          "text": "Find buying-intent conversations from the last_7_days window.\n\nCall list_mentions and look for posts where someone is asking for a\nrecommendation, comparing tools, or complaining about a competitor in a way\nthat suggests they are shopping.\n\nFor each one give me: the link, what they actually want, and one sentence on\nwhy we are or are not a fit. Rank by how likely a reply is to be welcome.\n\nBe honest about weak matches — a bad lead costs more than a missed one, because\nreplying to it burns the account. Do not draft replies unless I ask.",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  }
+}

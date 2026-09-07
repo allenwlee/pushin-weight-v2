@@ -1,0 +1,107 @@
+# HerculeRadar
+
+> HerculeRadar monitors public mentions of your brand, products and competitors across X, Reddit, YouTube, LinkedIn and Threads, then uses AI to tell you which ones actually matter.
+
+## What it does
+
+- Watches keywords across X, Reddit, YouTube, LinkedIn and Threads on a schedule.
+- Deduplicates results into a single mention feed.
+- Classifies every mention: category, sentiment, urgency (0-100), one-line summary.
+- Pushes matching mentions to email or a signed webhook.
+
+## Developer
+
+- Documentation: https://herculeradar.com/docs
+- REST API: https://herculeradar.com/api/v1
+- MCP: https://herculeradar.com/api/mcp
+- OpenAPI 3.1: https://herculeradar.com/openapi.json
+- Webhooks: https://herculeradar.com/docs/webhooks
+- Full agent document: https://herculeradar.com/llms-full.txt
+
+## Capabilities
+
+- Projects: A workspace holding monitors, mentions and alerts.
+- Monitors: A keyword set watched across one or more sources.
+- Mentions: A collected public post with its AI classification.
+- Alerts: A rule that pushes matching mentions to email or a webhook.
+- Usage: Quota consumption and measured provider cost.
+
+## Capabilities (same name in REST and MCP)
+
+- list_projects (GET /api/v1/projects, scope projects:read) — List projects
+- create_project (POST /api/v1/projects, scope projects:write) — Create a project
+- get_project (GET /api/v1/projects/{id}, scope projects:read) — Retrieve a project
+- list_monitors (GET /api/v1/monitors, scope monitors:read) — List monitors
+- create_monitor (POST /api/v1/monitors, scope monitors:write) — Create a monitor
+- update_monitor (PATCH /api/v1/monitors/{id}, scope monitors:write) — Update a monitor
+- delete_monitor (DELETE /api/v1/monitors/{id}, scope monitors:write) — Delete a monitor
+- list_mentions (GET /api/v1/mentions, scope mentions:read) — List mentions
+- get_mention (GET /api/v1/mentions/{id}, scope mentions:read) — Retrieve a mention
+- update_mention_status (PATCH /api/v1/mentions/{id}, scope mentions:write) — Update mention status
+- get_mention_analytics (GET /api/v1/analytics/mentions, scope mentions:read) — Mention analytics
+- list_alerts (GET /api/v1/alerts, scope alerts:read) — List alert rules
+- create_alert (POST /api/v1/alerts, scope alerts:write) — Create an alert rule
+- delete_alert (DELETE /api/v1/alerts/{id}, scope alerts:write) — Delete an alert rule
+- get_usage (GET /api/v1/usage, scope usage:read) — Plan usage and cost
+
+## MCP tools
+
+- list_projects — List the projects this credential can reach. Start here when you do not know the project id.
+- create_project — Create a workspace for a brand. Only needed once per brand you monitor.
+- list_monitors — List what is currently being watched: keywords, aliases, sources and whether each monitor is active.
+- create_monitor — Start watching a brand, product or competitor. Include every spelling people actually use — the domain and the @handle as well as the name — because matching is literal.
+- update_monitor — Change a monitor’s keywords, sources or active state. Only the fields you pass change.
+- delete_monitor — Permanently remove a monitor. Mentions already collected are kept. Prefer update_monitor with active:false if the user may want it back.
+- list_mentions — The main read tool. Returns collected posts newest first, already classified. Call with no arguments for the latest, or filter by category, sentiment, urgency, source or a named time window. Page with the returned nextCursor.
+- get_mention — Fetch one mention in full, with its AI classification and a link to the original post.
+- update_mention_status — Move a mention through triage. Use done once it has been handled and ignored when it is not really about the brand.
+- get_mention_analytics — Counts for a window — totals, relevance rate, how many need attention, and breakdowns by category, sentiment and source. Use this to answer "how are we doing" without paging the whole feed.
+- list_alerts — List alert rules — what triggers a notification and where it is sent.
+- create_alert — Notify an email address or https webhook when a matching mention arrives. Empty filter arrays mean "any".
+- delete_alert — Permanently remove an alert rule. Notifications stop immediately.
+- get_usage — Plan, mentions used against the quota, and what collection cost this period. Check before creating monitors if the user is near their limit.
+
+## Authentication
+
+REST and MCP both accept a project-scoped API key as `Authorization: Bearer hr_live_...`.
+Keys are created in the dashboard under Developer. Only an HMAC digest is stored.
+OAuth 2.1 discovery: https://herculeradar.com/.well-known/oauth-protected-resource/mcp
+
+## Constraints
+
+- An API key is scoped to exactly one project; no endpoint takes a project id.
+- Mention quota limits collection, not reads. Trial: 100 total. Solo: 1,000/month. Team: 10,000/month. Agency: 50,000/month.
+- Only public content is collected. No private messages, no protected accounts.
+- Classifications are triage aids, not statements of fact.
+
+## Pages
+
+- https://herculeradar.com/ — overview
+- https://herculeradar.com/pricing — plans and limits
+- https://herculeradar.com/docs — developer documentation
+- https://herculeradar.com/privacy — privacy policy
+- https://herculeradar.com/terms — terms of service
+
+## What each source can and cannot give up
+
+Written per platform, including the limits — an assistant asked "can I monitor
+Instagram mentions" should be able to quote the honest answer.
+
+- https://herculeradar.com/listening/x — X (Twitter) mention monitoring
+- https://herculeradar.com/listening/reddit — Reddit mention monitoring
+- https://herculeradar.com/listening/youtube — YouTube mention monitoring
+- https://herculeradar.com/listening/linkedin — LinkedIn mention monitoring
+- https://herculeradar.com/listening/threads — Threads mention monitoring
+
+## Use cases
+
+- https://herculeradar.com/use-cases/customer-support — Social customer support monitoring
+- https://herculeradar.com/use-cases/product-feedback — Product feedback monitoring
+- https://herculeradar.com/use-cases/testimonials — Find testimonials people already wrote
+- https://herculeradar.com/use-cases/social-selling — Social selling and buying-intent monitoring
+- https://herculeradar.com/use-cases/competitor-monitoring — Competitor monitoring
+- https://herculeradar.com/use-cases/pr-monitoring — PR and launch monitoring
+- https://herculeradar.com/use-cases/reputation-management — Reputation management
+- https://herculeradar.com/use-cases/agencies — Social listening for agencies
+- https://herculeradar.com/use-cases/brand-monitoring — Brand monitoring
+- https://herculeradar.com/use-cases/launch-monitoring — Launch day monitoring

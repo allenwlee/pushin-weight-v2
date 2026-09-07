@@ -1,0 +1,375 @@
+# HerculeRadar
+
+> HerculeRadar monitors public mentions of your brand, products and competitors across X, Reddit, YouTube, LinkedIn and Threads, then uses AI to tell you which ones actually matter.
+
+
+## Product model
+
+The core loop is: monitor -> discover -> classify -> review -> act.
+
+A project owns monitors. A monitor is a keyword set plus the sources to search.
+A scheduled scan starts a provider run per source; results are normalised,
+deduplicated on (project, source, external_id) and stored as mentions.
+Each new mention is then classified by a language model and, if it matches an
+alert rule, queued for delivery by email or webhook.
+
+Deduplication happens before billing: one post matching three aliases is one
+mention, charged once.
+
+
+## Sources
+
+- X (Twitter) mention monitoring
+  Keyword searches run through a managed scraping Actor on a schedule. Results are deduplicated by post id, so a post matching three of your aliases is stored — and billed — once.
+  Covered: Public posts, Public replies, Quote posts, Likes, replies, reposts and views.
+  Not covered: Protected accounts are never collected. Deleted posts stop updating but stay in your history with their original link.
+
+- Reddit mention monitoring
+  Keyword search runs through a managed Actor against public Reddit search. Each post keeps its subreddit, score and comment count, so you can tell a dead thread from one that is climbing.
+  Covered: Post titles, Post bodies, Subreddit and author, Upvotes and comment counts.
+  Not covered: Comment-level search is not in the MVP — posts only. Private and quarantined subreddits are not collected.
+
+- YouTube mention monitoring
+  Unlike X and Reddit, YouTube is read through the official Data API rather than a scraper — it is free at our volume, stable, and keeps us inside YouTube’s terms.
+  Covered: Video titles, Video descriptions, Channel name and link, Views, likes and comment counts.
+  Not covered: Comment search is not offered by the API globally, so comments are not covered in the MVP. Very new uploads can take a few minutes to appear in API search results.
+
+- LinkedIn mention monitoring
+  Keyword search runs through a managed Actor that needs no cookies and no LinkedIn account — we never hold your credentials. Posts keep their author, company, reactions, comments and reposts.
+  Covered: Public post text, Author name and profile, Reactions, comments and reposts, Company pages.
+  Not covered: Comments on posts are not collected in the MVP — posts only. Anything behind a login, a private group or a connection-only audience is never touched.
+
+- Threads mention monitoring
+  Keyword search through a managed Actor, no login required. Each post keeps its author, likes, replies, reposts and view count.
+  Covered: Public posts, Author handle and profile, Likes, replies, reposts and views, Quote posts and replies.
+  Not covered: The date filter is day-granular, so a scan may re-see a few posts it already stored. Deduplication absorbs them at no cost to your quota. Private accounts are never collected.
+
+
+## Classification
+
+Every mention receives:
+
+- is_relevant: boolean. False when the keyword match is coincidental.
+- category: bug_report | complaint | misinformation | product_idea | testimonial | other
+- sentiment: positive | neutral | negative
+- urgency: integer 0-100
+- ai_summary: one sentence, max 20 words
+
+Mentions judged not relevant are stored with status "ignored" and are excluded
+from alerts and webhooks. Classification is advisory, not authoritative.
+
+
+## Authentication
+
+Send a project API key as a bearer token:
+
+  Authorization: Bearer hr_live_XXXXXXXXXXXXXXXXXXXXXXXX
+
+A key is bound to one project, so no endpoint accepts a project id. Only an
+HMAC-SHA256 digest of the key is stored, so the plaintext is displayed once at
+creation. Revocation takes effect immediately.
+
+Dashboard session cookies are also accepted; those callers may pass
+?project_id= to choose among their projects.
+
+OAuth 2.1 discovery documents:
+- https://herculeradar.com/.well-known/oauth-authorization-server
+- https://herculeradar.com/.well-known/oauth-protected-resource/mcp
+
+
+## REST API
+
+Base URL: https://herculeradar.com/api/v1
+All payloads are JSON. Timestamps are ISO 8601 UTC.
+
+Every success returns:
+  { "data": <resource>, "meta": { "capability", "requestId", "idempotencyReplayed", "docs" } }
+
+Every failure returns:
+  { "error": { "code", "message", "requestId", "docs", "details?", "retryAfter?" } }
+
+Lists page by cursor, never by offset: pass the returned nextCursor back as the
+"cursor" parameter. Writes accept an Idempotency-Key header (8-128 characters);
+a completed response is replayed for 24 hours, so a retry cannot duplicate a
+write.
+
+list_projects
+  GET /api/v1/projects
+  scope: projects:read
+  docs: https://herculeradar.com/docs/reference/list_projects
+  Returns every project the credential can reach. An API key is scoped to one project and always returns exactly that project.
+  Response data: {"projects":[{"id":"uuid","name":"Acme","plan":"starter"}]}
+
+create_project
+  POST /api/v1/projects
+  scope: projects:write
+  docs: https://herculeradar.com/docs/reference/create_project
+  Session-authenticated only. API keys are issued against an existing project and cannot create one.
+  Request body: {"type":"object","required":["name"],"properties":{"name":{"type":"string","maxLength":80},"website":{"type":"string","format":"uri","nullable":true}}}
+  Response data: {"id":"uuid","name":"Acme","slug":"acme","plan":"trial"}
+
+get_project
+  GET /api/v1/projects/{id}
+  scope: projects:read
+  docs: https://herculeradar.com/docs/reference/get_project
+  One project, including its plan and mention quota.
+  Parameters:
+    - id (path, string, required): Project id
+  Response data: {"id":"uuid","name":"Acme","plan":"starter","mention_quota":1000}
+
+list_monitors
+  GET /api/v1/monitors
+  scope: monitors:read
+  docs: https://herculeradar.com/docs/reference/list_monitors
+  Every keyword monitor in the project, oldest first.
+  Response data: {"monitors":[{"id":"2c1a9f77-1b31-4d6a-9d2e-0f6a2b3c4d5e","name":"Acme","keywords":["Acme","acme.dev","@acmehq"],"exclude_keywords":["acme corp cartoon"],"sources":["x","reddit","youtube"],"group_name":"my_brand","active":true,"scan_interval_minutes":15,"last_scanned_at":"2026-09-01T09:20:00.000Z"}]}
+
+create_monitor
+  POST /api/v1/monitors
+  scope: monitors:write
+  docs: https://herculeradar.com/docs/reference/create_monitor
+  Start watching a keyword set. Matching is literal, so include every spelling people use — the name, the domain and the @handle. The first scan runs on the next cron tick.
+  Request body: {"type":"object","required":["name","keywords"],"properties":{"name":{"type":"string","maxLength":80},"keywords":{"type":"array","minItems":1,"maxItems":20,"items":{"type":"string"}},"exclude_keywords":{"type":"array","maxItems":20,"items":{"type":"string"}},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"group_name":{"type":"string","enum":["my_brand","competitors","custom"]}}}
+  Response data: {"id":"2c1a9f77-1b31-4d6a-9d2e-0f6a2b3c4d5e","name":"Acme","keywords":["Acme","acme.dev","@acmehq"],"exclude_keywords":["acme corp cartoon"],"sources":["x","reddit","youtube"],"group_name":"my_brand","active":true,"scan_interval_minutes":15,"last_scanned_at":"2026-09-01T09:20:00.000Z"}
+
+update_monitor
+  PATCH /api/v1/monitors/{id}
+  scope: monitors:write
+  docs: https://herculeradar.com/docs/reference/update_monitor
+  Change keywords, sources, group or active state. Only supplied fields are touched.
+  Parameters:
+    - id (path, string, required): Monitor id
+  Request body: {"type":"object","properties":{"name":{"type":"string"},"keywords":{"type":"array","items":{"type":"string"}},"exclude_keywords":{"type":"array","items":{"type":"string"}},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"active":{"type":"boolean","description":"false pauses collection without deleting history"}}}
+  Response data: {"id":"2c1a9f77-1b31-4d6a-9d2e-0f6a2b3c4d5e","name":"Acme","keywords":["Acme","acme.dev","@acmehq"],"exclude_keywords":["acme corp cartoon"],"sources":["x","reddit","youtube"],"group_name":"my_brand","active":false,"scan_interval_minutes":15,"last_scanned_at":"2026-09-01T09:20:00.000Z"}
+
+delete_monitor
+  DELETE /api/v1/monitors/{id}
+  scope: monitors:write
+  docs: https://herculeradar.com/docs/reference/delete_monitor
+  Stops collection permanently. Mentions already collected are kept. Prefer update_monitor with active:false if it may be wanted back.
+  Parameters:
+    - id (path, string, required): Monitor id
+  Response data: {"deleted":true,"id":"uuid"}
+
+list_mentions
+  GET /api/v1/mentions
+  scope: mentions:read
+  docs: https://herculeradar.com/docs/reference/list_mentions
+  The core read capability. Newest first, already classified. Every parameter is optional — call it with nothing for the latest. Page with the returned nextCursor rather than an offset, so rows arriving mid-walk cannot shift the window.
+  Parameters:
+    - monitor_id (query, string): Restrict to one monitor
+    - source (query, x | reddit | youtube | linkedin | threads): Platform
+    - category (query, bug_report | complaint | misinformation | product_idea | testimonial | other): AI category
+    - sentiment (query, positive | neutral | negative): AI sentiment
+    - status (query, new | reviewed | done | ignored): Triage status
+    - min_urgency (query, integer): Lower bound, 0-100. 70+ is worth interrupting someone for.
+    - max_urgency (query, integer): Upper bound, 0-100
+    - author_handle (query, string): Exact handle, without the @
+    - search (query, string): Case-insensitive substring of the mention text
+    - date_preset (query, today | last_24_hours | last_7_days | last_30_days | last_90_days | month_to_date | all_time): Named window, so you need not compute dates
+    - since (query, string): ISO 8601 lower bound. Overrides date_preset.
+    - until (query, string): ISO 8601 upper bound
+    - cursor (query, string): nextCursor from the previous page
+    - limit (query, integer): Page size, 1-100 (default 50)
+  Response data: {"items":[{"id":"7b0f1e3a-1c4d-4a0a-9f2b-2f4a8c1d0e11","source":"reddit","url":"https://reddit.com/r/SaaS/comments/abc123","author_handle":"ops_kate","text":"Our analytics bill tripled. Anyone know a cheaper alternative?","published_at":"2026-09-01T09:14:00.000Z","engagement":{"upvotes":128,"comments":41},"is_relevant":true,"category":"complaint","sentiment":"negative","urgency":72,"ai_summary":"User is priced out of a competitor and asking for alternatives.","status":"new"}],"nextCursor":"MjAyNi0wOS0wMVQwOToxNDowMC4wMDBafDdiMGYxZTNh","hasMore":true}
+
+get_mention
+  GET /api/v1/mentions/{id}
+  scope: mentions:read
+  docs: https://herculeradar.com/docs/reference/get_mention
+  Full text plus AI classification for one mention.
+  Parameters:
+    - id (path, string, required): Mention id
+  Response data: {"id":"7b0f1e3a-1c4d-4a0a-9f2b-2f4a8c1d0e11","source":"reddit","url":"https://reddit.com/r/SaaS/comments/abc123","author_handle":"ops_kate","text":"Our analytics bill tripled. Anyone know a cheaper alternative?","published_at":"2026-09-01T09:14:00.000Z","engagement":{"upvotes":128,"comments":41},"is_relevant":true,"category":"complaint","sentiment":"negative","urgency":72,"ai_summary":"User is priced out of a competitor and asking for alternatives.","status":"new"}
+
+update_mention_status
+  PATCH /api/v1/mentions/{id}
+  scope: mentions:write
+  docs: https://herculeradar.com/docs/reference/update_mention_status
+  Move a mention through triage. Status is the only mutable field — everything else is a fact about the post.
+  Parameters:
+    - id (path, string, required): Mention id
+  Request body: {"type":"object","required":["status"],"properties":{"status":{"type":"string","enum":["new","reviewed","done","ignored"]}}}
+  Response data: {"id":"7b0f1e3a-1c4d-4a0a-9f2b-2f4a8c1d0e11","source":"reddit","url":"https://reddit.com/r/SaaS/comments/abc123","author_handle":"ops_kate","text":"Our analytics bill tripled. Anyone know a cheaper alternative?","published_at":"2026-09-01T09:14:00.000Z","engagement":{"upvotes":128,"comments":41},"is_relevant":true,"category":"complaint","sentiment":"negative","urgency":72,"ai_summary":"User is priced out of a competitor and asking for alternatives.","status":"reviewed"}
+
+get_mention_analytics
+  GET /api/v1/analytics/mentions
+  scope: mentions:read
+  docs: https://herculeradar.com/docs/reference/get_mention_analytics
+  Counts for one window: totals, relevance rate, how many need attention, and breakdowns by category, sentiment, source and status. Answers "how are we doing" without paging the feed.
+  Parameters:
+    - date_preset (query, today | last_24_hours | last_7_days | last_30_days | last_90_days | month_to_date | all_time): Named window (default last_30_days)
+    - monitor_id (query, string): Restrict to one monitor
+  Response data: {"window":"last_30_days","total":412,"relevant":268,"relevance_rate":0.65,"needs_attention":9,"by_category":{"complaint":91,"product_idea":74,"testimonial":62,"bug_report":28,"other":13},"by_sentiment":{"negative":121,"neutral":96,"positive":51},"by_source":{"reddit":180,"x":154,"youtube":78},"by_status":{"new":203,"reviewed":41,"done":24}}
+
+list_alerts
+  GET /api/v1/alerts
+  scope: alerts:read
+  docs: https://herculeradar.com/docs/reference/list_alerts
+  Every alert rule in the project.
+  Response data: {"alerts":[{"id":"uuid","name":"Critical complaints","channel":"email","destination":"team@acme.dev","categories":["complaint"],"min_urgency":70,"active":true}]}
+
+create_alert
+  POST /api/v1/alerts
+  scope: alerts:write
+  docs: https://herculeradar.com/docs/reference/create_alert
+  Empty filter arrays mean "any". A rule fires at most once per mention, so overlapping rules do not double-send.
+  Request body: {"type":"object","required":["name","destination"],"properties":{"name":{"type":"string"},"channel":{"type":"string","enum":["email","webhook"]},"destination":{"type":"string","description":"Email address, or https URL when channel is webhook"},"categories":{"type":"array","items":{"type":"string","enum":["bug_report","complaint","misinformation","product_idea","testimonial","other"]}},"sentiments":{"type":"array","items":{"type":"string","enum":["positive","neutral","negative"]}},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"min_urgency":{"type":"integer","minimum":0,"maximum":100}}}
+  Response data: {"id":"uuid","name":"Critical complaints","active":true}
+
+delete_alert
+  DELETE /api/v1/alerts/{id}
+  scope: alerts:write
+  docs: https://herculeradar.com/docs/reference/delete_alert
+  Notifications stop immediately. Mentions are unaffected.
+  Parameters:
+    - id (path, string, required): Alert id
+  Response data: {"deleted":true,"id":"uuid"}
+
+get_usage
+  GET /api/v1/usage
+  scope: usage:read
+  docs: https://herculeradar.com/docs/reference/get_usage
+  Plan, mentions used against the quota, and what collection cost this period. Check it before creating monitors if the project is near its limit.
+  Response data: {"plan":"starter","quota_period":"monthly","mentions_included":1000,"mentions_used":412,"mentions_remaining":588,"period_start":"2026-09-01","provider_cost_usd":0.842,"cost_per_new_mention_usd":0.00204}
+
+
+## MCP
+
+Endpoint: https://herculeradar.com/api/mcp
+Transport: streamable HTTP, JSON-RPC 2.0.
+Protocol version: 2025-06-18.
+Methods: initialize, ping, tools/list, tools/call, resources/list, resources/read,
+prompts/list, prompts/get.
+
+Tool results carry the same { data, meta } envelope as REST, in both a text
+content block and structuredContent. Tool failures are returned in-band with
+isError: true so a model can read the error and correct itself.
+
+Resources:
+- herculeradar://capabilities  the live tool catalog with scopes and annotations
+- herculeradar://glossary      what categories, urgency and relevance mean
+
+Prompts: triage_inbox, weekly_digest, set_up_monitoring, find_leads.
+
+Tools:
+- list_projects
+  List the projects this credential can reach. Start here when you do not know the project id.
+  Input schema: {"type":"object","properties":{},"additionalProperties":false}
+- create_project
+  Create a workspace for a brand. Only needed once per brand you monitor.
+  Input schema: {"type":"object","required":["name"],"additionalProperties":false,"properties":{"name":{"type":"string","description":"Brand or product name"},"website":{"type":"string","description":"Optional website URL"}}}
+- list_monitors
+  List what is currently being watched: keywords, aliases, sources and whether each monitor is active.
+  Input schema: {"type":"object","properties":{},"additionalProperties":false}
+- create_monitor
+  Start watching a brand, product or competitor. Include every spelling people actually use — the domain and the @handle as well as the name — because matching is literal.
+  Input schema: {"type":"object","required":["name","keywords"],"additionalProperties":false,"properties":{"name":{"type":"string"},"keywords":{"type":"array","items":{"type":"string"},"description":"Names, handles and domains. All spellings you want matched."},"exclude_keywords":{"type":"array","items":{"type":"string"},"description":"Drop anything containing these, for a name that collides with something else."},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"group_name":{"type":"string","enum":["my_brand","competitors","custom"]}}}
+- update_monitor
+  Change a monitor’s keywords, sources or active state. Only the fields you pass change.
+  Input schema: {"type":"object","required":["monitor_id"],"additionalProperties":false,"properties":{"monitor_id":{"type":"string","format":"uuid"},"name":{"type":"string"},"keywords":{"type":"array","items":{"type":"string"}},"exclude_keywords":{"type":"array","items":{"type":"string"}},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"active":{"type":"boolean","description":"false pauses collection without deleting history"}}}
+- delete_monitor
+  Permanently remove a monitor. Mentions already collected are kept. Prefer update_monitor with active:false if the user may want it back.
+  Input schema: {"type":"object","required":["monitor_id"],"additionalProperties":false,"properties":{"monitor_id":{"type":"string","format":"uuid"}}}
+- list_mentions
+  The main read tool. Returns collected posts newest first, already classified. Call with no arguments for the latest, or filter by category, sentiment, urgency, source or a named time window. Page with the returned nextCursor.
+  Input schema: {"type":"object","additionalProperties":false,"properties":{"monitor_id":{"type":"string","format":"uuid"},"source":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]},"category":{"type":"string","enum":["bug_report","complaint","misinformation","product_idea","testimonial","other"]},"sentiment":{"type":"string","enum":["positive","neutral","negative"]},"status":{"type":"string","enum":["new","reviewed","done","ignored"]},"min_urgency":{"type":"integer","minimum":0,"maximum":100,"description":"70+ is worth interrupting someone for"},"max_urgency":{"type":"integer","minimum":0,"maximum":100},"author_handle":{"type":"string","description":"Exact handle, without the @"},"search":{"type":"string","description":"Case-insensitive substring of the post text"},"date_preset":{"type":"string","enum":["today","last_24_hours","last_7_days","last_30_days","last_90_days","month_to_date","all_time"]},"since":{"type":"string","format":"date-time","description":"Overrides date_preset"},"until":{"type":"string","format":"date-time"},"cursor":{"type":"string","description":"nextCursor from the previous page"},"limit":{"type":"integer","minimum":1,"maximum":100,"default":50}}}
+- get_mention
+  Fetch one mention in full, with its AI classification and a link to the original post.
+  Input schema: {"type":"object","required":["mention_id"],"additionalProperties":false,"properties":{"mention_id":{"type":"string","format":"uuid"}}}
+- update_mention_status
+  Move a mention through triage. Use done once it has been handled and ignored when it is not really about the brand.
+  Input schema: {"type":"object","required":["mention_id","status"],"additionalProperties":false,"properties":{"mention_id":{"type":"string","format":"uuid"},"status":{"type":"string","enum":["new","reviewed","done","ignored"]}}}
+- get_mention_analytics
+  Counts for a window — totals, relevance rate, how many need attention, and breakdowns by category, sentiment and source. Use this to answer "how are we doing" without paging the whole feed.
+  Input schema: {"type":"object","additionalProperties":false,"properties":{"date_preset":{"type":"string","enum":["today","last_24_hours","last_7_days","last_30_days","last_90_days","month_to_date","all_time"]},"monitor_id":{"type":"string","format":"uuid"}}}
+- list_alerts
+  List alert rules — what triggers a notification and where it is sent.
+  Input schema: {"type":"object","properties":{},"additionalProperties":false}
+- create_alert
+  Notify an email address or https webhook when a matching mention arrives. Empty filter arrays mean "any".
+  Input schema: {"type":"object","required":["name","destination"],"additionalProperties":false,"properties":{"name":{"type":"string"},"channel":{"type":"string","enum":["email","webhook"]},"destination":{"type":"string","description":"Email address, or https URL when channel is webhook"},"categories":{"type":"array","items":{"type":"string","enum":["bug_report","complaint","misinformation","product_idea","testimonial","other"]}},"sentiments":{"type":"array","items":{"type":"string","enum":["positive","neutral","negative"]}},"sources":{"type":"array","items":{"type":"string","enum":["x","reddit","youtube","linkedin","threads"]}},"min_urgency":{"type":"integer","minimum":0,"maximum":100}}}
+- delete_alert
+  Permanently remove an alert rule. Notifications stop immediately.
+  Input schema: {"type":"object","required":["alert_id"],"additionalProperties":false,"properties":{"alert_id":{"type":"string","format":"uuid"}}}
+- get_usage
+  Plan, mentions used against the quota, and what collection cost this period. Check before creating monitors if the user is near their limit.
+  Input schema: {"type":"object","properties":{},"additionalProperties":false}
+
+
+## Webhooks
+
+Event: mention.created — emitted once a mention is classified and relevant.
+
+Headers:
+  x-herculeradar-event: mention.created
+  x-herculeradar-signature: t=<unix seconds>,v1=<hex hmac>
+
+Verification: HMAC-SHA256 over "<t>.<raw body>" with the endpoint secret,
+compared in constant time. Reject timestamps older than 300 seconds.
+
+Respond 2xx within ten seconds. Every attempt is logged with its status code.
+
+
+## Errors
+
+Envelope, identical on every surface:
+
+  { "error": { "code", "message", "requestId", "docs", "details?", "retryAfter?" } }
+
+Codes:
+  VALIDATION_ERROR (400) - malformed or invalid input; details lists the fields
+  UNAUTHORIZED     (401) - missing, expired or revoked credentials
+  USAGE_LIMIT      (402) - plan quota exhausted; collection is paused, reads still work
+  FORBIDDEN        (403) - the credential lacks the scope this capability needs
+  NOT_FOUND        (404) - missing, or in a project this credential cannot reach
+  CONFLICT         (409) - idempotency mismatch, or a duplicate still in flight
+  RATE_LIMIT       (429) - honour retryAfter
+  INTERNAL_ERROR   (500) - our fault; safe to retry a keyed write
+
+Retry 429 and 5xx with exponential backoff and jitter. Never retry 422 or 400
+unchanged. Only retry writes that carry the same Idempotency-Key and identical
+input.
+
+404 rather than 403 for another tenant's resource is deliberate: a 403 would
+confirm that an id exists.
+
+
+
+## Plans and limits
+
+- Trial: $0, 100 mentions total, 1 monitors, 30 req/min
+- Solo: $29/month, 1,000 mentions per month, 3 monitors, 60 req/min
+- Team: $99/month, 10,000 mentions per month, 7 monitors, 180 req/min
+- Agency: $299/month, 50,000 mentions per month, 15 monitors, 600 req/min
+
+REST, MCP and webhooks are included on every plan; only volume and rate limits
+differ. When a quota is reached, collection pauses — reads continue and no
+overage is billed automatically.
+
+
+## Use cases
+
+- Customer support: Answer the people who never opened a ticket. (https://herculeradar.com/use-cases/customer-support)
+- Product feedback: Your roadmap is already being written in public. (https://herculeradar.com/use-cases/product-feedback)
+- Testimonials: People are praising you. You just have not seen it. (https://herculeradar.com/use-cases/testimonials)
+- Social selling: Be in the thread where someone asks for a recommendation. (https://herculeradar.com/use-cases/social-selling)
+- Competitor monitoring: Know what your competitors’ users complain about. (https://herculeradar.com/use-cases/competitor-monitoring)
+- PR monitoring: Watch a launch land in real time. (https://herculeradar.com/use-cases/pr-monitoring)
+- Reputation management: Correct the false claim while it is still small. (https://herculeradar.com/use-cases/reputation-management)
+- Agencies: Every client, one inbox, no tab juggling. (https://herculeradar.com/use-cases/agencies)
+- Brand monitoring: Know what your name means to people who never contact you. (https://herculeradar.com/use-cases/brand-monitoring)
+- Launches: Read the room while the room is still talking. (https://herculeradar.com/use-cases/launch-monitoring)
+
+
+## Boundaries
+
+The product does not:
+
+- post, reply or act on a user's behalf;
+- collect private messages, protected accounts or private communities;
+- build profiles of individuals;
+- sell or redistribute collected content.
+
+Requests to remove a collected public post are honoured on request from its
+author, without requiring an account.

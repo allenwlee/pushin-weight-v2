@@ -1,0 +1,1 @@
+{"resource":"https://herculeradar.com/api/mcp","authorization_servers":["https://herculeradar.com"],"bearer_methods_supported":["header"],"scopes_supported":["mentions:read","mentions:write","monitors:write","alerts:write"],"resource_documentation":"https://herculeradar.com/docs/mcp"}

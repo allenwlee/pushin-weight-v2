@@ -1,0 +1,16 @@
+{
+  "id": 13,
+  "jsonrpc": "2.0",
+  "result": {
+    "description": "Set up monitoring for a brand from scratch, including competitors.",
+    "messages": [
+      {
+        "content": {
+          "text": "Set up monitoring for ExampleCo (https://example.com).\n\n1. Call list_monitors first to see what already exists — do not create duplicates.\n2. Call get_usage to check how much quota is left before adding anything.\n3. Create a monitor in the my_brand group for ExampleCo. Include every\n   spelling people actually use: the plain name, the spaced form if it is\n   CamelCase, the @handle, and the bare domain.\n4. Ask me which competitors to watch, then create one monitor per competitor in\n   the competitors group.\n5. Suggest exclude_keywords if the name collides with something common.\n\nTell me what you created and roughly when the first mentions will appear.\nDo not create alerts unless I ask for them.",
+          "type": "text"
+        },
+        "role": "user"
+      }
+    ]
+  }
+}

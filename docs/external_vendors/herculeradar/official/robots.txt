@@ -1,0 +1,98 @@
+User-Agent: *
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: GPTBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: OAI-SearchBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: ChatGPT-User
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: ClaudeBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: Claude-User
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: Claude-SearchBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: PerplexityBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: Perplexity-User
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: Google-Extended
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: Applebot-Extended
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+User-Agent: CCBot
+Allow: /
+Disallow: /app/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+
+Host: https://herculeradar.com
+Sitemap: https://herculeradar.com/sitemap.xml
