@@ -243,7 +243,7 @@ wheels = [
 [[package]]
 name = "bridgewright"
 version = "0.1.0"
-source = { git = "https://github.com/allenwlee/bridgewright.git?rev=611105319bed1aaf563b28e0a61efbe817314f3b#611105319bed1aaf563b28e0a61efbe817314f3b" }
+source = { git = "https://github.com/allenwlee/bridgewright.git?rev=d0a5279ff1dcfab76f285b75a048b6611ee3c2d2#d0a5279ff1dcfab76f285b75a048b6611ee3c2d2" }
 dependencies = [
     { name = "filelock" },
     { name = "playwright" },
@@ -2201,7 +2201,7 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bridgewright", git = "https://github.com/allenwlee/bridgewright.git?rev=611105319bed1aaf563b28e0a61efbe817314f3b" },
+    { name = "bridgewright", git = "https://github.com/allenwlee/bridgewright.git?rev=d0a5279ff1dcfab76f285b75a048b6611ee3c2d2" },
     { name = "hypothesis", specifier = ">=6.138,<7" },
     { name = "playwright", specifier = ">=1.62.0" },
 ]
