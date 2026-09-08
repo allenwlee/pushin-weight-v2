@@ -2530,6 +2530,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
     def test_home_preferences_migrate_safe_fields_without_restoring_expensive_state(self) -> None:
         """v1 storage migrates only safe preferences and never restores filters."""
         cookies = self._anonymous_cookies("en")
+        cookies.append(
+            {"name": "home_window", "value": "365", "url": self.live_server_url}
+        )
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -2585,6 +2588,15 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertIn("pushinweight.home.preferences.v2:anonymous", state["storage"])
                     self.assertNotIn("pushinweight.home.preferences.v1:anonymous", state["storage"])
                     self.assertNotIn("restore", state["events"])
+                    cookie_values = {
+                        cookie["name"]: cookie["value"]
+                        for cookie in context.cookies()
+                    }
+                    self.assertEqual(
+                        cookie_values["home_window"],
+                        "365",
+                        "public home must ignore shared non-public window state without erasing it",
+                    )
                     startup_requests = list(runtime_requests)
                     self.assertEqual(
                         startup_requests,

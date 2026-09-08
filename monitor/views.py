@@ -557,7 +557,7 @@ def _resolve_locale(request: HttpRequest) -> str:
     return normalized
 
 
-def _resolve_home_window(request: HttpRequest) -> int:
+def _resolve_home_window(request: HttpRequest, *, allow_cookie: bool = True) -> int:
     """Read the home window from filter state, cookie, or default."""
     # Check filters JSON first (JS-driven updates)
     filters_raw = request.GET.get("filters")
@@ -578,6 +578,8 @@ def _resolve_home_window(request: HttpRequest) -> int:
         direct_window = None
     if direct_window in ALLOWED_HOME_WINDOWS:
         return direct_window
+    if not allow_cookie:
+        return HOME_WINDOW_DEFAULT
     # Fall back to cookie
     raw = request.COOKIES.get(HOME_WINDOW_COOKIE)
     if raw is None:
@@ -2544,7 +2546,7 @@ def home(request: HttpRequest) -> HttpResponse:
     Shows all enabled brands with accent colors and a time-windowed post feed.
     """
     locale = _resolve_locale(request)
-    window_days = _resolve_home_window(request)
+    window_days = _resolve_home_window(request, allow_cookie=False)
 
     # Pre-merged brand data for template iteration
     brands_data = _build_brands_context(locale)
