@@ -1,0 +1,61 @@
+{
+  "status": "complete",
+  "verdict": "Ready to merge",
+  "scope": {
+    "base": "b184276cc6ec4e7d1a9eba83357e824848dc8f94",
+    "branch": "feat/ai-enrichment-stage0",
+    "head_sha": "22fef27d46985eabf336b234e8e717c43544434f",
+    "pr_url": null,
+    "files_changed": 13
+  },
+  "intent": "Add passive, privacy-safe provider usage telemetry while preserving enrichment behavior. Prove true translator, classifier, cycle, and headline transport call chains with fake providers and exact run/batch correlation.",
+  "intent_confidence": "explicit",
+  "reviewers": ["correctness", "security", "testing", "reliability", "adversarial-claude"],
+  "findings": [],
+  "actionable_findings": [],
+  "resolved_findings": [
+    {
+      "#": 1,
+      "title": "Structured telemetry was discarded by the default Render formatter",
+      "resolution": "emit_attempt now renders the allowlisted event as safe JSON in the message while retaining LogRecord extra metadata. A plain StreamHandler StringIO regression parses the rendered line and checks privacy and nullable usage.",
+      "verification": "Focused Stage 0 suite passed after the fix."
+    },
+    {
+      "#": 3,
+      "title": "Cycle proof bypassed the actual direct HTTP response extractor",
+      "resolution": "The CycleRunner test now keeps both real factories and x_monitor.attribution.AnthropicClaudeClient and fakes only http.client.HTTPSConnection. A separate malformed-assistant-JSON case proves provider usage survives the real response extractor.",
+      "verification": "Focused Stage 0 suite passed after the fix."
+    }
+  ],
+  "dismissed_findings": [
+    {
+      "#": 2,
+      "title": "Headline unavailable usage is converted to zero",
+      "reason": "The headline ledger's integer defaults and zero coercion predate Stage 0. The new telemetry event correctly preserves missing provider usage as null, now covered by an event-only regression. No source or schema change is required in this scoped release."
+    }
+  ],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": {
+    "U0.1": "met",
+    "U0.2": "met",
+    "U0.3": "met",
+    "U0.4": "implementation evidence present; staging verification remains a release gate"
+  },
+  "learnings": [],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": ["Staging exact-SHA proof remains a release gate."],
+  "testing_gaps": [],
+  "coverage": {
+    "mode": "agent",
+    "scope_mode": "local-aligned",
+    "reviewed_against": "b184276cc6ec4e7d1a9eba83357e824848dc8f94; all 13 committed and uncommitted branch files",
+    "known_fixed_items": "Headline failure usage, ledger correlation, attempt labels, context whitelist, and invalid-count null handling were inspected as fixed.",
+    "validation_evidence": "The authoritative root .venv is available. Final aggregate verification passed 182 tests in 33.73 seconds; all 37 required tests executed with no skips or errors. Scoped Ruff, compileall, and diff checks passed. Project-wide Ruff reports 1325 pre-existing failures; no type checker is configured. Receipt: .context/final-pytest.log.",
+    "cross_model": "adversarial-claude completed independently as job 20260908T114828Z-21e95eb0; model claude-opus-5, requested high, actual effort unverified; artifact /tmp/compound-engineering-501/ce-code-review/20260908-204811-4bd5bcfa/adversarial-claude.json",
+    "review_limit": "No new reviewer threads were started because the host thread cap was full. Findings are bounded to the full branch diff, explicit Stage 0 plan, in-process review, and the completed independent adversarial pass."
+  },
+  "artifact_path": "docs/reviews/2026-09-08-214500-staged-ai-enrichment-code-review.json",
+  "run_id": "2026-09-08-214500-staged-ai-enrichment-code-review"
+}

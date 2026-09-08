@@ -25,6 +25,11 @@ Current role names are `post_translation_synthesis` for translator,
 source or post text, raw bodies, full URLs, or exception messages. Reporting is
 best effort and cannot alter provider failure or parsed output.
 
+The production post-fetch translator and classifier factories share the
+direct-HTTP `x_monitor.attribution.AnthropicClaudeClient`; their explicit
+application loops own retries. The separate legacy translator SDK wrapper and
+the headline SDK client disable SDK retries.
+
 ## Contract boundaries
 
 Future completion identity includes content, context, prompt, model, taxonomy,
