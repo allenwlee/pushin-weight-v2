@@ -511,10 +511,10 @@ def _run_post_fetch(
          (literal_zh + cn_equivalent + annotation). Pragmatic register
          (discourse_role) was removed from the translator before this cutover;
          the Stage 1 classifier does not emit it either.
-      2. `classify_pragmatics_full` writes the shared Stage 1 result. This
-         retired adapter flattens classified `post_types` into the existing
-         `posts_brands_signals` table and deliberately ignores product labels.
-         It does not write the retired discourse relation.
+      2. `classify_pragmatics_full` accepts the shared Stage 1 result only
+         to preserve compatibility counters. The retired adapter does not write
+         Stage 1 signals, product labels, unsanctioned flags, or discourse to
+         legacy SQLite.
 
     Fail-soft per stage: an LLM failure on one post never aborts the
     cycle. Counters surface in the run summary so the smoketest
@@ -526,7 +526,7 @@ def _run_post_fetch(
             classifications live on `classifications` (set by
             `_attribute_call_items` via classify_post). The shared batch
             classifier replaces those with the Stage 1 result.
-        store: open Store (caller's transaction).
+        store: open Store used only for the pre-existing translation write.
         anthropic_client: a ClaudeClient-protocol object. When None,
             skip both stages (used by --dry-run and offline tests).
         brand_registry_rows: list of BrandRow from store.read_brands().
@@ -540,6 +540,8 @@ def _run_post_fetch(
           n_discourse        — retained compatibility counter, always zero
           n_nationalism      — retained compatibility counter, always zero
           n_failed_translate — kept posts whose LLM call failed
+          n_unsanctioned      — valid results with recognized flags, in memory
+          t_unsanctioned_ms   — retained compatibility counter, always zero
     """
     counters = {
         "n_translated": 0,
@@ -629,7 +631,6 @@ def _run_post_fetch(
     # docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md
     # for the original truncation analysis.
     t0 = time.monotonic()
-    signal_rows: list[dict[str, Any]] = []
     unsanctioned_by_post: dict[str, list[str]] = {}
     classified_posts: set[str] = set()
 
@@ -661,82 +662,29 @@ def _run_post_fetch(
         ]
 
     # Pair `kept_posts` with `classification_results` (index-aligned) and
-    # project classified types onto the existing legacy signal table. Invalid
-    # results publish nothing. Context-missing results are valid but have no
-    # type edge. Product labels and discourse are outside this retired schema.
+    # retain only the recognized-result counts required by this compatibility
+    # surface. Stage 1 persistence belongs exclusively to the Django pipeline.
     for it, classified in zip(kept_posts, classification_results):
         tid = str(it.get("id") or it.get("tweet_id"))
         if not isinstance(classified, dict) or classified.get("valid") is not True:
             continue
-        by_brand = classified.get("by_brand", {})
-        if not isinstance(by_brand, dict):
+        if not isinstance(classified.get("by_brand"), dict):
             continue
         classified_posts.add(tid)
-        for brand_id, prongs in by_brand.items():
-            if not isinstance(prongs, dict) or prongs.get("outcome") != "classified":
-                continue
-            sentiment = prongs.get("sentiment")
-            post_types = prongs.get("post_types")
-            if not isinstance(sentiment, str) or not isinstance(post_types, list):
-                continue
-            for post_type in post_types:
-                if not isinstance(post_type, str):
-                    continue
-                signal_rows.append({
-                    "tweet_id": tid,
-                    "brand_id": brand_id,
-                    "post_type": post_type,
-                    "sentiment": sentiment,
-                })
         flags = classified.get("unsanctioned_flags", [])
         if flags:
             unsanctioned_by_post[tid] = list(flags)
     t_classify = time.monotonic() - t0
     log.info(
         "_run_post_fetch: classify_batch_pragmatics_full %d valid posts "
-        "(%d legacy signal rows) in %.2fs",
-        len(classified_posts), len(signal_rows), t_classify,
+        "in %.2fs; legacy SQLite classification writes disabled",
+        len(classified_posts), t_classify,
     )
 
-    # Persist. The U4 path REPLACES the (post_type, sentiment) row
-    # classify_post wrote (we don't double-write — U4 wins because
-    # it's the merged-path writer). Insert one signal row per
-    # (post × brand) — the existing `insert_posts_brands_signals`
-    # is per-row (not bulk), so loop. Failures are per-row (the
-    # method drops unknowns to dead-letter and continues).
-    for s in signal_rows:
-        try:
-            store.insert_posts_brands_signals(
-                post_id=s["tweet_id"],
-                brand_id=s["brand_id"],
-                post_type=s["post_type"],
-                sentiment=s["sentiment"],
-            )
-        except Exception as e:
-            log.warning(
-                "_run_post_fetch: insert_posts_brands_signals "
-                "(tweet_id=%s brand_id=%s): %s",
-                s["tweet_id"], s["brand_id"], e,
-            )
-    # U8a: Stage 3 — unsanctioned flags. One row per post with
-    # non-empty unsanctioned_flags. Failures are per-row (the Store
-    # method dead-letters on FK violations and continues).
-    t_unsanc = time.monotonic()
-    n_unsanctioned = 0
-    for tid, flags in unsanctioned_by_post.items():
-        try:
-            store.upsert_unsanctioned_flags(tid, flags)
-            n_unsanctioned += 1
-        except Exception as e:
-            log.warning(
-                "_run_post_fetch: upsert_unsanctioned_flags "
-                "(tweet_id=%s): %s", tid, e,
-            )
-    t_unsanc_ms = int((time.monotonic() - t_unsanc) * 1000)
-    log.info(
-        "_run_post_fetch: upsert_unsanctioned_flags %d posts in %dms",
-        n_unsanctioned, t_unsanc_ms,
-    )
+    # Compatibility counters describe recognized in-memory results. Stage 1
+    # signals and flags are never projected into the retired SQLite schema.
+    n_unsanctioned = len(unsanctioned_by_post)
+    t_unsanc_ms = 0
 
     counters["n_classified"] = len(classified_posts)
     counters["n_unsanctioned"] = n_unsanctioned

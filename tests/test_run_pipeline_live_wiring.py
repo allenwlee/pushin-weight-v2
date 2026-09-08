@@ -11,8 +11,8 @@ path with stubbed `plan_calls` + `apify.run_search` and asserts:
     (wall_clock_sec, n_translated, n_classified,
     n_failed_translate) — proving `_run_post_fetch` was actually
     CALLED from the live pipeline.
-  - The post-tweet ends up in `posts` and has two legacy signal rows, while
-    the retired discourse relation remains empty.
+  - The post-tweet and its translation end up in `posts`, while every
+    retired SQLite classification relation remains empty.
   - `posts.text_en` is populated — proving the translator path
     ran end-to-end (not just the integration wire).
 
@@ -132,8 +132,7 @@ def _build_stub_plan_calls():
 
 
 def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
-    """Drive execute() through its real code path; confirm the
-    post-fetch stage is reached AND persists data."""
+    """Drive execute through post-fetch translation without legacy writes."""
     pipeline, config = _build_minimal_pipeline(tmp_path)
 
     # Two tweets that should match deepseek via body keywords.
@@ -193,7 +192,7 @@ def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
         "classify_batch_pragmatics_full",
         lambda tweets, brands, client, **kwargs: [{
             "valid": True,
-            "unsanctioned_flags": [],
+            "unsanctioned_flags": ["scam"],
             "by_brand": {
                 "deepseek": {
                     "outcome": "classified",
@@ -238,8 +237,10 @@ def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
         f"expected at least one valid Stage 1 result; got "
         f"{pf['n_classified']}; pf={pf}"
     )
+    assert pf["n_unsanctioned"] == 1
+    assert pf["t_unsanctioned_ms"] == 0
 
-    # --- 4. The DB has actual persisted state -------------------
+    # --- 4. Only post and translation state persists ------------
     from x_monitor.store import Store
 
     store = Store(pipeline.db_path)
@@ -268,15 +269,16 @@ def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
         )
         assert kept["lang_detected"] == "en"
 
-        # The retired compatibility adapter flattens both Stage 1 types into
-        # legacy signals and never writes the retired discourse relation.
-        signals = store._conn.execute(
-            "SELECT COUNT(*) AS n FROM posts_brands_signals"
-        ).fetchone()["n"]
-        assert signals == 2, "expected one legacy signal row per Stage 1 type"
-        discourses = store._conn.execute(
-            "SELECT COUNT(*) AS n FROM posts_brands_discourse"
-        ).fetchone()["n"]
-        assert discourses == 0, "Stage 1 must not restore discourse writes"
+        # The retired compatibility adapter retains Stage 1 counters in
+        # memory but must not project any classification result into SQLite.
+        for table in (
+            "posts_brands_signals",
+            "posts_brands_discourse",
+            "posts_unsanctioned_flags",
+        ):
+            count = store._conn.execute(
+                f"SELECT COUNT(*) AS n FROM {table}"
+            ).fetchone()["n"]
+            assert count == 0, f"Stage 1 wrote retired SQLite table {table}"
     finally:
         store.close()

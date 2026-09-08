@@ -12,6 +12,7 @@ the legacy adapter cutover and must not restore discourse writes.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import Mock
 
 # --- shared fixtures ----------------------------------------------------
 
@@ -324,10 +325,10 @@ def test_run_post_fetch_no_client_returns_empty_counters(tmp_path):
         s.close()
 
 
-def _stage1_result(*, outcome="classified", valid=True):
+def _stage1_result(*, outcome="classified", valid=True, flags=None):
     return {
         "valid": valid,
-        "unsanctioned_flags": [] if valid else ["scam"],
+        "unsanctioned_flags": list(flags or []) if valid else ["scam"],
         "by_brand": {
             "anthropic": {
                 "outcome": outcome,
@@ -350,6 +351,10 @@ def _run_with_stage1_result(tmp_path, monkeypatch, result):
     from x_monitor.run import _run_post_fetch
 
     s = _seed_minimal_db(tmp_path)
+    signal_write = Mock()
+    flag_write = Mock()
+    monkeypatch.setattr(s, "insert_posts_brands_signals", signal_write)
+    monkeypatch.setattr(s, "upsert_unsanctioned_flags", flag_write)
     monkeypatch.setattr(
         attribution,
         "classify_batch_pragmatics_full",
@@ -361,31 +366,31 @@ def _run_with_stage1_result(tmp_path, monkeypatch, result):
         anthropic_client=FakeClaudeClient(),
         brand_registry_rows=s.read_brands(),
     )
-    return s, out
+    return s, out, signal_write, flag_write
 
 
-def test_run_post_fetch_flattens_stage1_types_without_discourse(
+def test_run_post_fetch_counts_stage1_without_legacy_classification_writes(
     tmp_path, monkeypatch
 ):
-    s, out = _run_with_stage1_result(
-        tmp_path, monkeypatch, _stage1_result()
+    s, out, signal_write, flag_write = _run_with_stage1_result(
+        tmp_path, monkeypatch, _stage1_result(flags=["scam"])
     )
     try:
         assert out["n_classified"] == 1
+        assert out["n_unsanctioned"] == 1
+        assert out["t_unsanctioned_ms"] == 0
         assert out["n_discourse"] == 0
         assert out["n_nationalism"] == 0
-        assert {
-            tuple(row)
-            for row in s._conn.execute(
-                "SELECT post_type_key, sentiment FROM posts_brands_signals"
-            ).fetchall()
-        } == {
-            ("hands_on_usage", "neutral"),
-            ("feedback_questions", "neutral"),
-        }
-        assert s._conn.execute(
-            "SELECT COUNT(*) FROM posts_brands_discourse"
-        ).fetchone()[0] == 0
+        signal_write.assert_not_called()
+        flag_write.assert_not_called()
+        for table in (
+            "posts_brands_signals",
+            "posts_brands_discourse",
+            "posts_unsanctioned_flags",
+        ):
+            assert s._conn.execute(
+                f"SELECT COUNT(*) FROM {table}"
+            ).fetchone()[0] == 0
     finally:
         s.close()
 
@@ -393,11 +398,13 @@ def test_run_post_fetch_flattens_stage1_types_without_discourse(
 def test_run_post_fetch_accepts_context_missing_without_legacy_edges(
     tmp_path, monkeypatch
 ):
-    s, out = _run_with_stage1_result(
+    s, out, signal_write, flag_write = _run_with_stage1_result(
         tmp_path, monkeypatch, _stage1_result(outcome="context_missing")
     )
     try:
         assert out["n_classified"] == 1
+        signal_write.assert_not_called()
+        flag_write.assert_not_called()
         assert s._conn.execute(
             "SELECT COUNT(*) FROM posts_brands_signals"
         ).fetchone()[0] == 0
@@ -411,12 +418,14 @@ def test_run_post_fetch_accepts_context_missing_without_legacy_edges(
 def test_run_post_fetch_invalid_result_publishes_nothing(
     tmp_path, monkeypatch
 ):
-    s, out = _run_with_stage1_result(
+    s, out, signal_write, flag_write = _run_with_stage1_result(
         tmp_path, monkeypatch, _stage1_result(valid=False)
     )
     try:
         assert out["n_classified"] == 0
         assert out["n_unsanctioned"] == 0
+        signal_write.assert_not_called()
+        flag_write.assert_not_called()
         assert s._conn.execute(
             "SELECT COUNT(*) FROM posts_brands_signals"
         ).fetchone()[0] == 0
