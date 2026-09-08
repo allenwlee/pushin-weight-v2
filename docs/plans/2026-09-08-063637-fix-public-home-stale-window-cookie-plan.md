@@ -8,7 +8,7 @@ ollija:
   change_id: fix-public-home-stale-window-cookie-2026-09-08-063637
   branch: fix/public-home-stale-window-cookie
   workflow: plan
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -37,7 +37,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -48,6 +48,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/public-home-stale-window-cookie` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/public-home-stale-window-cookie` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -70,8 +77,8 @@ None.
 Prevent a legacy one-year `home_window` cookie from forcing an expensive
 365-day query during initial public-home navigation.
 
-The owner explicitly selected staging delivery on 2026-09-08. Production is
-outside this delivery scope.
+The owner explicitly authorized promotion of the staging-verified candidate to
+production on 2026-09-08.
 
 ## Product Contract
 
