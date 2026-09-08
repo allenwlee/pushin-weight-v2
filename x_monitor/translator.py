@@ -224,6 +224,7 @@ def _call_with_retry(
     cfg: "Config | None" = None,
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
+    operation_kind: str = "initial",
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
@@ -262,6 +263,11 @@ def _call_with_retry(
     event_context = dict(telemetry_context or {})
     event_context.setdefault("batch_size", n_tweets)
     for attempt in range(_MAX_RETRIES):
+        attempt_kind = (
+            operation_kind
+            if operation_kind in {"repair", "fallback"}
+            else "initial" if attempt == 0 else "retry"
+        )
         started = time.monotonic()
         request_timeout: float | None = None
         if deadline is not None:
@@ -279,10 +285,10 @@ def _call_with_retry(
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
             response = client.messages_create(**kwargs)
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             return response
         except Exception as e:
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -358,7 +364,7 @@ def translate_batch(
             batch, target_locales, brand_names=brand_names
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
+            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg, operation_kind="fallback")
         except Exception:
             # All retries exhausted. Mark this batch's tweets as
             # failed and continue with the next batch (failures are
@@ -1026,6 +1032,7 @@ def translate_batch_pragmatics(
                 cfg=cfg,
                 deadline=deadline,
                 telemetry_context=telemetry_context,
+                operation_kind="initial",
             )
         except Exception as exc:
             logger.warning(
@@ -1079,6 +1086,7 @@ def translate_batch_pragmatics(
                     cfg=cfg,
                     deadline=deadline,
                     telemetry_context=telemetry_context,
+                    operation_kind="repair",
                 )
                 repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
             except Exception as exc:
@@ -1297,7 +1305,7 @@ def translate_registry_rows(
             brand_names=brand_names,
         )
         try:
-            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg)
+            response = _call_with_retry(client, prompt, n_tweets=len(batch), cfg=cfg, operation_kind="fallback")
         except Exception:
             for r in batch:
                 out.append(_empty_registry_row(r, failed=True))

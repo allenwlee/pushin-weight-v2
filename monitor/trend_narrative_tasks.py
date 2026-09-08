@@ -547,7 +547,15 @@ def execute_per_brand_stage(
         return {"status": "claim_lost", "call_id": call_id}
     try:
         response = execute_per_brand_provider_request(
-            claimed.request_packet["provider_request"], config
+            claimed.request_packet["provider_request"],
+            config,
+            telemetry_context={
+                "call_id": claimed.pk,
+                "run_id": str(claimed.run_id),
+                "stage": claimed.stage,
+                "batch_key": claimed.batch_key,
+                "request_identity": claimed.request_identity,
+            },
         )
     except HeadlineGenerationError as exc:
         # Once sent, even a timeout is unknown rather than safely retryable.

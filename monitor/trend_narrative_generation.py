@@ -15,7 +15,7 @@ import anthropic
 from billiard.exceptions import SoftTimeLimitExceeded
 
 from x_monitor.config import HeadlineNarrativeConfig
-from x_monitor.provider_telemetry import emit_attempt
+from x_monitor.provider_telemetry import ProviderResponse, emit_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +252,7 @@ def execute_per_brand_provider_request(
     api_key: str | None = None,
     client_factory: Callable[..., Any] | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    telemetry_context: Mapping[str, Any] | None = None,
 ) -> PerBrandProviderResponse:
     """Execute exactly one bounded stage transport and preserve its raw body."""
     if set(request) != {"model", "max_tokens", "thinking", "system", "messages"}:
@@ -267,20 +268,26 @@ def execute_per_brand_provider_request(
         max_retries=0,
     )
     started = monotonic()
+    event_context = dict(telemetry_context or {})
+    event_context.setdefault("stage", "headline")
+    event_context.setdefault("provider_host_class", "sdk")
     try:
         message = client.messages.create(**dict(request))
-    except SoftTimeLimitExceeded:
+    except SoftTimeLimitExceeded as exc:
+        emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="error", started=started, error=exc, attempt_kind="initial", **event_context)
         raise
     except Exception as exc:  # noqa: BLE001 - unknowns map to safe codes
-        emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="error", started=started, error=exc, attempt_kind="single")
+        emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="error", started=started, error=exc, attempt_kind="initial", **event_context)
         raise HeadlineGenerationError(_provider_failure_code(exc)) from None
     elapsed_ms = max(0, round((monotonic() - started) * 1000))
     try:
         raw_text = _message_text(message)
     except ValueError as exc:
+        usage = getattr(message, "usage", None)
+        emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="error", started=started, response=ProviderResponse({}, usage=usage), error=exc, attempt_kind="initial", **event_context)
         raise HeadlineGenerationError(str(exc), transport_completed=True) from None
     usage = getattr(message, "usage", None)
-    emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="success", started=started, response=type("Response", (), {"provider_usage": usage})(), attempt_kind="single")
+    emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="success", started=started, response=ProviderResponse({}, usage=usage), attempt_kind="initial", **event_context)
     return PerBrandProviderResponse(
         raw_text=raw_text,
         input_tokens=int(getattr(usage, "input_tokens", 0) or 0),

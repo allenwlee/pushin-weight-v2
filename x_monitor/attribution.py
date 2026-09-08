@@ -1020,6 +1020,7 @@ def _call_signal_with_retry(
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
+    operation_kind: str = "initial",
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -1045,6 +1046,11 @@ def _call_signal_with_retry(
     if thinking is not None:
         create_kwargs["thinking"] = thinking
     for attempt in range(_MAX_RETRIES):
+        attempt_kind = (
+            operation_kind
+            if operation_kind in {"repair", "fallback"}
+            else "initial" if attempt == 0 else "retry"
+        )
         started = time.monotonic()
         call_kwargs = dict(create_kwargs)
         if deadline is not None:
@@ -1054,10 +1060,10 @@ def _call_signal_with_retry(
             call_kwargs["timeout"] = request_timeout
         try:
             response = client.messages_create(**call_kwargs)
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **(telemetry_context or {}), attempt_kind="retry")
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **(telemetry_context or {}), attempt_kind=attempt_kind)
             return response
         except Exception as e:
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **(telemetry_context or {}), attempt_kind="retry")
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **(telemetry_context or {}), attempt_kind=attempt_kind)
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -1727,6 +1733,7 @@ def classify_pragmatics_full(
     model: str | None = None,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
+    telemetry_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
 
@@ -1754,6 +1761,8 @@ def classify_pragmatics_full(
             model=model,
             thinking=thinking,
             deadline=deadline,
+            telemetry_context=telemetry_context,
+            operation_kind="fallback",
         )
     except Exception as e:
         logger.warning(
@@ -2115,6 +2124,7 @@ def classify_batch_pragmatics_full(
                 thinking=thinking,
                 deadline=deadline,
                 telemetry_context={**(telemetry_context or {}), "batch_size": len(kept)},
+                operation_kind="initial",
             )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
