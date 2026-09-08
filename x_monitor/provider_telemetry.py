@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import logging
 import time
+import hashlib
+from datetime import datetime, timezone
+from uuid import uuid4
 from typing import Any, Mapping
 
 
@@ -40,11 +43,15 @@ def normalize_usage(value: Any) -> dict[str, int | None]:
     }
 
 
-def emit_attempt(logger: logging.Logger, *, role: str, model: str | None, attempt: int, outcome: str, started: float, response: Any = None, error: Exception | None = None, **context: Any) -> None:
+def emit_attempt(logger: logging.Logger, *, role: str, model: str | None, attempt: int, outcome: str, started: float, response: Any = None, error: Exception | None = None, prompt: str = "", **context: Any) -> None:
     """Emit metadata only. Logging must never affect enrichment."""
     try:
         logger.info("provider_transport_attempt", extra={"provider_transport_event": {
-            "role": role, "model": model, "attempt": attempt,
+            "event_id": str(uuid4()), "timestamp": datetime.now(timezone.utc).isoformat(),
+            "role": role, "stage": context.pop("stage", role), "run_id": context.pop("run_id", None),
+            "model": model, "provider_host_class": context.pop("provider_host_class", "unknown"),
+            "prompt_identity": hashlib.sha256(prompt.encode()).hexdigest()[:16] if prompt else None,
+            "batch_size": context.pop("batch_size", None), "attempt": attempt,
             "outcome": outcome, "elapsed_ms": max(0, round((time.monotonic() - started) * 1000)),
             "error_type": type(error).__name__ if error else None,
             "usage": normalize_usage(getattr(response, "provider_usage", None)),

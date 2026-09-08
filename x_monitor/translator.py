@@ -223,6 +223,7 @@ def _call_with_retry(
     n_tweets: int = 0,
     cfg: "Config | None" = None,
     deadline: Any | None = None,
+    telemetry_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
@@ -276,10 +277,10 @@ def _call_with_retry(
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
             response = client.messages_create(**kwargs)
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, batch_size=n_tweets, **(telemetry_context or {}), attempt_kind="retry")
             return response
         except Exception as e:
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, batch_size=n_tweets, **(telemetry_context or {}), attempt_kind="retry")
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -942,6 +943,7 @@ def translate_batch_pragmatics(
     cfg: "Config | None" = None,
     deadline: Any | None = None,
     max_workers: int = 1,
+    telemetry_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Translate a batch with required bilingual commentary and translations.
     Pass cfg to thread through to model resolution (per swap-translator plan).
@@ -999,6 +1001,7 @@ def translate_batch_pragmatics(
                     cfg=cfg,
                     deadline=deadline,
                     max_workers=1,
+                    telemetry_context=telemetry_context,
                 )
                 for batch in batches
             ]
@@ -1020,6 +1023,7 @@ def translate_batch_pragmatics(
                 n_tweets=len(batch),
                 cfg=cfg,
                 deadline=deadline,
+                telemetry_context=telemetry_context,
             )
         except Exception as exc:
             logger.warning(
@@ -1072,6 +1076,7 @@ def translate_batch_pragmatics(
                     n_tweets=len(bad_tweets),
                     cfg=cfg,
                     deadline=deadline,
+                    telemetry_context=telemetry_context,
                 )
                 repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
             except Exception as exc:

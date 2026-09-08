@@ -1019,6 +1019,7 @@ def _call_signal_with_retry(
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
+    telemetry_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -1053,10 +1054,10 @@ def _call_signal_with_retry(
             call_kwargs["timeout"] = request_timeout
         try:
             response = client.messages_create(**call_kwargs)
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, attempt_kind="retry")
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **(telemetry_context or {}), attempt_kind="retry")
             return response
         except Exception as e:
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, attempt_kind="retry")
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **(telemetry_context or {}), attempt_kind="retry")
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
