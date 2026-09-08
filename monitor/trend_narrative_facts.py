@@ -17,6 +17,8 @@ from typing import Any
 from django.db import connection
 from django.db.models import Count, Min, Q
 
+from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_readers import read_brand_scalars_many
 from core.models import HarvestBacklogWindow, PostBrand
 
 ALLOWED_TREND_WINDOWS = frozenset({1, 7, 30, 365})
@@ -28,13 +30,13 @@ _RANK_FAMILY_KEYS = (
     "volume",
     "engagement",
     "post_type",
-    "discourse",
+    "product_label",
     "sentiment",
     "nationalism",
 )
 _METADATA_FAMILY_KEYS = (
     "post_type",
-    "discourse",
+    "product_label",
     "sentiment",
     "china_nationalism",
     "us_nationalism",
@@ -283,7 +285,7 @@ def aggregate_trend_family_facts(
                 engagement["selected"]["intensity"],
                 engagement.get("intensity_change_pct"),
             )
-        for family in ("post_type", "discourse", "sentiment"):
+        for family in ("post_type", "product_label", "sentiment"):
             family_score = _labels_ranking_score(
                 family_facts[family]["labels"],
                 comparison_allowed=comparison_allowed,
@@ -800,7 +802,8 @@ def _series_rows(
     ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
-        return _dict_rows(cursor)
+        rows = _dict_rows(cursor)
+    return rows
 
 
 def _metadata_series_rows(
@@ -810,7 +813,7 @@ def _metadata_series_rows(
     as_of: datetime,
     schedule: TrendWindowSchedule,
 ) -> list[dict[str, Any]]:
-    sql = """
+    sql = f"""
         WITH requested AS (
             SELECT brand_key, min(position)::integer AS position
             FROM unnest(%s::text[]) WITH ORDINALITY AS item(brand_key, position)
@@ -836,43 +839,29 @@ def _metadata_series_rows(
                             b.bucket_index, 'post_type'::text AS family,
                             s.post_type_key::text AS label_key
             FROM base b
+            JOIN posts_brands_classification_states state
+              ON state.post_id = b.tweet_id
+             AND state.brand_id::text = b.brand_key
+             AND state.contract_version = '{CONTRACT_VERSION}'
+             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+             AND state.outcome = 'classified'
             JOIN posts_brands_signals s
               ON s.post_id = b.tweet_id
              AND s.brand_id::text = b.brand_key
             UNION ALL
             SELECT DISTINCT b.position, b.brand_key, b.tweet_id,
-                            b.bucket_index, 'sentiment'::text,
-                            s.sentiment::text
+                            b.bucket_index, 'product_label'::text,
+                            product.product_label_key::text
             FROM base b
-            JOIN posts_brands_signals s
-              ON s.post_id = b.tweet_id
-             AND s.brand_id::text = b.brand_key
-            UNION ALL
-            SELECT DISTINCT b.position, b.brand_key, b.tweet_id,
-                            b.bucket_index, 'discourse'::text,
-                            d.discourse_key::text
-            FROM base b
-            JOIN posts_brands_discourse d
-              ON d.post_id = b.tweet_id
-             AND d.brand_id::text = b.brand_key
-            UNION ALL
-            SELECT DISTINCT b.position, b.brand_key, b.tweet_id,
-                            b.bucket_index, 'china_nationalism'::text,
-                            d.china_nationalism::text
-            FROM base b
-            JOIN posts_brands_discourse d
-              ON d.post_id = b.tweet_id
-             AND d.brand_id::text = b.brand_key
-            WHERE d.china_nationalism IS NOT NULL
-            UNION ALL
-            SELECT DISTINCT b.position, b.brand_key, b.tweet_id,
-                            b.bucket_index, 'us_nationalism'::text,
-                            d.us_nationalism::text
-            FROM base b
-            JOIN posts_brands_discourse d
-              ON d.post_id = b.tweet_id
-             AND d.brand_id::text = b.brand_key
-            WHERE d.us_nationalism IS NOT NULL
+            JOIN posts_brands_classification_states state
+              ON state.post_id = b.tweet_id
+             AND state.brand_id::text = b.brand_key
+             AND state.contract_version = '{CONTRACT_VERSION}'
+             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+             AND state.outcome = 'classified'
+            JOIN posts_brands_product_labels product
+              ON product.post_id = state.post_id
+             AND product.brand_id::text = state.brand_id::text
         ),
         label_counts AS (
             SELECT position, brand_key, bucket_index, family, label_key,
@@ -880,10 +869,27 @@ def _metadata_series_rows(
             FROM metadata_edges
             GROUP BY position, brand_key, bucket_index, family, label_key
         ),
+        coverage_edges AS (
+            SELECT position, brand_key, tweet_id, bucket_index, family
+            FROM metadata_edges
+            UNION
+            SELECT b.position, b.brand_key, b.tweet_id, b.bucket_index, family
+            FROM base b
+            JOIN posts_brands_classification_states state
+              ON state.post_id = b.tweet_id
+             AND state.brand_id::text = b.brand_key
+             AND state.contract_version = '{CONTRACT_VERSION}'
+             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+            CROSS JOIN (VALUES
+                ('post_type'::text),
+                ('product_label'::text)
+            ) AS families(family)
+            WHERE state.outcome = 'classified'
+        ),
         coverage_counts AS (
             SELECT position, brand_key, bucket_index, family,
                    count(DISTINCT tweet_id)::integer AS value
-            FROM metadata_edges
+            FROM coverage_edges
             GROUP BY position, brand_key, bucket_index, family
         )
         SELECT 'label'::text AS row_type, position, brand_key, bucket_index,
@@ -904,7 +910,83 @@ def _metadata_series_rows(
     ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
-        return _dict_rows(cursor)
+        rows = _dict_rows(cursor)
+    scalar_sql = """
+        WITH requested AS (
+            SELECT brand_key, min(position)::integer AS position
+            FROM unnest(%s::text[]) WITH ORDINALITY AS item(brand_key, position)
+            GROUP BY brand_key
+        )
+        SELECT r.position, r.brand_key, p.tweet_id::text,
+               floor(
+                   extract(epoch FROM (p.created_at - %s::timestamptz))
+                   / %s::integer
+               )::integer AS bucket_index
+        FROM requested r
+        JOIN posts_brands pb ON pb.brand_id::text = r.brand_key
+        JOIN posts p ON p.tweet_id = pb.post_id
+        WHERE p.created_at >= %s::timestamptz
+          AND p.created_at < %s::timestamptz
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            scalar_sql,
+            [
+                list(candidate_keys), window_start, schedule.coarse_bucket_seconds,
+                window_start, as_of,
+            ],
+        )
+        scalar_edges = [
+            (int(position), str(brand), str(post), int(bucket))
+            for position, brand, post, bucket in cursor.fetchall()
+        ]
+    scalar_values = read_brand_scalars_many(
+        [(post_id, brand_key) for _position, brand_key, post_id, _bucket in scalar_edges]
+    )
+    labels: dict[tuple[int, str, int, str, str], set[str]] = {}
+    coverage: dict[tuple[int, str, int, str], set[str]] = {}
+    for position, brand_key, post_id, bucket_index in scalar_edges:
+        scalar = scalar_values[(post_id, brand_key)]
+        for family, value in (
+            ("sentiment", scalar.sentiment),
+            ("china_nationalism", scalar.china_nationalism),
+            ("us_nationalism", scalar.us_nationalism),
+        ):
+            if value is None:
+                continue
+            labels.setdefault(
+                (position, brand_key, bucket_index, family, value), set()
+            ).add(post_id)
+            coverage.setdefault(
+                (position, brand_key, bucket_index, family), set()
+            ).add(post_id)
+    rows.extend(
+        {
+            "row_type": "label",
+            "position": position,
+            "brand_key": brand_key,
+            "bucket_index": bucket_index,
+            "family": family,
+            "label_key": label_key,
+            "value": len(post_ids),
+        }
+        for (position, brand_key, bucket_index, family, label_key), post_ids
+        in sorted(labels.items())
+    )
+    rows.extend(
+        {
+            "row_type": "coverage",
+            "position": position,
+            "brand_key": brand_key,
+            "bucket_index": bucket_index,
+            "family": family,
+            "label_key": None,
+            "value": len(post_ids),
+        }
+        for (position, brand_key, bucket_index, family), post_ids
+        in sorted(coverage.items())
+    )
+    return rows
 
 
 def _series_bucket(
@@ -1318,7 +1400,7 @@ def _metadata_taxonomy() -> dict[str, list[str]]:
             UNION ALL
             SELECT 'sentiment', key::text FROM sentiment_keys
             UNION ALL
-            SELECT 'discourse', key::text FROM discourse_keys
+            SELECT 'product_label', key::text FROM product_label_keys
             UNION ALL
             SELECT 'china_nationalism', key::text FROM nationalism_keys
             UNION ALL
@@ -1364,45 +1446,38 @@ def _metadata_counts(
               AND p.created_at >= %s::timestamptz
               AND p.created_at < %s::timestamptz
         ),
-        signal_labels AS (
-            SELECT DISTINCT
-                e.post_id,
-                e.brand_id,
-                e.period,
-                label.family,
-                label.label_key
+        current_states AS (
+            SELECT e.*, state.outcome
             FROM edges e
+            JOIN posts_brands_classification_states state
+              ON state.post_id = e.post_id
+             AND state.brand_id::text = e.brand_id
+             AND state.contract_version = %s
+             AND state.taxonomy_version = %s
+        ),
+        post_type_labels AS (
+            SELECT DISTINCT
+                e.post_id, e.brand_id, e.period,
+                'post_type'::text AS family, s.post_type_key::text AS label_key
+            FROM current_states e
             JOIN posts_brands_signals s
               ON s.post_id = e.post_id AND s.brand_id::text = e.brand_id
-            CROSS JOIN LATERAL (
-                VALUES
-                    ('post_type'::text, s.post_type_key::text),
-                    ('sentiment'::text, s.sentiment::text)
-            ) AS label(family, label_key)
+            WHERE e.outcome = 'classified'
         ),
-        discourse_labels AS (
-            SELECT DISTINCT
-                e.post_id,
-                e.brand_id,
-                e.period,
-                label.family,
-                label.label_key
-            FROM edges e
-            JOIN posts_brands_discourse d
-              ON d.post_id = e.post_id AND d.brand_id::text = e.brand_id
-            CROSS JOIN LATERAL (
-                VALUES
-                    ('discourse'::text, d.discourse_key::text),
-                    ('china_nationalism'::text,
-                     d.china_nationalism::text),
-                    ('us_nationalism'::text, d.us_nationalism::text)
-            ) AS label(family, label_key)
-            WHERE label.label_key IS NOT NULL
+        product_labels AS (
+            SELECT DISTINCT e.post_id, e.brand_id, e.period,
+                   'product_label'::text AS family,
+                   product.product_label_key::text AS label_key
+            FROM current_states e
+            JOIN posts_brands_product_labels product
+             ON product.post_id = e.post_id
+             AND product.brand_id::text = e.brand_id
+            WHERE e.outcome = 'classified'
         ),
         labels AS (
-            SELECT * FROM signal_labels
+            SELECT * FROM post_type_labels
             UNION ALL
-            SELECT * FROM discourse_labels
+            SELECT * FROM product_labels
         ),
         scoped_labels AS (
             SELECT
@@ -1415,9 +1490,9 @@ def _metadata_counts(
             FROM labels l
             JOIN requested r ON r.brand_key = l.brand_id
             UNION ALL
-            SELECT
+            SELECT DISTINCT
                 post_id,
-                brand_id,
+                NULL::text AS brand_id,
                 period,
                 family,
                 label_key,
@@ -1441,15 +1516,20 @@ def _metadata_counts(
                 l.post_id,
                 l.brand_id,
                 l.period,
-                l.family
-            FROM labels l
+                families.family
+            FROM current_states l
             JOIN requested r ON r.brand_key = l.brand_id
+            CROSS JOIN (VALUES
+                ('post_type'::text),
+                ('product_label'::text)
+            ) AS families(family)
+            WHERE l.outcome = 'classified'
         ),
         scoped_family_edges AS (
             SELECT post_id, period, family, brand_id AS scope_key
             FROM candidate_family_edges
             UNION ALL
-            SELECT
+            SELECT DISTINCT
                 post_id,
                 period,
                 family,
@@ -1474,7 +1554,10 @@ def _metadata_counts(
                selected_count, prior_count FROM coverage_counts
         ORDER BY row_type, scope_key, family, label_key
     """
-    params: list[Any] = [list(candidate_keys), window_start, prior_start, as_of]
+    params: list[Any] = [
+        list(candidate_keys), window_start, prior_start, as_of,
+        CONTRACT_VERSION, TAXONOMY_VERSION,
+    ]
     counts: dict[tuple[str, str, str], tuple[int, int]] = {}
     coverage: dict[tuple[str, str], tuple[int, int]] = {}
     with connection.cursor() as cursor:
@@ -1485,6 +1568,48 @@ def _metadata_counts(
                 coverage[(str(scope), str(family))] = pair
             else:
                 counts[(str(scope), str(family), str(label))] = pair
+    scalar_sql = """
+        SELECT pb.post_id::text, pb.brand_id::text,
+               CASE WHEN p.created_at >= %s::timestamptz
+                    THEN 'selected' ELSE 'prior' END AS period
+        FROM posts_brands pb
+        JOIN posts p ON p.tweet_id = pb.post_id
+        JOIN brands b ON b.nickname = pb.brand_id
+        WHERE NOT b.is_sentinel
+          AND p.created_at >= %s::timestamptz
+          AND p.created_at < %s::timestamptz
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(scalar_sql, [window_start, prior_start, as_of])
+        scalar_edges = [(str(post), str(brand), str(period)) for post, brand, period in cursor.fetchall()]
+    scalar_values = read_brand_scalars_many(
+        [(post_id, brand_id) for post_id, brand_id, _period in scalar_edges]
+    )
+    scalar_labels: dict[tuple[str, str, str], set[tuple[str, str]]] = {}
+    scalar_coverage: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    wanted = set(candidate_keys)
+    for post_id, brand_id, period in scalar_edges:
+        scalar = scalar_values[(post_id, brand_id)]
+        for family, value in (
+            ("sentiment", scalar.sentiment),
+            ("china_nationalism", scalar.china_nationalism),
+            ("us_nationalism", scalar.us_nationalism),
+        ):
+            if value is None:
+                continue
+            for scope in ("__market__", brand_id) if brand_id in wanted else ("__market__",):
+                scalar_labels.setdefault((scope, family, value), set()).add((post_id, period))
+                scalar_coverage.setdefault((scope, family), set()).add((post_id, period))
+    for key, values in scalar_labels.items():
+        counts[key] = (
+            sum(period == "selected" for _post, period in values),
+            sum(period == "prior" for _post, period in values),
+        )
+    for key, values in scalar_coverage.items():
+        coverage[key] = (
+            sum(period == "selected" for _post, period in values),
+            sum(period == "prior" for _post, period in values),
+        )
     return counts, coverage
 
 

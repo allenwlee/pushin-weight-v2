@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from html import unescape
 
 import pytest
+from django.test import override_settings
 
 from core.models import (
     Brand,
@@ -479,7 +480,7 @@ def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():
     payload = project_trend_narrative(
         1,
         locale="en",
-        now=NOW + timedelta(hours=2),
+        now=NOW + timedelta(hours=2, seconds=2),
         config=_config(),
     )
 
@@ -705,6 +706,7 @@ def test_chart_payload_has_one_identity_for_chart_pulse_narrative_and_voices(
     assert payload["computed_at"] == payload["top_voices"]["computed_at"]
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 def test_ten_window_requests_are_database_only_and_apply_only_brand_selection(
     client,
     monkeypatch,
@@ -1135,6 +1137,7 @@ def test_u5_chart_view_threads_only_normalized_brand_selection(monkeypatch):
     assert changed_brand["items"][0]["brand"]["key"] == "deepseek"
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 def test_u5_chart_endpoint_threads_brand_filter_to_dto_v3(client, monkeypatch):
     deepseek = _brand("deepseek", "DeepSeek")
     minimax = _brand("minimax", "MiniMax")

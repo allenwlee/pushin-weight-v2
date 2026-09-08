@@ -14,6 +14,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 import monitor.trend_narrative_facts as trend_facts
+from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
 from core.models import (
     Account,
     Brand,
@@ -22,9 +23,12 @@ from core.models import (
     NationalismKey,
     Post,
     PostBrand,
+    PostBrandClassificationState,
     PostBrandDiscourse,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostTypeKey,
+    ProductLabelKey,
     SentimentKey,
 )
 from monitor.trend_narrative_facts import (
@@ -113,6 +117,21 @@ def _label(candidate: dict, family: str, key: str) -> dict:
     )
 
 
+def _state(post: Post, brand: Brand, *, sentiment: str = "positive", china: str | None = None, us: str | None = None) -> None:
+    SentimentKey.objects.get_or_create(key=sentiment)
+    if china:
+        NationalismKey.objects.get_or_create(key=china)
+    if us:
+        NationalismKey.objects.get_or_create(key=us)
+    PostBrandClassificationState.objects.create(
+        post=post, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+        model="test", source_language="en", input_context_fingerprint="0" * 64,
+        outcome="classified", sentiment_id=sentiment,
+        china_nationalism_id=china, us_nationalism_id=us,
+    )
+
+
 def test_u1_all_brand_aggregate_keeps_zero_post_brand_and_enrichment_count():
     populated = _brand("u1_populated")
     zero = _brand("u1_zero")
@@ -174,7 +193,7 @@ def test_u1_partial_metadata_share_uses_the_classified_subset():
     assert family["labels"][0]["brand_change_pp"] == "0.000000"
 
 
-def test_u1_market_coverage_dedupes_multiple_discourse_acts_per_post():
+def test_u4_product_coverage_dedupes_multiple_labels_per_post():
     brand = _brand("multi_act_coverage")
     current = _seed_posts(
         brand,
@@ -190,31 +209,15 @@ def test_u1_market_coverage_dedupes_multiple_discourse_acts_per_post():
         created_at=AS_OF - timedelta(days=1, hours=1),
         prefix="multi-act-prior",
     )[0]
-    DiscourseKey.objects.bulk_create(
-        [DiscourseKey(key="comparison"), DiscourseKey(key="technical_analysis")]
-    )
-    PostBrandDiscourse.objects.bulk_create(
-        [
-            PostBrandDiscourse(
-                post=current,
-                brand=brand,
-                discourse_id="comparison",
-                act_id=0,
-            ),
-            PostBrandDiscourse(
-                post=current,
-                brand=brand,
-                discourse_id="technical_analysis",
-                act_id=1,
-            ),
-            PostBrandDiscourse(
-                post=prior,
-                brand=brand,
-                discourse_id="comparison",
-                act_id=0,
-            ),
-        ]
-    )
+    ProductLabelKey.objects.get_or_create(key="complaint")
+    ProductLabelKey.objects.get_or_create(key="testimonial")
+    for post in (current, prior):
+        _state(post, brand)
+    PostBrandProductLabel.objects.bulk_create([
+        PostBrandProductLabel(post=current, brand=brand, product_label_id="complaint"),
+        PostBrandProductLabel(post=current, brand=brand, product_label_id="testimonial"),
+        PostBrandProductLabel(post=prior, brand=brand, product_label_id="complaint"),
+    ])
 
     _counts, coverage = trend_facts._metadata_counts(
         candidate_keys=[brand.nickname],
@@ -223,7 +226,157 @@ def test_u1_market_coverage_dedupes_multiple_discourse_acts_per_post():
         as_of=AS_OF,
     )
 
-    assert coverage[("__market__", "discourse")] == (1, 1)
+    assert coverage[("__market__", "product_label")] == (1, 1)
+
+
+def test_u4_scalars_use_current_nulls_and_historical_one_distinct_fallback():
+    brand = _brand("stage1-scalar-precedence")
+    legacy = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=1)
+    )[0]
+    current_null = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=2)
+    )[0]
+    classified_empty = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=3)
+    )[0]
+    PostTypeKey.objects.get_or_create(key="other")
+    SentimentKey.objects.get_or_create(key="positive")
+    NationalismKey.objects.get_or_create(key="none")
+    DiscourseKey.objects.get_or_create(key="legacy")
+    PostBrandSignal.objects.create(
+        post=legacy, brand=brand, post_type_id="other", sentiment_id="positive"
+    )
+    PostBrandDiscourse.objects.create(
+        post=legacy, brand=brand, discourse_id="legacy", act_id=0,
+        china_nationalism_id="none",
+    )
+    PostBrandClassificationState.objects.create(
+        post=current_null, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+        model="test", source_language="en", input_context_fingerprint="1" * 64,
+        outcome="context_missing", sentiment=None, china_nationalism=None,
+        us_nationalism=None,
+    )
+    _state(classified_empty, brand)
+    counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[brand.nickname], prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1), as_of=AS_OF,
+    )
+
+    assert counts[(brand.nickname, "sentiment", "positive")] == (2, 0)
+    assert coverage[(brand.nickname, "sentiment")] == (2, 0)
+    assert counts[(brand.nickname, "china_nationalism", "none")] == (1, 0)
+    assert coverage[(brand.nickname, "product_label")] == (1, 0)
+    assert not any(family == "product_label" for _scope, family, _label in counts)
+
+
+def test_u4_metadata_series_keeps_historical_scalar_fallback_and_nulls_unknown():
+    brand = _brand("stage1-series-scalar-fallback")
+    legacy = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=1)
+    )[0]
+    current_null = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=2)
+    )[0]
+    PostTypeKey.objects.get_or_create(key="other")
+    SentimentKey.objects.get_or_create(key="positive")
+    NationalismKey.objects.get_or_create(key="none")
+    DiscourseKey.objects.get_or_create(key="legacy")
+    PostBrandSignal.objects.create(
+        post=legacy, brand=brand, post_type_id="other", sentiment_id="positive"
+    )
+    PostBrandDiscourse.objects.create(
+        post=legacy, brand=brand, discourse_id="legacy", act_id=0,
+        china_nationalism_id="none",
+    )
+    PostBrandClassificationState.objects.create(
+        post=current_null, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+        model="test", source_language="en", input_context_fingerprint="2" * 64,
+        outcome="context_missing", sentiment=None, china_nationalism=None,
+        us_nationalism=None,
+    )
+
+    details = trend_facts.fetch_trend_candidate_series(
+        1, as_of=AS_OF, candidate_keys=[brand.nickname]
+    )
+    metadata = details["candidates"][0]["metadata_series"]
+
+    assert sum(metadata["sentiment"]["coverage_counts"]) == 1
+    assert metadata["sentiment"]["labels"]["positive"] == [
+        1 if index == 7 else 0 for index in range(8)
+    ]
+    assert sum(metadata["china_nationalism"]["coverage_counts"]) == 1
+    assert sum(metadata["us_nationalism"]["coverage_counts"]) == 0
+
+
+def test_u4_metadata_counts_keep_product_labels_per_brand_and_distinct_post_bases():
+    alpha = _brand("stage1-alpha-products")
+    beta = _brand("stage1-beta-products")
+    post = _seed_posts(
+        alpha, total=1, authors=1, created_at=AS_OF - timedelta(hours=1)
+    )[0]
+    PostBrand.objects.create(post=post, brand=beta)
+    PostTypeKey.objects.get_or_create(key="other")
+    SentimentKey.objects.get_or_create(key="positive")
+    for key in ("testimonial", "complaint"):
+        ProductLabelKey.objects.get_or_create(key=key)
+    _state(post, alpha)
+    _state(post, beta)
+    PostBrandSignal.objects.create(
+        post=post, brand=alpha, post_type_id="other", sentiment_id="positive"
+    )
+    PostBrandSignal.objects.create(
+        post=post, brand=beta, post_type_id="other", sentiment_id="positive"
+    )
+    PostBrandProductLabel.objects.create(
+        post=post, brand=alpha, product_label_id="testimonial"
+    )
+    PostBrandProductLabel.objects.create(
+        post=post, brand=beta, product_label_id="complaint"
+    )
+
+    counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[alpha.nickname, beta.nickname],
+        prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+    )
+
+    assert counts[(alpha.nickname, "product_label", "testimonial")] == (1, 0)
+    assert counts[(beta.nickname, "product_label", "complaint")] == (1, 0)
+    assert (alpha.nickname, "product_label", "complaint") not in counts
+    assert (beta.nickname, "product_label", "testimonial") not in counts
+    assert coverage[(alpha.nickname, "product_label")] == (1, 0)
+    assert coverage[(beta.nickname, "product_label")] == (1, 0)
+    assert coverage[("__market__", "product_label")] == (1, 0)
+
+
+def test_u4_classified_null_scalars_are_unknown_but_empty_products_are_covered():
+    brand = _brand("stage1-classified-null-scalars")
+    post = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=1)
+    )[0]
+    PostBrandClassificationState.objects.create(
+        post=post, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+        model="test", source_language="en", input_context_fingerprint="3" * 64,
+        outcome="classified", sentiment=None, china_nationalism=None,
+        us_nationalism=None,
+    )
+
+    counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[brand.nickname], prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1), as_of=AS_OF,
+    )
+
+    assert coverage[(brand.nickname, "post_type")] == (1, 0)
+    assert coverage[(brand.nickname, "product_label")] == (1, 0)
+    assert (brand.nickname, "sentiment") not in coverage
+    assert (brand.nickname, "china_nationalism") not in coverage
+    assert (brand.nickname, "us_nationalism") not in coverage
+    assert not any(scope == brand.nickname for scope, _family, _label in counts)
 
 
 def test_recent_minimax_leads_and_earlier_deepseek_is_handoff_contrast():
@@ -279,7 +432,7 @@ def test_half_open_boundaries_and_duplicate_signals_do_not_multiply_counts():
         created_at=AS_OF + timedelta(seconds=1),
     )
     for key in ("buzz_releases", "hands_on_usage"):
-        PostTypeKey.objects.create(key=key)
+            PostTypeKey.objects.get_or_create(key=key)
     SentimentKey.objects.create(key="positive")
     for key in ("buzz_releases", "hands_on_usage"):
         PostBrandSignal.objects.create(
@@ -570,7 +723,7 @@ def test_u1_aggregate_operation_returns_ranked_full_window_candidate():
         "volume": ["u1_ranked:full_window"],
         "engagement": [],
         "post_type": [],
-        "discourse": [],
+            "product_label": [],
         "sentiment": [],
         "nationalism": [],
     }
@@ -957,8 +1110,8 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
     )
     for key in ("release", "usage"):
         PostTypeKey.objects.create(key=key)
-    SentimentKey.objects.create(key="positive")
-    DiscourseKey.objects.create(key="genuine_hype")
+    SentimentKey.objects.get_or_create(key="positive")
+    ProductLabelKey.objects.get_or_create(key="testimonial")
     for post in selected:
         for post_type in ("release", "usage"):
             PostBrandSignal.objects.create(
@@ -967,13 +1120,10 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
                 post_type_id=post_type,
                 sentiment_id="positive",
             )
-        for act_id in (1, 2):
-            PostBrandDiscourse.objects.create(
-                post=post,
-                brand=brand,
-                discourse_id="genuine_hype",
-                act_id=act_id,
-            )
+        _state(post, brand)
+        PostBrandProductLabel.objects.create(
+            post=post, brand=brand, product_label_id="testimonial"
+        )
     for post in prior:
         PostBrandSignal.objects.create(
             post=post,
@@ -981,11 +1131,9 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
             post_type_id="release",
             sentiment_id="positive",
         )
-        PostBrandDiscourse.objects.create(
-            post=post,
-            brand=brand,
-            discourse_id="genuine_hype",
-            act_id=1,
+        _state(post, brand)
+        PostBrandProductLabel.objects.create(
+            post=post, brand=brand, product_label_id="testimonial"
         )
 
     candidate = _candidate(
@@ -995,7 +1143,7 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
     release = _label(candidate, "post_type", "release")
     usage = _label(candidate, "post_type", "usage")
     sentiment = _label(candidate, "sentiment", "positive")
-    discourse = _label(candidate, "discourse", "genuine_hype")
+    product = _label(candidate, "product_label", "testimonial")
 
     assert release["selected_basis_count"] == usage["selected_basis_count"] == 20
     assert release["selected_count"] == usage["selected_count"] == 20
@@ -1004,7 +1152,7 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         usage["selected_prevalence"]
     ) == Decimal("2.000000")
     assert sentiment["selected_count"] == sentiment["selected_basis_count"] == 20
-    assert discourse["selected_count"] == discourse["selected_basis_count"] == 20
+    assert product["selected_count"] == product["selected_basis_count"] == 20
 
 
 def test_u1_nationalism_axes_are_independent_and_constructive_is_not_anti():
@@ -1034,20 +1182,12 @@ def test_u1_nationalism_axes_are_independent_and_constructive_is_not_anti():
         authors=10,
         created_at=AS_OF - timedelta(days=1, hours=2),
     )
-    DiscourseKey.objects.create(key="analysis")
     for key in ("none", "pro", "constructive_critical", "anti"):
-        NationalismKey.objects.create(key=key)
+        NationalismKey.objects.get_or_create(key=key)
 
     def add(rows, brand, china: str, us: str):
         for post in rows:
-            PostBrandDiscourse.objects.create(
-                post=post,
-                brand=brand,
-                discourse_id="analysis",
-                act_id=1,
-                china_nationalism_id=china,
-                us_nationalism_id=us,
-            )
+            _state(post, brand, china=china, us=us)
 
     add(target_selected, target, "constructive_critical", "pro")
     add(target_prior, target, "anti", "none")
@@ -1247,7 +1387,7 @@ def test_u1_bounded_candidate_detail_query_count_is_fixed():
             earliest_at=AS_OF - timedelta(days=2),
         )
 
-    assert len(one_candidate) == len(three_candidates) == 2
+    assert len(one_candidate) == len(three_candidates) == 6
 
 
 def test_u1_candidate_detail_set_is_explicitly_bounded():

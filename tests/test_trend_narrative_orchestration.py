@@ -411,9 +411,9 @@ def test_oversized_editor_group_splits_and_completes_the_production_call_chain(
                 "first_party_role": "public_opaque",
                 "taxonomy": {
                     "post_types": {"status": "available", "values": ["hands_on"]},
-                    "discourse_roles": {
+                    "product_labels": {
                         "status": "available",
-                        "values": ["technical_capability"],
+                        "values": ["testimonial"],
                     },
                     "sentiment": {"status": "available", "values": ["positive"]},
                 },
