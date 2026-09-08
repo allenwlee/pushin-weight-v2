@@ -15,6 +15,15 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
+The allowlist below describes the production schema after migration 0028.
+Stage 0 production remained at 0027 during the 2026-09-08 Stage 1
+verification; these expanded grants have not been applied or live-verified.
+Apply them only after the source has migrated through 0028. Refresh preflight
+compares the source's complete table inventory with the tracked policy and
+fails closed with `source_classified_table_missing:<table>` when a required
+relation is absent; the later shadow migration does not bypass that source
+check.
+
 Application credentials remain Render-managed. The refresh reader is a
 separate least-privileged PostgreSQL login because it must see only the
 allowlisted product relations. Open an interactive owner session so the
@@ -52,15 +61,19 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
-  account_post_appearances, accounts, brand_hashtags, brand_keywords,
+  account_based_in_mappings, account_post_appearances, accounts,
+  brand_hashtags, brand_keywords,
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
-  companies_accounts, discourse_keys, discourse_labels, django_content_type,
-  django_migrations, django_site, hf_orgs, nationalism_keys,
+  companies_accounts, countries, country_codes_region, country_labels,
+  discourse_keys, discourse_labels, django_content_type, django_migrations,
+  django_site, hf_orgs, nationalism_keys,
   nationalism_labels, post_type_keys, post_type_labels, posts, posts_brands,
-  posts_brands_discourse, posts_brands_mentions, posts_brands_signals,
-  posts_unsanctioned_flags, products, role_labels, roles, search_queries,
-  sentiment_keys, sentiment_labels, trend_narrative_subjects,
-  trend_narratives, unsanctioned_flag_keys
+  posts_brands_classification_states, posts_brands_discourse,
+  posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
+  posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
+  region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
+  sentiment_labels, trend_narrative_subjects, trend_narratives,
+  unsanctioned_flag_keys
 TO staging_refresh_reader;
 
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL

@@ -630,7 +630,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
 ):
     from django.utils import timezone
 
-    from core.models import Post, PostEnrichmentState
+    from core.models import Post, PostEnrichmentState, PostTypeKey, SentimentKey
     from monitor.cycle import CycleRunner
     from monitor.harvest_summary import HARVEST_COHORT_PREFIX
     from monitor.post_enrichment import post_persisted_output_complete
@@ -660,6 +660,8 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         database=_Connection(),
         policy=load_policy(POLICY_PATH),
     )
+    PostTypeKey.objects.get_or_create(key="buzz_releases")
+    SentimentKey.objects.get_or_create(key="positive")
     tweet_id = "999000000000001"
     now = timezone.now()
     provider_calls: list[dict] = []
@@ -717,7 +719,20 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     def classify(tweets, _brands, _client, **_kwargs):
         classification_ids.extend(tweet["tweet_id"] for tweet in tweets)
         return [
-            {"by_brand": {}, "unsanctioned_flags": []}
+            {
+                "valid": True,
+                "by_brand": {
+                    "deepseek": {
+                        "outcome": "classified",
+                        "post_types": ["buzz_releases"],
+                        "product_labels": [],
+                        "sentiment": "positive",
+                        "china_nationalism": None,
+                        "us_nationalism": None,
+                    }
+                },
+                "unsanctioned_flags": [],
+            }
             for _tweet in tweets
         ]
 

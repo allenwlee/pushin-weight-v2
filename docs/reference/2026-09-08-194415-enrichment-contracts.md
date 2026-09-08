@@ -21,7 +21,7 @@ transport invocation; retry, repair, and fallback are represented by their
 own invocation with outer context, without helper/wrapper duplicates.
 
 Current role names are `post_translation_synthesis` for translator,
-`classifier`, `relevancy`, and `headline`. Metadata contains no keys, prompts,
+`classification`, `relevancy`, and `headline`. Metadata contains no keys, prompts,
 source or post text, raw bodies, full URLs, or exception messages. Reporting is
 best effort and cannot alter provider failure or parsed output.
 

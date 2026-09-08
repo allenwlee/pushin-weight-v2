@@ -67,8 +67,9 @@ class FakeClaudeClient:
         return {"results": [{
             "tweet_id": "_legacy_default_",  # overwritten in dispatch
             "classifications": [
-                {"brand_id": b, "post_types": ["hands_on_usage"],
-                 "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
+                {"brand_id": b, "outcome": "classified",
+                 "post_types": ["hands_on_usage"], "product_labels": [],
+                 "sentiment": "neutral",
                  "china_nationalism": "none", "us_nationalism": "none"}
                 for b in brand_ids
             ],
@@ -101,7 +102,7 @@ class FakeClaudeClient:
             )
         if ("across FIVE dimensions" in prompt
                 or "_PRAGMATICS_FULL_SYSTEM_PROMPT" in prompt
-                or "You classify one or more tweets" in prompt):
+                or "You classify stored social posts" in prompt):
             self.classify_calls.append(kwargs)
             # Pull the per-tweet payload and brand list(s) out of the
             # prompt. The batch path emits the payload as a JSON array
@@ -297,7 +298,7 @@ def test_run_post_fetch_empty_input_returns_empty_counters(tmp_path):
             brand_registry_rows=s.read_brands(),
         )
         assert out == {
-            "n_translated": 0, "n_discourse": 0,
+            "n_translated": 0, "n_classified": 0, "n_discourse": 0,
             "n_nationalism": 0, "n_failed_translate": 0,
         }
         assert client.call_count == 0
@@ -316,17 +317,114 @@ def test_run_post_fetch_no_client_returns_empty_counters(tmp_path):
             brand_registry_rows=s.read_brands(),
         )
         assert out == {
-            "n_translated": 0, "n_discourse": 0,
+            "n_translated": 0, "n_classified": 0, "n_discourse": 0,
             "n_nationalism": 0, "n_failed_translate": 0,
         }
     finally:
         s.close()
 
 
-# The classifier/discourse writer cases that previously lived here exercised the
-# retired SQLite x_monitor.run path and required the removed discourse result.
-# Stage 1 writer and failure-isolation coverage lives in the Django CycleRunner
-# suites; U5 owns the separate compatibility decision for x_monitor.run.
+def _stage1_result(*, outcome="classified", valid=True):
+    return {
+        "valid": valid,
+        "unsanctioned_flags": [] if valid else ["scam"],
+        "by_brand": {
+            "anthropic": {
+                "outcome": outcome,
+                "post_types": (
+                    ["hands_on_usage", "feedback_questions"]
+                    if outcome == "classified"
+                    else []
+                ),
+                "product_labels": ["bug"] if outcome == "classified" else [],
+                "sentiment": "neutral" if outcome == "classified" else None,
+                "china_nationalism": None,
+                "us_nationalism": "none" if outcome == "classified" else None,
+            }
+        },
+    }
+
+
+def _run_with_stage1_result(tmp_path, monkeypatch, result):
+    from x_monitor import attribution
+    from x_monitor.run import _run_post_fetch
+
+    s = _seed_minimal_db(tmp_path)
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        lambda *args, **kwargs: [result],
+    )
+    out = _run_post_fetch(
+        [{"tweet_id": "t1", "text": "x", "brand_ids": ["anthropic"]}],
+        store=s,
+        anthropic_client=FakeClaudeClient(),
+        brand_registry_rows=s.read_brands(),
+    )
+    return s, out
+
+
+def test_run_post_fetch_flattens_stage1_types_without_discourse(
+    tmp_path, monkeypatch
+):
+    s, out = _run_with_stage1_result(
+        tmp_path, monkeypatch, _stage1_result()
+    )
+    try:
+        assert out["n_classified"] == 1
+        assert out["n_discourse"] == 0
+        assert out["n_nationalism"] == 0
+        assert {
+            tuple(row)
+            for row in s._conn.execute(
+                "SELECT post_type_key, sentiment FROM posts_brands_signals"
+            ).fetchall()
+        } == {
+            ("hands_on_usage", "neutral"),
+            ("feedback_questions", "neutral"),
+        }
+        assert s._conn.execute(
+            "SELECT COUNT(*) FROM posts_brands_discourse"
+        ).fetchone()[0] == 0
+    finally:
+        s.close()
+
+
+def test_run_post_fetch_accepts_context_missing_without_legacy_edges(
+    tmp_path, monkeypatch
+):
+    s, out = _run_with_stage1_result(
+        tmp_path, monkeypatch, _stage1_result(outcome="context_missing")
+    )
+    try:
+        assert out["n_classified"] == 1
+        assert s._conn.execute(
+            "SELECT COUNT(*) FROM posts_brands_signals"
+        ).fetchone()[0] == 0
+        assert s._conn.execute(
+            "SELECT COUNT(*) FROM posts_brands_discourse"
+        ).fetchone()[0] == 0
+    finally:
+        s.close()
+
+
+def test_run_post_fetch_invalid_result_publishes_nothing(
+    tmp_path, monkeypatch
+):
+    s, out = _run_with_stage1_result(
+        tmp_path, monkeypatch, _stage1_result(valid=False)
+    )
+    try:
+        assert out["n_classified"] == 0
+        assert out["n_unsanctioned"] == 0
+        assert s._conn.execute(
+            "SELECT COUNT(*) FROM posts_brands_signals"
+        ).fetchone()[0] == 0
+        assert s._conn.execute(
+            "SELECT COUNT(*) FROM posts_unsanctioned_flags"
+        ).fetchone()[0] == 0
+    finally:
+        s.close()
 
 
 # --- U1 (Plan 2026-07-13-002) closed-DB fix ------------------------

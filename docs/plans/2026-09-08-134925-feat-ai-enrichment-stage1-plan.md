@@ -372,10 +372,31 @@ U1 freezes the result and fixture contract, then U2 adds the schema and active w
 | Headline regression | U4 | Candidate/facts/evaluation/projection/orchestration suites prove closed packet schemas, deterministic evidence, unchanged provider-call topology, and last-good behavior. |
 | UI behavior | U3 | URL/view/template tests plus Bridgewright affected and candidate gates from `.claude/skills/fix-ui/SKILL.md`; every required obligation executes with zero failed, skipped, errored, missing, or unknown results. |
 | Stage 0 invariants | U1, U2, U4, U5 | Existing provider telemetry call-chain tests retain role/model/provider host, one-event-per-application-invocation cardinality, privacy, retries, and nullable usage semantics. |
-| Reconciliation and aggregate | U5 | Scoped Ruff on changed Python, `pytest tests/ollija`, the impacted regression manifest, and the repository's aggregate Django test suite. Project-wide pre-existing lint debt is reported separately rather than waived or attributed to Stage 1. |
+| Reconciliation and aggregate | U5 | Scoped Ruff on changed Python, `pytest tests/ollija`, the impacted regression manifest, and the active Django/shared-runtime aggregate selected by `tests/fixtures/ai_enrichment_stage1_test_scope.json`. Every selected test must pass with zero failures, skips, errors, or missing results. Retain the complete mixed-stack pytest result and paired Stage 0 comparison as separate evidence. Project-wide pre-existing lint debt is reported separately. |
 | Offline evaluation | U1, U5 | Stored fixture/candidate JSON yields 100% contract validity and zero fabricated defaults. Fresh heldout gold assessment and numeric semantic floors are recorded before any production proposal. |
 | Staging delivery | U5 | Passive baseline reviewed; remote staging and Render report the unchanged candidate SHA; migrations and web health pass; deterministic UI/headline probes pass; no manual paid harvest is required. |
 | Latest-N production health | U5 | Before staging, capture the literal latest 20 production IDs in order and recheck the identical cohort once after 30 minutes. No substitution, retry, production write, or semantic-accuracy claim is allowed; existing missing-discourse evidence stays labeled as pre-existing. |
+
+### Aggregate Scope Clarification
+
+The repository's single-stack instructions retire Flask and the historical
+SQLite stack. The broad pytest collection still includes their migrations,
+CLI paths, dashboards, and one-time data tools. U5's aggregate Django gate
+therefore uses the portable scope manifest above, derived from current runtime
+callsites and the Port/Exclude/Defer map. The default includes every test;
+explicit rules identify retired whole files, retired nodes within mixed files,
+and optional live checks. Shared provider, normalization, query-boundary,
+classification, and translation tests remain required, as do U5's named
+retired-caller compatibility tests.
+
+Record every collected node's disposition independently of its outcome,
+including passing retired tests. Preserve the full mixed-stack log and JUnit
+result, the paired baseline comparison, and the exact selected aggregate
+command. A failure shared with Stage 0 remains a failure; current/shared
+failures must be repaired before this gate passes. The five explicit live
+exclusions and 28 guarded historical production-snapshot tests are outside
+local aggregate execution. R18's separate immutable-cohort health check and
+the staging-only delivery target retain their existing requirements.
 
 ### Preproduction Quality Gate
 
@@ -408,7 +429,7 @@ The first release is additive at the database layer. Rollback is application-onl
 
 ## Confidence and Review State
 
-Planning confidence is high for the active call chain, schema boundaries, consumer inventory, and staged compatibility design because each is grounded in current production code and the completed Stage 0/taxonomy audits. Confidence is medium for real semantic quality and production economics because the frozen adjudicated cohort and Stage 0 production window are not yet complete. Those gaps are explicit staging/production gates and do not make the Stage 1 implementation contract ambiguous.
+Planning confidence is high for the active call chain, schema boundaries, consumer inventory, and staged compatibility design because each is grounded in current production code and the completed Stage 0/taxonomy audits. The Stage 0 production window is complete. Confidence remains medium for real semantic quality and production economics because the frozen adjudicated cohort is not yet complete and the observed window cannot establish future economics. Those gaps are explicit production gates and do not make the Stage 1 implementation contract ambiguous.
 
 The confidence check strengthened the state model, shared historical fallback, coupled U1/U2 commit boundary, health diagnostics, migration rollback, and latest-N proof. The plan contains one diagram each for the data flow, classification state lifecycle, and rollout sequence; all feature-bearing units have concrete files, failure cases, integration proof, and observable completion criteria.
 

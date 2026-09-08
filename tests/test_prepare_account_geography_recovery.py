@@ -11,7 +11,7 @@ from django.core.management.base import CommandError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Account
+from core.models import Account, Country
 from monitor.account_geography_recovery import (
     parse_geography_recovery_receipt,
     verify_geography_recovery_snapshot,
@@ -19,8 +19,13 @@ from monitor.account_geography_recovery import (
 
 pytestmark = [
     pytest.mark.requires_postgres,
-    pytest.mark.django_db(transaction=True, serialized_rollback=True),
+    pytest.mark.django_db(transaction=True),
 ]
+
+
+@pytest.fixture(autouse=True)
+def seed_referenced_country():
+    Country.objects.get_or_create(code="US", defaults={"m49_code": "840"})
 
 
 def test_geography_snapshot_defaults_to_zero_write_dry_run():

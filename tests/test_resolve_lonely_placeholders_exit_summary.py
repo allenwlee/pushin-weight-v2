@@ -14,8 +14,6 @@ Verifies the apply loop body (`run_apply_loop`) and exit summary shape:
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -93,10 +91,13 @@ def test_dead_letter_log_appended_per_failure(tmp_logs, monkeypatch):
     """A dead-letter LookupResult writes one JSON line per handle to dl_log."""
     apply_log, dl_log = tmp_logs
 
-    from monitor.twitterapi.caller import LookupResult, LookupStats
+    from monitor.twitterapi.caller import LookupResult
 
     async def fake_lookup_batch(handles, **kwargs):
+        stats = kwargs["stats"]
         for h in handles:
+            stats.looked_up += 1
+            stats.dead_lettered += 1
             yield LookupResult.from_dead_letter(
                 h, reason="not_found_200", status_code=200,
                 response_excerpt='{"status":"error","msg":"user not found"}',
@@ -142,12 +143,18 @@ def test_summary_partial_true_on_circuit_breaker_trip(tmp_logs, monkeypatch):
 
     async def fake_lookup_batch(handles, **kwargs):
         breaker = kwargs.get("breaker")
+        stats = kwargs["stats"]
         for h in handles:
-            # First few: dead-letter 5xx to trip breaker; rest: short-circuit.
-            r = LookupResult.from_dead_letter(h, reason="http_5xx")
+            if breaker is not None and breaker.is_open:
+                stats.dead_lettered += 1
+                stats.circuit_open_short_circuits += 1
+                yield LookupResult.from_dead_letter(h, reason="circuit_open")
+                continue
+            stats.looked_up += 1
+            stats.dead_lettered += 1
             if breaker is not None:
                 breaker.record("http_5xx")
-            yield r
+            yield LookupResult.from_dead_letter(h, reason="http_5xx")
 
     monkeypatch.setattr(
         "monitor.reconcile.apply_loop.lookup_batch",
@@ -178,23 +185,20 @@ def test_max_seconds_triggers_partial(monkeypatch, tmp_logs):
     """--max-seconds elapsed mid-loop -> partial=True."""
     apply_log, dl_log = tmp_logs
 
-    # Make time.time() jump forward after the first iteration.
-    real_time = __import__("time").time
-    call_count = {"n": 0}
-
-    def fake_time():
-        call_count["n"] += 1
-        # After the first few calls (used for setup), jump forward past deadline.
-        if call_count["n"] > 5:
-            return real_time() + 10000
-        return real_time()
-
-    monkeypatch.setattr("monitor.reconcile.apply_loop.time.time", fake_time)
+    clock = {"now": 0.0}
+    monkeypatch.setattr(
+        "monitor.reconcile.apply_loop.time.time",
+        lambda: clock["now"],
+    )
 
     from monitor.twitterapi.caller import LookupResult
 
     async def fake_lookup_batch(handles, **kwargs):
+        stats = kwargs["stats"]
         for h in handles:
+            stats.looked_up += 1
+            stats.resolved += 1
+            clock["now"] = 11.0
             yield LookupResult.from_success(
                 h, canonical={"author_id": "99999", "screen_name": h},
             )
@@ -218,3 +222,5 @@ def test_max_seconds_triggers_partial(monkeypatch, tmp_logs):
         received_signal_ref=received,
     )
     assert summary["partial"] is True
+    assert summary["looked_up"] == 1
+    assert summary["applied"] == 0

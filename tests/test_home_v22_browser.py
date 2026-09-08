@@ -964,6 +964,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_anonymous_chart_is_live_canvas_and_window_refetch_is_atomic(self) -> None:
+        expected_brand_count = len(_live_brand_nicknames())
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -1030,7 +1031,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["chart"]["computed_at"], projection["pulseComputedAt"])
                     self.assertEqual(
                         projection["pulseCount"],
-                        len(_live_brand_nicknames()),
+                        expected_brand_count,
                     )
                     refreshed_legend = page.locator("[data-pw-chart-legend]")
                     self.assertEqual(
@@ -1571,6 +1572,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         with (
             patch(
@@ -1588,7 +1593,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 _freeze_clock(context)
                 page = context.new_page()
                 try:
-                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.goto(
+                        f"{self.live_server_url}/?locale=en&{unscoped_query}",
+                        wait_until="networkidle",
+                    )
                     headline_body = page.locator("[data-pw-headline] .body")
                     rendered = " ".join(headline_body.inner_text().split())
                     self.assertEqual(rendered.count("MiniMax"), 1)
@@ -1652,7 +1660,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     )
 
                     page.goto(
-                        f"{self.live_server_url}/?locale=zh_hans",
+                        f"{self.live_server_url}/?locale=zh_hans&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     zh_observations = page.locator(
@@ -1713,6 +1721,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         with (
             patch(
@@ -1734,7 +1746,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "No clear conversation story emerged in this window."
                     )
                     page.goto(
-                        f"{self.live_server_url}/?locale=en",
+                        f"{self.live_server_url}/?locale=en&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     headline = page.locator("[data-pw-headline]")
@@ -1778,7 +1790,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(payload["subjects"], [])
 
                     page.goto(
-                        f"{self.live_server_url}/?locale=zh_hans",
+                        f"{self.live_server_url}/?locale=zh_hans&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     expected_zh = "这一时间段内没有出现明确的讨论主题。"
@@ -1893,6 +1905,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         cookies = self._authenticated_cookies("en")
         with (
@@ -1911,7 +1927,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 )
                 page = context.new_page()
                 try:
-                    response = page.goto(self.live_server_url, wait_until="networkidle")
+                    response = page.goto(
+                        f"{self.live_server_url}/?{unscoped_query}",
+                        wait_until="networkidle",
+                    )
                     self.assertIsNotNone(response)
                     self.assertTrue(
                         response.headers.get("content-language", "en").startswith("en")
@@ -1965,6 +1984,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         navigation.value.headers.get("content-language", "").startswith(
                             "zh"
                         )
+                    )
+                    self.assertEqual(normalized(page), release_zh)
+                    zh_window_query = urlencode(
+                        {
+                            "locale": "zh_hans",
+                            "filters": json.dumps(
+                                {"brands": "__all__", "window": 30}
+                            ),
+                        }
+                    )
+                    page.goto(
+                        f"{self.live_server_url}/?{zh_window_query}",
+                        wait_until="networkidle",
                     )
                     self.assertEqual(normalized(page), quiet_zh)
                     self.assertEqual(
@@ -2035,9 +2067,18 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(response.status, 200)
                     state = page.locator("[data-pw-headline-state]")
                     body = page.locator("[data-pw-headline-body]")
+                    fallback = page.locator("[data-pw-headline-empty]")
                     self.assertEqual(state.inner_text(), "DISABLED")
                     self.assertEqual(body.inner_text(), "Trend summary is unavailable.")
-                    for visible in (state, body):
+                    self.assertFalse(body.is_visible())
+                    self.assertEqual(
+                        fallback.inner_text(), "Trend summary is unavailable."
+                    )
+                    self.assertEqual(
+                        page.locator("[data-pw-headline-item-title]:visible").count(),
+                        0,
+                    )
+                    for visible in (state, fallback):
                         shape = visible.bounding_box()
                         self.assertIsNotNone(shape)
                         self.assertGreater(shape["width"], 0)
@@ -3314,6 +3355,27 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertGreater(len(local_assets), 0, "anonymous root referenced zero local assets")
                             for asset_url in local_assets:
+                                if asset_url not in local_asset_responses:
+                                    explicit_status = page.evaluate(
+                                        """async url => {
+                                          const response = await fetch(url, {
+                                            credentials: 'same-origin',
+                                            redirect: 'error'
+                                          });
+                                          return response.status;
+                                        }""",
+                                        asset_url,
+                                    )
+                                    self.assertGreaterEqual(
+                                        explicit_status,
+                                        200,
+                                        f"declared local asset fetch failed: url={asset_url}; status={explicit_status}",
+                                    )
+                                    self.assertLess(
+                                        explicit_status,
+                                        300,
+                                        f"declared local asset fetch failed: url={asset_url}; status={explicit_status}",
+                                    )
                                 self.assertIn(asset_url, local_asset_responses, f"local asset emitted no response: {asset_url}")
                                 self.assertLess(
                                     local_asset_responses[asset_url],
@@ -3761,6 +3823,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "signal_inspections",
             "sentiment_keys",
             "post_type_keys",
+            "product_label_keys",
             "nat_cn",
             "nat_us",
             "unsanctioned",
@@ -3772,9 +3835,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row["account"]["role_label"], "官方")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
         self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
+        self.assertEqual(row["product_label_keys"], ["bug"])
         self.assertEqual(row["nat_cn"], "pro")
         self.assertEqual(row["nat_us"], "mild_pro")
-        self.assertIn("genuine_hype", str(row["classifications"]))
+        self.assertNotIn("discourse", str(row["classifications"]))
         self.assertTrue(row["engagement_pretty"]["followers"])
 
     def test_hover_freeze_feed_range_is_half_open_and_keeps_only_brand_filter(
@@ -4199,7 +4263,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         count = lead.locator(".follower-count")
         self.assertEqual(lead.count(), 1)
         self.assertEqual(glyph.count(), 1)
-        self.assertIn("followers", magnitude.get_attribute("aria-label") or "")
+        locale = page.locator("body").get_attribute("data-pw-locale") or "en"
+        follower_label = "关注者" if locale.startswith("zh") else "followers"
+        self.assertIn(
+            follower_label,
+            magnitude.get_attribute("aria-label") or "",
+        )
         self.assertGreater(glyph.bounding_box()["width"], 0)
         self.assertTrue((count.inner_text() or "").strip())
         account_link = row.locator(".feed-handle-link")
@@ -4209,7 +4278,6 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             role = lead.locator(".account-role.role-official")
             self.assertEqual(role.count(), 1)
             self.assertEqual(role.locator("use").get_attribute("href"), "#icon-role-badge")
-            locale = page.locator("body").get_attribute("data-pw-locale") or "en"
             self.assertEqual(
                 role.get_attribute("aria-label"),
                 "官方" if locale.startswith("zh") else "Official",

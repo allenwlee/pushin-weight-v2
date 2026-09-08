@@ -14,25 +14,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-# Plan 2026-07-11-002 (U4): Account / derive_edges / find_clusters /
-# role_tag moved from x_monitor.accounts (deleted) to
-# x_monitor.account_graph.
-from .account_graph import Account, derive_edges, find_clusters, role_tag
+# Plan 2026-07-11-002 (U4): Account / role_tag moved from
+# x_monitor.accounts (deleted) to x_monitor.account_graph.
+from .account_graph import Account, role_tag
 from .apify import (
     TwitterApiAuthError,
     TwitterApiClient,
     TwitterApiRateLimitError,
     TwitterApiServerError,
 )
-from .config import KNOWN_MODELS, Config
-from .queries import (
-    Query,
-    assert_under_operator_cap,
-    count_x_operators,
-    estimated_cost,
-    load_queries,
-)
-from .query_plan import plan_calls
+
 # v1.8 (R15, R20): the per-tweet classification seam uses the
 # multi-brand `attribute_to_brands` + `classify_post` from
 # `x_monitor.attribution`. U9 (migration 022) drops the legacy
@@ -41,15 +32,18 @@ from .query_plan import plan_calls
 from .attribution import (
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
+    _max_tokens_for_batch,
     attribute_to_brands,
     classify_post,
     compile_keyword_index,
-    _max_tokens_for_batch,
 )
+from .config import KNOWN_MODELS, Config
+from .headlines import HeadlinesCache, enrich_posts
+from .queries import Query, estimated_cost
+from .query_plan import MIN_FAVES_FOR_LIST_CALL, PlannedCall, plan_calls
 from .relevance import filter_posts  # noqa: F401 — re-exported for tests
 from .review import ReviewQueue
 from .store import Store
-from .headlines import HeadlinesCache, enrich_posts
 
 log = logging.getLogger(__name__)
 
@@ -182,13 +176,12 @@ def _signal_to_qid(signal: str) -> str:
 # import — query_plan is imported by run.py, not the other way around.
 # Was 1 historically (the "release-like" preset) — lowered to 0 so the
 # list call surfaces every post from the curated handles, not just
-# ones that already have traction. brand_wide calls (B1/B2/B3/C1/C2)
+# ones that already have traction. brand_wide calls (B1/B2/B3/C1/C2/C3)
 # have always been 0; this constant only governs the `account` path.
 # Pinned by tests/test_min_faves_list_call.py.
-from .query_plan import MIN_FAVES_FOR_LIST_CALL  # noqa: E402
 
 
-def _planned_call_to_query(call: "PlannedCall") -> Query:
+def _planned_call_to_query(call: PlannedCall) -> Query:
     """Synthesize a Query object for the v1.2 filter_and_review helper.
 
     U9 (migration 022): the Query model no longer carries
@@ -202,7 +195,6 @@ def _planned_call_to_query(call: "PlannedCall") -> Query:
     creates fresh rows keyed by call_id with a null cursor (wider
     initial fetch, dedup handles duplicates).
     """
-    from .query_plan import PlannedCall  # local to avoid circular at import
     min_faves = MIN_FAVES_FOR_LIST_CALL if call.call_kind == "account" else 0
     return Query(
         id=call.call_id,  # type: ignore[arg-type]
@@ -339,7 +331,8 @@ def _attribute_call_items(
     fallback is gone; the pipeline can run offline-only and skip the
     posts_brands_signals writes).
     """
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
     classified = 0
     for it in items:
         _fallback_created_at = _dt.now(_tz.utc).isoformat(timespec="seconds")
@@ -516,12 +509,12 @@ def _run_post_fetch(
       1. `translate_batch_pragmatics` (U3) writes text_en / text_zh_cn
          / lang_detected to `posts` and emits the four-pronged row
          (literal_zh + cn_equivalent + annotation). Pragmatic register
-         (discourse_role) was REMOVED from the translator in plan
-         2026-07-06-001 — it's the classifier's exclusive output.
-      2. `classify_pragmatics_full` (U4) writes the per-brand
-         (post_type + sentiment) pair to `posts_brands_signals` AND
-         the (discourse_role + china_nationalism + us_nationalism)
-         triple to `posts_brands_discourse`.
+         (discourse_role) was removed from the translator before this cutover;
+         the Stage 1 classifier does not emit it either.
+      2. `classify_pragmatics_full` writes the shared Stage 1 result. This
+         retired adapter flattens classified `post_types` into the existing
+         `posts_brands_signals` table and deliberately ignores product labels.
+         It does not write the retired discourse relation.
 
     Fail-soft per stage: an LLM failure on one post never aborts the
     cycle. Counters surface in the run summary so the smoketest
@@ -531,8 +524,8 @@ def _run_post_fetch(
         kept_posts: the per-cycle kept posts. Each dict must have
             `tweet_id` (or `id`) and `text`. The per-brand
             classifications live on `classifications` (set by
-            `_attribute_call_items` via classify_post) — U4's merged
-            call REPLACES those with the five-prong result.
+            `_attribute_call_items` via classify_post). The shared batch
+            classifier replaces those with the Stage 1 result.
         store: open Store (caller's transaction).
         anthropic_client: a ClaudeClient-protocol object. When None,
             skip both stages (used by --dry-run and offline tests).
@@ -543,14 +536,14 @@ def _run_post_fetch(
     Returns:
         Counter dict with keys:
           n_translated       — kept posts with text_en + text_zh_cn
-          n_discourse        — kept posts with at least one
-                               posts_brands_discourse row written
-          n_nationalism      — kept posts with both nationalism FKs
-                               populated
+          n_classified       — kept posts with one valid Stage 1 result
+          n_discourse        — retained compatibility counter, always zero
+          n_nationalism      — retained compatibility counter, always zero
           n_failed_translate — kept posts whose LLM call failed
     """
     counters = {
         "n_translated": 0,
+        "n_classified": 0,
         "n_discourse": 0,
         "n_nationalism": 0,
         "n_failed_translate": 0,
@@ -567,11 +560,8 @@ def _run_post_fetch(
     # Lazy imports to avoid pulling translator / classification
     # modules when the caller is offline (the no-`anthropic_client`
     # path is the offline-test path).
+    from .attribution import classify_batch_pragmatics_full
     from .translator import translate_batch_pragmatics
-    from .attribution import (
-        classify_pragmatics_full,
-        classify_batch_pragmatics_full,
-    )
 
     # --- Stage 1: translate_batch_pragmatics (U3) ------------------------
     # Build the per-post translation batch (one call per 20-post batch).
@@ -639,10 +629,9 @@ def _run_post_fetch(
     # docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md
     # for the original truncation analysis.
     t0 = time.monotonic()
-    discourse_rows: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
     unsanctioned_by_post: dict[str, list[str]] = {}
-    n_nationalism = 0
+    classified_posts: set[str] = set()
 
     # Build the per-post payload list. Posts with no brand_ids are
     # skipped here (the classifier's purpose is per-brand) and
@@ -667,71 +656,46 @@ def _run_post_fetch(
             "_run_post_fetch: classify_batch_pragmatics_full failed: %s", e,
         )
         classification_results = [
-            {"by_brand": {}, "unsanctioned_flags": []}
+            {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
             for _ in kept_posts
         ]
 
     # Pair `kept_posts` with `classification_results` (index-aligned) and
-    # emit the same `(signal_rows, discourse_rows, unsanctioned_by_post,
-    # n_nationalism)` rows the prior per-post loop produced. The downstream
-    # write paths (`insert_posts_brands_signals`,
-    # `bulk_insert_post_brand_discourse`) are unchanged.
+    # project classified types onto the existing legacy signal table. Invalid
+    # results publish nothing. Context-missing results are valid but have no
+    # type edge. Product labels and discourse are outside this retired schema.
     for it, classified in zip(kept_posts, classification_results):
         tid = str(it.get("id") or it.get("tweet_id"))
-        # U2a: pull the per-brand dict out of the new return shape.
-        by_brand = classified.get("by_brand", {}) if isinstance(
-            classified, dict) else {}
-        # v12 (plan 2026-07-06-001 U2): parser-layer demotion. When the
-        # LLM-defaulted post_type='hands_on_usage' but the raw text
-        # contains a strong marker for performance_comparisons or
-        # event_announcement, override. Fail-soft: log + keep the
-        # un-post-processed by_brand on any exception.
-        try:
-            by_brand = _post_process_pragmatics(
-                by_brand, it.get("text") or "",
-            )
-        except Exception as e:
-            log.warning(
-                "_run_post_fetch: _post_process_pragmatics failed for "
-                "tweet_id=%s: %s",
-                tid, e,
-            )
+        if not isinstance(classified, dict) or classified.get("valid") is not True:
+            continue
+        by_brand = classified.get("by_brand", {})
+        if not isinstance(by_brand, dict):
+            continue
+        classified_posts.add(tid)
         for brand_id, prongs in by_brand.items():
-            # posts_brands_signals: (post_type, sentiment) per brand.
-            # Scalar fields preserved from the legacy shape.
-            signal_rows.append({
-                "tweet_id": tid,
-                "brand_id": brand_id,
-                "post_type": prongs["post_type"],
-                "sentiment": prongs["sentiment"],
-            })
-            # posts_brands_discourse: (discourse_role + 2 nationalism
-            # axes) per brand. act_id = 1 (v1 always writes a single
-            # speech-act per post × brand).
-            discourse_rows.append({
-                "tweet_id": tid,
-                "brand_id": brand_id,
-                "discourse_key": prongs["discourse_role"],
-                "act_id": 1,
-                "china_nationalism": prongs["china_nationalism"],
-                "us_nationalism": prongs["us_nationalism"],
-            })
-            if (
-                prongs["china_nationalism"] != "none"
-                and prongs["us_nationalism"] != "none"
-            ):
-                n_nationalism += 1
-        # U2a: capture top-level unsanctioned flags for the new table.
-        flags = classified.get("unsanctioned_flags", []) if isinstance(
-            classified, dict) else []
+            if not isinstance(prongs, dict) or prongs.get("outcome") != "classified":
+                continue
+            sentiment = prongs.get("sentiment")
+            post_types = prongs.get("post_types")
+            if not isinstance(sentiment, str) or not isinstance(post_types, list):
+                continue
+            for post_type in post_types:
+                if not isinstance(post_type, str):
+                    continue
+                signal_rows.append({
+                    "tweet_id": tid,
+                    "brand_id": brand_id,
+                    "post_type": post_type,
+                    "sentiment": sentiment,
+                })
+        flags = classified.get("unsanctioned_flags", [])
         if flags:
             unsanctioned_by_post[tid] = list(flags)
     t_classify = time.monotonic() - t0
     log.info(
-        "_run_post_fetch: classify_batch_pragmatics_full %d brand rows "
-        "(%d discourse, %d signal) in %.2fs",
-        len(discourse_rows), len(discourse_rows),
-        len(signal_rows), t_classify,
+        "_run_post_fetch: classify_batch_pragmatics_full %d valid posts "
+        "(%d legacy signal rows) in %.2fs",
+        len(classified_posts), len(signal_rows), t_classify,
     )
 
     # Persist. The U4 path REPLACES the (post_type, sentiment) row
@@ -754,11 +718,6 @@ def _run_post_fetch(
                 "(tweet_id=%s brand_id=%s): %s",
                 s["tweet_id"], s["brand_id"], e,
             )
-    try:
-        store.bulk_insert_post_brand_discourse(discourse_rows)
-    except Exception as e:
-        log.warning("_run_post_fetch: bulk_insert_post_brand_discourse: %s", e)
-
     # U8a: Stage 3 — unsanctioned flags. One row per post with
     # non-empty unsanctioned_flags. Failures are per-row (the Store
     # method dead-letters on FK violations and continues).
@@ -779,20 +738,7 @@ def _run_post_fetch(
         n_unsanctioned, t_unsanc_ms,
     )
 
-    # Per-post counters for the smoketest runner.
-    # n_discourse = kept posts with at least one PERSISTED discourse
-    # row. The Store dead-letters `uncategorized` rows (KTD5), so the
-    # row count returned by bulk_insert_post_brand_discourse may be
-    # less than `len(discourse_rows)`. We approximate the per-post
-    # set by re-reading the DB rather than re-counting the input —
-    # the smoketest runner (U7) only needs an order-of-magnitude
-    # signal.
-    persisted_count = len({
-        r["tweet_id"] for r in discourse_rows
-        if r["discourse_key"] != "uncategorized"
-    })
-    counters["n_discourse"] = persisted_count
-    counters["n_nationalism"] = n_nationalism
+    counters["n_classified"] = len(classified_posts)
     counters["n_unsanctioned"] = n_unsanctioned
     counters["t_unsanctioned_ms"] = t_unsanc_ms
     return counters
@@ -829,24 +775,7 @@ def load_brand_queries_or_stub(
         store = Store(db_path)
     try:
         primary_keywords = store.read_primary_brand_keywords()
-    except Exception as e:
-        primary_keywords = {}
-    queries_per_model: dict[str, list[Query]] = {
-        m: [
-            Query(
-                id="B3",  # first in degraded_skip_order; most expendable
-                query_string="(placeholder)",
-                enabled=True,
-            )
-        ]
-        for m in cfg.enabled_models
-    }
-    return queries_per_model, primary_keywords
-    if store is None:
-        store = Store(db_path)
-    try:
-        primary_keywords = store.read_primary_brand_keywords()
-    except Exception as e:
+    except Exception:
         primary_keywords = {}
     queries_per_model: dict[str, list[Query]] = {
         m: [
@@ -1144,7 +1073,7 @@ class RunPipeline:
                 # `data/accounts/*.yaml` is also gone; staff_handles
                 # now reads from `brands_accounts WHERE role_id IN (2,
                 # 3)` via Store.read_brand_official_staff_handles.
-                staff_handles = _staff_handles_map(store, models)
+                _staff_handles = _staff_handles_map(store, models)
                 _t_loop = time.monotonic()
                 # U5: per-cycle accumulator for the post-fetch
                 # transformers. Each `_attribute_call_items` returns

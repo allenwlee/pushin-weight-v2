@@ -23,12 +23,8 @@ test is `total_ms > 90_000` returning rc=1).
 from __future__ import annotations
 
 import io
-import json
-import time
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-
-import pytest
 
 
 class FakeSlowClaudeClient:
@@ -63,16 +59,16 @@ class FakeSlowClaudeClient:
                 "literal_zh": f"[zh] {t.get('text', '')[:60]}",
                 "text_zh_cn": f"[zh] {t.get('text', '')[:60]}",
                 "lang_detected": "en",
-                "discourse_role": "genuine_hype",
                 "cn_equivalent": "[zh equivalent]",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
             } for t in tweets]}
-        if "across FIVE dimensions" in prompt:
+        if "You classify stored social posts" in prompt:
             return {"classifications": [{
-                "brand_id": "anthropic", "post_type": "hands_on_usage",
-                "sentiment": "neutral", "discourse_role": "genuine_hype",
+                "brand_id": "anthropic", "outcome": "classified",
+                "post_types": ["hands_on_usage"], "product_labels": [],
+                "sentiment": "neutral",
                 "china_nationalism": "none", "us_nationalism": "none",
             }]}
         return {"classifications": [], "results": []}
@@ -124,9 +120,9 @@ def test_smoketest_strict_budget_exits_1_when_cycle_exceeds_90s(
 ):
     """A cycle whose wall-clock exceeds 90s with --strict-budget
     exits 1."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -172,9 +168,9 @@ def test_smoketest_without_strict_budget_exits_0_on_slow_cycle(
 ):
     """A slow cycle WITHOUT --strict-budget still exits 0 (the
     flag is the only thing that promotes a slow cycle to rc=1)."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()

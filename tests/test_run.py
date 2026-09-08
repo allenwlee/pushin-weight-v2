@@ -6,19 +6,16 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from x_monitor.config import Config
-from x_monitor.relevance import RelevanceConfig
 from x_monitor.queries import Query
 from x_monitor.query_plan import PlannedCall
 from x_monitor.query_rot import apply_rot, detect_rot, read_run_zero_result_streaks
 from x_monitor.review import ReviewQueue
 from x_monitor.run import RunPipeline, pipeline_lock
-
 
 # --- run: cost / skip order -----------------------------------------------
 
@@ -62,38 +59,34 @@ queries:
         cost = p.estimate_cost(per_model)
         # 3 models × 6 queries × 50 = 900 — ABOVE 333 default
         assert cost == 900
-        # Test skip order with a per-model budget smaller than cost
-        # (single model cost = 5*50 = 250; budget = 100 → 3 queries dropped)
-        kept, skipped = p.apply_skip_order(per_model["minimax"], budget=100)
+        # The retired YAML cost remains readable, while skip order operates on
+        # current logical call IDs.
+        current_calls = [
+            Query(id=call_id, query_string=call_id, max_results=50)
+            for call_id in ("A", "B1", "B2", "B3", "C1", "C2", "C3")
+        ]
+        kept, skipped = p.apply_skip_order(current_calls, budget=100)
         assert len(skipped) >= 1
-        # Q1 must be in 'kept' (last to drop per R17)
-        assert any(q.id == "Q1" for q in kept)
+        # Call A must be kept because it is last to drop.
+        assert any(q.id == "A" for q in kept)
 
 
 def test_apply_skip_order_drops_in_configured_order():
-    """Per R17: Q5 first, then Q3, Q2, Q4, Q1 last."""
+    """Current logical calls drop in the configured order, with A last."""
     with tempfile.TemporaryDirectory() as d:
         data = Path(d)
         cfg = Config(enabled_models=["minimax"], daily_ceiling=50, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=Path(d) / "x.db")
         qs = [
             Query(id=qid, query_string=qid, max_results=50)
-            for qid, signal in [
-                ("Q1", "release"),
-                ("Q2", "community_question"),
-                ("Q3", "criticism"),
-                ("Q4", "commenter_capture"),
-                ("Q5", "other"),
-            ]
+            for qid in ("A", "B1", "B2", "B3", "C1", "C2", "C3")
         ]
-        kept, skipped = p.apply_skip_order(qs, budget=50)
-        # Cost = 5*50 = 250. budget=50. Drop in Q5,Q3,Q2,Q4 order until fit.
-        # Drop Q5 (cost 200), Q3 (150), Q2 (100), Q4 (50). Q1 is the only one left.
+        kept, skipped = p.apply_skip_order(qs, budget=100)
         kept_ids = [q.id for q in kept]
         skipped_ids = [q.id for q in skipped]
-        assert "Q1" in kept_ids
-        assert skipped_ids[0] == "Q5"
-        assert "Q1" not in skipped_ids
+        assert "A" in kept_ids
+        assert skipped_ids == ["B3", "B2", "B1", "C3", "C2"]
+        assert "A" not in skipped_ids
 
 
 # --- run: lock + idempotency ----------------------------------------------
@@ -261,7 +254,7 @@ def test_read_run_zero_result_streaks(tmp_path):
     (runs / "run1.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-21T00:00:00+00:00",
+                "started_at": f"{date.today().isoformat()}T00:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
                     {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 5},
@@ -270,13 +263,11 @@ def test_read_run_zero_result_streaks(tmp_path):
         )
     )
     # Force mtime order: run1 older than run2
-    import time
-
     os.utime(runs / "run1.json", (1000, 1000))
     (runs / "run2.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-21T01:00:00+00:00",
+                "started_at": f"{date.today().isoformat()}T01:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0},
                     {"brand_id": "m", "query_id": "Q2", "status": "completed", "n_results": 3},
@@ -297,7 +288,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run1.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-21T00:00:00+00:00",
+                "started_at": f"{date.today().isoformat()}T00:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
@@ -307,7 +298,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run2.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-21T01:00:00+00:00",
+                "started_at": f"{date.today().isoformat()}T01:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
@@ -317,7 +308,7 @@ def test_detect_rot_flips_at_threshold(tmp_path):
     (runs / "run3.json").write_text(
         json.dumps(
             {
-                "started_at": "2026-06-21T02:00:00+00:00",
+                "started_at": f"{date.today().isoformat()}T02:00:00+00:00",
                 "queries": [
                     {"brand_id": "m", "query_id": "Q1", "status": "completed", "n_results": 0}
                 ],
@@ -672,7 +663,7 @@ def _stub_plan_calls(enabled_models):
     pipeline tests we don't want to write full yaml; we just need
     deterministic call lists to drive apify mocks. Returns:
       - 1 account call per model (release)
-      - 1 intent call per model (criticism, with the model's brand
+      - 1 constrained brand-wide call per model (with the model's brand
         token prefixed)
     """
     out = []
@@ -686,8 +677,8 @@ def _stub_plan_calls(enabled_models):
             query_length=1,
         ))
         out.append(PlannedCall(
-            call_id="X",
-            call_kind="intent",
+            call_id="B1",
+            call_kind="brand_wide",
             brand_id=m,
             bucket="howto_criticism",
             query_string=f"({m}) how OR broken min_faves:0",
@@ -741,7 +732,7 @@ def test_pipeline_runs_via_plan_calls_account_call(monkeypatch):
         # The summary has 2 query entries (1 per call).
         assert len(summary["queries"]) == 2
         kinds = {q.get("call_kind") for q in summary["queries"]}
-        assert kinds == {"account", "intent"}
+        assert kinds == {"account", "brand_wide"}
 
 
 def test_intent_call_reclassifies_brand_id(monkeypatch):
@@ -759,7 +750,6 @@ def test_intent_call_reclassifies_brand_id(monkeypatch):
     `classify_post` returning `{brand_id: (post_type, sentiment)}`.
     """
     from x_monitor.attribution import (
-        UNATTRIBUTED_BRAND_ID,
         attribute_to_brands,
         classify_post,
         compute_post_brands,
@@ -921,7 +911,7 @@ def test_intent_call_classifies_multi_brand(monkeypatch):
             captured["items"] = list(items)
             return orig_insert(self, items)
         monkeypatch.setattr(Store, "insert_posts", _capture)
-        summary = p.execute(apify, model_filter=["minimax"])
+        p.execute(apify, model_filter=["qwen", "deepseek"])
         assert len(captured["items"]) == 1
         kept = captured["items"][0]
         # The new v1.8 multi-brand fields are populated.
@@ -1159,18 +1149,18 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
         # Find the intent-call summary entry; n_results is POST-reclassify
         # drop (2), n_filtered is from the relevance filter (0 — both
         # pass must_have_any: [minimax] and lack banned "celebrity").
-        intent_entries = [q for q in summary["queries"] if q.get("call_kind") == "intent"]
-        assert len(intent_entries) == 1
-        entry = intent_entries[0]
+        constrained_entries = [
+            q for q in summary["queries"] if q.get("call_kind") == "brand_wide"
+        ]
+        assert len(constrained_entries) == 1
+        entry = constrained_entries[0]
         assert entry["n_results"] == 2
         assert entry["n_filtered"] == 0
         store.close()
 
 
-def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
-    """F1 hijack at moonshot_kimi: a tweet mentioning F1 but no
-    kimi/moonshot gets soft-dropped to the review queue.
-    """
+def test_retired_filter_yaml_does_not_soft_drop(monkeypatch):
+    """Retired filter YAML cannot silently remove an attributed post."""
     monkeypatch.setattr(
         "x_monitor.run.plan_calls",
         lambda *a, **kw: _stub_plan_calls(["moonshot_kimi"]),
@@ -1214,30 +1204,25 @@ def test_pipeline_soft_drop_adds_to_review_queue_v16(monkeypatch):
         cfg = Config(enabled_models=["moonshot_kimi"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         apify = MagicMock()
-        # The F1 hijack: a tweet that mentions F1 but no kimi/moonshot.
-        # Pre-stamp brand_id to bypass the intent-call reclassify.
+        # The checked-in YAML still lists an old F1 exclusion, but the
+        # current runtime attributes from its in-code/DB vocabulary and does
+        # not load that retired filter file.
         apify.run_search.side_effect = [
             [],
             [
-                # Tweet mentions BOTH "kimi" (so attribute_to_brand
-                # passes) and "F1" (so the relevance filter's
-                # must_have_none catches it and soft-drops to review
-                # queue). v1.6 reclassify sees the brand match; the
-                # filter then sees the banned token.
-                {"id": "f1", "text": "kimi is faster than F1 today",
+                {"id": "f1", "text": "moonshot_kimi is faster than F1 today",
                  "author_handle": "f1fan", "like_count": 50,
                  "brand_id": "moonshot_kimi", "source_query_id": "Q5"},
             ],
         ]
         review = ReviewQueue(data / "_review_queue.json")
-        summary = p.execute(apify, model_filter=["moonshot_kimi"])
-        # No posts inserted (the F1 tweet was filtered).
+        p.execute(apify, model_filter=["moonshot_kimi"])
         from x_monitor.store import Store
         store = Store(data / "x.db")
-        assert store.get_all_posts("moonshot_kimi") == []
-        # The soft-drop landed in the review queue.
-        items = review.list()
-        assert any(it.get("tweet_id") == "f1" for it in items)
+        assert {
+            post["tweet_id"] for post in store.get_all_posts("moonshot_kimi")
+        } == {"f1"}
+        assert review.list() == []
         store.close()
 
 
@@ -1261,7 +1246,7 @@ def _qt_pipeline(tmp_path):
     from x_monitor.store import Store
     cfg = Config(enabled_models=["glm"], daily_ceiling=10, x_monitor_list_id=1)
     pipe = RunPipeline(cfg, tmp_path, tmp_path / "x.db")
-    return pipe, Store(tmp_path / "x.db"), _build_brand_index({"glm": ["glm"]}, ["glm"])
+    return pipe, Store(tmp_path / "x.db"), _build_brand_index(["glm"])
 
 
 def test_capture_official_qt_threshold_fetch_ingest_track(tmp_path):

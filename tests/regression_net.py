@@ -19,10 +19,8 @@ Usage:
 Default URL: http://127.0.0.1:5050/?locale=en
 """
 
-import sys
 import re
-import html
-from html.parser import HTMLParser
+import sys
 
 try:
     import requests
@@ -35,6 +33,14 @@ except ImportError:
 EXPECTED_TIME_WINDOWS_EN = ["1d", "7d", "30d", "365d"]
 EXPECTED_TIME_WINDOWS_ZH = ["1天", "7天", "30天", "365天"]
 EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
+EXPECTED_POST_TYPE_KEYS = (
+    "buzz_releases", "hands_on_usage", "performance_comparisons",
+    "feedback_questions", "advertising_marketing", "event_announcement",
+    "opinions_reactions", "research_explanations", "business_finance", "other",
+)
+EXPECTED_PRODUCT_LABEL_KEYS = (
+    "bug", "complaint", "testimonial", "product_request", "misinformation",
+)
 
 # Each section's required text.
 EXPECTED_SECTIONS = {
@@ -43,11 +49,11 @@ EXPECTED_SECTIONS = {
     # Trending pills carry .delta.up/.down/.flat spans with pct values (iter 2 v22)
     "filter-groups": [
         'data-group="brands"', 'data-group="sentiment"',
-        'data-group="post_types"', 'data-group="lang"',
-        'data-group="role"', 'data-group="nationalism"',
-        'data-group="discourse"', 'data-group="unsanctioned"',
+        'data-group="post_types"', 'data-group="product_labels"',
+        'data-group="lang"', 'data-group="role"',
+        'data-group="nationalism"', 'data-group="unsanctioned"',
     ],
-    "chart": ["Daily total posts per brand"],
+    "chart": ["Daily total posts per brand", "每日各品牌帖子总数"],
     "top-voices": ["Top voices", "voice-star-icon"],
     "feed": ['data-i18n="feed_title"'],
 }
@@ -194,7 +200,7 @@ class RegressionNet:
 
     def _check_filter_buttons(self, html):
         # Find the Filter groups nav
-        nav_match = re.search(r'<nav[^>]*aria-label="Filter groups"[^>]*>(.*?)</nav>',
+        nav_match = re.search(r'<nav[^>]*aria-label="(?:Filter groups|筛选组)"[^>]*>(.*?)</nav>',
                               html, re.DOTALL)
         if not nav_match:
             self.assert_("filter-group nav exists", False,
@@ -204,8 +210,8 @@ class RegressionNet:
         # Visible labels are localized; stable data-group keys define the
         # production inventory.
         expected_groups = (
-            "brands", "sentiment", "post_types", "lang", "role",
-            "nationalism", "discourse", "unsanctioned",
+            "brands", "sentiment", "post_types", "product_labels", "lang", "role",
+            "nationalism", "unsanctioned",
         )
         buttons = re.findall(r'<button[^>]*>(.*?)</button>', nav_html, re.DOTALL)
         # The label text may be inside <strong> or directly as text
@@ -250,7 +256,7 @@ class RegressionNet:
 
     def _check_time_window_buttons(self, html):
         # Time-period selector nav
-        nav_match = re.search(r'<nav[^>]*aria-label="Time-period selector"[^>]*>(.*?)</nav>',
+        nav_match = re.search(r'<nav[^>]*aria-label="(?:Time-period selector|时间窗口)"[^>]*>(.*?)</nav>',
                               html, re.DOTALL)
         if not nav_match:
             self.assert_("time-window nav exists", False,
@@ -262,7 +268,7 @@ class RegressionNet:
         for window in expected:
             present = window in nav_html
             self.assert_(f"time-window '{window}' present", present,
-                         f"not found")
+                         "not found")
 
     def _check_locale_toggle(self, html):
         # In zh_cn, the locale-toggle is rendered; in en, also rendered.
@@ -346,7 +352,9 @@ class RegressionNet:
             "zh-cnfied feed heading missing in default response — locale default not zh_cn",
         )
 
-        # Cookie home_window=7 honored (returning user override)
+        # The public initial-home route deliberately ignores a remembered
+        # window cookie. ``tests/test_public_home_window_cookie.py`` pins this
+        # behavior; only an explicit ``?window=`` query chooses another window.
         try:
             r7 = default_session.get(default_url, timeout=30,
                                      cookies={"home_window": "7"}, allow_redirects=True)
@@ -357,13 +365,61 @@ class RegressionNet:
         m3 = re.search(r'<button[^>]*class="is-active"[^>]*data-pw-window-btn="(\d+)"', cookie_html)
         if m3:
             self.assert_(
-                "U2: home_window=7 cookie honored (returning user override)",
-                int(m3.group(1)) == 7,
-                f"with cookie home_window=7, active was {m3.group(1)}d; expected 7d",
+                "U2: initial home ignores home_window=7 cookie",
+                int(m3.group(1)) == 1,
+                f"with cookie home_window=7, active was {m3.group(1)}d; expected 1d",
+            )
+        else:
+            self.assert_(
+                "U2: initial home ignores home_window=7 cookie",
+                False,
+                "no is-active window button found with home_window=7 cookie",
+            )
+
+        # ``window`` is the documented shareable route parameter and wins over
+        # the initial-home default. Keep this explicit assertion separate from
+        # the legacy cookie behavior above.
+        try:
+            explicit = default_session.get(
+                default_url + "?window=7", timeout=30, allow_redirects=True
+            )
+        except Exception as e:
+            self.failures.append(("u2-window-query-http", f"GET ?window=7 failed: {e}"))
+            return
+        if explicit.status_code != 200:
+            self.failures.append(("u2-window-query-status", f"status {explicit.status_code}"))
+            return
+        explicit_active = re.search(
+            r'<button[^>]*class="is-active"[^>]*data-pw-window-btn="(\d+)"',
+            explicit.text,
+        )
+        if explicit_active:
+            self.assert_(
+                "U2: explicit window=7 query selects 7d",
+                int(explicit_active.group(1)) == 7,
+                f"with window=7, active was {explicit_active.group(1)}d; expected 7d",
+            )
+        else:
+            self.assert_(
+                "U2: explicit window=7 query selects 7d",
+                False,
+                "no is-active window button found with explicit window=7",
             )
 
     def _check_sections(self, html):
         for section, keywords in EXPECTED_SECTIONS.items():
+            if section == "chart":
+                expected_heading = (
+                    "Daily total posts per brand"
+                    if self.locale == "en"
+                    else "每日各品牌帖子总数"
+                )
+                self.assert_(
+                    "section chart has its localized heading",
+                    expected_heading in html,
+                    f"text '{expected_heading}' not found in HTML",
+                )
+                continue
             for kw in keywords:
                 present = kw in html
                 self.assert_(f"section {section} has '{kw}'", present,
@@ -451,8 +507,10 @@ class RegressionNet:
 
     def _check_follower_glyphs(self, html):
         glyphs = re.findall(
-            r'<div class="follower-lead follower-bin-([^" ]+)"[^>]*aria-label="([^"]*followers)"',
+            r'<div class="follower-lead follower-bin-([^" ]+)"[^>]*>\s*'
+            r'<button[^>]*aria-label="([^"]*(?:followers|关注者))"',
             html,
+            re.DOTALL,
         )
         self.assert_("feed has >= 1 follower-count glyph",
                      len(glyphs) >= 1,
@@ -494,7 +552,7 @@ class RegressionNet:
         for sig in ("sig-sentiment", "sig-post-type", "sig-nat", "sig-unsanctioned"):
             self.assert_(f".sig-row.{sig} present",
                          f'class="sig-row {sig}"' in html,
-                         f"missing — right column missing classification signals")
+                         "missing — right column missing classification signals")
         # Inside feed-main: fixed follower lead, head (name + meta), text, engagement
         self.assert_(".feed-main .follower-lead present",
                      re.search(r'<div class="feed-main">\s*<div class="follower-lead', html, re.DOTALL) is not None,
@@ -564,15 +622,6 @@ class RegressionNet:
         # Net C — Filter contract (unchanged wire).
         # Pin the dashboard filter key tuples from monitor/views.py to ensure
         # the v22 chrome cutover doesn't silently drop a filter group or option.
-        EXPECTED_DISCOURCE_KEYS = (
-            "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
-            "cope", "fud", "distillation_accusation", "ai_slop_critique",
-            "absurdist_meme", "advertising-marketing",
-        )
-        EXPECTED_POST_TYPE_KEYS = (
-            "buzz_releases", "hands_on_usage", "performance_comparisons",
-            "feedback_questions", "advertising_marketing", "event_announcement",
-        )
         EXPECTED_ROLE_KEYS = ("official", "staff", "community", "other")
         EXPECTED_NATIONALISM_KEYS = (
             "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed",
@@ -587,8 +636,8 @@ class RegressionNet:
         # All eight production groups must be present.
         groups_in_html = set(re.findall(r'data-group="([^"]+)"', html))
         EXPECTED_GROUPS = {
-            "brands", "sentiment", "post_types", "lang", "role",
-            "nationalism", "discourse", "unsanctioned",
+            "brands", "sentiment", "post_types", "product_labels", "lang", "role",
+            "nationalism", "unsanctioned",
         }
         self.assert_(
             "filter-bar nav has all 8 expected groups",
@@ -596,23 +645,30 @@ class RegressionNet:
             f"missing: {EXPECTED_GROUPS - groups_in_html}, found: {groups_in_html}",
         )
 
-        # For each filter group whose underlying key tuple is pinned in
-        # monitor/views.py, verify a sample of expected keys appear in the
-        # rendered option HTML (the data-key or value attributes).
-        sample_checks = (
-            ("discourse", EXPECTED_DISCOURCE_KEYS),
+        # Types and products are independent Stage 1 filter families. Check every
+        # exact key, including the valid exclusive ``other`` type; this verifies
+        # the declared vocabulary without inventing fallback classification.
+        exact_checks = (
+            ("post_type", EXPECTED_POST_TYPE_KEYS),
+            ("product_labels", EXPECTED_PRODUCT_LABEL_KEYS),
             ("nationalism", EXPECTED_NATIONALISM_KEYS),
             ("role", EXPECTED_ROLE_KEYS),
             ("lang", EXPECTED_LANG_KEYS),
-            ("post_type", EXPECTED_POST_TYPE_KEYS),
         )
-        for group_name, expected_keys in sample_checks:
-            sample_missing = [k for k in expected_keys[:3] if k not in html]
+        for group_name, expected_keys in exact_checks:
+            missing = [key for key in expected_keys if key not in html]
             self.assert_(
-                f"filter-group '{group_name}' has sample options in HTML",
-                not sample_missing,
-                f"sample keys missing: {sample_missing}",
+                f"filter-group '{group_name}' has its exact options in HTML",
+                not missing,
+                f"keys missing: {missing}",
             )
+
+        self.assert_(
+            "Stage 1 removes the active discourse filter",
+            'data-group="discourse"' not in html
+            and 'data-pw-filter-group="discourse"' not in html,
+            "legacy discourse filter control is still rendered",
+        )
 
     def _check_chart_contract(self, html):
         # Net D — Chart contract.
@@ -804,7 +860,7 @@ def main():
         print(f"Authenticating as {email}...")
         try:
             authenticate(session, base_url, email, password)
-            print(f"  Auth OK")
+            print("  Auth OK")
         except Exception as e:
             print(f"  AUTH FAILED: {e}")
             print("  Continuing without auth — many checks will fail")

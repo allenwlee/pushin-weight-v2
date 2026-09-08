@@ -9,16 +9,60 @@ import pytest
 
 from core.classification_contract import parse_stage1_classifications
 
+FIXTURE_PATH = Path("tests/fixtures/classification_stage1_contract_v1.json")
+
+
+def _contract_fixture():
+    return json.loads(FIXTURE_PATH.read_text())
+
 
 def test_contract_fixture_is_explicitly_synthetic_and_non_gold():
-    fixture = json.loads(
-        Path("tests/fixtures/classification_stage1_contract_v1.json").read_text()
-    )
+    fixture = _contract_fixture()
 
     assert fixture["provenance"]["kind"] == "synthetic"
     assert fixture["provenance"]["gold"] is False
     assert "accuracy" in fixture["provenance"]["note"]
-    assert parse_stage1_classifications(fixture["examples"], ["example"]) is not None
+    assert fixture["contract_version"] == "stage1-v1"
+    assert fixture["taxonomy_version"] == "stage1-taxonomy-v1"
+
+
+@pytest.mark.parametrize(
+    "case",
+    _contract_fixture()["cases"],
+    ids=lambda case: case["name"],
+)
+def test_stored_fixture_matches_expected_contract_outcome(case):
+    parsed = parse_stage1_classifications(
+        case["classifications"], case["expected_brand_ids"]
+    )
+
+    assert (parsed is not None) is case["expected_valid"]
+    if case["expected_valid"]:
+        assert parsed == case["expected_canonical"]
+    else:
+        assert "expected_canonical" not in case
+
+
+def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
+    from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
+
+    cases = _contract_fixture()["cases"]
+    valid_rows = [
+        row
+        for case in cases
+        if case["expected_valid"]
+        for row in case["classifications"]
+    ]
+    assert {
+        post_type for row in valid_rows for post_type in row["post_types"]
+    } == set(POST_TYPE_KEYS)
+    assert {
+        label for row in valid_rows for label in row["product_labels"]
+    } == set(PRODUCT_LABEL_KEYS)
+    assert {case["source_language"] for case in cases} >= {"en", "zh-Hans", "ja"}
+    assert {
+        source for case in cases for source in case["context_provenance"]
+    } == {"stored_quote", "local_parent"}
 
 
 def test_contract_preserves_all_types_and_empty_product_labels():

@@ -2941,11 +2941,7 @@ def _fetch_evidence_rows(
                     DISTINCT product.product_label_key::text
                     ORDER BY product.product_label_key::text
                 ) FILTER (WHERE product.product_label_key IS NOT NULL)
-                    AS product_label_keys,
-                max(state.china_nationalism::text)
-                    AS china_nationalism_keys
-                , max(state.us_nationalism::text)
-                    AS us_nationalism_keys
+                    AS product_label_keys
             FROM base_posts base
             JOIN posts_brands_classification_states state
               ON state.post_id = base.tweet_id
@@ -2978,15 +2974,8 @@ def _fetch_evidence_rows(
                 coalesce(sig.post_type_keys, ARRAY[]::text[])
                     AS post_type_keys,
                 current.classification_outcome,
-                ARRAY[]::text[] AS sentiment_keys,
                 coalesce(current.product_label_keys, ARRAY[]::text[])
                     AS product_label_keys,
-                case when current.china_nationalism_keys is null then ARRAY[]::text[]
-                     else ARRAY[current.china_nationalism_keys] end
-                    AS china_nationalism_keys,
-                case when current.us_nationalism_keys is null then ARRAY[]::text[]
-                     else ARRAY[current.us_nationalism_keys] end
-                    AS us_nationalism_keys,
                 coalesce(uns.unsanctioned_flag_keys, ARRAY[]::text[])
                     AS unsanctioned_flag_keys
             FROM base_posts base

@@ -48,6 +48,7 @@ from django.views.decorators.http import require_POST
 
 from core.classification_contract import (
     CONTRACT_VERSION,
+    NATIONALISM_KEYS,
     POST_TYPE_KEYS,
     PRODUCT_LABEL_KEYS,
     TAXONOMY_VERSION,
@@ -106,10 +107,7 @@ _DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
     "official", "staff", "community", "other",
 )
 
-_DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = (
-    "none", "mild_pro", "pro",
-    "constructive_critical", "anti", "mixed",
-)
+_DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = NATIONALISM_KEYS
 
 _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
@@ -1662,17 +1660,7 @@ def _enrich_posts_with_classifications(
         if not pb.brand.is_sentinel
         and (brand_nickname is None or pb.brand_id == brand_nickname)
     ]
-    scalar_pair_set = set(scalar_pairs)
     scalar_reads = read_brand_scalars_many(scalar_pairs)
-    current_outcomes = {
-        (row["post_id"], row["brand_id"]): row["outcome"]
-        for row in PostBrandClassificationState.objects.filter(
-            post_id__in=tweet_ids,
-            contract_version=CONTRACT_VERSION,
-            taxonomy_version=TAXONOMY_VERSION,
-        ).values("post_id", "brand_id", "outcome")
-        if (row["post_id"], row["brand_id"]) in scalar_pair_set
-    }
     role_map: dict[tuple[str, str], str | None] = {}
     if author_ids and post_brand_ids:
         ba_qs = BrandAccount.objects.filter(
@@ -1835,7 +1823,7 @@ def _enrich_posts_with_classifications(
             cls_data["us_nationalism"] = scalar.us_nationalism
             cls_data["scalar_source"] = scalar.source
             cls_data["conflicts"] = list(scalar.conflicts)
-            current_outcome = current_outcomes.get((tid, nick))
+            current_outcome = scalar.outcome
             if current_outcome:
                 cls_data["classification_status"] = current_outcome
             else:
@@ -3494,17 +3482,6 @@ def _build_brand_chart_payload(
             for i in range(window_days - 1, -1, -1)
         ]
 
-    allowed_tabs = {
-        "post_type",
-        "product_labels",
-        "account_roles",
-        "us_nationalism",
-        "cn_nationalism",
-        "unsanctioned",
-    }
-    if tab not in allowed_tabs:
-        tab = "post_type"
-
     tab_categories = {
         "post_type": _DASHBOARD_POST_TYPE_KEYS,
         "product_labels": _DASHBOARD_PRODUCT_LABEL_KEYS,
@@ -3513,6 +3490,8 @@ def _build_brand_chart_payload(
         "cn_nationalism": _DASHBOARD_NATIONALISM_KEYS,
         "unsanctioned": ("flagged", "unflagged"),
     }
+    if tab not in tab_categories:
+        tab = "post_type"
     tab_datasets = {
         tab_name: {key: [0] * bucket_count for key in categories}
         for tab_name, categories in tab_categories.items()

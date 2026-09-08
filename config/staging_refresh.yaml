@@ -33,6 +33,7 @@ production_deny:
 
 relations:
   copied_tables:
+    - account_based_in_mappings
     - account_post_appearances
     - accounts
     - brand_hashtags
@@ -43,6 +44,9 @@ relations:
     - brands_companies
     - companies
     - companies_accounts
+    - countries
+    - country_codes_region
+    - country_labels
     - discourse_keys
     - discourse_labels
     - django_content_type
@@ -55,11 +59,17 @@ relations:
     - post_type_labels
     - posts
     - posts_brands
+    - posts_brands_classification_states
     - posts_brands_discourse
     - posts_brands_mentions
+    - posts_brands_product_labels
     - posts_brands_signals
     - posts_unsanctioned_flags
     - products
+    - product_label_keys
+    - product_label_labels
+    - region_labels
+    - regions
     - role_labels
     - roles
     - search_queries
@@ -218,8 +228,10 @@ validation:
       - display_name_zh_cn
   classification_tables:
     - posts_brands
+    - posts_brands_classification_states
     - posts_brands_discourse
     - posts_brands_mentions
+    - posts_brands_product_labels
     - posts_brands_signals
     - posts_unsanctioned_flags
 

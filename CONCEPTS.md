@@ -88,17 +88,33 @@ A state where a brand listed in the pipeline's enabled-models set has no primary
 
 The pipeline tolerates gaps so a partial keyword table still produces a run summary; closing a gap requires adding the row, not relaxing the check.
 
-### Classification upsert
+### Stage 1 classification publication
 
-The act of writing one `(post, brand, post_type, sentiment)` triple into the classification store. If the triple already exists, the write becomes an update on the same row.
+The atomic publication of one complete, versioned classification result for
+every attributed brand on a post. Each brand result records either
+`classified` or `context_missing`. A classified result has one or more
+independent post types, zero or more product labels, sentiment, and nullable
+China/US nationalism values. A context-missing result has no type or product
+edges and preserves only independently supported scalar judgments.
 
-The store keeps a run-level counter of upserts attempted (which counts both new inserts and updates). That counter answers "did the classifier run?", not "how many new rows landed in the DB?" — a row updated twice still counts twice.
+Malformed, missing, duplicate, or extra brand results publish nothing. A
+successful publication replaces the current type/product edges for the
+covered brands and records the contract, taxonomy, prompt, model, source
+language, and non-reversible input-context fingerprint. It never writes a
+current discourse judgment.
 
 ### Post-fetch classification
 
-A second classification pass that runs after the initial fetch+classify loop completes, used to re-classify posts against the full brand set once translation and other enrichments are done. The post-fetch pass writes to the same classification store as the inline pass, so a single per-post triple can be written by both passes.
+The durable classification stage that runs after collection and translation.
+It claims a bounded set of persisted posts, classifies every already attributed
+brand from stored source/quote/local-parent context, and publishes through the
+Stage 1 classification boundary. Translation and classification retry states
+remain independent, so a translation failure does not fabricate a
+classification result or prevent a separately valid classification.
 
-Because post-fetch runs after the per-call loop, any run-summary counter that snapshots inside the loop will miss post-fetch writes. The snapshot must happen after post-fetch completes.
+`n_classifications_published` counts successful Stage 1 post publications.
+Legacy SQLite `n_discourse` counters are historical compatibility evidence and
+do not indicate current classifier health.
 
 ### Operator-degraded entry
 
@@ -108,7 +124,7 @@ The pattern matters because operators triaging failures want to grep a stable pr
 
 ## Flagged ambiguities
 
-- "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the v1.7 short-code call ids (`A`, `B1`..`C2`). The v1.7 call id is canonical; `Q`-string references in older docs are historical-only.
+- "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the current short-code call ids (`A`, `B1`..`B3`, `C1`..`C3`). The short-code call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
 
 ## Translator env-vs-yaml precedence

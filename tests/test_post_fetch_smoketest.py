@@ -17,11 +17,8 @@ from __future__ import annotations
 
 import io
 import json
-import sys
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-
-import pytest
 
 
 class FakeClaudeClient:
@@ -38,7 +35,6 @@ class FakeClaudeClient:
             "literal_zh": f"[zh] {t.get('text', '')[:60]}",
             "text_zh_cn": f"[zh] {t.get('text', '')[:60]}",
             "lang_detected": "en",
-            "discourse_role": "genuine_hype",
             "cn_equivalent": "[zh equivalent]",
             "annotation": "",
             "noop_en": True,
@@ -47,8 +43,9 @@ class FakeClaudeClient:
 
     def _default_classify(self, text, brand_ids):
         return {"classifications": [
-            {"brand_id": b, "post_type": "hands_on_usage",
-             "sentiment": "neutral", "discourse_role": "genuine_hype",
+            {"brand_id": b, "outcome": "classified",
+             "post_types": ["hands_on_usage"], "product_labels": [],
+             "sentiment": "neutral",
              "china_nationalism": "none", "us_nationalism": "none"}
             for b in brand_ids
         ]}
@@ -60,7 +57,7 @@ class FakeClaudeClient:
                 kwargs.get("_test_tweets", []),
                 kwargs.get("_test_target_locales", []),
             )
-        if "across FIVE dimensions" in prompt:
+        if "You classify stored social posts" in prompt:
             return self._c_factory(
                 kwargs.get("_test_text", ""),
                 kwargs.get("_test_brand_ids", []),
@@ -141,6 +138,8 @@ def test_smoketest_fixture_runs_end_to_end(tmp_path, monkeypatch):
     assert "POST-FETCH SMOKETEST REPORT" in out
     assert "n_translated:" in out
     assert "n_classified:" in out
+    assert "n_context_missing:" in out
+    assert "n_classification_invalid:" in out
     assert "t_translate_ms:" in out
     assert "t_classify_ms:" in out
     assert "SAMPLE POSTS" in out
@@ -152,6 +151,7 @@ def test_smoketest_fixture_runs_end_to_end(tmp_path, monkeypatch):
     # `post:`; per-brand tags grouped under `brand_mentions:`.
     assert "post:" in out and "types=" in out
     assert "brand_mentions:" in out
+    assert "discourse" not in out
 
 
 def test_smoketest_strict_budget_does_not_trip_on_fast_cycle(tmp_path, monkeypatch):

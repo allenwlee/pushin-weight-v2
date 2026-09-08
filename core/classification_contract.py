@@ -119,9 +119,6 @@ def parse_stage1_classifications(
             or sentiment is _INVALID
             or china is _INVALID
             or us is _INVALID
-            or "sentiment" not in row
-            or "china_nationalism" not in row
-            or "us_nationalism" not in row
         ):
             return None
         if outcome == "classified":

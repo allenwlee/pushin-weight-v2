@@ -29,10 +29,17 @@ def test_u9_state_tables_exist_on_postgresql():
 
 @pytest.mark.django_db(transaction=True)
 def test_u9_reverse_migration_preserves_existing_posts_flags_and_vocabulary():
+    import importlib
+
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
-    from core.models import Post, PostUnsanctionedFlag
+    from core.models import Post, PostUnsanctionedFlag, UnsanctionedFlagKey
+
+    migration = importlib.import_module("core.migrations.0011_harvester_state_primitives")
+    expected_flag_keys = set(migration.FLAG_KEYS)
+    for key in expected_flag_keys:
+        UnsanctionedFlagKey.objects.get_or_create(key=key)
 
     post = Post.objects.create(tweet_id="migration-safe-post")
     PostUnsanctionedFlag.objects.create(post=post, flags='["scam"]')
@@ -52,13 +59,7 @@ def test_u9_reverse_migration_preserves_existing_posts_flags_and_vocabulary():
             )
             assert cursor.fetchone()[0] == 1
             cursor.execute("SELECT key FROM unsanctioned_flag_keys ORDER BY key")
-            assert {row[0] for row in cursor.fetchall()} == {
-                "marketing_spam",
-                "scam",
-                "crypto",
-                "unauthorized",
-            }
+            assert {row[0] for row in cursor.fetchall()} == expected_flag_keys
     finally:
-        MigrationExecutor(connection).migrate(
-            [("core", "0011_harvester_state_primitives")]
-        )
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes("core"))

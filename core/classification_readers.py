@@ -19,6 +19,7 @@ class BrandScalarRead:
     us_nationalism: str | None
     source: str
     conflicts: tuple[str, ...] = ()
+    outcome: str | None = None
 
 
 def _one_distinct(values) -> tuple[str | None, bool]:
@@ -55,6 +56,7 @@ def read_brand_scalars_many(
         "sentiment_id",
         "china_nationalism_id",
         "us_nationalism_id",
+        "outcome",
     )
     current = {
         (row["post_id"], row["brand_id"]): row
@@ -84,6 +86,7 @@ def read_brand_scalars_many(
                 row["china_nationalism_id"] or None,
                 row["us_nationalism_id"] or None,
                 "current",
+                outcome=row["outcome"],
             )
             continue
         sentiment, sentiment_conflict = _one_distinct(

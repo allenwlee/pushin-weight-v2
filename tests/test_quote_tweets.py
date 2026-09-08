@@ -1,10 +1,11 @@
 """Tests for quote-tweet capture (2026-06-22).
 
-TwitterAPI.io signals a quote/retweet via a nested `quoted_tweet` /
-`retweeted_tweet` object, not via isQuote/isRetweet (never set). These
-cover: (1) normalize extracts the quoted id+text and sets is_quote from
-object presence; (2) attribution folds the quoted text in so a quote-repost
-of a brand tweet attributes even when the commentary lacks the keyword.
+TwitterAPI.io can signal a quote/retweet via a nested `quoted_tweet` /
+`retweeted_tweet` object. Explicit isQuote/isRetweet booleans are preserved;
+when both forms are absent, the value remains unknown (`None`). These cover:
+(1) normalize extracts the quoted id+text and sets is_quote from object
+presence; (2) attribution folds the quoted text in so a quote-repost of a
+brand tweet attributes even when the commentary lacks the keyword.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ def test_normalize_tweet_extracts_quoted_content():
     }
     n = _normalize_tweet(item)
     assert n["is_quote"] is True
-    assert n["is_retweet"] is False
+    assert n["is_retweet"] is None
     assert n["quoted_status_id"] == "222"
     assert n["quoted_text"] == "GLM 5.2 is now available — a coding model"
     assert n["quoted_author_handle"] == "Zai_org"
@@ -48,10 +49,13 @@ def test_normalize_tweet_no_quote_is_clean():
         "text": "hello",
         "lang": "en",
         "createdAt": "2026-06-22T00:00:00Z",
+        "isQuote": False,
+        "isRetweet": False,
         "author": {"userName": "a", "name": "A", "followers": 0},
     }
     n = _normalize_tweet(item)
     assert n["is_quote"] is False
+    assert n["is_retweet"] is False
     assert n["quoted_status_id"] is None
     assert n["quoted_text"] is None
     assert n["quoted_author_handle"] is None
@@ -68,7 +72,7 @@ def test_normalize_tweet_detects_retweet_via_object():
     }
     n = _normalize_tweet(item)
     assert n["is_retweet"] is True
-    assert n["is_quote"] is False  # a pure RT is not a quote
+    assert n["is_quote"] is None
 
 
 def test_attribute_folds_quoted_text():

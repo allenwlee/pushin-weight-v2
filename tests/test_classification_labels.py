@@ -15,8 +15,6 @@ import pytest
 from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
 from core.classification_labels import POST_TYPE_LABELS, PRODUCT_LABEL_LABELS
 from core.models import (
-    DiscourseKey,
-    DiscourseLabel,
     NationalismKey,
     NationalismLabel,
     PostTypeKey,
@@ -89,13 +87,13 @@ class TestLocalizeEmptyCache:
 
     def test_en_miss_returns_canonical_fallback(self):
         out = _localize_classification_value(
-            "discourse", "sarcasm", "en", label_cache={}
+            "product_label", "bug", "en", label_cache={}
         )
-        assert out == "Sarcasm"
+        assert out == "Bug"
 
     def test_unknown_en_key_is_humanized(self):
         out = _localize_classification_value(
-            "discourse", "new_signal", "en", label_cache={}
+            "product_label", "new_signal", "en", label_cache={}
         )
         assert out == "New Signal"
 
@@ -184,7 +182,12 @@ class TestBuildLabelCache:
 
     def test_returns_empty_dict_when_no_keys(self):
         cache = _build_label_cache(
-            {"post_type": set(), "discourse": set(), "sentiment": set(), "nationalism": set()},
+            {
+                "post_type": set(),
+                "product_label": set(),
+                "sentiment": set(),
+                "nationalism": set(),
+            },
             "zh_cn",
         )
         assert cache == {}
@@ -199,7 +202,12 @@ class TestBuildLabelCache:
             defaults={"label": "zh_cn_label"},
         )
         cache = _build_label_cache(
-            {"post_type": {"test_post_type_k1"}, "discourse": set(), "sentiment": set(), "nationalism": set()},
+            {
+                "post_type": {"test_post_type_k1"},
+                "product_label": set(),
+                "sentiment": set(),
+                "nationalism": set(),
+            },
             "zh_cn",
         )
         assert ("post_type", "test_post_type_k1", "zh_cn") in cache
@@ -218,7 +226,12 @@ class TestBuildLabelCache:
             defaults={"label": "zh_dash_label"},
         )
         cache = _build_label_cache(
-            {"post_type": {"test_post_type_k2"}, "discourse": set(), "sentiment": set(), "nationalism": set()},
+            {
+                "post_type": {"test_post_type_k2"},
+                "product_label": set(),
+                "sentiment": set(),
+                "nationalism": set(),
+            },
             "zh_cn",
         )
         # Helper uses zh-cn first; build_label_cache stores both, the
@@ -251,7 +264,7 @@ class TestSerializeFeedRow:
             "brands": [],
             "classifications_by_brand": {
                 "minimax": {
-                    "discourse": ["genuine_hype"],
+                    "product_labels": ["bug"],
                     "post_types": ["hands_on_usage"],
                     "sentiments": ["positive"],
                     "cn_nationalism": "none",
@@ -265,27 +278,31 @@ class TestSerializeFeedRow:
         cache = {}
         # Seed keys if not present (idempotent in test DB).
         PostTypeKey.objects.update_or_create(key="hands_on_usage")
-        DiscourseKey.objects.update_or_create(key="genuine_hype")
+        ProductLabelKey.objects.update_or_create(key="bug")
         SentimentKey.objects.update_or_create(key="positive")
         NationalismKey.objects.update_or_create(key="none")
         # Seed labels in zh-cn (current seed).
         PostTypeLabel.objects.update_or_create(post_type_id="hands_on_usage", lang="zh-cn", defaults={"label": "实际使用"})
-        DiscourseLabel.objects.update_or_create(discourse_id="genuine_hype", lang="zh-cn", defaults={"label": "真实热度"})
+        ProductLabelLabel.objects.update_or_create(
+            product_label_id="bug", lang="zh-cn", defaults={"label": "缺陷"}
+        )
         SentimentLabel.objects.update_or_create(sentiment_id="positive", lang="zh-cn", defaults={"label": "正面"})
         NationalismLabel.objects.update_or_create(nationalism_id="none", lang="zh-cn", defaults={"label": "无"})
         # Seed labels in en.
         PostTypeLabel.objects.update_or_create(post_type_id="hands_on_usage", lang="en", defaults={"label": "Hands-on usage"})
-        DiscourseLabel.objects.update_or_create(discourse_id="genuine_hype", lang="en", defaults={"label": "Genuine hype"})
+        ProductLabelLabel.objects.update_or_create(
+            product_label_id="bug", lang="en", defaults={"label": "Bug"}
+        )
         SentimentLabel.objects.update_or_create(sentiment_id="positive", lang="en", defaults={"label": "Positive"})
         NationalismLabel.objects.update_or_create(nationalism_id="none", lang="en", defaults={"label": "None"})
 
         for family, key, lang, label in [
             ("post_type", "hands_on_usage", "zh-cn", "实际使用"),
-            ("discourse", "genuine_hype", "zh-cn", "真实热度"),
+            ("product_label", "bug", "zh-cn", "缺陷"),
             ("sentiment", "positive", "zh-cn", "正面"),
             ("nationalism", "none", "zh-cn", "无"),
             ("post_type", "hands_on_usage", "en", "Hands-on usage"),
-            ("discourse", "genuine_hype", "en", "Genuine hype"),
+            ("product_label", "bug", "en", "Bug"),
             ("sentiment", "positive", "en", "Positive"),
             ("nationalism", "none", "en", "None"),
         ]:
@@ -300,7 +317,7 @@ class TestSerializeFeedRow:
         wire = _serialize_feed_row(row, "zh_cn")
         cls = wire["classifications"]["minimax"]
         assert cls["post_types"][0] == {"key": "hands_on_usage", "label": "实际使用"}
-        assert cls["discourse"][0] == {"key": "genuine_hype", "label": "真实热度"}
+        assert cls["product_labels"][0] == {"key": "bug", "label": "缺陷"}
         assert cls["sentiments"][0] == {"key": "positive", "label": "正面"}
         assert cls["cn_nationalism"] == {"key": "none", "label": "无"}
         assert cls["us_nationalism"] is None  # None key emits None
@@ -313,7 +330,7 @@ class TestSerializeFeedRow:
         wire = _serialize_feed_row(row, "en")
         cls = wire["classifications"]["minimax"]
         assert cls["post_types"][0] == {"key": "hands_on_usage", "label": "Hands-on usage"}
-        assert cls["discourse"][0] == {"key": "genuine_hype", "label": "Genuine hype"}
+        assert cls["product_labels"][0] == {"key": "bug", "label": "Bug"}
         assert cls["cn_nationalism"] == {"key": "none", "label": "None"}
 
     def test_empty_cache_returns_canonical_fallback_labels(self):

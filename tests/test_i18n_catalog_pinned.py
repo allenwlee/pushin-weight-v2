@@ -142,10 +142,10 @@ class TestClassificationLabelsPin:
     def test_old_zh_cn_axis_label_removed(self):
         """Old axis label gone from catalog; gettext returns the English msgid
         (no zh_CN translation, so no fallback)."""
-        assert gettext("zh_cn:") != "zh_cn:"
+        assert gettext("zh_cn:") == "zh_cn:"
 
     def test_old_en_axis_label_removed(self):
-        assert gettext("en:") != "en:"
+        assert gettext("en:") == "en:"
 
     def test_types_msgstr_unchanged(self):
         # This msgid existed pre-U1; U1 does NOT change its msgstr.

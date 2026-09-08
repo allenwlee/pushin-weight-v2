@@ -6,7 +6,7 @@ from django.db.migrations.executor import MigrationExecutor
 
 pytestmark = [
     pytest.mark.requires_postgres,
-    pytest.mark.django_db(transaction=True, serialized_rollback=True),
+    pytest.mark.django_db(transaction=True),
 ]
 
 BEFORE = [("core", "0025_account_verification_override_year")]
@@ -17,6 +17,10 @@ def _apps_at(targets):
     executor = MigrationExecutor(connection)
     executor.migrate(targets)
     return executor.loader.project_state(targets).apps
+
+
+def _current_core_leaf():
+    return MigrationExecutor(connection).loader.graph.leaf_nodes("core")
 
 
 def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy():
@@ -55,7 +59,7 @@ def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy
         assert OldAccount.objects.get(pk="migration-country").country_code == "US"
         assert OldAccount.objects.get(pk="migration-null").country_code is None
     finally:
-        _apps_at(CURRENT)
+        _apps_at(_current_core_leaf())
 
 
 def test_country_foreign_key_preflight_rejects_unknown_existing_code():
@@ -77,4 +81,4 @@ def test_country_foreign_key_preflight_rejects_unknown_existing_code():
             pk="migration-unsupported"
         ).delete()
     finally:
-        _apps_at(CURRENT)
+        _apps_at(_current_core_leaf())

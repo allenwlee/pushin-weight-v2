@@ -201,6 +201,20 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             brand=brand,
             product_label_id="bug",
         )
+        PostBrandClassificationState.objects.create(
+            post=post,
+            brand=brand,
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version=TAXONOMY_VERSION,
+            prompt_version=PROMPT_VERSION,
+            model="stage1-chart-fixture",
+            source_language="en",
+            input_context_fingerprint="1" * 64,
+            outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+            sentiment_id="positive",
+            china_nationalism_id="pro",
+            us_nationalism_id="mild_pro",
+        )
 
         active = {
             "brands": ["up"],

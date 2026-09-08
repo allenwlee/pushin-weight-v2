@@ -2169,8 +2169,9 @@ class CycleRunner:
         text_en / text_zh_cn / bilingual commentary / lang_detected for each
         post.
 
-        Stage 2 (classify): calls classify_batch_pragmatics_full to produce
-        PostBrandSignal and PostBrandDiscourse rows for each post.
+        Stage 2 (classify): calls classify_batch_pragmatics_full and atomically
+        publishes the versioned per-brand Stage 1 state, type edges, product
+        labels, scalar judgments, and top-level unsanctioned flags.
 
         Guardrails:
           - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).

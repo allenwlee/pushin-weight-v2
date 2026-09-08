@@ -8,14 +8,12 @@ Plan: docs/plans/2026-07-11-002-feat-call-b-revival-via-x-query-specs-plan.md
 from __future__ import annotations
 
 import io
-import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 
 import pytest
 
 import scripts.post_fetch_smoketest as sm
-
 
 # ----------------------------------------------------------------------
 # 1. --include-call-preview flag exists and is parsed.
@@ -32,12 +30,12 @@ def test_include_call_preview_flag_parsed() -> None:
 
 
 # ----------------------------------------------------------------------
-# 2. _print_call_preview prints 6 calls (A + C1 + C2 + B1 + B2 + B3).
+# 2. _print_call_preview prints the current configured call set.
 # ----------------------------------------------------------------------
 
 
-def test_print_call_preview_emits_six_calls() -> None:
-    """The helper prints 6 call lines — one per spec in the live
+def test_print_call_preview_emits_current_calls() -> None:
+    """The helper prints 7 call lines — one per spec in the live
     `x_query_specs:` plus the synthesized Call A. Each line includes
     the call_id, query string, and char count."""
     buf = io.StringIO()
@@ -45,16 +43,16 @@ def test_print_call_preview_emits_six_calls() -> None:
         sm._print_call_preview()
     text = buf.getvalue()
     assert "CALL PREVIEW" in text
-    # Six CALL lines (one per spec + Call A). Match "CALL <ID>:"
+    # Seven CALL lines (one per spec + Call A). Match "CALL <ID>:"
     # so the header line "CALL PREVIEW ..." isn't counted.
     call_lines = [
-        l for l in text.splitlines()
-        if l.startswith("CALL ") and l.split()[1].endswith(":")
+        line for line in text.splitlines()
+        if line.startswith("CALL ") and line.split()[1].endswith(":")
     ]
-    assert len(call_lines) == 6
+    assert len(call_lines) == 7
     # Each expected call_id present.
-    for cid in ("A", "B1", "B2", "B3", "C1", "C2"):
-        assert any(l.startswith(f"CALL {cid}:") for l in call_lines), (
+    for cid in ("A", "B1", "B2", "B3", "C1", "C2", "C3"):
+        assert any(line.startswith(f"CALL {cid}:") for line in call_lines), (
             f"missing {cid} in preview"
         )
 
@@ -88,29 +86,38 @@ def test_print_call_preview_all_calls_under_cap() -> None:
 
 
 # ----------------------------------------------------------------------
-# 4. --source=latest-cycle with --include-call-preview prints the
-#    preview AND continues into the cycle pipeline (preview is a side
+# 4. --source=fixture with --include-call-preview prints the preview
+#    AND continues into the pipeline (preview is a side
 #    channel, not a replacement).
 # ----------------------------------------------------------------------
 
 
-def test_latest_cycle_with_include_call_preview_continues(
+def test_fixture_with_include_call_preview_continues(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The --include-call-preview flag does NOT short-circuit the
-    normal source-mode dispatch — the smoketest still attempts the
-    cycle pipeline after printing the preview. We don't run the full
-    pipeline here; we just verify the flag doesn't raise and the
-    preview block fires."""
-    # Sanity: the parser accepts the combo, no immediate error.
-    args = sm._parse_args([
-        "--source", "latest-cycle",
+    """The preview prints and fixture dispatch still reaches the pipeline."""
+    fixture = tmp_path / "post.jsonl"
+    fixture.write_text('{"tweet_id":"1","text":"test"}\n', encoding="utf-8")
+    calls: list[object] = []
+    monkeypatch.setattr(sm, "_print_call_preview", lambda: calls.append("preview"))
+    monkeypatch.setattr(
+        sm,
+        "_run_pipeline",
+        lambda posts, _rows, args: calls.append(
+            ("pipeline", args.source, [post["tweet_id"] for post in posts])
+        )
+        or 0,
+    )
+
+    rc = sm.main([
+        "--source", "fixture",
+        "--fixture", str(fixture),
         "--include-call-preview",
         "--limit", "1",
     ])
-    assert args.include_call_preview is True
-    assert args.source == "latest-cycle"
+    assert rc == 0
+    assert calls == ["preview", ("pipeline", "fixture", ["1"])]
 
 
 # ----------------------------------------------------------------------
@@ -119,19 +126,31 @@ def test_latest_cycle_with_include_call_preview_continues(
 # ----------------------------------------------------------------------
 
 
-def test_no_preview_without_flag(capsys: pytest.CaptureFixture) -> None:
-    """With the flag absent, the smoketest does not call
-    _print_call_preview (no CALL PREVIEW text on stderr). This guards
-    the default-off behavior."""
-    args = sm._parse_args(["--source", "fixture", "--fixture", "nope.json"])
-    # We do NOT call main() — just verify the flag is absent.
-    assert args.include_call_preview is False
-    # And verify the helper itself produces CALL PREVIEW text so the
-    # above assertion is meaningful (the helper does what it says).
-    buf = io.StringIO()
-    with redirect_stderr(buf):
-        sm._print_call_preview()
-    assert "CALL PREVIEW" in buf.getvalue()
+def test_no_preview_without_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default fixture dispatch reaches the pipeline without a preview."""
+    fixture = tmp_path / "post.jsonl"
+    fixture.write_text('{"tweet_id":"1","text":"test"}\n', encoding="utf-8")
+    pipeline_calls: list[str] = []
+    monkeypatch.setattr(
+        sm,
+        "_print_call_preview",
+        lambda: pytest.fail("preview must remain opt-in"),
+    )
+    monkeypatch.setattr(
+        sm,
+        "_run_pipeline",
+        lambda _posts, _rows, args: pipeline_calls.append(args.source) or 0,
+    )
+
+    rc = sm.main([
+        "--source", "fixture",
+        "--fixture", str(fixture),
+    ])
+    assert rc == 0
+    assert pipeline_calls == ["fixture"]
 
 
 # ----------------------------------------------------------------------
@@ -164,12 +183,12 @@ def test_print_call_preview_handles_missing_db(
     with redirect_stderr(buf):
         sm._print_call_preview()
     text = buf.getvalue()
-    # All 6 calls still print (CALL <id>: lines, not the header).
+    # All 7 calls still print (CALL <id>: lines, not the header).
     call_lines = [
-        l for l in text.splitlines()
-        if l.startswith("CALL ") and l.split()[1].endswith(":")
+        line for line in text.splitlines()
+        if line.startswith("CALL ") and line.split()[1].endswith(":")
     ]
-    assert len(call_lines) == 6
+    assert len(call_lines) == 7
     # Wide-net specs (B1/B2/B3) show empty brand groups — but each
     # still emits a syntactically valid query with "(empty)" markers
     # for the missing brand groups.
@@ -182,24 +201,26 @@ def test_print_call_preview_handles_missing_db(
 
 
 # ----------------------------------------------------------------------
-# 7. Live config has exactly 5 x_query_specs entries (C1 + C2 + B1 +
-#    B2 + B3); the planner synthesizes the 6th (Call A).
+# 7. Live config has exactly 6 x_query_specs entries; the planner
+#    synthesizes the seventh (Call A).
 # ----------------------------------------------------------------------
 
 
-def test_live_config_has_five_x_query_specs() -> None:
-    """`config.yaml::x_query_specs` carries 5 entries post-U3. The
-    planner synthesizes Call A from `x_monitor_list_id` for a total
-    of 6 calls per cycle."""
+def test_live_config_has_current_x_query_specs() -> None:
+    """The preview inventory matches the checked-in active policy."""
     from x_monitor.config import load_config
     cfg = load_config(Path("config.yaml"))
-    assert len(cfg.x_query_specs) == 5
+    assert len(cfg.x_query_specs) == 6
     call_ids = {s.call_id for s in cfg.x_query_specs}
-    assert call_ids == {"C1", "C2", "B1", "B2", "B3"}
+    assert call_ids == {"C1", "C2", "C3", "B1", "B2", "B3"}
 
-    # Each B-spec is wide-net with a populated wide_net_brands list.
-    for s in cfg.x_query_specs:
-        if s.call_id in ("B1", "B2", "B3"):
-            assert s.is_wide_net is True
-            assert len(s.wide_net_brands) >= 2
-            assert s.brands == {}
+    by_id = {s.call_id: s for s in cfg.x_query_specs}
+    assert by_id["B1"].is_wide_net is True
+    assert len(by_id["B1"].wide_net_brands) >= 2
+    assert by_id["B1"].brands == {}
+
+    # B2/B3 are handle-only discovery specs in the current policy.
+    for call_id in ("B2", "B3"):
+        assert by_id[call_id].is_wide_net is False
+        assert len(by_id[call_id].handles) >= 2
+        assert by_id[call_id].brands == {}

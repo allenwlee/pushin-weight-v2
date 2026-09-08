@@ -17,11 +17,8 @@ they'll be picked up.
 from __future__ import annotations
 
 import io
-import json
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stdout
 from pathlib import Path
-
-import pytest
 
 
 class FakeClaudeClient:
@@ -46,13 +43,12 @@ class FakeClaudeClient:
                 "literal_zh": f"[zh] {t.get('text', '')[:60]}",
                 "text_zh_cn": f"[zh] {t.get('text', '')[:60]}",
                 "lang_detected": "en",
-                "discourse_role": "genuine_hype",
                 "cn_equivalent": "[zh equivalent]",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
             } for t in tweets]}
-        if "across FIVE dimensions" in prompt:
+        if "You classify stored social posts" in prompt:
             # Parse brand_ids from the prompt to return a row per brand.
             import re
             m = re.search(r"Brands \(in order\): ([^\n]+)", prompt)
@@ -64,8 +60,9 @@ class FakeClaudeClient:
             )
             return {"classifications": [{
                 "brand_id": b,
-                "post_type": "hands_on_usage",
-                "sentiment": "neutral", "discourse_role": "genuine_hype",
+                "outcome": "classified",
+                "post_types": ["hands_on_usage"], "product_labels": [],
+                "sentiment": "neutral",
                 "china_nationalism": "none", "us_nationalism": "none",
             } for b in brand_ids]}
         # Generic fallback for any other prompt: return empty
@@ -135,9 +132,9 @@ def _seed_db_with_kept_posts(db_path: Path, posts: list[dict]) -> None:
 def test_smoketest_latest_cycle_end_to_end(tmp_path, monkeypatch):
     """--source=latest-cycle reads posts from the DB and runs them
     through the full pipeline."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
