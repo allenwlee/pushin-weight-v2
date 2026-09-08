@@ -219,6 +219,7 @@ class LocalPreviewServer:
                             "Last-Modified",
                             "ETag",
                             "Location",
+                            "X-Bridgewright-Revision",
                         ):
                             value = response.headers.get(name)
                             if value:

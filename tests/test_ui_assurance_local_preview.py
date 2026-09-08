@@ -19,6 +19,7 @@ class _Upstream(http.server.BaseHTTPRequestHandler):
         b'<script src="https://unpkg.com/chart.js@4.4.0" defer></script>'
         b'<script src="/static/app.js" defer></script></head><body>unchanged</body></html>'
     )
+    revision = "a" * 40
     methods: ClassVar[list[tuple[str, str]]] = []
 
     def log_message(self, _format: str, *_args: object) -> None:
@@ -34,6 +35,7 @@ class _Upstream(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(self.home)))
+        self.send_header("X-Bridgewright-Revision", self.revision)
         self.end_headers()
         self.wfile.write(self.home)
 
@@ -42,6 +44,7 @@ class _Upstream(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(self.home)))
+        self.send_header("X-Bridgewright-Revision", self.revision)
         self.end_headers()
 
 
@@ -175,6 +178,7 @@ def test_preview_serves_verified_bytes_and_blocks_redirects(
                 f"{preview.origin}/", timeout=5
             ) as response:
                 homepage = response.read()
+                assert response.headers["X-Bridgewright-Revision"] == _Upstream.revision
             assert b"/__bridgewright_assets/htmx.js" in homepage
             assert b"unchanged" in homepage
 
