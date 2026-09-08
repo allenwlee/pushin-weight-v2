@@ -10,7 +10,7 @@ ollija:
   change_id: staged-ai-enrichment-roadmap-2026-09-08-194415
   branch: feat/ai-enrichment-stage0
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -39,7 +39,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -50,6 +50,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage0` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage0` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -66,9 +73,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-1. This LFG run may execute Stage 0 only. Stages 1-4 are ordered roadmap context and require their own implementation authorization and release cycle.
-2. Delivery stops after staging. This plan does not authorize production promotion, a production harvest pause or resume, a manual production cycle, or production database mutation.
-3. This exception overrides the generated move-root guidance: do not move or repurpose the current dirty authoritative root or its `docs/llm-cost-token-report-20260903` branch. After the parent completes the Ollija pre-mutation check, create a fresh clean linked worktree at `.worktrees/feat/ai-enrichment-stage0` on `feat/ai-enrichment-stage0` from verified `origin/main`, move this one logical plan into that worktree, and rerun annotation there; do not create a parallel plan. Reconcile staging only through verified fast-forward ancestry; never import the root's unrelated files or force-push.
+1. Stage 0 completed staging verification at `04f4165`. The owner now explicitly authorizes its production promotion after the parent reads the production guide and passes its required check. This does not authorize a production harvest pause or resume, manual production cycle, production database manual mutation, or paid acceptance job.
+2. The owner authorizes Stage 1 continuation after Stage 0 promotion. Stage 1 development may proceed during the natural Stage 0 production baseline window (owner target: 90 minutes; acceptable baseline: 1–2 hours). Stage 1 staging deployment requires baseline review; Stage 1 production promotion is not authorized. Stages 2–4 remain unauthorized.
+3. Keep the canonical Stage 0 worktree through the production baseline and Stage 1 handoff/continuation. The owner-directed rationale is that cleanup must be the final filesystem action across this continuation; do not remove it before then. This exception overrides any earlier cleanup or move-root guidance. Do not move or repurpose the dirty authoritative root or its `docs/llm-cost-token-report-20260903` branch, import unrelated root files, or force-push.
+4. The active executable units remain Stage 0 until a Stage 1 plan extension is ready. This production authorization does not expand Stage 0 source scope.
 
 ## Goal Capsule
 
@@ -127,9 +135,9 @@ Use fake SDK/provider responses at the real production callers. Cover `CycleRunn
 
 Owned surfaces: existing translator/classifier/headline transport test suites and new focused call-chain tests. Dependencies: U0.2. Done proof: tests fail if instrumentation bypasses a true caller or changes retry/fallback/output behavior.
 
-### U0.4 — Report and staging proof contract
+### U0.4 — Report and promotion proof contract
 
-Document the baseline without inventing spend. A read-only receipt from `render logs -r crn-d9gv94o4n6ts739tqaug --tail 120 --output text`, captured `2026-09-08T20:06:37+0900`, reports deploy `b184276`: run `20260908T103029_0000-508c7fc6` at `10:30:29Z` claimed/succeeded 28 posts in 82.853s post-fetch; run `20260908T100053_0000-c1ed2294` claimed 42, succeeded 40, left 2 pending in 108.909s. A separate read-only `git ls-remote` receipt resolved both remote main and staging to `b184276cc6ec4e7d1a9eba83357e824848dc8f94`. Actual role usage remains unknown; headline input/output/latency already exist. Define staging proof as focused tests plus `tests/ollija`, exact candidate SHA deployment, web health, and a deterministic fake-provider probe with no provider calls. Do not manually trigger a paid acceptance job. Report worker liveness only if exercised.
+Document the baseline without inventing spend. A read-only receipt from `render logs -r crn-d9gv94o4n6ts739tqaug --tail 120 --output text`, captured `2026-09-08T20:06:37+0900`, reports deploy `b184276`: run `20260908T103029_0000-508c7fc6` at `10:30:29Z` claimed/succeeded 28 posts in 82.853s post-fetch; run `20260908T100053_0000-c1ed2294` claimed 42, succeeded 40, left 2 pending in 108.909s. A separate read-only `git ls-remote` receipt resolved both remote main and staging to `b184276cc6ec4e7d1a9eba83357e824848dc8f94`. Stage 0 staging verification completed at `04f4165`; production promotion is now owner-authorized. Actual role usage remains unknown; headline input/output/latency already exist. Define promotion proof as focused tests plus `tests/ollija`, exact candidate SHA deployment, web health, and a deterministic fake-provider probe with no provider calls. Do not manually trigger a paid acceptance job. Report worker liveness only if exercised.
 
 Owned surfaces: plan/report and release verification record. Dependencies: U0.1–U0.3 and parent delivery workflow. Done proof: reviewer can distinguish measured facts, unknowns, and later measurements; Stage 0 leaves harvest/headline behavior unchanged.
 
@@ -139,17 +147,17 @@ The main risk is an observability refactor altering provider call shape or failu
 
 Do not infer cost from `max_tokens`, label counts, page views, or the 599-post audit. Do not claim headline savings, synthesis savings, p95, TTFT, or worker capacity until later measurement exists. Existing `core/models.PostEnrichmentState` is reusable backlog state for later stages; Stage 0 makes no migration.
 
-## Staging and rollback
+## Promotion and rollback
 
-The parent workflow reads the generated Ollija guide and these Delivery Exceptions, runs `./bin/ollija annotate-plan <plan-path> --check`, then creates the clean linked `feat/ai-enrichment-stage0` worktree from verified remote `main` and reconciles staging ancestry. The current dirty authoritative root and unrelated docs branch remain intact. Delivery target is staging only; no production promotion, production cycle, harvest pause, database mutation, or paid acceptance job is authorized.
+The parent workflow reads the generated Ollija guide and these Delivery Exceptions, then runs the guide's required `annotate-plan --check` before Git or deployment mutation. Stage 0 staging verification completed at `04f4165`; delivery target is now production by explicit owner authorization. Production harvest pause/resume, manual production cycle, database manual mutation, and paid acceptance jobs remain unauthorized.
 
-The forward patch is additive instrumentation and tests. Rollback is a normal forward revert of the candidate commit, followed by staging health verification; no force push. Existing harvest, headline, prompt, retry, model, and output behavior must remain usable during rollback. Staging resources are web `srv-d9vb8t49v7es738lf2ng`, own DB/broker, dormant harvest `crn-da7vrdqd0e5s739uvcs0`, and queue-only worker `srv-da7vrdqd0e5s739uvcsg`. No worktree removal follows staging delivery.
+The forward patch is additive instrumentation and tests. Rollback is a normal forward revert of the candidate commit, followed by production health verification; no force push. Existing harvest, headline, prompt, retry, model, and output behavior must remain usable during rollback. Retain the canonical worktree through the baseline and Stage 1 continuation; cleanup, if warranted by the generated guide, is the final filesystem action only after that continuation.
 
 ## Scope, deferred work, and gates
 
 Deferred: all executable work in Stages 1–4; schema/status changes; taxonomy migration; discourse removal and nationalism migration; event/opportunity and recap implementation; any implementation that splits the settled combined Ideas & requests label; synthesis queue/prewarm/lazy loading; headline demand policy; critic/model swaps or specialist cascades; grade/critic changes; historical relabeling; broad summary/page redesign; and real-label accuracy evaluation. These require explicit stage authorization, a frozen prompt/contract where applicable, and a new release plan or updated authorization.
 
-Stage 0 gates are: contract cases are deterministic and provenance-safe; every named transport seam has true-caller coverage; normalizer overlap/missing-field behavior is proven; focused tests and `tests/ollija` pass; staging serves the exact candidate SHA; web health and fake-provider probe pass without provider calls; and no behavior regression is observed. Later-stage gates must include actual per-role/locale usage, demand, queue, latency, quality, and fallback evidence. The plan does not manufacture a spend baseline.
+Stage 0 gates are: contract cases are deterministic and provenance-safe; every named transport seam has true-caller coverage; normalizer overlap/missing-field behavior is proven; focused tests and `tests/ollija` pass; staging verified `04f4165`; production serves the exact candidate SHA; web health and fake-provider probe pass without provider calls; and no behavior regression is observed. Later-stage gates must include actual per-role/locale usage, demand, queue, latency, quality, and fallback evidence. The plan does not manufacture a spend baseline.
 
 ## Confidence and review state
 
