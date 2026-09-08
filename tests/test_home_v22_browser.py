@@ -2676,12 +2676,17 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     browser.close()
 
     def test_safe_preferences_and_invalid_storage_fall_back(self) -> None:
-        cookies = self._anonymous_cookies("en")
+        cookies: list[dict[str, str]] = []
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
                 context = self._context_with_cookies(
                     browser, cookies, VIEWPORTS["desktop"]
+                )
+                context.add_init_script(
+                    "window.__pwLocaleChanges = []; "
+                    "document.addEventListener('pw:locale-change', event => "
+                    "window.__pwLocaleChanges.push(event.detail.locale));"
                 )
                 page = context.new_page()
                 errors: list[str] = []
@@ -2690,7 +2695,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     page.goto(f"{self.live_server_url}/", wait_until="networkidle")
                     storage_key = page.evaluate("() => window.pwFilter.storageKey")
                     preferences = page.evaluate("() => window.pwFilter.getPreferences()")
-                    preferences["locale"] = "zh_cn"
+                    preferences["locale"] = "en"
                     preferences["timezone"] = "ca"
                     preferences["lens"] = {"brands": "closed", "nationalism": "cn"}
                     page.evaluate(
@@ -2706,17 +2711,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         else None,
                     )
                     page.reload(wait_until="networkidle")
-                    page.wait_for_function(
-                        "() => document.body.dataset.pwLocale === 'zh_cn'"
+                    synchronized = page.evaluate(
+                        "() => ({locale: document.body.dataset.pwLocale, "
+                        "preferences: window.pwFilter.getPreferences(), "
+                        "localeChanges: window.__pwLocaleChanges})"
                     )
-                    for endpoint in ("/chart.html?", "/feed/?"):
-                        request_url = next(
-                            url for url in runtime_requests if endpoint in url
-                        )
-                        self.assertEqual(
-                            parse_qs(urlparse(request_url).query)["locale"],
-                            ["zh_cn"],
-                        )
+                    self.assertEqual(synchronized["locale"], "zh_hans")
+                    self.assertEqual(synchronized["preferences"]["locale"], "zh_hans")
+                    self.assertEqual(synchronized["localeChanges"], [])
+                    self.assertEqual(
+                        runtime_requests,
+                        [],
+                        "server-authored startup locale must not refetch chart or feed",
+                    )
 
                     legacy = {
                         "version": 1,
@@ -2767,7 +2774,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(fallback["filters"]["window"], 1)
                     self.assertIn("qwen", fallback["filters"]["brands"])
-                    self.assertEqual(fallback["locale"], "en")
+                    self.assertEqual(fallback["locale"], "zh_hans")
                     self.assertEqual(fallback["timezone"], "local")
 
                     page.evaluate(

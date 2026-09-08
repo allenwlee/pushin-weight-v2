@@ -135,22 +135,6 @@
     form.submit();
   }
 
-  function initialLocale() {
-    var authored = document.body.getAttribute('data-pw-locale') || 'zh_cn';
-    try {
-      if (new URLSearchParams(window.location.search).has('locale')) return authored;
-    } catch (_error) { /* keep the authored locale */ }
-    if (window.pwFilter && window.pwFilter.getPreference) {
-      return window.pwFilter.getPreference('locale') || authored;
-    }
-    return authored;
-  }
-
-  function hasExplicitLocale() {
-    try { return new URLSearchParams(window.location.search).has('locale'); }
-    catch (_error) { return false; }
-  }
-
   function wireLocale() {
     var buttons = document.querySelectorAll('[data-pw-locale-btn]');
     buttons.forEach(function (btn) {
@@ -185,14 +169,12 @@
 
   function init() {
     var authored = document.body.getAttribute('data-pw-locale') || 'zh_cn';
-    var restored = initialLocale();
-    applyChrome(restored);
-    wireLocale();
-    if (!hasExplicitLocale() && selectedLocale(restored) !== selectedLocale(authored)) {
-      document.dispatchEvent(new CustomEvent('pw:locale-change', {
-        detail: { locale: restored },
-      }));
+    if (window.pwFilter && window.pwFilter.getPreference && window.pwFilter.setPreference &&
+        window.pwFilter.getPreference('locale') !== authored) {
+      window.pwFilter.setPreference('locale', authored);
     }
+    applyChrome(authored);
+    wireLocale();
     // The V22 filter store owns public window changes so both consumers use
     // one event without a reload. Legacy pages retain their POST/cookie flow.
     if (!document.querySelector('.filter-bar')) wireWindow();

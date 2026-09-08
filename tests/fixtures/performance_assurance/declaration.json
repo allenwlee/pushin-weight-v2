@@ -59,7 +59,7 @@
         {
           "storage": "local_storage",
           "name": "pushinweight.home.preferences.v1:anonymous",
-          "value": "{\"version\":1,\"locale\":\"en\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
+          "value": "{\"version\":1,\"locale\":\"zh_cn\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
         }
       ],
       "actions": [{"kind": "click", "target": ".follower-magnitude.pw-inspection-trigger"}],
@@ -92,7 +92,7 @@
         {
           "storage": "local_storage",
           "name": "pushinweight.home.preferences.v1:anonymous",
-          "value": "{\"version\":1,\"locale\":\"en\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
+          "value": "{\"version\":1,\"locale\":\"zh_cn\",\"timezone\":\"ca\",\"lens\":{\"brands\":\"closed\",\"nationalism\":\"cn\"},\"window\":365,\"filters\":{\"brands\":[\"qwen\"],\"window\":365},\"pulseBrands\":[\"qwen\"]}"
         }
       ],
       "actions": [{"kind": "click", "target": ".follower-magnitude.pw-inspection-trigger"}],
