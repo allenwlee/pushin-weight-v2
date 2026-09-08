@@ -54,9 +54,9 @@
               <span class="cls-row"><span class="cls-label">{% trans "types:" %}</span>
               {% for v in cls.post_types %}<span class="pill" data-key="{{ v.key }}">{{ v.label }}</span>{% endfor %}</span>
             {% endif %}
-            {% if cls.discourse %}
-              <span class="cls-row"><span class="cls-label">{% trans "discourses:" %}</span>
-              {% for v in cls.discourse %}<span class="pill" data-key="{{ v.key }}">{{ v.label }}</span>{% endfor %}</span>
+            {% if cls.product_labels %}
+              <span class="cls-row"><span class="cls-label">{% trans "product signals:" %}</span>
+              {% for v in cls.product_labels %}<span class="pill" data-key="{{ v.key }}"{% if v.key == 'misinformation' %} title="{% if active_locale == 'zh_cn' %}可能误导；需要审核{% else %}Potentially misleading; requires review{% endif %}"{% endif %}>{{ v.label }}</span>{% endfor %}</span>
             {% endif %}
             {% if cls.sentiments %}
               <span class="cls-row"><span class="cls-label">{% trans "sentiments:" %}</span>
@@ -69,6 +69,11 @@
             {% if cls.us_nationalism %}
               <span class="cls-row"><span class="cls-label">{% trans "美国民族主义:" %}</span>
               <span class="pill muted" data-key="{{ cls.us_nationalism.key }}">{{ cls.us_nationalism.label }}</span></span>
+            {% endif %}
+            {% if cls.classification_status != 'classified' %}
+              <span class="cls-row classification-status classification-status-{{ cls.classification_status }}">
+                {{ cls.classification_status_label }}
+              </span>
             {% endif %}
           {% endwith %}
         </div>

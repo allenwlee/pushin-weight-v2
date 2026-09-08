@@ -44,7 +44,7 @@ def _fake_row():
         "engagement_pretty": {"followers": "128.4k", "likes": "1.2k", "retweets": "340", "replies": "89"},
         "brands": [{"nickname": "kimi", "display_name": "Kimi", "display_name_en": "Kimi", "display_name_zh_cn": "Kimi"}],
         "brand_nicknames": ["kimi"],
-        "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}, "discourse": []}},
+        "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "product_labels": [], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}}},
         "signal_inspections_json": '{"sentiment":{"positive":[{"text":"Kimi Sentiment: Positive"}]}}',
         "unsanctioned": False,
         "account": {"handle": "@kimi_moonshot", "display_name": "Moonshot AI", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
@@ -212,11 +212,13 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
             patch("monitor.views._multi_top_voices", return_value=[]),
             patch("monitor.views._post_to_wire", return_value=fake),
         ]
-        for p in patches: p.start()
+        for item in patches:
+            item.start()
         try:
             r = self.client.get("/internal/", secure=True)
         finally:
-            for p in patches: p.stop()
+            for item in patches:
+                item.stop()
         self.assertEqual(r.status_code, 200, r.content[:500].decode("utf-8", errors="replace"))
         body = r.content.decode("utf-8")
         # Legacy chrome markers (per Net F)

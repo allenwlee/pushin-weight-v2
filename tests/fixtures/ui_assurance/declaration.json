@@ -1,21 +1,21 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "e0bd1e20f0522cdbf52172b013eddace8cd55da1",
+  "source_revision": "61974ad03fce796201035e1dfdfe9246199decbc",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
-    "sha256": "d0fef546c3ec378cb8eec92f995db806a30934272d432e538a472654b55d4027"
+    "sha256": "af261de46674a3072b9b33299a48231cbf3499664a0c75e098d0dba587cb91a4"
   },
   "generator": {"name": "pushinweight-covering-array", "version": "1.0", "seed": 501},
   "controls": [
     {"id":"brands","kind":"multi_select","values":["__all__","deepseek","qwen","minimax","glm","mimo","moonshot_kimi","inclusionai","mistral","stepfun","ernie","hunyuan","llama","nemo_megatron","doubao","yi","sensechat","exaone","kuaishou","sakana_ai","upstage","chatglm","gemma","kwaiyii","seed","sensenova","step","wenxin","gemini","gpt","claude","grok"],"initial_value":"__all__","reversible":true},
     {"id":"sentiment","kind":"multi_select","values":["__all__","mixed","negative","neutral","positive"],"initial_value":"__all__","reversible":true},
-    {"id":"post_type","kind":"multi_select","values":["__all__","buzz_releases","hands_on_usage","performance_comparisons","feedback_questions","advertising_marketing","event_announcement"],"initial_value":"__all__","reversible":true},
+    {"id":"post_type","kind":"multi_select","values":["__all__","buzz_releases","hands_on_usage","performance_comparisons","feedback_questions","advertising_marketing","event_announcement","opinions_reactions","research_explanations","business_finance","other"],"initial_value":"__all__","reversible":true},
     {"id":"lang","kind":"multi_select","values":["__all__","en","zh-hans","ja","es","tr","fr","pt","ko","id","ar","pl","undetected","other"],"initial_value":"__all__","reversible":true},
     {"id":"role","kind":"multi_select","values":["__all__","official","staff","community","other"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_cn","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_us","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
-    {"id":"discourse","kind":"multi_select","values":["__all__","genuine_hype","sarcasm","dunk_yingyang","self_deprecation","cope","fud","distillation_accusation","ai_slop_critique","absurdist_meme","advertising-marketing","uncategorized"],"initial_value":"__all__","reversible":true},
+    {"id":"product_labels","kind":"multi_select","values":["__all__","bug","complaint","testimonial","product_request","misinformation"],"initial_value":"__all__","reversible":true},
     {"id":"unsanctioned","kind":"toggle","values":["off","only"],"initial_value":"off","reversible":true},
     {"id":"locale","kind":"single_select","values":["en","zh_cn","original"],"initial_value":"en","reversible":true},
     {"id":"window","kind":"single_select","values":["1","7","30","365"],"initial_value":"1","reversible":true},
@@ -35,7 +35,7 @@
   ],
   "coverage_groups": [
     {"id":"filter-core","controls":["brands","sentiment","post_type","unsanctioned"],"strength":2},
-    {"id":"taxonomy-core","controls":["lang","role","discourse"],"strength":2},
+    {"id":"taxonomy-core","controls":["lang","role","product_labels"],"strength":2},
     {"id":"nationalism-core","controls":["nationalism_cn","nationalism_us","unsanctioned"],"strength":2},
     {"id":"presentation-core","controls":["locale","window","timezone","brand_lens","nationalism_lens"],"strength":2},
     {"id":"chart-refresh-risk","controls":["brands","window","locale"],"strength":3},
@@ -73,7 +73,8 @@
     {"id":"feed-inspection-agrees","projections":["accessibility","feed"]},
     {"id":"feed-navigation-agrees","projections":["accessibility","network"]},
     {"id":"feed-pagination-complete","projections":["feed","counts","network"]},
-    {"id":"hover-freeze-agrees","projections":["controls","accessibility","feed","chart","network"]}
+    {"id":"hover-freeze-agrees","projections":["controls","accessibility","feed","chart","network"]},
+    {"id":"stage1-classification-states-stay-distinct","projections":["feed","counts"]}
   ],
   "races": [
     {"id":"old-seven-day-after-new-one-day","older_action":"window:7","newer_action":"window:1","fault":"out_of_order"},
@@ -91,7 +92,8 @@
     {"id":"hover-freeze-preserves-brand-and-restores-locale","actions":["brands:qwen","chart_hover_freeze:frozen","freeze_point:same","freeze_point:other","chart_hover_freeze:released"],"invariants":["filter-state-agrees","hover-freeze-agrees","latest-intent-wins"]},
     {"id":"guiding-country-taiwan-region-stay-distinct","actions":["account_geography:hierarchy","account_geography:taiwan","account_geography:region"],"invariants":["account-geography-agrees"]},
     {"id":"inspection-transfer-keeps-x-exclusive","actions":["feed_inspection:preview","feed_inspection:pinned","feed_inspection:transferred","feed_navigation:row","feed_navigation:x"],"invariants":["feed-inspection-agrees","feed-navigation-agrees"]},
-    {"id":"pagination-crosses-500-and-exhausts","actions":["window:7","feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"invariants":["feed-pagination-complete"]}
+    {"id":"pagination-crosses-500-and-exhausts","actions":["window:7","feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"invariants":["feed-pagination-complete"]},
+    {"id":"stage1-empty-products-and-statuses-remain-visible","actions":["product_labels:bug","product_labels:__all__"],"invariants":["feed-oracle-agrees","stage1-classification-states-stay-distinct"]}
   ],
   "environments": [{"id":"desktop-chromium","browser_runtime":"playwright-chromium","required":true}],
   "gates": [

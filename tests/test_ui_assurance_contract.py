@@ -9,10 +9,10 @@ from pathlib import Path
 import yaml
 
 from monitor.views import (
-    _DASHBOARD_DISCOURSE_FILTER_KEYS,
     _DASHBOARD_LANG_FILTER_KEYS,
     _DASHBOARD_NATIONALISM_KEYS,
     _DASHBOARD_POST_TYPE_KEYS,
+    _DASHBOARD_PRODUCT_LABEL_KEYS,
     _DASHBOARD_ROLE_FILTER_KEYS,
 )
 from tests.ui_assurance.covering import (
@@ -68,7 +68,7 @@ def test_ui_assurance_source_revision_is_the_reviewed_product_source_revision() 
     declaration = json.loads(
         (ROOT / "tests/fixtures/ui_assurance/declaration.json").read_text(encoding="utf-8")
     )
-    assert declaration["source_revision"] == "e0bd1e20f0522cdbf52172b013eddace8cd55da1"
+    assert declaration["source_revision"] == "61974ad03fce796201035e1dfdfe9246199decbc"
 
 
 def test_declaration_inventory_matches_the_production_control_vocabulary() -> None:
@@ -91,8 +91,8 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     assert controls["nationalism_us"]["values"] == [
         "__all__", *_DASHBOARD_NATIONALISM_KEYS
     ]
-    assert controls["discourse"]["values"] == [
-        "__all__", *_DASHBOARD_DISCOURSE_FILTER_KEYS
+    assert controls["product_labels"]["values"] == [
+        "__all__", *_DASHBOARD_PRODUCT_LABEL_KEYS
     ]
     assert controls["unsanctioned"]["values"] == ["off", "only"]
     assert controls["locale"]["values"] == ["en", "zh_cn", "original"]
@@ -146,4 +146,5 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "guiding-country-taiwan-region-stay-distinct",
         "inspection-transfer-keeps-x-exclusive",
         "pagination-crosses-500-and-exhausts",
+        "stage1-empty-products-and-statuses-remain-visible",
     }

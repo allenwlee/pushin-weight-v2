@@ -51,14 +51,24 @@
       buzz_releases: 'icon-announce',
       feedback_questions: 'icon-question',
       advertising_marketing: 'icon-marketing',
-      event_announcement: 'icon-event'
+      event_announcement: 'icon-event',
+      opinions_reactions: 'icon-sentiment',
+      research_explanations: 'icon-star',
+      business_finance: 'icon-rise',
+      other: 'icon-sentiment-mixed'
+    }),
+    product_labels: Object.freeze({
+      bug: 'icon-question',
+      complaint: 'icon-sentiment-negative',
+      testimonial: 'icon-star',
+      product_request: 'icon-event',
+      misinformation: 'icon-unsanctioned'
     }),
     role: Object.freeze({
       official: 'icon-role-badge',
       staff: 'icon-role-badge',
       community: 'icon-role-badge'
     }),
-    discourse: Object.freeze({ '*': 'icon-discourse' }),
     nationalism: Object.freeze({ '*': 'icon-nationalism' }),
     unsanctioned: Object.freeze({ only: 'icon-unsanctioned' })
   });

@@ -231,14 +231,14 @@
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="discourse">
+      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="product_labels">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_discourse">{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}</span>
+        <span class="title" data-i18n="pill_product_labels">{% if is_zh_chrome %}产品{% else %}Products{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
-        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}话语{% else %}Discourse{% endif %}">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}产品信号{% else %}Product signals{% endif %}">
           <div class="dd-grid cols-3">
-            {% for entry in discourse_entries %}
-              <label><input type="checkbox" data-pw-filter-group="discourse" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="discourse" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% for entry in product_label_entries %}
+              <label{% if entry.help %} title="{{ entry.help }}"{% endif %}><input type="checkbox" data-pw-filter-group="product_labels" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="product_labels" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>

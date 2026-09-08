@@ -162,14 +162,25 @@ class TestSerializeFeedRow:
         post = _make_post(
             "100", "2026-07-20T10:00:00+00:00",
             classifications_by_brand={
-                "deepseek": {"discourse": ["genuine_hype"], "post_types": [], "sentiments": [], "cn_nationalism": None, "us_nationalism": None},
+                "deepseek": {
+                    "product_labels": ["bug", "misinformation"],
+                    "post_types": ["other"],
+                    "sentiments": ["neutral"],
+                    "cn_nationalism": None,
+                    "us_nationalism": None,
+                    "classification_status": "classified",
+                    "scalar_source": "current",
+                },
             },
         )
         row = _serialize_feed_row(post, "en")
         assert "deepseek" in row["classifications"]
-        assert row["classifications"]["deepseek"]["discourse"] == [
-            {"key": "genuine_hype", "label": "Genuine Hype"},
+        assert "discourse" not in row["classifications"]["deepseek"]
+        assert row["classifications"]["deepseek"]["product_labels"] == [
+            {"key": "bug", "label": "Bug"},
+            {"key": "misinformation", "label": "Misinformation"},
         ]
+        assert row["classifications"]["deepseek"]["classification_status"] == "classified"
 
     def test_v22_display_contract_includes_signal_and_tint_fields(self):
         """Refresh JSON must carry the same V22 fields consumed by pw-feed."""
@@ -177,14 +188,14 @@ class TestSerializeFeedRow:
             "100", "2026-07-20T10:00:00+00:00",
             classifications_by_brand={
                 "kimi": {
-                    "discourse": ["genuine_hype"],
+                    "product_labels": ["bug", "complaint"],
                     "post_types": ["buzz_releases"],
                     "sentiments": ["positive"],
                     "cn_nationalism": "pro",
                     "us_nationalism": "mild_pro",
                 },
                 "deepseek": {
-                    "discourse": [],
+                    "product_labels": ["testimonial"],
                     "post_types": ["hands_on_usage"],
                     "sentiments": ["mixed"],
                     "cn_nationalism": None,
@@ -201,6 +212,7 @@ class TestSerializeFeedRow:
 
         assert row["sentiment_keys"] == ["positive", "mixed"]
         assert row["post_type_keys"] == ["buzz_releases", "hands_on_usage"]
+        assert row["product_label_keys"] == ["bug", "complaint", "testimonial"]
         assert row["nat_cn"] == "pro"
         assert row["nat_us"] == "mild_pro"
         assert row["tint_class"] == "tint-pos-mixed"
@@ -289,14 +301,14 @@ class TestSerializeFeedRow:
             brand_nicknames=["minimax", "moonshot_kimi"],
             classifications_by_brand={
                 "minimax": {
-                    "discourse": ["genuine_hype"],
+                    "product_labels": ["bug"],
                     "post_types": ["hands_on_usage"],
                     "sentiments": ["positive", "positive"],
                     "cn_nationalism": None,
                     "us_nationalism": None,
                 },
                 "moonshot_kimi": {
-                    "discourse": [],
+                    "product_labels": [],
                     "post_types": ["buzz_releases"],
                     "sentiments": ["negative"],
                     "cn_nationalism": "pro",
@@ -328,7 +340,7 @@ class TestSerializeFeedRow:
             brand_nicknames=["minimax"],
             classifications_by_brand={
                 "minimax": {
-                    "discourse": ["genuine_hype"],
+                    "product_labels": ["bug"],
                     "post_types": ["hands_on_usage"],
                     "sentiments": ["positive"],
                     "cn_nationalism": "pro",
@@ -348,12 +360,12 @@ class TestSerializeFeedRow:
                 "nat_cn": row["nat_cn"],
                 "nat_us": row["nat_us"],
                 "tint_class": row["tint_class"],
-                "discourse_key": row["classifications"]["minimax"]["discourse"][0]["key"],
+                "product_label_key": row["classifications"]["minimax"]["product_labels"][0]["key"],
             }
             for locale, row in rows.items()
         }
         assert len({repr(value) for value in invariant.values()}) == 1
-        assert invariant["en"]["discourse_key"] == "genuine_hype"
+        assert invariant["en"]["product_label_key"] == "bug"
 
 
 # ============================================================================
@@ -371,9 +383,9 @@ class TestParseFilters:
     def test_json_filters(self):
         from django.http import HttpRequest
         req = HttpRequest()
-        req.GET = {"filters": '{"brands": ["deepseek"], "discourse": ["genuine_hype"]}'}
+        req.GET = {"filters": '{"brands": ["deepseek"], "product_labels": ["bug"]}'}
         result = _parse_filters_from_request(req)
-        assert result == {"brands": ["deepseek"], "discourse": ["genuine_hype"]}
+        assert result == {"brands": ["deepseek"], "product_labels": ["bug"]}
 
     def test_malformed_json_ignored(self):
         from django.http import HttpRequest
@@ -385,9 +397,9 @@ class TestParseFilters:
     def test_comma_separated_keys(self):
         from django.http import HttpRequest
         req = HttpRequest()
-        req.GET = {"discourse": "genuine_hype,sarcasm", "role": "official"}
+        req.GET = {"product_labels": "bug,complaint", "role": "official"}
         result = _parse_filters_from_request(req)
-        assert result["discourse"] == ["genuine_hype", "sarcasm"]
+        assert result["product_labels"] == ["bug", "complaint"]
         assert result["role"] == ["official"]
 
 

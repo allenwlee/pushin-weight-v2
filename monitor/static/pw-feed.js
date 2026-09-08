@@ -125,6 +125,15 @@
     div.setAttribute('data-created-at-iso', row.created_at_iso || '');
     div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
     div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
+    div.setAttribute('data-product-labels', (row.product_label_keys || []).join(','));
+    div.setAttribute(
+      'data-classification-statuses',
+      (row.classification_statuses || []).join(',')
+    );
+    div.setAttribute(
+      'data-classification-status-labels',
+      (row.classification_status_labels || []).join(',')
+    );
     div.setAttribute('data-nat-cn', row.nat_cn || '');
     div.setAttribute('data-nat-us', row.nat_us || '');
     div.setAttribute('data-signal-inspections', JSON.stringify(row.signal_inspections || {}));
@@ -368,6 +377,8 @@
         '<div class="feed-signals">' +
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
+          '<div class="sig-row sig-product" data-sig-product></div>' +
+          '<div class="sig-row sig-classification-status" data-sig-classification-status></div>' +
           '<div class="sig-row sig-nat" data-sig-nat></div>' +
           '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
         '</div>' +
@@ -379,7 +390,11 @@
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
     'buzz_releases', 'hands_on_usage', 'performance_comparisons',
-    'feedback_questions', 'advertising_marketing', 'event_announcement'
+    'feedback_questions', 'advertising_marketing', 'event_announcement',
+    'opinions_reactions', 'research_explanations', 'business_finance', 'other'
+  ];
+  var PRODUCT_ORDER = [
+    'bug', 'complaint', 'testimonial', 'product_request', 'misinformation'
   ];
 
   function parseListAttr(raw) {
@@ -433,6 +448,15 @@
   function paintSignals(row) {
     var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
     var types = uniqueInOrder(parseListAttr(row.getAttribute('data-post-types')), TYPE_ORDER);
+    var products = uniqueInOrder(
+      parseListAttr(row.getAttribute('data-product-labels')), PRODUCT_ORDER
+    );
+    var classificationStatuses = parseListAttr(
+      row.getAttribute('data-classification-statuses')
+    );
+    var classificationStatusLabels = parseListAttr(
+      row.getAttribute('data-classification-status-labels')
+    );
     var natCn = (row.getAttribute('data-nat-cn') || '').trim();
     var natUs = (row.getAttribute('data-nat-us') || '').trim();
     var showCn = natCn && natCn !== 'none';
@@ -458,6 +482,34 @@
         );
       }).join('');
     }
+    var elP = row.querySelector('[data-sig-product]');
+    if (elP) {
+      elP.innerHTML = products.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('product_labels', key, 'signal-icon'),
+          signalInspectionText(inspections, 'product_label', key),
+          'signal-inspection-trigger product-signal product-' + key
+        );
+      }).join('');
+      elP.classList.toggle('is-empty', products.length === 0);
+    }
+    var elClassification = row.querySelector('[data-sig-classification-status]');
+    if (elClassification) {
+      elClassification.innerHTML = classificationStatuses.map(function (status, index) {
+        var inspection = signalInspectionText(
+          inspections, 'classification_status', status
+        );
+        return inspectionTriggerHtml(
+          '<span class="classification-state-label">' +
+            escapeHtml(classificationStatusLabels[index] || status) + '</span>',
+          inspection,
+          'signal-inspection-trigger classification-state classification-state-' + status
+        );
+      }).join('');
+      elClassification.classList.toggle(
+        'is-empty', classificationStatuses.length === 0
+      );
+    }
     var elN = row.querySelector('[data-sig-nat]');
     if (elN) {
       if (!showCn && !showUs) { elN.innerHTML = ''; elN.classList.add('is-empty'); }
@@ -476,8 +528,7 @@
               'signal-inspection-trigger nationalism-region nationalism-us'
             )
           : '');
-        elN.innerHTML = '<span class="sig-nat-prefix" aria-hidden="true">' +
-          renderIcon('icon-discourse', 'signal-icon') + ':</span>' + regions;
+        elN.innerHTML = regions;
       }
     }
     var elU = row.querySelector('[data-sig-unsanctioned]');

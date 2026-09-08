@@ -19,7 +19,6 @@ from tests.test_home_v22_browser import (
 )
 from tests.v22_support import seed_v22_metadata_regression_orm
 
-
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_ROOT = ROOT / "tests/golden/bridgewright/cyber-quan"
 FIXED_NOW = datetime(2026, 8, 10, 12, 34, tzinfo=UTC)
@@ -30,7 +29,9 @@ STATES = (
 
 
 def _outside_mask_report(page: Page, before: bytes, after: bytes, mask: bytes) -> dict[str, object]:
-    encode = lambda value: "data:image/png;base64," + base64.b64encode(value).decode("ascii")
+    def encode(value: bytes) -> str:
+        return "data:image/png;base64," + base64.b64encode(value).decode("ascii")
+
     return page.evaluate(
         """async ({before, after, mask}) => {
           const decode = source => new Promise((resolve, reject) => {
@@ -169,6 +170,14 @@ def _release_a_mask(page: Page) -> bytes:
           // Python registry to live non-sentinel Brand rows.  This older
           // Cyber-Quan-only golden therefore does not own pulse-strip pixels.
           document.querySelectorAll('.pulse-bar-wrap, .home-chart-wrap, .headline-strip, .feed-strip')
+            .forEach(node => paint(node));
+          // Stage 1's owner-approved R13 substitution replaces the discourse
+          // pill in this exact slot with product labels. The first affected
+          // run bounded the intentional copy/control delta to
+          // x=799..1025, y=181..205 (1,375 desktop pixels). Mask only the new
+          // product-label control; the surrounding filter row remains owned
+          // by the reviewed Cyber-Quan golden.
+          document.querySelectorAll('[data-group="product_labels"]')
             .forEach(node => paint(node));
           // Preserve the same known Chromium rounded-edge seam allowance as
           // the reviewed icon mask above. This is a two-pixel raster boundary,

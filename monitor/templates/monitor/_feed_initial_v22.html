@@ -15,6 +15,9 @@
        data-created-at-iso="{{ row.created_at_iso|default:'' }}"
        data-sentiments="{{ row.sentiment_keys|join:',' }}"
        data-post-types="{{ row.post_type_keys|join:',' }}"
+       data-product-labels="{{ row.product_label_keys|join:',' }}"
+       data-classification-statuses="{{ row.classification_statuses|join:',' }}"
+       data-classification-status-labels="{{ row.classification_status_labels|join:',' }}"
        data-nat-cn="{{ row.nat_cn|default:'' }}"
        data-nat-us="{{ row.nat_us|default:'' }}"
        data-signal-inspections="{{ row.signal_inspections_json }}"
@@ -92,6 +95,8 @@
       <div class="feed-signals">
         <div class="sig-row sig-sentiment" data-sig-sentiment></div>
         <div class="sig-row sig-post-type" data-sig-post-type></div>
+        <div class="sig-row sig-product" data-sig-product></div>
+        <div class="sig-row sig-classification-status" data-sig-classification-status></div>
         <div class="sig-row sig-nat" data-sig-nat></div>
         <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
       </div>

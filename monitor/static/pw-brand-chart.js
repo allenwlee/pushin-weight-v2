@@ -6,7 +6,7 @@
 //   active tab. Tab switch = toggle visibility + `chart.update('none')`
 //   (KTD6).
 // - Reads `data-brand-chart` JSON attribute. Tab order is fixed:
-//   post_type, discourse, account_roles, us_nationalism, cn_nationalism,
+//   post_type, product_labels, account_roles, us_nationalism, cn_nationalism,
 //   unsanctioned.
 // - On tab click, emits `pw:tab-change` and updates URL hash.
 
@@ -14,14 +14,14 @@
   'use strict';
 
   var TABS = [
-    'post_type', 'discourse', 'account_roles',
+    'post_type', 'product_labels', 'account_roles',
     'us_nationalism', 'cn_nationalism', 'unsanctioned',
   ];
 
   function colorForCategory(tab, cat) {
     var prefix = '';
     if (tab === 'post_type') prefix = '--pt-';
-    else if (tab === 'discourse') prefix = '--bar-';
+    else if (tab === 'product_labels') prefix = '--product-';
     else if (tab === 'account_roles') prefix = '--role-';
     else if (tab === 'us_nationalism' || tab === 'cn_nationalism') prefix = '--nat-';
     else if (tab === 'unsanctioned') {

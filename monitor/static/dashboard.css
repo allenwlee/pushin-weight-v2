@@ -26,15 +26,22 @@
   /* U6 (Pushin' Weight home pages): taxonomy color tokens for the new
      6-step post_type / nationalism / 3-key role filters (R7, R14).
      Each set is a 6-step ramp tuned to the dark bg and chosen so
-     adjacent keys are visually distinguishable. The 10th discourse
-     key (advertising-marketing) gets its own --bar- token below to
-     round out the legacy 9-key set. */
+     adjacent keys are visually distinguishable. */
   --pt-buzz-releases: #10b981;
   --pt-hands-on-usage: #3b82f6;
   --pt-performance-comparisons: #f59e0b;
   --pt-feedback-questions: #a855f7;
   --pt-advertising-marketing: #f43f5e;
   --pt-event-announcement: #06b6d4;
+  --pt-opinions-reactions: #f472b6;
+  --pt-research-explanations: #22d3ee;
+  --pt-business-finance: #facc15;
+  --pt-other: #94a3b8;
+  --product-bug: #ef4444;
+  --product-complaint: #fb7185;
+  --product-testimonial: #10b981;
+  --product-product-request: #60a5fa;
+  --product-misinformation: #f59e0b;
   --nat-none: #6b7280;
   --nat-mild-pro: #84cc16;
   --nat-pro: #eab308;

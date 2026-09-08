@@ -53,7 +53,7 @@
     <section>
       <nav class="tab-strip" id="brand-tabs" aria-label="Area chart category">
         <button class="pw-tab is-active" data-pw-tab="post_type">post_type</button>
-        <button class="pw-tab" data-pw-tab="discourse">discourse</button>
+        <button class="pw-tab" data-pw-tab="product_labels">product_labels</button>
         <button class="pw-tab" data-pw-tab="account_roles">account.role</button>
         <button class="pw-tab" data-pw-tab="us_nationalism">us_nationalism</button>
         <button class="pw-tab" data-pw-tab="cn_nationalism">cn_nationalism</button>
@@ -80,21 +80,21 @@
       </div>
 
       <div class="control-group">
-        <div class="control-group-title">{% trans "Discourse" %}</div>
-        {% for key in discourse_keys %}
-          <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="discourse" value="{{ key }}" checked>
-            {{ key }}
+        <div class="control-group-title">{% if is_zh_chrome %}产品信号{% else %}Product signals{% endif %}</div>
+        {% for entry in product_label_entries %}
+          <label class="control-row"{% if entry.help %} title="{{ entry.help }}"{% endif %}>
+            <input type="checkbox" data-pw-filter-group="product_labels" value="{{ entry.key }}" checked>
+            {{ entry.label }}
           </label>
         {% endfor %}
       </div>
 
       <div class="control-group">
         <div class="control-group-title">{% trans "post_type" %}</div>
-        {% for key in post_type_keys %}
+        {% for entry in post_type_entries %}
           <label class="control-row">
-            <input type="checkbox" data-pw-filter-group="post_types" value="{{ key }}" checked>
-            {{ key }}
+            <input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked>
+            {{ entry.label }}
           </label>
         {% endfor %}
       </div>

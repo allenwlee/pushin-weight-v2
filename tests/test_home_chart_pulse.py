@@ -12,6 +12,11 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
+from core.classification_contract import (
+    CONTRACT_VERSION,
+    PROMPT_VERSION,
+    TAXONOMY_VERSION,
+)
 from core.models import (
     Account,
     Brand,
@@ -20,9 +25,12 @@ from core.models import (
     NationalismKey,
     Post,
     PostBrand,
+    PostBrandClassificationState,
     PostBrandDiscourse,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostTypeKey,
+    ProductLabelKey,
     Role,
     SentimentKey,
 )
@@ -159,11 +167,12 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(_round_pulse_percent(200, 201), 0)
 
     def test_chart_uses_set_based_shared_predicate_and_atomic_pulse_anchor(self):
-        PostTypeKey.objects.create(key="buzz_releases")
-        SentimentKey.objects.create(key="positive")
-        DiscourseKey.objects.create(key="genuine_hype")
-        NationalismKey.objects.create(key="pro")
-        NationalismKey.objects.create(key="mild_pro")
+        PostTypeKey.objects.get_or_create(key="buzz_releases")
+        SentimentKey.objects.get_or_create(key="positive")
+        DiscourseKey.objects.get_or_create(key="genuine_hype")
+        ProductLabelKey.objects.get_or_create(key="bug")
+        NationalismKey.objects.get_or_create(key="pro")
+        NationalismKey.objects.get_or_create(key="mild_pro")
         account = Account.objects.create(author_id="chart-account", handle="chart-account")
         brand = Brand.objects.get(nickname="up")
         post = Post.objects.create(
@@ -187,10 +196,15 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             china_nationalism_id="pro",
             us_nationalism_id="mild_pro",
         )
+        PostBrandProductLabel.objects.create(
+            post=post,
+            brand=brand,
+            product_label_id="bug",
+        )
 
         active = {
             "brands": ["up"],
-            "discourse": ["genuine_hype"],
+            "product_labels": ["bug"],
             "post_types": ["buzz_releases"],
             "sentiment": ["positive"],
             "lang": ["en"],
@@ -208,7 +222,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
 
         empty = _build_home_chart_payload(
             1,
-            {**active, "discourse": []},
+            {**active, "product_labels": []},
             now=ANCHOR + timedelta(seconds=1),
         )
         self.assertEqual(empty["totals"], {"up": 0})
@@ -307,7 +321,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
     def test_in_memory_empty_axes_match_set_based_zero_semantics(self):
         sample = {
             "brand_nicknames": ["up"],
-            "discourse": ["genuine_hype"],
+            "product_labels": ["bug"],
             "post_types": ["buzz_releases"],
             "sentiments": ["positive"],
             "role_key": "official",
@@ -316,61 +330,163 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             "us_nationalism": "mild_pro",
             "unsanctioned": False,
         }
-        for axis in ("brands", "discourse", "post_types", "sentiment", "role", "lang", "cn_nationalism", "us_nationalism"):
+        for axis in ("brands", "product_labels", "post_types", "sentiment", "role", "lang", "cn_nationalism", "us_nationalism"):
             with self.subTest(axis=axis):
                 self.assertFalse(_post_matches_filter(sample, {axis: []}))
 
-    def test_uncategorized_discourse_matches_missing_rows_in_feed_and_chart(self):
-        DiscourseKey.objects.get_or_create(key="absurdist_meme")
+    def test_empty_product_labels_remain_visible_by_default_but_not_when_filtered(self):
+        PostTypeKey.objects.get_or_create(key="other")
+        ProductLabelKey.objects.get_or_create(key="bug")
+        SentimentKey.objects.get_or_create(key="neutral")
         brand = Brand.objects.create(
-            nickname="discourse-bucket",
-            display_name="Discourse Bucket",
-            display_name_en="Discourse Bucket",
-            display_name_zh_cn="话语桶",
+            nickname="product-bucket",
+            display_name="Product Bucket",
+            display_name_en="Product Bucket",
+            display_name_zh_cn="产品桶",
             accent_color="#123456",
         )
         missing = Post.objects.create(
-            tweet_id="discourse-missing",
+            tweet_id="product-empty",
             created_at=ANCHOR - timedelta(minutes=10),
         )
         classified = Post.objects.create(
-            tweet_id="discourse-classified",
+            tweet_id="product-labeled",
             created_at=ANCHOR - timedelta(minutes=5),
         )
         PostBrand.objects.create(post=missing, brand=brand)
         PostBrand.objects.create(post=classified, brand=brand)
-        PostBrandDiscourse.objects.create(
+        for index, post in enumerate((missing, classified)):
+            PostBrandSignal.objects.create(
+                post=post,
+                brand=brand,
+                post_type_id="other",
+                sentiment_id="neutral",
+            )
+            PostBrandClassificationState.objects.create(
+                post=post,
+                brand=brand,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                prompt_version=PROMPT_VERSION,
+                model="stage1-chart-fixture",
+                source_language="en",
+                input_context_fingerprint=f"{index + 1:064x}",
+                outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+                sentiment_id="neutral",
+            )
+        PostBrandProductLabel.objects.create(
             post=classified,
             brand=brand,
-            discourse_id="absurdist_meme",
-            act_id=1,
+            product_label_id="bug",
         )
 
-        missing_row = {"brand_nicknames": [brand.nickname], "discourse": []}
+        missing_row = {"brand_nicknames": [brand.nickname], "product_labels": []}
         classified_row = {
             "brand_nicknames": [brand.nickname],
-            "discourse": ["absurdist_meme"],
+            "product_labels": ["bug"],
         }
-        only_uncategorized = {
+        only_bug = {
             "brands": [brand.nickname],
-            "discourse": ["uncategorized"],
+            "product_labels": ["bug"],
             "unsanctioned": "off",
         }
-        mixed = {
-            **only_uncategorized,
-            "discourse": ["uncategorized", "absurdist_meme"],
-        }
 
-        self.assertTrue(_post_matches_filter(missing_row, only_uncategorized))
-        self.assertFalse(_post_matches_filter(classified_row, only_uncategorized))
+        self.assertFalse(_post_matches_filter(missing_row, only_bug))
+        self.assertTrue(_post_matches_filter(classified_row, only_bug))
         self.assertEqual(
-            _build_home_chart_payload(1, only_uncategorized, now=ANCHOR)["totals"][brand.nickname],
+            _build_home_chart_payload(1, only_bug, now=ANCHOR)["totals"][brand.nickname],
             1,
         )
         self.assertEqual(
-            _build_home_chart_payload(1, mixed, now=ANCHOR + timedelta(seconds=1))["totals"][brand.nickname],
+            _build_home_chart_payload(
+                1,
+                {"brands": [brand.nickname], "unsanctioned": "off"},
+                now=ANCHOR + timedelta(seconds=1),
+            )["totals"][brand.nickname],
             2,
         )
+
+    def test_type_and_product_edges_require_exact_current_classified_state(self):
+        PostTypeKey.objects.get_or_create(key="other")
+        ProductLabelKey.objects.get_or_create(key="bug")
+        SentimentKey.objects.get_or_create(key="neutral")
+        brand = Brand.objects.create(nickname="stage1-edge-gate")
+        posts = {}
+        for index, state_kind in enumerate(
+            ("historical", "context_missing", "stale", "classified")
+        ):
+            post = Post.objects.create(
+                tweet_id=f"stage1-edge-{state_kind}",
+                created_at=ANCHOR - timedelta(minutes=index + 1),
+            )
+            posts[state_kind] = post
+            PostBrand.objects.create(post=post, brand=brand)
+            PostBrandSignal.objects.create(
+                post=post,
+                brand=brand,
+                post_type_id="other",
+                sentiment_id="neutral",
+            )
+            PostBrandProductLabel.objects.create(
+                post=post,
+                brand=brand,
+                product_label_id="bug",
+            )
+            if state_kind == "historical":
+                continue
+            PostBrandClassificationState.objects.create(
+                post=post,
+                brand=brand,
+                contract_version=(
+                    "stale-contract" if state_kind == "stale" else CONTRACT_VERSION
+                ),
+                taxonomy_version=(
+                    "stale-taxonomy" if state_kind == "stale" else TAXONOMY_VERSION
+                ),
+                prompt_version=PROMPT_VERSION,
+                model="fixture-stage1",
+                input_context_fingerprint=f"{index + 1:064x}",
+                outcome=(
+                    PostBrandClassificationState.Outcome.CONTEXT_MISSING
+                    if state_kind == "context_missing"
+                    else PostBrandClassificationState.Outcome.CLASSIFIED
+                ),
+                sentiment_id=("neutral" if state_kind != "context_missing" else None),
+            )
+
+        rows = _enrich_posts_with_classifications(
+            Post.objects.filter(tweet_id__startswith="stage1-edge-").prefetch_related(
+                "brands__brand"
+            ),
+            brand_nickname=brand.nickname,
+        )
+        by_id = {row["tweet_id"]: row for row in rows}
+        for state_kind in ("historical", "context_missing", "stale"):
+            row = by_id[f"stage1-edge-{state_kind}"]
+            self.assertEqual(row["post_types"], [])
+            self.assertEqual(row["product_labels"], [])
+            self.assertNotEqual(
+                row["classifications_by_brand"][brand.nickname]["classification_status"],
+                "classified",
+            )
+        current = by_id["stage1-edge-classified"]
+        self.assertEqual(current["post_types"], ["other"])
+        self.assertEqual(current["product_labels"], ["bug"])
+
+        all_payload = _build_home_chart_payload(
+            1, {"brands": [brand.nickname], "unsanctioned": "off"}, now=ANCHOR
+        )
+        product_payload = _build_home_chart_payload(
+            1,
+            {
+                "brands": [brand.nickname],
+                "product_labels": ["bug"],
+                "unsanctioned": "off",
+            },
+            now=ANCHOR + timedelta(seconds=1),
+        )
+        self.assertEqual(all_payload["totals"][brand.nickname], 4)
+        self.assertEqual(product_payload["totals"][brand.nickname], 1)
 
     def test_role_filter_matches_feed_and_chart_for_multi_brand_posts(self):
         role, _ = Role.objects.get_or_create(key="official")

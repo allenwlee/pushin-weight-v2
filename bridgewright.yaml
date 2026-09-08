@@ -19,6 +19,7 @@ configuration:
       - docs/reference/2026-08-19-132714-v24-bridgewright-target.md
       - docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md
       - docs/plans/2026-08-12-121455-feat-v22-headline-trend-narratives.md
+      - docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md
     project_foundation:
       - monitor/templates
       - monitor/static
@@ -59,6 +60,8 @@ configuration:
       description: Owner-approved normalized account geography, guiding-country hierarchy, Taiwan-neutral signal, and one-button headline disclosure delta.
     - key: production.home.feed-inspection-pagination
       description: Owner-approved feed inspection, X-only navigation, language and region projection, flag-tree hierarchy, one-day chart sizing, and window-complete pagination delta.
+    - key: staging.home.ai-enrichment-stage1
+      description: Owner-approved Stage 1 replacement of active discourse UI with ten post types and five independent product labels.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []
