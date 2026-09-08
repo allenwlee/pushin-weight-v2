@@ -22,11 +22,11 @@ See R19a for the prompt source-of-truth.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 import time
+from dataclasses import dataclass
 
-from .provider_telemetry import emit_attempt
+from .provider_telemetry import emit_attempt, provider_host_class
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +244,7 @@ def build_binary_relevancy_llm_call(
     """
     if client is None:
         return None
+    telemetry_context = {"provider_host_class": provider_host_class(client)}
 
     def llm_call(system: str, user: str) -> str:
         kwargs = {
@@ -257,9 +258,9 @@ def build_binary_relevancy_llm_call(
         try:
             result = client.messages_create(**kwargs)
         except Exception as exc:
-            emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="error", started=started, error=exc, attempt_kind="single")
+            emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="error", started=started, error=exc, attempt_kind="single", **telemetry_context)
             raise
-        emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="success", started=started, response=result, attempt_kind="single")
+        emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="success", started=started, response=result, attempt_kind="single", **telemetry_context)
         # Anthropic SDK returns {"content": [{"text": "...", ...}]} —
         # extract the first text block.
         content = result.get("content") or []

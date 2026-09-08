@@ -9,6 +9,7 @@ import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 
@@ -18,6 +19,26 @@ class ProviderResponse(dict):
     def __init__(self, value: Mapping[str, Any], *, usage: Any = None):
         super().__init__(value)
         self.provider_usage = usage
+
+
+def provider_host_class(client_or_url: Any) -> str:
+    """Return an allowlisted provider label without exposing a host or URL."""
+    try:
+        base_url = client_or_url if isinstance(client_or_url, str) else getattr(
+            client_or_url, "_base_url", None
+        )
+        if base_url is None:
+            base_url = getattr(
+                getattr(client_or_url, "_client", None), "base_url", None
+            )
+        hostname = (urlparse(str(base_url or "")).hostname or "").casefold()
+    except Exception:  # noqa: BLE001 - telemetry must not affect enrichment
+        return "unknown"
+    return {
+        "api.deepseek.com": "deepseek",
+        "api.minimax.io": "minimax",
+        "api.anthropic.com": "anthropic",
+    }.get(hostname, "unknown")
 
 
 def _read(value: Any, *names: str) -> int | None:

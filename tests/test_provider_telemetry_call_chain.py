@@ -116,6 +116,39 @@ def test_usage_normalizer_rejects_non_count_values_and_event_context_is_safe(cap
     assert "raw_body" not in event and "full_url" not in event
 
 
+def test_provider_host_class_is_allowlisted_and_hides_custom_hosts(caplog):
+    from x_monitor.provider_telemetry import emit_attempt, provider_host_class
+
+    assert provider_host_class("https://api.deepseek.com/anthropic") == "deepseek"
+    assert provider_host_class("https://api.minimax.io/anthropic") == "minimax"
+    assert provider_host_class("https://api.anthropic.com") == "anthropic"
+    custom_url = "https://private-gateway.example/anthropic"
+    assert provider_host_class(custom_url) == "unknown"
+    assert provider_host_class("https://evil.deepseek.com/anthropic") == "unknown"
+    assert provider_host_class("https://api.deepseek.com.evil.invalid") == "unknown"
+    assert provider_host_class("https://[broken") == "unknown"
+
+    class BrokenClient:
+        @property
+        def _base_url(self):
+            raise RuntimeError("private provider failure")
+
+    assert provider_host_class(BrokenClient()) == "unknown"
+    caplog.set_level("INFO")
+    emit_attempt(
+        logging.getLogger("telemetry-host-class"),
+        role="safe-role",
+        model="safe-model",
+        attempt=1,
+        outcome="success",
+        started=time.monotonic(),
+        provider_host_class=provider_host_class(custom_url),
+    )
+    rendered = json.dumps(_events(caplog)[0])
+    assert '"provider_host_class": "unknown"' in rendered
+    assert "private-gateway.example" not in rendered
+
+
 def test_default_stream_handler_renders_safe_serialized_provider_event():
     from x_monitor.provider_telemetry import emit_attempt
 
@@ -294,6 +327,7 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     assert {event["stage"] for event in events} == {"post_fetch"}
     assert {event["batch_size"] for event in events} == {1, 20}
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
+    assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
 
 

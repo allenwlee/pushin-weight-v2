@@ -2217,7 +2217,7 @@ class CycleRunner:
                     cfg=self.cfg,
                     deadline=translation_deadline,
                     max_workers=3,
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id, "provider_host_class": "sdk"},
+                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
                 )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
@@ -2354,7 +2354,7 @@ class CycleRunner:
                     ),
                     deadline=classification_deadline,
                     max_workers=3,
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id, "provider_host_class": "direct_http"},
+                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
                 )
             except Exception as exc:
                 logger.warning(

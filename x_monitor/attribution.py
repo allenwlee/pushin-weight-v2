@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, Protocol
 
 from ._json_parser import parse_llm_response
-from .provider_telemetry import ProviderResponse, emit_attempt
+from .provider_telemetry import ProviderResponse, emit_attempt, provider_host_class
 
 if TYPE_CHECKING:
     from .config import Config
@@ -1045,6 +1045,8 @@ def _call_signal_with_retry(
     }
     if thinking is not None:
         create_kwargs["thinking"] = thinking
+    event_context = dict(telemetry_context or {})
+    event_context["provider_host_class"] = provider_host_class(client)
     for attempt in range(_MAX_RETRIES):
         attempt_kind = (
             operation_kind
@@ -1060,10 +1062,10 @@ def _call_signal_with_retry(
             call_kwargs["timeout"] = request_timeout
         try:
             response = client.messages_create(**call_kwargs)
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **(telemetry_context or {}), attempt_kind=attempt_kind)
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             return response
         except Exception as e:
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **(telemetry_context or {}), attempt_kind=attempt_kind)
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)

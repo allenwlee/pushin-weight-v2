@@ -53,7 +53,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from ._json_parser import parse_llm_response
-from .provider_telemetry import ProviderResponse, emit_attempt
+from .provider_telemetry import ProviderResponse, emit_attempt, provider_host_class
 
 if TYPE_CHECKING:
     from .config import Config
@@ -262,6 +262,7 @@ def _call_with_retry(
     max_tokens = _max_tokens_for_batch_size(n_tweets)
     event_context = dict(telemetry_context or {})
     event_context.setdefault("batch_size", n_tweets)
+    event_context["provider_host_class"] = provider_host_class(client)
     for attempt in range(_MAX_RETRIES):
         attempt_kind = (
             operation_kind

@@ -15,7 +15,11 @@ import anthropic
 from billiard.exceptions import SoftTimeLimitExceeded
 
 from x_monitor.config import HeadlineNarrativeConfig
-from x_monitor.provider_telemetry import ProviderResponse, emit_attempt
+from x_monitor.provider_telemetry import (
+    ProviderResponse,
+    emit_attempt,
+    provider_host_class,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +274,7 @@ def execute_per_brand_provider_request(
     started = monotonic()
     event_context = dict(telemetry_context or {})
     event_context.setdefault("stage", "headline")
-    event_context.setdefault("provider_host_class", "sdk")
+    event_context["provider_host_class"] = provider_host_class(config.base_url)
     try:
         message = client.messages.create(**dict(request))
     except SoftTimeLimitExceeded as exc:
