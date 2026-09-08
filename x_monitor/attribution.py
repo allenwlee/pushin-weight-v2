@@ -1980,6 +1980,7 @@ def classify_batch_pragmatics_full(
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     max_workers: int = 1,
+    telemetry_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """U4 (batched): per-post classification across N tweets, one LLM call per batch.
 
@@ -2059,6 +2060,7 @@ def classify_batch_pragmatics_full(
                     thinking=thinking,
                     deadline=deadline,
                     max_workers=1,
+                    telemetry_context=telemetry_context,
                 )
                 for batch in batches
             ]
@@ -2112,6 +2114,7 @@ def classify_batch_pragmatics_full(
                 max_tokens=max_tokens,
                 thinking=thinking,
                 deadline=deadline,
+                telemetry_context={**(telemetry_context or {}), "batch_size": len(kept)},
             )
         except Exception as exc:
             # Plan 2026-07-13-001 fail-soft contract: when a batch
@@ -2141,6 +2144,7 @@ def classify_batch_pragmatics_full(
                         model=model,
                         thinking=thinking,
                         deadline=deadline,
+                        telemetry_context={**(telemetry_context or {}), "batch_size": 1},
                     )
                     results.append(
                         single if isinstance(single, dict) else dict(empty),

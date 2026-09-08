@@ -55,6 +55,7 @@ def emit_attempt(logger: logging.Logger, *, role: str, model: str | None, attemp
             "outcome": outcome, "elapsed_ms": max(0, round((time.monotonic() - started) * 1000)),
             "error_type": type(error).__name__ if error else None,
             "usage": normalize_usage(getattr(response, "provider_usage", None)),
+            "usage_source": "provider" if getattr(response, "provider_usage", None) is not None else "missing",
             **{key: value for key, value in context.items() if value is not None},
         }})
     except Exception:

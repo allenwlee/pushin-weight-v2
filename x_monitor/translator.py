@@ -259,6 +259,8 @@ def _call_with_retry(
     # 4096 tokens cleanly at batch_size=20 with 50% headroom (per
     # classifier-swap probe data, plan 2026-07-15-002 KTD4).
     max_tokens = _max_tokens_for_batch_size(n_tweets)
+    event_context = dict(telemetry_context or {})
+    event_context.setdefault("batch_size", n_tweets)
     for attempt in range(_MAX_RETRIES):
         started = time.monotonic()
         request_timeout: float | None = None
@@ -277,10 +279,10 @@ def _call_with_retry(
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
             response = client.messages_create(**kwargs)
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, batch_size=n_tweets, **(telemetry_context or {}), attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind="retry")
             return response
         except Exception as e:
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, batch_size=n_tweets, **(telemetry_context or {}), attempt_kind="retry")
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind="retry")
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
