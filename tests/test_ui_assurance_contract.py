@@ -68,7 +68,7 @@ def test_ui_assurance_source_revision_is_the_reviewed_product_source_revision() 
     declaration = json.loads(
         (ROOT / "tests/fixtures/ui_assurance/declaration.json").read_text(encoding="utf-8")
     )
-    assert declaration["source_revision"] == "29512a89d2606fd0e646e1a0ad4a10694d42b7d6"
+    assert declaration["source_revision"] == "5c2dee1fd048dfff0fda944f96f677f34f4c1e0b"
 
 
 def test_declaration_inventory_matches_the_production_control_vocabulary() -> None:
