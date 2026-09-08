@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, Protocol
 
 from ._json_parser import parse_llm_response
+from .provider_telemetry import ProviderResponse, emit_attempt
 
 if TYPE_CHECKING:
     from .config import Config
@@ -1043,6 +1044,7 @@ def _call_signal_with_retry(
     if thinking is not None:
         create_kwargs["thinking"] = thinking
     for attempt in range(_MAX_RETRIES):
+        started = time.monotonic()
         call_kwargs = dict(create_kwargs)
         if deadline is not None:
             request_timeout = float(deadline.request_timeout())
@@ -1050,8 +1052,11 @@ def _call_signal_with_retry(
                 raise TimeoutError("enrichment_attempt_deadline_exhausted")
             call_kwargs["timeout"] = request_timeout
         try:
-            return client.messages_create(**call_kwargs)
+            response = client.messages_create(**call_kwargs)
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, attempt_kind="retry")
+            return response
         except Exception as e:
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="error", started=started, error=e, attempt_kind="retry")
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -2289,11 +2294,11 @@ class AnthropicClaudeClient:
         # Trailing-prose-tolerant parser (plan 2026-08-04-001).
         # Replaces the inline json.loads + except fallback with the shared
         # helper. Same warning shape and same fallback dict as before.
-        return parse_llm_response(
+        return ProviderResponse(parse_llm_response(
             raw,
             logger_name="x_monitor.attribution",
             fallback={"verdict": "uncertain", "reason": "llm_non_json_response"},
-        )
+        ), usage=body.get("usage"))
 
 
 # --- Public re-exports for compat shim (Unit 6) -------------------------

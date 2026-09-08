@@ -53,6 +53,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from ._json_parser import parse_llm_response
+from .provider_telemetry import ProviderResponse, emit_attempt
 
 if TYPE_CHECKING:
     from .config import Config
@@ -258,6 +259,7 @@ def _call_with_retry(
     # classifier-swap probe data, plan 2026-07-15-002 KTD4).
     max_tokens = _max_tokens_for_batch_size(n_tweets)
     for attempt in range(_MAX_RETRIES):
+        started = time.monotonic()
         request_timeout: float | None = None
         if deadline is not None:
             request_timeout = float(deadline.request_timeout())
@@ -273,8 +275,11 @@ def _call_with_retry(
                 kwargs["thinking"] = thinking
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
-            return client.messages_create(**kwargs)
+            response = client.messages_create(**kwargs)
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, attempt_kind="retry")
+            return response
         except Exception as e:
+            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, attempt_kind="retry")
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -1369,8 +1374,8 @@ class AnthropicClaudeClient:
         # Soft-fails to {"results": []} on parse failure; the consumer
         # (translate_batch -> _parse_response) handles empty results
         # by marking the batch as translation_failed=True.
-        return parse_llm_response(
+        return ProviderResponse(parse_llm_response(
             raw,
             logger_name="x_monitor.translator",
             fallback={"results": []},
-        )
+        ), usage=getattr(msg, "usage", None))

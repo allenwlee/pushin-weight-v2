@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 from collections.abc import Callable, Mapping
@@ -14,6 +15,9 @@ import anthropic
 from billiard.exceptions import SoftTimeLimitExceeded
 
 from x_monitor.config import HeadlineNarrativeConfig
+from x_monitor.provider_telemetry import emit_attempt
+
+logger = logging.getLogger(__name__)
 
 
 class HeadlineGenerationError(ValueError):
@@ -268,6 +272,7 @@ def execute_per_brand_provider_request(
     except SoftTimeLimitExceeded:
         raise
     except Exception as exc:  # noqa: BLE001 - unknowns map to safe codes
+        emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="error", started=started, error=exc, attempt_kind="single")
         raise HeadlineGenerationError(_provider_failure_code(exc)) from None
     elapsed_ms = max(0, round((monotonic() - started) * 1000))
     try:
@@ -275,6 +280,7 @@ def execute_per_brand_provider_request(
     except ValueError as exc:
         raise HeadlineGenerationError(str(exc), transport_completed=True) from None
     usage = getattr(message, "usage", None)
+    emit_attempt(logger, role="headline", model=str(request["model"]), attempt=1, outcome="success", started=started, response=type("Response", (), {"provider_usage": usage})(), attempt_kind="single")
     return PerBrandProviderResponse(
         raw_text=raw_text,
         input_tokens=int(getattr(usage, "input_tokens", 0) or 0),

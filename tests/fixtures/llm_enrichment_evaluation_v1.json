@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "kind": "synthetic",
+    "description": "Deterministic Stage 0 transport and contract cases; not production observations or gold labels.",
+    "created": "2026-09-08",
+    "source": "stage0-contract"
+  },
+  "usage_cases": [
+    {
+      "id": "reported-total-only",
+      "provider_usage": {"input_tokens": 12, "output_tokens": 4, "total_tokens": 16},
+      "expected_normalized": {"input_tokens": 12, "output_tokens": 4, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": 16}
+    },
+    {
+      "id": "missing-usage",
+      "provider_usage": null,
+      "expected_normalized": {"input_tokens": null, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null}
+    },
+    {
+      "id": "overlap-is-not-added",
+      "provider_usage": {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 1, "reasoning_tokens": 5, "total_tokens": 13},
+      "expected_normalized": {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 1, "reasoning_tokens": 5, "total_tokens": 13}
+    },
+    {
+      "id": "reserved-limit-is-not-usage",
+      "provider_usage": {"max_tokens": 200, "input_tokens": 7, "output_tokens": null},
+      "expected_normalized": {"input_tokens": 7, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null}
+    }
+  ],
+  "semantic_status_cases": [
+    {"id": "pending-is-discoverable", "label": "pending", "synthetic": true},
+    {"id": "provider-failure", "label": "failure", "synthetic": true},
+    {"id": "missing-context", "label": "context_missing", "synthetic": true},
+    {"id": "legacy-without-type", "label": "historical_untyped", "synthetic": true},
+    {"id": "confident-residual", "label": "Other", "synthetic": true}
+  ]
+}

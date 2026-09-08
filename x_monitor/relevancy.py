@@ -23,6 +23,12 @@ See R19a for the prompt source-of-truth.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import time
+
+from .provider_telemetry import emit_attempt
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # R19a — Source-of-truth prompt constants
@@ -247,7 +253,13 @@ def build_binary_relevancy_llm_call(
             "messages": [{"role": "user", "content": user}],
             "timeout": timeout_seconds,
         }
-        result = client.messages_create(**kwargs)
+        started = time.monotonic()
+        try:
+            result = client.messages_create(**kwargs)
+        except Exception as exc:
+            emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="error", started=started, error=exc, attempt_kind="single")
+            raise
+        emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="success", started=started, response=result, attempt_kind="single")
         # Anthropic SDK returns {"content": [{"text": "...", ...}]} —
         # extract the first text block.
         content = result.get("content") or []
