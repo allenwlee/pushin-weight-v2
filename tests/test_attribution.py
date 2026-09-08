@@ -866,6 +866,7 @@ def test_call_signal_with_retry_threads_thinking_through():
     captured.clear()
     _call_signal_with_retry(client, prompt, max_tokens=4096, thinking=None)
     assert "thinking" not in captured
+    assert "system" not in captured
     # The model is whatever _SIGNAL_MODEL resolved to at import time
     # (cached). The test doesn't pin the model — only the thinking
     # threading behavior.

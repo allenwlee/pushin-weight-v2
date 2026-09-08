@@ -8,6 +8,7 @@ from core.classification_contract import (
     NATIONALISM_KEYS,
     POST_TYPE_KEYS,
     PRODUCT_LABEL_KEYS,
+    PROMPT_VERSION,
     SENTIMENT_KEYS,
 )
 from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
@@ -102,7 +103,13 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
     assert '"product_labels":[str]' in prompt
 
 
+def test_prompt_version_tracks_the_system_user_boundary():
+    assert PROMPT_VERSION == "stage1-prompt-v2"
+
+
 def test_prompt_identity_is_shared_by_batch_and_single_builders():
+    import json
+
     from x_monitor.attribution import (
         build_batch_pragmatics_full_prompt,
         build_pragmatics_full_prompt,
@@ -113,5 +120,17 @@ def test_prompt_identity_is_shared_by_batch_and_single_builders():
         {"tweet_id": "one", "text": "text", "brand_ids": ["deepseek"]}
     ])
 
-    assert single.startswith(_PRAGMATICS_FULL_SYSTEM_PROMPT)
-    assert batch.startswith(_PRAGMATICS_FULL_SYSTEM_PROMPT)
+    assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in single
+    assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in batch
+    assert json.loads(single) == [{
+        "tweet_id": "_single_",
+        "text": "text",
+        "brand_ids": ["deepseek"],
+        "context": [],
+    }]
+    assert json.loads(batch) == [{
+        "tweet_id": "one",
+        "text": "text",
+        "brand_ids": ["deepseek"],
+        "context": [],
+    }]

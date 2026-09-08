@@ -79,6 +79,7 @@ class FakeClaudeClient:
 
     def messages_create(self, **kwargs):
         prompt = kwargs.get("messages", [{}])[0].get("content", "")
+        system = kwargs.get("system", "")
         if "bilingual pragmatic analyst" in prompt:
             self.translate_calls.append(kwargs)
             # Parse the JSON-encoded tweets array out of the prompt.
@@ -103,7 +104,8 @@ class FakeClaudeClient:
             )
         if ("across FIVE dimensions" in prompt
                 or "_PRAGMATICS_FULL_SYSTEM_PROMPT" in prompt
-                or "You classify stored social posts" in prompt):
+                or "You classify stored social posts" in prompt
+                or "You classify stored social posts" in system):
             self.classify_calls.append(kwargs)
             # Pull the per-tweet payload and brand list(s) out of the
             # prompt. The batch path emits the payload as a JSON array
@@ -117,12 +119,25 @@ class FakeClaudeClient:
                 text = kwargs["_test_text"]
                 brand_ids = kwargs["_test_brand_ids"]
             else:
+                import json as _json
+
+                try:
+                    batch_tweets = _json.loads(prompt) if system else []
+                except _json.JSONDecodeError:
+                    batch_tweets = []
+                if batch_tweets:
+                    first = batch_tweets[0]
+                    text = first.get("text", "")
+                    brand_ids = list(first.get("brand_ids") or [])
+                    tweet_ids_in_batch = [
+                        str(t.get("tweet_id") or t.get("id") or "")
+                        for t in batch_tweets
+                    ]
                 batch_marker = "Tweets (JSON array of "
                 b_idx = prompt.find(batch_marker)
-                if b_idx >= 0:
+                if not batch_tweets and b_idx >= 0:
                     # Batch prompt — find the `[` that opens the
                     # JSON payload (skip past the "1):" header).
-                    import json as _json
                     payload_start = prompt.find("[", b_idx)
                     if payload_start < 0:
                         batch_tweets = []
@@ -146,7 +161,7 @@ class FakeClaudeClient:
                             str(t.get("tweet_id") or t.get("id") or "")
                             for t in batch_tweets
                         ]
-                else:
+                elif not batch_tweets:
                     # Single-post prompt — the new format (Plan
                     # 2026-07-13-001) emits `Tweet text:\n<text>\n\n`
                     # (no triple quotes). Fall back to the legacy

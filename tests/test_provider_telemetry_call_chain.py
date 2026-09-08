@@ -302,7 +302,7 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         def getresponse(self):
             prompt = self.body["messages"][0]["content"]
             ids = [post.tweet_id for post in posts if post.tweet_id in prompt]
-            if "unsanctioned_flags" in prompt:
+            if "unsanctioned_flags" in self.body.get("system", ""):
                 payload = {
                     "results": [
                             {"tweet_id": ident, "classifications": [{
@@ -345,6 +345,18 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
     assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
+    classifier_requests = [
+        request["body"]
+        for request in requests
+        if "unsanctioned_flags" in request["body"].get("system", "")
+    ]
+    assert len(classifier_requests) == 2
+    assert all(
+        len(request["messages"]) == 1
+        and request["messages"][0]["role"] == "user"
+        and isinstance(json.loads(request["messages"][0]["content"]), list)
+        for request in classifier_requests
+    )
 
 
 def test_direct_http_wrapper_retains_usage_when_assistant_json_is_malformed(monkeypatch):

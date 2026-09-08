@@ -52,16 +52,16 @@ class FakeClaudeClient:
 
     def messages_create(self, **kwargs):
         prompt = kwargs.get("messages", [{}])[0].get("content", "")
+        system = kwargs.get("system", "")
         if "bilingual pragmatic analyst" in prompt:
             return self._t_factory(
                 kwargs.get("_test_tweets", []),
                 kwargs.get("_test_target_locales", []),
             )
-        if "You classify stored social posts" in prompt:
-            return self._c_factory(
-                kwargs.get("_test_text", ""),
-                kwargs.get("_test_brand_ids", []),
-            )
+        if ("You classify stored social posts" in prompt
+                or "You classify stored social posts" in system):
+            tweet = json.loads(prompt)[0]
+            return self._c_factory(tweet["text"], tweet["brand_ids"])
         return {"classifications": [], "results": []}
 
 

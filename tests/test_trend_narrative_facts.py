@@ -240,10 +240,22 @@ def test_u4_scalars_use_current_nulls_and_historical_one_distinct_fallback():
     classified_empty = _seed_posts(
         brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=3)
     )[0]
+    conflicting = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=4)
+    )[0]
+    legacy_with_empty = _seed_posts(
+        brand, total=1, authors=1, created_at=AS_OF - timedelta(hours=5)
+    )[0]
     PostTypeKey.objects.get_or_create(key="other")
+    PostTypeKey.objects.get_or_create(key="news")
+    PostTypeKey.objects.get_or_create(key="update")
     SentimentKey.objects.get_or_create(key="positive")
+    SentimentKey.objects.get_or_create(key="negative")
+    SentimentKey.objects.get_or_create(key="")
     NationalismKey.objects.get_or_create(key="none")
+    NationalismKey.objects.get_or_create(key="anti")
     DiscourseKey.objects.get_or_create(key="legacy")
+    DiscourseKey.objects.get_or_create(key="conflict")
     PostBrandSignal.objects.create(
         post=legacy, brand=brand, post_type_id="other", sentiment_id="positive"
     )
@@ -251,6 +263,42 @@ def test_u4_scalars_use_current_nulls_and_historical_one_distinct_fallback():
         post=legacy, brand=brand, discourse_id="legacy", act_id=0,
         china_nationalism_id="none",
     )
+    PostBrandSignal.objects.create(
+        post=current_null, brand=brand, post_type_id="other",
+        sentiment_id="positive",
+    )
+    PostBrandDiscourse.objects.create(
+        post=current_null, brand=brand, discourse_id="legacy", act_id=0,
+        china_nationalism_id="none",
+    )
+    PostBrandSignal.objects.bulk_create([
+        PostBrandSignal(
+            post=conflicting, brand=brand, post_type_id="other",
+            sentiment_id="positive",
+        ),
+        PostBrandSignal(
+            post=conflicting, brand=brand, post_type_id="news",
+            sentiment_id="negative",
+        ),
+        PostBrandSignal(
+            post=legacy_with_empty, brand=brand, post_type_id="other",
+            sentiment_id="positive",
+        ),
+        PostBrandSignal(
+            post=legacy_with_empty, brand=brand, post_type_id="update",
+            sentiment_id="",
+        ),
+    ])
+    PostBrandDiscourse.objects.bulk_create([
+        PostBrandDiscourse(
+            post=conflicting, brand=brand, discourse_id="legacy", act_id=0,
+            china_nationalism_id="none",
+        ),
+        PostBrandDiscourse(
+            post=conflicting, brand=brand, discourse_id="conflict", act_id=1,
+            china_nationalism_id="anti",
+        ),
+    ])
     PostBrandClassificationState.objects.create(
         post=current_null, brand=brand, contract_version=CONTRACT_VERSION,
         taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
@@ -264,11 +312,23 @@ def test_u4_scalars_use_current_nulls_and_historical_one_distinct_fallback():
         window_start=AS_OF - timedelta(days=1), as_of=AS_OF,
     )
 
-    assert counts[(brand.nickname, "sentiment", "positive")] == (2, 0)
-    assert coverage[(brand.nickname, "sentiment")] == (2, 0)
+    assert counts[(brand.nickname, "sentiment", "positive")] == (3, 0)
+    assert coverage[(brand.nickname, "sentiment")] == (3, 0)
     assert counts[(brand.nickname, "china_nationalism", "none")] == (1, 0)
     assert coverage[(brand.nickname, "product_label")] == (1, 0)
     assert not any(family == "product_label" for _scope, family, _label in counts)
+
+    candidate = _candidate(
+        trend_facts.aggregate_trend_family_facts(
+            1,
+            as_of=AS_OF,
+            earliest_at=AS_OF - timedelta(days=2),
+        ),
+        brand.nickname,
+    )
+    sentiment = candidate["family_facts"]["sentiment"]
+    assert sentiment["selected_covered_count"] == 3
+    assert _label(candidate, "sentiment", "positive")["selected_count"] == 3
 
 
 def test_u4_metadata_series_keeps_historical_scalar_fallback_and_nulls_unknown():
@@ -288,6 +348,14 @@ def test_u4_metadata_series_keeps_historical_scalar_fallback_and_nulls_unknown()
     )
     PostBrandDiscourse.objects.create(
         post=legacy, brand=brand, discourse_id="legacy", act_id=0,
+        china_nationalism_id="none",
+    )
+    PostBrandSignal.objects.create(
+        post=current_null, brand=brand, post_type_id="other",
+        sentiment_id="positive",
+    )
+    PostBrandDiscourse.objects.create(
+        post=current_null, brand=brand, discourse_id="legacy", act_id=0,
         china_nationalism_id="none",
     )
     PostBrandClassificationState.objects.create(
@@ -323,7 +391,7 @@ def test_u4_metadata_counts_keep_product_labels_per_brand_and_distinct_post_base
     for key in ("testimonial", "complaint"):
         ProductLabelKey.objects.get_or_create(key=key)
     _state(post, alpha)
-    _state(post, beta)
+    _state(post, beta, sentiment="negative")
     PostBrandSignal.objects.create(
         post=post, brand=alpha, post_type_id="other", sentiment_id="positive"
     )
@@ -351,6 +419,11 @@ def test_u4_metadata_counts_keep_product_labels_per_brand_and_distinct_post_base
     assert coverage[(alpha.nickname, "product_label")] == (1, 0)
     assert coverage[(beta.nickname, "product_label")] == (1, 0)
     assert coverage[("__market__", "product_label")] == (1, 0)
+    assert counts[(alpha.nickname, "sentiment", "positive")] == (1, 0)
+    assert counts[(beta.nickname, "sentiment", "negative")] == (1, 0)
+    assert counts[("__market__", "sentiment", "positive")] == (1, 0)
+    assert counts[("__market__", "sentiment", "negative")] == (1, 0)
+    assert coverage[("__market__", "sentiment")] == (1, 0)
 
 
 def test_u4_classified_null_scalars_are_unknown_but_empty_products_are_covered():
@@ -377,6 +450,98 @@ def test_u4_classified_null_scalars_are_unknown_but_empty_products_are_covered()
     assert (brand.nickname, "china_nationalism") not in coverage
     assert (brand.nickname, "us_nationalism") not in coverage
     assert not any(scope == brand.nickname for scope, _family, _label in counts)
+
+
+def test_u4_scalar_aggregate_rows_stay_bounded_at_high_post_cardinality(
+    monkeypatch,
+):
+    alpha = _brand("stage1-bounded-alpha")
+    beta = _brand("stage1-bounded-beta")
+    posts = _seed_posts(
+        alpha,
+        total=1_000,
+        authors=20,
+        created_at=AS_OF - timedelta(hours=1),
+        prefix="stage1-bounded",
+    )
+    PostBrand.objects.bulk_create([
+        PostBrand(post=post, brand=beta) for post in posts
+    ])
+    for key in ("positive", "negative"):
+        SentimentKey.objects.get_or_create(key=key)
+    PostBrandClassificationState.objects.bulk_create([
+        PostBrandClassificationState(
+            post=post,
+            brand=brand,
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version=TAXONOMY_VERSION,
+            prompt_version="stage1-test",
+            model="test",
+            source_language="en",
+            input_context_fingerprint="4" * 64,
+            outcome="classified",
+            sentiment_id=sentiment,
+        )
+        for post in posts
+        for brand, sentiment in ((alpha, "positive"), (beta, "negative"))
+    ])
+
+    returned_row_counts: list[int] = []
+    dict_rows = trend_facts._dict_rows
+
+    def recording_dict_rows(cursor):
+        rows = dict_rows(cursor)
+        returned_row_counts.append(len(rows))
+        return rows
+
+    monkeypatch.setattr(trend_facts, "_dict_rows", recording_dict_rows)
+    counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[alpha.nickname, beta.nickname],
+        prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+    )
+    count_query_rows = returned_row_counts.pop()
+    schedule = trend_facts._WINDOW_SCHEDULES[1]
+    series_rows = trend_facts._metadata_series_rows(
+        candidate_keys=[alpha.nickname, beta.nickname],
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+        schedule=schedule,
+    )
+    series_query_rows = returned_row_counts.pop()
+    taxonomy = trend_facts._metadata_taxonomy()
+    label_slots = sum(len(labels) for labels in taxonomy.values())
+
+    assert counts[(alpha.nickname, "sentiment", "positive")] == (1_000, 0)
+    assert counts[(beta.nickname, "sentiment", "negative")] == (1_000, 0)
+    assert coverage[("__market__", "sentiment")] == (1_000, 0)
+    assert count_query_rows == len(counts) + len(coverage) == 13
+    assert count_query_rows <= 3 * (label_slots + len(taxonomy))
+    assert series_query_rows <= (
+        2 * schedule.coarse_bucket_count * (label_slots + len(taxonomy))
+    )
+    assert len(series_rows) == series_query_rows == 8
+
+    facts = trend_facts.aggregate_trend_family_facts(
+        1,
+        as_of=AS_OF,
+        earliest_at=AS_OF - timedelta(days=2),
+    )
+    assert _label(
+        _candidate(facts, alpha.nickname), "sentiment", "positive"
+    )["selected_count"] == 1_000
+    details = trend_facts.fetch_trend_candidate_series(
+        1,
+        as_of=AS_OF,
+        candidate_keys=[alpha.nickname, beta.nickname],
+        earliest_at=AS_OF - timedelta(days=2),
+    )
+    assert sum(
+        details["candidates"][0]["metadata_series"]["sentiment"][
+            "coverage_counts"
+        ]
+    ) == 1_000
 
 
 def test_recent_minimax_leads_and_earlier_deepseek_is_handoff_contrast():
@@ -1387,7 +1552,7 @@ def test_u1_bounded_candidate_detail_query_count_is_fixed():
             earliest_at=AS_OF - timedelta(days=2),
         )
 
-    assert len(one_candidate) == len(three_candidates) == 6
+    assert len(one_candidate) == len(three_candidates) == 2
 
 
 def test_u1_candidate_detail_set_is_explicitly_bounded():

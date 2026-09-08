@@ -42,7 +42,11 @@ class FakeSlowClaudeClient:
 
     def messages_create(self, **kwargs):
         self.calls += 1
-        prompt = kwargs.get("messages", [{}])[0].get("content", "")
+        prompt = (
+            str(kwargs.get("system") or "")
+            + "\n"
+            + kwargs.get("messages", [{}])[0].get("content", "")
+        )
         if "bilingual pragmatic analyst" in prompt:
             import json as _json
             marker = "Tweets (JSON array):"

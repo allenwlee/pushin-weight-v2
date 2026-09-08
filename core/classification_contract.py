@@ -12,7 +12,7 @@ from typing import Any
 
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v1"
-PROMPT_VERSION = "stage1-prompt-v1"
+PROMPT_VERSION = "stage1-prompt-v2"
 
 POST_TYPE_KEYS = (
     "buzz_releases",

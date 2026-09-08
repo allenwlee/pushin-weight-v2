@@ -27,6 +27,7 @@ class FakeClaudeClient:
 
     def messages_create(self, **kwargs):
         prompt = kwargs.get("messages", [{}])[0].get("content", "")
+        system = kwargs.get("system", "")
         if "bilingual pragmatic analyst" in prompt:
             import json as _json
             marker = "Tweets (JSON array):"
@@ -48,16 +49,10 @@ class FakeClaudeClient:
                 "noop_en": True,
                 "noop_zh": False,
             } for t in tweets]}
-        if "You classify stored social posts" in prompt:
-            # Parse brand_ids from the prompt to return a row per brand.
-            import re
-            m = re.search(r"Brands \(in order\): ([^\n]+)", prompt)
-            brand_line = m.group(1).strip() if m else ""
-            brand_ids = (
-                [b.strip() for b in brand_line.split(",")]
-                if brand_line and brand_line != "(none)"
-                else []
-            )
+        if ("You classify stored social posts" in prompt
+                or "You classify stored social posts" in system):
+            import json as _json
+            brand_ids = _json.loads(prompt)[0]["brand_ids"]
             return {"classifications": [{
                 "brand_id": b,
                 "outcome": "classified",

@@ -54,7 +54,7 @@ def test_single_prompt_uses_batch_envelope_and_preserves_context():
             {"provenance": "local_parent", "text": "Parent question"},
         ],
     )
-    payload = json.loads(prompt.rsplit("\n", 1)[1])
+    payload = json.loads(prompt)
 
     assert payload == [{
         "tweet_id": "_single_",
@@ -103,6 +103,13 @@ def test_single_preserves_multilabel_result_and_explicit_unknown():
     }
     assert client.calls[0]["model"] == "deepseek-v4-flash"
     assert client.calls[0]["thinking"] == {"type": "disabled"}
+    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+    assert client.calls[0]["system"] == _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert client.calls[0]["messages"] == [{
+        "role": "user",
+        "content": client.calls[0]["messages"][0]["content"],
+    }]
 
 
 def test_single_accepts_legacy_unwrapped_transport_response():

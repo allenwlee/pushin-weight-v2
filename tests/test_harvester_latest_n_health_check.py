@@ -76,7 +76,7 @@ def _current_state(**overrides):
     state = {
         "contract_version": "stage1-v1",
         "taxonomy_version": "stage1-taxonomy-v1",
-        "prompt_version": "stage1-prompt-v1",
+        "prompt_version": "stage1-prompt-v2",
         "outcome": "classified",
         "sentiment": "positive",
         "china_nationalism": "none",
@@ -406,7 +406,7 @@ def test_stage1_classified_accepts_empty_products_and_no_discourse(checker):
     assert classification["state"] == "current"
     assert classification["outcome"] == "classified"
     assert classification["product_labels"] == []
-    assert classification["prompt_version"] == "stage1-prompt-v1"
+    assert classification["prompt_version"] == "stage1-prompt-v2"
     assert payload["posts"][0]["reasons"] == []
 
 
@@ -523,7 +523,7 @@ def test_stage1_stale_state_is_not_treated_as_current(checker):
     assert classification["state"] == "stale"
     assert classification["contract_version"] == "stage0-legacy"
     assert classification["taxonomy_version"] == "stage1-taxonomy-v1"
-    assert classification["prompt_version"] == "stage1-prompt-v1"
+    assert classification["prompt_version"] == "stage1-prompt-v2"
     assert classification["stale_outcome"] == "classified"
     assert classification["outcome"] is None
     assert classification["post_types"] == []
