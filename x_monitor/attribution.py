@@ -42,6 +42,22 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, Protocol
 
+from core.classification_contract import (
+    NATIONALISM_KEYS as _STAGE1_NATIONALISM_KEYS,
+)
+from core.classification_contract import (
+    POST_TYPE_KEYS as _STAGE1_POST_TYPE_KEYS,
+)
+from core.classification_contract import (
+    PRODUCT_LABEL_KEYS as _STAGE1_PRODUCT_LABEL_KEYS,
+)
+from core.classification_contract import (
+    SENTIMENT_KEYS as _STAGE1_SENTIMENT_KEYS,
+)
+from core.classification_contract import (
+    parse_stage1_classifications,
+)
+
 from ._json_parser import parse_llm_response
 from .provider_telemetry import ProviderResponse, emit_attempt, provider_host_class
 
@@ -1131,810 +1147,176 @@ def classify_post(
     return parsed
 
 
-# --- U4: classify_pragmatics_full (merged per-post classifier) ----------
-#
-# KTD1: a SINGLE batched LLM call per 20-post batch returns ALL FIVE
-# prongs (post_type, sentiment, discourse_role, china_nationalism,
-# us_nationalism) per attributed brand.
+# --- Stage 1 full pragmatics classifier ----------------------------------
 
-# Plan 2026-07-13-001 (timeout investigation): the system prompt body
-# (rules + worked examples + taxonomy lists) is byte-identical between
-# the per-post and batch paths. Factor it into a module-level constant
-# so Anthropic's prompt-cache stays warm across calls — the cache key
-# is a function of the prefix bytes, so reusing the same prefix lets
-# both the single-post `classify_pragmatics_full` and the batch
-# `classify_batch_pragmatics_full` ride the same cache entry.
 _CLASSIFY_BATCH_SIZE: int = 20
-
-
-_VALID_DISCOURSE: frozenset[str] = frozenset({
-    "genuine_hype", "sarcasm", "dunk_yingyang", "self_deprecation",
-    "cope", "fud", "distillation_accusation", "ai_slop_critique",
-    "absurdist_meme",
-    # U2a: extended by migration 027 + plan 2026-07-03-003.
-    # NOTE: hyphenated, not underscored — see plan KTD7.
-    "advertising-marketing",
-})
-_VALID_NATIONALISM: frozenset[str] = frozenset({
-    "none", "mild_pro", "pro", "constructive_critical", "anti", "mixed",
-})
-_VALID_POST_TYPES = {
-    "buzz_releases", "hands_on_usage",
-    "performance_comparisons", "feedback_questions",
-    # U2a: extended by migration 027 + plan 2026-07-03-003.
-    "advertising_marketing", "event_announcement",
-}
-_VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
-
-# U2a: top-level unsanctioned flag allow-list. Values outside this set
-# are filtered out at the parser (KTD2 / R14).
-_VALID_UNSANCTIONED_FLAGS: frozenset[str] = frozenset({
-    "marketing_spam", "scam", "crypto", "unauthorized",
-})
-
-# U2b: hard cap on LLM-emitted array lengths. The prompt instructs
-# max 3 of each per brand; the parser enforces 6 as a defensive ceiling
-# against LLM-emitted 100-element arrays (security F2).
-_ARRAY_HARD_CAP = 6
-
-
-def build_pragmatics_full_prompt(text: str, brand_ids: list[str]) -> str:
-    """Build the §5.1 + U9 + U3a merged per-post classifier prompt.
-
-    U3a extends this prompt with:
-      - 2 new post_type values (advertising_marketing, event_announcement)
-      - 1 new discourse_role value (advertising-marketing, hyphenated)
-      - The per-brand row now emits `post_types: [str]` and
-        `discourse_roles: [str]` arrays (max 3 each) instead of
-        scalar `post_type` / `discourse_role`.
-      - A top-level `unsanctioned_flags: [str]` field for
-        marketing_spam / scam / crypto / unauthorized.
-
-    For multi-post classification, prefer `classify_batch_pragmatics_full`
-    (~20× LLM cost reduction at 20 posts/cycle). The single-post
-    variant delegates to the same `_PRAGMATICS_FULL_SYSTEM_PROMPT`
-    prefix the batch path uses, so Anthropic's prompt-cache stays
-    warm across call kinds.
-    """
-    brand_list = ", ".join(brand_ids) if brand_ids else "(none)"
-    return (
-        _PRAGMATICS_FULL_SYSTEM_PROMPT
-        + f"\n\nTweet text:\n{text}\n\n"
-        f"Brands (in order): {brand_list}\n\n"
-        f"(Apply the rules and worked examples to this single tweet. "
-        f"Return ONE entry in `results` whose `tweet_id` is "
-        f"`_single_`.)"
-    )
-
-
-# Plan 2026-07-13-001 (timeout investigation): the system prompt body
-# (rules + worked examples + taxonomy lists) is byte-identical between
-# the per-post and batch paths. Factor it into a module-level constant
-# so Anthropic's prompt-cache stays warm across calls — the cache key
-# is a function of the prefix bytes, so reusing the same prefix lets
-# both the single-post `classify_pragmatics_full` and the batch
-# `classify_batch_pragmatics_full` ride the same cache entry.
-_CLASSIFY_BATCH_SIZE: int = 20
-
-
-def _max_tokens_for_batch(batch_size: int) -> int:
-    """Compute the LLM `max_tokens` budget for a batched classifier call.
-
-    The DeepSeek V4 Pro endpoint returns valid JSON for batch_size=20 in
-    ~1975 output tokens (probe at data/runs/dsv4-probe-20260715T071331Z.json)
-    and for batch_size=40 with max_tokens=8192 in ~4310 output tokens.
-    The 200-tokens-per-tweet linear coefficient is conservative: the
-    empirical usage at batch_size=20 was 99 tokens/tweet; at batch_size=40
-    with max_tokens=8192 it was 108 tokens/tweet. The 200 coefficient
-    gives 100% headroom for any 2x growth from multi-brand or
-    unsanctioned-flags-heavy tweets.
-
-    The min(8192, ...) cap prevents unbounded budgets on misconfigured
-    large batches (KTD7 confirmed 8192 is empirically reachable on DS V4).
-    The max(4096, ...) floor ensures even single-post calls get the
-    headroom the M3 path needed (per
-    docs/debug/2026-07-15-max-tokens-not-threaded-into-classify-batch.md).
-    """
-    return min(8192, max(4096, 200 * batch_size))
-
-
-_PRAGMATICS_FULL_SYSTEM_PROMPT: str = (
-    "You classify one or more tweets about their relationship to a "
-    "list of brands, across FIVE dimensions per brand: post_types "
-    "(array), sentiment (scalar), discourse_roles (array), "
-    "china_nationalism (scalar), us_nationalism (scalar). You also "
-    "emit a top-level `unsanctioned_flags: [str]` per tweet for "
-    "marketing_spam / scam / crypto / unauthorized signals.\n\n"
-    "For each brand in each tweet, return FIVE fields from these "
-    "exact sets:\n\n"
-    "post_types (6 buckets — what KIND of post; ARRAY, max 3):\n"
-    "  - buzz_releases            (brand announced something new)\n"
-    "  - hands_on_usage           (user is using / showing the brand)\n"
-    "  - performance_comparisons  (benchmark / eval / head-to-head)\n"
-    "  - feedback_questions       (user asking how-to / help / complaint)\n"
-    "  - advertising_marketing    (CTA, promo, wrapper, free-credit pitch)\n"
-    "  - event_announcement       (official event / community meetup)\n\n"
-    "sentiment (4 values — the VALENCE; scalar):\n"
-    "  - positive                 (praise, enthusiasm)\n"
-    "  - negative                 (criticism, disappointment)\n"
-    "  - neutral                  (informational / question; also when "
-    "the brand is mentioned only as a COMPARISON POINT and not directly "
-    "evaluated — 'X is better than Y' is positive for X, neutral for Y)\n"
-    "  - mixed                    (multiple valences in one post)\n\n"
-    "discourse_roles (10 keys — pragmatic register, §2; ARRAY, max 3):\n"
-    "  - genuine_hype             (straight praise)\n"
-    "  - sarcasm                  (English verbal irony)\n"
-    "  - dunk_yingyang            (阴阳怪气 / passive-aggressive dunk)\n"
-    "  - self_deprecation         (自嘲 / self-mockery)\n"
-    "  - cope                     (嘴硬 / stubborn denial)\n"
-    "  - fud                      (唱衰 / spreading doom)\n"
-    "  - distillation_accusation  (套壳 / 蒸馏指控)\n"
-    "  - ai_slop_critique         (AI content-garbage accusation)\n"
-    "  - absurdist_meme           (抽象整活 / absurdist antics)\n"
-    "  - advertising-marketing    (salesy, CTA-heavy marketing speak — "
-    "NOTE: hyphenated, not underscored)\n"
-    "  - uncategorized            (catch-all when none of the above fit)\n\n"
-    "unsanctioned_flags (per tweet; ARRAY, top-level — omit when no "
-    "signal applies):\n"
-    "  - marketing_spam           (promotional CTA on a brand — usually "
-    "paired with post_type=advertising_marketing AND "
-    "discourse_role=advertising-marketing; includes referral-link "
-    "pitches, 'try it now', 'FREE access' wrappers, third-party "
-    "aggregator lists with explicit CTAs)\n"
-    "  - scam                     (impersonation of an official brand "
-    "account + asks for payment, credentials, or wallet seed)\n"
-    "  - crypto                   (token ticker / airdrop / wallet claim "
-    "tied to a brand — 'claim your $X airdrop', 'swap Y for brand "
-    "token', 'join the liquidity pool')\n"
-    "  - unauthorized             (brand appears in a third-party post "
-    "without authorization — giveaway, 'official AI' impersonation, "
-    "fake partner announcement)\n\n"
-    "Cross-reference rules (these are HARD — emit consistently):\n"
-    "  - If post_type=advertising_marketing OR "
-    "discourse_role=advertising-marketing, the post MUST also carry "
-    "unsanctioned_flags: [\"marketing_spam\"]. The marketing signal is "
-    "one signal; it shows up in three places.\n"
-    "  - Comparative mention is NOT negative sentiment. When a post "
-    "ranks models ('X is better than Y') and does NOT explicitly call "
-    "Y bad, emit sentiment=neutral for Y. Only emit "
-    "sentiment=negative when the post contains direct evaluative "
-    "criticism of the brand (not when it merely ranks another brand "
-    "above it).\n"
-    "  - lang_detected is REQUIRED on every tweet. Source-language "
-    "English posts emit lang_detected='en' with text_en=source text "
-    "and text_zh_cn=Chinese translation. Source-language Chinese "
-    "posts emit lang_detected='zh' with text_zh_cn=source text and "
-    "text_en=English translation. Other languages: emit lang_detected "
-    "with the source language and populate both translation fields.\n\n"
-    "china_nationalism (6-step scale, §4.4; scalar):\n"
-    "  - none                     (no China-nationalism layer)\n"
-    "  - mild_pro                 (温和亲华 — subtle positive)\n"
-    "  - pro                      (亲华 — open positive)\n"
-    "  - constructive_critical   (建设性批评 — pro-CN criticism)\n"
-    "  - anti                     (反华 — hostile)\n"
-    "  - mixed                    (mixed modes in one post)\n\n"
-    "us_nationalism (6-step scale, same as china_nationalism but\n"
-    "applied to the US axis — anti = 反美, etc.; scalar):\n"
-    "  - none / mild_pro / pro / constructive_critical / anti / mixed\n\n"
-    "Rules:\n"
-    "1. Return ONLY a JSON object matching this shape:\n"
-    "   {\n"
-    "     \"results\": [\n"
-    "       {\n"
-    "         \"tweet_id\": str,\n"
-    "         \"classifications\": [\n"
-    "           {\n"
-    "             \"brand_id\": str,\n"
-    "             \"post_types\": [str],         // ARRAY, max 3\n"
-    "             \"sentiment\": str,             // scalar\n"
-    "             \"discourse_roles\": [str],     // ARRAY, max 3\n"
-    "             \"china_nationalism\": str,     // scalar\n"
-    "             \"us_nationalism\": str         // scalar\n"
-    "           }, ...\n"
-    "         ],\n"
-    "         \"unsanctioned_flags\": [str]      // ARRAY, top-level\n"
-    "       }, ...\n"
-    "     ]\n"
-    "   }\n"
-    "2. ONE result per input tweet, IN THE SAME ORDER as the input.\n"
-    "3. Per tweet, RETURN ONE OBJECT PER BRAND LISTED. The brand list "
-    "is what the keyword detector found in the text — if a "
-    "brand name appears, you MUST produce an object. Cross-brand "
-    "comparison posts (\"GLM 5.2 vs Kimi K2.7\"), reply chains "
-    "where the brand is mentioned, posts sharing screenshots "
-    "with the brand name — ALL count. Only skip a brand if "
-    "the post text contains ZERO mention of it (this should be "
-    "impossible given how the brand list was derived).\n"
-    "4. Use the EXACT brand_id strings from each tweet's brand list.\n"
-    "5. Most posts have exactly 1 post_type and 1 discourse_role. "
-    "Multi-value is allowed when a post legitimately has more than "
-    "one (e.g., a benchmark write-up that is also a "
-    "`performance_comparisons` AND `feedback_questions` because it "
-    "asks 'am I running behind?'). MAXIMUM 3 of each per brand.\n"
-    "6. nationalism is ORTHOGONAL to post_types × sentiment × "
-    "discourse_roles — a single post can be e.g. "
-    "([perf_compare, feedback], positive, [genuine_hype], none, "
-    "constructive_critical).\n"
-    "7. If a tweet is off-topic for all brands (shouldn't "
-    "happen if the brand list is non-empty), return "
-    "{\"tweet_id\": \"<id>\", \"classifications\": [], "
-    "\"unsanctioned_flags\": []}.\n"
-    "8. genuine_hype is incompatible with explicit call-to-action. "
-    "If the post contains a CTA (URL + verb like 'try', 'sign up', "
-    "'join', 'get', 'limited-time', 'free access', 限时免费, 立即体验, "
-    "注册, 点击), discount offer, or wrapper/promo language "
-    "('one API key', 'OpenAI-compatible gateway', 'free credit no card'), "
-    "prefer discourse_role `advertising-marketing` over `genuine_hype`. "
-    "If both genuine praise AND a CTA coexist, emit BOTH "
-    "discourse_roles values — let downstream consumers decide.\n"
-    "9. No prose, no explanation, no code fences.\n"
-    "\n"
-    "10. sent=neutral for launch announcements with no evaluative "
-    "language. A post that says only 'X is generally available', "
-    "'Y launched today', 'Z shipped v3.2', or 'W is now in beta' "
-    "(without praise/criticism) is INFORMATIONAL. emit sent=neutral "
-    "regardless of whether the brand would benefit from the "
-    "announcement. Optimistic framing like 'now available for "
-    "everyone' is still neutral (vendor announcement voice, not "
-    "user praise).\n"
-    "11. sent=positive for long analytical / investment posts "
-    "with explicit positive framing. If the post says 'the model "
-    "is strategically positive for X's cloud multiple', "
-    "'increasingly important as a strategic asset', 'supports the "
-    "valuation narrative', or similar investment-grade positive "
-    "language, that IS positive sentiment — do not water it down "
-    "to sent=mixed because there are also caveats in the post. "
-    "Caveats and positive framing coexist; positive framing wins.\n"
-    "12. sent=neutral for multi-brand state-of-market posts that "
-    "are factual updates per brand ('X climbed 20 spots to #138, "
-    "'Y price dropped 8.2%', 'Z was degraded for 45 min'). emit "
-    "sent=neutral for each brand UNLESS a specific positive/"
-    "negative evaluative claim is made about that brand in the "
-    "same post.\n"
-    "13. pt=event_announcement for one-line 'X is generally "
-    "available / Y launched / Z shipped' posts. NOT hands_on_usage "
-    "(the user isn't using the brand — the brand is announcing). "
-    "NOT buzz_releases (that's a brand-side press release; this "
-    "rule covers third-party reshares of an announcement too).\n"
-    "14. pt=performance_comparisons for any post mentioning TTFT "
-    "(time-to-first-token), latency, benchmark, ranking, '#N "
-    "ranking', 'N spots climbed/dropped', 'side-by-side race', "
-    "'vs <other model>'. The LLM Drag Race write-up ('races GPT-"
-    "4o-mini vs Llama 3.3 70B side-by-side, measure TTFT') is the "
-    "canonical example.\n"
-    "15. pt=performance_comparisons OR pt=feedback_questions for "
-    "pure analytical commentary (price/perf framing, model "
-    "governance framing, 'should I switch?' framing). NOT "
-    "hands_on_usage — the author is analyzing, not using.\n"
-    "16. Nationalism requires explicit US-China relational framing. "
-    "Do not infer `china_nationalism` or `us_nationalism` from "
-    "generic anti-vendor dunk on a Chinese (or US) brand's product "
-    "failure, benchmark miss, or release reception. A post dunking "
-    "on Qwen for a benchmark miss is `sentiment=anti-Qwen` and "
-    "`nationalism=neutral`, NOT `us_nationalism=anti`. The "
-    "nationalism axes measure US-China framing, not anti-vendor "
-    "hostility.\n"
-    "17. Trap-language handling. When the post text contains "
-    "\"trap\", \"gotcha\", \"embarrassing\", \"fumbled\", or "
-    "\"翻车\" AND the subject is a Chinese-vendor product failure, "
-    "the post's `discourse_roles` should include `dunk_yingyang` "
-    "if the tone is passive-aggressive, or `fud` if the tone is "
-    "doom-spreading. The post's `us_nationalism` should remain "
-    "`none` per rule 16 — trap-language is surface vocabulary, "
-    "not a US-China framing signal.\n"
-    "18. Superlative praise (`fastest`, `best`, `strongest`, "
-    "`first to ship`, `most powerful`) describes the brand being "
-    "praised, NOT a US-China framing. The post is "
-    "`discourse_roles=[genuine_hype]` for the brand being praised "
-    "— NOT `us_nationalism=pro/anti` based on which country the "
-    "praised brand is from. 'Qwen is the fastest model' is hype, "
-    "not a nationalism statement about China.\n"
-    "19. Qwen-vendor-not-US distinction. Posts critiquing a "
-    "Chinese-vendor's product behavior (Qwen, GLM, DeepSeek, Kimi) "
-    "do not carry `us_nationalism` valence by default. Even when "
-    "the critique is harsh (\"Qwen faded\", \"DeepSeek shipped a "
-    "broken model\"), the axis measures US-China framing, not "
-    "anti-Chinese-vendor sentiment. emit `us_nationalism=none` "
-    "unless the post explicitly invokes US-China framing.\n"
-    "\n"
-    "Worked examples (reference cases; match these patterns):\n"
-    "  A. 'Kimi K2.7 Code is generally available in GitHub Copilot'\n"
-    "     → per brand: pt=[event_announcement], sent=neutral,\n"
-    "       discourse_roles=[uncategorized].\n"
-    "  B. 'K2.7 Code climbed 20 spots to #138; Deepseek V4 price "
-    "dropped 8.2%'\n"
-    "     → per brand: pt=[hands_on_usage], sent=neutral for both,\n"
-    "       discourse_roles=[uncategorized]. (factual updates, no\n"
-    "       aggregate judgment.)\n"
-    "  C. 'Alibaba's Qwen franchise is increasingly important as a\n"
-    "strategic cloud and platform asset... strategically positive "
-    "for BABA's cloud multiple'\n"
-    "     → qwen: pt=[performance_comparisons],\n"
-    "       sent=positive, discourse_roles=[genuine_hype].\n"
-    "       other brands mentioned in same post without explicit\n"
-    "       positive framing: sent=neutral.\n"
-    "  D. 'I built LLM Drag Race: races GPT-4o-mini vs Llama 3.3 "
-    "70B, measure TTFT'\n"
-    "     → brands present: pt=[performance_comparisons],\n"
-    "       sent=neutral (showcase, no evaluative claim).\n"
-    "  E. 'This changes how GitHub routes coding tasks — model "
-    "picker vs single assistant' (price/perf analytical piece)\n"
-    "     → pt=[performance_comparisons] OR\n"
-    "       [feedback_questions] (user implicitly asking 'where "
-    "does this leave me?'), NOT hands_on_usage.\n"
-    "  F. 'Kimi K2.7 Code makes Copilot a model marketplace' "
-    "(rhetorical questions + analytical commentary)\n"
-    "     → pt=[feedback_questions] (asks 4 rhetorical "
-    "performance/pricing questions), NOT hands_on_usage.\n"
-    "  G. 'DeepSeek shipping a benchmark trap — gotcha benchmarks "
-    "that nobody can reproduce' (anti-vendor dunk on Chinese-vendor "
-    "product failure)\n"
-    "     → deepseek: pt=[performance_comparisons], sent=negative,\n"
-    "       discourse_roles=[dunk_yingyang], cn_nationalism=none,\n"
-    "       us_nationalism=none. (per rules 16, 17: dunk tone is\n"
-    "       surface vocabulary, NOT US-China framing.)\n"
-    "  H. 'Qwen is the fastest model I've benchmarked this month, "
-    "scored 89% on MMLU'\n"
-    "     → qwen: pt=[performance_comparisons], sent=positive,\n"
-    "       discourse_roles=[genuine_hype], cn_nationalism=none,\n"
-    "       us_nationalism=none. (per rule 18: superlative praise\n"
-    "       is hype, not a US-China statement.)\n"
-    "  I. 'GLM 5.2 fumbled the launch — benchmarks collapsed, "
-    "everyone noticed' (anti-vendor dunk on Chinese-vendor release)\n"
-    "     → glm: pt=[buzz_releases], sent=negative,\n"
-    "       discourse_roles=[fud], cn_nationalism=none,\n"
-    "       us_nationalism=none. (per rules 16, 19: harsh critique\n"
-    "       of Chinese-vendor product is anti-vendor sentiment,\n"
-    "       not US-China framing.)\n"
-    "  J. 'Kimi K2.7 is fast but DeepSeek V4 is faster on coding "
-    "tasks; the AI race is heating up between US and Chinese "
-    "vendors'\n"
-    "     → kimi + deepseek: pt=[performance_comparisons],\n"
-    "       sent=neutral, discourse_roles=[uncategorized],\n"
-    "       cn_nationalism=mild_pro, us_nationalism=anti. (this\n"
-    "       post DOES invoke US-China framing explicitly — rule 16\n"
-    "       applies the other way: nationalism fires when the post\n"
-    "       actually names the AI race.)\n"
+_VALID_UNSANCTIONED_FLAGS = frozenset(
+    {"marketing_spam", "scam", "crypto", "unauthorized"}
 )
 
 
-def build_batch_pragmatics_full_prompt(
-    tweets: list[dict[str, Any]],
-) -> str:
-    """Build the batch (N tweets) variant of the per-post prompt.
+def _max_tokens_for_batch(batch_size: int) -> int:
+    """Keep the established bounded DeepSeek output budget."""
+    return min(8192, max(4096, 200 * batch_size))
 
-    Each tweet dict has keys: `tweet_id` (str), `text` (str), and
-    `brand_ids` (list[str]). The system rules + worked examples are
-    shared across all tweets via the `_PRAGMATICS_FULL_SYSTEM_PROMPT`
-    constant — meaning a single API call can amortize ~3.5 KB of
-    prefix tokens across up to 20 posts before the per-tweet payload
-    even starts. Prompt-cache hits stay warm cycle-to-cycle.
-    """
-    import json as _json
 
-    payload = _json.dumps(
-        [
-            {
-                "tweet_id": str(t.get("tweet_id") or t.get("id") or ""),
-                "text": t.get("text") or "",
-                "brand_ids": list(t.get("brand_ids") or []),
-            }
-            for t in tweets
-        ],
-        ensure_ascii=False,
-    )
+_PRAGMATICS_FULL_SYSTEM_PROMPT = f"""You classify stored social posts for each attributed brand. Return JSON only.
+
+POST TYPES (no count cap; return every supported type):
+Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
+- buzz_releases: concrete releases, features, integrations, availability, or pricing changes.
+- hands_on_usage: actual use, demos, artifacts, workflows, setup, or tutorials.
+- performance_comparisons: substantive evaluations, benchmarks, rankings, results, or comparisons.
+- feedback_questions: genuine product questions, support requests, corrections, or desired changes.
+- advertising_marketing: observable pitches, calls to action, discounts, services, or product showcases.
+- event_announcement: organized events and concrete opportunities such as jobs, grants, bounties, or collaborations.
+- opinions_reactions: views, predictions, anticipation, or reactions that are not principally another defined type.
+- research_explanations: technical mechanisms, architecture, research interpretation, or conceptual teaching.
+- business_finance: funding, ownership, investment, valuation, revenue, monetization, commercial strategy, suppliers, partners, or parent companies.
+- other: a confident residual only. It is exclusive and cannot accompany another post type.
+
+TYPE BOUNDARIES:
+- Future intent, a bare recommendation, praise, or a news roundup is not hands_on_usage.
+- A bare release date, launch, feature availability, integration, or pricing change is buzz_releases, not event_announcement. An event needs an identifiable organized occasion. A substantive recap with a named occasion and concrete outcomes may be event_announcement.
+- Mentioning a benchmark, latency, ranking, or model is not enough for performance_comparisons; the post must make a substantive evaluation or comparison.
+- Rhetorical headings are not feedback_questions. Use feedback_questions for genuine questions or requests.
+- Investment, funding, valuation, earnings, ownership, revenue, and commercial strategy are business_finance.
+
+PRODUCT LABELS (independent multi-label array; an empty array is valid):
+Allowed keys exactly: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
+- bug: a concrete malfunction or regression.
+- complaint: dissatisfaction or a negative customer experience.
+- testimonial: praise, endorsement, or a favorable product experience.
+- product_request: an idea, desired capability, improvement, or unmet need; ideas and requests stay combined.
+- misinformation: a potentially misleading claim that may warrant review. This label never adjudicates the claim false.
+
+SENTIMENT (required for classified): {", ".join(_STAGE1_SENTIMENT_KEYS)}.
+- positive: praise or favorable evaluation of this brand.
+- negative: criticism or unfavorable evaluation of this brand.
+- neutral: informational or genuine question content without evaluative valence.
+- mixed: materially both positive and negative for this brand.
+A comparative mention is not automatically negative. "X is better than Y" is positive for X and neutral for Y unless Y is directly criticized. A factual launch is neutral without evaluative language.
+
+CHINA_NATIONALISM and US_NATIONALISM: {", ".join(_STAGE1_NATIONALISM_KEYS)}, or null when unknown.
+- none means an explicit judgment that no nationalism layer is present; null means the value is unknown.
+- mild_pro is subtle favorable national framing; pro is overt favorable national framing; constructive_critical is criticism from a broadly favorable national frame; anti is hostile national framing; mixed combines materially different modes.
+- Nationalism requires explicit US-China relational or national framing. Never infer it from vendor nationality, product criticism, a benchmark miss, trap language, or superlative product praise.
+
+CONTEXT AND OUTCOMES:
+- Each input includes source text and may include already stored context entries. Use only those entries and their provenance markers; do not fetch parents, links, media, or other context.
+- outcome is classified or context_missing.
+- classified requires at least one post_type and one valid sentiment. Every scalar field must be present.
+- context_missing requires empty post_types and product_labels. It may preserve sentiment or nationalism only when independently supported; use null for an unknown scalar.
+- Return exactly one classification object for every supplied brand_id. Duplicate, missing, or extra brand objects are invalid.
+
+UNSANCTIONED FLAGS (independent top-level array; omit it or return [] when none applies):
+- marketing_spam: a promotional CTA on a brand, including referral pitches, "try/sign up/join/get it now", free-access or discount wrappers, and third-party aggregator lists with explicit CTAs.
+- scam: impersonation of an official brand that asks for payment, credentials, or a wallet seed.
+- crypto: token tickers, airdrops, wallet claims, swaps, or liquidity-pool pitches tied to a brand.
+- unauthorized: a third-party giveaway, "official AI" impersonation, or fake partner announcement using the brand without authorization.
+Advertising or CTA-heavy wrapper content should also carry marketing_spam. Do not infer scam, crypto, or unauthorized without their specific evidence. Use only these four keys.
+
+Return {{"results":[{{"tweet_id":str,"classifications":[{{"brand_id":str,"outcome":"classified|context_missing","post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}}],"unsanctioned_flags":[str]}}]}}.
+Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or code fences.
+"""
+
+
+def _stage1_payload(tweets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the sole batch/fallback input envelope from stored data."""
+    return [
+        {
+            "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
+            "text": tweet.get("text") or "",
+            "brand_ids": list(tweet.get("brand_ids") or []),
+            "context": list(tweet.get("context") or []),
+        }
+        for tweet in tweets
+    ]
+
+
+def build_batch_pragmatics_full_prompt(tweets: list[dict[str, Any]]) -> str:
+    payload = json.dumps(_stage1_payload(tweets), ensure_ascii=False)
     return (
         _PRAGMATICS_FULL_SYSTEM_PROMPT
-        + f"\n\nTweets (JSON array of {len(tweets)}):\n{payload}"
+        + f"\nTweets (JSON array of {len(tweets)}):\n{payload}"
     )
 
 
-def _parse_pragmatics_full_response(
-    response: dict[str, Any],
-    brand_registry_ids: set[str],
-) -> dict[str, Any]:
-    """Parse the merged LLM response into the new U2a shape.
+def build_pragmatics_full_prompt(
+    text: str,
+    brand_ids: list[str],
+    *,
+    context: list[dict[str, Any]] | None = None,
+) -> str:
+    return build_batch_pragmatics_full_prompt(
+        [
+            {
+                "tweet_id": "_single_",
+                "text": text,
+                "brand_ids": brand_ids,
+                "context": context or [],
+            }
+        ]
+    )
 
-    Returns:
-        {
-            "by_brand": {brand_id: {post_type, sentiment, discourse_role,
-                                    china_nationalism, us_nationalism}},
-            "unsanctioned_flags": [str, ...],
-        }
 
-    Each per-brand entry's discourse_role is a SINGLE string (scalar),
-    not an array. U2b's array reshape is applied at a higher layer
-    (Store API / U4's bulk_insert path) — the parser deliberately keeps
-    the scalar shape to preserve backwards-compat with callers that
-    iterate `result[brand_id]["discourse_role"]`.
-
-    The U2b multi-value path lives in `_parse_pragmatics_full_response_arrays`
-    (added below) — callers that need arrays call that variant directly.
-    """
-    if not isinstance(response, dict):
-        return {"by_brand": {}, "unsanctioned_flags": []}
-    results = response.get("classifications")
-    if not isinstance(results, list):
-        return {"by_brand": {}, "unsanctioned_flags": []}
-    out: dict[str, dict[str, str]] = {}
-    for item in results:
-        if not isinstance(item, dict):
-            continue
-        b = item.get("brand_id")
-        if not isinstance(b, str) or b not in brand_registry_ids:
-            continue
-        # Plan 2026-07-13-001 compat: the new batch wire format emits
-        # `post_types: [str]` and `discourse_roles: [str]` (arrays).
-        # The legacy scalar format emits `post_type` / `discourse_role`
-        # as single strings. Accept either — take the first allowed
-        # array element when an array is present.
-        raw_pt = item.get("post_types")
-        if isinstance(raw_pt, list) and raw_pt:
-            pt = next(
-                (p for p in raw_pt
-                 if isinstance(p, str) and p in _VALID_POST_TYPES),
-                None,
-            )
-        else:
-            pt = item.get("post_type")
-        raw_dr = item.get("discourse_roles")
-        if isinstance(raw_dr, list) and raw_dr:
-            dr = next(
-                (d for d in raw_dr
-                 if isinstance(d, str) and d in _VALID_DISCOURSE),
-                None,
-            )
-        else:
-            dr = item.get("discourse_role")
-        sent = item.get("sentiment")
-        cn = item.get("china_nationalism")
-        un = item.get("us_nationalism")
-        post_type = pt if pt in _VALID_POST_TYPES else "hands_on_usage"
-        sentiment = sent if sent in _VALID_SENTIMENTS else "neutral"
-        discourse_role = (
-            dr if isinstance(dr, str) and dr in _VALID_DISCOURSE
-            else "uncategorized"
-        )
-        # `post_type` and `discourse_role` are only assigned when the
-        # raw value passed the enum check; otherwise the above
-        # `hands_on_usage` / `uncategorized` defaults apply. No
-        # additional normalization needed below.
-        china = (
-            cn if isinstance(cn, str) and cn in _VALID_NATIONALISM
-            else "none"
-        )
-        us = (
-            un if isinstance(un, str) and un in _VALID_NATIONALISM
-            else "none"
-        )
-        out[b] = {
-            "post_type": post_type,
-            "sentiment": sentiment,
-            "discourse_role": discourse_role,
-            "china_nationalism": china,
-            "us_nationalism": us,
-        }
-    flags = _parse_unsanctioned_flags(response.get("unsanctioned_flags"))
-    return {"by_brand": out, "unsanctioned_flags": flags}
+def _stage1_empty() -> dict[str, Any]:
+    return {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
 
 
 def _parse_unsanctioned_flags(raw: Any) -> list[str]:
-    """Filter the top-level unsanctioned_flags array against the allow-list."""
+    """Preserve the established omission default and allow-list filter."""
     if not isinstance(raw, list):
         return []
-    return [f for f in raw if isinstance(f, str) and f in _VALID_UNSANCTIONED_FLAGS]
+    return [
+        flag
+        for flag in raw
+        if isinstance(flag, str) and flag in _VALID_UNSANCTIONED_FLAGS
+    ]
 
 
-def _parse_pragmatics_full_response_arrays(
-    response: dict[str, Any],
-    brand_registry_ids: set[str],
+def _parse_stage1_entry(
+    entry: Any,
+    expected_brand_ids: list[str],
 ) -> dict[str, Any]:
-    """U2b: parse the LLM response into multi-value arrays.
+    if not isinstance(entry, dict):
+        return _stage1_empty()
+    parsed = parse_stage1_classifications(
+        entry.get("classifications"), expected_brand_ids
+    )
+    if parsed is None:
+        return _stage1_empty()
+    return {
+        "by_brand": parsed,
+        "unsanctioned_flags": _parse_unsanctioned_flags(
+            entry.get("unsanctioned_flags")
+        ),
+        "valid": True,
+    }
 
-    Each per-brand entry emits `post_types: [str]` and
-    `discourse_roles: [str]` arrays. Sentiment / nationalism stay
-    scalar (one valence per post × brand is the natural semantic).
-    N rows are produced per brand — one per (post_type, discourse_role)
-    combination — by `_expand_per_brand_to_rows` below.
 
-    Returns:
-        {
-            "rows": [
-                {"brand_id", "post_type", "sentiment",
-                 "discourse_role", "china_nationalism", "us_nationalism"},
-                ...
-            ],
-            "unsanctioned_flags": [str, ...],
-        }
-
-    The caller (Store.bulk_insert_post_brand_signals +
-    bulk_insert_post_brand_discourse) iterates `rows` and inserts each
-    into the appropriate junction table.
-    """
+def _extract_single_stage1_entry(response: Any) -> Any:
     if not isinstance(response, dict):
-        return {"rows": [], "unsanctioned_flags": []}
-    results = response.get("classifications")
-    if not isinstance(results, list):
-        return {"rows": [], "unsanctioned_flags": []}
-    rows: list[dict[str, str]] = []
-    for item in results:
-        if not isinstance(item, dict):
-            continue
-        b = item.get("brand_id")
-        if not isinstance(b, str) or b not in brand_registry_ids:
-            continue
-        # post_types array — default to ["hands_on_usage"] if missing/invalid.
-        raw_pts = item.get("post_types")
-        if not isinstance(raw_pts, list) or not raw_pts:
-            post_types = ["hands_on_usage"]
-        else:
-            post_types = [
-                p for p in raw_pts
-                if isinstance(p, str) and p in _VALID_POST_TYPES
-            ]
-            # Security: hard cap at _ARRAY_HARD_CAP entries.
-            if len(post_types) > _ARRAY_HARD_CAP:
-                logger.warning(
-                    "classify_pragmatics_full: post_types=%d > hard cap %d; "
-                    "truncating (brand_id=%r)",
-                    len(post_types), _ARRAY_HARD_CAP, b,
-                )
-                post_types = post_types[:_ARRAY_HARD_CAP]
-            if not post_types:
-                post_types = ["hands_on_usage"]
-        # discourse_roles array — default to ["uncategorized"] if missing/invalid.
-        raw_drs = item.get("discourse_roles")
-        if not isinstance(raw_drs, list) or not raw_drs:
-            discourse_roles = ["uncategorized"]
-        else:
-            discourse_roles = [
-                d for d in raw_drs
-                if isinstance(d, str) and d in _VALID_DISCOURSE
-            ]
-            if len(discourse_roles) > _ARRAY_HARD_CAP:
-                logger.warning(
-                    "classify_pragmatics_full: discourse_roles=%d > hard cap %d; "
-                    "truncating (brand_id=%r)",
-                    len(discourse_roles), _ARRAY_HARD_CAP, b,
-                )
-                discourse_roles = discourse_roles[:_ARRAY_HARD_CAP]
-            if not discourse_roles:
-                discourse_roles = ["uncategorized"]
-        # Scalar fields with the same coercion rules.
-        sent = item.get("sentiment")
-        cn = item.get("china_nationalism")
-        un = item.get("us_nationalism")
-        sentiment = sent if sent in _VALID_SENTIMENTS else "neutral"
-        china = cn if isinstance(cn, str) and cn in _VALID_NATIONALISM else "none"
-        us = un if isinstance(un, str) and un in _VALID_NATIONALISM else "none"
-        # Expand: one row per (post_type × discourse_role) pair.
-        # Each row gets the same sentiment + nationalism values
-        # (per the plan: sentiment is per-(post, brand, post_type) — so
-        # all rows for the same brand share sentiment; discourse roles
-        # get their own row but inherit the post's sentiment).
-        for pt in post_types:
-            for dr in discourse_roles:
-                rows.append({
-                    "brand_id": b,
-                    "post_type": pt,
-                    "sentiment": sentiment,
-                    "discourse_role": dr,
-                    "china_nationalism": china,
-                    "us_nationalism": us,
-                })
-    flags = _parse_unsanctioned_flags(response.get("unsanctioned_flags"))
-    return {"rows": rows, "unsanctioned_flags": flags}
-
-
-def classify_pragmatics_full(
-    text: str,
-    brand_ids: list[str],
-    brand_registry: list,
-    anthropic_client: "ClaudeClient | None" = None,
-    *,
-    model: str | None = None,
-    thinking: "dict | None" = None,
-    deadline: Any | None = None,
-    telemetry_context: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """U4 (U2a): per-brand classification + top-level unsanctioned_flags.
-
-    Returns `{"by_brand": {...}, "unsanctioned_flags": [...]}` (U2a shape).
-    Callers that only want the by_brand dict should index result["by_brand"].
-    """
-    empty = {"by_brand": {}, "unsanctioned_flags": []}
-    if not brand_ids or not text:
-        return empty
-    if anthropic_client is None:
-        return empty
-    # If the caller didn't supply a brand_registry, trust the
-    # brand_ids argument (the fixture path doesn't read the live
-    # `brands` table). The parser then validates the LLM's
-    # response against the same set.
-    if brand_registry:
-        registry_ids = {b.brand_id for b in brand_registry}
-    else:
-        registry_ids = set(brand_ids)
-    prompt = build_pragmatics_full_prompt(text, brand_ids)
-    try:
-        response = _call_signal_with_retry(
-            anthropic_client,
-            prompt,
-            model=model,
-            thinking=thinking,
-            deadline=deadline,
-            telemetry_context=telemetry_context,
-            operation_kind="fallback",
-        )
-    except Exception as e:
-        logger.warning(
-            "classify_pragmatics_full: LLM call failed after %d retries: %s",
-            _MAX_RETRIES, e,
-        )
-        return empty
-    # U2b-fix: route through the array-aware parser. The prompt at
-    # build_pragmatics_full_prompt explicitly requests `post_types: [str]`
-    # and `discourse_roles: [str]` arrays (lines 1048, 1060, 1088, 1090),
-    # but the previous scalar parser at line 1263 read `post_type` /
-    # `discourse_role` (singular) — which never matched the LLM's
-    # array output, so every post_type fell through to "hands_on_usage"
-    # and every discourse_role to "uncategorized". Smoketest data on
-    # 2026-07-06 confirmed 20/20 degenerate on those two prongs.
-    #
-    # We reshape the array parser's `rows` back into the legacy
-    # U2a `by_brand` shape by collapsing post_types[] / discourse_roles[]
-    # into their first element. Callers that need the multi-value
-    # structure (Store.bulk_insert_post_brand_signals) call the
-    # array parser directly via `_parse_pragmatics_full_response_arrays`.
-    raw = _parse_pragmatics_full_response_arrays(response, registry_ids)
-    by_brand: dict[str, dict[str, str]] = {}
-    for row in raw["rows"]:
-        bid = row["brand_id"]
-        if bid in by_brand:
-            # Duplicate brand_id in the LLM response — keep the
-            # first row's classification; later rows are ignored.
-            logger.warning(
-                "classify_pragmatics_full: duplicate brand_id=%r in "
-                "response rows; keeping first", bid,
-            )
-            continue
-        by_brand[bid] = {
-            "post_type": row["post_type"],
-            "sentiment": row["sentiment"],
-            "discourse_role": row["discourse_role"],
-            "china_nationalism": row["china_nationalism"],
-            "us_nationalism": row["us_nationalism"],
-        }
-    parsed = {"by_brand": by_brand, "unsanctioned_flags": raw["unsanctioned_flags"]}
-    if not parsed["by_brand"]:
-        # Compat shim: the new batch wire format wraps each per-tweet
-        # entry in a `results: [{tweet_id, classifications, ...}]` array.
-        # The per-post caller (and the legacy / non-batch response path)
-        # may receive either shape from a client adapter; if the
-        # `classifications` top-level key is missing, descend into the
-        # first `results` entry.
-        if isinstance(response, dict):
-            results_arr = response.get("results")
-            if isinstance(results_arr, list) and results_arr:
-                first = results_arr[0]
-                if isinstance(first, dict):
-                    parsed = _parse_pragmatics_full_response(
-                        first, registry_ids,
-                    )
-    if not parsed["by_brand"]:
-        logger.warning(
-            "classify_pragmatics_full returned no classifications for "
-            "text=%r brand_ids=%r",
-            text[:80], brand_ids,
-        )
-    return parsed
-
-
-def _classify_one_batch_to_by_brand(
-    per_tweet: dict[str, Any],
-    registry_ids: set[str],
-    tweet_id: str,
-) -> dict[str, Any]:
-    """Reduce one `results[i]` entry to the legacy U2a by_brand shape.
-
-    Mirrors the array-reshape loop at the bottom of `classify_pragmatics_full`
-    (first-row-wins per brand_id, dedup warning logged). Posts with
-    no `classifications` key return the empty shape.
-
-    Returns:
-        {"by_brand": {brand_id: {...scalar prongs...}},
-         "unsanctioned_flags": [str, ...]}
-    """
-    if not isinstance(per_tweet, dict):
-        return {"by_brand": {}, "unsanctioned_flags": []}
-    rows = per_tweet.get("classifications")
-    if not isinstance(rows, list):
-        return {"by_brand": {}, "unsanctioned_flags": []}
-    by_brand: dict[str, dict[str, str]] = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        b = row.get("brand_id")
-        if not isinstance(b, str) or b not in registry_ids:
-            continue
-        if b in by_brand:
-            logger.warning(
-                "classify_batch_pragmatics_full: duplicate brand_id=%r "
-                "in tweet_id=%r; keeping first", b, tweet_id,
-            )
-            continue
-        # Per-brand array fields — collapse to the first allowed value
-        # (the legacy `by_brand` shape is scalar; the multi-value path
-        # is the array parser in `_parse_pragmatics_full_response_arrays`).
-        raw_pts = row.get("post_types") or []
-        raw_drs = row.get("discourse_roles") or []
-        pt = next(
-            (p for p in raw_pts
-             if isinstance(p, str) and p in _VALID_POST_TYPES),
-            "hands_on_usage",
-        )
-        dr = next(
-            (d for d in raw_drs
-             if isinstance(d, str) and d in _VALID_DISCOURSE),
-            "uncategorized",
-        )
-        sent = row.get("sentiment")
-        cn = row.get("china_nationalism")
-        un = row.get("us_nationalism")
-        by_brand[b] = {
-            "post_type": pt if pt in _VALID_POST_TYPES else "hands_on_usage",
-            "sentiment": sent if sent in _VALID_SENTIMENTS else "neutral",
-            "discourse_role": dr,
-            "china_nationalism": (
-                cn if isinstance(cn, str) and cn in _VALID_NATIONALISM
-                else "none"
-            ),
-            "us_nationalism": (
-                un if isinstance(un, str) and un in _VALID_NATIONALISM
-                else "none"
-            ),
-        }
-    flags = _parse_unsanctioned_flags(per_tweet.get("unsanctioned_flags"))
-    return {"by_brand": by_brand, "unsanctioned_flags": flags}
+        return None
+    rows = response.get("results")
+    if isinstance(rows, list):
+        if len(rows) != 1 or not isinstance(rows[0], dict):
+            return None
+        if rows[0].get("tweet_id") not in {"_single_", "single"}:
+            return None
+        return rows[0]
+    return response
 
 
 def _validate_deepseek_response_shape(
     parsed: Any,
     expected_count: int,
 ) -> None:
-    """Assert the wire format of a batched classifier response.
+    """Validate the established batch wire envelope before semantics.
 
-    The DeepSeek V4 endpoint (and the production prompt, per
-    `_PRAGMATICS_FULL_SYSTEM_PROMPT`) emits a wire shape of:
-        {
-          "results": [
-            {"tweet_id": str, "classifications": [...], "unsanctioned_flags": [...]},
-            ...
-          ]
-        }
-    with one entry per input tweet. The shape is consumed by
-    `_classify_one_batch_to_by_brand` above, which already handles a
-    missing `unsanctioned_flags` gracefully via `_parse_unsanctioned_flags`.
-
-    This validator is a defense-in-depth check that runs before the
-    parser, so a future DS V4 prompt drift (e.g. a model that wraps
-    results differently or drops the `tweet_id` field) surfaces as a
-    typed `ValueError` with a clear message, rather than a generic
-    KeyError deep in the parser. The fail-soft contract at lines
-    1815-1849 already catches `Exception` and falls back to per-post
-    retries, so a shape-drift exception routes through the same
-    recovery path.
-
-    Args:
-        parsed: the deserialized JSON response from the LLM.
-        expected_count: number of input tweets in the batch (the
-            validator asserts `len(results) == expected_count`).
-
-    Raises:
-        ValueError: with a descriptive message identifying the missing
-            or malformed element. Missing `unsanctioned_flags` is
-            logged at WARNING but does not raise (the existing parser
-            defaults to `[]`).
+    A missing top-level flag array remains a supported omission: the flag
+    parser defaults it to an empty list. Per-brand Stage 1 fields are checked
+    separately by ``_parse_stage1_entry``.
     """
     if not isinstance(parsed, dict):
         raise ValueError(
@@ -1952,32 +1334,220 @@ def _validate_deepseek_response_shape(
             f"shape drift: 'results' has {len(results)} entries, "
             f"expected {expected_count}"
         )
-    for i, entry in enumerate(results):
+    for index, entry in enumerate(results):
         if not isinstance(entry, dict):
             raise ValueError(
-                f"shape drift: results[{i}] is {type(entry).__name__}, "
-                f"expected dict"
+                f"shape drift: results[{index}] is "
+                f"{type(entry).__name__}, expected dict"
             )
         if not isinstance(entry.get("tweet_id"), str):
             raise ValueError(
-                f"shape drift: results[{i}].tweet_id is "
+                f"shape drift: results[{index}].tweet_id is "
                 f"{type(entry.get('tweet_id')).__name__}, expected str"
             )
         if not isinstance(entry.get("classifications"), list):
             raise ValueError(
-                f"shape drift: results[{i}].classifications is "
+                f"shape drift: results[{index}].classifications is "
                 f"{type(entry.get('classifications')).__name__}, expected list"
             )
         if "unsanctioned_flags" not in entry:
-            # Log at WARNING but do not raise — the existing parser
-            # defaults to [] via `_parse_unsanctioned_flags` (which
-            # returns [] for non-list input per the helper at line
-            # 1467). This is the documented graceful-default path.
             logger.warning(
                 "shape drift: results[%d] (tweet_id=%r) missing "
                 "'unsanctioned_flags'; parser will default to []",
-                i, entry.get("tweet_id"),
+                index,
+                entry.get("tweet_id"),
             )
+
+
+def classify_pragmatics_full(
+    text: str,
+    brand_ids: list[str],
+    brand_registry: list,
+    anthropic_client: "ClaudeClient | None" = None,
+    *,
+    model: str | None = None,
+    thinking: "dict | None" = None,
+    deadline: Any | None = None,
+    telemetry_context: dict[str, Any] | None = None,
+    context: list[dict[str, Any]] | None = None,
+    max_tokens: int = 4096,
+) -> dict[str, Any]:
+    """Classify one post through the same contract used for batch fallback."""
+    if not text or not brand_ids or anthropic_client is None:
+        return _stage1_empty()
+    registry_ids = (
+        {brand.brand_id for brand in brand_registry}
+        if brand_registry
+        else set(brand_ids)
+    )
+    if not set(brand_ids).issubset(registry_ids):
+        return _stage1_empty()
+    prompt = build_pragmatics_full_prompt(
+        text, brand_ids, context=context
+    )
+    try:
+        response = _call_signal_with_retry(
+            anthropic_client,
+            prompt,
+            model=model,
+            max_tokens=max_tokens,
+            thinking=thinking,
+            deadline=deadline,
+            telemetry_context={**(telemetry_context or {}), "batch_size": 1},
+            operation_kind="fallback",
+        )
+    except Exception as exc:
+        logger.warning(
+            "classify_pragmatics_full: LLM call failed after %d retries: %s",
+            _MAX_RETRIES,
+            exc,
+        )
+        return _stage1_empty()
+    return _parse_stage1_entry(
+        _extract_single_stage1_entry(response), brand_ids
+    )
+
+
+def _validate_stage1_batch_response(
+    response: Any,
+    batch: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    _validate_deepseek_response_shape(response, len(batch))
+    rows = response["results"]
+    expected_ids = [
+        str(tweet.get("tweet_id") or tweet.get("id") or "")
+        for tweet in batch
+    ]
+    if len(set(expected_ids)) != len(expected_ids):
+        raise ValueError("input contains duplicate tweet IDs")
+    by_tweet: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not isinstance(row.get("tweet_id"), str):
+            raise ValueError(f"shape drift: results[{index}] has no string tweet_id")
+        tweet_id = row["tweet_id"]
+        if tweet_id in by_tweet:
+            raise ValueError(f"shape drift: duplicate tweet_id {tweet_id!r}")
+        by_tweet[tweet_id] = row
+    if set(by_tweet) != set(expected_ids):
+        raise ValueError("shape drift: response tweet IDs do not match inputs")
+
+    parsed = [
+        _parse_stage1_entry(
+            by_tweet[tweet_id], list(tweet.get("brand_ids") or [])
+        )
+        for tweet, tweet_id in zip(batch, expected_ids)
+    ]
+    if not all(item["valid"] for item in parsed):
+        raise ValueError("invalid Stage 1 per-brand classification")
+    return parsed
+
+
+def _fallback_stage1_batch(
+    batch: list[dict[str, Any]],
+    brand_registry: list,
+    anthropic_client: "ClaudeClient",
+    *,
+    model: str | None,
+    max_tokens: int,
+    thinking: "dict | None",
+    deadline: Any | None,
+    telemetry_context: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for tweet in batch:
+        if not tweet.get("brand_ids"):
+            results.append(_stage1_empty())
+            continue
+        if deadline is not None and deadline.expired():
+            raise TimeoutError("enrichment_attempt_deadline_exhausted")
+        results.append(
+            classify_pragmatics_full(
+                text=str(tweet.get("text") or ""),
+                brand_ids=list(tweet.get("brand_ids") or []),
+                brand_registry=brand_registry,
+                anthropic_client=anthropic_client,
+                model=model,
+                max_tokens=max_tokens,
+                thinking=thinking,
+                deadline=deadline,
+                telemetry_context=telemetry_context,
+                context=list(tweet.get("context") or []),
+            )
+        )
+    return results
+
+
+def _classify_stage1_batch(
+    batch: list[dict[str, Any]],
+    brand_registry: list,
+    anthropic_client: "ClaudeClient",
+    *,
+    model: str | None,
+    max_tokens: int,
+    thinking: "dict | None",
+    deadline: Any | None,
+    telemetry_context: dict[str, Any] | None,
+    on_batch_error: Callable[[list[dict[str, Any]], Exception], None] | None,
+) -> list[dict[str, Any]]:
+    kept = [tweet for tweet in batch if tweet.get("brand_ids")]
+    if not kept:
+        return [_stage1_empty() for _ in batch]
+
+    registry_ids = (
+        {brand.brand_id for brand in brand_registry}
+        if brand_registry
+        else set().union(
+            *(set(tweet.get("brand_ids") or []) for tweet in kept)
+        )
+    )
+    if any(
+        not set(tweet.get("brand_ids") or []).issubset(registry_ids)
+        for tweet in kept
+    ):
+        return [_stage1_empty() for _ in batch]
+
+    try:
+        if deadline is not None and deadline.expired():
+            raise TimeoutError("enrichment_attempt_deadline_exhausted")
+        response = _call_signal_with_retry(
+            anthropic_client,
+            build_batch_pragmatics_full_prompt(kept),
+            model=model,
+            max_tokens=max_tokens,
+            thinking=thinking,
+            deadline=deadline,
+            telemetry_context={
+                **(telemetry_context or {}),
+                "batch_size": len(kept),
+            },
+            operation_kind="initial",
+        )
+        parsed_kept = _validate_stage1_batch_response(response, kept)
+    except Exception as exc:
+        logger.warning(
+            "classify_batch_pragmatics_full: batch failed for %d posts; "
+            "falling back per post: %s",
+            len(kept),
+            exc,
+        )
+        if on_batch_error is not None:
+            on_batch_error(batch, exc)
+        return _fallback_stage1_batch(
+            batch,
+            brand_registry,
+            anthropic_client,
+            model=model,
+            max_tokens=max_tokens,
+            thinking=thinking,
+            deadline=deadline,
+            telemetry_context=telemetry_context,
+        )
+
+    parsed_iterator = iter(parsed_kept)
+    return [
+        next(parsed_iterator) if tweet.get("brand_ids") else _stage1_empty()
+        for tweet in batch
+    ]
 
 
 def classify_batch_pragmatics_full(
@@ -1986,234 +1556,66 @@ def classify_batch_pragmatics_full(
     anthropic_client: "ClaudeClient | None" = None,
     *,
     model: str | None = None,
-    on_batch_error: "Callable[[list[dict[str, Any]], Exception], None] | None" = None,
+    on_batch_error: Callable[[list[dict[str, Any]], Exception], None] | None = None,
     max_tokens: int = 4096,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     max_workers: int = 1,
     telemetry_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """U4 (batched): per-post classification across N tweets, one LLM call per batch.
-
-    Each tweet dict MUST have keys: `tweet_id` (or `id`), `text`, and
-    `brand_ids` (list[str]). Tweets without brands are skipped — but they
-    still occupy a slot in the returned list so the caller can index
-    `result[i]` ↔ `tweets[i]`. For tweets with no brands the result is
-    `{"by_brand": {}, "unsanctioned_flags": []}` (the same empty shape
-    `classify_pragmatics_full` returns in that case).
-
-    Batching mirrors `translate_batch_pragmatics`: outer loop walks
-    `range(0, len(tweets), _CLASSIFY_BATCH_SIZE)` (20 posts/batch), the
-    `_PRAGMATICS_FULL_SYSTEM_PROMPT` prefix is shared across every batch
-    so Anthropic's prompt-cache stays warm. At 200 posts this is
-    ~10 LLM calls instead of 200 — a ~20× cost reduction that fits
-    Cycle 1's 15-min budget.
-
-    Args:
-        tweets: list of `{"tweet_id": str, "text": str, "brand_ids": [str]}`.
-        brand_registry: list of `BrandRow`-like (read brand_id). When
-            empty, the union of all `brand_ids` arguments is used.
-        anthropic_client: a ClaudeClient instance. None → short-circuit
-            to per-tweet empty shape (the no-LLM path).
-        on_batch_error: optional callback `(batch, exc)` invoked per-batch
-            when the LLM call raised (after retries exhausted) OR the
-            response failed to parse. Per-tweet failure is isolated — the
-            rest of the run continues with empty-shape entries.
-        max_tokens: output token budget for the LLM generation. Default
-            4096 (covers N=20 structured JSON ~3000 tokens). Must be
-            high enough or the response truncates mid-JSON (the
-            "Unterminated string" failure mode).
-
-    Returns:
-        list of length `len(tweets)`, index-aligned. Each entry is
-        `{"by_brand": {brand_id: {"post_type", "sentiment", "discourse_role",
-         "china_nationalism", "us_nationalism"}}, "unsanctioned_flags": [str]}` —
-        the same shape `classify_pragmatics_full` returns, so the
-        `_run_post_fetch` Stage 2 loop body does not need to change.
-    """
-    empty = {"by_brand": {}, "unsanctioned_flags": []}
+    """Classify in 20-post batches with bounded, stable-order concurrency."""
     if not tweets:
         return []
     if anthropic_client is None:
-        return [dict(empty) for _ in tweets]
+        return [_stage1_empty() for _ in tweets]
+    if thinking is None:
+        import os as _os
 
-    # Production may opt into bounded per-batch concurrency. Other callers
-    # remain sequential by default, preserving their cost and ordering
-    # behavior. Flattening futures in submission order keeps index alignment.
-    if len(tweets) > _CLASSIFY_BATCH_SIZE and max_workers > 1:
-        batches = [
-            tweets[start: start + _CLASSIFY_BATCH_SIZE]
-            for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE)
-        ]
-        callback_lock = threading.Lock()
+        thinking = _resolve_thinking_default(
+            _os.environ.get(
+                "X_MONITOR_CLASSIFIER_BASE_URL",
+                _os.environ.get("ANTHROPIC_BASE_URL", ""),
+            )
+        )
 
-        def serialized_batch_error(
-            batch: list[dict[str, Any]], exc: Exception
+    batches = [
+        tweets[start : start + _CLASSIFY_BATCH_SIZE]
+        for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE)
+    ]
+    callback_lock = threading.Lock()
+
+    def classify_one(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        def serialized_error(
+            failed_batch: list[dict[str, Any]], exc: Exception
         ) -> None:
             if on_batch_error is None:
                 return
             with callback_lock:
-                on_batch_error(batch, exc)
+                on_batch_error(failed_batch, exc)
 
-        with ThreadPoolExecutor(
-            max_workers=min(max_workers, len(batches)),
-            thread_name_prefix="classifier-batch",
-        ) as executor:
-            futures = [
-                executor.submit(
-                    classify_batch_pragmatics_full,
-                    batch,
-                    brand_registry,
-                    anthropic_client,
-                    model=model,
-                    on_batch_error=serialized_batch_error,
-                    max_tokens=max_tokens,
-                    thinking=thinking,
-                    deadline=deadline,
-                    max_workers=1,
-                    telemetry_context=telemetry_context,
-                )
-                for batch in batches
-            ]
-            return [row for future in futures for row in future.result()]
-
-    # Resolve `thinking` default from env: when not explicitly passed
-    # (None), use the env-driven helper. The M3/direct paths resolve to
-    # None so behavior is unchanged. The deepseek path resolves to
-    # {"type": "disabled"} so the reasoning model does not consume the
-    # entire output budget on internal deliberation.
-    if thinking is None:
-        import os as _os
-        thinking = _resolve_thinking_default(_os.environ.get(
-            "X_MONITOR_CLASSIFIER_BASE_URL",
-            _os.environ.get("ANTHROPIC_BASE_URL", ""),
-        ))
-
-    if brand_registry:
-        registry_ids = {b.brand_id for b in brand_registry}
-    else:
-        registry_ids = set().union(
-            *(set(t.get("brand_ids") or []) for t in tweets)
+        return _classify_stage1_batch(
+            batch,
+            brand_registry,
+            anthropic_client,
+            model=model,
+            max_tokens=max_tokens,
+            thinking=thinking,
+            deadline=deadline,
+            telemetry_context=telemetry_context,
+            on_batch_error=serialized_error,
         )
 
-    results: list[dict[str, Any]] = []
-    for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE):
-        batch = tweets[start: start + _CLASSIFY_BATCH_SIZE]
-        if deadline is not None and deadline.expired():
-            raise TimeoutError("enrichment_attempt_deadline_exhausted")
-        # Skip posts that carry no brand list — emit empty shape in
-        # their slot so the result list is index-aligned with the
-        # input. The classifier's purpose is per-brand classification;
-        # unattributed posts have nothing to classify.
-        kept: list[dict[str, Any]] = []
-        kept_indexes: list[int] = []
-        skipped_count = 0
-        for i, t in enumerate(batch):
-            if not (t.get("brand_ids") or []):
-                skipped_count += 1
-                continue
-            kept.append(t)
-            kept_indexes.append(i)
-        if not kept:
-            results.extend([dict(empty) for _ in batch])
-            continue
-        prompt = build_batch_pragmatics_full_prompt(kept)
-        try:
-            response = _call_signal_with_retry(
-                anthropic_client, prompt,
-                model=model,
-                max_tokens=max_tokens,
-                thinking=thinking,
-                deadline=deadline,
-                telemetry_context={**(telemetry_context or {}), "batch_size": len(kept)},
-                operation_kind="initial",
-            )
-        except Exception as exc:
-            # Plan 2026-07-13-001 fail-soft contract: when a batch
-            # fails to classify, fall back to per-post retries so a
-            # single bad post doesn't poison the rest of the batch.
-            # This preserves the legacy per-post granularity under the
-            # v1.7 batched API. If the per-post fallback also raises
-            # for a particular post, that single post gets empty shape
-            # and the others still get their per-post classification.
-            logger.warning(
-                "classify_batch_pragmatics_full: batch LLM call failed "
-                "after %d retries for batch of %d posts; falling back "
-                "to per-post retries: %s",
-                _MAX_RETRIES, len(kept), exc,
-            )
-            if on_batch_error is not None:
-                on_batch_error(batch, exc)
-            for index, t in enumerate(batch):
-                if deadline is not None and deadline.expired():
-                    raise TimeoutError("enrichment_attempt_deadline_exhausted")
-                try:
-                    single = classify_pragmatics_full(
-                        text=t.get("text") or "",
-                        brand_ids=list(t.get("brand_ids") or []),
-                        brand_registry=list(brand_registry) if brand_registry else [],
-                        anthropic_client=anthropic_client,
-                        model=model,
-                        thinking=thinking,
-                        deadline=deadline,
-                        telemetry_context={**(telemetry_context or {}), "batch_size": 1},
-                    )
-                    results.append(
-                        single if isinstance(single, dict) else dict(empty),
-                    )
-                except Exception as single_exc:
-                    logger.warning(
-                        "classify_batch_pragmatics_full: per-post fallback "
-                        "also failed for tweet_id=%s: %s",
-                        t.get("tweet_id") or t.get("id"), single_exc,
-                    )
-                    results.append(dict(empty))
-            continue
-        # Validate the wire shape BEFORE consuming entries. The validator
-        # raises ValueError on drift, which is caught below by the
-        # fail-soft contract. (The redundant count check that lived here
-        # pre-swap is now subsumed by `_validate_deepseek_response_shape`.)
-        try:
-            _validate_deepseek_response_shape(response, len(kept))
-        except ValueError as shape_exc:
-            logger.warning(
-                "classify_batch_pragmatics_full: %s; emitting empty "
-                "for entire batch of %d posts",
-                shape_exc, len(kept),
-            )
-            for _ in batch:
-                results.append(dict(empty))
-            if on_batch_error is not None:
-                on_batch_error(batch, shape_exc)
-            continue
-        parsed = response.get("results")  # validator already proved this is a list
-        # Build a tweet_id → entry map so the result list is robust
-        # to the LLM emitting them out of order.
-        per_id: dict[str, dict[str, Any]] = {}
-        for entry in parsed:
-            if isinstance(entry, dict):
-                tid = entry.get("tweet_id")
-                if isinstance(tid, str):
-                    per_id[tid] = entry
-        # Walk the input batch (so order matches) and decode each.
-        for t in batch:
-            tid = str(t.get("tweet_id") or t.get("id") or "")
-            entry = per_id.get(tid)
-            if entry is None:
-                results.append(dict(empty))
-                continue
-            decoded = _classify_one_batch_to_by_brand(
-                entry, registry_ids, tid,
-            )
-            results.append(decoded)
-        # Sanity warning — useful for catching LLM drift on the
-        # prompt cache (e.g. a system change that drops tweet_id).
-        if skipped_count:
-            logger.debug(
-                "classify_batch_pragmatics_full: skipped %d tweets with "
-                "no brand_ids in batch of %d", skipped_count, len(batch),
-            )
-    return results
+    if len(batches) == 1 or max_workers <= 1:
+        return [item for batch in batches for item in classify_one(batch)]
+    with ThreadPoolExecutor(
+        max_workers=min(max_workers, 3, len(batches)),
+        thread_name_prefix="classifier-batch",
+    ) as executor:
+        return [
+            item
+            for batch_result in executor.map(classify_one, batches)
+            for item in batch_result
+        ]
 
 
 # --- Real Anthropic client (lazy import) --------------------------------
@@ -2243,7 +1645,6 @@ class AnthropicClaudeClient:
 
     def messages_create(self, **kwargs: Any) -> dict[str, Any]:
         """Send a messages.create request and return the parsed JSON."""
-        import json as _json
 
         # Resolve the thinking default when not explicitly passed by the
         # caller. DeepSeek V4 defaults to thinking and emits
@@ -2280,7 +1681,6 @@ class AnthropicClaudeClient:
         # path entirely.
         import http.client
         import json as _json_module
-        import urllib.parse
         from urllib.parse import urlparse
         parsed = urlparse(url)
         timeout = kwargs.pop("timeout", 60)

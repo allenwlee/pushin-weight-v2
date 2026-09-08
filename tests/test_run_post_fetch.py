@@ -1,32 +1,17 @@
-"""U5 tests for x_monitor.run._run_post_fetch.
+"""Retained legacy adapter boundaries for ``x_monitor.run._run_post_fetch``.
 
 Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
 (Unit 5 of 8).
 
-Verifies:
-- Empty kept_posts returns {} counters without touching the LLM.
-- No anthropic_client returns {} counters without touching the LLM.
-- Happy path: the post-fetch writes to posts (text_en / text_zh_cn /
-  lang_detected) AND to posts_brands_signals AND to
-  posts_brands_discourse, with the right counter values.
-- An LLM failure on the translator marks rows translation_failed
-  but does NOT abort the cycle (the classifier still runs).
-- An LLM failure on the classifier for one post does NOT abort
-  other posts' classifications.
-- The discourse_role prong is coerced to one of the 9 known keys
-  (or `uncategorized`) before writing.
-- Unknown post_type / sentiment are dead-lettered (the Store path
-  takes care of this; U5 just verifies the row shape passes through).
+This file keeps the empty-input, no-client, and store-lifetime checks plus the
+legacy fake adapters needed by that surface. Stage 1 writer and failure
+isolation are verified through Django ``CycleRunner`` tests; future U5 owns
+the legacy adapter cutover and must not restore discourse writes.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Any
-
-import pytest
-
 
 # --- shared fixtures ----------------------------------------------------
 
@@ -108,7 +93,7 @@ class FakeClaudeClient:
                     payload = prompt[idx + len(marker):].strip()
                     try:
                         tweets = _json.loads(payload)
-                    except Exception:
+                    except _json.JSONDecodeError:
                         tweets = []
             return self._t_factory(
                 tweets,
@@ -143,7 +128,7 @@ class FakeClaudeClient:
                         payload = prompt[payload_start:].strip()
                         try:
                             batch_tweets = _json.loads(payload)
-                        except Exception:
+                        except _json.JSONDecodeError:
                             batch_tweets = []
                     if batch_tweets:
                         # Use the first tweet's text + brand_ids as
@@ -338,324 +323,10 @@ def test_run_post_fetch_no_client_returns_empty_counters(tmp_path):
         s.close()
 
 
-def test_run_post_fetch_happy_path_writes_all_three_tables(tmp_path):
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        # Translator factory: returns a successful four-pronged row.
-        def t_factory(tweets, locales):
-            return {"results": [{
-                "tweet_id": "t1",
-                "text_en": "Claude could never",
-                "literal_zh": "Claude 永远做不出",
-                "text_zh_cn": "Claude 永远做不出",
-                "lang_detected": "en",
-                "discourse_role": "dunk_yingyang",
-                "en_equivalent": "The post dismisses Claude's capability.",
-                "cn_equivalent": "Claude 不行",
-                "annotation": "",
-                "noop_en": True,
-                "noop_zh": False,
-            }]}
-        client = FakeClaudeClient(translate_factory=t_factory)
-
-        kept = [{
-            "tweet_id": "t1", "id": "t1", "text": "Claude could never",
-            "brand_id": "anthropic", "brand_ids": ["anthropic"],
-        }]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-
-        # Counters reflect success.
-        assert out["n_translated"] == 1
-        assert out["n_discourse"] == 1
-        assert out["n_nationalism"] == 0  # both axes were "none"
-        assert out["n_failed_translate"] == 0
-
-        # Verify posts row updated. The factory emits lang_detected='en'
-        # → server-side deterministic noop NULLs text_en (source serves)
-        # and populates text_zh_cn with the Chinese best-interpretation.
-        row = s._conn.execute(
-            "SELECT text_en, text_zh_cn, lang_detected FROM posts "
-            "WHERE tweet_id = 't1'"
-        ).fetchone()
-        assert row["text_en"] is None
-        assert row["text_zh_cn"] == "Claude 永远做不出"
-        assert row["lang_detected"] == "en"
-
-        # Verify posts_brands_signals updated (post_type_key + sentiment).
-        # U1b: the column is now `post_type_key` (TEXT) and stores the
-        # TEXT slug directly (no INTEGER FK resolution needed).
-        sig = s._conn.execute(
-            "SELECT post_type_key, sentiment FROM posts_brands_signals"
-        ).fetchone()
-        assert sig is not None
-        pt_key = sig["post_type_key"]
-        sent_key = sig["sentiment"]
-        assert pt_key == "hands_on_usage"
-        assert sent_key == "neutral"
-
-        # Verify posts_brands_discourse updated.
-        # NOTE: the discourse_role written to posts_brands_discourse
-        # comes from `classify_pragmatics_full` (U4), NOT the
-        # translator's `discourse_role` prong (U3) — the translator's
-        # prong is informational and surfaces in U7's render only.
-        # The default FakeClaudeClient classifier emits
-        # `genuine_hype` for every brand.
-        disc = s.get_post_brand_discourse_for_post("t1")
-        assert len(disc) == 1
-        assert disc[0]["discourse_key"] == "genuine_hype"
-        assert disc[0]["act_id"] == 1
-        assert disc[0]["china_nationalism"] == "none"
-        assert disc[0]["us_nationalism"] == "none"
-    finally:
-        s.close()
-
-
-def test_run_post_fetch_translator_failure_does_not_abort_cycle(tmp_path):
-    """A failing translator marks rows translation_failed; the
-    classifier still runs and writes discourse rows."""
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        def t_factory(tweets, locales):
-            raise RuntimeError("translator down")
-        client = FakeClaudeClient(translate_factory=t_factory)
-
-        kept = [{
-            "tweet_id": "t1", "id": "t1", "text": "x",
-            "brand_id": "anthropic", "brand_ids": ["anthropic"],
-        }]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-
-        # Translation failed but the classifier still ran.
-        assert out["n_failed_translate"] == 1
-        assert out["n_discourse"] == 1  # classifier ran regardless
-        assert out["n_nationalism"] == 0
-
-        # Posts columns NOT updated.
-        row = s._conn.execute(
-            "SELECT text_en, text_zh_cn FROM posts WHERE tweet_id='t1'"
-        ).fetchone()
-        assert row["text_en"] is None
-        assert row["text_zh_cn"] is None
-
-        # But the discourse row IS written.
-        disc = s.get_post_brand_discourse_for_post("t1")
-        assert len(disc) == 1
-    finally:
-        s.close()
-
-
-def test_run_post_fetch_classifier_failure_on_one_post_does_not_abort(tmp_path):
-    """The classifier raises for one post; others still get classified."""
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        # Seed a second post.
-        s._conn.execute(
-            """
-            INSERT INTO posts(tweet_id, text, created_at, fetched_at)
-            VALUES ('t2', 'second post', '2026-07-02T00:00:00+00:00',
-                    '2026-07-02T00:00:00+00:00')
-            """,
-        )
-        s._conn.execute(
-            """
-            INSERT INTO posts_brands(post_id, brand_id, weight)
-            VALUES (
-                (SELECT id FROM posts WHERE tweet_id='t2'),
-                (SELECT id FROM brands WHERE nickname='anthropic'),
-                1.0
-            )
-            """,
-        )
-        # Classifier raises for "t1" (the FIRST call), succeeds for "t2".
-        # The retry loop may call us 3x for "t1" before giving up —
-        # count only distinct texts.
-        seen_texts: set[str] = set()
-        def c_factory(text, brand_ids):
-            seen_texts.add(text)
-            if "Claude could never" in text:
-                raise RuntimeError("classifier boom on t1")
-            return {"classifications": [
-                {"brand_id": b, "post_types": ["hands_on_usage"],
-                 "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
-                 "china_nationalism": "none", "us_nationalism": "none"}
-                for b in brand_ids
-            ]}
-
-        client = FakeClaudeClient(classify_factory=c_factory)
-        kept = [
-            {"tweet_id": "t1", "id": "t1", "text": "Claude could never",
-             "brand_id": "anthropic", "brand_ids": ["anthropic"]},
-            {"tweet_id": "t2", "id": "t2", "text": "second post",
-             "brand_id": "anthropic", "brand_ids": ["anthropic"]},
-        ]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-
-        # Both posts were attempted; the failure was contained.
-        assert len(seen_texts) == 2
-        # Only t2 has a discourse row.
-        assert s.get_post_brand_discourse_for_post("t1") == []
-        disc_t2 = s.get_post_brand_discourse_for_post("t2")
-        assert len(disc_t2) == 1
-        assert out["n_discourse"] == 1
-    finally:
-        s.close()
-
-
-def test_run_post_fetch_nationalism_counter_only_when_both_set(tmp_path):
-    """n_nationalism counts posts where both axes are NOT 'none'."""
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        # Seed two posts; classify each with a different nationalism.
-        s._conn.execute(
-            """
-            INSERT INTO posts(tweet_id, text, created_at, fetched_at)
-            VALUES ('t2', 'post two', '2026-07-02T00:00:00+00:00',
-                    '2026-07-02T00:00:00+00:00')
-            """,
-        )
-        s._conn.execute(
-            """
-            INSERT INTO posts_brands(post_id, brand_id, weight)
-            VALUES (
-                (SELECT id FROM posts WHERE tweet_id='t2'),
-                (SELECT id FROM brands WHERE nickname='anthropic'),
-                1.0
-            )
-        """,
-        )
-
-        def c_factory(text, brand_ids):
-            return {"classifications": [{
-                "brand_id": brand_ids[0], "post_types": ["hands_on_usage"],
-                "sentiment": "neutral", "discourse_roles": ["genuine_hype"],
-                "china_nationalism": "pro", "us_nationalism": "anti",
-            }]}
-
-        client = FakeClaudeClient(classify_factory=c_factory)
-        kept = [
-            {"tweet_id": "t1", "id": "t1", "text": "first",
-             "brand_id": "anthropic", "brand_ids": ["anthropic"]},
-            {"tweet_id": "t2", "id": "t2", "text": "second",
-             "brand_id": "anthropic", "brand_ids": ["anthropic"]},
-        ]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-        # Both posts have non-none nationalism → counter = 2.
-        assert out["n_nationalism"] == 2
-    finally:
-        s.close()
-
-
-def test_run_post_fetch_discourse_role_coerced_to_known_set(tmp_path):
-    """An LLM-emitted unknown discourse_role is coerced to
-    `uncategorized` at the parser, then dead-lettered at the Store
-    (NOT persisted — the table is intentionally tight per KTD5).
-    The brief renderer cites `uncategorized` rows in the limitations
-    paragraph rather than folding them into a fake bucket."""
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        def c_factory(text, brand_ids):
-            return {"classifications": [{
-                "brand_id": brand_ids[0], "post_types": ["hands_on_usage"],
-                "sentiment": "neutral",
-                "discourse_roles": ["made_up_role"],  # unknown
-                "china_nationalism": "none", "us_nationalism": "none",
-            }]}
-        client = FakeClaudeClient(classify_factory=c_factory)
-        kept = [{
-            "tweet_id": "t1", "id": "t1", "text": "x",
-            "brand_id": "anthropic", "brand_ids": ["anthropic"],
-        }]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-        # The row is dead-lettered; not persisted.
-        disc = s.get_post_brand_discourse_for_post("t1")
-        assert disc == []
-        # n_discourse counts PERSISTED rows, so 0 here.
-        assert out["n_discourse"] == 0
-    finally:
-        s.close()
-
-
-def test_run_post_fetch_per_brand_classifications_loop(tmp_path):
-    """A post with multiple brands gets one discourse row per brand."""
-    from x_monitor.run import _run_post_fetch
-
-    s = _seed_minimal_db(tmp_path)
-    try:
-        # Seed a second brand + post-brand edge.
-        s._conn.execute(
-            """
-            INSERT INTO brands(nickname, display_name, accent_color,
-                               is_sentinel, created_at)
-            VALUES ('openai', 'OpenAI', '#9ca3af', 0,
-                    '2026-07-02T00:00:00+00:00')
-            """,
-        )
-        s._conn.execute(
-            """
-            INSERT INTO posts_brands(post_id, brand_id, weight)
-            VALUES (
-                (SELECT id FROM posts WHERE tweet_id='t1'),
-                (SELECT id FROM brands WHERE nickname='openai'),
-                1.0
-            )
-            """,
-        )
-        s._brand_cache = None
-        s._brand_id_map = None
-
-        def c_factory(text, brand_ids):
-            # Emit a row for each brand the LLM was asked about.
-            return {"classifications": [
-                {"brand_id": b, "post_types": ["hands_on_usage"],
-                 "sentiment": "positive" if b == "openai" else "negative",
-                 "discourse_roles": ["genuine_hype"] if b == "openai"
-                                    else ["dunk_yingyang"],
-                 "china_nationalism": "none", "us_nationalism": "none"}
-                for b in brand_ids
-            ]}
-        client = FakeClaudeClient(classify_factory=c_factory)
-        kept = [{
-            "tweet_id": "t1", "id": "t1", "text": "x",
-            "brand_id": "anthropic",
-            "brand_ids": ["anthropic", "openai"],
-        }]
-        out = _run_post_fetch(
-            kept, store=s, anthropic_client=client,
-            brand_registry_rows=s.read_brands(),
-        )
-        assert out["n_discourse"] == 1  # one post × 2 brands = 2 rows
-        disc = s.get_post_brand_discourse_for_post("t1")
-        assert len(disc) == 2
-        # Both brand_ids present.
-        brand_ids_written = {d["brand_id"] for d in disc}
-        assert brand_ids_written == {"anthropic", "openai"}
-    finally:
-        s.close()
+# The classifier/discourse writer cases that previously lived here exercised the
+# retired SQLite x_monitor.run path and required the removed discourse result.
+# Stage 1 writer and failure-isolation coverage lives in the Django CycleRunner
+# suites; U5 owns the separate compatibility decision for x_monitor.run.
 
 
 # --- U1 (Plan 2026-07-13-002) closed-DB fix ------------------------
@@ -682,7 +353,7 @@ def test_run_execute_does_not_close_store_before_accounts_update():
     from pathlib import Path
     src = Path("x_monitor/run.py").read_text()
     close_sites = [
-        m.start() for m in _re.finditer(r"^\s*store\.close\(\)", src, _re.M)
+        m.start() for m in _re.finditer(r"^\s*store\.close\(\)", src, _re.MULTILINE)
     ]
     update_sites = [
         m.start() for m in _re.finditer(

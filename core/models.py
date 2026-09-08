@@ -75,6 +75,37 @@ class PostTypeLabel(models.Model):
         db_table = "post_type_labels"
 
 
+class ProductLabelKey(models.Model):
+    """Lookup vocabulary for independent product-feedback labels."""
+
+    key = models.CharField(
+        max_length=64,
+        primary_key=True,
+        db_collation="case_insensitive",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "product_label_keys"
+        ordering = ["key"]
+
+
+class ProductLabelLabel(models.Model):
+    pk = models.CompositePrimaryKey("product_label", "lang")
+    product_label = models.ForeignKey(
+        ProductLabelKey,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="key",
+        to_field="key",
+    )
+    lang = models.TextField()
+    label = models.TextField()
+
+    class Meta:
+        db_table = "product_label_labels"
+
+
 class SentimentKey(models.Model):
     """Lookup table for sentiment vocabulary (positive, negative, mixed, neutral)."""
 
@@ -1581,6 +1612,81 @@ class PostBrandSignal(models.Model):
             models.Index(
                 fields=["brand", "sentiment"],
                 name="idx_pb_sig_b_sent",
+            ),
+        ]
+
+
+class PostBrandClassificationState(models.Model):
+    """Current Stage 1 classification identity and scalar judgments."""
+
+    class Outcome(models.TextChoices):
+        CLASSIFIED = "classified", "Classified"
+        CONTEXT_MISSING = "context_missing", "Context missing"
+
+    pk = models.CompositePrimaryKey("post", "brand")
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="classification_states",
+        db_column="post_id", to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, related_name="+",
+        db_column="brand_id", to_field="nickname",
+    )
+    contract_version = models.CharField(max_length=64)
+    taxonomy_version = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=256)
+    source_language = models.CharField(max_length=64, blank=True, default="")
+    input_context_fingerprint = models.CharField(max_length=64)
+    outcome = models.CharField(max_length=32, choices=Outcome.choices)
+    sentiment = models.ForeignKey(
+        SentimentKey, on_delete=models.PROTECT, related_name="+",
+        db_column="sentiment", to_field="key", blank=True, null=True,
+    )
+    china_nationalism = models.ForeignKey(
+        NationalismKey, on_delete=models.PROTECT, related_name="+",
+        db_column="china_nationalism", to_field="key", blank=True, null=True,
+    )
+    us_nationalism = models.ForeignKey(
+        NationalismKey, on_delete=models.PROTECT, related_name="+",
+        db_column="us_nationalism", to_field="key", blank=True, null=True,
+    )
+    classified_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "posts_brands_classification_states"
+        indexes = [
+            models.Index(
+                fields=["brand", "outcome"],
+                name="idx_pb_cls_state_brand_outcome",
+            ),
+            models.Index(fields=["contract_version"], name="idx_pb_cls_state_contract"),
+        ]
+
+
+class PostBrandProductLabel(models.Model):
+    """Independent product labels for a post-brand classification."""
+
+    pk = models.CompositePrimaryKey("post", "brand", "product_label")
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="product_label_edges",
+        db_column="post_id", to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, related_name="+",
+        db_column="brand_id", to_field="nickname",
+    )
+    product_label = models.ForeignKey(
+        ProductLabelKey, on_delete=models.PROTECT, related_name="+",
+        db_column="product_label_key", to_field="key",
+    )
+
+    class Meta:
+        db_table = "posts_brands_product_labels"
+        indexes = [
+            models.Index(
+                fields=["brand", "product_label"],
+                name="idx_pb_product_brand_label",
             ),
         ]
 

@@ -67,9 +67,13 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     """Production post-fetch wiring owns state and Django flag persistence."""
     _django_setup()
     from core.models import (
+        Brand,
+        NationalismKey,
         Post,
+        PostBrand,
         PostEnrichmentState,
         PostUnsanctionedFlag,
+        SentimentKey,
         UnsanctionedFlagKey,
     )
     from monitor.cycle import CycleRunner
@@ -77,6 +81,10 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     from x_monitor.config import Config
 
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
+    brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    PostBrand.objects.create(post=post, brand=brand)
+    SentimentKey.objects.get_or_create(key="neutral")
+    NationalismKey.objects.get_or_create(key="none")
     PostEnrichmentState.objects.create(post=post)
     UnsanctionedFlagKey.objects.get_or_create(key="scam")
     client = object()
@@ -103,7 +111,11 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     def classify(tweets, brands, classifier_client, **kwargs):
         classifier_calls.append((tweets, brands, classifier_client))
         attempt_deadlines.append(kwargs["deadline"])
-        return [{"by_brand": {}, "unsanctioned_flags": ["scam"]}]
+        return [{"by_brand": {"deepseek": {
+            "outcome": "classified", "post_types": ["buzz_releases"],
+            "product_labels": [], "sentiment": "neutral",
+            "china_nationalism": "none", "us_nationalism": "none",
+        }}, "unsanctioned_flags": ["scam"], "valid": True}]
 
     monkeypatch.setattr(
         translator,

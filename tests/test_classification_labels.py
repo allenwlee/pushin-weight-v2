@@ -12,23 +12,26 @@ from __future__ import annotations
 
 import pytest
 
+from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
+from core.classification_labels import POST_TYPE_LABELS, PRODUCT_LABEL_LABELS
+from core.models import (
+    DiscourseKey,
+    DiscourseLabel,
+    NationalismKey,
+    NationalismLabel,
+    PostTypeKey,
+    PostTypeLabel,
+    ProductLabelKey,
+    ProductLabelLabel,
+    SentimentKey,
+    SentimentLabel,
+)
 from monitor.views import (
     _build_label_cache,
     _locale_to_lang_codes,
     _localize_classification_value,
     _serialize_feed_row,
 )
-from core.models import (
-    DiscourseLabel,
-    DiscourseKey,
-    NationalismKey,
-    NationalismLabel,
-    PostTypeKey,
-    PostTypeLabel,
-    SentimentKey,
-    SentimentLabel,
-)
-
 
 # ============================================================================
 # Pure-function tests (no DB)
@@ -47,6 +50,32 @@ class TestLocaleToLangCodes:
 
     def test_unknown_locale_defaults_to_en(self):
         assert _locale_to_lang_codes("fr") == ("en",)
+
+
+def test_stage1_label_constants_match_the_frozen_taxonomy():
+    assert tuple(POST_TYPE_LABELS) == POST_TYPE_KEYS
+    assert tuple(PRODUCT_LABEL_LABELS) == PRODUCT_LABEL_KEYS
+    assert all(set(labels) == {"en", "zh-cn"} for labels in POST_TYPE_LABELS.values())
+    assert all(
+        set(labels) == {"en", "zh-cn"}
+        for labels in PRODUCT_LABEL_LABELS.values()
+    )
+
+
+@pytest.mark.django_db
+def test_seed_command_is_idempotent_for_stage1_product_labels():
+    from django.core.management import call_command
+
+    call_command("seed_i18n_labels")
+    call_command("seed_i18n_labels")
+
+    assert set(ProductLabelKey.objects.values_list("key", flat=True)) == set(
+        PRODUCT_LABEL_KEYS
+    )
+    assert ProductLabelLabel.objects.filter(
+        product_label_id__in=PRODUCT_LABEL_KEYS,
+        lang__in=("en", "zh-cn"),
+    ).count() == len(PRODUCT_LABEL_KEYS) * 2
 
 
 class TestLocalizeEmptyCache:

@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from x_monitor.attribution import (
-    AnthropicClaudeClient,
     BrandRow,
     MentionRow,
     attribute_to_brands,
@@ -28,7 +27,6 @@ from x_monitor.attribution import (
     extract_user_mentions,
     validate_raw_token,
 )
-
 
 # --- Shared fixtures: 11-brand registry + 4 detection tables ------------
 
@@ -776,6 +774,7 @@ def test_validate_deepseek_response_shape_missing_unsanctioned_flags(caplog):
     for non-list input).
     """
     import logging
+
     from x_monitor.attribution import _validate_deepseek_response_shape
 
     missing_flags = {
@@ -795,6 +794,7 @@ def test_validate_deepseek_response_shape_raises_on_drift():
     message), per plan U3 test scenario list.
     """
     import pytest
+
     from x_monitor.attribution import _validate_deepseek_response_shape
 
     # (a) count mismatch
@@ -931,13 +931,10 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
     )
 
 
-def test_classify_batch_pragmatics_full_shape_drift_emits_empty(monkeypatch):
-    """When the LLM returns a malformed response (drift), the new
-    _validate_deepseek_response_shape safety net catches the drift,
-    the per-batch path emits empty for the whole batch, and
-    on_batch_error is invoked with the ValueError. This is the same
-    fail-soft contract that pre-swap used for the count-mismatch case.
-    """
+def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
+    monkeypatch,
+):
+    """Malformed batch responses invoke fallback and remain unpublished."""
     from x_monitor.attribution import classify_batch_pragmatics_full
 
     class FakeClient:
@@ -956,8 +953,9 @@ def test_classify_batch_pragmatics_full_shape_drift_emits_empty(monkeypatch):
         on_batch_error=lambda batch, exc: captured_exc.append(exc),
         max_tokens=4096,
     )
-    # Whole batch emits empty
-    assert results == [{"by_brand": {}, "unsanctioned_flags": []}]
+    assert results == [
+        {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
+    ]
     # on_batch_error was called with the shape-drift ValueError
     assert len(captured_exc) == 1
     assert isinstance(captured_exc[0], ValueError)

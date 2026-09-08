@@ -9,10 +9,17 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
+from core.classification_contract import (
+    NATIONALISM_KEYS,
+    POST_TYPE_KEYS,
+    PRODUCT_LABEL_KEYS,
+    SENTIMENT_KEYS,
+)
 from core.classification_labels import (
     DISCOURSE_LABELS,
     NATIONALISM_LABELS,
     POST_TYPE_LABELS,
+    PRODUCT_LABEL_LABELS,
     ROLE_LABELS,
     SENTIMENT_LABELS,
 )
@@ -23,6 +30,8 @@ from core.models import (
     NationalismLabel,
     PostTypeKey,
     PostTypeLabel,
+    ProductLabelKey,
+    ProductLabelLabel,
     Role,
     RoleLabel,
     SentimentKey,
@@ -33,21 +42,9 @@ from core.models import (
 # Canonical taxonomy values (mirrors x_monitor/attribution.py constants)
 # ---------------------------------------------------------------------------
 
-_POST_TYPES: list[str] = [
-    "buzz_releases",
-    "hands_on_usage",
-    "performance_comparisons",
-    "feedback_questions",
-    "advertising_marketing",
-    "event_announcement",
-]
-
-_SENTIMENTS: list[str] = [
-    "positive",
-    "negative",
-    "neutral",
-    "mixed",
-]
+_POST_TYPES = list(POST_TYPE_KEYS)
+_PRODUCT_LABELS = list(PRODUCT_LABEL_KEYS)
+_SENTIMENTS = list(SENTIMENT_KEYS)
 
 _DISCOURSE: list[str] = [
     "genuine_hype",
@@ -62,14 +59,7 @@ _DISCOURSE: list[str] = [
     "advertising-marketing",
 ]
 
-_NATIONALISM: list[str] = [
-    "none",
-    "mild_pro",
-    "pro",
-    "constructive_critical",
-    "anti",
-    "mixed",
-]
+_NATIONALISM = list(NATIONALISM_KEYS)
 
 _ROLES: list[str] = [
     "official",
@@ -138,6 +128,20 @@ class Command(BaseCommand):
                         "key": key,
                         "lang": lang,
                         "label": label,
+                    }
+                )
+
+        # Product labels
+        for key in _PRODUCT_LABELS:
+            for lang in _LOCALES:
+                seeds.append(
+                    {
+                        "family": "product_label",
+                        "key_model": ProductLabelKey,
+                        "label_model": ProductLabelLabel,
+                        "key": key,
+                        "lang": lang,
+                        "label": PRODUCT_LABEL_LABELS.get(key, {}).get(lang, key),
                     }
                 )
 

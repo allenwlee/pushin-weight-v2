@@ -27,6 +27,8 @@ agents MUST remain untouched. This is a NEW entry point.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import time
 import uuid
@@ -40,6 +42,12 @@ from django.db import DatabaseError, transaction
 from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone as django_timezone
 
+from core.classification_contract import (
+    CONTRACT_VERSION,
+    PROMPT_VERSION,
+    TAXONOMY_VERSION,
+    parse_stage1_classifications,
+)
 from core.models import (
     Account,
     Brand,
@@ -49,7 +57,9 @@ from core.models import (
     HarvestBacklogWindow,
     Post,
     PostBrand,
+    PostBrandClassificationState,
     PostBrandMention,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
     PostTypeKey,
@@ -454,6 +464,115 @@ def _finish_enrichment_stage(
                     setattr(state, error_name, str(error_code or "stage_failed")[:128])
             state.save(update_fields=[status_name, next_name, error_name, "updated_at"])
     return failed
+
+
+def _publish_stage1_classification(
+    *,
+    post_id: str,
+    result: dict[str, Any],
+    tweet: dict[str, Any],
+    model: str,
+    run_id: str,
+    cfg: Any | None = None,
+) -> Any:
+    """Atomically publish one already-complete, per-brand Stage 1 result."""
+    from monitor.unsanctioned_flags import persist_classifier_flags
+
+    if not isinstance(result, dict) or result.get("valid") is not True:
+        return None
+    by_brand = result.get("by_brand")
+    if not isinstance(by_brand, dict):
+        return None
+    if any(
+        not isinstance(classification, dict)
+        for classification in by_brand.values()
+    ):
+        return None
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {"text": tweet.get("text") or "", "context": tweet.get("context") or []},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    with transaction.atomic():
+        claim = (
+            PostEnrichmentState.objects.select_for_update()
+            .select_related("post")
+            .filter(post_id=post_id)
+            .first()
+        )
+        if claim is None or claim.claim_run_id != str(run_id)[:128]:
+            return None
+        expected = set(
+            PostBrand.objects.filter(post_id=post_id).values_list(
+                "brand_id", flat=True
+            )
+        )
+        if not expected or set(by_brand) != expected:
+            return None
+        canonical = parse_stage1_classifications(
+            [
+                {"brand_id": brand_id, **classification}
+                for brand_id, classification in by_brand.items()
+            ],
+            expected,
+        )
+        if canonical is None or canonical != by_brand:
+            return None
+
+        post = claim.post
+        for brand_id, classification in canonical.items():
+            PostBrandSignal.objects.filter(
+                post_id=post_id, brand_id=brand_id
+            ).delete()
+            PostBrandProductLabel.objects.filter(
+                post_id=post_id, brand_id=brand_id
+            ).delete()
+            PostBrandClassificationState.objects.update_or_create(
+                post_id=post_id,
+                brand_id=brand_id,
+                defaults={
+                    "contract_version": CONTRACT_VERSION,
+                    "taxonomy_version": TAXONOMY_VERSION,
+                    "prompt_version": PROMPT_VERSION,
+                    "model": model,
+                    "source_language": post.lang_detected or post.lang or "",
+                    "input_context_fingerprint": fingerprint,
+                    "outcome": classification["outcome"],
+                    "sentiment_id": classification["sentiment"],
+                    "china_nationalism_id": classification["china_nationalism"],
+                    "us_nationalism_id": classification["us_nationalism"],
+                },
+            )
+            if classification["outcome"] == "classified":
+                PostBrandSignal.objects.bulk_create([
+                    PostBrandSignal(
+                        post_id=post_id, brand_id=brand_id, post_type_id=post_type,
+                        sentiment_id=classification["sentiment"],
+                    )
+                    for post_type in classification["post_types"]
+                ])
+                PostBrandProductLabel.objects.bulk_create([
+                    PostBrandProductLabel(
+                        post_id=post_id, brand_id=brand_id, product_label_id=label,
+                    )
+                    for label in classification["product_labels"]
+                ])
+        flag_result = persist_classifier_flags(
+            post_id=post_id, classifier_result=result, run_id=run_id
+        )
+        if flag_result.outcome not in {"persisted", "cleared"}:
+            raise ValueError("classifier_flags_invalid")
+        if cfg is not None:
+            _finish_enrichment_stage(
+                post_ids=[post_id],
+                run_id=run_id,
+                stage="classification",
+                succeeded_ids={post_id},
+                error_code="classification_incomplete",
+                cfg=cfg,
+            )
+        return flag_result
 
 
 # ============================================================================
@@ -2132,16 +2251,41 @@ class CycleRunner:
         # queue authority so retries survive later cycles and processes.
         translation_tweets: list[dict[str, Any]] = []
         classification_tweets: list[dict[str, Any]] = []
+        local_parent_ids = {
+            str(state.post.in_reply_to_id)
+            for state in claimed_states
+            if state.post.in_reply_to_id
+        }
+        local_parents = {
+            str(parent.pk): parent.text
+            for parent in Post.objects.filter(
+                tweet_id__in=local_parent_ids
+            ).only("tweet_id", "text")
+        }
         for state in claimed_states:
             post = state.post
             tid = str(post.pk)
             text = post.text or ""
             brand_ids = list(post.brands.values_list("brand_id", flat=True))
             if tid and text:
+                context: list[dict[str, str]] = []
+                if post.quoted_text:
+                    context.append(
+                        {
+                            "provenance": "stored_quote",
+                            "text": post.quoted_text,
+                        }
+                    )
+                parent_text = local_parents.get(str(post.in_reply_to_id or ""))
+                if parent_text:
+                    context.append(
+                        {"provenance": "local_parent", "text": parent_text}
+                    )
                 tweet = {
                     "tweet_id": tid,
                     "text": text,
                     "brand_ids": list(brand_ids),
+                    "context": context,
                 }
                 if state.translation_status == PostEnrichmentState.Status.PENDING:
                     translation_tweets.append(tweet)
@@ -2363,111 +2507,42 @@ class CycleRunner:
                 self._error_counts["classifier_batch_failed"] += 1
                 classification_error_code = "classifier_exception"
 
-        # Persist classifications with guardrails
-        from core.models import (
-            PostBrandDiscourse as PBDiscourse,
-        )
-        from core.models import (
-            PostBrandSignal as PBSignal,
-        )
-
         _CLASSIFY_BATCH_SIZE = getattr(
             settings, "X_MONITOR_CLASSIFY_BATCH_SIZE", 20
         )
 
-        from monitor.unsanctioned_flags import persist_classifier_flags
-
         classification_succeeded: set[str] = set()
         for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
             tid = tweet["tweet_id"]
-            by_brand = (
-                (result.get("by_brand") or {})
-                if isinstance(result, dict)
-                else {}
-            )
-
-            flag_result = persist_classifier_flags(
-                post_id=tid,
-                classifier_result=result,
-                run_id=run_id,
-            )
-            if flag_result.outcome in {"persisted", "cleared"}:
+            try:
+                flag_result = _publish_stage1_classification(
+                    post_id=tid,
+                    result=result if isinstance(result, dict) else {},
+                    tweet=tweet,
+                    model=self.cfg.llm.classifier_model,
+                    run_id=run_id,
+                    cfg=enrichment_cfg,
+                )
+            except (DatabaseError, ValueError, KeyError) as exc:
+                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                flag_result = None
+            if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
                 classification_succeeded.add(tid)
                 counters[
                     "n_unsanctioned_persisted"
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
-            if flag_result.degraded:
+            if flag_result is not None and flag_result.degraded:
                 self._error_counts["classifier_flags_invalid"] += 1
                 self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
                 if flag_result.dead_letter is not None:
                     counters["flag_dead_letters"].append(flag_result.dead_letter)
 
-            for brand_id, cls in by_brand.items():
-                post_type = cls.get("post_type")
-                sentiment = cls.get("sentiment")
-                if post_type:
-                    try:
-                        PBSignal.objects.update_or_create(
-                            post_id=tid,
-                            brand_id=brand_id,
-                            post_type_id=post_type,
-                            defaults={"sentiment_id": sentiment or ""},
-                        )
-                        counters["n_discourse"] += 1
-                    except Exception:
-                        logger.debug(
-                            "_run_post_fetch: signal FK violation for %s/%s — skipping",
-                            tid, post_type,
-                        )
-
-                discourse_raw = cls.get("discourse_role")
-                # discourse_role may be a string or a list — normalize
-                if isinstance(discourse_raw, str):
-                    discourse_keys = [discourse_raw] if discourse_raw else []
-                elif isinstance(discourse_raw, list):
-                    discourse_keys = discourse_raw
-                else:
-                    discourse_keys = []
-                cn_nat = cls.get("china_nationalism")
-                us_nat = cls.get("us_nationalism")
-
-                if discourse_keys:
-                    for act_idx, dk in enumerate(discourse_keys):
-                        if not dk:
-                            continue
-                        try:
-                            PBDiscourse.objects.update_or_create(
-                                post_id=tid,
-                                brand_id=brand_id,
-                                discourse_id=dk,
-                                act_id=act_idx,
-                                defaults={
-                                    "china_nationalism_id": cn_nat or None,
-                                    "us_nationalism_id": us_nat or None,
-                                },
-                            )
-                        except Exception:
-                            logger.debug(
-                                "_run_post_fetch: discourse key %r not in FK table — skipping",
-                                dk,
-                            )
-                    counters["n_nationalism"] += 1
-                elif cn_nat or us_nat:
-                    # Nationalism flags present without explicit discourse role —
-                    # store under an empty discourse key.
-                    PBDiscourse.objects.update_or_create(
-                        post_id=tid,
-                        brand_id=brand_id,
-                        discourse_id="",
-                        act_id=0,
-                        defaults={
-                            "china_nationalism_id": cn_nat or None,
-                            "us_nationalism_id": us_nat or None,
-                        },
-                    )
-                    counters["n_nationalism"] += 1
+            if flag_result is not None:
+                counters["n_classifications_published"] = (
+                    counters.get("n_classifications_published", 0) + 1
+                )
 
             # Guard: pause / cap at batch boundaries.
             # classify_batch_pragmatics_full batches 20 posts per LLM call

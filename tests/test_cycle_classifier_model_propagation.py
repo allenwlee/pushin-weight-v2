@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -13,7 +14,15 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 
 def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypatch):
     """CycleRunner must not fall back to the classifier module's ambient model."""
-    from core.models import Brand, Post, PostBrand, PostEnrichmentState
+    from core.models import (
+        Brand,
+        NationalismKey,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostTypeKey,
+        SentimentKey,
+    )
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
@@ -22,12 +31,21 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
         display_name="DeepSeek",
         accent_color="#4f46e5",
     )
+    parent = Post.objects.create(
+        tweet_id="cycle-classifier-parent",
+        text="What changed in the new model?",
+    )
     post = Post.objects.create(
         tweet_id="cycle-classifier-flash",
         text="DeepSeek released a model",
+        quoted_text="A stored benchmark artifact",
+        in_reply_to_id=parent.pk,
     )
     PostBrand.objects.create(post=post, brand=brand)
     PostEnrichmentState.objects.create(post=post)
+    PostTypeKey.objects.get_or_create(key="buzz_releases")
+    SentimentKey.objects.get_or_create(key="neutral")
+    NationalismKey.objects.get_or_create(key="none")
 
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.setenv(
@@ -45,7 +63,15 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
             return {
                 "results": [{
                     "tweet_id": post.pk,
-                    "classifications": [],
+                    "classifications": [{
+                        "brand_id": "deepseek",
+                        "outcome": "classified",
+                        "post_types": ["buzz_releases"],
+                        "product_labels": [],
+                        "sentiment": "neutral",
+                        "china_nationalism": "none",
+                        "us_nationalism": "none",
+                    }],
                     "unsanctioned_flags": [],
                 }]
             }
@@ -88,3 +114,14 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     assert call["model"] == "deepseek-v4-flash"
     assert call["thinking"] == {"type": "disabled"}
     assert call["max_tokens"] == 4096
+    payload = json.loads(call["messages"][0]["content"].rsplit("\n", 1)[1])
+    assert payload[0]["context"] == [
+        {
+            "provenance": "stored_quote",
+            "text": "A stored benchmark artifact",
+        },
+        {
+            "provenance": "local_parent",
+            "text": "What changed in the new model?",
+        },
+    ]

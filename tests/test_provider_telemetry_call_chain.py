@@ -251,7 +251,15 @@ def test_translator_production_entry_emits_redacted_single_boundary_event(caplog
 @pytest.mark.django_db(transaction=True)
 def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkeypatch):
     """M18: persisted work reaches both real factories and HTTP extraction."""
-    from core.models import Brand, Post, PostBrand, PostEnrichmentState
+    from core.models import (
+        Brand,
+        NationalismKey,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostTypeKey,
+        SentimentKey,
+    )
     from monitor.cycle import CycleRunner
 
     brand = Brand.objects.create(nickname="telemetry-brand", display_name="Telemetry")
@@ -261,6 +269,9 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     ]
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
     PostEnrichmentState.objects.bulk_create([PostEnrichmentState(post=post) for post in posts])
+    SentimentKey.objects.get_or_create(key="neutral")
+    NationalismKey.objects.get_or_create(key="none")
+    PostTypeKey.objects.get_or_create(key="hands_on_usage")
 
     requests: list[dict] = []
 
@@ -294,7 +305,12 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
             if "unsanctioned_flags" in prompt:
                 payload = {
                     "results": [
-                        {"tweet_id": ident, "classifications": [], "unsanctioned_flags": []}
+                            {"tweet_id": ident, "classifications": [{
+                                "brand_id": "telemetry-brand", "outcome": "classified",
+                                "post_types": ["hands_on_usage"], "product_labels": [],
+                                "sentiment": "neutral", "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }], "unsanctioned_flags": []}
                         for ident in ids
                     ]
                 }

@@ -1,0 +1,5 @@
+{
+  "provenance": {"kind": "synthetic", "gold": false, "note": "Structural contract fixture; not semantic accuracy truth."},
+  "contract_version": "stage1-v1",
+  "examples": [{"brand_id": "example", "outcome": "context_missing", "post_types": [], "product_labels": [], "sentiment": null, "china_nationalism": null, "us_nationalism": null}]
+}
