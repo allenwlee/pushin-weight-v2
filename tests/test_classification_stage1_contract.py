@@ -7,7 +7,26 @@ from pathlib import Path
 
 import pytest
 
-from core.classification_contract import parse_stage1_classifications
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    CANONICAL_PROMPT_VERSION,
+    CANONICAL_TAXONOMY_VERSION,
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    LEGACY_POST_TYPE_KEYS,
+    LEGACY_PRODUCT_LABEL_KEYS,
+    LEGACY_STAGE1_PROMPT_VERSION,
+    LEGACY_STAGE1_TAXONOMY_VERSION,
+    POST_TYPE_KEYS,
+    PRODUCT_LABEL_KEYS,
+    PROMPT_VERSION,
+    TAXONOMY_KEY_CROSSWALK,
+    TAXONOMY_VERSION,
+    canonicalize_taxonomy_key,
+    parse_stage1_classifications,
+    taxonomy_crosswalk_rows,
+)
 
 FIXTURE_PATH = Path("tests/fixtures/classification_stage1_contract_v1.json")
 
@@ -44,8 +63,6 @@ def test_stored_fixture_matches_expected_contract_outcome(case):
 
 
 def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
-    from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
-
     cases = _contract_fixture()["cases"]
     valid_rows = [
         row
@@ -63,6 +80,82 @@ def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
     assert {
         source for case in cases for source in case["context_provenance"]
     } == {"stored_quote", "local_parent"}
+
+
+def test_taxonomy_v2_version_roles_leave_release_a_writer_unchanged():
+    assert CONTRACT_VERSION == "stage1-v1"
+    assert LEGACY_STAGE1_TAXONOMY_VERSION == "stage1-taxonomy-v1"
+    assert LEGACY_STAGE1_PROMPT_VERSION == "stage1-prompt-v2"
+    assert TAXONOMY_VERSION == LEGACY_STAGE1_TAXONOMY_VERSION
+    assert PROMPT_VERSION == LEGACY_STAGE1_PROMPT_VERSION
+    assert POST_TYPE_KEYS is LEGACY_POST_TYPE_KEYS
+    assert PRODUCT_LABEL_KEYS is LEGACY_PRODUCT_LABEL_KEYS
+    assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v2"
+    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v3"
+    assert COMPATIBLE_TAXONOMY_VERSIONS == (
+        LEGACY_STAGE1_TAXONOMY_VERSION,
+        CANONICAL_TAXONOMY_VERSION,
+    )
+
+
+def test_taxonomy_v2_crosswalk_is_total_ordered_and_collision_free():
+    expected_aliases = {
+        ("post_type", "buzz_releases"): "releases_updates",
+        ("post_type", "performance_comparisons"): "results_evaluations",
+        ("post_type", "feedback_questions"): "questions_requests",
+        ("post_type", "event_announcement"): "events_opportunities",
+        ("product_label", "product_request"): "ideas_requests",
+    }
+    pairs = [(family, source) for family, source, _ in TAXONOMY_KEY_CROSSWALK]
+
+    assert len(pairs) == len(set(pairs))
+    assert {
+        (family, source): canonical
+        for family, source, canonical in TAXONOMY_KEY_CROSSWALK
+        if source != canonical
+    } == expected_aliases
+    assert {
+        canonicalize_taxonomy_key("post_type", key)
+        for key in (*POST_TYPE_KEYS, *CANONICAL_POST_TYPE_KEYS)
+    } == set(CANONICAL_POST_TYPE_KEYS)
+    assert {
+        canonicalize_taxonomy_key("product_label", key)
+        for key in (*PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS)
+    } == set(CANONICAL_PRODUCT_LABEL_KEYS)
+    assert all(
+        canonicalize_taxonomy_key(family, key) == key
+        for family, keys in (
+            ("post_type", CANONICAL_POST_TYPE_KEYS),
+            ("product_label", CANONICAL_PRODUCT_LABEL_KEYS),
+        )
+        for key in keys
+    )
+    assert canonicalize_taxonomy_key("post_type", "unknown") is None
+    assert canonicalize_taxonomy_key("unknown", "other") is None
+    assert taxonomy_crosswalk_rows("post_type") == tuple(
+        (source, canonical)
+        for family, source, canonical in TAXONOMY_KEY_CROSSWALK
+        if family == "post_type"
+    )
+    with pytest.raises(ValueError, match="Unknown taxonomy family"):
+        taxonomy_crosswalk_rows("unknown")
+
+
+def test_release_a_parser_rejects_future_canonical_provider_keys():
+    row = {
+        "brand_id": "deepseek",
+        "outcome": "classified",
+        "post_types": ["releases_updates"],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": None,
+        "us_nationalism": None,
+    }
+    assert parse_stage1_classifications([row], ["deepseek"]) is None
+
+    row["post_types"] = ["other"]
+    row["product_labels"] = ["ideas_requests"]
+    assert parse_stage1_classifications([row], ["deepseek"]) is None
 
 
 def test_contract_preserves_all_types_and_empty_product_labels():

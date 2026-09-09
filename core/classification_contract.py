@@ -11,10 +11,21 @@ from collections.abc import Iterable
 from typing import Any
 
 CONTRACT_VERSION = "stage1-v1"
-TAXONOMY_VERSION = "stage1-taxonomy-v1"
-PROMPT_VERSION = "stage1-prompt-v2"
+LEGACY_STAGE1_TAXONOMY_VERSION = "stage1-taxonomy-v1"
+LEGACY_STAGE1_PROMPT_VERSION = "stage1-prompt-v2"
+TAXONOMY_VERSION = LEGACY_STAGE1_TAXONOMY_VERSION
+PROMPT_VERSION = LEGACY_STAGE1_PROMPT_VERSION
 
-POST_TYPE_KEYS = (
+# Release A continues to write the versions above. These constants describe
+# the Release B write target without changing the active provider parser.
+CANONICAL_TAXONOMY_VERSION = "stage1-taxonomy-v2"
+CANONICAL_PROMPT_VERSION = "stage1-prompt-v3"
+COMPATIBLE_TAXONOMY_VERSIONS = (
+    LEGACY_STAGE1_TAXONOMY_VERSION,
+    CANONICAL_TAXONOMY_VERSION,
+)
+
+LEGACY_POST_TYPE_KEYS = (
     "buzz_releases",
     "hands_on_usage",
     "performance_comparisons",
@@ -26,16 +37,105 @@ POST_TYPE_KEYS = (
     "business_finance",
     "other",
 )
-PRODUCT_LABEL_KEYS = (
+LEGACY_PRODUCT_LABEL_KEYS = (
     "bug",
     "complaint",
     "testimonial",
     "product_request",
     "misinformation",
 )
+POST_TYPE_KEYS = LEGACY_POST_TYPE_KEYS
+PRODUCT_LABEL_KEYS = LEGACY_PRODUCT_LABEL_KEYS
+CANONICAL_POST_TYPE_KEYS = (
+    "releases_updates",
+    "hands_on_usage",
+    "results_evaluations",
+    "questions_requests",
+    "advertising_marketing",
+    "events_opportunities",
+    "opinions_reactions",
+    "research_explanations",
+    "business_finance",
+    "other",
+)
+CANONICAL_PRODUCT_LABEL_KEYS = (
+    "bug",
+    "complaint",
+    "testimonial",
+    "ideas_requests",
+    "misinformation",
+)
 SENTIMENT_KEYS = ("positive", "negative", "neutral", "mixed")
 NATIONALISM_KEYS = ("none", "mild_pro", "pro", "constructive_critical", "anti", "mixed")
 OUTCOMES = ("classified", "context_missing")
+
+# Ordered relation shared by Python callers and parameterized SQL VALUES
+# clauses. It includes every compatible source key, including canonical
+# identities, so consumers do not need their own alias maps.
+TAXONOMY_KEY_CROSSWALK = (
+    ("post_type", "buzz_releases", "releases_updates"),
+    ("post_type", "releases_updates", "releases_updates"),
+    ("post_type", "hands_on_usage", "hands_on_usage"),
+    ("post_type", "performance_comparisons", "results_evaluations"),
+    ("post_type", "results_evaluations", "results_evaluations"),
+    ("post_type", "feedback_questions", "questions_requests"),
+    ("post_type", "questions_requests", "questions_requests"),
+    ("post_type", "advertising_marketing", "advertising_marketing"),
+    ("post_type", "event_announcement", "events_opportunities"),
+    ("post_type", "events_opportunities", "events_opportunities"),
+    ("post_type", "opinions_reactions", "opinions_reactions"),
+    ("post_type", "research_explanations", "research_explanations"),
+    ("post_type", "business_finance", "business_finance"),
+    ("post_type", "other", "other"),
+    ("product_label", "bug", "bug"),
+    ("product_label", "complaint", "complaint"),
+    ("product_label", "testimonial", "testimonial"),
+    ("product_label", "product_request", "ideas_requests"),
+    ("product_label", "ideas_requests", "ideas_requests"),
+    ("product_label", "misinformation", "misinformation"),
+)
+
+_CANONICAL_KEYS_BY_FAMILY = {
+    "post_type": frozenset(CANONICAL_POST_TYPE_KEYS),
+    "product_label": frozenset(CANONICAL_PRODUCT_LABEL_KEYS),
+}
+
+
+def _build_taxonomy_key_map() -> dict[tuple[str, str], str]:
+    result: dict[tuple[str, str], str] = {}
+    for family, source_key, canonical_key in TAXONOMY_KEY_CROSSWALK:
+        pair = (family, source_key)
+        if pair in result:
+            raise ValueError(f"Duplicate taxonomy crosswalk source: {pair!r}")
+        if canonical_key not in _CANONICAL_KEYS_BY_FAMILY.get(family, ()):
+            raise ValueError(
+                f"Invalid taxonomy crosswalk target: {(family, canonical_key)!r}"
+            )
+        result[pair] = canonical_key
+    return result
+
+
+_TAXONOMY_KEY_MAP = _build_taxonomy_key_map()
+
+
+def taxonomy_crosswalk_rows(family: str) -> tuple[tuple[str, str], ...]:
+    """Return ordered ``(source, canonical)`` rows for SQL ``VALUES`` params."""
+
+    if family not in _CANONICAL_KEYS_BY_FAMILY:
+        raise ValueError(f"Unknown taxonomy family: {family!r}")
+    return tuple(
+        (source_key, canonical_key)
+        for row_family, source_key, canonical_key in TAXONOMY_KEY_CROSSWALK
+        if row_family == family
+    )
+
+
+def canonicalize_taxonomy_key(family: str, key: str) -> str | None:
+    """Return the canonical v2 key for one recognized compatible input."""
+
+    return _TAXONOMY_KEY_MAP.get((family, key))
+
+
 CLASSIFICATION_FIELDS = frozenset(
     {
         "brand_id",

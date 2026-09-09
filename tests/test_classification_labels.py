@@ -12,8 +12,21 @@ from __future__ import annotations
 
 import pytest
 
-from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
-from core.classification_labels import POST_TYPE_LABELS, PRODUCT_LABEL_LABELS
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    NATIONALISM_KEYS,
+    PRODUCT_LABEL_KEYS,
+    SENTIMENT_KEYS,
+)
+from core.classification_labels import (
+    DISCOURSE_LABELS,
+    NATIONALISM_LABELS,
+    POST_TYPE_LABELS,
+    PRODUCT_LABEL_LABELS,
+    ROLE_LABELS,
+    SENTIMENT_LABELS,
+)
 from core.models import (
     NationalismKey,
     NationalismLabel,
@@ -51,12 +64,79 @@ class TestLocaleToLangCodes:
 
 
 def test_stage1_label_constants_match_the_frozen_taxonomy():
-    assert tuple(POST_TYPE_LABELS) == POST_TYPE_KEYS
-    assert tuple(PRODUCT_LABEL_LABELS) == PRODUCT_LABEL_KEYS
-    assert all(set(labels) == {"en", "zh-cn"} for labels in POST_TYPE_LABELS.values())
+    active = {
+        "post_type": (CANONICAL_POST_TYPE_KEYS, POST_TYPE_LABELS),
+        "product_label": (CANONICAL_PRODUCT_LABEL_KEYS, PRODUCT_LABEL_LABELS),
+        "sentiment": (SENTIMENT_KEYS, SENTIMENT_LABELS),
+        "nationalism": (NATIONALISM_KEYS, NATIONALISM_LABELS),
+    }
+
+    assert sum(len(keys) for keys, _ in active.values()) == 25
+    for keys, labels_by_key in active.values():
+        assert all(set(labels_by_key[key]) == {"en", "zh-cn", "ja"} for key in keys)
+        assert all(
+            labels_by_key[key][lang].strip()
+            for key in keys
+            for lang in ("en", "zh-cn", "ja")
+        )
+
+    assert all("ja" not in labels for labels in DISCOURSE_LABELS.values())
+    assert all("ja" not in labels for labels in ROLE_LABELS.values())
+
+
+def test_japanese_labels_match_the_reviewed_implementation_copy():
+    assert {
+        **{key: POST_TYPE_LABELS[key]["ja"] for key in CANONICAL_POST_TYPE_KEYS},
+        **{
+            key: PRODUCT_LABEL_LABELS[key]["ja"]
+            for key in CANONICAL_PRODUCT_LABEL_KEYS
+        },
+        **{f"sentiment:{key}": SENTIMENT_LABELS[key]["ja"] for key in SENTIMENT_KEYS},
+        **{
+            f"nationalism:{key}": NATIONALISM_LABELS[key]["ja"]
+            for key in NATIONALISM_KEYS
+        },
+    } == {
+        "releases_updates": "リリース・アップデート",
+        "hands_on_usage": "使用体験",
+        "results_evaluations": "結果・評価",
+        "questions_requests": "質問・要望",
+        "advertising_marketing": "広告・マーケティング",
+        "events_opportunities": "イベント・機会",
+        "opinions_reactions": "意見・反応",
+        "research_explanations": "研究・解説",
+        "business_finance": "ビジネス・金融",
+        "other": "その他",
+        "bug": "バグ",
+        "complaint": "苦情",
+        "testimonial": "推奨の声",
+        "ideas_requests": "アイデア・要望",
+        "misinformation": "誤情報の可能性",
+        "sentiment:positive": "ポジティブ",
+        "sentiment:negative": "ネガティブ",
+        "sentiment:neutral": "中立",
+        "sentiment:mixed": "賛否混在",
+        "nationalism:none": "なし",
+        "nationalism:mild_pro": "控えめな支持",
+        "nationalism:pro": "支持",
+        "nationalism:constructive_critical": "建設的な批判",
+        "nationalism:anti": "反対",
+        "nationalism:mixed": "賛否混在",
+    }
+
+
+def test_legacy_alias_labels_remain_english_chinese_only():
+    legacy_aliases = {
+        "buzz_releases": POST_TYPE_LABELS,
+        "performance_comparisons": POST_TYPE_LABELS,
+        "feedback_questions": POST_TYPE_LABELS,
+        "event_announcement": POST_TYPE_LABELS,
+        "product_request": PRODUCT_LABEL_LABELS,
+    }
+
     assert all(
-        set(labels) == {"en", "zh-cn"}
-        for labels in PRODUCT_LABEL_LABELS.values()
+        set(labels[key]) == {"en", "zh-cn"}
+        for key, labels in legacy_aliases.items()
     )
 
 
