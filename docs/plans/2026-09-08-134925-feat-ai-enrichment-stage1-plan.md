@@ -661,3 +661,28 @@ Planning confidence is high for the five-key crosswalk, latest-state provenance 
 The amendment confidence check strengthened crosswalk ownership, canonicalization before SQL aggregation, the latest-state analysis limitation, Release A/B identity and rollback proof, runner isolation, and Japanese parity boundaries. The plan includes data-flow, state, two-release rollout, and three-population analysis diagrams; every new feature-bearing unit has concrete files, failure cases, integration proof, and observable completion criteria.
 
 Independent non-interactive document review on 2026-09-08 found four material issues in the original plan; all were resolved before U1–U5. The September 9 amendment adds U6–U11 without rewriting that historical proof. Its design review selected compatibility-first staging, original-provenance retention, canonical-before-aggregation semantics, and explicit non-blended analysis. A second independent amendment review resolved nine implementation blockers covering exact Japanese copy, range basis, unknown-version fallback, version activation ownership, migration irreversibility, rollback proof, alias lifetime, receipt ownership, and legacy-map provenance; closure review found no remaining blocker.
+
+## Execution State — Taxonomy v2 Follow-up
+
+U6–U11 are complete through the owner-authorized staging target. Release A
+product revision `a1b72acb8a146092d933c49a54e79aca2ce873d7` and metadata
+revision `a698504e43134064b5d000dbe2f96f78d7aa56f0` first established compatible
+v1/v2 reads on staging. Release B product revision
+`6bc9fd952eff558dc9f7c2e26a86b8967230331b` and metadata revision
+`a6599bcacc360879cc8037b429fa151613eccbd6` then activated the canonical
+taxonomy-v2/prompt-v3 writer and migration 0030.
+
+The Release B focused, aggregate, candidate, browser, headline, migration,
+analysis, and exact-M_A-on-post-0030 compatibility gates passed. Staging web and
+the headline worker report exact M_B. The erroneous staging harvest cron
+remains suspended on older code with its dormant schedule and did not run.
+Staging finishes on M_B; the application-only rollback proof did not reverse
+migration 0030 or move staging backward.
+
+The durable evidence is
+`docs/analysis/2026-09-09-175200-ai-enrichment-stage1-taxonomy-v2-staging.md`.
+The completed Stage 0 baseline and original taxonomy-v1 Stage 1 receipts remain
+immutable historical evidence. No provider call, production database read, new
+baseline, or new cohort capture occurred during this follow-up. Production
+promotion is still unauthorized, and R17's heldout semantic-quality assessment
+remains a preproduction gate.
