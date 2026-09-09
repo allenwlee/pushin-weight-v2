@@ -48,11 +48,10 @@ class AnalysisInputError(ValueError):
     def __init__(self, code: str, message: str, *, field: str | None = None) -> None:
         super().__init__(message)
         self.code = code
-        self.message = message
         self.field = field
 
     def as_dict(self) -> dict[str, str]:
-        result = {"code": self.code, "message": self.message}
+        result = {"code": self.code, "message": str(self)}
         if self.field is not None:
             result["field"] = self.field
         return result

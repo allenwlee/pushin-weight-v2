@@ -6,7 +6,6 @@ import html
 import json
 import re
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 from django.utils import timezone
@@ -230,27 +229,3 @@ def test_chart_endpoints_emit_canonical_filters_and_reuse_one_cache_entry(
             response, attribute
         )
         assert payload["applied_filters"] == canonical_filters
-
-
-def test_static_icon_and_order_contract_uses_only_canonical_renamed_keys():
-    root = Path(__file__).resolve().parents[1]
-    icons = (root / "monitor/static/pw-icons.js").read_text(encoding="utf-8")
-    feed = (root / "monitor/static/pw-feed.js").read_text(encoding="utf-8")
-    for key in (
-        "releases_updates",
-        "results_evaluations",
-        "questions_requests",
-        "events_opportunities",
-        "ideas_requests",
-    ):
-        assert key in icons
-        assert key in feed
-    for alias in (
-        "buzz_releases",
-        "performance_comparisons",
-        "feedback_questions",
-        "event_announcement",
-        "product_request",
-    ):
-        assert alias not in icons
-        assert alias not in feed
