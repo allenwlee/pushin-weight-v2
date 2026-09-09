@@ -468,7 +468,7 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
             "classification_status": "succeeded",
             "classification_outcome": "classified",
             "scalar_source": "current",
-            "post_type_keys": ["buzz_releases"],
+            "post_type_keys": ["releases_updates"],
             "product_label_keys": ["testimonial"],
             "sentiment_keys": ["positive"],
             "china_nationalism_keys": ["none"],
@@ -514,7 +514,7 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
     assert evidence["translation_status"] == "succeeded"
     assert evidence["classification_status"] == "succeeded"
     assert evidence["taxonomy"] == {
-        "post_types": {"status": "available", "values": ["buzz_releases"]},
+        "post_types": {"status": "available", "values": ["releases_updates"]},
         "product_labels": {"status": "available", "values": ["testimonial"]},
         "china_nationalism": {
             "status": "available", "values": ["none"], "provenance": "current"
@@ -802,7 +802,7 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
                     "selected_covered_count": 145,
                 "labels": [
                     {
-                        "key": "buzz_releases",
+                        "key": "releases_updates",
                         "selected_count": 52,
                         "prior_count": 12,
                         "selected_basis_count": 145,
@@ -839,7 +839,7 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
     by_metric = {fact["metric"]: fact for fact in facts}
 
     assert by_metric["post_count_change_pct"]["display_en"] == "45%"
-    assert by_metric["buzz_releases_share_change_pp"]["display_en"] == "24 pts"
+    assert by_metric["releases_updates_share_change_pp"]["display_en"] == "24 pts"
     assert by_metric["positive_share_change_pp"]["display_en"] == "13 pts"
     assert by_metric["official_staff_post_count"]["display_en"] == "4 posts"
     assert all(fact["fact_id"].startswith("f:deepseek:") for fact in facts)

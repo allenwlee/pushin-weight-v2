@@ -375,7 +375,7 @@
         "handle": "@kimi_moonshot",
         "offset_minutes": 12,
         "post_types": [
-          "buzz_releases",
+          "releases_updates",
           "hands_on_usage"
         ],
         "sentiments": [
@@ -393,8 +393,8 @@
         "handle": "@awnihannun",
         "offset_minutes": 24,
         "post_types": [
-          "performance_comparisons",
-          "feedback_questions"
+          "results_evaluations",
+          "questions_requests"
         ],
         "sentiments": [
           "negative"
@@ -410,9 +410,9 @@
         "handle": "@rasbt",
         "offset_minutes": 41,
         "post_types": [
-          "buzz_releases",
+          "releases_updates",
           "advertising_marketing",
-          "event_announcement"
+          "events_opportunities"
         ],
         "sentiments": [
           "positive",

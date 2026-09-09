@@ -12,7 +12,7 @@ def test_renderer_shows_stage1_arrays_without_discourse():
         "111": [{
             "brand_id": "glm",
             "outcome": "classified",
-            "post_types": ["performance_comparisons", "research_explanations"],
+            "post_types": ["results_evaluations", "research_explanations"],
             "product_labels": ["bug", "complaint"],
             "sentiment": "mixed",
             "china_nationalism": None,
@@ -21,7 +21,7 @@ def test_renderer_shows_stage1_arrays_without_discourse():
     }
     output = _render_sample_posts(sample, translations, rows)
     assert "glm outcome=classified" in output
-    assert "      - performance_comparisons" in output
+    assert "      - results_evaluations" in output
     assert "      - research_explanations" in output
     assert "    product_labels:" in output
     assert "      - bug" in output
@@ -58,8 +58,8 @@ def test_renderer_keeps_brand_rows_separate_without_cartesian_expansion():
     sample = [{"tweet_id": "333", "text": "GLM and Kimi"}]
     base = {
         "outcome": "classified",
-        "post_types": ["performance_comparisons", "feedback_questions"],
-        "product_labels": ["product_request"],
+        "post_types": ["results_evaluations", "questions_requests"],
+        "product_labels": ["ideas_requests"],
         "sentiment": "neutral",
         "china_nationalism": "none",
         "us_nationalism": "none",

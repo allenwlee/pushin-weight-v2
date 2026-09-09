@@ -561,9 +561,9 @@ def test_stage1_canonical_taxonomy_state_is_current_compatible(checker):
     classification = payload["posts"][0]["brand_classifications"][0]
     assert classification["state"] == "current"
     assert classification["taxonomy_version_current_compatible"] is True
-    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v1"
+    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v2"
     assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v2"
-    assert classification["active_write_prompt_version"] == "stage1-prompt-v2"
+    assert classification["active_write_prompt_version"] == "stage1-prompt-v3"
     assert classification["latest_prompt_version"] == "stage1-prompt-v3"
 
 
@@ -924,6 +924,12 @@ def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
 
     executor = MigrationExecutor(connection)
     try:
+        # Migration 0030 is intentionally irreversible and data-only. Remove
+        # only its recorder row before exercising the older schema profiles.
+        executor.recorder.record_unapplied(
+            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        )
+        executor = MigrationExecutor(connection)
         executor.migrate(before)
         legacy_apps = executor.loader.project_state(before).apps
         Post = legacy_apps.get_model("core", "Post")

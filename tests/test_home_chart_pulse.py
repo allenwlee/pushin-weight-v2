@@ -167,7 +167,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(_round_pulse_percent(200, 201), 0)
 
     def test_chart_uses_set_based_shared_predicate_and_atomic_pulse_anchor(self):
-        PostTypeKey.objects.get_or_create(key="buzz_releases")
+        PostTypeKey.objects.get_or_create(key="releases_updates")
         SentimentKey.objects.get_or_create(key="positive")
         DiscourseKey.objects.get_or_create(key="genuine_hype")
         ProductLabelKey.objects.get_or_create(key="bug")
@@ -185,7 +185,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         PostBrandSignal.objects.create(
             post=post,
             brand=brand,
-            post_type_id="buzz_releases",
+            post_type_id="releases_updates",
             sentiment_id="positive",
         )
         PostBrandDiscourse.objects.create(
@@ -219,7 +219,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         active = {
             "brands": ["up"],
             "product_labels": ["bug"],
-            "post_types": ["buzz_releases"],
+            "post_types": ["releases_updates"],
             "sentiment": ["positive"],
             "lang": ["en"],
             "cn_nationalism": ["pro"],
@@ -336,7 +336,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         sample = {
             "brand_nicknames": ["up"],
             "product_labels": ["bug"],
-            "post_types": ["buzz_releases"],
+            "post_types": ["releases_updates"],
             "sentiments": ["positive"],
             "role_key": "official",
             "lang_detected": "en",

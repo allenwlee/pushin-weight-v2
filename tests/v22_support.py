@@ -65,7 +65,7 @@ def _ensure_stage1_product_label_keys() -> None:
         "bug",
         "complaint",
         "testimonial",
-        "product_request",
+        "ideas_requests",
         "misinformation",
     ):
         ProductLabelKey.objects.get_or_create(key=key)
@@ -202,7 +202,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
                 "accent_color": "#d97706",
             },
         )
-    for key in ("buzz_releases", "hands_on_usage", "feedback_questions", "other"):
+    for key in ("releases_updates", "hands_on_usage", "questions_requests", "other"):
         PostTypeKey.objects.get_or_create(key=key)
     for key in ("positive", "negative", "mixed", "neutral"):
         SentimentKey.objects.get_or_create(key=key)
@@ -252,7 +252,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
         PostBrand.objects.create(post=post, brand=primary)
         if index == 0:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="buzz_releases", sentiment_id="positive"
+                post=post, brand=primary, post_type_id="releases_updates", sentiment_id="positive"
             )
             secondary = brands["deepseek"]
             PostBrand.objects.create(post=post, brand=secondary)
@@ -270,7 +270,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             )
         elif index == 51:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="negative"
+                post=post, brand=primary, post_type_id="questions_requests", sentiment_id="negative"
             )
             secondary = brands["deepseek"]
             PostBrand.objects.create(post=post, brand=secondary)
@@ -282,7 +282,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             PostBrandSignal.objects.create(
                 post=post,
                 brand=primary,
-                post_type_id="feedback_questions",
+                post_type_id="questions_requests",
                 sentiment_id="negative",
             )
             secondary = brands["minimax"]
@@ -296,7 +296,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             discourse_brand = primary
         else:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="positive"
+                post=post, brand=primary, post_type_id="questions_requests", sentiment_id="positive"
             )
             discourse_brand = primary
         PostBrandDiscourse.objects.create(

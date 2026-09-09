@@ -696,10 +696,10 @@ def test_half_open_boundaries_and_duplicate_signals_do_not_multiply_counts():
         authors=1,
         created_at=AS_OF + timedelta(seconds=1),
     )
-    for key in ("buzz_releases", "hands_on_usage"):
-            PostTypeKey.objects.get_or_create(key=key)
+    for key in ("releases_updates", "hands_on_usage"):
+        PostTypeKey.objects.get_or_create(key=key)
     SentimentKey.objects.get_or_create(key="positive")
-    for key in ("buzz_releases", "hands_on_usage"):
+    for key in ("releases_updates", "hands_on_usage"):
         PostBrandSignal.objects.create(
             post=recent[0],
             brand=brand,
@@ -1373,12 +1373,12 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         authors=10,
         created_at=AS_OF - timedelta(days=1, hours=1),
     )
-    for key in ("buzz_releases", "hands_on_usage"):
+    for key in ("releases_updates", "hands_on_usage"):
         PostTypeKey.objects.get_or_create(key=key)
     SentimentKey.objects.get_or_create(key="positive")
     ProductLabelKey.objects.get_or_create(key="testimonial")
     for post in selected:
-        for post_type in ("buzz_releases", "hands_on_usage"):
+        for post_type in ("releases_updates", "hands_on_usage"):
             PostBrandSignal.objects.create(
                 post=post,
                 brand=brand,
@@ -1393,7 +1393,7 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         PostBrandSignal.objects.create(
             post=post,
             brand=brand,
-            post_type_id="buzz_releases",
+            post_type_id="releases_updates",
             sentiment_id="positive",
         )
         _state(post, brand)
