@@ -15,8 +15,11 @@ import pytest
 from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
     CANONICAL_PRODUCT_LABEL_KEYS,
+    LEGACY_POST_TYPE_KEYS,
+    LEGACY_PRODUCT_LABEL_KEYS,
     NATIONALISM_KEYS,
     SENTIMENT_KEYS,
+    TAXONOMY_VERSION,
 )
 from core.classification_labels import (
     DISCOURSE_LABELS,
@@ -139,13 +142,85 @@ def test_legacy_alias_labels_remain_english_chinese_only():
     )
 
 
-@pytest.mark.django_db
-def test_seed_command_is_idempotent_for_stage1_product_labels():
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_seed_command_restores_v1_aliases_and_supports_active_writer():
     from django.core.management import call_command
 
+    from core.models import (
+        Brand,
+        Post,
+        PostBrand,
+        PostBrandClassificationState,
+        PostBrandProductLabel,
+        PostBrandSignal,
+        PostEnrichmentState,
+    )
+    from monitor.cycle import _publish_stage1_classification
+
+    call_command("flush", verbosity=0, interactive=False)
+    legacy_post_aliases = tuple(
+        key for key in LEGACY_POST_TYPE_KEYS if key not in CANONICAL_POST_TYPE_KEYS
+    )
+    legacy_product_aliases = tuple(
+        key
+        for key in LEGACY_PRODUCT_LABEL_KEYS
+        if key not in CANONICAL_PRODUCT_LABEL_KEYS
+    )
+    assert legacy_post_aliases == (
+        "buzz_releases",
+        "performance_comparisons",
+        "feedback_questions",
+        "event_announcement",
+    )
+    assert legacy_product_aliases == ("product_request",)
+
+    for key in legacy_post_aliases:
+        key_row, _created = PostTypeKey.objects.get_or_create(key=key)
+        for lang in ("en", "zh-cn"):
+            PostTypeLabel.objects.update_or_create(
+                post_type=key_row,
+                lang=lang,
+                defaults={"label": POST_TYPE_LABELS[key][lang]},
+            )
+    for key in legacy_product_aliases:
+        key_row, _created = ProductLabelKey.objects.get_or_create(key=key)
+        for lang in ("en", "zh-cn"):
+            ProductLabelLabel.objects.update_or_create(
+                product_label=key_row,
+                lang=lang,
+                defaults={"label": PRODUCT_LABEL_LABELS[key][lang]},
+            )
+    PostTypeLabel.objects.filter(post_type_id__in=legacy_post_aliases).delete()
+    ProductLabelLabel.objects.filter(
+        product_label_id__in=legacy_product_aliases
+    ).delete()
+    PostTypeKey.objects.filter(key__in=legacy_post_aliases).delete()
+    ProductLabelKey.objects.filter(key__in=legacy_product_aliases).delete()
+    assert not PostTypeKey.objects.filter(key__in=legacy_post_aliases).exists()
+    assert not ProductLabelKey.objects.filter(key__in=legacy_product_aliases).exists()
+    other, _created = PostTypeKey.objects.get_or_create(key="other")
+    PostTypeLabel.objects.update_or_create(
+        post_type=other,
+        lang="en",
+        defaults={"label": "Preserved custom Other"},
+    )
+
     call_command("seed_i18n_labels")
     call_command("seed_i18n_labels")
 
+    for key in legacy_post_aliases:
+        assert set(
+            PostTypeLabel.objects.filter(post_type_id=key).values_list(
+                "lang", flat=True
+            )
+        ) == {"en", "zh-cn"}
+    for key in legacy_product_aliases:
+        assert set(
+            ProductLabelLabel.objects.filter(product_label_id=key).values_list(
+                "lang", flat=True
+            )
+        ) == {"en", "zh-cn"}
     assert set(CANONICAL_PRODUCT_LABEL_KEYS).issubset(
         ProductLabelKey.objects.values_list("key", flat=True)
     )
@@ -153,15 +228,60 @@ def test_seed_command_is_idempotent_for_stage1_product_labels():
         product_label_id__in=CANONICAL_PRODUCT_LABEL_KEYS,
         lang__in=("en", "zh-cn", "ja"),
     ).count() == len(CANONICAL_PRODUCT_LABEL_KEYS) * 3
-    assert ProductLabelLabel.objects.filter(lang="ja").count() == len(
-        CANONICAL_PRODUCT_LABEL_KEYS
+    active_ja_count = sum(
+        Label.objects.filter(**{f"{foreign_key}__in": keys}, lang="ja").count()
+        for Label, foreign_key, keys in (
+            (PostTypeLabel, "post_type_id", CANONICAL_POST_TYPE_KEYS),
+            (ProductLabelLabel, "product_label_id", CANONICAL_PRODUCT_LABEL_KEYS),
+            (SentimentLabel, "sentiment_id", SENTIMENT_KEYS),
+            (NationalismLabel, "nationalism_id", NATIONALISM_KEYS),
+        )
     )
-    assert ProductLabelLabel.objects.filter(
-        product_label_id="product_request", lang__in=("en", "zh-cn")
-    ).count() == 2
-    assert not ProductLabelLabel.objects.filter(
-        product_label_id="product_request", lang="ja"
-    ).exists()
+    assert active_ja_count == 25
+    assert PostTypeLabel.objects.get(post_type_id="other", lang="en").label == (
+        "Preserved custom Other"
+    )
+
+    post = Post.objects.create(
+        tweet_id="seed-v1-writer", text="seed v1 writer", lang_detected="en"
+    )
+    brand = Brand.objects.create(nickname="seed-v1-writer", display_name="Seed V1")
+    PostBrand.objects.create(post=post, brand=brand)
+    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v1-writer")
+    classification = {
+        "outcome": "classified",
+        "post_types": list(legacy_post_aliases),
+        "product_labels": list(legacy_product_aliases),
+        "sentiment": "neutral",
+        "china_nationalism": None,
+        "us_nationalism": None,
+    }
+    published = _publish_stage1_classification(
+        post_id=post.pk,
+        result={
+            "valid": True,
+            "unsanctioned_flags": [],
+            "by_brand": {brand.pk: classification},
+        },
+        tweet={"text": post.text, "context": []},
+        model="seed-test-model",
+        run_id="seed-v1-writer",
+    )
+
+    assert published is not None
+    assert PostBrandClassificationState.objects.get(
+        post=post, brand=brand
+    ).taxonomy_version == TAXONOMY_VERSION
+    assert set(
+        PostBrandSignal.objects.filter(post=post, brand=brand).values_list(
+            "post_type_id", flat=True
+        )
+    ) == set(legacy_post_aliases)
+    assert set(
+        PostBrandProductLabel.objects.filter(post=post, brand=brand).values_list(
+            "product_label_id", flat=True
+        )
+    ) == set(legacy_product_aliases)
 
 
 class TestLocalizeEmptyCache:

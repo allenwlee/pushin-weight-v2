@@ -210,6 +210,44 @@ def test_result_json_and_query_identity_are_deterministic(monkeypatch):
     assert first["identity"]["source_revision"] == "a" * 40
 
 
+def test_render_revision_identity_normalizes_without_invoking_git(monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", f"  {'A' * 40}\n")
+    monkeypatch.setattr(
+        analysis, "_resolve_source_identity", REAL_RESOLVE_SOURCE_IDENTITY
+    )
+    monkeypatch.setattr(
+        analysis.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("Git must not run for a Render SHA"),
+    )
+
+    assert analysis._resolve_source_identity() == analysis._SourceIdentity(
+        "a" * 40, "render_deploy", False
+    )
+
+
+def test_invalid_render_revision_is_explicit_without_invoking_git(monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", " not-a-full-sha ")
+    monkeypatch.setattr(
+        analysis, "_resolve_source_identity", REAL_RESOLVE_SOURCE_IDENTITY
+    )
+    monkeypatch.setattr(
+        analysis.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Git must not run for an invalid Render SHA"
+        ),
+    )
+    monkeypatch.setattr(analysis, "_query_rows", lambda _request: _rows())
+
+    result = analyze_classifications(_request())
+
+    assert result["identity"]["source_revision"] == "unavailable"
+    assert result["identity"]["source_revision_kind"] == "invalid_render_environment"
+    assert result["identity"]["source_worktree_dirty"] is None
+    assert {"code": "source_revision_unavailable"} in result["warnings"]
+
+
 def test_nested_archive_does_not_borrow_parent_repository_identity(
     monkeypatch, tmp_path
 ):
@@ -307,6 +345,26 @@ def test_crosswalk_collision_fails_before_query(monkeypatch):
         analysis,
         "_query_rows",
         lambda _request: pytest.fail("query must not run after crosswalk collision"),
+    )
+
+    with pytest.raises(AnalysisInputError) as caught:
+        analyze_classifications(_request())
+    assert caught.value.code == "invalid_taxonomy_crosswalk"
+
+
+def test_missing_legacy_dashboard_key_fails_before_query(monkeypatch):
+    real_helper = analysis.taxonomy_crosswalk_rows
+    missing_key = analysis.LEGACY_DASHBOARD_POST_TYPE_KEYS[0]
+
+    def incomplete(family):
+        rows = real_helper(family)
+        return tuple(row for row in rows if row[0] != missing_key)
+
+    monkeypatch.setattr(analysis, "taxonomy_crosswalk_rows", incomplete)
+    monkeypatch.setattr(
+        analysis,
+        "_query_rows",
+        lambda _request: pytest.fail("query must not run with an incomplete crosswalk"),
     )
 
     with pytest.raises(AnalysisInputError) as caught:
