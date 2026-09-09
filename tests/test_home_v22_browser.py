@@ -4078,7 +4078,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row["account"]["role"], "official")
         self.assertEqual(row["account"]["role_label"], "官方")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
-        self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
+        self.assertEqual(row["post_type_keys"], ["releases_updates", "hands_on_usage"])
         self.assertEqual(row["product_label_keys"], ["bug"])
         self.assertEqual(row["nat_cn"], "pro")
         self.assertEqual(row["nat_us"], "mild_pro")
