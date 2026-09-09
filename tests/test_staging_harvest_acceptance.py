@@ -660,7 +660,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         database=_Connection(),
         policy=load_policy(POLICY_PATH),
     )
-    PostTypeKey.objects.get_or_create(key="buzz_releases")
+    PostTypeKey.objects.get_or_create(key="releases_updates")
     SentimentKey.objects.get_or_create(key="positive")
     tweet_id = "999000000000001"
     now = timezone.now()
@@ -724,7 +724,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
                 "by_brand": {
                     "deepseek": {
                         "outcome": "classified",
-                        "post_types": ["buzz_releases"],
+                        "post_types": ["releases_updates"],
                         "product_labels": [],
                         "sentiment": "positive",
                         "china_nationalism": None,

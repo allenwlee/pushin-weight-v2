@@ -62,10 +62,10 @@ def test_prompt_contains_taxonomy_boundaries_from_settled_contract():
         "Future intent",
         "news roundup is not hands_on_usage",
         "release date",
-        "not event_announcement",
+        "not events_opportunities",
         "substantive recap",
         "Mentioning a benchmark",
-        "Rhetorical headings are not feedback_questions",
+        "Rhetorical headings are not questions_requests",
         "parent companies",
     ):
         assert boundary in prompt
@@ -104,7 +104,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v2"
+    assert PROMPT_VERSION == "stage1-prompt-v3"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

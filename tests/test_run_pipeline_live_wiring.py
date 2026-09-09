@@ -62,7 +62,7 @@ class FakeClaudeClient:
                 "classifications": [{
                     "brand_id": "deepseek",
                     "outcome": "classified",
-                    "post_types": ["hands_on_usage", "feedback_questions"],
+                    "post_types": ["hands_on_usage", "questions_requests"],
                     "product_labels": ["bug"],
                     "sentiment": "neutral",
                     "china_nationalism": "none",
@@ -196,7 +196,7 @@ def test_run_pipeline_execute_calls_run_post_fetch(tmp_path, monkeypatch):
             "by_brand": {
                 "deepseek": {
                     "outcome": "classified",
-                    "post_types": ["hands_on_usage", "feedback_questions"],
+                    "post_types": ["hands_on_usage", "questions_requests"],
                     "product_labels": ["bug"],
                     "sentiment": "neutral",
                     "china_nationalism": "none",

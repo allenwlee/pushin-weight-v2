@@ -33,7 +33,7 @@ def classification(
     return {
         "brand_id": brand_id,
         "outcome": outcome,
-        "post_types": post_types if post_types is not None else ["buzz_releases"],
+        "post_types": post_types if post_types is not None else ["releases_updates"],
         "product_labels": product_labels if product_labels is not None else [],
         "sentiment": sentiment,
         "china_nationalism": china_nationalism,

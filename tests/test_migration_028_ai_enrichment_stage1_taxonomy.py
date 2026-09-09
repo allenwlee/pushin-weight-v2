@@ -6,7 +6,10 @@ import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
-from core.classification_contract import POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
+from core.classification_contract import (
+    LEGACY_POST_TYPE_KEYS,
+    LEGACY_PRODUCT_LABEL_KEYS,
+)
 
 BEFORE = [("core", "0027_account_country_foreign_key")]
 STAGE1 = [("core", "0028_ai_enrichment_stage1_taxonomy")]
@@ -18,6 +21,14 @@ def test_stage1_migration_seeds_forward_and_reverse_keeps_legacy_rows():
     """The pre-publication reverse removes only additive Stage 1 schema."""
     executor = MigrationExecutor(connection)
     try:
+        # The test database starts at the latest leaf. Migration 0030 is
+        # intentionally irreversible and data-only, so establish this
+        # historical pre-0030 fixture through the recorder before migrating
+        # backwards through the older reversible migrations.
+        executor.recorder.record_unapplied(
+            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        )
+        executor = MigrationExecutor(connection)
         executor.migrate(BEFORE)
         old_apps = executor.loader.project_state(BEFORE).apps
         Brand = old_apps.get_model("core", "Brand")
@@ -31,10 +42,10 @@ def test_stage1_migration_seeds_forward_and_reverse_keeps_legacy_rows():
 
         Brand.objects.create(nickname="migration-stage1", display_name="Migration")
         Post.objects.create(tweet_id="migration-stage1", text="legacy")
-        PostTypeKey.objects.create(key="legacy_type")
-        SentimentKey.objects.create(key="neutral")
-        NationalismKey.objects.create(key="none")
-        DiscourseKey.objects.create(key="legacy_discourse")
+        PostTypeKey.objects.get_or_create(key="legacy_type")
+        SentimentKey.objects.get_or_create(key="neutral")
+        NationalismKey.objects.get_or_create(key="none")
+        DiscourseKey.objects.get_or_create(key="legacy_discourse")
         PostBrandSignal.objects.create(
             post_id="migration-stage1",
             brand_id="migration-stage1",
@@ -61,20 +72,20 @@ def test_stage1_migration_seeds_forward_and_reverse_keeps_legacy_rows():
         ProductEdge = stage1_apps.get_model("core", "PostBrandProductLabel")
         Stage1PostTypeKey = stage1_apps.get_model("core", "PostTypeKey")
         assert set(ProductLabelKey.objects.values_list("key", flat=True)) == set(
-            PRODUCT_LABEL_KEYS
+            LEGACY_PRODUCT_LABEL_KEYS
         )
         assert (
             ProductLabelLabel.objects.filter(
-                product_label_id__in=PRODUCT_LABEL_KEYS,
+                product_label_id__in=LEGACY_PRODUCT_LABEL_KEYS,
                 lang__in=("en", "zh-cn"),
             ).count()
-            == len(PRODUCT_LABEL_KEYS) * 2
+            == len(LEGACY_PRODUCT_LABEL_KEYS) * 2
         )
         assert set(
-            Stage1PostTypeKey.objects.filter(key__in=POST_TYPE_KEYS).values_list(
+            Stage1PostTypeKey.objects.filter(key__in=LEGACY_POST_TYPE_KEYS).values_list(
                 "key", flat=True
             )
-        ) == set(POST_TYPE_KEYS)
+        ) == set(LEGACY_POST_TYPE_KEYS)
         assert ClassificationState.objects.count() == 0
         assert ProductEdge.objects.count() == 0
         assert PostBrandSignal.objects.filter(post_id="migration-stage1").exists()

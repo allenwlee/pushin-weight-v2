@@ -112,7 +112,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
         classifier_calls.append((tweets, brands, classifier_client))
         attempt_deadlines.append(kwargs["deadline"])
         return [{"by_brand": {"deepseek": {
-            "outcome": "classified", "post_types": ["buzz_releases"],
+            "outcome": "classified", "post_types": ["releases_updates"],
             "product_labels": [], "sentiment": "neutral",
             "china_nationalism": "none", "us_nationalism": "none",
         }}, "unsanctioned_flags": ["scam"], "valid": True}]

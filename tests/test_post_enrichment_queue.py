@@ -31,7 +31,7 @@ def _state(tweet_id: str):
         defaults={"display_name": "DeepSeek"},
     )
     SentimentKey.objects.get_or_create(key="neutral")
-    PostTypeKey.objects.get_or_create(key="buzz_releases")
+    PostTypeKey.objects.get_or_create(key="releases_updates")
     PostBrand.objects.create(post=post, brand=brand)
     return PostEnrichmentState.objects.create(post=post)
 
@@ -42,7 +42,7 @@ def _classification_results(tweets):
             "by_brand": {
                 brand_id: {
                     "outcome": "classified",
-                    "post_types": ["buzz_releases"],
+                    "post_types": ["releases_updates"],
                     "product_labels": [],
                     "sentiment": "neutral",
                     "china_nationalism": None,

@@ -348,7 +348,7 @@ def _stage1_result(*, outcome="classified", valid=True, flags=None):
             "anthropic": {
                 "outcome": outcome,
                 "post_types": (
-                    ["hands_on_usage", "feedback_questions"]
+                    ["hands_on_usage", "questions_requests"]
                     if outcome == "classified"
                     else []
                 ),

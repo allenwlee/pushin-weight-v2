@@ -13,13 +13,10 @@ from typing import Any
 CONTRACT_VERSION = "stage1-v1"
 LEGACY_STAGE1_TAXONOMY_VERSION = "stage1-taxonomy-v1"
 LEGACY_STAGE1_PROMPT_VERSION = "stage1-prompt-v2"
-TAXONOMY_VERSION = LEGACY_STAGE1_TAXONOMY_VERSION
-PROMPT_VERSION = LEGACY_STAGE1_PROMPT_VERSION
-
-# Release A continues to write the versions above. These constants describe
-# the Release B write target without changing the active provider parser.
 CANONICAL_TAXONOMY_VERSION = "stage1-taxonomy-v2"
 CANONICAL_PROMPT_VERSION = "stage1-prompt-v3"
+TAXONOMY_VERSION = CANONICAL_TAXONOMY_VERSION
+PROMPT_VERSION = CANONICAL_PROMPT_VERSION
 COMPATIBLE_TAXONOMY_VERSIONS = (
     LEGACY_STAGE1_TAXONOMY_VERSION,
     CANONICAL_TAXONOMY_VERSION,
@@ -44,8 +41,6 @@ LEGACY_PRODUCT_LABEL_KEYS = (
     "product_request",
     "misinformation",
 )
-POST_TYPE_KEYS = LEGACY_POST_TYPE_KEYS
-PRODUCT_LABEL_KEYS = LEGACY_PRODUCT_LABEL_KEYS
 CANONICAL_POST_TYPE_KEYS = (
     "releases_updates",
     "hands_on_usage",
@@ -65,6 +60,8 @@ CANONICAL_PRODUCT_LABEL_KEYS = (
     "ideas_requests",
     "misinformation",
 )
+POST_TYPE_KEYS = CANONICAL_POST_TYPE_KEYS
+PRODUCT_LABEL_KEYS = CANONICAL_PRODUCT_LABEL_KEYS
 SENTIMENT_KEYS = ("positive", "negative", "neutral", "mixed")
 NATIONALISM_KEYS = ("none", "mild_pro", "pro", "constructive_critical", "anti", "mixed")
 OUTCOMES = ("classified", "context_missing")

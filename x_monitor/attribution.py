@@ -1177,12 +1177,12 @@ _PRAGMATICS_FULL_SYSTEM_PROMPT = f"""You classify stored social posts for each a
 
 POST TYPES (no count cap; return every supported type):
 Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
-- buzz_releases: concrete releases, features, integrations, availability, or pricing changes.
+- releases_updates: concrete releases, features, integrations, availability, or pricing changes.
 - hands_on_usage: actual use, demos, artifacts, workflows, setup, or tutorials.
-- performance_comparisons: substantive evaluations, benchmarks, rankings, results, or comparisons.
-- feedback_questions: genuine product questions, support requests, corrections, or desired changes.
+- results_evaluations: substantive evaluations, benchmarks, rankings, results, or comparisons.
+- questions_requests: genuine product questions, support requests, corrections, or desired changes.
 - advertising_marketing: observable pitches, calls to action, discounts, services, or product showcases.
-- event_announcement: organized events and concrete opportunities such as jobs, grants, bounties, or collaborations.
+- events_opportunities: organized events and concrete opportunities such as jobs, grants, bounties, or collaborations.
 - opinions_reactions: views, predictions, anticipation, or reactions that are not principally another defined type.
 - research_explanations: technical mechanisms, architecture, research interpretation, or conceptual teaching.
 - business_finance: funding, ownership, investment, valuation, revenue, monetization, commercial strategy, suppliers, partners, or parent companies.
@@ -1190,9 +1190,9 @@ Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
 
 TYPE BOUNDARIES:
 - Future intent, a bare recommendation, praise, or a news roundup is not hands_on_usage.
-- A bare release date, launch, feature availability, integration, or pricing change is buzz_releases, not event_announcement. An event needs an identifiable organized occasion. A substantive recap with a named occasion and concrete outcomes may be event_announcement.
-- Mentioning a benchmark, latency, ranking, or model is not enough for performance_comparisons; the post must make a substantive evaluation or comparison.
-- Rhetorical headings are not feedback_questions. Use feedback_questions for genuine questions or requests.
+- A bare release date, launch, feature availability, integration, or pricing change is releases_updates, not events_opportunities. An event needs an identifiable organized occasion. A substantive recap with a named occasion and concrete outcomes may be events_opportunities.
+- Mentioning a benchmark, latency, ranking, or model is not enough for results_evaluations; the post must make a substantive evaluation or comparison.
+- Rhetorical headings are not questions_requests. Use questions_requests for genuine questions or requests.
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial strategy are business_finance.
 
 PRODUCT LABELS (independent multi-label array; an empty array is valid):
@@ -1200,7 +1200,7 @@ Allowed keys exactly: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
 - bug: a concrete malfunction or regression.
 - complaint: dissatisfaction or a negative customer experience.
 - testimonial: praise, endorsement, or a favorable product experience.
-- product_request: an idea, desired capability, improvement, or unmet need; ideas and requests stay combined.
+- ideas_requests: an idea, desired capability, improvement, or unmet need; ideas and requests stay combined.
 - misinformation: a potentially misleading claim that may warrant review. This label never adjudicates the claim false.
 
 SENTIMENT (required for classified): {", ".join(_STAGE1_SENTIMENT_KEYS)}.

@@ -26,6 +26,13 @@ RELEASE_A = [("core", "0029_ai_enrichment_stage1_taxonomy_v2_labels")]
 def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges():
     executor = MigrationExecutor(connection)
     try:
+        # Migration 0030 is deliberately irreversible and data-only. Remove
+        # only its recorder row so this Release A test can build its genuine
+        # pre-0029 fixture without reversing Release B data.
+        executor.recorder.record_unapplied(
+            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        )
+        executor = MigrationExecutor(connection)
         executor.migrate(BEFORE)
         apps = executor.loader.project_state(BEFORE).apps
         Brand = apps.get_model("core", "Brand")

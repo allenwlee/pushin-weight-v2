@@ -19,7 +19,7 @@ def row(brand_id: str = "deepseek"):
     return {
         "brand_id": brand_id,
         "outcome": "classified",
-        "post_types": ["buzz_releases"],
+        "post_types": ["releases_updates"],
         "product_labels": [],
         "sentiment": "neutral",
         "china_nationalism": "none",
@@ -29,12 +29,12 @@ def row(brand_id: str = "deepseek"):
 
 def test_exact_stage1_vocabularies_are_frozen():
     assert POST_TYPE_KEYS == (
-        "buzz_releases",
+        "releases_updates",
         "hands_on_usage",
-        "performance_comparisons",
-        "feedback_questions",
+        "results_evaluations",
+        "questions_requests",
         "advertising_marketing",
-        "event_announcement",
+        "events_opportunities",
         "opinions_reactions",
         "research_explanations",
         "business_finance",
@@ -44,7 +44,7 @@ def test_exact_stage1_vocabularies_are_frozen():
         "bug",
         "complaint",
         "testimonial",
-        "product_request",
+        "ideas_requests",
         "misinformation",
     )
     assert SENTIMENT_KEYS == ("positive", "negative", "neutral", "mixed")
@@ -74,7 +74,7 @@ def test_duplicate_array_values_are_deduplicated_in_first_seen_order():
     input_row = row()
     input_row["post_types"] = [
         "research_explanations",
-        "buzz_releases",
+        "releases_updates",
         "research_explanations",
     ]
     input_row["product_labels"] = ["bug", "complaint", "bug"]
@@ -84,7 +84,7 @@ def test_duplicate_array_values_are_deduplicated_in_first_seen_order():
     assert parsed is not None
     assert parsed["deepseek"]["post_types"] == [
         "research_explanations",
-        "buzz_releases",
+        "releases_updates",
     ]
     assert parsed["deepseek"]["product_labels"] == ["bug", "complaint"]
 
@@ -118,7 +118,7 @@ def test_missing_duplicate_extra_or_empty_expected_brand_sets_fail(
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("post_types", "buzz_releases"),
+        ("post_types", "releases_updates"),
         ("product_labels", "bug"),
         ("sentiment", ["neutral"]),
         ("china_nationalism", ["none"]),
@@ -150,6 +150,6 @@ def test_context_missing_rejects_type_and_product_edges():
 
 def test_unexpected_per_brand_fields_fail_closed():
     input_row = row()
-    input_row["primary_type"] = "buzz_releases"
+    input_row["primary_type"] = "releases_updates"
 
     assert parse_stage1_classifications([input_row], ["deepseek"]) is None

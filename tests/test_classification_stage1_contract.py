@@ -14,8 +14,6 @@ from core.classification_contract import (
     CANONICAL_TAXONOMY_VERSION,
     COMPATIBLE_TAXONOMY_VERSIONS,
     CONTRACT_VERSION,
-    LEGACY_POST_TYPE_KEYS,
-    LEGACY_PRODUCT_LABEL_KEYS,
     LEGACY_STAGE1_PROMPT_VERSION,
     LEGACY_STAGE1_TAXONOMY_VERSION,
     POST_TYPE_KEYS,
@@ -42,7 +40,7 @@ def test_contract_fixture_is_explicitly_synthetic_and_non_gold():
     assert fixture["provenance"]["gold"] is False
     assert "accuracy" in fixture["provenance"]["note"]
     assert fixture["contract_version"] == "stage1-v1"
-    assert fixture["taxonomy_version"] == "stage1-taxonomy-v1"
+    assert fixture["taxonomy_version"] == "stage1-taxonomy-v2"
 
 
 @pytest.mark.parametrize(
@@ -82,14 +80,14 @@ def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
     } == {"stored_quote", "local_parent"}
 
 
-def test_taxonomy_v2_version_roles_leave_release_a_writer_unchanged():
+def test_taxonomy_v2_versions_and_allowlists_are_the_release_b_write_target():
     assert CONTRACT_VERSION == "stage1-v1"
     assert LEGACY_STAGE1_TAXONOMY_VERSION == "stage1-taxonomy-v1"
     assert LEGACY_STAGE1_PROMPT_VERSION == "stage1-prompt-v2"
-    assert TAXONOMY_VERSION == LEGACY_STAGE1_TAXONOMY_VERSION
-    assert PROMPT_VERSION == LEGACY_STAGE1_PROMPT_VERSION
-    assert POST_TYPE_KEYS is LEGACY_POST_TYPE_KEYS
-    assert PRODUCT_LABEL_KEYS is LEGACY_PRODUCT_LABEL_KEYS
+    assert TAXONOMY_VERSION == CANONICAL_TAXONOMY_VERSION
+    assert PROMPT_VERSION == CANONICAL_PROMPT_VERSION
+    assert POST_TYPE_KEYS is CANONICAL_POST_TYPE_KEYS
+    assert PRODUCT_LABEL_KEYS is CANONICAL_PRODUCT_LABEL_KEYS
     assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v2"
     assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v3"
     assert COMPATIBLE_TAXONOMY_VERSIONS == (
@@ -141,7 +139,7 @@ def test_taxonomy_v2_crosswalk_is_total_ordered_and_collision_free():
         taxonomy_crosswalk_rows("unknown")
 
 
-def test_release_a_parser_rejects_future_canonical_provider_keys():
+def test_release_b_parser_accepts_canonical_and_rejects_v1_provider_keys():
     row = {
         "brand_id": "deepseek",
         "outcome": "classified",
@@ -151,10 +149,13 @@ def test_release_a_parser_rejects_future_canonical_provider_keys():
         "china_nationalism": None,
         "us_nationalism": None,
     }
+    assert parse_stage1_classifications([row], ["deepseek"]) is not None
+
+    row["post_types"] = ["buzz_releases"]
     assert parse_stage1_classifications([row], ["deepseek"]) is None
 
     row["post_types"] = ["other"]
-    row["product_labels"] = ["ideas_requests"]
+    row["product_labels"] = ["product_request"]
     assert parse_stage1_classifications([row], ["deepseek"]) is None
 
 
@@ -165,12 +166,12 @@ def test_contract_preserves_all_types_and_empty_product_labels():
                 "brand_id": "deepseek",
                 "outcome": "classified",
                 "post_types": [
-                    "buzz_releases",
+                    "releases_updates",
                     "hands_on_usage",
-                    "performance_comparisons",
-                    "feedback_questions",
+                    "results_evaluations",
+                    "questions_requests",
                     "advertising_marketing",
-                    "event_announcement",
+                    "events_opportunities",
                     "opinions_reactions",
                     "research_explanations",
                     "business_finance",
@@ -317,7 +318,7 @@ def test_writer_replaces_one_brand_exactly_without_touching_another():
         SentimentKey.objects.get_or_create(key=key)
     for key in ("none", "mild_pro", "pro", "constructive_critical", "anti", "mixed"):
         NationalismKey.objects.get_or_create(key=key)
-    for key in ("hands_on_usage", "feedback_questions", "business_finance"):
+    for key in ("hands_on_usage", "questions_requests", "business_finance"):
         PostTypeKey.objects.get_or_create(key=key)
     for key in ("bug", "complaint", "testimonial"):
         ProductLabelKey.objects.get_or_create(key=key)
@@ -337,7 +338,7 @@ def test_writer_replaces_one_brand_exactly_without_touching_another():
         "by_brand": {
             "stage1-alpha": {
                 "outcome": "classified",
-                "post_types": ["hands_on_usage", "feedback_questions"],
+                "post_types": ["hands_on_usage", "questions_requests"],
                 "product_labels": ["bug", "complaint"],
                 "sentiment": "negative",
                 "china_nationalism": "none",
@@ -362,7 +363,7 @@ def test_writer_replaces_one_brand_exactly_without_touching_another():
         "by_brand": {
             "stage1-alpha": {
                 "outcome": "classified",
-                "post_types": ["feedback_questions"],
+                "post_types": ["questions_requests"],
                 "product_labels": [],
                 "sentiment": "neutral",
                 "china_nationalism": None,
@@ -382,7 +383,7 @@ def test_writer_replaces_one_brand_exactly_without_touching_another():
         PostBrandSignal.objects.filter(post=post, brand=alpha).values_list(
             "post_type_id", flat=True
         )
-    ) == ["feedback_questions"]
+    ) == ["questions_requests"]
     assert not PostBrandProductLabel.objects.filter(post=post, brand=alpha).exists()
     assert list(
         PostBrandSignal.objects.filter(post=post, brand=beta).values_list(
@@ -468,7 +469,7 @@ def test_writer_rejects_forged_valid_and_stale_claim():
         "by_brand": {
             "stage1-forged-brand": {
                 "outcome": "classified",
-                "post_types": ["not-a-type"],
+                "post_types": ["buzz_releases"],
                 "product_labels": [],
                 "sentiment": "neutral",
                 "china_nationalism": None,

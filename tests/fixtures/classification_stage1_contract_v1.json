@@ -5,7 +5,7 @@
     "note": "Deterministic contract-outcome fixture; it does not measure semantic accuracy."
   },
   "contract_version": "stage1-v1",
-  "taxonomy_version": "stage1-taxonomy-v1",
+  "taxonomy_version": "stage1-taxonomy-v2",
   "cases": [
     {
       "name": "en_all_non_other_types_and_all_products",
@@ -15,11 +15,11 @@
       "expected_valid": true,
       "classifications": [{
         "brand_id": "deepseek", "outcome": "classified",
-        "post_types": ["buzz_releases", "hands_on_usage", "performance_comparisons", "feedback_questions", "advertising_marketing", "event_announcement", "opinions_reactions", "research_explanations", "business_finance"],
-        "product_labels": ["bug", "complaint", "testimonial", "product_request", "misinformation"],
+        "post_types": ["releases_updates", "hands_on_usage", "results_evaluations", "questions_requests", "advertising_marketing", "events_opportunities", "opinions_reactions", "research_explanations", "business_finance"],
+        "product_labels": ["bug", "complaint", "testimonial", "ideas_requests", "misinformation"],
         "sentiment": "mixed", "china_nationalism": "none", "us_nationalism": null
       }],
-      "expected_canonical": {"deepseek": {"outcome": "classified", "post_types": ["buzz_releases", "hands_on_usage", "performance_comparisons", "feedback_questions", "advertising_marketing", "event_announcement", "opinions_reactions", "research_explanations", "business_finance"], "product_labels": ["bug", "complaint", "testimonial", "product_request", "misinformation"], "sentiment": "mixed", "china_nationalism": "none", "us_nationalism": null}}
+      "expected_canonical": {"deepseek": {"outcome": "classified", "post_types": ["releases_updates", "hands_on_usage", "results_evaluations", "questions_requests", "advertising_marketing", "events_opportunities", "opinions_reactions", "research_explanations", "business_finance"], "product_labels": ["bug", "complaint", "testimonial", "ideas_requests", "misinformation"], "sentiment": "mixed", "china_nationalism": "none", "us_nationalism": null}}
     },
     {
       "name": "ja_other_is_explicit_and_exclusive",
@@ -65,11 +65,11 @@
       "expected_valid": true,
       "classifications": [
         {"brand_id": "glm", "outcome": "classified", "post_types": ["business_finance", "business_finance"], "product_labels": ["testimonial", "testimonial"], "sentiment": "positive", "china_nationalism": null, "us_nationalism": null},
-        {"brand_id": "qwen", "outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["product_request"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
+        {"brand_id": "qwen", "outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["ideas_requests"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
       ],
       "expected_canonical": {
         "glm": {"outcome": "classified", "post_types": ["business_finance"], "product_labels": ["testimonial"], "sentiment": "positive", "china_nationalism": null, "us_nationalism": null},
-        "qwen": {"outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["product_request"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
+        "qwen": {"outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["ideas_requests"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
       }
     },
     {"name": "classified_empty_types", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": [], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
