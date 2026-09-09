@@ -44,6 +44,15 @@ def _restore_current_core_schema() -> None:
     executor.migrate(targets)
 
 
+def _prepare_historical_core_schema() -> None:
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    executor.recorder.record_unapplied(
+        "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+    )
+
+
 def test_canonical_parent_and_subject_models_use_physical_table_names():
     narrative_model = core_models.TrendNarrative
     subject_model = core_models.TrendNarrativeSubject
@@ -338,6 +347,7 @@ def test_u2_migration_round_trip_preserves_legacy_narrative_rows():
         error_code="existing_legacy_check",
     )
     try:
+        _prepare_historical_core_schema()
         executor = MigrationExecutor(connection)
         executor.migrate([("core", "0016_post_commentary_fields")])
         old_apps = executor.loader.project_state(
@@ -396,6 +406,8 @@ def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
 
     executor = MigrationExecutor(connection)
     try:
+        _prepare_historical_core_schema()
+        executor = MigrationExecutor(connection)
         executor.migrate([("core", "0013_trend_narrative_version")])
         old_apps = executor.loader.project_state(
             [("core", "0013_trend_narrative_version")]
@@ -476,6 +488,7 @@ def test_reverse_refuses_expansion_only_data_before_any_destructive_step():
     )
 
     try:
+        _prepare_historical_core_schema()
         with pytest.raises(RuntimeError, match="cannot reverse"):
             MigrationExecutor(connection).migrate(
                 [("core", "0013_trend_narrative_version")]

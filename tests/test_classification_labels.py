@@ -144,7 +144,7 @@ def test_legacy_alias_labels_remain_english_chinese_only():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_seed_command_restores_v1_aliases_and_supports_active_writer():
+def test_seed_command_restores_v1_aliases_and_supports_active_v2_writer():
     from django.core.management import call_command
 
     from core.models import (
@@ -242,16 +242,25 @@ def test_seed_command_restores_v1_aliases_and_supports_active_writer():
         "Preserved custom Other"
     )
 
-    post = Post.objects.create(
-        tweet_id="seed-v1-writer", text="seed v1 writer", lang_detected="en"
+    writer_post_types = (
+        "releases_updates",
+        "results_evaluations",
+        "questions_requests",
+        "events_opportunities",
     )
-    brand = Brand.objects.create(nickname="seed-v1-writer", display_name="Seed V1")
+    writer_product_labels = ("ideas_requests",)
+    assert set(writer_post_types) <= set(CANONICAL_POST_TYPE_KEYS)
+    assert set(writer_product_labels) <= set(CANONICAL_PRODUCT_LABEL_KEYS)
+    post = Post.objects.create(
+        tweet_id="seed-v2-writer", text="seed v2 writer", lang_detected="en"
+    )
+    brand = Brand.objects.create(nickname="seed-v2-writer", display_name="Seed V2")
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v1-writer")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v2-writer")
     classification = {
         "outcome": "classified",
-        "post_types": list(legacy_post_aliases),
-        "product_labels": list(legacy_product_aliases),
+        "post_types": list(writer_post_types),
+        "product_labels": list(writer_product_labels),
         "sentiment": "neutral",
         "china_nationalism": None,
         "us_nationalism": None,
@@ -265,7 +274,7 @@ def test_seed_command_restores_v1_aliases_and_supports_active_writer():
         },
         tweet={"text": post.text, "context": []},
         model="seed-test-model",
-        run_id="seed-v1-writer",
+        run_id="seed-v2-writer",
     )
 
     assert published is not None
@@ -276,12 +285,12 @@ def test_seed_command_restores_v1_aliases_and_supports_active_writer():
         PostBrandSignal.objects.filter(post=post, brand=brand).values_list(
             "post_type_id", flat=True
         )
-    ) == set(legacy_post_aliases)
+    ) == set(writer_post_types)
     assert set(
         PostBrandProductLabel.objects.filter(post=post, brand=brand).values_list(
             "product_label_id", flat=True
         )
-    ) == set(legacy_product_aliases)
+    ) == set(writer_product_labels)
 
 
 class TestLocalizeEmptyCache:

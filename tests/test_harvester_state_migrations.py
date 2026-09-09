@@ -46,6 +46,10 @@ def test_u9_reverse_migration_preserves_existing_posts_flags_and_vocabulary():
 
     executor = MigrationExecutor(connection)
     try:
+        executor.recorder.record_unapplied(
+            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        )
+        executor = MigrationExecutor(connection)
         executor.migrate([("core", "0010_post_metrics_refreshed_at")])
         with connection.cursor() as cursor:
             cursor.execute(

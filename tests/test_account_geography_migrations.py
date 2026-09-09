@@ -11,6 +11,12 @@ pytestmark = [
 
 BEFORE = [("core", "0025_account_verification_override_year")]
 CURRENT = [("core", "0027_account_country_foreign_key")]
+IRREVERSIBLE_TAXONOMY_MIGRATION = "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+
+
+def _prepare_historical_core_schema():
+    executor = MigrationExecutor(connection)
+    executor.recorder.record_unapplied("core", IRREVERSIBLE_TAXONOMY_MIGRATION)
 
 
 def _apps_at(targets):
@@ -25,6 +31,7 @@ def _current_core_leaf():
 
 def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy():
     try:
+        _prepare_historical_core_schema()
         old_apps = _apps_at(BEFORE)
         OldAccount = old_apps.get_model("core", "Account")
         OldAccount.objects.create(
@@ -64,6 +71,7 @@ def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy
 
 def test_country_foreign_key_preflight_rejects_unknown_existing_code():
     try:
+        _prepare_historical_core_schema()
         old_apps = _apps_at(BEFORE)
         OldAccount = old_apps.get_model("core", "Account")
         OldAccount.objects.create(
