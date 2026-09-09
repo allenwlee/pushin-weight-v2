@@ -1,8 +1,9 @@
 ---
-title: AI Enrichment Stage 1 Taxonomy Migration - Plan
+title: AI Enrichment Stage 1 Taxonomy and Versioned Identifier Migration - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
+amended: 2026-09-09
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -73,25 +74,26 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Retain the canonical Stage 1 worktree after staging. Production is unauthorized, so the generated production cleanup path does not apply.
 6. After the explicit staging hold, the owner resumed with “cocontinue” on September 9 JST. This authorizes one replacement latest-20 production capture and one recheck of those same ordered IDs after 30 minutes. The original failed capture saved no IDs. This is a narrow exception to the diagnostic skill's no-retry rule; it does not authorize further retries, a new baseline window, production writes, harvesting, or provider calls.
 7. Continue Stage 1 by resolving the two remaining code findings from review `20260909-044149-aa012156`: aggregate headline scalar facts in PostgreSQL before returning rows, and separate classifier instructions from untrusted post/context data using the existing provider system field. Preserve the settled taxonomy, output semantics, provider configuration, batch/concurrency limits, retry/fallback behavior, and telemetry. Verify these changes with local call-chain and database regressions. R17's real semantic-quality assessment remains a preproduction gate; production promotion remains unauthorized.
+8. The owner authorized this versioned taxonomy follow-up through staging. Add Japanese labels for the active classification vocabulary, rename only the five identifiers in R19, and add explicit historical analysis without historical LLM reclassification. Use the compatibility-first two-release staging sequence in KTD9; do not run a new paid call, passive baseline, production cohort capture, or production deployment. The completed Stage 1 receipts remain immutable historical evidence, and this follow-up receives new candidate and staging proof.
 
-# AI Enrichment Stage 1 Taxonomy Migration
+# AI Enrichment Stage 1 Taxonomy and Versioned Identifier Migration
 
 ## Goal Capsule
 
-- **Objective:** Readers and lab operators can classify every newly enriched brand mention with the selected reader taxonomy and independent product signals without fabricated fallback judgments, while sentiment, nationalism, discovery, and headline behavior remain trustworthy.
-- **Means:** Replace the active discourse dimension with a versioned per-brand classification contract, independent product-label relations, and coordinated writer/reader migration (KTD1–KTD7).
+- **Objective:** Readers, operators, and agents can use one canonical Stage 1 taxonomy across newly classified and compatible stored records, with Japanese label foundations and explicit provenance-aware historical analysis, without fabricating semantic equivalence or rewriting past judgments.
+- **Means:** Preserve the completed discourse-free per-brand contract, add one versioned identifier crosswalk, deploy compatibility before migration, mechanically canonicalize eligible Stage 1 edges, and expose explicit current-definition and historical-inclusive analysis policies (KTD1–KTD13).
 - **Authority:** This plan's Product Contract owns the complete Stage 1 product semantics carried from the owner-selected ideation. `docs/plans/2026-09-08-194415-feat-staged-ai-enrichment-roadmap-plan.md` owns the staged roadmap, and `docs/reference/2026-09-08-194415-enrichment-contracts.md` owns Stage 0 telemetry invariants and receives the bounded durable Stage 1 taxonomy excerpt in U1.
-- **Execution profile:** U1 and U2 are one coupled authoring, verification, and commit packet owned by the same worker, with linear internal steps. U3 and U4 may run in parallel only after that combined packet commits. U5 reconciles cross-import and retired-caller compatibility before staging.
-- **Stop conditions:** Stop for evidence that a settled ten-type or five-label decision is infeasible, a migration would relabel historical rows, a consumer cannot preserve nationalism without active discourse, or the Stage 0 baseline shows a material regression that Stage 1 would obscure.
+- **Execution profile:** U1–U5 and their staging receipts are the completed Stage 1 baseline. U6–U8 form compatibility Release A and must pass exact-SHA staging proof before U9 switches persisted edges and new writes in Release B; U10 and U11 reconcile surfaces and close the follow-up gate.
+- **Stop conditions:** Stop if a migration changes original state provenance, touches unversioned legacy edges, double-counts aliases, requires historical model inference, makes Release A unable to run against Release B data, or makes an analysis result silently blend approximate and exact populations.
 - **Tail ownership:** The parent workflow owns commits, pushes, staging deployment, exact-SHA verification, and any later production authorization.
 
 ## Product Contract
 
 ### Summary
 
-Stage 1 replaces the active six-type-plus-discourse classifier with the selected ten reader-facing post types and five independent product labels. Classification stays universal and per brand. The change preserves sentiment and both nationalism axes, removes discourse from current prompts, writes, feeds, filters, charts, and headline packets, and leaves historical rows intact.
+Stage 1 replaced the active six-type-plus-discourse classifier with ten reader-facing post types and five independent product labels. This follow-up keeps those meanings and the response shape, renames five identifiers, adds Japanese display-label rows for every active classification family, and makes mixed-era analysis explicit. Classification stays universal and per brand; no stored record is reclassified merely because an identifier changed.
 
-Product Contract preservation: the selected taxonomy, label semantics, staged delivery, universal classification, and deferrals are unchanged from the owner-selected ideation and tracked roadmap. The ideation file was a planning input on the authoritative root and is not tracked in this worktree, so every implementation-relevant semantic is carried into R1–R18 and AE1–AE7 rather than left behind an unavailable citation. This plan resolves only the storage, parser, compatibility, and rollout mechanics required to implement them.
+Product Contract amendment: R1 and R3 preserve the ten-type and five-product meanings while the user-directed R19 identifier crosswalk supersedes five machine keys. R20–R26 add the Japanese label foundation, provenance-preserving compatibility, explicit history-policy contract, and latest-state limit. Universal classification, response shape, staging-only delivery, and later EN/ZH-CN/JA content-synthesis work remain unchanged. The completed U1–U5 evidence describes taxonomy v1; U6–U11 own the new follow-up candidate.
 
 ### Problem Frame
 
@@ -101,9 +103,9 @@ The production classifier asks for six post types, sentiment, discourse, and two
 
 **Reader and product taxonomy**
 
-- R1. The canonical post-type keys and display labels are `buzz_releases` / Releases & Updates, `hands_on_usage` / Hands-On Usage, `performance_comparisons` / Results and Evaluations, `feedback_questions` / Questions & Requests, `advertising_marketing` / Advertising & Marketing, `event_announcement` / Events & Opportunities, `opinions_reactions` / Opinions & Reactions, `research_explanations` / Research & Explanations, `business_finance` / Business & Finance, and `other` / Other.
+- R1. The ten post-type meanings remain Releases & Updates, Hands-On Usage, Results and Evaluations, Questions & Requests, Advertising & Marketing, Events & Opportunities, Opinions & Reactions, Research & Explanations, Business & Finance, and Other. Taxonomy v2 emits the canonical keys `releases_updates`, `hands_on_usage`, `results_evaluations`, `questions_requests`, `advertising_marketing`, `events_opportunities`, `opinions_reactions`, `research_explanations`, `business_finance`, and `other`; v1 aliases are defined only by R19.
 - R2. Post types are independent per brand and may contain every supported type justified by the post. The contract imposes no arbitrary count cap. Duplicate values are removed, and `other` is valid only as an exclusive confident residual judgment.
-- R3. Product-label keys are `bug`, `complaint`, `testimonial`, `product_request`, and `misinformation`, with display labels Bug, Complaint, Testimonial, Ideas & requests, and Misinformation. Labels are independent per brand; zero, one, or several may be valid.
+- R3. Product-label keys are `bug`, `complaint`, `testimonial`, `ideas_requests`, and `misinformation`, with display labels Bug, Complaint, Testimonial, Ideas & requests, and Misinformation. The v1 alias for Ideas & requests is defined by R19. Labels are independent per brand; zero, one, or several may be valid.
 - R4. The type rules use the final boundaries represented by this Product Contract and its acceptance examples, including experience/results redistribution, genuine questions and requests, concrete events and opportunities, event recaps with substantive occasion outcomes, and available quote or locally persisted parent context. Brand relevance, truth, usefulness, and priority remain separate judgments.
 
 **State, preservation, and failure semantics**
@@ -129,6 +131,45 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - R17. After the prompt and taxonomy version freeze, assess a fresh provenance-bearing heldout cohort offline from stored candidate output. The assessment covers all ten types, five product labels, empty/multiple labels, `other`, sentiment, nationalism `none` versus unknown, EN/ZH-CN/JA source text, quote/local-parent context, and context-missing cases. Numeric semantic floors are set from cohort size and adjudicated baseline before any Stage 1 production proposal.
 - R18. Stage 1 staging deployment requires the passive 90-minute Stage 0 baseline review, the fixed-cohort latest-20 production health observation, migration and data-integrity proof, contract tests, real browser proof, headline regression proof, and exact-SHA staging health. Staging verification may establish contract readiness but must not claim real classifier accuracy before R17 is complete.
 
+**Versioned identifiers, Japanese labels, and analysis**
+
+- R19. The only identifier renames are `buzz_releases` to `releases_updates`, `performance_comparisons` to `results_evaluations`, `feedback_questions` to `questions_requests`, `event_announcement` to `events_opportunities`, and `product_request` to `ideas_requests`. The mapping is identifier-only: meanings and the provider response shape do not change. New classifications use `stage1-taxonomy-v2` and `stage1-prompt-v3`; the classification contract remains `stage1-v1`.
+- R20. Seed exactly three display-label locales (`en`, `zh-cn`, `ja`) for the active ten post types, five product labels, four sentiments, and six nationalism values. The Japanese strings below are an agent-authored implementation proposal adopted by this amendment and are the exact migration/test values; they are not pre-existing approved product copy, so any change requires Product Contract review before U6 freezes them. Keys and counts are locale-independent. Japanese locale selection, translated post/commentary/headline content, account and brand metadata, and full EN/ZH-CN/JA UI parity remain deferred.
+- R21. Preserve each existing Stage 1 state's original taxonomy version, prompt version, model, and `classified_at` while mechanically renaming its eligible type/product edges. Do not stamp an old row as a v2 classification, infer classification era from publication date, invoke an LLM for historical rows, or rewrite immutable headline snapshots or provider-request ledgers.
+- R22. One shared crosswalk treats v1 aliases and v2 keys as current-compatible inputs and emits canonical v2 keys. New provider output is strict v2 only. Canonicalization occurs before filtering, deduplication, distinct counts, and grouping; current explicit nulls continue to block historical fallback. Any post-brand with a state row whose contract or taxonomy version is unrecognized is excluded from exact and legacy-approximate populations, blocks scalar fallback, and increments an explicit exclusion/warning rather than being treated as state-absent.
+- R23. A shared read-only analysis query and management CLI require `--history-policy current_definition` or `--history-policy historical_inclusive`, an explicit half-open UTC range over `Post.created_at`, and optional brand scope. Output states `range_basis: post_created_at`; null post timestamps are excluded and counted with a warning, while `classified_at` remains provenance only. `current_definition` reports recognized versioned Stage 1 state with canonical keys. `historical_inclusive` adds a separately labeled `legacy_unversioned_approximate` section and never mixes approximate legacy rows into exact Stage 1 denominators. Its six-type mapping is `buzz_releases` to `releases_updates`, `hands_on_usage` to itself, `performance_comparisons` to `results_evaluations`, `feedback_questions` to `questions_requests`, `advertising_marketing` to itself, and `event_announcement` to `events_opportunities`; the section remains approximate because those rows have no Stage 1 version state and used older definitions. This mapping is pinned to the six-key dashboard vocabulary at `af272b6fe0b43be3276429792508749b9ddc8194:monitor/views.py`.
+- R24. Deterministic analysis JSON reports schema version, requested policy and range, output taxonomy version, identifier-only mapping equivalence and crosswalk, distinct post-brand-key memberships, unique post count, distinct classified post-brand denominator, exact counts by stored v1/v2 provenance, excluded/unknown provenance, and warnings. Legacy product-label availability is `unavailable`, not zero. Empty valid results exit zero; invalid inputs or mapping collisions fail nonzero without partial aggregates. Saved outputs carry source revision and query identity for reproducibility.
+- R25. Feed, chart, DOM, icon, headline, and analysis outputs emit canonical v2 keys. The old-filter compatibility window starts in Release A and remains through Release B and its Release A rollback support; U6–U11 never remove aliases. A later explicitly authorized cleanup may end it only after Release B reaches production, instrumented alias-use telemetry records zero old-alias requests for 30 consecutive days, and Release A is no longer an approved rollback target. Inputs normalize before ORM predicates and cache identity. Old key/label rows remain for unversioned legacy references, while active headline taxonomy and new prompt inputs use closed canonical allowlists.
+- R26. `PostBrandClassificationState` is the latest state per post-brand, not an append-only event ledger. The analysis contract distinguishes stored populations and provenance visible at query time but does not claim to reconstruct an arbitrary historical classification state; later genuine reclassification may replace state and edges.
+
+| Family | Key | Exact Japanese label |
+| --- | --- | --- |
+| Post type | `releases_updates` | リリース・アップデート |
+| Post type | `hands_on_usage` | 使用体験 |
+| Post type | `results_evaluations` | 結果・評価 |
+| Post type | `questions_requests` | 質問・要望 |
+| Post type | `advertising_marketing` | 広告・マーケティング |
+| Post type | `events_opportunities` | イベント・機会 |
+| Post type | `opinions_reactions` | 意見・反応 |
+| Post type | `research_explanations` | 研究・解説 |
+| Post type | `business_finance` | ビジネス・金融 |
+| Post type | `other` | その他 |
+| Product | `bug` | バグ |
+| Product | `complaint` | 苦情 |
+| Product | `testimonial` | 推奨の声 |
+| Product | `ideas_requests` | アイデア・要望 |
+| Product | `misinformation` | 誤情報の可能性 |
+| Sentiment | `positive` | ポジティブ |
+| Sentiment | `negative` | ネガティブ |
+| Sentiment | `neutral` | 中立 |
+| Sentiment | `mixed` | 賛否混在 |
+| Nationalism | `none` | なし |
+| Nationalism | `mild_pro` | 控えめな支持 |
+| Nationalism | `pro` | 支持 |
+| Nationalism | `constructive_critical` | 建設的な批判 |
+| Nationalism | `anti` | 反対 |
+| Nationalism | `mixed` | 賛否混在 |
+
 ### Key Decisions
 
 - **The final ten post types supersede every earlier taxonomy variant.** Governs R1, R2, R4. (session-settled: user-directed — chosen over earlier variants because the final selection is the desired reader organization.)
@@ -136,6 +177,9 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - **Discourse is removed while sentiment and nationalism remain.** Governs R5, R6, R11, R14. (session-settled: user-directed — chosen over a replacement posture/sincerity taxonomy because no replacement was selected.)
 - **Classification and needed translation remain universal.** Governs R9, R12, R15. (session-settled: user-directed — chosen over classifying only synthesized or product-labeled posts because discovery and charts require all posts.)
 - **Stages ship separately.** Governs R18. (session-settled: user-approved — chosen over a combined mega-refactor for causal verification and rollback.)
+- **Five identifiers change without changing their meanings.** Governs R1, R3, R19, R22, R25. (session-settled: user-directed — chosen to make the machine keys match the approved reader labels without reopening semantic classification.)
+- **Japanese taxonomy labels land before Japanese content parity.** Governs R20. (session-settled: user-directed — chosen as a storage and reference foundation while selectable locale and synthesis remain staged roadmap work.)
+- **Historical analysis always names its population and policy.** Governs R21–R24, R26. (session-settled: user-directed — chosen over publication-date inference or blended totals because the three populations have different provenance and precision.)
 
 ### Acceptance Examples
 
@@ -146,13 +190,20 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - AE5. Covers R3, R14. A post may carry `misinformation` as a review signal, while headline text and UI labels describe it as potentially misleading rather than confirmed falsehood.
 - AE6. Covers R11–R13. A historical post with nationalism only on a discourse row remains filterable by nationalism after cutover, but no discourse pill, chart tab, feed badge, or headline field is rendered.
 - AE7. Covers R9, R15. A malformed batch result falls back per post through existing retry boundaries; no partial current-version rows become visible and Stage 0 emits one event per application transport invocation.
+- AE8. Covers R19, R22. A v1 `buzz_releases` edge and a v2 `releases_updates` edge for the same post-brand emit one `releases_updates` membership; a new provider result containing `buzz_releases` is rejected rather than silently canonicalized.
+- AE9. Covers R20. Seed verification finds one `en`, one `zh-cn`, and one `ja` label for every active type, product, sentiment, and nationalism key, while no Japanese locale toggle or translated content field is introduced.
+- AE10. Covers R21, R22. A migration rewrites an eligible v1 edge to its canonical key but leaves that row's state at taxonomy v1/prompt v2 with unchanged model and classification time; an unversioned legacy edge remains untouched.
+- AE11. Covers R23, R24. The same UTC range under `current_definition` returns exact v1/v2 provenance totals only; `historical_inclusive` returns those totals unchanged plus a distinct approximate legacy section whose product-label availability is unavailable.
+- AE12. Covers R22, R25. An old filter URL for `feedback_questions` selects canonical `questions_requests` rows and emits only the canonical key in the response and cache identity.
+- AE13. Covers R26. A saved analysis snapshot can be reproduced from its revision and query identity, but a request for the classification state as of an earlier date returns no invented point-in-time history.
 
 ### Scope Boundaries
 
-**Included in Stage 1**
+**Included in this Stage 1 follow-up**
 
 - The active Django/PostgreSQL classifier contract, schema, writer, feed/filter/chart readers, trend-narrative readers, localized labels, and focused retired-caller compatibility.
 - Deterministic contract fixtures, a frozen-cohort evaluation format, regression coverage, passive baseline review, and staging-only delivery.
+- A shared v1-to-v2 crosswalk, compatibility-first staged cutover, scoped mechanical edge migration, three-locale active taxonomy labels, canonical UI/headline outputs, and a provenance-aware read-only analysis CLI/reference.
 
 **Deferred to follow-up work**
 
@@ -161,6 +212,8 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - Historical taxonomy relabeling, broad nationalism backfill, or repair of the pre-existing missing-discourse population.
 - Model swaps, conditional critics, specialist cascades, headline demand policy, split translation/synthesis modules, lazy synthesis, and EN/ZH-CN/JA synthesis parity.
 - Broad summary, navigation, or page redesign; product-label prioritization or response workflows; truth adjudication for misinformation.
+- Japanese locale selection, Japanese gettext/JavaScript catalogs, translated source/commentary/headline persistence or generation, Japanese account/brand metadata, completeness gates, routes, templates, and browser parity.
+- A classification event ledger, arbitrary point-in-time reconstruction, semantic reinterpretation of renamed categories, or historical model reclassification.
 
 ---
 
@@ -175,6 +228,12 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - KTD5. **Use one canonical prompt and context envelope.** Batch and single-post fallback share the same taxonomy definition. Inputs may add stored quote text and locally available parent text with provenance markers; they never fetch a parent, link, or media during classification. The prompt removes discourse and preserves the existing provider route, batching, token budget, and retry envelope.
 - KTD6. **Replace discourse-dependent headline diversity with post-type diversity.** Keep the existing deterministic candidate slots and provider-call topology. Product labels enter packets only as scoped metadata, and coverage/status rules prevent claims from unavailable classifications.
 - KTD7. **Use expand-and-cut-over staging delivery.** The migration creates and seeds new tables and keys before the new writer/readers run. The first release retains old tables so older data remains readable and rollback is a normal forward application revert. Destructive schema cleanup requires a later plan and production authorization.
+- KTD8. **Keep one versioned crosswalk and separate read compatibility from the write target.** `stage1-taxonomy-v1` and `stage1-taxonomy-v2` are current-compatible stored versions, but the parser for new classifications accepts only the active write version. The shared crosswalk drives Python readers, SQL alias relations, request normalization, analysis output, health reporting, and tests; it canonicalizes before database limits, grouping, or distinct operations. This implements R19, R22, and R25. (session-settled: user-approved — chosen over parallel per-surface maps because canonical counts and current-null precedence must agree.)
+- KTD9. **Use two staging releases for an application-only rollback.** Release A adds canonical lookup/EN-ZH-JA label rows and makes readers, SQL, filters, health, and analysis accept v1/v2 while continuing to write taxonomy v1/prompt v2 and leaving existing edges/state unchanged. Exact-SHA staging proof of A is required before Release B rewrites eligible Stage 1 edges and enables taxonomy v2/prompt v3 writes. Release A remains the rollback binary after B; neither release reverses a migration. This implements R18–R22 and R25. (session-settled: user-approved — chosen over a one-release rewrite because the immediately previous binary must understand Release B data.)
+- KTD10. **Migrate identifiers only for provenance-bearing Stage 1 state.** The forward migration retains old lookup keys/labels, rewrites type/product edges only when the post-brand has recognized v1 state, preserves state provenance, and leaves unversioned legacy edges plus immutable headline and request-ledger JSON untouched. It collapses old/new collisions before uniqueness enforcement; a type edge uses the authoritative current-state sentiment. The operation is explicitly irreversible so Django cannot mark it unapplied while canonical data remains. This implements R21 and R22.
+- KTD11. **Count canonical memberships before aggregation.** Every compatible SQL path maps aliases before `DISTINCT`, limits, or `GROUP BY`. The membership unit is one `(post_id, brand_id, canonical_key)`; unique posts and distinct classified post-brand denominators are separate fields. This implements R22–R24.
+- KTD12. **Make historical scope an explicit read contract.** The management CLI and its shared query require a named policy and half-open UTC range, return deterministic safe JSON, preserve exact v1/v2 provenance, and isolate approximate unversioned legacy output. Saved output records revision/query identity but does not imply an append-only history. This implements R23, R24, and R26. (session-settled: user-directed — chosen over date inference and blended counts because they would present approximate history as exact.)
+- KTD13. **Treat Japanese taxonomy labels as locale-independent reference data.** Release A adds `ja` rows only for the active 10/5/4/6 vocabularies. It does not add a selectable locale, translation/synthesis columns, catalogs, routes, templates, or completeness gates. This implements R20 and preserves the roadmap boundary.
 
 ### High-Level Technical Design
 
@@ -205,15 +264,28 @@ stateDiagram-v2
   Classified --> Classified: atomic reclassification
 ```
 
-The compatibility window separates additive deployment from destructive cleanup:
+The compatibility window separates readable expansion from the write switch:
 
 ```mermaid
 flowchart TB
-  A[Add and seed Stage 1 schema] --> B[Switch prompt and writer]
-  B --> C[Switch UI and headline readers]
-  C --> D[Stage 1 staging verification]
-  D --> E[Later production decision]
-  E --> F[Separate legacy-table cleanup plan]
+  A[Release A add keys and EN ZH JA labels] --> B[Readers SQL filters and analysis accept v1 plus v2]
+  B --> C[Exact SHA staging proof A]
+  C --> D[Release B migrate eligible edges]
+  D --> E[New writes use taxonomy v2 prompt v3]
+  E --> F[Exact SHA staging proof B]
+  F --> G[Later production decision]
+```
+
+The analysis contract keeps the three stored populations distinct:
+
+```mermaid
+flowchart LR
+  A[Legacy unversioned six type rows] -->|approximate mapping only| D[Historical inclusive legacy section]
+  B[Stage 1 v1 state and aliases] -->|identifier equivalent| E[Canonical v2 exact counts]
+  C[Stage 1 v2 state and keys] -->|identity mapping| E
+  E --> F[Current definition result]
+  D --> G[Historical inclusive result]
+  E --> G
 ```
 
 ### Port, Exclude, and Defer Map
@@ -226,14 +298,23 @@ flowchart TB
 | Compatibility only | `x_monitor/run.py` | Accept the shared result without attempting a discourse write; do not add product storage to the retired SQLite path. |
 | Exclude | `x_monitor/store.py`, `x_monitor/_home_routes.py`, `x_monitor/dashboard.py`, `x_monitor/__main__.py`, `x_monitor/translator.py` | Retired SQLite/Flask or unaffected translation surfaces receive no Stage 1 feature port or writes. Preserve shared imports and Stage 0 telemetry. |
 | Defer | `PostBrandDiscourse`, `DiscourseKey`, `DiscourseLabel`, their indexes/migration removal, and retired UI/data cleanup | Keep historical storage readable during the compatibility window; remove only under a later cleanup plan. |
+| Port | `core/classification_contract.py`, `core/classification_readers.py`, `core/classification_labels.py`, `core/management/commands/seed_i18n_labels.py`, new additive migrations | Define one v1/v2 crosswalk, active 10/5/4/6 EN/ZH/JA labels, compatible reads, and the scoped identifier migration. |
+| Port | Current-version predicates and grouping in `monitor/views.py`, `monitor/trend_narrative_facts.py`, `monitor/trend_narrative_candidates.py`, and the latest-N health helper | Accept recognized v1/v2 state and canonicalize in SQL before limits, grouping, and distinct counts. |
+| Port | A shared classification-analysis query, management command, tests, and an agent-facing reference linked from `AGENTS.md` | Expose explicit `current_definition` and `historical_inclusive` JSON without silent blending or point-in-time claims. |
+| Compatibility only | Existing UI filter query values and cache identity | Accept the five old aliases for one window, normalize before querying/caching, and emit canonical keys only. |
+| Defer | Japanese gettext/JavaScript locale selection and all Japanese content, metadata, synthesis, headline, and completeness surfaces | Retain the roadmap's later full-parity work; taxonomy label rows alone do not expose Japanese UI. |
 
 ### Sequencing and Parallel Ownership
 
-U1 freezes the result and fixture contract, then U2 adds the schema and active writer. Because the current cycle consumes the legacy parser shape, one worker owns both units as a single authoring, verification, and commit packet; there is no intermediate U1 commit or candidate. U3 and U4 depend on that committed combined packet and may then proceed concurrently because they own disjoint reader surfaces. U5 owns all cross-import reconciliation, the compatibility-only `x_monitor.run` adjustment, regression aggregation, baseline gate, and staging evidence. No unit edits another unit's primary files without routing the conflict through U5.
+U1–U5 and their exact-SHA staging receipt are immutable historical evidence for the first Stage 1 delivery. The follow-up begins at U6. U6 owns the crosswalk, future version constants, and label contract. U7 and U8 build Release A; U8 reconciles their shared predicates and owns its candidate/staging proof. Only after Release A passes staging may U9 own activation of taxonomy v2/prompt v3, the edge migration, and the single-owner classifier-prompt exhibit update. U10 updates canonical output consumers against that committed packet. U11 reconciles and verifies after all dependencies; it does not pre-edit U6 or U9 files. Each unit has one primary owner and routes shared-file conflicts through U11.
 
 ---
 
 ## Implementation Units
+
+U1–U5 below are the completed taxonomy-v1 baseline and retain their original
+commands, identifiers, and evidence meaning. Executors of this amendment start
+at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U1. Freeze the taxonomy, context, and parser contract
 
@@ -363,6 +444,114 @@ U1 freezes the result and fixture contract, then U2 adds the schema and active w
   - Exact candidate SHA staging deployment passes web health, migration checks, deterministic feed/filter/headline probes, and required browser obligations without a paid harvest trigger.
 - **Verification:** All five unit contracts agree; required tests execute with zero skips/errors; the staging receipt separates deterministic contract proof from unmeasured semantic accuracy and confirms no production promotion occurred.
 
+### U6. Freeze the taxonomy v2 crosswalk and three-locale label contract
+
+- **Goal:** Establish one canonical identifier and label source before any reader, migration, or prompt changes.
+- **Requirements:** R1–R5, R19, R20, R22, R25; KTD8 and KTD13.
+- **Dependencies:** Completed U1–U5 baseline.
+- **Files:** `core/classification_contract.py`; `core/classification_labels.py`; `tests/test_classification_stage1_contract.py`; `tests/test_classification_labels.py`.
+- **Approach:**
+  1. Define taxonomy v2 and prompt v3 as future write targets while retaining taxonomy v1 as a recognized compatible stored version. Keep `stage1-v1` and the exact provider response fields unchanged.
+  2. Add the five R19 aliases to one ordered crosswalk; all unchanged v2 keys map to themselves. Expose one canonicalization representation suitable for Python and parameterized SQL rather than copying maps across modules.
+  3. Add reviewed English, Simplified Chinese, and Japanese labels for exactly the active ten types, five products, four sentiments, and six nationalism values. Do not add Japanese fallback rows for retired discourse/role families.
+- **Test scenarios:**
+  - Every old alias maps to the named v2 key, every unchanged canonical key is identity, and no two aliases map to conflicting canonical values.
+  - The v2 output sets contain exactly ten types and five products; parser field names, sentiment/nationalism/outcome vocabularies, and classification contract version are unchanged.
+  - Each active key has exactly one nonblank `en`, `zh-cn`, and `ja` label; retired families do not gain accidental Japanese rows.
+  - Unknown keys fail canonical validation rather than falling through to a display label.
+- **Verification:** Contract and label tests pin ordered allowlists, version roles, crosswalk totality, uniqueness, and exact 10/5/4/6 locale coverage.
+
+### U7. Ship Release A compatible storage and readers
+
+- **Goal:** Make the previous write format and future canonical format readable together before any edge rewrite or writer switch.
+- **Requirements:** R11, R12, R18–R22, R25; KTD8, KTD9, KTD11, and KTD13.
+- **Dependencies:** U6.
+- **Files:** `core/migrations/0029_ai_enrichment_stage1_taxonomy_v2_labels.py`; `core/management/commands/seed_i18n_labels.py`; `core/classification_readers.py`; `monitor/views.py`; `monitor/trend_narrative_facts.py`; `monitor/trend_narrative_candidates.py`; `.claude/skills/harvester-latest-n-health-check/scripts/check.py`; related migration, reader, view, fact, candidate, and health tests.
+- **Approach:**
+  1. Add canonical lookup keys and EN/ZH-CN/JA active-family labels without changing any classification state or type/product edge. Retain v1 keys and labels so unversioned legacy foreign keys remain valid and an older application tolerates the additive rows.
+  2. Replace exact-v1 currency predicates with recognized v1/v2 predicates. Canonicalize through the shared SQL relation before window limits, grouping, or distinct operations, while preserving current-state explicit-null precedence and unversioned historical fallback.
+  3. Keep the writer and provider parser on taxonomy v1/prompt v2 throughout Release A. Queue completion remains version-agnostic and recognized v1 rows are never requeued for this rename.
+  4. Report actual stored taxonomy/prompt provenance in health output, label both recognized versions current-compatible, and identify the latest write target separately.
+- **Execution note:** Characterize mixed v1/v2 and current-null behavior before replacing any exact-version predicate. This unit follows `.claude/skills/change-harvester/SKILL.md` only for its bounded health/call-chain verification; it does not change collection or invoke providers.
+- **Test scenarios:**
+  - A fresh database and a database with v1 rows gain canonical lookup/three-locale labels while all existing states and edges remain byte-for-byte semantically unchanged.
+  - Mixed alias/canonical edges collapse to one post-brand-key membership before grouping; two attributed brands remain two memberships and one unique post.
+  - A v1 or v2 current state wins over legacy fallback, including explicit null; conflicting legacy scalars remain unknown.
+  - A post-brand with an unknown contract or taxonomy state is excluded with provenance counts/warnings and cannot fall through to its legacy type or scalar rows.
+  - Every raw SQL reader accepts both recognized versions, rejects unknown versions, and returns row counts bounded by aggregate dimensions rather than post-brand edge count.
+  - Health distinguishes stored v1/v2 provenance, treats both as current-compatible, and does not report v1 as pending or trigger reclassification.
+- **Verification:** Focused PostgreSQL tests cover migration forward/idempotence, mixed versions, empty strings/nulls, conflicts, deduplication, query bounds, and rollback to the Release A binary without reversing the additive migration.
+
+### U8. Add explicit historical analysis and canonical compatibility surfaces
+
+- **Goal:** Give humans and agents one reproducible analysis contract while preserving old filter links and canonicalizing all new outputs.
+- **Requirements:** R19, R22–R26; KTD8, KTD11, and KTD12.
+- **Dependencies:** U7.
+- **Files:** a shared classification-analysis query module under `core/`; a management command under `core/management/commands/`; `monitor/views.py`; relevant feed/filter/chart JavaScript and icon maps; `monitor/trend_narrative_facts.py`; `monitor/trend_narrative_candidates.py`; `AGENTS.md`; a new `docs/reference/` analysis contract; analysis, view, headline, command, and browser tests.
+- **Approach:**
+  1. Implement one query service used by the management command and available to agent adapters. Require a named history policy, half-open UTC `Post.created_at` timestamps, and optional canonical brand scope; never infer classification era from publication time. Exclude and count null post timestamps, emit `range_basis: post_created_at`, and expose `classified_at` only as provenance.
+  2. Emit the deterministic R24 schema. `historical_inclusive` nests approximate unversioned legacy results beside, never inside, exact v1/v2 counts. Snapshot output includes source revision/query identity and states the latest-state limitation from R26.
+  3. Normalize old filter aliases before ORM predicates and cache-key construction. Responses, DOM state, charts, icon lookup, and headline facts emit canonical keys only and canonicalize before aggregation.
+  4. Link the agent-facing reference from `AGENTS.md`, including copyable CLI examples, provenance/count units, empty/error behavior, and the identifier-equivalence table.
+- **Execution note:** Follow `.claude/skills/fix-ui/SKILL.md` for old-link and canonical-output browser checks; the work changes machine keys but does not add Japanese UI controls or copy.
+- **Test scenarios:**
+  - `current_definition` reports canonical exact counts with separate stored v1/v2 provenance; `historical_inclusive` leaves those counts unchanged and adds a labeled approximate legacy section.
+  - Empty ranges exit zero with `status: empty`; invalid policy/range/brand/schema or crosswalk collision exits nonzero with a structured safe error and no partial counts.
+  - Rows exactly at the inclusive start and exclusive end boundary behave correctly; null `Post.created_at` rows are excluded, counted, and warned without consulting `classified_at`.
+  - Unversioned legacy types map only in the approximate section and product labels report unavailable; unknown provenance is counted as excluded with a warning.
+  - An old alias URL and its canonical URL produce equivalent filtering and one normalized cache identity, while responses expose only the canonical key.
+  - Mixed aliases cannot duplicate feed rows, chart counts, headline facts, or CLI memberships.
+- **Verification:** Deterministic JSON/golden tests, PostgreSQL count parity, management-command subprocess tests, and bounded browser tests prove the two policies and compatibility window. Release A then receives its own clean aggregate, exact-SHA staging deploy, migration/seed check, and rollback-only probe before U9 starts.
+
+### U9. Migrate eligible edges and switch new writes in Release B
+
+- **Goal:** Canonicalize stored Stage 1 memberships and make new classifier results use taxonomy v2/prompt v3 without changing semantics or provenance.
+- **Requirements:** R7–R10, R15, R19, R21, R22, R25; KTD8–KTD10.
+- **Dependencies:** U8 and successful Release A staging proof.
+- **Files:** `core/classification_contract.py`; `core/migrations/0030_ai_enrichment_stage1_taxonomy_v2_edges.py`; `x_monitor/attribution.py`; `monitor/cycle.py`; `docs/reference/classifier-prompts.md` through its existing single-owner formatter; migration, parser, prompt, cycle, publisher, provider-route, retry, and telemetry tests.
+- **Approach:**
+  1. In one forward-only migration, select edges only for post-brand pairs with recognized v1 Stage 1 state. Rewrite the five aliases, collapse old/new collisions, and rebuild each type membership with authoritative state sentiment; leave unversioned pairs and state provenance untouched.
+  2. Preserve old lookup rows, all state taxonomy/prompt/model/classified-at values, immutable headline snapshots, request ledgers, and enrichment success. Supply no reverse callable: an attempted Django reverse raises `IrreversibleError` before migration-recorder or row changes.
+  3. Activate the U6 future constants only in Release B, switching the canonical prompt/parser/write target to taxonomy v2/prompt v3. The provider response stays the same shape, uses only canonical keys, and rejects v1 aliases as invalid new output through the existing batch/fallback/failure semantics.
+  4. Preserve batch 20, workers 3, provider/model route, max tokens, retry/backoff, fallback, telemetry identity/cardinality/privacy, atomic all-brand publication, and zero added recurring calls.
+- **Execution note:** Coordinate `docs/reference/classifier-prompts.md` with its current owner; mechanically regenerate its literal prompt/example evidence after the prompt version change rather than concurrent manual edits.
+- **Test scenarios:**
+  - Mixed v1 alias plus canonical collision produces one canonical type/product edge; type sentiment comes from state and no uniqueness error or duplicate remains.
+  - Eligible v1 state retains taxonomy v1/prompt v2/model/classified-at after edge rewrite; unversioned legacy and existing v2 rows remain untouched.
+  - Attempting to reverse migration 0030 raises `IrreversibleError` and leaves the migration recorder and canonical rows unchanged.
+  - New valid v2 results publish atomically; a result containing any v1 alias fails strict parsing and cannot partially replace rows.
+  - Context-missing/current-null, multi-brand completion, stale-row replacement, claim loss, database rollback, retries, and deadline behavior match the completed Stage 1 contract.
+  - Provider route, role isolation, application-call telemetry, batch/workers, and call cardinality remain unchanged.
+- **Verification:** Fresh/upgrade PostgreSQL migration tests, irreversible-reverse and collision fixtures, exact prompt/version pins, true HTTP-wrapper call-chain tests, and publisher failure injection pass without paid calls.
+
+### U10. Reconcile canonical UI, headline, health, and provenance fixtures
+
+- **Goal:** Close cross-import and closed-taxonomy drift after Release B without broadening Japanese UI or historical semantics.
+- **Requirements:** R12–R16, R19–R26; KTD8–KTD13.
+- **Dependencies:** U9.
+- **Files:** current feed/chart/filter templates and JavaScript; `monitor/views.py`; `monitor/trend_narrative_facts.py`; `monitor/trend_narrative_candidates.py`; health/smoke diagnostics; UI assurance declarations; headline fixtures; classifier reference; analysis reference; affected tests.
+- **Approach:** Audit every active v1 literal and exact-version predicate, then classify it as accepted compatibility input, stored-provenance output, immutable historical evidence, or stale current output. Canonicalize current outputs and closed headline taxonomy while retaining v1 provenance and historical artifacts. Do not edit the Stage 0 baseline, completed Stage 1 staging receipt, headline snapshots, or request ledgers; new candidate evidence goes only to the dated follow-up receipt owned by U11.
+- **Test scenarios:**
+  - Feed, chart, DOM, icons, headline packets, and new URLs contain only canonical keys; v1 appears only in compatibility input or explicit provenance fields.
+  - Headline evidence built from mixed v1/v2 state has canonical distinct counts and unchanged provider-call topology, cache/last-good behavior, and immutable old snapshots.
+  - English and Chinese existing UI remains localized; Japanese label persistence is verified without exposing a Japanese locale option.
+  - Health, smoke, analysis, prompt reference, and version fixtures agree on contract v1, compatible v1/v2, write target v2, and prompt v3.
+- **Verification:** Focused current-surface/browser, headline, health, documentation-literal, and provenance suites pass with no obsolete current-key expectation or accidental Japanese UI path.
+
+### U11. Run the follow-up regression net and verify Release B on staging
+
+- **Goal:** Prove the amended contract end to end and preserve the old Stage 1 evidence as historical rather than rerunning production observations.
+- **Requirements:** R15–R26; KTD8–KTD13.
+- **Dependencies:** U10.
+- **Files:** `tests/fixtures/ai_enrichment_stage1_test_scope.json`; regression manifests/runners; a new `docs/analysis/YYYY-MM-DD-HHMMSS-ai-enrichment-stage1-taxonomy-v2-staging.md`; Release A/B ignored receipts promoted only where the new receipt requires durable evidence. The parent workflow alone may append final execution state to this plan after implementation.
+- **Approach:** Reconcile shared imports and ownership, run focused and aggregate local gates on the frozen Release B source, independently review the migration/history contract, and deploy the exact candidate to staging under the existing Ollija guide. Exercise only transaction-local probe fixtures and authenticated/local browser flows already allowed by the staging runbook; do not run provider work, production reads, a new baseline, or a new cohort capture.
+- **Test scenarios:**
+  - The active aggregate includes every new migration, crosswalk, analysis CLI, call-chain, old-filter alias, canonical-output, headline, health, and three-locale label node with zero required failures/skips/errors.
+  - Release A receipt proves the exact compatible binary before Release B; Release B receipt proves migration 0030, retained v1 provenance, canonical edges, analysis policy outputs, current-null behavior, and exact Release A compatibility with retained Release B data.
+  - Local browser proof covers old alias input and canonical emission in EN/ZH; Japanese remains a storage/reference assertion and is not reported as selectable parity.
+  - Staging probe creates bounded v1/v2/legacy transaction-local rows, checks both history policies and canonical aggregate SQL, then rolls back without touching existing data or invoking a queue/provider.
+- **Verification:** Formal review, required aggregate, candidate/browser/headline gates, source/artifact identity checks, and exact-SHA Release B staging verification pass. For the rollback proof, archive exact M_A sources with `git archive` into a hashed ignored bundle, run that bundle's Django readers through the existing absolute virtualenv against an owned disposable database after actual migration 0030, and prove v1/v2 reads without creating a branch or worktree. Keep staging on M_B. The final receipt names Release A and B identities, historical receipt boundaries, live-auth limitations, R17 as preproduction-only, and no production deployment.
+
 ---
 
 ## Verification Contract
@@ -378,6 +567,12 @@ U1 freezes the result and fixture contract, then U2 adds the schema and active w
 | Offline evaluation | U1, U5 | Stored fixture/candidate JSON yields 100% contract validity and zero fabricated defaults. Fresh heldout gold assessment and numeric semantic floors are recorded before any production proposal. |
 | Staging delivery | U5 | Passive baseline reviewed; remote staging and Render report the unchanged candidate SHA; migrations and web health pass; deterministic UI/headline probes pass; no manual paid harvest is required. |
 | Latest-N production health | U5 | Before staging, capture the literal latest 20 production IDs in order and recheck the identical cohort once after 30 minutes. No substitution, retry, production write, or semantic-accuracy claim is allowed; existing missing-discourse evidence stays labeled as pre-existing. |
+| Crosswalk and label foundation | U6, U7 | Exact key/version tests prove the five aliases, unchanged identities, and the exact R20 Japanese strings; migration/seed tests prove one nonblank `en`, `zh-cn`, and `ja` row for each active 10/5/4/6 value, exactly 25 Japanese rows among active keys, and no Japanese UI/catalog claim. |
+| Release A compatibility | U7, U8 | PostgreSQL and call-chain tests prove writers remain v1/prompt-v2, readers and SQL accept v1/v2, aliases canonicalize before limits/distinct/grouping, current-null precedence survives, and no row is requeued or rewritten. Run the current aggregate and candidate gates, then deploy and probe exact P_A/M_A on staging before U9. |
+| Analysis contract | U8 | Command/query tests prove explicit policies, half-open UTC `Post.created_at` boundaries, null-timestamp exclusion/warning, deterministic JSON, separate exact/approximate populations, unknown-state fallback blocking, canonical count units, provenance/exclusion counts, unavailable legacy products, empty success, safe failures, and the latest-state limitation. |
+| Release B migration and writer | U9 | Fresh and upgrade PostgreSQL tests cover eligible-only rewrite, alias collisions, current-state sentiment, unchanged v1 provenance, untouched unversioned rows, `IrreversibleError` without recorder/data change, strict v2 provider output, atomic publication, retries, role isolation, and telemetry without a paid call. |
+| Canonical consumers | U8, U10 | View/API/browser and headline tests prove old filter aliases work for one window, cache keys normalize, new outputs use canonical keys, mixed aliases count once, immutable snapshots/ledgers stay unchanged, and Japanese selection/content is absent. |
+| Release B regression and staging | U10, U11 | Run focused checks and the current/shared aggregate manifest with zero required failures/skips/errors/missing nodes. Run candidate, browser, headline, migration, analysis, and rollback-only probes, then verify exact P_B/M_B on staging. No production or provider action. |
 
 ### Aggregate Scope Clarification
 
@@ -400,13 +595,33 @@ exclusions and 28 guarded historical production-snapshot tests are outside
 local aggregate execution. R18's separate immutable-cohort health check and
 the staging-only delivery target retain their existing requirements.
 
+For this follow-up, the completed baseline and fixed latest-20 cohort remain
+archived evidence and are not repeated. Each Release A/B runner uses a unique
+output prefix and owned database names, rejects preexisting owned databases,
+closes only its own ports 8763/8764, verifies zero owned sessions, and drops
+only its recorded base/test databases without `FORCE`; port 8765 and foreign
+sessions are untouched. Test and preview subprocesses receive a minimal
+allowlisted environment with provider credentials, tokens, proxies, Redis,
+and dotenv-loaded secrets denied. No runner prints environment values.
+
+Record separate product and metadata chains P_A/M_A and P_B/M_B. Bridgewright
+declarations and literal pins identify P; the local preview and response
+header identify M. Bridgewright package source
+`0390f3c42195856a67afcb1d62464052cebf3476` and the installed
+performance package identity remain separate tool identities and must not be
+replaced by a product SHA. The staging probe is phase-aware rather than fixed
+to migration 0028/v1. The Release A-on-B-data proof uses a hashed `git archive`
+of exact M_A plus an owned disposable post-0030 database on the authoritative
+host; it does not move a Git ref, create a worktree, or roll staging backward.
+Staging remains on and finishes with exact M_B.
+
 ### Preproduction Quality Gate
 
 The frozen heldout cohort is adjudicated only after the prompt, taxonomy version, and context envelope are fixed. Record cohort selection, source/context provenance, adjudication method, per-label support, disagreements, and multi-label metrics. Choose numeric type, product-label, sentiment, and nationalism floors only when sample support makes them meaningful. A missing or under-supported label remains an explicit evaluation gap and blocks a Stage 1 production recommendation; it does not block contract implementation or staging verification.
 
 ### Rollback and Data Safety
 
-The first release is additive at the database layer. Rollback is application-only: deploy the prior application against retained legacy tables and leave Stage 1 migrations, shared keys, and data in place. It does not reverse production migrations, relabel posts, force-push, or resume a retired service. A forward fix may reprocess only explicitly authorized posts. Historical discourse stays available until a later cleanup plan proves every active reader and rollback window no longer needs it.
+The original Stage 1 release and follow-up Release A are additive. Release B rewrites only provenance-bearing Stage 1 edges after Release A proves it can read both identifier sets. Rollback is application-only: run or deploy Release A against retained Release B migrations/data; never reverse migration 0030, restore aliases, alter provenance, move staging backward during verification, force-push, or resume a retired service. The mandatory rollback proof uses the hashed exact-M_A archive and disposable post-0030 database described above; staging remains on M_B. A forward fix may reprocess only explicitly authorized posts. Historical discourse and old taxonomy keys remain until a later cleanup plan proves every reader and rollback window no longer needs them.
 
 ---
 
@@ -417,6 +632,12 @@ The first release is additive at the database layer. Rollback is application-onl
 - U3: Public, internal, and brand reader surfaces replace discourse with product labels, preserve nationalism and discoverability, and pass real browser assurance in supported current locales without layout redesign.
 - U4: Headline facts, evidence selection, packet schemas, and prompts contain no active discourse dependency and preserve current queue, ledger, last-good, fingerprint, and provider-call behavior.
 - U5: Shared callers and constants are reconciled, the retired SQLite path receives no feature port or write, contract and aggregate gates pass with required execution counts, and the passive baseline plus exact-SHA staging receipt are recorded.
+- U6: One total, collision-free crosswalk defines taxonomy v2 while preserving the response contract, and every active 10/5/4/6 value has reviewed EN/ZH-CN/JA labels.
+- U7: Release A adds only compatible lookup/label data, reads and groups v1/v2 canonically across every current predicate, preserves current-null and queue semantics, and keeps writes on v1/prompt v2.
+- U8: The history-policy CLI/reference and old-filter compatibility emit canonical deterministic results over explicit `Post.created_at` ranges without blending legacy approximations; exact P_A/M_A staging proof is complete before Release B.
+- U9: Release B irreversibly migrates only eligible Stage 1 edges, preserves original state provenance and immutable artifacts, and switches new strict output to taxonomy v2/prompt v3 without changing calls, retries, or telemetry.
+- U10: UI, headline, health, diagnostic, and reference surfaces agree on canonical output, compatible provenance, closed taxonomies, and the Japanese foundation boundary.
+- U11: New focused/aggregate/browser/headline gates and exact P_B/M_B staging probes pass; Release A can read Release B data; staging ends on M_B; no production, provider, baseline, or cohort action occurs.
 - The implementation contains no abandoned prompt variants, temporary adapters beyond the named retired-caller compatibility seam, duplicate taxonomy sources, dead migrations, or test-only product behavior.
 - Stage 1 production remains unpromoted. Any production proposal cites the separately completed heldout semantic-quality assessment and receives explicit owner authorization.
 
@@ -428,11 +649,15 @@ The first release is additive at the database layer. Rollback is application-onl
 - `docs/reference/2026-09-08-194415-enrichment-contracts.md` — Stage 0 telemetry and semantic-state boundary contract.
 - `docs/analysis/2026-09-08-194415-enrichment-stage0-baseline.md` — pre-instrumentation baseline and unknown-spend discipline.
 - `core/models.py`, `monitor/cycle.py`, `x_monitor/attribution.py`, `monitor/views.py`, and `monitor/trend_narrative_candidates.py` — current schema, writer, parser defaults, active feed, and headline discourse coupling.
+- `core/classification_contract.py`, `core/classification_readers.py`, `core/classification_labels.py`, and `core/management/commands/seed_i18n_labels.py` — current version pins, latest-state precedence, generic locale-key storage, and bilingual seed boundary.
+- `project/settings.py`, `project/locale_cookie.py`, `monitor/static/pw-locale-toggle.js`, and the bilingual fields in `core/models.py` — evidence that Japanese label rows can be additive while selectable/global content parity remains future work.
+- `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` — locale middleware, cookie, catalog, and browser risks that keep Japanese UI parity out of this follow-up.
+- `docs/solutions/data-migration/posts-raw-denormalize-prod-incident-2026-07-28.md` — additive migration sequencing and exact-environment verification discipline.
 
 ## Confidence and Review State
 
-Planning confidence is high for the active call chain, schema boundaries, consumer inventory, and staged compatibility design because each is grounded in current production code and the completed Stage 0/taxonomy audits. The Stage 0 production window is complete. Confidence remains medium for real semantic quality and production economics because the frozen adjudicated cohort is not yet complete and the observed window cannot establish future economics. Those gaps are explicit production gates and do not make the Stage 1 implementation contract ambiguous.
+Planning confidence is high for the five-key crosswalk, latest-state provenance boundary, compatible-reader inventory, label storage, and two-release staging design because each is grounded in current source and the completed Stage 1 proof. Confidence is medium for migration implementation until mixed-era/collision fixtures and the Release A-on-B compatibility probe pass. Real semantic quality and production economics remain R17 preproduction questions; an identifier-only migration supplies no new accuracy evidence.
 
-The confidence check strengthened the state model, shared historical fallback, coupled U1/U2 commit boundary, health diagnostics, migration rollback, and latest-N proof. The plan contains one diagram each for the data flow, classification state lifecycle, and rollout sequence; all feature-bearing units have concrete files, failure cases, integration proof, and observable completion criteria.
+The amendment confidence check strengthened crosswalk ownership, canonicalization before SQL aggregation, the latest-state analysis limitation, Release A/B identity and rollback proof, runner isolation, and Japanese parity boundaries. The plan includes data-flow, state, two-release rollout, and three-population analysis diagrams; every new feature-bearing unit has concrete files, failure cases, integration proof, and observable completion criteria.
 
-Independent non-interactive document review on 2026-09-08 found four material issues: stale Ollija delivery guidance, an unavailable ideation citation, no sentiment home for context-missing, and unsafe post-publication reverse-migration wording. All were resolved in place. The parent additionally required one U1/U2 commit packet and one shared current-versus-historical reader; both are now explicit. No settled decision was invalidated, and no actionable review finding remains.
+Independent non-interactive document review on 2026-09-08 found four material issues in the original plan; all were resolved before U1–U5. The September 9 amendment adds U6–U11 without rewriting that historical proof. Its design review selected compatibility-first staging, original-provenance retention, canonical-before-aggregation semantics, and explicit non-blended analysis. A second independent amendment review resolved nine implementation blockers covering exact Japanese copy, range basis, unknown-version fallback, version activation ownership, migration irreversibility, rollback proof, alias lifetime, receipt ownership, and legacy-map provenance; closure review found no remaining blocker.
