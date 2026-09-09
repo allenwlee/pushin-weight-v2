@@ -47,11 +47,11 @@
     }),
     post_types: Object.freeze({
       hands_on_usage: 'icon-hands-on-hammer',
-      performance_comparisons: 'icon-compare',
-      buzz_releases: 'icon-announce',
-      feedback_questions: 'icon-question',
+      results_evaluations: 'icon-compare',
+      releases_updates: 'icon-announce',
+      questions_requests: 'icon-question',
       advertising_marketing: 'icon-marketing',
-      event_announcement: 'icon-event',
+      events_opportunities: 'icon-event',
       opinions_reactions: 'icon-sentiment',
       research_explanations: 'icon-star',
       business_finance: 'icon-rise',
@@ -61,7 +61,7 @@
       bug: 'icon-question',
       complaint: 'icon-sentiment-negative',
       testimonial: 'icon-star',
-      product_request: 'icon-event',
+      ideas_requests: 'icon-event',
       misinformation: 'icon-unsanctioned'
     }),
     role: Object.freeze({

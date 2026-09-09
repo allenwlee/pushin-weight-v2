@@ -389,12 +389,12 @@
   // Paint Cyber-Quan symbols and existing semantic tints in the right column.
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
-    'buzz_releases', 'hands_on_usage', 'performance_comparisons',
-    'feedback_questions', 'advertising_marketing', 'event_announcement',
+    'releases_updates', 'hands_on_usage', 'results_evaluations',
+    'questions_requests', 'advertising_marketing', 'events_opportunities',
     'opinions_reactions', 'research_explanations', 'business_finance', 'other'
   ];
   var PRODUCT_ORDER = [
-    'bug', 'complaint', 'testimonial', 'product_request', 'misinformation'
+    'bug', 'complaint', 'testimonial', 'ideas_requests', 'misinformation'
   ];
 
   function parseListAttr(raw) {

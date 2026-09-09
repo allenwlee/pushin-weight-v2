@@ -30,6 +30,8 @@ FOCUSED_TESTS = [
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_stage1_taxonomy_filters_round_trip_without_cross_brand_product_matches",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_multibrand_product_filter_and_brand_page_keep_brand_provenance",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_classification_states_render_without_fabricated_taxonomy",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_old_taxonomy_url_hydrates_canonical_controls_and_visible_icons",
+    "tests/test_taxonomy_compatibility_surfaces.py",
     "tests/test_home_chart_pulse.py::HomeChartPulseTests::test_empty_product_labels_remain_visible_by_default_but_not_when_filtered",
     "tests/test_home_chart_pulse.py::HomeChartPulseTests::test_type_and_product_edges_require_exact_current_classified_state",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards",

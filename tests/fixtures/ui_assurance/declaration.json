@@ -4,18 +4,18 @@
   "source_revision": "5c2dee1fd048dfff0fda944f96f677f34f4c1e0b",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
-    "sha256": "af261de46674a3072b9b33299a48231cbf3499664a0c75e098d0dba587cb91a4"
+    "sha256": "9483929728c5e316ab1b9e70bd3baf30da2c6ddbaa5139c0357ea8dbbc8e7c37"
   },
   "generator": {"name": "pushinweight-covering-array", "version": "1.0", "seed": 501},
   "controls": [
     {"id":"brands","kind":"multi_select","values":["__all__","deepseek","qwen","minimax","glm","mimo","moonshot_kimi","inclusionai","mistral","stepfun","ernie","hunyuan","llama","nemo_megatron","doubao","yi","sensechat","exaone","kuaishou","sakana_ai","upstage","chatglm","gemma","kwaiyii","seed","sensenova","step","wenxin","gemini","gpt","claude","grok"],"initial_value":"__all__","reversible":true},
     {"id":"sentiment","kind":"multi_select","values":["__all__","mixed","negative","neutral","positive"],"initial_value":"__all__","reversible":true},
-    {"id":"post_type","kind":"multi_select","values":["__all__","buzz_releases","hands_on_usage","performance_comparisons","feedback_questions","advertising_marketing","event_announcement","opinions_reactions","research_explanations","business_finance","other"],"initial_value":"__all__","reversible":true},
+    {"id":"post_type","kind":"multi_select","values":["__all__","releases_updates","hands_on_usage","results_evaluations","questions_requests","advertising_marketing","events_opportunities","opinions_reactions","research_explanations","business_finance","other"],"initial_value":"__all__","reversible":true},
     {"id":"lang","kind":"multi_select","values":["__all__","en","zh-hans","ja","es","tr","fr","pt","ko","id","ar","pl","undetected","other"],"initial_value":"__all__","reversible":true},
     {"id":"role","kind":"multi_select","values":["__all__","official","staff","community","other"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_cn","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_us","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
-    {"id":"product_labels","kind":"multi_select","values":["__all__","bug","complaint","testimonial","product_request","misinformation"],"initial_value":"__all__","reversible":true},
+    {"id":"product_labels","kind":"multi_select","values":["__all__","bug","complaint","testimonial","ideas_requests","misinformation"],"initial_value":"__all__","reversible":true},
     {"id":"unsanctioned","kind":"toggle","values":["off","only"],"initial_value":"off","reversible":true},
     {"id":"locale","kind":"single_select","values":["en","zh_cn","original"],"initial_value":"en","reversible":true},
     {"id":"window","kind":"single_select","values":["1","7","30","365"],"initial_value":"1","reversible":true},

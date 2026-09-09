@@ -411,7 +411,7 @@ console.log('\n--- server-owned tint and marker hydration ---');
 const serverTintRow = markerRow(
   {
     'data-sentiments': 'negative',
-    'data-post-types': 'buzz_releases',
+    'data-post-types': 'releases_updates',
     'data-nat-cn': 'mild_pro',
     'data-unsanctioned': '1',
   },

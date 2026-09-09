@@ -41,14 +41,14 @@ FAKE_ROW = {
     "text_en": "Mock en", "text_translated": "Mock en",
     "text_original": "Mock", "text": "Mock",
     "is_translated": True, "like_count": 1200,
-    "sentiment_keys": ["positive"], "post_type_keys": ["buzz_releases"],
+    "sentiment_keys": ["positive"], "post_type_keys": ["releases_updates"],
     "nat_cn": "", "nat_us": "mild_pro",
     "tint_class": "tint-positive", "meta_text": "12m", "ts_abs_text": "(01:51 本地)",
     "avatar_initials": "K", "avatar_color": "#ec4899",
     "engagement_pretty": {"followers": "128.4k", "likes": "1.2k", "retweets": "340", "replies": "89"},
     "brands": [{"nickname": "kimi", "display_name": "Kimi", "display_name_en": "Kimi", "display_name_zh_cn": "Kimi"}],
     "brand_nicknames": ["kimi"],
-    "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "product_labels": [], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}}},
+    "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "releases_updates"}], "product_labels": [], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}}},
     "unsanctioned": False,
     "account": {"handle": "@kimi_moonshot", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
 }
@@ -118,8 +118,8 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        SentimentKey.objects.create(key="positive")
-        SentimentKey.objects.create(key="mixed")
+        SentimentKey.objects.get_or_create(key="positive")
+        SentimentKey.objects.get_or_create(key="mixed")
         call_command("seed_i18n_labels", verbosity=0)
 
     def _get_home(self, locale="en"):
@@ -211,15 +211,15 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         )[0]
         self.assertIn('data-pw-filter-group="post_types"', post_type)
         for key in (
-            "buzz_releases", "hands_on_usage", "performance_comparisons",
-            "feedback_questions", "advertising_marketing", "event_announcement",
+            "releases_updates", "hands_on_usage", "results_evaluations",
+            "questions_requests", "advertising_marketing", "events_opportunities",
             "opinions_reactions", "research_explanations", "business_finance", "other",
         ):
             self.assertIn(f'value="{key}"', post_type)
         products = body.split('data-group="product_labels"', 1)[1].split(
             'data-group="unsanctioned"', 1
         )[0]
-        for key in ("bug", "complaint", "testimonial", "product_request", "misinformation"):
+        for key in ("bug", "complaint", "testimonial", "ideas_requests", "misinformation"):
             self.assertIn(f'value="{key}"', products)
         self.assertIn("Potentially misleading; requires review", products)
 
@@ -286,7 +286,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         sample = {
             "brand_nicknames": ["qwen"],
             "product_labels": [],
-            "post_types": ["buzz_releases"],
+            "post_types": ["releases_updates"],
             "sentiments": ["positive"],
             "role_key": None,
             "lang_detected": "",
@@ -361,7 +361,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         sample = {
             "brand_nicknames": ["qwen", "deepseek"],
             "product_labels": ["bug"],
-            "post_types": ["buzz_releases"],
+            "post_types": ["releases_updates"],
             "sentiments": ["mixed"],
             "role_key": "official",
             "lang_detected": "en",

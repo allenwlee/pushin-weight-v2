@@ -211,7 +211,7 @@ class TestSerializeFeedRow:
         row = _serialize_feed_row(post, "en")
 
         assert row["sentiment_keys"] == ["positive", "mixed"]
-        assert row["post_type_keys"] == ["buzz_releases", "hands_on_usage"]
+        assert row["post_type_keys"] == ["releases_updates", "hands_on_usage"]
         assert row["product_label_keys"] == ["bug", "complaint", "testimonial"]
         assert row["nat_cn"] == "pro"
         assert row["nat_us"] == "mild_pro"

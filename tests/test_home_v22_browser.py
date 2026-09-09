@@ -3441,6 +3441,250 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(response.status_code, 200)
         return response.json()
 
+    def test_old_taxonomy_url_hydrates_canonical_controls_and_visible_icons(
+        self,
+    ) -> None:
+        from django.utils import timezone
+
+        from core.classification_contract import CONTRACT_VERSION
+        from core.models import (
+            PostBrandClassificationState,
+            PostBrandProductLabel,
+            PostBrandSignal,
+            PostTypeKey,
+            ProductLabelKey,
+            SentimentKey,
+        )
+
+        brand = Brand.objects.create(
+            nickname="taxonomy-browser",
+            display_name="Taxonomy Browser",
+            display_name_en="Taxonomy Browser",
+            display_name_zh_cn="分类浏览器",
+        )
+        old_types = (
+            "buzz_releases",
+            "performance_comparisons",
+            "feedback_questions",
+            "event_announcement",
+        )
+        canonical_types = (
+            "releases_updates",
+            "results_evaluations",
+            "questions_requests",
+            "events_opportunities",
+        )
+        for key in old_types + canonical_types:
+            PostTypeKey.objects.get_or_create(key=key)
+        for key in ("product_request", "ideas_requests"):
+            ProductLabelKey.objects.get_or_create(key=key)
+        SentimentKey.objects.get_or_create(key="positive")
+        post = Post.objects.create(
+            tweet_id="taxonomy-browser-row",
+            created_at=timezone.now() - timedelta(minutes=5),
+            text="taxonomy source",
+            text_en="taxonomy translation",
+            text_zh_cn="分类翻译",
+            commentary_en="taxonomy commentary",
+            commentary_zh_cn="分类评论",
+            lang_detected="en",
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        PostBrandClassificationState.objects.create(
+            post=post,
+            brand=brand,
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version="stage1-taxonomy-v1",
+            prompt_version="stage1-prompt-v2",
+            model="browser-test",
+            source_language="en",
+            input_context_fingerprint="b" * 64,
+            outcome="classified",
+            sentiment_id="positive",
+        )
+        PostBrandSignal.objects.bulk_create(
+            [
+                PostBrandSignal(
+                    post=post,
+                    brand=brand,
+                    post_type_id=key,
+                    sentiment_id="positive",
+                )
+                for key in old_types + canonical_types
+            ]
+        )
+        PostBrandProductLabel.objects.bulk_create(
+            [
+                PostBrandProductLabel(
+                    post=post,
+                    brand=brand,
+                    product_label_id=key,
+                )
+                for key in ("product_request", "ideas_requests")
+            ]
+        )
+        old_filters = {
+            "post_types": ["buzz_releases"],
+            "product_labels": ["product_request"],
+            "unsanctioned": "any",
+            "window": 1,
+        }
+        canonical_filters = {
+            "post_types": ["releases_updates"],
+            "product_labels": ["ideas_requests"],
+            "unsanctioned": "any",
+            "window": 1,
+        }
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, labels in (
+                    ("en", ("Releases & Updates", "Ideas & requests")),
+                    ("zh_cn", ("发布与更新", "想法与请求")),
+                ):
+                    with self.subTest(locale=locale):
+                        context = self._anonymous_context(browser)
+                        page = context.new_page()
+                        page_errors: list[str] = []
+                        page.on(
+                            "pageerror",
+                            lambda error, errors=page_errors: errors.append(str(error)),
+                        )
+                        try:
+                            response = page.goto(
+                                f"{self.live_server_url}/?"
+                                + urlencode(
+                                    {
+                                        "locale": locale,
+                                        "filters": json.dumps(old_filters),
+                                    }
+                                ),
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            row = page.locator(
+                                '[data-pw-feed-row][data-tweet-id="taxonomy-browser-row"]'
+                            )
+                            self.assertTrue(row.is_visible())
+                            self.assertEqual(
+                                page.evaluate("window.pwFilter.get().post_types"),
+                                ["releases_updates"],
+                            )
+                            self.assertEqual(
+                                page.evaluate("window.pwFilter.get().product_labels"),
+                                ["ideas_requests"],
+                            )
+                            canonical_type = page.locator(
+                                '[data-pw-filter-group="post_types"]'
+                                '[value="releases_updates"]'
+                            )
+                            canonical_product = page.locator(
+                                '[data-pw-filter-group="product_labels"]'
+                                '[value="ideas_requests"]'
+                            )
+                            self.assertTrue(canonical_type.is_checked())
+                            self.assertTrue(canonical_product.is_checked())
+                            self.assertEqual(
+                                page.locator(
+                                    '[data-pw-filter-group="post_types"]'
+                                    '[value="buzz_releases"]'
+                                ).count(),
+                                0,
+                            )
+                            self.assertEqual(
+                                canonical_type.locator(
+                                    "xpath=following-sibling::*[2]"
+                                ).inner_text(),
+                                labels[0],
+                            )
+                            self.assertEqual(
+                                canonical_product.locator(
+                                    "xpath=following-sibling::*[2]"
+                                ).inner_text(),
+                                labels[1],
+                            )
+                            self.assertEqual(
+                                row.get_attribute("data-post-types"),
+                                ",".join(canonical_types),
+                            )
+                            self.assertEqual(
+                                row.get_attribute("data-product-labels"),
+                                "ideas_requests",
+                            )
+                            type_icons = row.locator("[data-sig-post-type] svg")
+                            product_icons = row.locator("[data-sig-product] svg")
+                            self.assertEqual(
+                                type_icons.locator("use").evaluate_all(
+                                    "nodes => nodes.map(node => node.getAttribute('href'))"
+                                ),
+                                [
+                                    "#icon-announce",
+                                    "#icon-compare",
+                                    "#icon-question",
+                                    "#icon-event",
+                                ],
+                            )
+                            self.assertEqual(
+                                product_icons.locator("use").evaluate_all(
+                                    "nodes => nodes.map(node => node.getAttribute('href'))"
+                                ),
+                                ["#icon-event"],
+                            )
+                            for icon in (type_icons, product_icons):
+                                for index in range(icon.count()):
+                                    box = icon.nth(index).bounding_box()
+                                    self.assertIsNotNone(box)
+                                    self.assertGreater(box["width"], 0)
+                                    self.assertGreater(box["height"], 0)
+                            payloads = page.evaluate(
+                                """async ({oldFilters, canonicalFilters, locale}) => {
+                                  async function get(path, filters) {
+                                    const query = new URLSearchParams({
+                                      locale,
+                                      window: '1',
+                                      filters: JSON.stringify(filters),
+                                    });
+                                    const response = await fetch(path + '?' + query);
+                                    if (!response.ok) throw new Error(path + ' ' + response.status);
+                                    return response.json();
+                                  }
+                                  return {
+                                    oldFeed: await get('/feed/', oldFilters),
+                                    newFeed: await get('/feed/', canonicalFilters),
+                                    oldChart: await get('/chart/', oldFilters),
+                                    newChart: await get('/chart/', canonicalFilters),
+                                  };
+                                }""",
+                                {
+                                    "oldFilters": old_filters,
+                                    "canonicalFilters": canonical_filters,
+                                    "locale": locale,
+                                },
+                            )
+                            self.assertEqual(
+                                payloads["oldFeed"]["applied_filters"],
+                                canonical_filters,
+                            )
+                            self.assertEqual(
+                                payloads["oldChart"]["applied_filters"],
+                                canonical_filters,
+                            )
+                            self.assertEqual(
+                                payloads["oldFeed"]["rows"],
+                                payloads["newFeed"]["rows"],
+                            )
+                            self.assertEqual(
+                                payloads["oldChart"]["totals"],
+                                payloads["newChart"]["totals"],
+                            )
+                            self.assertEqual(page_errors, [])
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_multibrand_product_filter_and_brand_page_keep_brand_provenance(self) -> None:
         filters = {"product_labels": ["bug"], "unsanctioned": "any"}
         kimi = self._feed_payload(

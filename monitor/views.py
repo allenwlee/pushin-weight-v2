@@ -824,11 +824,15 @@ def _feed_signal_keys(
         for v in (cls.get("post_types") or []):
             k = (v.get("key") if isinstance(v, dict) else v) if v else None
             if k:
-                types.add(k)
+                canonical = canonicalize_taxonomy_key("post_type", str(k))
+                if canonical is not None:
+                    types.add(canonical)
         for v in (cls.get("product_labels") or []):
             k = (v.get("key") if isinstance(v, dict) else v) if v else None
             if k:
-                products.add(k)
+                canonical = canonicalize_taxonomy_key("product_label", str(k))
+                if canonical is not None:
+                    products.add(canonical)
         cn = cls.get("cn_nationalism")
         if cn:
             k = (cn.get("key") if isinstance(cn, dict) else cn) if cn else None
@@ -1985,6 +1989,18 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             window = HOME_WINDOW_DEFAULT
         normalized["window"] = window if window in ALLOWED_HOME_WINDOWS else HOME_WINDOW_DEFAULT
     return normalized
+
+
+def _applied_home_filters(
+    source: dict[str, Any], normalized: dict[str, Any]
+) -> dict[str, Any]:
+    """Return canonical response metadata without inventing absent defaults."""
+    ordered_keys = _HOME_MULTI_VALUE_FILTERS + ("unsanctioned", "window")
+    return {
+        key: normalized[key]
+        for key in ordered_keys
+        if key in source and key in normalized
+    }
 
 
 def _home_chart_cache_key(
@@ -3353,7 +3369,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+    rows, next_cursor, has_more, normalized = _feed_page_wire(
         locale=locale,
         window_days=window_days,
         filters=filters,
@@ -3371,7 +3387,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
         "rows": rows,
         "next_cursor": next_cursor,
         "has_more": has_more,
-        "applied_filters": filters,
+        "applied_filters": _applied_home_filters(filters, normalized),
         "locale": locale,
     })
 
@@ -3408,7 +3424,7 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+    rows, next_cursor, has_more, normalized = _feed_page_wire(
         locale=locale,
         window_days=window_days,
         filters=filters,
@@ -3423,7 +3439,7 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         "rows": rows,
         "next_cursor": next_cursor,
         "has_more": has_more,
-        "applied_filters": filters,
+        "applied_filters": _applied_home_filters(filters, normalized),
         "locale": locale,
     })
 
@@ -3440,10 +3456,11 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     Query params: window, filters.
     """
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     locale = _resolve_locale(request)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return JsonResponse(payload)
 
 
@@ -3454,9 +3471,10 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     """
     window_days = _resolve_home_window(request)
     locale = _resolve_locale(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return render(
         request,
         "monitor/_home_chart.html",
@@ -3597,12 +3615,13 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         return JsonResponse({"error": "missing brand"}, status=400)
 
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     tab = request.GET.get("tab", "post_type")
     payload = _build_brand_chart_payload(
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return JsonResponse(payload)
 
 
@@ -3618,12 +3637,13 @@ def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
         raise Http404("Brand not found")
 
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     tab = request.GET.get("tab", "post_type")
     payload = _build_brand_chart_payload(
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return render(
         request,
         "monitor/_brand_chart.html",
