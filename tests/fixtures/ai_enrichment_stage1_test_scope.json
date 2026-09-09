@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Stage 1 active Django/shared runtime plus U5 compatibility aggregate",
+  "scope": "Stage 1 active Django/shared runtime plus taxonomy Release B U6-U10 regression aggregate",
   "default_disposition": "required",
   "ignored_files": {
     "tests/test_account_handle_uniqueness_regression_net.py": "explicit guarded historical live-shadow BEFORE snapshot; not executable against disposable local PostgreSQL",
@@ -117,8 +117,27 @@
     "tests/test_quote_tweets.py::test_normalize_tweet_no_quote_is_clean": "current TwitterApiClient reaches x_monitor.apify._normalize_tweet"
   },
   "required_compatibility_files": [
+    "tests/test_classification_analysis.py",
+    "tests/test_classification_analysis_postgres.py",
+    "tests/test_classification_labels.py",
+    "tests/test_classification_readers.py",
     "tests/test_classification_stage1_contract.py",
+    "tests/test_classify_batch_pragmatics_full.py",
+    "tests/test_classify_pragmatics_full_arrays.py",
+    "tests/test_classify_pragmatics_full_prompt.py",
+    "tests/test_cycle_classifier_model_propagation.py",
+    "tests/test_cycle_error_counters.py",
     "tests/test_harvester_latest_n_health_check.py",
+    "tests/test_home_chart_pulse.py",
+    "tests/test_home_v22_browser.py",
+    "tests/test_home_v22_feed_row_shape.py",
+    "tests/test_home_v22_filter_pills.py",
+    "tests/test_home_v22_topbar_layout.py",
+    "tests/test_migration_028_ai_enrichment_stage1_taxonomy.py",
+    "tests/test_migration_029_ai_enrichment_stage1_taxonomy_v2_labels.py",
+    "tests/test_migration_030_ai_enrichment_stage1_taxonomy_v2_edges.py",
+    "tests/test_mockup_spec.py",
+    "tests/test_post_enrichment_queue.py",
     "tests/test_post_fetch_smoketest.py",
     "tests/test_post_fetch_smoketest_api_source.py",
     "tests/test_post_fetch_smoketest_call_preview.py",
@@ -132,12 +151,18 @@
     "tests/test_relevance.py",
     "tests/test_run.py",
     "tests/test_run_pipeline_live_wiring.py",
-    "tests/test_run_post_fetch.py"
+    "tests/test_run_post_fetch.py",
+    "tests/test_staging_harvest_acceptance.py",
+    "tests/test_taxonomy_compatibility_surfaces.py",
+    "tests/test_trend_narrative_candidates.py",
+    "tests/test_trend_narrative_facts.py",
+    "tests/test_ui_assurance_contract.py",
+    "tests/test_views.py"
   ],
   "notes": [
     "Whole retired files target the retired SQLite/Flask/launchd stack or one-time tooling and remain represented in the verbatim mixed-suite evidence.",
     "Historical live-shadow files are guarded snapshots and are not executed against the disposable local PostgreSQL database.",
-    "All tests outside ignored_files and deselected_nodes are required by conservative default.",
+    "All tests outside ignored_files and deselected_nodes are required by conservative default; required_compatibility_files explicitly anchors the U6-U10 Release B migration, compatibility, analysis, label, prompt, diagnostic, and canonical-consumer tests.",
     "Five network/live nodes remain explicit even when their containing retired file is ignored."
   ]
 }
