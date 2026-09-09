@@ -47,11 +47,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    COMPATIBLE_TAXONOMY_VERSIONS,
     CONTRACT_VERSION,
     NATIONALISM_KEYS,
-    POST_TYPE_KEYS,
-    PRODUCT_LABEL_KEYS,
-    TAXONOMY_VERSION,
+    canonicalize_taxonomy_key,
+    taxonomy_crosswalk_rows,
 )
 from core.classification_labels import CLASSIFICATION_LABELS
 from core.classification_readers import read_brand_scalars_many
@@ -100,8 +102,8 @@ _LOCALE_TO_COLUMN: dict[str, str] = {
 }
 
 # Taxonomy keys — imported from the versioned Stage 1 classifier contract.
-_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = POST_TYPE_KEYS
-_DASHBOARD_PRODUCT_LABEL_KEYS: tuple[str, ...] = PRODUCT_LABEL_KEYS
+_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = CANONICAL_POST_TYPE_KEYS
+_DASHBOARD_PRODUCT_LABEL_KEYS: tuple[str, ...] = CANONICAL_PRODUCT_LABEL_KEYS
 
 _DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
     "official", "staff", "community", "other",
@@ -1602,7 +1604,7 @@ def _enrich_posts_with_classifications(
         post_id=OuterRef("post_id"),
         brand_id=OuterRef("brand_id"),
         contract_version=CONTRACT_VERSION,
-        taxonomy_version=TAXONOMY_VERSION,
+        taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
         outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
     )
     signal_qs = PostBrandSignal.objects.filter(
@@ -1683,13 +1685,19 @@ def _enrich_posts_with_classifications(
         bid = s["brand_id"]
         if tid not in signals_by_tweet:
             signals_by_tweet[tid] = {}
-        signals_by_tweet[tid].setdefault(bid, []).append(s["post_type_id"])
+        canonical = canonicalize_taxonomy_key("post_type", s["post_type_id"])
+        if canonical is not None:
+            signals_by_tweet[tid].setdefault(bid, []).append(canonical)
 
     products_by_tweet: dict[str, dict[str, list[str]]] = {}
     for item in products:
-        products_by_tweet.setdefault(item["post_id"], {}).setdefault(
-            item["brand_id"], []
-        ).append(item["product_label_id"])
+        canonical = canonicalize_taxonomy_key(
+            "product_label", item["product_label_id"]
+        )
+        if canonical is not None:
+            products_by_tweet.setdefault(item["post_id"], {}).setdefault(
+                item["brand_id"], []
+            ).append(canonical)
 
     # Collect all classification keys present in this page so we can
     # batch-load the label rows for zh_cn + en in one go per family.
@@ -1702,12 +1710,12 @@ def _enrich_posts_with_classifications(
         # named roles; these are the only displayable badge values.
         "role": set(_DISPLAY_ROLE_PRECEDENCE),
     }
-    for s in signals:
-        if s.get("post_type_id"):
-            keys_by_family["post_type"].add(s["post_type_id"])
-    for item in products:
-        if item.get("product_label_id"):
-            keys_by_family["product_label"].add(item["product_label_id"])
+    for values in signals_by_tweet.values():
+        for keys in values.values():
+            keys_by_family["post_type"].update(keys)
+    for values in products_by_tweet.values():
+        for keys in values.values():
+            keys_by_family["product_label"].update(keys)
     for scalar in scalar_reads.values():
         if scalar.sentiment:
             keys_by_family["sentiment"].add(scalar.sentiment)
@@ -1826,6 +1834,8 @@ def _enrich_posts_with_classifications(
             current_outcome = scalar.outcome
             if current_outcome:
                 cls_data["classification_status"] = current_outcome
+            elif scalar.source == "unrecognized":
+                cls_data["classification_status"] = "stale"
             else:
                 attempt = classification_attempt_by_tweet.get(tid)
                 cls_data["classification_status"] = (
@@ -1957,7 +1967,15 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             continue
         if not isinstance(value, (list, tuple, set)):
             value = [value] if value not in (None, "") else []
-        normalized[key] = list(dict.fromkeys(str(item) for item in value if item not in (None, "")))
+        values = [str(item) for item in value if item not in (None, "")]
+        family = {"post_types": "post_type", "product_labels": "product_label"}.get(key)
+        if family is not None:
+            values = [
+                canonical
+                for item in values
+                if (canonical := canonicalize_taxonomy_key(family, item)) is not None
+            ]
+        normalized[key] = list(dict.fromkeys(values))
     mode = source.get("unsanctioned", "off")
     normalized["unsanctioned"] = mode if mode in {"off", "only", "any"} else "off"
     if "window" in source:
@@ -2187,11 +2205,16 @@ def _filter_home_posts_queryset(
             post_id=OuterRef("post_id"),
             brand_id=OuterRef("brand_id"),
             contract_version=CONTRACT_VERSION,
-            taxonomy_version=TAXONOMY_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
+        stored_types = [
+            source
+            for source, canonical in taxonomy_crosswalk_rows("post_type")
+            if canonical in active_types
+        ]
         matching_types = PostBrandSignal.objects.filter(
-            post_id=OuterRef("tweet_id"), post_type_id__in=active_types
+            post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
         ).filter(Exists(current_classified_edge))
         if brand_scope not in (None, "__all__"):
             matching_types = matching_types.filter(brand_id__in=brand_scope)
@@ -2205,11 +2228,16 @@ def _filter_home_posts_queryset(
             post_id=OuterRef("post_id"),
             brand_id=OuterRef("brand_id"),
             contract_version=CONTRACT_VERSION,
-            taxonomy_version=TAXONOMY_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
+        stored_products = [
+            source
+            for source, canonical in taxonomy_crosswalk_rows("product_label")
+            if canonical in active_products
+        ]
         matching_products = PostBrandProductLabel.objects.filter(
-            post_id=OuterRef("tweet_id"), product_label_id__in=active_products
+            post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
         ).filter(Exists(current_classified_edge))
         if brand_scope not in (None, "__all__"):
             matching_products = matching_products.filter(brand_id__in=brand_scope)
@@ -2253,7 +2281,7 @@ def _filter_home_posts_queryset(
         current_rows = PostBrandClassificationState.objects.filter(
             post_id=OuterRef("tweet_id"),
             contract_version=CONTRACT_VERSION,
-            taxonomy_version=TAXONOMY_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             **{f"{current_field}__in": active},
         )
         if brand_scope not in (None, "__all__"):
@@ -2262,8 +2290,6 @@ def _filter_home_posts_queryset(
         current_pair = PostBrandClassificationState.objects.filter(
             post_id=OuterRef("post_id"),
             brand_id=OuterRef("brand_id"),
-            contract_version=CONTRACT_VERSION,
-            taxonomy_version=TAXONOMY_VERSION,
         )
         historical_rows = (
             legacy_model.objects.filter(post_id=OuterRef("tweet_id"))

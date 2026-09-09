@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_contract import (
+    CANONICAL_TAXONOMY_VERSION,
+    CONTRACT_VERSION,
+    TAXONOMY_VERSION,
+)
 from core.classification_readers import read_brand_scalars, read_brand_scalars_many
 from core.models import (
     Brand,
@@ -104,7 +108,7 @@ def test_prompt_version_is_provenance_not_reader_currency():
     assert result.sentiment == "neutral"
 
 
-def test_noncurrent_contract_or_taxonomy_does_not_override_legacy():
+def test_unrecognized_state_blocks_legacy_fallback():
     seed_keys()
     post, brand = pair("old-version")
     current_state(post, brand, taxonomy_version="old-taxonomy")
@@ -117,8 +121,25 @@ def test_noncurrent_contract_or_taxonomy_does_not_override_legacy():
 
     result = read_brand_scalars(post_id=post.pk, brand_id=brand.pk)
 
-    assert result.source == "historical"
-    assert result.sentiment == "negative"
+    assert result.source == "unrecognized"
+    assert result.sentiment is None
+    assert result.contract_version == CONTRACT_VERSION
+    assert result.taxonomy_version == "old-taxonomy"
+
+
+def test_v2_current_state_owns_explicit_nulls_without_legacy_fallthrough():
+    seed_keys()
+    post, brand = pair("v2-current-null")
+    current_state(post, brand, taxonomy_version=CANONICAL_TAXONOMY_VERSION)
+    PostBrandSignal.objects.create(
+        post=post, brand=brand, post_type_id="other", sentiment_id="negative"
+    )
+
+    result = read_brand_scalars(post_id=post.pk, brand_id=brand.pk)
+
+    assert result.source == "current"
+    assert result.sentiment is None
+    assert result.taxonomy_version == CANONICAL_TAXONOMY_VERSION
 
 
 def test_historical_reader_accepts_one_distinct_value_regardless_of_row_order():

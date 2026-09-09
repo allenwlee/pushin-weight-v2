@@ -90,7 +90,7 @@ def _stage1_brand(**overrides):
     brand = {
         "brand_id": "minimax",
         "signals": [
-            {"post_type": "buzz_releases", "sentiment": "positive"}
+            {"post_type": "releases_updates", "sentiment": "positive"}
         ],
         "product_labels": [],
         "classification_state": _current_state(),
@@ -528,11 +528,11 @@ def test_stage1_stale_state_is_not_treated_as_current(checker):
     assert classification["outcome"] is None
     assert classification["post_types"] == []
     assert classification["product_labels"] == []
-    assert classification["scalar_source"] == "historical"
-    assert classification["sentiment"] == "negative"
+    assert classification["scalar_source"] == "unrecognized"
+    assert classification["sentiment"] is None
     assert classification["china_nationalism"] is None
     assert classification["us_nationalism"] is None
-    assert classification["legacy_conflicts"] == ["china_nationalism"]
+    assert classification["legacy_conflicts"] == []
     assert payload["posts"][0]["reasons"] == [
         {
             "stage": "classification",
@@ -540,6 +540,31 @@ def test_stage1_stale_state_is_not_treated_as_current(checker):
             "brand_id": "minimax",
         }
     ]
+
+
+def test_stage1_canonical_taxonomy_state_is_current_compatible(checker):
+    brand = _stage1_brand(
+        signals=[{"post_type": "releases_updates", "sentiment": "positive"}],
+        classification_state=_current_state(
+            taxonomy_version="stage1-taxonomy-v2",
+            prompt_version="stage1-prompt-v3",
+        ),
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["state"] == "current"
+    assert classification["taxonomy_version_current_compatible"] is True
+    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v1"
+    assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v2"
+    assert classification["active_write_prompt_version"] == "stage1-prompt-v2"
+    assert classification["latest_prompt_version"] == "stage1-prompt-v3"
 
 
 def test_stage1_current_null_scalars_suppress_legacy_fallback(checker):
@@ -952,6 +977,82 @@ def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
         assert stage1_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
         assert stage1_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
         assert stage1_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
+
+        stage1_apps = executor.loader.project_state(stage1).apps
+        Brand = stage1_apps.get_model("core", "Brand")
+        Post = stage1_apps.get_model("core", "Post")
+        PostBrand = stage1_apps.get_model("core", "PostBrand")
+        PostTypeKey = stage1_apps.get_model("core", "PostTypeKey")
+        SentimentKey = stage1_apps.get_model("core", "SentimentKey")
+        ProductLabelKey = stage1_apps.get_model("core", "ProductLabelKey")
+        EnrichmentState = stage1_apps.get_model("core", "PostEnrichmentState")
+        Signal = stage1_apps.get_model("core", "PostBrandSignal")
+        ProductEdge = stage1_apps.get_model("core", "PostBrandProductLabel")
+        State = stage1_apps.get_model("core", "PostBrandClassificationState")
+        brand = Brand.objects.create(nickname="health-crosswalk")
+        post = Post.objects.create(
+            tweet_id="101",
+            text="health crosswalk",
+            text_en="health crosswalk en",
+            text_zh_cn="health crosswalk zh",
+            commentary_en="health commentary en",
+            commentary_zh_cn="health commentary zh",
+            lang_detected="en",
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        EnrichmentState.objects.create(
+            post=post,
+            translation_status="succeeded",
+            classification_status="succeeded",
+        )
+        SentimentKey.objects.get_or_create(key="positive")
+        for key in ("buzz_releases", "health_unknown_type"):
+            PostTypeKey.objects.get_or_create(key=key)
+            Signal.objects.create(
+                post=post, brand=brand, post_type_id=key, sentiment_id="positive"
+            )
+        for key in ("product_request", "health_unknown_product"):
+            ProductLabelKey.objects.get_or_create(key=key)
+            ProductEdge.objects.create(post=post, brand=brand, product_label_id=key)
+        State.objects.create(
+            post=post,
+            brand=brand,
+            contract_version="stage1-v1",
+            taxonomy_version="stage1-taxonomy-v1",
+            prompt_version="stage1-prompt-v2",
+            model="test",
+            input_context_fingerprint="b" * 64,
+            outcome="classified",
+            sentiment_id="positive",
+        )
+        crosswalk_snapshot = execute_snapshot(
+            checker.build_query(latest=None, tweet_ids=["101"], detailed=True)
+        )
+        observed = crosswalk_snapshot["posts"][0]["brands"][0]
+        assert observed["signals"] == [
+            {"post_type": "releases_updates", "sentiment": "positive"}
+        ]
+        assert observed["product_labels"] == ["ideas_requests"]
+        assert observed["stored_post_type_keys"] == [
+            "buzz_releases",
+            "health_unknown_type",
+        ]
+        assert observed["stored_product_label_keys"] == [
+            "health_unknown_product",
+            "product_request",
+        ]
+        evaluated, exit_code = checker.evaluate_snapshot(
+            crosswalk_snapshot,
+            latest=None,
+            requested_ids=["101"],
+            grace_hours=24,
+        )
+        assert exit_code == 1
+        reasons = evaluated["posts"][0]["reasons"]
+        assert {reason["reason"] for reason in reasons} >= {
+            "invalid_post_type",
+            "invalid_product_label",
+        }
     finally:
         MigrationExecutor(connection).migrate(
             MigrationExecutor(connection).loader.graph.leaf_nodes()

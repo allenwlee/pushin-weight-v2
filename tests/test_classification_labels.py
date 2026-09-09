@@ -16,7 +16,6 @@ from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
     CANONICAL_PRODUCT_LABEL_KEYS,
     NATIONALISM_KEYS,
-    PRODUCT_LABEL_KEYS,
     SENTIMENT_KEYS,
 )
 from core.classification_labels import (
@@ -147,13 +146,22 @@ def test_seed_command_is_idempotent_for_stage1_product_labels():
     call_command("seed_i18n_labels")
     call_command("seed_i18n_labels")
 
-    assert set(ProductLabelKey.objects.values_list("key", flat=True)) == set(
-        PRODUCT_LABEL_KEYS
+    assert set(CANONICAL_PRODUCT_LABEL_KEYS).issubset(
+        ProductLabelKey.objects.values_list("key", flat=True)
     )
     assert ProductLabelLabel.objects.filter(
-        product_label_id__in=PRODUCT_LABEL_KEYS,
-        lang__in=("en", "zh-cn"),
-    ).count() == len(PRODUCT_LABEL_KEYS) * 2
+        product_label_id__in=CANONICAL_PRODUCT_LABEL_KEYS,
+        lang__in=("en", "zh-cn", "ja"),
+    ).count() == len(CANONICAL_PRODUCT_LABEL_KEYS) * 3
+    assert ProductLabelLabel.objects.filter(lang="ja").count() == len(
+        CANONICAL_PRODUCT_LABEL_KEYS
+    )
+    assert ProductLabelLabel.objects.filter(
+        product_label_id="product_request", lang__in=("en", "zh-cn")
+    ).count() == 2
+    assert not ProductLabelLabel.objects.filter(
+        product_label_id="product_request", lang="ja"
+    ).exists()
 
 
 class TestLocalizeEmptyCache:

@@ -22,14 +22,18 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    CANONICAL_PROMPT_VERSION,
+    CANONICAL_TAXONOMY_VERSION,
+    COMPATIBLE_TAXONOMY_VERSIONS,
     CONTRACT_VERSION,
     NATIONALISM_KEYS,
-    POST_TYPE_KEYS,
-    PRODUCT_LABEL_KEYS,
     PROMPT_VERSION,
     SENTIMENT_KEYS,
     TAXONOMY_VERSION,
-    parse_stage1_classifications,
+    canonicalize_taxonomy_key,
+    taxonomy_crosswalk_rows,
 )
 
 DATABASE_RESOURCE = "pushinweight-db-shadow"
@@ -133,6 +137,14 @@ def _snapshot_select(
     detailed: bool,
     stage1: bool,
 ) -> str:
+    def crosswalk_values(family: str) -> str:
+        rows = taxonomy_crosswalk_rows(family)
+        if any(not re.fullmatch(r"[a-z_]+", value) for row in rows for value in row):
+            raise HealthCheckError("query", "invalid_taxonomy_crosswalk")
+        return ", ".join(f"('{source}', '{canonical}')" for source, canonical in rows)
+
+    post_type_crosswalk = crosswalk_values("post_type")
+    product_crosswalk = crosswalk_values("product_label")
     post_detail_fields = ""
     brand_detail_fields = ""
     discourse_detail_fields = ""
@@ -203,8 +215,17 @@ def _snapshot_select(
                   'contract_version', classification_state.contract_version,
                   'taxonomy_version', classification_state.taxonomy_version,
                   'prompt_version', classification_state.prompt_version,
-                  'prompt_version_current',
+                  'prompt_version_active_write',
                     classification_state.prompt_version = '{PROMPT_VERSION}',
+                  'taxonomy_version_current_compatible',
+                    classification_state.contract_version = '{CONTRACT_VERSION}'
+                    AND classification_state.taxonomy_version = ANY(
+                      ARRAY[{", ".join(repr(value) for value in COMPATIBLE_TAXONOMY_VERSIONS)}]
+                    ),
+                  'active_write_taxonomy_version', '{TAXONOMY_VERSION}',
+                  'active_write_prompt_version', '{PROMPT_VERSION}',
+                  'latest_taxonomy_version', '{CANONICAL_TAXONOMY_VERSION}',
+                  'latest_prompt_version', '{CANONICAL_PROMPT_VERSION}',
                   'outcome', classification_state.outcome,
                   'sentiment', classification_state.sentiment,
                   'china_nationalism',
@@ -214,11 +235,28 @@ def _snapshot_select(
               END,
               'product_labels', COALESCE((
                 SELECT jsonb_agg(
-                  product.product_label_key ORDER BY product.product_label_key
+                  canonical_key ORDER BY canonical_key
                 )
+                FROM (
+                  SELECT DISTINCT mapping.canonical_key
+                  FROM posts_brands_product_labels product
+                  JOIN product_crosswalk mapping
+                    ON mapping.source_key = product.product_label_key::text
+                  WHERE product.post_id = p.tweet_id
+                    AND product.brand_id = pb.brand_id
+                ) canonical_products
+              ), '[]'::jsonb),
+              'stored_product_label_keys', COALESCE((
+                SELECT jsonb_agg(product.product_label_key ORDER BY product.product_label_key)
                 FROM posts_brands_product_labels product
                 WHERE product.post_id = p.tweet_id
                   AND product.brand_id = pb.brand_id
+              ), '[]'::jsonb),
+              'stored_post_type_keys', COALESCE((
+                SELECT jsonb_agg(signal.post_type_key ORDER BY signal.post_type_key)
+                FROM posts_brands_signals signal
+                WHERE signal.post_id = p.tweet_id
+                  AND signal.brand_id = pb.brand_id
               ), '[]'::jsonb)"""
     else:
         classification_fields = """,
@@ -234,6 +272,12 @@ def _snapshot_select(
 
     schema_profile = "stage1" if stage1 else "legacy"
     return f"""WITH
+  post_type_crosswalk(source_key, canonical_key) AS (
+    VALUES {post_type_crosswalk}
+  ),
+  product_crosswalk(source_key, canonical_key) AS (
+    VALUES {product_crosswalk}
+  ),
   {selected_cte},
   post_rows AS (
     SELECT
@@ -318,14 +362,20 @@ def _snapshot_select(
               'signals', COALESCE((
                 SELECT jsonb_agg(
                   jsonb_build_object(
-                    'post_type', signal.post_type_key,
-                    'sentiment', signal.sentiment
+                    'post_type', canonical_signal.post_type,
+                    'sentiment', canonical_signal.sentiment
                   )
-                  ORDER BY signal.post_type_key, signal.sentiment
+                  ORDER BY canonical_signal.post_type, canonical_signal.sentiment
                 )
-                FROM posts_brands_signals signal
-                WHERE signal.post_id = p.tweet_id
-                  AND signal.brand_id = pb.brand_id
+                FROM (
+                  SELECT DISTINCT mapping.canonical_key AS post_type,
+                                  signal.sentiment
+                  FROM posts_brands_signals signal
+                  JOIN post_type_crosswalk mapping
+                    ON mapping.source_key = signal.post_type_key::text
+                  WHERE signal.post_id = p.tweet_id
+                    AND signal.brand_id = pb.brand_id
+                ) canonical_signal
               ), '[]'::jsonb),
               'discourses', COALESCE((
                 SELECT jsonb_agg(
@@ -613,17 +663,26 @@ def _stage1_brand_health(
         for signal in signals
         if isinstance(signal, dict) and isinstance(signal.get("post_type"), str)
     ]
+    stored_post_types = _string_values(brand.get("stored_post_type_keys"))
+    stored_products = _string_values(brand.get("stored_product_label_keys"))
     if (
         state.get("contract_version") != CONTRACT_VERSION
-        or state.get("taxonomy_version") != TAXONOMY_VERSION
+        or state.get("taxonomy_version") not in COMPATIBLE_TAXONOMY_VERSIONS
     ):
         summary = {
-            **_legacy_brand_summary(brand),
             "state": "stale",
             "contract_version": state.get("contract_version"),
             "taxonomy_version": state.get("taxonomy_version"),
             "prompt_version": state.get("prompt_version"),
             "stale_outcome": state.get("outcome"),
+            "outcome": None,
+            "post_types": [],
+            "product_labels": [],
+            "sentiment": None,
+            "china_nationalism": None,
+            "us_nationalism": None,
+            "scalar_source": "unrecognized",
+            "legacy_conflicts": [],
         }
         return summary, [
             _reason("classification", "stale_state", brand_id=brand_id)
@@ -634,9 +693,16 @@ def _stage1_brand_health(
         "contract_version": state.get("contract_version"),
         "taxonomy_version": state.get("taxonomy_version"),
         "prompt_version": state.get("prompt_version"),
+        "taxonomy_version_current_compatible": True,
+        "active_write_taxonomy_version": TAXONOMY_VERSION,
+        "active_write_prompt_version": PROMPT_VERSION,
+        "latest_taxonomy_version": CANONICAL_TAXONOMY_VERSION,
+        "latest_prompt_version": CANONICAL_PROMPT_VERSION,
         "outcome": state.get("outcome"),
         "post_types": post_types,
         "product_labels": product_labels,
+        "stored_post_type_keys": stored_post_types,
+        "stored_product_label_keys": stored_products,
         "sentiment": state.get("sentiment"),
         "china_nationalism": state.get("china_nationalism"),
         "us_nationalism": state.get("us_nationalism"),
@@ -662,12 +728,23 @@ def _stage1_brand_health(
         reasons.append(
             _reason("classification", "invalid_sentiment", brand_id=brand_id)
         )
-    invalid_types = [value for value in post_types if value not in POST_TYPE_KEYS]
+    invalid_types = [value for value in post_types if value not in CANONICAL_POST_TYPE_KEYS]
+    invalid_types.extend(
+        value
+        for value in stored_post_types
+        if canonicalize_taxonomy_key("post_type", value) is None
+    )
     if invalid_types or len(post_types) != len(signals):
         reasons.append(
             _reason("classification", "invalid_post_type", brand_id=brand_id)
         )
-    if any(label not in PRODUCT_LABEL_KEYS for label in product_labels):
+    invalid_products = any(
+        label not in CANONICAL_PRODUCT_LABEL_KEYS for label in product_labels
+    ) or any(
+        canonicalize_taxonomy_key("product_label", label) is None
+        for label in stored_products
+    )
+    if invalid_products:
         reasons.append(
             _reason("classification", "invalid_product_label", brand_id=brand_id)
         )
@@ -699,26 +776,6 @@ def _stage1_brand_health(
         reasons.append(
             _reason(
                 "classification", "context_missing_has_edges", brand_id=brand_id
-            )
-        )
-    canonical = parse_stage1_classifications(
-        [
-            {
-                "brand_id": brand_id,
-                "outcome": outcome,
-                "post_types": post_types,
-                "product_labels": product_labels,
-                "sentiment": sentiment,
-                "china_nationalism": state.get("china_nationalism"),
-                "us_nationalism": state.get("us_nationalism"),
-            }
-        ],
-        [brand_id],
-    )
-    if canonical is None and not reasons:
-        reasons.append(
-            _reason(
-                "classification", "invalid_current_contract", brand_id=brand_id
             )
         )
     return summary, reasons

@@ -14,7 +14,11 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 import monitor.trend_narrative_facts as trend_facts
-from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_contract import (
+    CANONICAL_TAXONOMY_VERSION,
+    CONTRACT_VERSION,
+    TAXONOMY_VERSION,
+)
 from core.models import (
     Account,
     Brand,
@@ -452,6 +456,102 @@ def test_u4_classified_null_scalars_are_unknown_but_empty_products_are_covered()
     assert not any(scope == brand.nickname for scope, _family, _label in counts)
 
 
+def test_u7_metadata_sql_canonicalizes_aliases_and_blocks_unknown_state_fallback():
+    brand = _brand("stage1-taxonomy-crosswalk")
+    canonical, unknown = _seed_posts(
+        brand,
+        total=2,
+        authors=1,
+        created_at=AS_OF - timedelta(hours=1),
+        prefix="stage1-taxonomy-crosswalk",
+    )
+    for key in ("buzz_releases", "releases_updates", "other"):
+        PostTypeKey.objects.get_or_create(key=key)
+    for key in ("product_request", "ideas_requests"):
+        ProductLabelKey.objects.get_or_create(key=key)
+    SentimentKey.objects.get_or_create(key="positive")
+    PostBrandClassificationState.objects.bulk_create(
+        [
+            PostBrandClassificationState(
+                post=canonical,
+                brand=brand,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=CANONICAL_TAXONOMY_VERSION,
+                prompt_version="stage1-prompt-v3",
+                model="test",
+                source_language="en",
+                input_context_fingerprint="7" * 64,
+                outcome="classified",
+                sentiment_id="positive",
+            ),
+            PostBrandClassificationState(
+                post=unknown,
+                brand=brand,
+                contract_version="unknown-contract",
+                taxonomy_version="unknown-taxonomy",
+                prompt_version="unknown-prompt",
+                model="test",
+                source_language="en",
+                input_context_fingerprint="8" * 64,
+                outcome="classified",
+                sentiment_id="positive",
+            ),
+        ]
+    )
+    PostBrandSignal.objects.bulk_create(
+        [
+            PostBrandSignal(
+                post=canonical,
+                brand=brand,
+                post_type_id=key,
+                sentiment_id="positive",
+            )
+            for key in ("buzz_releases", "releases_updates")
+        ]
+        + [
+            PostBrandSignal(
+                post=unknown,
+                brand=brand,
+                post_type_id="other",
+                sentiment_id="positive",
+            )
+        ]
+    )
+    PostBrandProductLabel.objects.bulk_create(
+        [
+            PostBrandProductLabel(post=canonical, brand=brand, product_label_id=key)
+            for key in ("product_request", "ideas_requests")
+        ]
+    )
+
+    counts, coverage = trend_facts._metadata_counts(
+        candidate_keys=[brand.nickname],
+        prior_start=AS_OF - timedelta(days=2),
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+    )
+    rows = trend_facts._metadata_series_rows(
+        candidate_keys=[brand.nickname],
+        window_start=AS_OF - timedelta(days=1),
+        as_of=AS_OF,
+        schedule=trend_facts._WINDOW_SCHEDULES[1],
+    )
+
+    assert counts[(brand.nickname, "post_type", "releases_updates")] == (1, 0)
+    assert counts[(brand.nickname, "product_label", "ideas_requests")] == (1, 0)
+    assert counts[(brand.nickname, "sentiment", "positive")] == (1, 0)
+    assert coverage[(brand.nickname, "post_type")] == (1, 0)
+    assert not any(label == "buzz_releases" for _scope, _family, label in counts)
+    assert not any(label == "product_request" for _scope, _family, label in counts)
+    assert sum(
+        row["value"]
+        for row in rows
+        if row["row_type"] == "label"
+        and row["family"] == "post_type"
+        and row["label_key"] == "releases_updates"
+    ) == 1
+
+
 def test_u4_scalar_aggregate_rows_stay_bounded_at_high_post_cardinality(
     monkeypatch,
 ):
@@ -598,7 +698,7 @@ def test_half_open_boundaries_and_duplicate_signals_do_not_multiply_counts():
     )
     for key in ("buzz_releases", "hands_on_usage"):
             PostTypeKey.objects.get_or_create(key=key)
-    SentimentKey.objects.create(key="positive")
+    SentimentKey.objects.get_or_create(key="positive")
     for key in ("buzz_releases", "hands_on_usage"):
         PostBrandSignal.objects.create(
             post=recent[0],
@@ -1273,12 +1373,12 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         authors=10,
         created_at=AS_OF - timedelta(days=1, hours=1),
     )
-    for key in ("release", "usage"):
-        PostTypeKey.objects.create(key=key)
+    for key in ("buzz_releases", "hands_on_usage"):
+        PostTypeKey.objects.get_or_create(key=key)
     SentimentKey.objects.get_or_create(key="positive")
     ProductLabelKey.objects.get_or_create(key="testimonial")
     for post in selected:
-        for post_type in ("release", "usage"):
+        for post_type in ("buzz_releases", "hands_on_usage"):
             PostBrandSignal.objects.create(
                 post=post,
                 brand=brand,
@@ -1293,7 +1393,7 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         PostBrandSignal.objects.create(
             post=post,
             brand=brand,
-            post_type_id="release",
+            post_type_id="buzz_releases",
             sentiment_id="positive",
         )
         _state(post, brand)
@@ -1305,8 +1405,8 @@ def test_u1_multilabel_metadata_uses_distinct_post_brand_bases():
         trend_facts.aggregate_trend_family_facts(1, as_of=AS_OF),
         brand.nickname,
     )
-    release = _label(candidate, "post_type", "release")
-    usage = _label(candidate, "post_type", "usage")
+    release = _label(candidate, "post_type", "releases_updates")
+    usage = _label(candidate, "post_type", "hands_on_usage")
     sentiment = _label(candidate, "sentiment", "positive")
     product = _label(candidate, "product_label", "testimonial")
 

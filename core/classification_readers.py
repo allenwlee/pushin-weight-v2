@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_contract import (
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+)
 from core.models import (
     PostBrandClassificationState,
     PostBrandDiscourse,
@@ -20,6 +23,8 @@ class BrandScalarRead:
     source: str
     conflicts: tuple[str, ...] = ()
     outcome: str | None = None
+    contract_version: str | None = None
+    taxonomy_version: str | None = None
 
 
 def _one_distinct(values) -> tuple[str | None, bool]:
@@ -46,21 +51,21 @@ def read_brand_scalars_many(
     if not wanted:
         return {}
     post_ids = {post_id for post_id, _brand_id in wanted}
-    current_rows = PostBrandClassificationState.objects.filter(
+    state_rows = PostBrandClassificationState.objects.filter(
         post_id__in=post_ids,
-        contract_version=CONTRACT_VERSION,
-        taxonomy_version=TAXONOMY_VERSION,
     ).values(
         "post_id",
         "brand_id",
+        "contract_version",
+        "taxonomy_version",
         "sentiment_id",
         "china_nationalism_id",
         "us_nationalism_id",
         "outcome",
     )
-    current = {
+    states = {
         (row["post_id"], row["brand_id"]): row
-        for row in current_rows
+        for row in state_rows
         if (row["post_id"], row["brand_id"]) in wanted
     }
     signals: dict[tuple[str, str], list[str | None]] = {pair: [] for pair in wanted}
@@ -79,14 +84,20 @@ def read_brand_scalars_many(
             discourse[(post_id, brand_id)].append((china, us))
     output: dict[tuple[str, str], BrandScalarRead] = {}
     for pair in wanted:
-        row = current.get(pair)
+        row = states.get(pair)
         if row is not None:
+            recognized = (
+                row["contract_version"] == CONTRACT_VERSION
+                and row["taxonomy_version"] in COMPATIBLE_TAXONOMY_VERSIONS
+            )
             output[pair] = BrandScalarRead(
-                row["sentiment_id"] or None,
-                row["china_nationalism_id"] or None,
-                row["us_nationalism_id"] or None,
-                "current",
-                outcome=row["outcome"],
+                (row["sentiment_id"] or None) if recognized else None,
+                (row["china_nationalism_id"] or None) if recognized else None,
+                (row["us_nationalism_id"] or None) if recognized else None,
+                "current" if recognized else "unrecognized",
+                outcome=row["outcome"] if recognized else None,
+                contract_version=row["contract_version"],
+                taxonomy_version=row["taxonomy_version"],
             )
             continue
         sentiment, sentiment_conflict = _one_distinct(

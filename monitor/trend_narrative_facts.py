@@ -17,7 +17,15 @@ from typing import Any
 from django.db import connection
 from django.db.models import Count, Min, Q
 
-from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    NATIONALISM_KEYS,
+    SENTIMENT_KEYS,
+    taxonomy_crosswalk_rows,
+)
 from core.models import HarvestBacklogWindow, PostBrand
 
 ALLOWED_TREND_WINDOWS = frozenset({1, 7, 30, 365})
@@ -812,8 +820,18 @@ def _metadata_series_rows(
     as_of: datetime,
     schedule: TrendWindowSchedule,
 ) -> list[dict[str, Any]]:
+    post_type_crosswalk = taxonomy_crosswalk_rows("post_type")
+    product_crosswalk = taxonomy_crosswalk_rows("product_label")
     sql = """
-        WITH requested AS (
+        WITH post_type_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        product_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        requested AS (
             SELECT brand_key, min(position)::integer AS position
             FROM unnest(%s::text[]) WITH ORDINALITY AS item(brand_key, position)
             GROUP BY brand_key
@@ -834,6 +852,13 @@ def _metadata_series_rows(
             WHERE p.created_at >= %s::timestamptz
               AND p.created_at < %s::timestamptz
         ),
+        all_states AS (
+            SELECT b.*, state.contract_version, state.taxonomy_version
+            FROM base b
+            JOIN posts_brands_classification_states state
+              ON state.post_id = b.tweet_id
+             AND state.brand_id = b.brand_id
+        ),
         current_states AS (
             SELECT b.*, state.outcome,
                    nullif(state.sentiment::text, '') AS sentiment,
@@ -844,7 +869,7 @@ def _metadata_series_rows(
               ON state.post_id = b.tweet_id
              AND state.brand_id = b.brand_id
              AND state.contract_version = %s
-             AND state.taxonomy_version = %s
+             AND state.taxonomy_version = ANY(%s::text[])
         ),
         current_scalar_labels AS (
             SELECT state.position, state.brand_key, state.tweet_id,
@@ -865,7 +890,7 @@ def _metadata_series_rows(
             JOIN posts_brands_signals signal
               ON signal.post_id = b.tweet_id
              AND signal.brand_id = b.brand_id
-            LEFT JOIN current_states current
+            LEFT JOIN all_states current
               ON current.tweet_id = b.tweet_id
              AND current.brand_id = b.brand_id
             WHERE current.tweet_id IS NULL
@@ -890,7 +915,7 @@ def _metadata_series_rows(
             JOIN posts_brands_discourse discourse
               ON discourse.post_id = b.tweet_id
              AND discourse.brand_id = b.brand_id
-            LEFT JOIN current_states current
+            LEFT JOIN all_states current
               ON current.tweet_id = b.tweet_id
              AND current.brand_id = b.brand_id
             WHERE current.tweet_id IS NULL
@@ -916,20 +941,24 @@ def _metadata_series_rows(
         metadata_edges AS (
             SELECT DISTINCT state.position, state.brand_key, state.tweet_id,
                             state.bucket_index, 'post_type'::text AS family,
-                            s.post_type_key::text AS label_key
+                            mapping.canonical_key AS label_key
             FROM current_states state
             JOIN posts_brands_signals s
               ON s.post_id = state.tweet_id
              AND s.brand_id = state.brand_id
+            JOIN post_type_crosswalk mapping
+              ON mapping.source_key = s.post_type_key::text
             WHERE state.outcome = 'classified'
             UNION ALL
             SELECT DISTINCT state.position, state.brand_key, state.tweet_id,
                             state.bucket_index, 'product_label'::text,
-                            product.product_label_key::text
+                            mapping.canonical_key
             FROM current_states state
             JOIN posts_brands_product_labels product
              ON product.post_id = state.tweet_id
              AND product.brand_id = state.brand_id
+            JOIN product_crosswalk mapping
+              ON mapping.source_key = product.product_label_key::text
             WHERE state.outcome = 'classified'
             UNION ALL
             SELECT DISTINCT scalar.position, scalar.brand_key, scalar.tweet_id,
@@ -971,13 +1000,17 @@ def _metadata_series_rows(
         ORDER BY position, brand_key, bucket_index, family, row_type, label_key
     """
     params = [
+        [row[0] for row in post_type_crosswalk],
+        [row[1] for row in post_type_crosswalk],
+        [row[0] for row in product_crosswalk],
+        [row[1] for row in product_crosswalk],
         list(candidate_keys),
         window_start,
         schedule.coarse_bucket_seconds,
         window_start,
         as_of,
         CONTRACT_VERSION,
-        TAXONOMY_VERSION,
+        list(COMPATIBLE_TAXONOMY_VERSIONS),
     ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
@@ -1390,26 +1423,13 @@ def _aggregate_brand_rows(
 
 
 def _metadata_taxonomy() -> dict[str, list[str]]:
-    sql = """
-        SELECT family, key FROM (
-            SELECT 'post_type'::text AS family, key::text FROM post_type_keys
-            UNION ALL
-            SELECT 'sentiment', key::text FROM sentiment_keys
-            UNION ALL
-            SELECT 'product_label', key::text FROM product_label_keys
-            UNION ALL
-            SELECT 'china_nationalism', key::text FROM nationalism_keys
-            UNION ALL
-            SELECT 'us_nationalism', key::text FROM nationalism_keys
-        ) vocabulary
-        ORDER BY family, lower(key), key
-    """
-    result = {family: [] for family in _METADATA_FAMILY_KEYS}
-    with connection.cursor() as cursor:
-        cursor.execute(sql)
-        for family, key in cursor.fetchall():
-            result[str(family)].append(str(key))
-    return result
+    return {
+        "post_type": list(CANONICAL_POST_TYPE_KEYS),
+        "sentiment": list(SENTIMENT_KEYS),
+        "product_label": list(CANONICAL_PRODUCT_LABEL_KEYS),
+        "china_nationalism": list(NATIONALISM_KEYS),
+        "us_nationalism": list(NATIONALISM_KEYS),
+    }
 
 
 def _metadata_counts(
@@ -1424,8 +1444,18 @@ def _metadata_counts(
 ]:
     if not candidate_keys:
         return {}, {}
+    post_type_crosswalk = taxonomy_crosswalk_rows("post_type")
+    product_crosswalk = taxonomy_crosswalk_rows("product_label")
     sql = """
-        WITH requested AS (
+        WITH post_type_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        product_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        requested AS (
             SELECT DISTINCT brand_key
             FROM unnest(%s::text[]) AS item(brand_key)
         ),
@@ -1442,6 +1472,13 @@ def _metadata_counts(
               AND p.created_at >= %s::timestamptz
               AND p.created_at < %s::timestamptz
         ),
+        all_states AS (
+            SELECT e.*, state.contract_version, state.taxonomy_version
+            FROM edges e
+            JOIN posts_brands_classification_states state
+              ON state.post_id = e.post_id
+             AND state.brand_id = e.brand_id
+        ),
         current_states AS (
             SELECT e.*, state.outcome,
                    nullif(state.sentiment::text, '') AS sentiment,
@@ -1452,7 +1489,7 @@ def _metadata_counts(
               ON state.post_id = e.post_id
              AND state.brand_id = e.brand_id
              AND state.contract_version = %s
-             AND state.taxonomy_version = %s
+             AND state.taxonomy_version = ANY(%s::text[])
         ),
         current_scalar_labels AS (
             SELECT state.post_id, state.brand_id, state.period,
@@ -1473,7 +1510,7 @@ def _metadata_counts(
             JOIN posts_brands_signals signal
               ON signal.post_id = e.post_id
              AND signal.brand_id = e.brand_id
-            LEFT JOIN current_states current
+            LEFT JOIN all_states current
               ON current.post_id = e.post_id
              AND current.brand_id = e.brand_id
             WHERE current.post_id IS NULL
@@ -1498,7 +1535,7 @@ def _metadata_counts(
             JOIN posts_brands_discourse discourse
               ON discourse.post_id = e.post_id
              AND discourse.brand_id = e.brand_id
-            LEFT JOIN current_states current
+            LEFT JOIN all_states current
               ON current.post_id = e.post_id
              AND current.brand_id = e.brand_id
             WHERE current.post_id IS NULL
@@ -1517,20 +1554,24 @@ def _metadata_counts(
         post_type_labels AS (
             SELECT DISTINCT
                 e.post_id, e.brand_id, e.period,
-                'post_type'::text AS family, s.post_type_key::text AS label_key
+                'post_type'::text AS family, mapping.canonical_key AS label_key
             FROM current_states e
             JOIN posts_brands_signals s
               ON s.post_id = e.post_id AND s.brand_id = e.brand_id
+            JOIN post_type_crosswalk mapping
+              ON mapping.source_key = s.post_type_key::text
             WHERE e.outcome = 'classified'
         ),
         product_labels AS (
             SELECT DISTINCT e.post_id, e.brand_id, e.period,
                    'product_label'::text AS family,
-                   product.product_label_key::text AS label_key
+                   mapping.canonical_key AS label_key
             FROM current_states e
             JOIN posts_brands_product_labels product
              ON product.post_id = e.post_id
              AND product.brand_id = e.brand_id
+            JOIN product_crosswalk mapping
+              ON mapping.source_key = product.product_label_key::text
             WHERE e.outcome = 'classified'
         ),
         taxonomy_labels AS (
@@ -1641,8 +1682,12 @@ def _metadata_counts(
         ORDER BY row_type, scope_key, family, label_key
     """
     params: list[Any] = [
+        [row[0] for row in post_type_crosswalk],
+        [row[1] for row in post_type_crosswalk],
+        [row[0] for row in product_crosswalk],
+        [row[1] for row in product_crosswalk],
         list(candidate_keys), window_start, prior_start, as_of,
-        CONTRACT_VERSION, TAXONOMY_VERSION,
+        CONTRACT_VERSION, list(COMPATIBLE_TAXONOMY_VERSIONS),
     ]
     counts: dict[tuple[str, str, str], tuple[int, int]] = {}
     coverage: dict[tuple[str, str], tuple[int, int]] = {}

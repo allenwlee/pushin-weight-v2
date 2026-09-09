@@ -16,7 +16,11 @@ from typing import Any
 
 from django.db import connection, transaction
 
-from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.classification_contract import (
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    taxonomy_crosswalk_rows,
+)
 from core.classification_readers import read_brand_scalars_many
 from monitor.trend_narrative_facts import (
     DEFAULT_TREND_THRESHOLDS,
@@ -2403,13 +2407,27 @@ def _fetch_evidence_rows(
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
+    post_type_crosswalk = taxonomy_crosswalk_rows("post_type")
+    product_crosswalk = taxonomy_crosswalk_rows("product_label")
     # Sample each candidate window before ranking evidence roles. The four time
     # buckets keep older catalyst posts eligible without letting any role scan
     # the full brand history. A post gets rank_limit + 1 for streams that did
     # not select it; downstream role eligibility therefore uses a real ordinal
     # only for a bounded selection.
-    sql = f"""
-        WITH requested_bounds AS (
+    sql = """
+        WITH compatible_state_versions AS (
+            SELECT %s::text AS contract_version,
+                   unnest(%s::text[]) AS taxonomy_version
+        ),
+        post_type_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        product_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        requested_bounds AS (
             SELECT
                 item.candidate_id,
                 item.brand_key,
@@ -2486,23 +2504,28 @@ def _fetch_evidence_rows(
                 pool.brand_key,
                 pool.tweet_id,
                 CASE
-                    WHEN state.post_id IS NOT NULL THEN state.sentiment::text
+                    WHEN state_any.post_id IS NOT NULL THEN state.sentiment::text
                     WHEN count(DISTINCT signal.sentiment) = 1
                     THEN min(signal.sentiment)::text
                     ELSE NULL::text
                 END AS sentiment
             FROM candidate_pool pool
+            LEFT JOIN posts_brands_classification_states state_any
+              ON state_any.post_id = pool.tweet_id
+             AND state_any.brand_id::text = pool.brand_key
             LEFT JOIN posts_brands_classification_states state
               ON state.post_id = pool.tweet_id
              AND state.brand_id::text = pool.brand_key
-             AND state.contract_version = '{CONTRACT_VERSION}'
-             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
             LEFT JOIN posts_brands_signals signal
               ON signal.post_id = pool.tweet_id
              AND signal.brand_id::text = pool.brand_key
             GROUP BY
                 pool.position, pool.candidate_id, pool.brand_key, pool.tweet_id,
-                state.post_id, state.sentiment
+                state_any.post_id, state.sentiment
         ),
         official_accounts AS (
             SELECT ba.brand_id::text AS brand_key, ba.accounts_id,
@@ -2654,7 +2677,7 @@ def _fetch_evidence_rows(
                 sentiment.dominant_sentiment
             FROM requested_bounds r
             LEFT JOIN LATERAL (
-                SELECT s.post_type_key::text AS dominant_post_type
+                SELECT mapping.canonical_key AS dominant_post_type
                 FROM evidence_seed seed
                 JOIN posts_brands_signals s
                   ON s.post_id = seed.tweet_id
@@ -2662,15 +2685,19 @@ def _fetch_evidence_rows(
                 JOIN posts_brands_classification_states state
                   ON state.post_id = seed.tweet_id
                  AND state.brand_id::text = seed.brand_key
-                 AND state.contract_version = '{CONTRACT_VERSION}'
-                 AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+                 AND (state.contract_version, state.taxonomy_version) IN (
+                        SELECT contract_version, taxonomy_version
+                        FROM compatible_state_versions
+                     )
                  AND state.outcome = 'classified'
+                JOIN post_type_crosswalk mapping
+                  ON mapping.source_key = s.post_type_key::text
                 WHERE seed.position = r.position
-                GROUP BY s.post_type_key::text
+                GROUP BY mapping.canonical_key
                 ORDER BY
                     count(DISTINCT seed.tweet_id) DESC,
-                    lower(s.post_type_key::text),
-                    s.post_type_key::text
+                    lower(mapping.canonical_key),
+                    mapping.canonical_key
                 LIMIT 1
             ) post_type ON TRUE
             LEFT JOIN LATERAL (
@@ -2733,12 +2760,16 @@ def _fetch_evidence_rows(
                             JOIN posts_brands_classification_states state
                               ON state.post_id = p.tweet_id
                              AND state.brand_id::text = r.brand_key
-                             AND state.contract_version = '{CONTRACT_VERSION}'
-                             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+                             AND (state.contract_version, state.taxonomy_version) IN (
+                                    SELECT contract_version, taxonomy_version
+                                    FROM compatible_state_versions
+                                 )
                              AND state.outcome = 'classified'
+                            JOIN post_type_crosswalk mapping
+                              ON mapping.source_key = s.post_type_key::text
                             WHERE s.post_id = p.tweet_id
                               AND s.brand_id::text = r.brand_key
-                              AND s.post_type_key::text = r.dominant_post_type
+                              AND mapping.canonical_key = r.dominant_post_type
                         )
                     ) DESC,
                     (
@@ -2917,18 +2948,22 @@ def _fetch_evidence_rows(
                 base.brand_key,
                 base.tweet_id,
                 array_agg(
-                    DISTINCT s.post_type_key::text ORDER BY s.post_type_key::text
+                    DISTINCT mapping.canonical_key ORDER BY mapping.canonical_key
                 ) FILTER (WHERE s.post_type_key IS NOT NULL) AS post_type_keys
             FROM base_posts base
             JOIN posts_brands_classification_states state
               ON state.post_id = base.tweet_id
              AND state.brand_id::text = base.brand_key
-             AND state.contract_version = '{CONTRACT_VERSION}'
-             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
              AND state.outcome = 'classified'
             JOIN posts_brands_signals s
               ON s.post_id = base.tweet_id
              AND s.brand_id::text = base.brand_key
+            JOIN post_type_crosswalk mapping
+              ON mapping.source_key = s.post_type_key::text
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
         current_classification_arrays AS (
@@ -2938,19 +2973,23 @@ def _fetch_evidence_rows(
                 base.tweet_id,
                 max(state.outcome) AS classification_outcome,
                 array_agg(
-                    DISTINCT product.product_label_key::text
-                    ORDER BY product.product_label_key::text
-                ) FILTER (WHERE product.product_label_key IS NOT NULL)
+                    DISTINCT mapping.canonical_key
+                    ORDER BY mapping.canonical_key
+                ) FILTER (WHERE mapping.canonical_key IS NOT NULL)
                     AS product_label_keys
             FROM base_posts base
             JOIN posts_brands_classification_states state
               ON state.post_id = base.tweet_id
              AND state.brand_id::text = base.brand_key
-             AND state.contract_version = '{CONTRACT_VERSION}'
-             AND state.taxonomy_version = '{TAXONOMY_VERSION}'
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
             LEFT JOIN posts_brands_product_labels product
               ON product.post_id = state.post_id
              AND product.brand_id::text = state.brand_id::text
+            LEFT JOIN product_crosswalk mapping
+              ON mapping.source_key = product.product_label_key::text
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
         unsanctioned_arrays AS (
@@ -3000,6 +3039,12 @@ def _fetch_evidence_rows(
                  ), created_at, tweet_id
     """
     params = [
+        CONTRACT_VERSION,
+        list(COMPATIBLE_TAXONOMY_VERSIONS),
+        [row[0] for row in post_type_crosswalk],
+        [row[1] for row in post_type_crosswalk],
+        [row[0] for row in product_crosswalk],
+        [row[1] for row in product_crosswalk],
         [str(row["candidate_id"]) for row in candidates],
         [str(row["brand_key"]) for row in candidates],
         [_parse_utc(str(row["start_at"])) for row in candidates],
