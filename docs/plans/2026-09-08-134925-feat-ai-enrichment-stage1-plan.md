@@ -994,9 +994,15 @@ Provider-free tests cover classifier cardinality and strict parsing, migration
 constraints, compressed profile history, restartable discovery cursors,
 one-request truncation handling, runtime credit ceilings, candidate source
 preservation, order-independent person identity, canonical job convergence,
-atomic targeted writes, and stable read/evaluation shapes. Exact-SHA staging
-deployment and browser verification remain to be recorded in the dated Stage
-1C receipt. No provider call, production database write, discovery activation,
-targeted-extraction activation, public MCP/API route, or taxonomy production
-promotion is authorized by this candidate. U12A and every real-label taxonomy,
-discovery, role, and affiliation assessment remain preproduction gates.
+atomic targeted writes, and stable read/evaluation shapes. Staging web and the
+headline worker now report exact metadata revision
+`2d4e50f5b6a9d185190d2cf8919ad2b8664f9ae0`, which pins reviewed product
+revision `84377b43d5938a07fbc6e95b1b7a4cf2212ceba1`; the read-only deployed probe,
+database migrations, disabled controls, and service health all passed. The
+staging harvest cron remains suspended on its older revision and did not run.
+The durable receipt is
+`docs/analysis/2026-09-10-231858-ai-enrichment-stage1c-staging.md`. No provider
+call, production database write, discovery activation, targeted-extraction
+activation, public MCP/API route, or taxonomy production promotion occurred.
+U12A and every real-label taxonomy, discovery, role, and affiliation assessment
+remain preproduction gates.
