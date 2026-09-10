@@ -380,10 +380,7 @@ class EnrichmentConfig(BaseModel):
 
     @property
     def claim_safe_envelope_seconds(self) -> int:
-        return (
-            2 * self.attempt_budget_seconds
-            + self.terminalization_reserve_seconds
-        )
+        return 2 * self.attempt_budget_seconds + self.terminalization_reserve_seconds
 
     def start_attempt_deadline(
         self, *, monotonic: Callable[[], float] = time.monotonic
@@ -495,6 +492,14 @@ class HeadlineNarrativeConfig(BaseModel):
         min_length=1,
         max_length=64,
     )
+    demand_shaping_enabled: bool = False
+    demand_hot_minutes: int = Field(default=180, ge=15, le=10_080)
+    prewarm_brand_keys: list[str] = Field(default_factory=list, max_length=5)
+    prewarm_windows: list[Literal[1, 7, 30, 365]] = Field(
+        default_factory=list, max_length=2
+    )
+    critic_risk_routing_enabled: bool = False
+    critic_audit_percent: int = Field(default=5, ge=0, le=100)
     cadence_minutes: dict[int, int] = Field(
         default_factory=lambda: {1: 60, 7: 1_440, 30: 10_080, 365: 43_200}
     )
@@ -600,6 +605,10 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline cadences must cover 1, 7, 30, and 365 days")
         if set(self.stale_minutes) != windows:
             raise ValueError("headline stale limits must cover all fixed windows")
+        if len(set(self.prewarm_brand_keys)) != len(self.prewarm_brand_keys):
+            raise ValueError("headline prewarm brands must be unique")
+        if len(set(self.prewarm_windows)) != len(self.prewarm_windows):
+            raise ValueError("headline prewarm windows must be unique")
         if any(
             self.stale_minutes[window] != self.cadence_minutes[window] * 2
             for window in windows
@@ -927,6 +936,8 @@ def load_config(path: Path) -> Config:
         "publication_source": "X_MONITOR_HEADLINE_PUBLICATION_SOURCE",
         "legacy_fallback_enabled": "X_MONITOR_HEADLINE_LEGACY_FALLBACK_ENABLED",
         "control_revision": "X_MONITOR_HEADLINE_CONTROL_REVISION",
+        "demand_shaping_enabled": "X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED",
+        "critic_risk_routing_enabled": "X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED",
     }
     env_headline_overrides = {
         field: os.environ[env_name]

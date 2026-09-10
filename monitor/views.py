@@ -2524,6 +2524,23 @@ def _build_home_chart_payload(
     selected_narrative_brands = normalized_filters.get("brands")
     if selected_narrative_brands in (None, "__all__"):
         selected_narrative_brands = None
+    try:
+        from pathlib import Path
+
+        from monitor.trend_narrative_demand import record_trend_narrative_demand
+        from x_monitor.config import load_config
+
+        headline_config = load_config(Path("config.yaml")).headline_narrative
+        if headline_config.demand_shaping_enabled:
+            record_trend_narrative_demand(
+                brand_keys=selected_narrative_brands or brand_nicknames,
+                window_days=window_days,
+                reason="visible",
+                config=headline_config,
+                now=now,
+            )
+    except Exception:
+        log.exception("unable to record trend narrative demand")
     trend_narrative = project_trend_narrative(
         window_days,
         locale=locale,

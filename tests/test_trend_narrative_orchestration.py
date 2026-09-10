@@ -25,6 +25,7 @@ from monitor.trend_narrative_generation import (
 )
 from monitor.trend_narrative_lifecycle import mark_trend_narrative_provider_call_sent
 from monitor.trend_narrative_tasks import (
+    _critic_risk_reasons,
     _fallback_brand_order,
     _provider_budget_reason,
     _reconcile_run,
@@ -682,3 +683,93 @@ def test_active_capacity_fails_closed_when_p95_drain_exceeds_arrival_rate():
             stale_minutes={1: 60, 7: 120, 30: 720, 365: 2880},
             per_brand_p95_latency_seconds="120",
         )
+
+
+def test_low_risk_editor_output_publishes_without_a_critic_call(monkeypatch):
+    config = _config(
+        per_brand_expected_max_brands=1,
+        critic_risk_routing_enabled=True,
+        critic_audit_percent=0,
+    )
+    snapshot = _snapshot(1)
+    snapshot["dossiers"][0]["enrichment_coverage"] = {
+        "classification_status": "complete"
+    }
+    Brand.objects.create(
+        nickname="brand-00",
+        display_name="Brand 00",
+        display_name_en="Brand 00",
+        display_name_zh_cn="品牌 00",
+    )
+    queued: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("monitor.trend_narrative_tasks._load_config", lambda: config)
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks.build_trend_analysis_snapshot",
+        lambda *_args, **_kwargs: snapshot,
+    )
+    monkeypatch.setattr(
+        "monitor.trend_narrative_tasks._enqueue_per_brand_stage",
+        lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+    monkeypatch.setattr("monitor.trend_narrative_tasks.timezone.now", lambda: NOW)
+
+    run = initialize_per_brand_snapshot(
+        source_cycle_id="low-risk",
+        window_days=1,
+        facts_as_of=NOW,
+        enqueue=lambda kind, **kwargs: queued.append((kind, kwargs)),
+    )
+    assert run is not None
+    while queued:
+        kind, kwargs = queued.pop(0)
+        if kind == "stage":
+            call = TrendNarrativeProviderCall.objects.get(pk=kwargs["call_id"])
+            raw = _provider_raw(call)
+            monkeypatch.setattr(
+                "monitor.trend_narrative_tasks.execute_per_brand_provider_request",
+                lambda *_args, _raw=raw, **_kwargs: PerBrandProviderResponse(
+                    raw_text=_raw,
+                    input_tokens=100,
+                    output_tokens=100,
+                    latency_ms=10,
+                ),
+            )
+            execute_per_brand_stage(**kwargs, now=NOW)
+        elif kind == "finalize":
+            finalize_per_brand_run(kwargs["run_id"], now=NOW + timedelta(seconds=1))
+
+    outcome = BrandTrendNarrative.objects.get(run=run)
+    assert outcome.status == BrandTrendNarrative.Status.APPROVED
+    assert outcome.critic_review_state == "bypassed"
+    assert outcome.critic_reason_codes == ["mechanically_valid_low_risk"]
+    assert set(run.provider_calls.values_list("stage", flat=True)) == {
+        "rank",
+        "editor",
+    }
+
+
+def test_causal_and_event_led_output_is_routed_to_critic():
+    config = _config(critic_audit_percent=0)
+    batch = {
+        "batch_key": "1d:001",
+        "dossiers": [
+            {
+                "brand_key": "brand-00",
+                "enrichment_coverage": {"classification_status": "complete"},
+            }
+        ],
+    }
+    narrative = _narrative("brand-00")
+    narrative["headline_en"] = "Brand 00 rose because an event drove attention."
+    narrative["narrative_kind"] = "event_led"
+    narrative["events"] = [{"event_id": "event-1"}]
+
+    reasons, audit_eligible = _critic_risk_reasons(
+        batch=batch,
+        parsed_editor={"brands": [narrative]},
+        editor_envelope={"packet_hash": "sha256:test"},
+        config=config,
+    )
+
+    assert audit_eligible is False
+    assert reasons == ["causal_language", "event_led"]

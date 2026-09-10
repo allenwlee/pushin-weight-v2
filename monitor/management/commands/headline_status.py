@@ -11,6 +11,7 @@ from django.utils import timezone
 from core.models import (
     BrandTrendNarrative,
     TrendNarrative,
+    TrendNarrativeDemand,
     TrendNarrativeProviderCall,
     TrendNarrativeRun,
     TrendNarrativeVisibleRun,
@@ -302,6 +303,39 @@ def _per_brand_status(*, window_days: int, config, now) -> dict[str, object]:
             run=run,
             calls=calls,
             config=config,
+        ),
+        "demand": _demand_status(window_days=window_days, now=now),
+        "critic_routing": {
+            "bypassed_count": sum(
+                outcome.critic_review_state == "bypassed" for outcome in outcomes
+            ),
+            "reviewed_count": sum(
+                outcome.critic_review_state == "reviewed" for outcome in outcomes
+            ),
+            "audit_eligible_count": sum(
+                outcome.critic_audit_eligible for outcome in outcomes
+            ),
+        },
+    }
+
+
+def _demand_status(*, window_days: int, now) -> dict[str, object]:
+    rows = list(
+        TrendNarrativeDemand.objects.filter(window_days=window_days).only(
+            "state", "hot_until", "is_pinned", "suppression_count", "updated_at"
+        )
+    )
+    return {
+        "total": len(rows),
+        "hot": sum(row.is_pinned or row.hot_until >= now for row in rows),
+        "pinned": sum(row.is_pinned for row in rows),
+        "states": {
+            state: sum(row.state == state for row in rows)
+            for state in TrendNarrativeDemand.State.values
+        },
+        "suppression_count": sum(row.suppression_count for row in rows),
+        "latest_updated_at": _iso(
+            max((row.updated_at for row in rows), default=None)
         ),
     }
 

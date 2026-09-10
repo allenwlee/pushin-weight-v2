@@ -292,7 +292,13 @@ headline_narrative:
   timeout_seconds: 60
   prompt_version: "headline-v10-why-first-quantitative-color"
   publication_epoch: 10
-  materiality_policy_version: "pending-live-review-v1"
+  materiality_policy_version: "headline-materiality-v1"
+  demand_shaping_enabled: null
+  demand_hot_minutes: 180
+  prewarm_brand_keys: []
+  prewarm_windows: []
+  critic_risk_routing_enabled: null
+  critic_audit_percent: 5
   cadence_minutes: {1: 60, 7: 1440, 30: 10080, 365: 43200}
   stale_minutes: {1: 120, 7: 2880, 30: 20160, 365: 86400}
   min_posts: 20

@@ -2819,6 +2819,105 @@ class TrendNarrativeVisibleRun(models.Model):
         ]
 
 
+class TrendNarrativeDemand(models.Model):
+    """Coalesced demand for one brand/window headline projection."""
+
+    class Reason(models.TextChoices):
+        VISIBLE = "visible", "Visible"
+        PREWARM = "prewarm", "Prewarm"
+        OPERATOR = "operator", "Operator"
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SCHEDULED = "scheduled", "Scheduled"
+        SATISFIED = "satisfied", "Satisfied"
+        SUPPRESSED = "suppressed", "Suppressed"
+        FAILED = "failed", "Failed"
+
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name="trend_narrative_demands",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    window_days = models.PositiveSmallIntegerField()
+    target_contract_version = models.CharField(max_length=64)
+    target_prompt_version = models.CharField(max_length=255)
+    target_model = models.CharField(max_length=128)
+    demand_reason = models.CharField(max_length=16, choices=Reason.choices)
+    priority = models.PositiveSmallIntegerField(default=10)
+    request_count = models.PositiveIntegerField(default=1)
+    last_enqueued_request_count = models.PositiveIntegerField(default=0)
+    operator_request_count = models.PositiveIntegerField(default=0)
+    last_enqueued_operator_request_count = models.PositiveIntegerField(default=0)
+    first_requested_at = models.DateTimeField()
+    last_requested_at = models.DateTimeField()
+    hot_until = models.DateTimeField()
+    is_pinned = models.BooleanField(default=False)
+    last_material_input_fingerprint = models.CharField(
+        max_length=64, blank=True, default=""
+    )
+    last_enqueued_at = models.DateTimeField(blank=True, null=True)
+    last_satisfied_at = models.DateTimeField(blank=True, null=True)
+    last_decision_reason = models.CharField(max_length=64, blank=True, default="")
+    suppression_count = models.PositiveIntegerField(default=0)
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.PENDING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "trend_narrative_demands"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "window_days"], name="uq_tnd_brand_window"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_days__in=[1, 7, 30, 365]),
+                name="ck_tnd_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(priority__gte=1, priority__lte=100),
+                name="ck_tnd_priority",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    last_requested_at__gte=models.F("first_requested_at")
+                ),
+                name="ck_tnd_request_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(hot_until__gte=models.F("last_requested_at")),
+                name="ck_tnd_hot_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    last_enqueued_request_count__lte=models.F("request_count")
+                ),
+                name="ck_tnd_enqueued_count",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    last_enqueued_operator_request_count__lte=models.F(
+                        "operator_request_count"
+                    )
+                ),
+                name="ck_tnd_operator_count",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["window_days", "state", "hot_until"],
+                name="idx_tnd_window_due",
+            ),
+            models.Index(
+                fields=["state", "-priority"], name="idx_tnd_state_priority"
+            ),
+        ]
+
+
 class TrendNarrativeProviderCall(models.Model):
     """Append-only bounded transport ledger for rank/editor/critic work."""
 
@@ -2963,6 +3062,9 @@ class BrandTrendNarrative(models.Model):
     critic_decision = models.CharField(
         max_length=16, choices=CriticDecision.choices, blank=True, default=""
     )
+    critic_review_state = models.CharField(max_length=16, blank=True, default="")
+    critic_reason_codes = models.JSONField(default=list, db_default=[])
+    critic_audit_eligible = models.BooleanField(default=False)
     narrative_kind = models.CharField(
         max_length=32, choices=NarrativeKind.choices, blank=True, default=""
     )
@@ -3020,6 +3122,12 @@ class BrandTrendNarrative(models.Model):
                     critic_decision__in=["", "approve", "repair", "hold"]
                 ),
                 name="ck_btn_critic_decision",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    critic_review_state__in=["", "bypassed", "reviewed"]
+                ),
+                name="ck_btn_critic_review_state",
             ),
             models.CheckConstraint(
                 condition=models.Q(
