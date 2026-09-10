@@ -63,6 +63,140 @@ call_b_groups:
 # from SC1. At $0.15/1k tweets, a full 333/day is ~$0.05/day = ~$1.50/mo.
 daily_ceiling: 333
 
+# Global discovery lanes share the existing 15-minute CycleRunner, cursors,
+# persistence, and post-fetch classifier. Both lanes stay disabled until a
+# separate owner-approved provider trial establishes quality and cost.
+discovery:
+  jobs:
+    enabled: false
+    query_pack_version: jobs-discovery-v1
+    cadence_minutes: 60
+    max_lookback_hours: 24
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    request_timeout_seconds: 30
+    per_cycle_call_ceiling: 2
+    daily_credit_ceiling: 1800
+    credits_per_result: 15
+    minimum_credits_per_call: 15
+    queries:
+      - query_id: JD_EN_ORG
+        language: en
+        query_family: organization
+        primary_terms: ['"artificial intelligence"', '"AI startup"', '"AI company"']
+        co_occurrence: ['hiring', 'jobs', 'careers', 'opening']
+        not_include: ['football', 'fantasy league']
+      - query_id: JD_EN_ROLE
+        language: en
+        query_family: role
+        primary_terms: ['engineer', 'researcher', 'scientist', 'designer']
+        co_occurrence: ['"we are hiring"', '"job opening"', 'apply', 'careers']
+        not_include: ['football', 'fantasy league']
+      - query_id: JD_ZHCN_ORG
+        language: zh-cn
+        query_family: organization
+        primary_terms: ['人工智能', '大模型', 'AI公司']
+        co_occurrence: ['招聘', '职位', '加入我们', '岗位']
+        not_include: []
+      - query_id: JD_ZHCN_ROLE
+        language: zh-cn
+        query_family: role
+        primary_terms: ['工程师', '研究员', '科学家', '设计师']
+        co_occurrence: ['招聘', '职位', '申请', '岗位']
+        not_include: []
+      - query_id: JD_JA_ORG
+        language: ja
+        query_family: organization
+        primary_terms: ['人工知能', '生成AI', 'AI企業']
+        co_occurrence: ['採用', '求人', '募集中', 'ポジション']
+        not_include: []
+      - query_id: JD_JA_ROLE
+        language: ja
+        query_family: role
+        primary_terms: ['エンジニア', '研究者', '科学者', 'デザイナー']
+        co_occurrence: ['採用', '求人', '応募', '募集中']
+        not_include: []
+  personnel:
+    enabled: false
+    query_pack_version: personnel-discovery-v1
+    cadence_minutes: 60
+    max_lookback_hours: 24
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    request_timeout_seconds: 30
+    per_cycle_call_ceiling: 2
+    daily_credit_ceiling: 1800
+    credits_per_result: 15
+    minimum_credits_per_call: 15
+    queries:
+      - query_id: PD_EN_ORG
+        language: en
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', '"Google DeepMind"', 'xAI', 'MiniMax', 'Cursor', 'Cognition', 'Genspark']
+        co_occurrence: ['joined', 'left', 'departed', 'appointed', '"now at"']
+        not_include: ['job opening', 'we are hiring']
+      - query_id: PD_EN_TRANSITION
+        language: en
+        query_family: transition
+        primary_terms: ['"I joined"', '"has joined"', '"I left"', '"has left"', '"worked at"']
+        co_occurrence: ['AI', 'LLM', 'research lab', 'foundation model']
+        not_include: ['job opening', 'we are hiring']
+      - query_id: PD_ZHCN_ORG
+        language: zh-cn
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', '谷歌DeepMind', 'MiniMax', '阿里通义', '深度求索']
+        co_occurrence: ['加入', '离开', '离职', '任命', '加盟']
+        not_include: ['招聘', '职位']
+      - query_id: PD_ZHCN_TRANSITION
+        language: zh-cn
+        query_family: transition
+        primary_terms: ['我加入了', '正式加入', '已经离开', '宣布离职', '曾任职于']
+        co_occurrence: ['人工智能', '大模型', 'AI实验室', '模型公司']
+        not_include: ['招聘', '职位']
+      - query_id: PD_JA_ORG
+        language: ja
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', 'Google DeepMind', 'MiniMax', 'Cursor', 'Cognition']
+        co_occurrence: ['入社', '退職', '退社', '就任', '加入']
+        not_include: ['採用', '求人']
+      - query_id: PD_JA_TRANSITION
+        language: ja
+        query_family: transition
+        primary_terms: ['入社しました', '加入しました', '退職しました', '退社しました', '就任しました']
+        co_occurrence: ['人工知能', '生成AI', 'AI研究所', '基盤モデル']
+        not_include: ['採用', '求人']
+
+# Structured extraction runs only after a positive universal classification.
+# Staging keeps transport disabled; fake-provider tests exercise the full
+# router and persistence path without spending tokens.
+targeted_extraction:
+  enabled: false
+  max_calls_per_cycle: 20
+  request_timeout_seconds: 30
+  roles:
+    event_extraction:
+      model: deepseek-v4-flash
+      prompt_version: event-extraction-v1
+      max_tokens: 2000
+    opportunity_extraction:
+      model: deepseek-v4-flash
+      prompt_version: opportunity-extraction-v1
+      max_tokens: 2000
+    job_listing_extraction:
+      model: deepseek-v4-flash
+      prompt_version: job-listing-extraction-v1
+      max_tokens: 4000
+    personnel_change_extraction:
+      model: deepseek-v4-flash
+      prompt_version: personnel-change-extraction-v1
+      max_tokens: 3000
+    profile_affiliation_extraction:
+      model: deepseek-v4-flash
+      prompt_version: profile-affiliation-extraction-v1
+      max_tokens: 2000
+
 # Reply-chain cluster threshold. Tune via PR.
 clustering:
   min_commenters: 3

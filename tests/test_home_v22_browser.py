@@ -757,7 +757,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertEqual(
                                 page.locator('[data-pw-filter-group="post_types"]').count(),
-                                10,
+                                13,
                             )
                             self.assertGreater(
                                 page.locator('[data-group="nationalism"]').count(), 0

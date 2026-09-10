@@ -1,16 +1,16 @@
 # Stage 1 classifier prompt — literal reference
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-09-10
 
 This document describes the Stage 1 per-brand classifier implemented by
 `x_monitor.attribution.classify_batch_pragmatics_full` and its single-post
 fallback. It records the exact contract, prompt, user-message envelope, parser,
 and Django publication boundary.
 
-This Release B reference was regenerated from reviewed product revision
-`6bc9fd952eff558dc9f7c2e26a86b8967230331b`. Release A passed exact-revision
-staging verification before this Release B activation work. This exhibit is
-source evidence and does not claim that Release B is deployed.
+This taxonomy-v3 reference describes the candidate source on the pull request
+branch. Taxonomy v2 completed exact-revision staging verification before this
+extension. This exhibit is source evidence and does not claim that taxonomy v3
+is deployed.
 
 The authoritative sources are:
 
@@ -29,8 +29,8 @@ These values are literal at the reviewed source:
 
 ```python
 CONTRACT_VERSION = "stage1-v1"
-TAXONOMY_VERSION = "stage1-taxonomy-v2"
-PROMPT_VERSION = "stage1-prompt-v3"
+TAXONOMY_VERSION = "stage1-taxonomy-v3"
+PROMPT_VERSION = "stage1-prompt-v4"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -38,7 +38,10 @@ POST_TYPE_KEYS = (
     "results_evaluations",
     "questions_requests",
     "advertising_marketing",
-    "events_opportunities",
+    "events",
+    "opportunities",
+    "job_listings",
+    "personnel_changes",
     "opinions_reactions",
     "research_explanations",
     "business_finance",
@@ -61,40 +64,69 @@ OUTCOMES = ("classified", "context_missing")
 The top-level unsanctioned-flag allowlist remains
 `marketing_spam`, `scam`, `crypto`, and `unauthorized`.
 
-### Ten post types
+### Thirteen post types
 
-| Key | English label | Simplified Chinese label | Japanese label | Prompt meaning |
-| --- | --- | --- | --- | --- |
-| `releases_updates` | Releases & Updates | 发布与更新 | リリース・アップデート | Concrete releases, features, integrations, availability, or pricing changes |
-| `hands_on_usage` | Hands-On Usage | 实际使用 | 使用体験 | Actual use, demos, artifacts, workflows, setup, or tutorials |
-| `results_evaluations` | Results and Evaluations | 结果与评测 | 結果・評価 | Substantive evaluations, benchmarks, rankings, results, or comparisons |
-| `questions_requests` | Questions & Requests | 问题与请求 | 質問・要望 | Genuine product questions, support requests, corrections, or desired changes |
-| `advertising_marketing` | Advertising & Marketing | 广告营销 | 広告・マーケティング | Observable pitches, calls to action, discounts, services, or product showcases |
-| `events_opportunities` | Events & Opportunities | 活动与机会 | イベント・機会 | Organized events and concrete opportunities such as jobs, grants, bounties, or collaborations |
-| `opinions_reactions` | Opinions & Reactions | 观点与反应 | 意見・反応 | Views, predictions, anticipation, or reactions that are not principally another defined type |
-| `research_explanations` | Research & Explanations | 研究与解释 | 研究・解説 | Technical mechanisms, architecture, research interpretation, or conceptual teaching |
-| `business_finance` | Business & Finance | 商业与金融 | ビジネス・金融 | Funding, ownership, investment, valuation, revenue, monetization, commercial strategy, suppliers, partners, or parent companies |
-| `other` | Other | 其他 | その他 | A confident residual; exclusive and cannot accompany another post type |
+Each entry lists the machine key, then its EN / ZH-CN / JA labels and prompt
+meaning.
+
+- `releases_updates` — Releases & Updates / 发布与更新 /
+  リリース・アップデート. Concrete releases, features, integrations,
+  availability, or pricing changes.
+- `hands_on_usage` — Hands-On Usage / 实际使用 / 使用体験. Actual use,
+  demos, artifacts, workflows, setup, or tutorials.
+- `results_evaluations` — Results and Evaluations / 结果与评测 / 結果・評価.
+  Substantive evaluations, benchmarks, rankings, results, or comparisons.
+- `questions_requests` — Questions & Requests / 问题与请求 / 質問・要望.
+  Genuine product questions, support requests, corrections, or desired
+  changes.
+- `advertising_marketing` — Advertising & Marketing / 广告营销 /
+  広告・マーケティング. Observable pitches, calls to action, discounts,
+  services, or product showcases.
+- `events` — Events / 活动 / イベント. Organized occurrences requiring
+  scheduled in-person, live-online, or hybrid attendance.
+- `opportunities` — Opportunities / 机会 / 機会. Bounded or ending chances
+  to act for a concrete benefit or a chance to receive one.
+- `job_listings` — Job Listings / 招聘信息 / 求人情報. Concrete roles or
+  vacancies with an actionable application route.
+- `personnel_changes` — Personnel Changes / 人事变动 / 人事異動. Named
+  people joining, leaving, or describing before-and-after employment
+  transitions.
+- `opinions_reactions` — Opinions & Reactions / 观点与反应 / 意見・反応.
+  Views, predictions, anticipation, or reactions that are not principally
+  another defined type.
+- `research_explanations` — Research & Explanations / 研究与解释 / 研究・解説.
+  Technical mechanisms, architecture, research interpretation, or conceptual
+  teaching.
+- `business_finance` — Business & Finance / 商业与金融 / ビジネス・金融.
+  Funding, ownership, investment, valuation, revenue, monetization,
+  commercial strategy, suppliers, partners, or parent companies.
+- `other` — Other / 其他 / その他. A confident residual; exclusive and unable
+  to accompany another post type.
 
 There is no post-type count cap. A classified brand receives every supported
 post type that applies. `other` is valid only as the sole value `['other']`.
 
 ### Five product labels
 
-| Key | English label | Simplified Chinese label | Japanese label | Prompt meaning |
-| --- | --- | --- | --- | --- |
-| `bug` | Bug | 缺陷 | バグ | A concrete malfunction or regression |
-| `complaint` | Complaint | 投诉 | 苦情 | Dissatisfaction or a negative customer experience |
-| `testimonial` | Testimonial | 推荐评价 | 推奨の声 | Praise, endorsement, or a favorable product experience |
-| `ideas_requests` | Ideas & requests | 想法与请求 | アイデア・要望 | An idea, desired capability, improvement, or unmet need |
-| `misinformation` | Misinformation | 可能误导的信息 | 誤情報の可能性 | A potentially misleading claim that may warrant review; the label does not adjudicate the claim false |
+- `bug` — Bug / 缺陷 / バグ. A concrete malfunction or regression.
+- `complaint` — Complaint / 投诉 / 苦情. Dissatisfaction or a negative
+  customer experience.
+- `testimonial` — Testimonial / 推荐评价 / 推奨の声. Praise, endorsement,
+  or a favorable product experience.
+- `ideas_requests` — Ideas & requests / 想法与请求 / アイデア・要望. An
+  idea, desired capability, improvement, or unmet need.
+- `misinformation` — Misinformation / 可能误导的信息 / 誤情報の可能性. A
+  potentially misleading claim that may warrant review; the label does not
+  adjudicate the claim false.
 
 Product labels are an independent multi-label dimension. An empty product-label
 array is valid for a `classified` result.
 
-New provider output is strict taxonomy v2: the five v1 aliases are rejected by
-the parser. Stored v1 and v2 memberships remain read-compatible through the
-shared crosswalk and are emitted as canonical v2 keys.
+New provider output is strict taxonomy v3: v1 aliases and the v2 combined
+`events_opportunities` key are rejected by the parser. Stored v1, v2, and v3
+memberships remain readable. The v1 identifier aliases normalize to their
+stable v2 meanings; the v2 combined event/opportunity population retains its
+own key and version and is never represented as an exact v3 category.
 
 ## Message construction
 
@@ -196,8 +228,8 @@ using the literal tuples from `core/classification_contract.py`; neither
 module was imported.
 
 The authoritative runtime source value, including its trailing newline, is
-6,186 UTF-8 bytes. Its SHA-256 is
-`ec2f4abf7e3b79a023c170239d1b8f8fa1847d893ba03ce70f0531d588da4e73`.
+8,132 UTF-8 bytes. Its SHA-256 is
+`f2ad602cbe169864755f587625e96a31488adbf25b15a63e0a256c4babb4d755`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
@@ -205,20 +237,31 @@ You classify stored social posts for each attributed brand. Return JSON only.
 
 POST TYPES (no count cap; return every supported type):
 Allowed keys exactly: releases_updates, hands_on_usage, results_evaluations,
-questions_requests, advertising_marketing, events_opportunities,
-opinions_reactions, research_explanations, business_finance, other.
-- releases_updates: concrete releases, features, integrations, availability, or
-  pricing changes.
+questions_requests, advertising_marketing, events, opportunities,
+job_listings, personnel_changes, opinions_reactions, research_explanations,
+business_finance, other.
+- releases_updates: concrete releases, features, integrations, availability,
+  or pricing changes.
 - hands_on_usage: actual use, demos, artifacts, workflows, setup, or
   tutorials.
-- results_evaluations: substantive evaluations, benchmarks, rankings,
-  results, or comparisons.
+- results_evaluations: substantive evaluations, benchmarks, rankings, results,
+  or comparisons.
 - questions_requests: genuine product questions, support requests,
   corrections, or desired changes.
 - advertising_marketing: observable pitches, calls to action, discounts,
   services, or product showcases.
-- events_opportunities: organized events and concrete opportunities such as
-  jobs, grants, bounties, or collaborations.
+- events: an organized occurrence that requires attendance at a scheduled
+  in-person, live-online, or hybrid venue or session. Past, live, upcoming,
+  cancelled, and postponed events may qualify.
+- opportunities: a bounded or ending chance to take an action for a concrete
+  benefit or a chance to receive one, such as a grant, bounty, contest, token
+  giveaway, discount, credits, access, allocation, referral reward, or
+  collaboration.
+- job_listings: a concrete role or vacancy with an actionable application
+  route such as a direct or careers-page URL, email, source-stated QR code, or
+  explicit direct-message instruction.
+- personnel_changes: a named person joining, leaving, or explicitly describing
+  a before-and-after employment transition involving an AI organization.
 - opinions_reactions: views, predictions, anticipation, or reactions that are
   not principally another defined type.
 - research_explanations: technical mechanisms, architecture, research
@@ -232,9 +275,28 @@ TYPE BOUNDARIES:
 - Future intent, a bare recommendation, praise, or a news roundup is not
   hands_on_usage.
 - A bare release date, launch, feature availability, integration, or pricing
-  change is releases_updates, not events_opportunities. An event needs an
-  identifiable organized occasion. A substantive recap with a named occasion
-  and concrete outcomes may be events_opportunities.
+  change is releases_updates, not events. A substantive recap of a named
+  attendance-bearing occasion may still be events even after it has ended.
+- Attendance means presence at a scheduled physical or live-online venue or
+  session. Merely submitting, applying, claiming, purchasing, voting,
+  referring, or completing an asynchronous task before a deadline is not
+  events.
+- opportunities requires both a bounded or ending availability condition and
+  an action-for-benefit exchange. Routine event registration that only grants
+  attendance is not opportunities. A scheduled hackathon with live attendance
+  and a prize-bearing submission may be both events and opportunities.
+- Jobs use job_listings rather than opportunities solely because applying is
+  time-bounded. A separate grant, prize, discount, or attendance-bearing
+  hiring event may justify another type.
+- A job listing needs a concrete role and application route. General
+  recruiting promotion, workplace culture, employee spotlights, unrelated jobs
+  with AI hashtags, and vague "we are growing" claims are not job_listings.
+- A personnel change needs a named person and a joining, leaving, appointment,
+  or before-and-after employment transition. A static biography, employee
+  spotlight, unchanged role, or model/team change without a named person is
+  not personnel_changes. The announcement may be first-person, official,
+  staff-authored, or a corroborated third-party statement, and effective dates
+  may be unknown.
 - Mentioning a benchmark, latency, ranking, or model is not enough for
   results_evaluations; the post must make a substantive evaluation or
   comparison.
@@ -311,22 +373,23 @@ Advertising or CTA-heavy wrapper content should also carry marketing_spam. Do
 not infer scam, crypto, or unauthorized without their specific evidence. Use
 only these four keys.
 
-Return {
-  "results": [
+Return
+{
+  "results":[
     {
-      "tweet_id": str,
-      "classifications": [
+      "tweet_id":str,
+      "classifications":[
         {
-          "brand_id": str,
-          "outcome": "classified|context_missing",
-          "post_types": [str],
-          "product_labels": [str],
-          "sentiment": str|null,
-          "china_nationalism": str|null,
-          "us_nationalism": str|null
+          "brand_id":str,
+          "outcome":"classified|context_missing",
+          "post_types":[str],
+          "product_labels":[str],
+          "sentiment":str|null,
+          "china_nationalism":str|null,
+          "us_nationalism":str|null
         }
       ],
-      "unsanctioned_flags": [str]
+      "unsanctioned_flags":[str]
     }
   ]
 }.
@@ -501,33 +564,38 @@ reproduced here.
 
 ## Source map at the reviewed revision
 
-| Contract or behavior | Source |
-| --- | --- |
-| Version IDs, exact allowlists, strict semantic parser | `core/classification_contract.py:13-113`; `core/classification_contract.py:173-236` |
-| Retry transport and role-separated system/user fields | `x_monitor/attribution.py:1030-1107` |
-| Batch size, exact system prompt, and JSON builders | `x_monitor/attribution.py:1163-1276` |
-| Entry, wire, ID, and per-brand validation | `x_monitor/attribution.py:1279-1459` |
-| Full-batch per-post fallback | `x_monitor/attribution.py:1462-1568` |
-| Bounded ordered batch execution | `x_monitor/attribution.py:1571-1636` |
-| Direct HTTP response envelope and text-block extraction | `x_monitor/attribution.py:1642-1736` |
-| Provider client and model/base-URL routing | `x_monitor/reattribute.py:428-463`; `x_monitor/attribution.py:806-871` |
-| Stored quote/local-parent context and active call | `monitor/cycle.py:2158-2332`; `monitor/cycle.py:2473-2503` |
-| Atomic current-state publication | `monitor/cycle.py:469-575` |
-| Persisted current state and product-label edges | `core/models.py:1619-1691` |
-| Three-locale active display labels | `core/classification_labels.py:5-113` |
-| Metadata-only provider telemetry | `x_monitor/provider_telemetry.py:24-115` |
-| Provider JSON text decoding | `x_monitor/_json_parser.py:25-82` |
-| Flag normalization and persistence | `monitor/unsanctioned_flags.py:44-176` |
+- Version IDs, allowlists, and semantic parser:
+  `core/classification_contract.py:13-113` and `:154-264`.
+- Retry transport and role-separated system/user fields:
+  `x_monitor/attribution.py:1030-1107`.
+- Batch size, system prompt, and JSON builders:
+  `x_monitor/attribution.py:1163-1284`.
+- Entry, wire, ID, and per-brand validation:
+  `x_monitor/attribution.py:1287-1467`.
+- Full-batch per-post fallback: `x_monitor/attribution.py:1470-1576`.
+- Bounded ordered batch execution: `x_monitor/attribution.py:1579-1644`.
+- HTTP response envelope and text extraction:
+  `x_monitor/attribution.py:1650-1744`.
+- Provider client and model/base-URL routing:
+  `x_monitor/reattribute.py:428-463` and `x_monitor/attribution.py:806-871`.
+- Stored quote/local-parent context and active call:
+  `monitor/cycle.py:2283-2791`.
+- Atomic current-state publication: `monitor/cycle.py:479-585`.
+- Persisted current state and product-label edges: `core/models.py:1619-1691`.
+- Three-locale active display labels: `core/classification_labels.py:5-113`.
+- Metadata-only provider telemetry: `x_monitor/provider_telemetry.py:24-115`.
+- Provider JSON text decoding: `x_monitor/_json_parser.py:25-82`.
+- Flag normalization and persistence: `monitor/unsanctioned_flags.py:44-176`.
 
 Reviewed source hashes:
 
 - `x_monitor/attribution.py`:
-  `abdb8bc3df06e49f822b58dccebbf04e416bf88382bee8c8786ff5b14fc0a022`
+  `f4e8ea1dbbb6d9112ba319284c895e5da1a185a98f240bc18c250dbde536c505`
 - `core/classification_contract.py`:
-  `1e4fef6561da0c301a95ff9b6b44b8c6598c9b61c5d653f7c2dc908794e3c643`
+  `b3f5986651f42d1fc425e0bc86d60c6e72cb3ad9bc56528a5e7c00de5cd8e53c`
 - `monitor/cycle.py`:
-  `ef684d2e357d3e63eb3d60644bed751e20decb689d05f19d1f033a7ebeb81b81`
+  `2a99d7c8651bbdf8965cd22abeba542aba91fbbf6918d8c25cde4a982032f9d5`
 - `core/classification_labels.py`:
-  `88ed819ed25b9dbf80372740124e77508bb03181441d960bffa4e1f556777adb`
+  `d620bef32e63c29c5f7809251f8496cb4538c22afced5d873456836a57d5d044`
 - `x_monitor/reattribute.py`:
   `86966be6a5fdc037d796cd528964abea6f9b7dd54c2cc3db69e7c1af57773534`

@@ -35,7 +35,8 @@ EXPECTED_TIME_WINDOWS_ZH = ["1天", "7天", "30天", "365天"]
 EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
 EXPECTED_POST_TYPE_KEYS = (
     "releases_updates", "hands_on_usage", "results_evaluations",
-    "questions_requests", "advertising_marketing", "events_opportunities",
+    "questions_requests", "advertising_marketing", "events", "opportunities",
+    "job_listings", "personnel_changes",
     "opinions_reactions", "research_explanations", "business_finance", "other",
 )
 EXPECTED_PRODUCT_LABEL_KEYS = (

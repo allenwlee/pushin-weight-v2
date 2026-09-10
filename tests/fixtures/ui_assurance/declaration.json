@@ -4,13 +4,13 @@
   "source_revision": "6bc9fd952eff558dc9f7c2e26a86b8967230331b",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
-    "sha256": "9483929728c5e316ab1b9e70bd3baf30da2c6ddbaa5139c0357ea8dbbc8e7c37"
+    "sha256": "0d45d13925beaddc04c128314a2bc1b6b063571347ba2b6b8f6655545c981cf6"
   },
   "generator": {"name": "pushinweight-covering-array", "version": "1.0", "seed": 501},
   "controls": [
     {"id":"brands","kind":"multi_select","values":["__all__","deepseek","qwen","minimax","glm","mimo","moonshot_kimi","inclusionai","mistral","stepfun","ernie","hunyuan","llama","nemo_megatron","doubao","yi","sensechat","exaone","kuaishou","sakana_ai","upstage","chatglm","gemma","kwaiyii","seed","sensenova","step","wenxin","gemini","gpt","claude","grok"],"initial_value":"__all__","reversible":true},
     {"id":"sentiment","kind":"multi_select","values":["__all__","mixed","negative","neutral","positive"],"initial_value":"__all__","reversible":true},
-    {"id":"post_type","kind":"multi_select","values":["__all__","releases_updates","hands_on_usage","results_evaluations","questions_requests","advertising_marketing","events_opportunities","opinions_reactions","research_explanations","business_finance","other"],"initial_value":"__all__","reversible":true},
+    {"id":"post_type","kind":"multi_select","values":["__all__","releases_updates","hands_on_usage","results_evaluations","questions_requests","advertising_marketing","events","opportunities","job_listings","personnel_changes","opinions_reactions","research_explanations","business_finance","other"],"initial_value":"__all__","reversible":true},
     {"id":"lang","kind":"multi_select","values":["__all__","en","zh-hans","ja","es","tr","fr","pt","ko","id","ar","pl","undetected","other"],"initial_value":"__all__","reversible":true},
     {"id":"role","kind":"multi_select","values":["__all__","official","staff","community","other"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_cn","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},

@@ -21,6 +21,9 @@ from core.classification_contract import (
     PROMPT_VERSION,
     TAXONOMY_KEY_CROSSWALK,
     TAXONOMY_VERSION,
+    STAGE1_PROMPT_V3_VERSION,
+    STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V2_VERSION,
     canonicalize_taxonomy_key,
     parse_stage1_classifications,
     taxonomy_crosswalk_rows,
@@ -40,7 +43,7 @@ def test_contract_fixture_is_explicitly_synthetic_and_non_gold():
     assert fixture["provenance"]["gold"] is False
     assert "accuracy" in fixture["provenance"]["note"]
     assert fixture["contract_version"] == "stage1-v1"
-    assert fixture["taxonomy_version"] == "stage1-taxonomy-v2"
+    assert fixture["taxonomy_version"] == "stage1-taxonomy-v3"
 
 
 @pytest.mark.parametrize(
@@ -80,7 +83,7 @@ def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
     } == {"stored_quote", "local_parent"}
 
 
-def test_taxonomy_v2_versions_and_allowlists_are_the_release_b_write_target():
+def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
     assert CONTRACT_VERSION == "stage1-v1"
     assert LEGACY_STAGE1_TAXONOMY_VERSION == "stage1-taxonomy-v1"
     assert LEGACY_STAGE1_PROMPT_VERSION == "stage1-prompt-v2"
@@ -88,15 +91,18 @@ def test_taxonomy_v2_versions_and_allowlists_are_the_release_b_write_target():
     assert PROMPT_VERSION == CANONICAL_PROMPT_VERSION
     assert POST_TYPE_KEYS is CANONICAL_POST_TYPE_KEYS
     assert PRODUCT_LABEL_KEYS is CANONICAL_PRODUCT_LABEL_KEYS
-    assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v2"
-    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v3"
+    assert STAGE1_TAXONOMY_V2_VERSION == "stage1-taxonomy-v2"
+    assert STAGE1_PROMPT_V3_VERSION == "stage1-prompt-v3"
+    assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v3"
+    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v4"
     assert COMPATIBLE_TAXONOMY_VERSIONS == (
         LEGACY_STAGE1_TAXONOMY_VERSION,
+        STAGE1_TAXONOMY_V2_VERSION,
         CANONICAL_TAXONOMY_VERSION,
     )
 
 
-def test_taxonomy_v2_crosswalk_is_total_ordered_and_collision_free():
+def test_compatible_crosswalk_is_total_ordered_and_collision_free():
     expected_aliases = {
         ("post_type", "buzz_releases"): "releases_updates",
         ("post_type", "performance_comparisons"): "results_evaluations",
@@ -112,10 +118,13 @@ def test_taxonomy_v2_crosswalk_is_total_ordered_and_collision_free():
         for family, source, canonical in TAXONOMY_KEY_CROSSWALK
         if source != canonical
     } == expected_aliases
-    assert {
-        canonicalize_taxonomy_key("post_type", key)
-        for key in (*POST_TYPE_KEYS, *CANONICAL_POST_TYPE_KEYS)
-    } == set(CANONICAL_POST_TYPE_KEYS)
+    assert all(
+        canonicalize_taxonomy_key("post_type", key) == key
+        for key in (
+            *STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+            *CANONICAL_POST_TYPE_KEYS,
+        )
+    )
     assert {
         canonicalize_taxonomy_key("product_label", key)
         for key in (*PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS)
@@ -139,7 +148,7 @@ def test_taxonomy_v2_crosswalk_is_total_ordered_and_collision_free():
         taxonomy_crosswalk_rows("unknown")
 
 
-def test_release_b_parser_accepts_canonical_and_rejects_v1_provider_keys():
+def test_v3_parser_accepts_active_keys_and_rejects_earlier_provider_keys():
     row = {
         "brand_id": "deepseek",
         "outcome": "classified",
@@ -152,6 +161,9 @@ def test_release_b_parser_accepts_canonical_and_rejects_v1_provider_keys():
     assert parse_stage1_classifications([row], ["deepseek"]) is not None
 
     row["post_types"] = ["buzz_releases"]
+    assert parse_stage1_classifications([row], ["deepseek"]) is None
+
+    row["post_types"] = ["events_opportunities"]
     assert parse_stage1_classifications([row], ["deepseek"]) is None
 
     row["post_types"] = ["other"]
@@ -171,7 +183,10 @@ def test_contract_preserves_all_types_and_empty_product_labels():
                     "results_evaluations",
                     "questions_requests",
                     "advertising_marketing",
-                    "events_opportunities",
+                    "events",
+                    "opportunities",
+                    "job_listings",
+                    "personnel_changes",
                     "opinions_reactions",
                     "research_explanations",
                     "business_finance",
@@ -185,7 +200,7 @@ def test_contract_preserves_all_types_and_empty_product_labels():
         ["deepseek"],
     )
     assert parsed is not None
-    assert len(parsed["deepseek"]["post_types"]) == 9
+    assert len(parsed["deepseek"]["post_types"]) == 12
     assert parsed["deepseek"]["product_labels"] == []
 
 

@@ -48,6 +48,15 @@ AS_OF = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 _SERIAL = count()
 
 
+@pytest.fixture(autouse=True)
+def _remove_stage1c_migration_seeded_brands():
+    """Keep each synthetic ranking test isolated from canonical seed rows."""
+
+    Brand.objects.filter(
+        nickname__in=("anthropic", "google_deepmind")
+    ).delete()
+
+
 def _brand(nickname: str, *, sentinel: bool = False) -> Brand:
     return Brand.objects.create(
         nickname=nickname,

@@ -29,8 +29,9 @@ explicit UTC (`Z` or `+00:00`), and the interval is always half-open:
 summaries and never selects rows or infers a classification era.
 
 `current_definition` reports only recognized, versioned Stage 1 state. A
-recognized row has contract `stage1-v1`, taxonomy `stage1-taxonomy-v1` or
-`stage1-taxonomy-v2`, and outcome `classified` or `context_missing`. The two
+recognized row has contract `stage1-v1`, taxonomy `stage1-taxonomy-v1`,
+`stage1-taxonomy-v2`, or `stage1-taxonomy-v3`, and outcome `classified` or
+`context_missing`. The two
 outcomes remain separate. Pending or failed post-level enrichment state cannot
 be coerced into either outcome. A state with another contract, taxonomy, or
 outcome is excluded and counted; its presence also blocks all unversioned
@@ -102,3 +103,10 @@ saved JSON preserves the aggregates observed at its statement timestamp, but
 it is not a database snapshot. Reproducing the underlying rows later requires
 a separately retained database snapshot, and later reclassification may have
 replaced the state.
+
+Taxonomy-v2 `events_opportunities` is retained as an exact historical combined
+category. It is not an identifier alias for taxonomy-v3 `events` or
+`opportunities`. Exact event/opportunity analysis must filter to taxonomy v3;
+a compatibility query that includes all three keys must report the stored key
+and taxonomy for every row or group. See
+`docs/reference/2026-09-10-203138-stage1c-intelligence-analysis-contract.md`.

@@ -561,10 +561,10 @@ def test_stage1_canonical_taxonomy_state_is_current_compatible(checker):
     classification = payload["posts"][0]["brand_classifications"][0]
     assert classification["state"] == "current"
     assert classification["taxonomy_version_current_compatible"] is True
-    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v2"
-    assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v2"
-    assert classification["active_write_prompt_version"] == "stage1-prompt-v3"
-    assert classification["latest_prompt_version"] == "stage1-prompt-v3"
+    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v3"
+    assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v3"
+    assert classification["active_write_prompt_version"] == "stage1-prompt-v4"
+    assert classification["latest_prompt_version"] == "stage1-prompt-v4"
 
 
 def test_stage1_current_null_scalars_suppress_legacy_fallback(checker):

@@ -1,15 +1,10 @@
 # x-monitor DB schema -- v2 Django ORM
 
-Last updated: 2026-08-05-20:38:42
+Last updated: 2026-09-10-203138
 
-Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/migrations/` (range: 001-039 applied).
-
-
-![x-monitor schema -- v2 Django ORM, post-migration-039 (core/models.py)](images/xmonitor-schema-post-batch.png)
-
-> **Note:** The schema image is auto-generated from `schema.dot`, which is
-> derived from the Django ORM graph in `core/models.py`. The PNG stamp
-> reflects the latest applied migration at regeneration time.
+Source of truth: [`core/models.py`](../../core/models.py) and the ordered
+migrations in `core/migrations/`. The old Graphviz image describes the retired
+v1 SQLite design and must not be used as a v2 schema reference.
 
 ## Conventions
 
@@ -18,8 +13,9 @@ Source of truth: [`core/models.py`](../../core/models.py). Migrations: `core/mig
   `id` column on these tables.
 - **CompositePrimaryKey.** Junction and i18n-label tables use
   `django.db.models.CompositePrimaryKey`. No surrogate `id` column.
-- **BigAutoField synthetic PK** only on `products` and `search_queries`, which
-  are control-plane tables populated by external scrapers/internal schedulers.
+- **BigAutoField synthetic PK** is used where a durable observation, claim,
+  listing, event, opportunity, extraction attempt, or control-plane row needs
+  its own identity.
 - **case_insensitive collation.** All `CharField` natural keys (nicknames,
   handles, namespaces, lookup keys) use `db_collation="case_insensitive"`
   (PostgreSQL: `CREATE COLLATION case_insensitive (provider = icu, locale =
@@ -571,12 +567,10 @@ Indexes: `idx_unsanctioned_flag_set (flag_set)`
 
 ---
 
-## Last reviewed: 2026-07-24
+## Historical review note: 2026-07-24
 
-**Source-of-truth:** `core/models.py` (Django 5.2 ORM), migrations `core/migrations/` (range: 001-039 applied as of 2026-08-05).
-All 32 models, their fields, types, FKs, indexes, and constraints were
-cross-referenced against the model source and migration file and found to be
-accurate.
+This section records the state checked on that date. Later sections and
+`core/models.py` supersede its model count and primary-key summary.
 
 **Key architectural decisions reflected in this schema:**
 
@@ -584,8 +578,8 @@ accurate.
    lookup tables -- no synthetic `id` columns.
 2. **CompositePrimaryKey** on all junction and i18n-label tables -- no
    surrogate `id`.
-3. **BigAutoField synthetic PK** retained only on `products` and
-   `search_queries`.
+3. **BigAutoField synthetic PK** was then retained only on `products` and
+   `search_queries`; later intelligence observation/entity tables also use it.
 4. **case_insensitive collation** on all `CharField` natural keys for
    case-insensitive equality at the database level.
 5. **JSONField** replaces TEXT for structured payloads (`entities`, `raw`,
@@ -596,7 +590,7 @@ accurate.
 
 ---
 
-## Last reviewed: 2026-07-31
+## Historical review note: 2026-07-31
 
 Substantive corrections made during the 2026-07-31 review pass
 (against `core/models.py`):
@@ -651,3 +645,32 @@ natural keys, index definitions, JSONField `db_column` renames
 (`tags_json`, `siblings_json`, `card_data_json`, `config_json`,
 `spaces_json`, `raw_json`, `keywords_json`).
 
+---
+
+## Stage 1C intelligence tables: 2026-09-10
+
+Migrations 0031–0036 add the thirteen-type taxonomy, organization seeds,
+normalized intelligence storage, targeted-extraction state, and database
+invariants. They are additive and do not rewrite existing posts, accounts, or
+taxonomy-v2 classification rows.
+
+| Table | Primary identity | Relationship and purpose |
+| --- | --- | --- |
+| `people` | UUID `id` | Person identity with localized names, reduced-precision DOB, `sexs`, nationality, ethnicity, and primary language |
+| `people_accounts` | Composite `(person_id, author_id)` | Person-to-account junction; `author_id` is an FK to `accounts.author_id` |
+| `account_profile_snapshots` | `BigAutoField id` plus unique account/hash/first observation | Consecutive-hash-compressed observed profile history and business-label facts |
+| `people_brand_affiliations` | `BigAutoField id`, unique `claim_identity` | Interpreted person-to-brand relationship; company is derived from the brand-company edge |
+| `people_brand_affiliation_evidence` | `BigAutoField id`, unique affiliation/evidence hash | Source post, profile snapshot, or validated URL supporting an affiliation |
+| `brand_discovery_candidates` | `BigAutoField id`, unique `candidate_identity` | Pending identity-review queue for untracked organizations; optional reviewed brand FK |
+| `job_listings` | `BigAutoField id`, unique `listing_identity` | One role/requisition owned by a known brand or pending organization candidate |
+| `job_listing_evidence` | `BigAutoField id`, unique listing/evidence hash | Many source posts, URLs, or media observations for one listing |
+| `job_discovery_runs` | `BigAutoField id`, unique `run_identity` | Per-query/window job search provenance, counts, capabilities, calls, and credits |
+| `personnel_discovery_runs` | `BigAutoField id`, unique `run_identity` | Equivalent personnel-search ledger with affiliation/evidence counts |
+| `events` | `BigAutoField id`, unique `event_identity` | Attendance-bearing occurrence with source-stated schedule facts |
+| `opportunities` | `BigAutoField id`, unique `opportunity_identity` | Bounded action-for-benefit offer with an optional FK to a related event |
+| `targeted_extraction_states` | `BigAutoField id`, unique post/role | Latest idempotent status for a role-specific extraction |
+| `targeted_extraction_attempts` | `BigAutoField id`, unique attempt identity | Sanitized model, prompt, token, latency, outcome, and error telemetry |
+
+Dates with incomplete source precision use separate value and precision fields.
+Observation timestamps never substitute for employment, job, event, or
+opportunity dates. Evidence-bearing facts remain pending until reviewed.

@@ -83,6 +83,9 @@ def fixture_from_oracle() -> dict:
 def seed_real_home_orm(fixture: dict) -> None:
     """Create only deterministic synthetic rows consumed by ``home()``."""
     _ensure_stage1_product_label_keys()
+    Brand.objects.filter(
+        nickname__in=("anthropic", "google_deepmind")
+    ).delete()
     for nickname, name, color in V22_FIXTURE_BRANDS:
         Brand.objects.get_or_create(
             nickname=nickname,

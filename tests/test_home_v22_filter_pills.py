@@ -212,7 +212,8 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertIn('data-pw-filter-group="post_types"', post_type)
         for key in (
             "releases_updates", "hands_on_usage", "results_evaluations",
-            "questions_requests", "advertising_marketing", "events_opportunities",
+            "questions_requests", "advertising_marketing", "events", "opportunities",
+            "job_listings", "personnel_changes",
             "opinions_reactions", "research_explanations", "business_finance", "other",
         ):
             self.assertIn(f'value="{key}"', post_type)

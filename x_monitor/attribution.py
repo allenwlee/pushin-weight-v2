@@ -1182,7 +1182,10 @@ Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
 - results_evaluations: substantive evaluations, benchmarks, rankings, results, or comparisons.
 - questions_requests: genuine product questions, support requests, corrections, or desired changes.
 - advertising_marketing: observable pitches, calls to action, discounts, services, or product showcases.
-- events_opportunities: organized events and concrete opportunities such as jobs, grants, bounties, or collaborations.
+- events: an organized occurrence that requires attendance at a scheduled in-person, live-online, or hybrid venue or session. Past, live, upcoming, cancelled, and postponed events may qualify.
+- opportunities: a bounded or ending chance to take an action for a concrete benefit or a chance to receive one, such as a grant, bounty, contest, token giveaway, discount, credits, access, allocation, referral reward, or collaboration.
+- job_listings: a concrete role or vacancy with an actionable application route such as a direct or careers-page URL, email, source-stated QR code, or explicit direct-message instruction.
+- personnel_changes: a named person joining, leaving, or explicitly describing a before-and-after employment transition involving an AI organization.
 - opinions_reactions: views, predictions, anticipation, or reactions that are not principally another defined type.
 - research_explanations: technical mechanisms, architecture, research interpretation, or conceptual teaching.
 - business_finance: funding, ownership, investment, valuation, revenue, monetization, commercial strategy, suppliers, partners, or parent companies.
@@ -1190,7 +1193,12 @@ Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
 
 TYPE BOUNDARIES:
 - Future intent, a bare recommendation, praise, or a news roundup is not hands_on_usage.
-- A bare release date, launch, feature availability, integration, or pricing change is releases_updates, not events_opportunities. An event needs an identifiable organized occasion. A substantive recap with a named occasion and concrete outcomes may be events_opportunities.
+- A bare release date, launch, feature availability, integration, or pricing change is releases_updates, not events. A substantive recap of a named attendance-bearing occasion may still be events even after it has ended.
+- Attendance means presence at a scheduled physical or live-online venue or session. Merely submitting, applying, claiming, purchasing, voting, referring, or completing an asynchronous task before a deadline is not events.
+- opportunities requires both a bounded or ending availability condition and an action-for-benefit exchange. Routine event registration that only grants attendance is not opportunities. A scheduled hackathon with live attendance and a prize-bearing submission may be both events and opportunities.
+- Jobs use job_listings rather than opportunities solely because applying is time-bounded. A separate grant, prize, discount, or attendance-bearing hiring event may justify another type.
+- A job listing needs a concrete role and application route. General recruiting promotion, workplace culture, employee spotlights, unrelated jobs with AI hashtags, and vague "we are growing" claims are not job_listings.
+- A personnel change needs a named person and a joining, leaving, appointment, or before-and-after employment transition. A static biography, employee spotlight, unchanged role, or model/team change without a named person is not personnel_changes. The announcement may be first-person, official, staff-authored, or a corroborated third-party statement, and effective dates may be unknown.
 - Mentioning a benchmark, latency, ranking, or model is not enough for results_evaluations; the post must make a substantive evaluation or comparison.
 - Rhetorical headings are not questions_requests. Use questions_requests for genuine questions or requests.
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial strategy are business_finance.

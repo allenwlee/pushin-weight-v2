@@ -152,6 +152,129 @@ class SearchConfig(BaseModel):
     max_pages: int = Field(default=5, ge=1)
 
 
+class DiscoveryQueryConfig(BaseModel):
+    """One stable global-discovery query inside a disabled-by-default lane."""
+
+    query_id: str = Field(pattern=r"^[A-Z][A-Z0-9_]+$")
+    language: Literal["en", "zh-cn", "ja"]
+    query_family: str = Field(min_length=1, max_length=32)
+    primary_terms: list[str] = Field(min_length=1)
+    co_occurrence: list[str] = Field(min_length=1)
+    not_include: list[str] = Field(default_factory=list)
+
+    @field_validator("primary_terms", "co_occurrence", "not_include")
+    @classmethod
+    def _validate_query_terms(cls, values: list[str]) -> list[str]:
+        if any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError("discovery query terms must be nonblank strings")
+        if len(set(values)) != len(values):
+            raise ValueError("discovery query terms must be unique")
+        return values
+
+
+class DiscoveryLaneConfig(BaseModel):
+    """Cost and scheduling boundary for one optional discovery lane."""
+
+    enabled: bool = False
+    query_pack_version: str = Field(min_length=1, max_length=64)
+    cadence_minutes: int = Field(default=60, ge=15)
+    max_lookback_hours: float = Field(default=24.0, gt=0, le=168)
+    max_results: int = Field(default=20, ge=1, le=100)
+    max_pages: int = Field(default=1, ge=1, le=5)
+    max_per_page: int = Field(default=20, ge=1, le=20)
+    request_timeout_seconds: int = Field(default=30, ge=5, le=60)
+    per_cycle_call_ceiling: int = Field(default=1, ge=1, le=12)
+    daily_credit_ceiling: int = Field(default=1500, ge=1)
+    credits_per_result: int = Field(default=15, ge=1)
+    minimum_credits_per_call: int = Field(default=15, ge=1)
+    queries: list[DiscoveryQueryConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_enabled_lane(self) -> DiscoveryLaneConfig:
+        if self.enabled and not self.queries:
+            raise ValueError("enabled discovery lane requires at least one query")
+        if self.max_results > self.max_pages * self.max_per_page:
+            raise ValueError(
+                "discovery max_results must fit within max_pages * max_per_page"
+            )
+        if self.daily_credit_ceiling < self.minimum_credits_per_call:
+            raise ValueError(
+                "discovery daily credit ceiling must cover one call minimum"
+            )
+        query_ids = [query.query_id for query in self.queries]
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("discovery query_id values must be unique within a lane")
+        return self
+
+
+class DiscoveryConfig(BaseModel):
+    jobs: DiscoveryLaneConfig = DiscoveryLaneConfig(
+        query_pack_version="jobs-discovery-v1"
+    )
+    personnel: DiscoveryLaneConfig = DiscoveryLaneConfig(
+        query_pack_version="personnel-discovery-v1"
+    )
+
+    @model_validator(mode="after")
+    def _validate_global_query_ids(self) -> DiscoveryConfig:
+        query_ids = [
+            query.query_id
+            for lane in (self.jobs, self.personnel)
+            for query in lane.queries
+        ]
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("discovery query_id values must be globally unique")
+        return self
+
+
+TARGETED_EXTRACTION_ROLES = frozenset(
+    {
+        "event_extraction",
+        "opportunity_extraction",
+        "job_listing_extraction",
+        "personnel_change_extraction",
+        "profile_affiliation_extraction",
+    }
+)
+
+
+class TargetedExtractionRoleConfig(BaseModel):
+    model: str = Field(min_length=1, max_length=256)
+    prompt_version: str = Field(min_length=1, max_length=64)
+    max_tokens: int = Field(default=2_000, ge=256, le=16_000)
+
+
+def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
+    return {
+        role: TargetedExtractionRoleConfig(
+            model="deepseek-v4-flash",
+            prompt_version=f"{role}-v1",
+        )
+        for role in sorted(TARGETED_EXTRACTION_ROLES)
+    }
+
+
+class TargetedExtractionConfig(BaseModel):
+    enabled: bool = False
+    max_calls_per_cycle: int = Field(default=20, ge=1, le=200)
+    request_timeout_seconds: int = Field(default=30, ge=5, le=90)
+    roles: dict[str, TargetedExtractionRoleConfig] = Field(
+        default_factory=_default_targeted_roles
+    )
+
+    @field_validator("roles")
+    @classmethod
+    def _validate_roles(
+        cls, value: dict[str, TargetedExtractionRoleConfig]
+    ) -> dict[str, TargetedExtractionRoleConfig]:
+        if set(value) != TARGETED_EXTRACTION_ROLES:
+            raise ValueError(
+                "targeted extraction roles must be exactly "
+                f"{sorted(TARGETED_EXTRACTION_ROLES)}"
+            )
+        return value
+
+
 class CycleConfig(BaseModel):
     """Cycle-level runtime constants (plan 2026-08-01-001).
 
@@ -550,6 +673,8 @@ class Config(BaseModel):
     quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
     metrics_refresh: MetricsRefreshConfig = MetricsRefreshConfig()
     search: SearchConfig = SearchConfig()
+    discovery: DiscoveryConfig = DiscoveryConfig()
+    targeted_extraction: TargetedExtractionConfig = TargetedExtractionConfig()
     cycle: CycleConfig = CycleConfig()
     harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()

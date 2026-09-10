@@ -34,7 +34,7 @@ python manage.py seed_i18n_labels
 
 **Dashboard constant:** `monitor/views.py:_DASHBOARD_POST_TYPE_KEYS`
 
-10 active values:
+13 active values:
 
 | key | en | zh-cn | ja |
 |---|---|---|---|
@@ -43,15 +43,19 @@ python manage.py seed_i18n_labels
 | `results_evaluations` | Results and Evaluations | 结果与评测 | 結果・評価 |
 | `questions_requests` | Questions & Requests | 问题与请求 | 質問・要望 |
 | `advertising_marketing` | Advertising & Marketing | 广告营销 | 広告・マーケティング |
-| `events_opportunities` | Events & Opportunities | 活动与机会 | イベント・機会 |
+| `events` | Events | 活动 | イベント |
+| `opportunities` | Opportunities | 机会 | 機会 |
+| `job_listings` | Job Listings | 招聘信息 | 求人情報 |
+| `personnel_changes` | Personnel Changes | 人事变动 | 人事異動 |
 | `opinions_reactions` | Opinions & Reactions | 观点与反应 | 意見・反応 |
 | `research_explanations` | Research & Explanations | 研究与解释 | 研究・解説 |
 | `business_finance` | Business & Finance | 商业与金融 | ビジネス・金融 |
 | `other` | Other | 其他 | その他 |
 
-The retained v1 alias keys and their English/Chinese labels remain available
-for compatible historical reads. New writes and emitted output use the active
-keys above.
+The retained v1 aliases and taxonomy-v2 `events_opportunities` key remain
+available for compatible historical reads. Taxonomy-v3 writes and emitted
+output use the active keys above; the combined v2 key cannot be retroactively
+split into `events` or `opportunities` without reclassification.
 
 ### 1.1 Product labels -- `ProductLabelKey` + `ProductLabelLabel`
 
@@ -336,7 +340,7 @@ Differences vs the 2026-07-31 review:
 
 Verified against `core/models.py` (Brand PK = `nickname` TEXT, no
 synthetic `id`; `_unattributed` is a sentinel row, not a synthetic
-integer), `core/classification_contract.py` (the active 10 post types,
+integer), `core/classification_contract.py` (the active 13 post types,
 5 product labels, 4 sentiments, and 6 nationalism values plus the retained
 v1-to-v2 compatibility crosswalk), `x_monitor/config.py`
 (`KNOWN_MODELS` frozenset order matches §7.1; `VALID_CALL_IDS = ("A",
@@ -348,7 +352,7 @@ v1-to-v2 compatibility crosswalk), `x_monitor/config.py`
 `minimax, qwen, deepseek, stepfun, hunyuan`; B2 = `doubao, glm,
 sensechat, inclusionai`; B3 = `nemo_megatron, exaone, sakana_ai,
 kuaishou`), and `core/classification_labels.py` plus
-`seed_i18n_labels.py` (25 active classification keys have complete
+`seed_i18n_labels.py` (28 active classification keys have complete
 en/zh-cn/ja labels). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP)
 reconciles.
 

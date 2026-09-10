@@ -5,84 +5,568 @@
     "note": "Deterministic contract-outcome fixture; it does not measure semantic accuracy."
   },
   "contract_version": "stage1-v1",
-  "taxonomy_version": "stage1-taxonomy-v2",
+  "taxonomy_version": "stage1-taxonomy-v3",
   "cases": [
     {
       "name": "en_all_non_other_types_and_all_products",
       "source_language": "en",
-      "context_provenance": ["stored_quote"],
-      "expected_brand_ids": ["deepseek"],
+      "context_provenance": [
+        "stored_quote"
+      ],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
       "expected_valid": true,
-      "classifications": [{
-        "brand_id": "deepseek", "outcome": "classified",
-        "post_types": ["releases_updates", "hands_on_usage", "results_evaluations", "questions_requests", "advertising_marketing", "events_opportunities", "opinions_reactions", "research_explanations", "business_finance"],
-        "product_labels": ["bug", "complaint", "testimonial", "ideas_requests", "misinformation"],
-        "sentiment": "mixed", "china_nationalism": "none", "us_nationalism": null
-      }],
-      "expected_canonical": {"deepseek": {"outcome": "classified", "post_types": ["releases_updates", "hands_on_usage", "results_evaluations", "questions_requests", "advertising_marketing", "events_opportunities", "opinions_reactions", "research_explanations", "business_finance"], "product_labels": ["bug", "complaint", "testimonial", "ideas_requests", "misinformation"], "sentiment": "mixed", "china_nationalism": "none", "us_nationalism": null}}
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "questions_requests",
+            "advertising_marketing",
+            "events",
+            "opportunities",
+            "job_listings",
+            "personnel_changes",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "bug",
+            "complaint",
+            "testimonial",
+            "ideas_requests",
+            "misinformation"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": null
+        }
+      ],
+      "expected_canonical": {
+        "deepseek": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "questions_requests",
+            "advertising_marketing",
+            "events",
+            "opportunities",
+            "job_listings",
+            "personnel_changes",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "bug",
+            "complaint",
+            "testimonial",
+            "ideas_requests",
+            "misinformation"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": null
+        }
+      }
     },
     {
       "name": "ja_other_is_explicit_and_exclusive",
       "source_language": "ja",
-      "context_provenance": ["local_parent"],
-      "expected_brand_ids": ["sakana_ai"],
+      "context_provenance": [
+        "local_parent"
+      ],
+      "expected_brand_ids": [
+        "sakana_ai"
+      ],
       "expected_valid": true,
-      "classifications": [{"brand_id": "sakana_ai", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}],
-      "expected_canonical": {"sakana_ai": {"outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}}
+      "classifications": [
+        {
+          "brand_id": "sakana_ai",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ],
+      "expected_canonical": {
+        "sakana_ai": {
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      }
     },
     {
       "name": "zh_cn_empty_products",
       "source_language": "zh-Hans",
       "context_provenance": [],
-      "expected_brand_ids": ["qwen"],
+      "expected_brand_ids": [
+        "qwen"
+      ],
       "expected_valid": true,
-      "classifications": [{"brand_id": "qwen", "outcome": "classified", "post_types": ["opinions_reactions"], "product_labels": [], "sentiment": "positive", "china_nationalism": "none", "us_nationalism": "none"}],
-      "expected_canonical": {"qwen": {"outcome": "classified", "post_types": ["opinions_reactions"], "product_labels": [], "sentiment": "positive", "china_nationalism": "none", "us_nationalism": "none"}}
+      "classifications": [
+        {
+          "brand_id": "qwen",
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      ],
+      "expected_canonical": {
+        "qwen": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      }
     },
     {
       "name": "context_missing_all_scalars_unknown",
       "source_language": "en",
-      "context_provenance": ["stored_quote", "local_parent"],
-      "expected_brand_ids": ["minimax"],
+      "context_provenance": [
+        "stored_quote",
+        "local_parent"
+      ],
+      "expected_brand_ids": [
+        "minimax"
+      ],
       "expected_valid": true,
-      "classifications": [{"brand_id": "minimax", "outcome": "context_missing", "post_types": [], "product_labels": [], "sentiment": null, "china_nationalism": null, "us_nationalism": null}],
-      "expected_canonical": {"minimax": {"outcome": "context_missing", "post_types": [], "product_labels": [], "sentiment": null, "china_nationalism": null, "us_nationalism": null}}
+      "classifications": [
+        {
+          "brand_id": "minimax",
+          "outcome": "context_missing",
+          "post_types": [],
+          "product_labels": [],
+          "sentiment": null,
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ],
+      "expected_canonical": {
+        "minimax": {
+          "outcome": "context_missing",
+          "post_types": [],
+          "product_labels": [],
+          "sentiment": null,
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      }
     },
     {
       "name": "context_missing_preserves_independent_scalar",
       "source_language": "ja",
-      "context_provenance": ["stored_quote"],
-      "expected_brand_ids": ["glm"],
+      "context_provenance": [
+        "stored_quote"
+      ],
+      "expected_brand_ids": [
+        "glm"
+      ],
       "expected_valid": true,
-      "classifications": [{"brand_id": "glm", "outcome": "context_missing", "post_types": [], "product_labels": [], "sentiment": "negative", "china_nationalism": null, "us_nationalism": "none"}],
-      "expected_canonical": {"glm": {"outcome": "context_missing", "post_types": [], "product_labels": [], "sentiment": "negative", "china_nationalism": null, "us_nationalism": "none"}}
+      "classifications": [
+        {
+          "brand_id": "glm",
+          "outcome": "context_missing",
+          "post_types": [],
+          "product_labels": [],
+          "sentiment": "negative",
+          "china_nationalism": null,
+          "us_nationalism": "none"
+        }
+      ],
+      "expected_canonical": {
+        "glm": {
+          "outcome": "context_missing",
+          "post_types": [],
+          "product_labels": [],
+          "sentiment": "negative",
+          "china_nationalism": null,
+          "us_nationalism": "none"
+        }
+      }
     },
     {
       "name": "multi_brand_complete_and_array_duplicates_deduplicated",
       "source_language": "en",
-      "context_provenance": ["local_parent"],
-      "expected_brand_ids": ["glm", "qwen"],
+      "context_provenance": [
+        "local_parent"
+      ],
+      "expected_brand_ids": [
+        "glm",
+        "qwen"
+      ],
       "expected_valid": true,
       "classifications": [
-        {"brand_id": "glm", "outcome": "classified", "post_types": ["business_finance", "business_finance"], "product_labels": ["testimonial", "testimonial"], "sentiment": "positive", "china_nationalism": null, "us_nationalism": null},
-        {"brand_id": "qwen", "outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["ideas_requests"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
+        {
+          "brand_id": "glm",
+          "outcome": "classified",
+          "post_types": [
+            "business_finance",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial",
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": null,
+          "us_nationalism": null
+        },
+        {
+          "brand_id": "qwen",
+          "outcome": "classified",
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [
+            "ideas_requests"
+          ],
+          "sentiment": "neutral",
+          "china_nationalism": "constructive_critical",
+          "us_nationalism": "anti"
+        }
       ],
       "expected_canonical": {
-        "glm": {"outcome": "classified", "post_types": ["business_finance"], "product_labels": ["testimonial"], "sentiment": "positive", "china_nationalism": null, "us_nationalism": null},
-        "qwen": {"outcome": "classified", "post_types": ["research_explanations"], "product_labels": ["ideas_requests"], "sentiment": "neutral", "china_nationalism": "constructive_critical", "us_nationalism": "anti"}
+        "glm": {
+          "outcome": "classified",
+          "post_types": [
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": null,
+          "us_nationalism": null
+        },
+        "qwen": {
+          "outcome": "classified",
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [
+            "ideas_requests"
+          ],
+          "sentiment": "neutral",
+          "china_nationalism": "constructive_critical",
+          "us_nationalism": "anti"
+        }
       }
     },
-    {"name": "classified_empty_types", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": [], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "other_combined_with_specific_type", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["other", "hands_on_usage"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "unknown_type", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["review"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "unknown_product", "source_language": "zh-Hans", "context_provenance": [], "expected_brand_ids": ["qwen"], "expected_valid": false, "classifications": [{"brand_id": "qwen", "outcome": "classified", "post_types": ["other"], "product_labels": ["feature"], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "missing_scalar_field", "source_language": "ja", "context_provenance": [], "expected_brand_ids": ["sakana_ai"], "expected_valid": false, "classifications": [{"brand_id": "sakana_ai", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null}]},
-    {"name": "wrong_array_type", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": "other", "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "duplicate_brand_result", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}, {"brand_id": "deepseek", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "missing_expected_brand", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek", "qwen"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "extra_brand_result", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}, {"brand_id": "qwen", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "context_missing_with_product_edge", "source_language": "ja", "context_provenance": ["stored_quote"], "expected_brand_ids": ["sakana_ai"], "expected_valid": false, "classifications": [{"brand_id": "sakana_ai", "outcome": "context_missing", "post_types": [], "product_labels": ["bug"], "sentiment": null, "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "unknown_sentiment", "source_language": "en", "context_provenance": [], "expected_brand_ids": ["deepseek"], "expected_valid": false, "classifications": [{"brand_id": "deepseek", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "unclear", "china_nationalism": null, "us_nationalism": null}]},
-    {"name": "extra_field", "source_language": "zh-Hans", "context_provenance": [], "expected_brand_ids": ["qwen"], "expected_valid": false, "classifications": [{"brand_id": "qwen", "outcome": "classified", "post_types": ["other"], "product_labels": [], "sentiment": "neutral", "china_nationalism": null, "us_nationalism": null, "confidence": 0.9}]}
+    {
+      "name": "classified_empty_types",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "other_combined_with_specific_type",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other",
+            "hands_on_usage"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "unknown_type",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "review"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "unknown_product",
+      "source_language": "zh-Hans",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "qwen"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "qwen",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [
+            "feature"
+          ],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "missing_scalar_field",
+      "source_language": "ja",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "sakana_ai"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "sakana_ai",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "wrong_array_type",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": "other",
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "duplicate_brand_result",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        },
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "missing_expected_brand",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek",
+        "qwen"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "extra_brand_result",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        },
+        {
+          "brand_id": "qwen",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "context_missing_with_product_edge",
+      "source_language": "ja",
+      "context_provenance": [
+        "stored_quote"
+      ],
+      "expected_brand_ids": [
+        "sakana_ai"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "sakana_ai",
+          "outcome": "context_missing",
+          "post_types": [],
+          "product_labels": [
+            "bug"
+          ],
+          "sentiment": null,
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "unknown_sentiment",
+      "source_language": "en",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "deepseek"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "deepseek",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "unclear",
+          "china_nationalism": null,
+          "us_nationalism": null
+        }
+      ]
+    },
+    {
+      "name": "extra_field",
+      "source_language": "zh-Hans",
+      "context_provenance": [],
+      "expected_brand_ids": [
+        "qwen"
+      ],
+      "expected_valid": false,
+      "classifications": [
+        {
+          "brand_id": "qwen",
+          "outcome": "classified",
+          "post_types": [
+            "other"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": null,
+          "us_nationalism": null,
+          "confidence": 0.9
+        }
+      ]
+    }
   ]
 }

@@ -28,6 +28,7 @@ Conventions:
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -3192,3 +3193,1303 @@ class AppliedConfigSnapshot(models.Model):
 
     class Meta:
         db_table = "_applied_config_snapshot"
+DATE_PRECISION_CHOICES = (
+    ("day", "Day"),
+    ("month", "Month"),
+    ("year", "Year"),
+    ("unknown", "Unknown"),
+)
+TEMPORAL_PRECISION_CHOICES = (
+    ("datetime", "Date and time"),
+    *DATE_PRECISION_CHOICES,
+)
+REVIEW_STATUS_CHOICES = (
+    ("pending", "Pending"),
+    ("confirmed", "Confirmed"),
+    ("rejected", "Rejected"),
+    ("needs_review", "Needs review"),
+)
+RELATIONSHIP_STATUS_CHOICES = (
+    ("current", "Current"),
+    ("former", "Former"),
+    ("future", "Future"),
+    ("unknown", "Unknown"),
+)
+
+
+def _precision_value_condition(
+    value_field: str,
+    precision_field: str,
+    *,
+    allow_datetime: bool = False,
+) -> models.Q:
+    condition = (
+        models.Q(
+            **{
+                f"{value_field}__isnull": True,
+                precision_field: "unknown",
+            }
+        )
+        | models.Q(
+            **{
+                precision_field: "day",
+                f"{value_field}__regex": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            }
+        )
+        | models.Q(
+            **{
+                precision_field: "month",
+                f"{value_field}__regex": r"^[0-9]{4}-[0-9]{2}$",
+            }
+        )
+        | models.Q(
+            **{
+                precision_field: "year",
+                f"{value_field}__regex": r"^[0-9]{4}$",
+            }
+        )
+    )
+    if allow_datetime:
+        condition |= models.Q(
+            **{
+                precision_field: "datetime",
+                f"{value_field}__regex": (
+                    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                    r"[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?"
+                    r"(Z|[+-][0-9]{2}:[0-9]{2})$"
+                ),
+            }
+        )
+    return condition
+
+
+class Person(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    display_name = models.TextField()
+    display_name_en = models.TextField(blank=True, null=True)
+    display_name_zh_cn = models.TextField(blank=True, null=True)
+    display_name_ja = models.TextField(blank=True, null=True)
+    date_of_birth = models.CharField(max_length=10, blank=True, null=True)
+    date_of_birth_precision = models.CharField(
+        max_length=16,
+        choices=DATE_PRECISION_CHOICES,
+        default="unknown",
+    )
+    # The owner selected this column name explicitly.
+    sexs = models.TextField(blank=True, null=True)
+    nationality = models.TextField(blank=True, null=True)
+    ethnicity = models.TextField(blank=True, null=True)
+    primary_language = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "people"
+        ordering = ["display_name", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "date_of_birth", "date_of_birth_precision"
+                ),
+                name="ck_people_dob_precision",
+            ),
+        ]
+
+
+class PersonAccount(models.Model):
+    pk = models.CompositePrimaryKey("person", "account")
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name="account_links",
+        db_column="person_id",
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name="person_links",
+        db_column="author_id",
+        to_field="author_id",
+    )
+    is_primary = models.BooleanField(default=False)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    confidence = models.FloatField(blank=True, null=True)
+    resolution_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    review_note = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "people_accounts"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    resolution_status__in=[
+                        value for value, _label in REVIEW_STATUS_CHOICES
+                    ]
+                ),
+                name="ck_people_accounts_resolution",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_observed_at__gte=models.F("first_observed_at")),
+                name="ck_people_accounts_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confidence__isnull=True)
+                    | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
+                ),
+                name="ck_people_accounts_conf",
+            ),
+            models.UniqueConstraint(
+                fields=["account"],
+                condition=models.Q(resolution_status="confirmed"),
+                name="uq_people_accounts_confirmed",
+            ),
+            models.UniqueConstraint(
+                fields=["person"],
+                condition=models.Q(
+                    resolution_status="confirmed",
+                    is_primary=True,
+                ),
+                name="uq_people_accounts_primary",
+            ),
+        ]
+
+
+class AccountProfileSnapshot(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name="profile_snapshots",
+        db_column="author_id",
+        to_field="author_id",
+    )
+    profile_hash = models.CharField(max_length=64)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    observation_count = models.PositiveIntegerField(default=1)
+    first_source_kind = models.CharField(max_length=32)
+    first_source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="profile_snapshots",
+        blank=True,
+        null=True,
+    )
+    first_source_run = models.TextField(blank=True, null=True)
+    handle = models.CharField(max_length=64, blank=True, null=True)
+    display_name = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    profile_bio_text = models.TextField(blank=True, null=True)
+    location = models.TextField(blank=True, null=True)
+    profile_image_url = models.URLField(max_length=2048, blank=True, null=True)
+    verified = models.BooleanField(blank=True, null=True)
+    is_blue_verified = models.BooleanField(blank=True, null=True)
+    verified_type = models.TextField(blank=True, null=True)
+    affiliate_target_username = models.CharField(max_length=64, blank=True, null=True)
+    affiliate_target_url = models.URLField(max_length=2048, blank=True, null=True)
+    affiliate_label_description = models.TextField(blank=True, null=True)
+    affiliate_badge_image_url = models.URLField(max_length=2048, blank=True, null=True)
+    affiliate_label_type = models.CharField(max_length=128, blank=True, null=True)
+    affiliate_display_type = models.CharField(max_length=128, blank=True, null=True)
+    present_fields = models.JSONField(default=list)
+    profile_data = models.JSONField(default=dict)
+    raw_profile_payload = models.JSONField(blank=True, null=True)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "account_profile_snapshots"
+        ordering = ["account_id", "first_observed_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["account", "-last_observed_at"],
+                name="idx_profile_snap_account_last",
+            ),
+            models.Index(fields=["profile_hash"], name="idx_profile_snap_hash"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(last_observed_at__gte=models.F("first_observed_at")),
+                name="ck_profile_snap_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(observation_count__gte=1),
+                name="ck_profile_snap_count",
+            ),
+            models.UniqueConstraint(
+                fields=["account", "profile_hash", "first_observed_at"],
+                name="uq_profile_snap_identity",
+            ),
+        ]
+
+
+class PersonBrandAffiliation(models.Model):
+    AFFILIATION_TYPES = (
+        ("employment", "Employment"),
+        ("founder", "Founder"),
+        ("advisor", "Advisor"),
+        ("board_member", "Board member"),
+        ("contractor", "Contractor"),
+        ("ambassador", "Ambassador"),
+        ("creator_partner", "Creator partner"),
+        ("affiliate", "Affiliate"),
+        ("investor", "Investor"),
+        ("community", "Community"),
+        ("other", "Other"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name="brand_affiliations",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="person_affiliations",
+        to_field="nickname",
+    )
+    affiliation_type = models.CharField(max_length=32, choices=AFFILIATION_TYPES)
+    observed_organization_name = models.TextField()
+    observed_organization_handle = models.CharField(
+        max_length=64, blank=True, null=True
+    )
+    title_raw = models.TextField(blank=True, null=True)
+    title_normalized = models.TextField(blank=True, null=True)
+    department = models.TextField(blank=True, null=True)
+    team = models.TextField(blank=True, null=True)
+    job_function = models.TextField(blank=True, null=True)
+    seniority = models.TextField(blank=True, null=True)
+    employment_type = models.TextField(blank=True, null=True)
+    status = models.CharField(
+        max_length=16,
+        choices=RELATIONSHIP_STATUS_CHOICES,
+        default="unknown",
+    )
+    start_date = models.CharField(max_length=10, blank=True, null=True)
+    start_date_precision = models.CharField(
+        max_length=16,
+        choices=DATE_PRECISION_CHOICES,
+        default="unknown",
+    )
+    end_date = models.CharField(max_length=10, blank=True, null=True)
+    end_date_precision = models.CharField(
+        max_length=16,
+        choices=DATE_PRECISION_CHOICES,
+        default="unknown",
+    )
+    location = models.TextField(blank=True, null=True)
+    workplace_type = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    confidence = models.FloatField(blank=True, null=True)
+    review_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    review_note = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    source_system = models.CharField(max_length=64, blank=True, null=True)
+    external_id = models.TextField(blank=True, null=True)
+    claim_identity = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "people_brand_affiliations"
+        ordering = ["person_id", "brand_id", "id"]
+        indexes = [
+            models.Index(
+                fields=["brand", "affiliation_type", "status"],
+                name="idx_pba_brand_type_status",
+            ),
+            models.Index(
+                fields=["person", "affiliation_type"],
+                name="idx_pba_person_type",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    affiliation_type__in=[
+                        "employment",
+                        "founder",
+                        "advisor",
+                        "board_member",
+                        "contractor",
+                        "ambassador",
+                        "creator_partner",
+                        "affiliate",
+                        "investor",
+                        "community",
+                        "other",
+                    ]
+                ),
+                name="ck_pba_affiliation_type",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[value for value, _label in RELATIONSHIP_STATUS_CHOICES]
+                ),
+                name="ck_pba_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_status__in=[value for value, _label in REVIEW_STATUS_CHOICES]
+                ),
+                name="ck_pba_review_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confidence__isnull=True)
+                    | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
+                ),
+                name="ck_pba_confidence",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "start_date", "start_date_precision"
+                ),
+                name="ck_pba_start_precision",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition("end_date", "end_date_precision"),
+                name="ck_pba_end_precision",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(start_date__isnull=True)
+                    | models.Q(end_date__isnull=True)
+                    | ~models.Q(start_date_precision=models.F("end_date_precision"))
+                    | models.Q(start_date__lte=models.F("end_date"))
+                ),
+                name="ck_pba_comparable_dates",
+            ),
+        ]
+
+
+class PersonBrandAffiliationEvidence(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    affiliation = models.ForeignKey(
+        PersonBrandAffiliation,
+        on_delete=models.CASCADE,
+        related_name="evidence",
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="affiliation_evidence",
+        blank=True,
+        null=True,
+    )
+    source_profile_snapshot = models.ForeignKey(
+        AccountProfileSnapshot,
+        on_delete=models.SET_NULL,
+        related_name="affiliation_evidence",
+        blank=True,
+        null=True,
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    evidence_text = models.TextField(blank=True, default="")
+    observed_at = models.DateTimeField()
+    extracted_claim_data = models.JSONField(default=dict)
+    extraction_method = models.CharField(max_length=64)
+    extraction_model = models.TextField(blank=True, null=True)
+    extraction_prompt_version = models.TextField(blank=True, null=True)
+    confidence = models.FloatField(blank=True, null=True)
+    review_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    reviewer = models.TextField(blank=True, null=True)
+    review_note = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    evidence_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_brand_affiliation_evidence"
+        ordering = ["affiliation_id", "observed_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_status__in=[value for value, _label in REVIEW_STATUS_CHOICES]
+                ),
+                name="ck_pbae_review_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_post__isnull=False)
+                    | models.Q(source_profile_snapshot__isnull=False)
+                    | (models.Q(source_url__isnull=False) & ~models.Q(source_url=""))
+                ),
+                name="ck_pbae_has_source",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confidence__isnull=True)
+                    | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
+                ),
+                name="ck_pbae_confidence",
+            ),
+            models.UniqueConstraint(
+                fields=["affiliation", "evidence_hash"],
+                name="uq_pbae_affiliation_hash",
+            ),
+        ]
+
+
+class BrandDiscoveryCandidate(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    observed_name = models.TextField()
+    aliases = models.JSONField(default=list)
+    candidate_handles = models.JSONField(default=list)
+    organization_ai_relationship = models.TextField(blank=True, null=True)
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="brand_discovery_candidates",
+        blank=True,
+        null=True,
+    )
+    source_query = models.ForeignKey(
+        SearchQuery,
+        on_delete=models.SET_NULL,
+        related_name="brand_discovery_candidates",
+        blank=True,
+        null=True,
+    )
+    source_identities = models.JSONField(default=list)
+    confidence = models.FloatField(blank=True, null=True)
+    verification_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    reviewer = models.TextField(blank=True, null=True)
+    review_note = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reviewed_brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="discovery_candidates",
+        blank=True,
+        null=True,
+        to_field="nickname",
+    )
+    candidate_identity = models.CharField(max_length=64, unique=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "brand_discovery_candidates"
+        ordering = ["observed_name", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    verification_status__in=[
+                        value for value, _label in REVIEW_STATUS_CHOICES
+                    ]
+                ),
+                name="ck_brand_candidate_review",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_observed_at__gte=models.F("first_observed_at")),
+                name="ck_brand_candidate_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confidence__isnull=True)
+                    | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
+                ),
+                name="ck_brand_candidate_conf",
+            ),
+        ]
+
+
+class JobListing(models.Model):
+    APPLICATION_ROUTE_KINDS = (
+        ("direct_url", "Direct URL"),
+        ("careers_page", "Careers page"),
+        ("email", "Email"),
+        ("qr", "QR"),
+        ("direct_message", "Direct message"),
+        ("other", "Other"),
+        ("unresolved", "Unresolved"),
+    )
+    LISTING_STATUSES = (
+        ("open", "Open"),
+        ("closed", "Closed"),
+        ("future", "Future"),
+        ("unknown", "Unknown"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="job_listings",
+        blank=True,
+        null=True,
+        to_field="nickname",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate,
+        on_delete=models.PROTECT,
+        related_name="job_listings",
+        blank=True,
+        null=True,
+    )
+    hiring_organization = models.TextField()
+    source_name = models.TextField(blank=True, null=True)
+    source_listing_id = models.TextField(blank=True, null=True)
+    canonical_url = models.URLField(max_length=2048, blank=True, null=True)
+    application_url = models.URLField(max_length=2048, blank=True, null=True)
+    application_route_kind = models.CharField(
+        max_length=32,
+        choices=APPLICATION_ROUTE_KINDS,
+        default="unresolved",
+    )
+    application_contact = models.TextField(blank=True, null=True)
+    application_resolution_status = models.CharField(
+        max_length=32, blank=True, null=True
+    )
+    title = models.TextField()
+    description_html = models.TextField(blank=True, null=True)
+    description_text = models.TextField(blank=True, null=True)
+    department = models.TextField(blank=True, null=True)
+    team = models.TextField(blank=True, null=True)
+    job_function = models.TextField(blank=True, null=True)
+    seniority = models.TextField(blank=True, null=True)
+    employment_type = models.TextField(blank=True, null=True)
+    workplace_type = models.TextField(blank=True, null=True)
+    locations_raw = models.TextField(blank=True, null=True)
+    locations = models.JSONField(default=list)
+    remote_applicant_restrictions = models.TextField(blank=True, null=True)
+    salary_text = models.TextField(blank=True, null=True)
+    salary_min = models.DecimalField(
+        max_digits=18, decimal_places=2, blank=True, null=True
+    )
+    salary_max = models.DecimalField(
+        max_digits=18, decimal_places=2, blank=True, null=True
+    )
+    salary_currency = models.CharField(max_length=3, blank=True, null=True)
+    salary_period = models.CharField(max_length=32, blank=True, null=True)
+    posted_at = models.DateTimeField(blank=True, null=True)
+    updated_source_at = models.DateTimeField(blank=True, null=True)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    expires_at = models.DateTimeField(blank=True, null=True)
+    closed_at = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        max_length=16,
+        choices=LISTING_STATUSES,
+        default="unknown",
+    )
+    campaign_openings = models.PositiveIntegerField(blank=True, null=True)
+    role_openings = models.PositiveIntegerField(blank=True, null=True)
+    skills = models.JSONField(default=list)
+    responsibilities = models.JSONField(default=list)
+    qualifications = models.JSONField(default=list)
+    education_requirements = models.TextField(blank=True, null=True)
+    experience_requirements = models.TextField(blank=True, null=True)
+    benefits = models.JSONField(default=list)
+    eligibility = models.TextField(blank=True, null=True)
+    source_language = models.CharField(max_length=32, blank=True, null=True)
+    organization_ai_relationship = models.TextField(blank=True, null=True)
+    role_ai_relationship = models.TextField(blank=True, null=True)
+    listing_identity = models.CharField(max_length=64, unique=True)
+    content_hash = models.CharField(max_length=64, blank=True, null=True)
+    extraction_version = models.TextField(blank=True, null=True)
+    extraction_confidence = models.FloatField(blank=True, null=True)
+    raw_payload = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "job_listings"
+        ordering = ["-first_seen_at", "id"]
+        indexes = [
+            models.Index(fields=["brand", "status"], name="idx_jobs_brand_status"),
+            models.Index(
+                fields=["status", "expires_at"], name="idx_jobs_status_expiry"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        brand__isnull=False,
+                        brand_discovery_candidate__isnull=True,
+                    )
+                    | models.Q(
+                        brand__isnull=True,
+                        brand_discovery_candidate__isnull=False,
+                    )
+                ),
+                name="ck_jobs_one_organization",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    application_route_kind__in=[
+                        "direct_url",
+                        "careers_page",
+                        "email",
+                        "qr",
+                        "direct_message",
+                        "other",
+                        "unresolved",
+                    ]
+                ),
+                name="ck_jobs_application_route",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=["open", "closed", "future", "unknown"]),
+                name="ck_jobs_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_jobs_seen_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(salary_min__isnull=True)
+                    | models.Q(salary_max__isnull=True)
+                    | models.Q(salary_max__gte=models.F("salary_min"))
+                ),
+                name="ck_jobs_salary_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(salary_min__isnull=True)
+                    | models.Q(salary_min__gte=0)
+                )
+                & (
+                    models.Q(salary_max__isnull=True)
+                    | models.Q(salary_max__gte=0)
+                ),
+                name="ck_jobs_salary_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(campaign_openings__isnull=True)
+                    | models.Q(campaign_openings__gte=1)
+                ),
+                name="ck_jobs_campaign_openings",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(role_openings__isnull=True)
+                    | models.Q(role_openings__gte=1)
+                ),
+                name="ck_jobs_role_openings",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(extraction_confidence__isnull=True)
+                    | (
+                        models.Q(extraction_confidence__gte=0.0)
+                        & models.Q(extraction_confidence__lte=1.0)
+                    )
+                ),
+                name="ck_jobs_extraction_conf",
+            ),
+        ]
+
+
+class JobListingEvidence(models.Model):
+    SOURCE_RELATIONSHIPS = (
+        ("official", "Official"),
+        ("staff", "Staff"),
+        ("third_party", "Third party"),
+    )
+    EXTRACTION_METHODS = (
+        ("structured_text", "Structured text"),
+        ("ocr", "OCR"),
+        ("vision", "Vision"),
+        ("manual", "Manual"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    listing = models.ForeignKey(
+        JobListing,
+        on_delete=models.CASCADE,
+        related_name="evidence",
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="job_listing_evidence",
+        blank=True,
+        null=True,
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    observed_author_handle = models.CharField(max_length=64, blank=True, null=True)
+    observed_author_display_name = models.TextField(blank=True, null=True)
+    source_relationship = models.CharField(max_length=16, choices=SOURCE_RELATIONSHIPS)
+    evidence_text = models.TextField(blank=True, default="")
+    linked_urls = models.JSONField(default=list)
+    observed_at = models.DateTimeField()
+    media_url = models.URLField(max_length=2048, blank=True, null=True)
+    media_hash = models.CharField(max_length=64, blank=True, null=True)
+    extraction_method = models.CharField(max_length=32, choices=EXTRACTION_METHODS)
+    image_derived_fields = models.JSONField(default=list)
+    confidence = models.FloatField(blank=True, null=True)
+    raw_evidence = models.JSONField(blank=True, null=True)
+    extraction_identity = models.CharField(max_length=64)
+    evidence_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "job_listing_evidence"
+        ordering = ["listing_id", "observed_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_relationship__in=[
+                        "official",
+                        "staff",
+                        "third_party",
+                    ]
+                ),
+                name="ck_job_evidence_relationship",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    extraction_method__in=[
+                        "structured_text",
+                        "ocr",
+                        "vision",
+                        "manual",
+                    ]
+                ),
+                name="ck_job_evidence_method",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_post__isnull=False)
+                    | (models.Q(source_url__isnull=False) & ~models.Q(source_url=""))
+                    | (models.Q(media_url__isnull=False) & ~models.Q(media_url=""))
+                ),
+                name="ck_job_evidence_has_source",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confidence__isnull=True)
+                    | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
+                ),
+                name="ck_job_evidence_conf",
+            ),
+            models.UniqueConstraint(
+                fields=["listing", "evidence_hash"],
+                name="uq_job_evidence_hash",
+            ),
+        ]
+
+
+class DiscoveryRunBase(models.Model):
+    RUN_STATUSES = (
+        ("planned", "Planned"),
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("truncated", "Truncated"),
+        ("blocked", "Blocked"),
+    )
+
+    run_identity = models.CharField(max_length=64, unique=True)
+    run_id = models.TextField()
+    cycle_id = models.TextField(blank=True, null=True)
+    query = models.ForeignKey(SearchQuery, on_delete=models.PROTECT, related_name="+")
+    query_text = models.TextField()
+    query_hash = models.CharField(max_length=64)
+    query_pack_version = models.TextField()
+    provider_boundary = models.TextField()
+    tool_boundary = models.TextField(blank=True, null=True)
+    language = models.CharField(max_length=16)
+    query_family = models.CharField(max_length=32)
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    input_cursor = models.TextField(blank=True, null=True)
+    output_cursor = models.TextField(blank=True, null=True)
+    reviewed_post_count = models.PositiveIntegerField(default=0)
+    accepted_post_count = models.PositiveIntegerField(default=0)
+    excluded_count = models.PositiveIntegerField(default=0)
+    exclusion_reasons = models.JSONField(default=dict)
+    discovered_organization_count = models.PositiveIntegerField(default=0)
+    provider_capabilities = models.JSONField(default=dict)
+    provider_call_count = models.PositiveIntegerField(default=0)
+    provider_credit_count = models.PositiveIntegerField(default=0)
+    telemetry = models.JSONField(default=dict)
+    limitations = models.JSONField(default=list)
+    status = models.CharField(
+        max_length=16,
+        choices=RUN_STATUSES,
+        default="planned",
+    )
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    completion_reason = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class JobDiscoveryRun(DiscoveryRunBase):
+    extracted_listing_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "job_discovery_runs"
+        ordering = ["-window_start", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        value for value, _label in DiscoveryRunBase.RUN_STATUSES
+                    ]
+                ),
+                name="ck_job_runs_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_end__gt=models.F("window_start")),
+                name="ck_job_runs_window",
+            ),
+        ]
+
+
+class PersonnelDiscoveryRun(DiscoveryRunBase):
+    extracted_affiliation_count = models.PositiveIntegerField(default=0)
+    extracted_evidence_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "personnel_discovery_runs"
+        ordering = ["-window_start", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        value for value, _label in DiscoveryRunBase.RUN_STATUSES
+                    ]
+                ),
+                name="ck_personnel_runs_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_end__gt=models.F("window_start")),
+                name="ck_personnel_runs_window",
+            ),
+        ]
+
+
+class Event(models.Model):
+    ATTENDANCE_MODES = (
+        ("in_person", "In person"),
+        ("online_live", "Online live"),
+        ("hybrid", "Hybrid"),
+        ("unknown", "Unknown"),
+    )
+    SOURCE_STATUSES = (
+        ("scheduled", "Scheduled"),
+        ("live", "Live"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+        ("postponed", "Postponed"),
+        ("unknown", "Unknown"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="events",
+        to_field="nickname",
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="extracted_events",
+        blank=True,
+        null=True,
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    title = models.TextField()
+    organizer_name = models.TextField()
+    organizer_handle = models.CharField(max_length=64, blank=True, null=True)
+    attendance_mode = models.CharField(
+        max_length=16,
+        choices=ATTENDANCE_MODES,
+        default="unknown",
+    )
+    physical_location = models.TextField(blank=True, null=True)
+    virtual_location = models.TextField(blank=True, null=True)
+    attendance_url = models.URLField(max_length=2048, blank=True, null=True)
+    start_value = models.CharField(max_length=64, blank=True, null=True)
+    start_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    end_value = models.CharField(max_length=64, blank=True, null=True)
+    end_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    source_timezone = models.CharField(max_length=64, blank=True, null=True)
+    source_schedule_text = models.TextField(blank=True, null=True)
+    source_status = models.CharField(
+        max_length=16,
+        choices=SOURCE_STATUSES,
+        default="unknown",
+    )
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    event_identity = models.CharField(max_length=64, unique=True)
+    content_hash = models.CharField(max_length=64, blank=True, null=True)
+    extraction_version = models.TextField(blank=True, null=True)
+    extraction_confidence = models.FloatField(blank=True, null=True)
+    review_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    raw_payload = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "events"
+        ordering = ["-first_seen_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    attendance_mode__in=[
+                        "in_person",
+                        "online_live",
+                        "hybrid",
+                        "unknown",
+                    ]
+                ),
+                name="ck_events_attendance_mode",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_status__in=[
+                        "scheduled",
+                        "live",
+                        "completed",
+                        "cancelled",
+                        "postponed",
+                        "unknown",
+                    ]
+                ),
+                name="ck_events_source_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_status__in=[value for value, _label in REVIEW_STATUS_CHOICES]
+                ),
+                name="ck_events_review_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_post__isnull=False)
+                    | (models.Q(source_url__isnull=False) & ~models.Q(source_url=""))
+                ),
+                name="ck_events_has_source",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_events_seen_window",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "start_value", "start_precision", allow_datetime=True
+                ),
+                name="ck_events_start_precision",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "end_value", "end_precision", allow_datetime=True
+                ),
+                name="ck_events_end_precision",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(extraction_confidence__isnull=True)
+                    | (
+                        models.Q(extraction_confidence__gte=0.0)
+                        & models.Q(extraction_confidence__lte=1.0)
+                    )
+                ),
+                name="ck_events_extraction_conf",
+            ),
+        ]
+
+
+class Opportunity(models.Model):
+    OPPORTUNITY_TYPES = (
+        ("giveaway", "Giveaway"),
+        ("discount", "Discount"),
+        ("free_credits", "Free credits"),
+        ("beta_access", "Beta access"),
+        ("grant", "Grant"),
+        ("bounty", "Bounty"),
+        ("contest", "Contest"),
+        ("referral", "Referral"),
+        ("collaboration", "Collaboration"),
+        ("other", "Other"),
+    )
+    SOURCE_STATUSES = (
+        ("upcoming", "Upcoming"),
+        ("open", "Open"),
+        ("closed", "Closed"),
+        ("cancelled", "Cancelled"),
+        ("unknown", "Unknown"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="opportunities",
+        to_field="nickname",
+    )
+    related_event = models.ForeignKey(
+        Event,
+        on_delete=models.SET_NULL,
+        related_name="opportunities",
+        blank=True,
+        null=True,
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        related_name="extracted_opportunities",
+        blank=True,
+        null=True,
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    sponsor_name = models.TextField()
+    sponsor_handle = models.CharField(max_length=64, blank=True, null=True)
+    opportunity_type = models.CharField(
+        max_length=32,
+        choices=OPPORTUNITY_TYPES,
+    )
+    action_type = models.TextField()
+    action_url = models.URLField(max_length=2048, blank=True, null=True)
+    benefit_type = models.TextField()
+    benefit_value = models.DecimalField(
+        max_digits=18, decimal_places=2, blank=True, null=True
+    )
+    benefit_currency = models.CharField(max_length=8, blank=True, null=True)
+    benefit_text = models.TextField(blank=True, null=True)
+    eligibility = models.TextField(blank=True, null=True)
+    geographic_restrictions = models.TextField(blank=True, null=True)
+    open_value = models.CharField(max_length=64, blank=True, null=True)
+    open_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    close_value = models.CharField(max_length=64, blank=True, null=True)
+    close_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    source_timezone = models.CharField(max_length=64, blank=True, null=True)
+    source_availability_text = models.TextField(blank=True, null=True)
+    source_status = models.CharField(
+        max_length=16,
+        choices=SOURCE_STATUSES,
+        default="unknown",
+    )
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    opportunity_identity = models.CharField(max_length=64, unique=True)
+    content_hash = models.CharField(max_length=64, blank=True, null=True)
+    extraction_version = models.TextField(blank=True, null=True)
+    extraction_confidence = models.FloatField(blank=True, null=True)
+    review_status = models.CharField(
+        max_length=16,
+        choices=REVIEW_STATUS_CHOICES,
+        default="pending",
+    )
+    raw_payload = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "opportunities"
+        ordering = ["-first_seen_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    opportunity_type__in=[
+                        "giveaway",
+                        "discount",
+                        "free_credits",
+                        "beta_access",
+                        "grant",
+                        "bounty",
+                        "contest",
+                        "referral",
+                        "collaboration",
+                        "other",
+                    ]
+                ),
+                name="ck_opportunities_type",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_status__in=[
+                        "upcoming",
+                        "open",
+                        "closed",
+                        "cancelled",
+                        "unknown",
+                    ]
+                ),
+                name="ck_opportunities_source_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_status__in=[value for value, _label in REVIEW_STATUS_CHOICES]
+                ),
+                name="ck_opportunities_review_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_post__isnull=False)
+                    | (models.Q(source_url__isnull=False) & ~models.Q(source_url=""))
+                ),
+                name="ck_opportunities_has_source",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_opportunities_seen_window",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "open_value", "open_precision", allow_datetime=True
+                ),
+                name="ck_opportunities_open_precision",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "close_value", "close_precision", allow_datetime=True
+                ),
+                name="ck_opportunities_close_precision",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(extraction_confidence__isnull=True)
+                    | (
+                        models.Q(extraction_confidence__gte=0.0)
+                        & models.Q(extraction_confidence__lte=1.0)
+                    )
+                ),
+                name="ck_opportunities_extraction_conf",
+            ),
+        ]
+
+
+class TargetedExtractionState(models.Model):
+    STATUSES = (
+        ("pending", "Pending"),
+        ("succeeded", "Succeeded"),
+        ("failed", "Failed"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="targeted_extraction_states",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    role = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATUSES, default="pending")
+    content_identity = models.CharField(max_length=64)
+    model = models.TextField()
+    prompt_version = models.CharField(max_length=64)
+    attempts = models.PositiveIntegerField(default=0)
+    result_hash = models.CharField(max_length=64, blank=True, null=True)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    last_attempted_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "targeted_extraction_states"
+        indexes = [
+            models.Index(fields=["status", "role"], name="idx_target_extract_due")
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=["pending", "succeeded", "failed"]),
+                name="ck_target_extract_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    role__in=[
+                        "event_extraction",
+                        "opportunity_extraction",
+                        "job_listing_extraction",
+                        "personnel_change_extraction",
+                        "profile_affiliation_extraction",
+                    ]
+                ),
+                name="ck_target_extract_role",
+            ),
+            models.UniqueConstraint(
+                fields=["post", "role"], name="uq_target_extract_post_role"
+            ),
+        ]
+
+
+class TargetedExtractionAttempt(models.Model):
+    OUTCOMES = (
+        ("succeeded", "Succeeded"),
+        ("failed", "Failed"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    state = models.ForeignKey(
+        TargetedExtractionState,
+        on_delete=models.CASCADE,
+        related_name="attempt_events",
+    )
+    attempt_identity = models.CharField(max_length=64, unique=True)
+    attempted_at = models.DateTimeField()
+    outcome = models.CharField(max_length=16, choices=OUTCOMES)
+    model = models.TextField()
+    prompt_version = models.CharField(max_length=64)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(default=0)
+    error_code = models.CharField(max_length=128, blank=True, default="")
+
+    class Meta:
+        db_table = "targeted_extraction_attempts"
+        ordering = ["attempted_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(outcome__in=["succeeded", "failed"]),
+                name="ck_target_attempt_outcome",
+            )
+        ]

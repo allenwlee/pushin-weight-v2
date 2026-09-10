@@ -39,6 +39,26 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "活动与机会",
         "ja": "イベント・機会",
     },
+    "events": {
+        "en": "Events",
+        "zh-cn": "活动",
+        "ja": "イベント",
+    },
+    "opportunities": {
+        "en": "Opportunities",
+        "zh-cn": "机会",
+        "ja": "機会",
+    },
+    "job_listings": {
+        "en": "Job Listings",
+        "zh-cn": "招聘信息",
+        "ja": "求人情報",
+    },
+    "personnel_changes": {
+        "en": "Personnel Changes",
+        "zh-cn": "人事变动",
+        "ja": "人事異動",
+    },
     "event_announcement": {"en": "Events & Opportunities", "zh-cn": "活动与机会"},
     "opinions_reactions": {
         "en": "Opinions & Reactions",

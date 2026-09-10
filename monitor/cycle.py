@@ -48,6 +48,11 @@ from core.classification_contract import (
     TAXONOMY_VERSION,
     parse_stage1_classifications,
 )
+from core.discovery import (
+    plan_discovery_calls,
+    record_discovery_run,
+    remaining_discovery_result_capacity,
+)
 from core.models import (
     Account,
     Brand,
@@ -64,6 +69,11 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     SentimentKey,
+)
+from core.profile_snapshots import (
+    build_account_affiliation_contexts,
+    build_brand_reference_index,
+    capture_post_profile_snapshot,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
 from monitor.harvest_summary import summarize_latency
@@ -744,7 +754,8 @@ def _read_cursor_since(
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
     cycle_cfg = cfg.cycle if cfg is not None else _DEFAULT_CYCLE_CONFIG
-    floor = now - timedelta(hours=cycle_cfg.max_lookback_hours)
+    max_lookback_hours = call.max_lookback_hours or cycle_cfg.max_lookback_hours
+    floor = now - timedelta(hours=max_lookback_hours)
     ceiling = now - timedelta(seconds=cycle_cfg.cursor_overlap_seconds)
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
@@ -1295,6 +1306,8 @@ def _persist_attribution(
     brand_ids: list[str],
     mentions: list[MentionRow],
     classifications: dict[str, tuple[str, str]] | None = None,
+    *,
+    allow_unattributed: bool = False,
 ) -> int:
     """Persist PostBrand, PostBrandMention, and PostBrandSignal rows.
 
@@ -1328,6 +1341,16 @@ def _persist_attribution(
         if bid not in brand_ids:
             brand_ids.append(bid)
         n += 1
+
+    # A global discovery post may be relevant before its organization has a
+    # reviewed Brand row. Persist only the explicit sentinel edge; ordinary
+    # brand edges remain owned by the mention loop above.
+    if allow_unattributed and UNATTRIBUTED_BRAND_ID in brand_ids:
+        PostBrand.objects.get_or_create(
+            post=post,
+            brand_id=UNATTRIBUTED_BRAND_ID,
+            defaults={"weight": 1.0},
+        )
 
     # PostBrandSignal (per brand, per post_type)
     if classifications:
@@ -1404,11 +1427,13 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         brand_nicknames=selected_models,
     )
 
-    return plan_calls(
+    calls = plan_calls(
         list_id,
         x_query_specs,
         primary_keywords=primary_keywords,
     )
+    calls.extend(plan_discovery_calls(cfg, list_id=int(list_id)))
+    return calls
 
 
 class CycleRunner:
@@ -1428,6 +1453,7 @@ class CycleRunner:
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
+        _targeted_extraction_calls: dict[str, Any] | None = None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -1450,6 +1476,7 @@ class CycleRunner:
         # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
         # Production wire-in passes an anthropic_messages_call function.
         self._relevancy_llm_call = _relevancy_llm_call
+        self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
@@ -1476,6 +1503,7 @@ class CycleRunner:
             "translator_unavailable": 0,
             "classifier_unavailable": 0,
             "classifier_flags_invalid": 0,
+            "targeted_extraction_failed": 0,
             "enrichment_quarantined": 0,
         }
 
@@ -1653,6 +1681,8 @@ class CycleRunner:
           "error"               -- the call failed (auth/rate/server/other).
           "length_cap_exceeded" -- the query would exceed the 512-char cap
                                    once the time operators are injected.
+          "daily_credit_ceiling" -- this discovery lane has no remaining
+                                    provider-credit budget for another call.
 
         The distinction matters because an empty list alone cannot tell a
         quiet window from a failure, and only the former may advance the
@@ -1679,6 +1709,19 @@ class CycleRunner:
             if max_per_page_cfg is not None
             else self.cfg.search.max_per_page
         )
+        if call.max_results is not None:
+            max_results_cap = min(max_results_cap, call.max_results)
+        if call.max_pages is not None:
+            max_pages_cap = min(max_pages_cap, call.max_pages)
+        if call.max_per_page is not None:
+            max_per_page_cap = min(max_per_page_cap, call.max_per_page)
+        affordable_results = remaining_discovery_result_capacity(
+            call, now=self._wall_now()
+        )
+        if affordable_results == 0:
+            return [], "daily_credit_ceiling"
+        if affordable_results is not None:
+            max_results_cap = min(max_results_cap, affordable_results)
         if tip_only:
             # Scheduled delivery is breadth-first: admit one fresh page for
             # every logical call before bounded backlog/deep-page work starts.
@@ -1748,7 +1791,7 @@ class CycleRunner:
 
         max_walks = (
             1
-            if tip_only or deadline is not None
+            if call.discovery_lane is not None or tip_only or deadline is not None
             else self.cfg.cycle.max_truncation_walks
         )
         for walk in range(max_walks):
@@ -2027,6 +2070,72 @@ class CycleRunner:
                 kept.extend(accepted)
         return kept, inserted, updated, attributed, failed, drops, degraded
 
+    def _record_discovery_run_safe(
+        self,
+        *,
+        call: PlannedCall,
+        run_id: str,
+        window: tuple[int, int],
+        outcome: str,
+        items: list[dict[str, Any]],
+        accepted_post_count: int,
+        exclusion_reasons: dict[str, int] | None = None,
+    ) -> None:
+        if call.discovery_lane is None:
+            return
+        try:
+            page_count = (
+                0
+                if outcome in {"length_cap_exceeded", "daily_credit_ceiling"}
+                else max(
+                    [int(item.get("_api_page_number") or 1) for item in items]
+                    or [1]
+                )
+            )
+            credit_count = (
+                0
+                if outcome in {"length_cap_exceeded", "daily_credit_ceiling"}
+                else max(
+                    len(items) * int(call.credits_per_result or 15),
+                    int(call.minimum_credits_per_call or 15),
+                )
+            )
+            record_discovery_run(
+                call=call,
+                run_id=run_id,
+                window=window,
+                outcome=outcome,
+                reviewed_post_count=len(items),
+                accepted_post_count=accepted_post_count,
+                excluded_count=max(len(items) - accepted_post_count, 0),
+                exclusion_reasons=exclusion_reasons,
+                provider_call_count=page_count,
+                provider_credit_count=credit_count,
+                observed_at=self._wall_now(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "discovery run ledger failed for call_id=%s: %s",
+                call.call_id,
+                exc,
+            )
+            self._errors.append(f"discovery_ledger.{call.call_id}: {exc}")
+
+    @staticmethod
+    def _mark_discovery_items(
+        call: PlannedCall, items: list[dict[str, Any]]
+    ) -> bool:
+        if call.discovery_lane is None:
+            return False
+        for item in items:
+            item["_discovery_lane"] = call.discovery_lane
+            item["_discovery_query_id"] = call.call_id
+            item["source_query_id"] = call.call_id
+            if item.get("_unattributed"):
+                item["brand_id"] = UNATTRIBUTED_BRAND_ID
+                item["brand_ids"] = [UNATTRIBUTED_BRAND_ID]
+        return True
+
     def _attribute_items(
         self,
         items: list[dict[str, Any]],
@@ -2115,8 +2224,12 @@ class CycleRunner:
         n_updated = 0
         n_attributed = 0
         n_failed = 0
+        profile_brand_references = build_brand_reference_index()
+        profile_account_contexts = build_account_affiliation_contexts(
+            str(it.get("author_id") or it.get("authorId") or "") for it in items
+        )
         for it in items:
-            if it.get("_unattributed"):
+            if it.get("_unattributed") and not it.get("_discovery_lane"):
                 continue
             it.pop("_db_inserted", None)
             it.pop("_persisted_post_id", None)
@@ -2126,6 +2239,14 @@ class CycleRunner:
                     post, created = _upsert_post(it, account=account)
                     if post is None:
                         continue
+                    capture_post_profile_snapshot(
+                        post=post,
+                        raw=it,
+                        references=profile_brand_references,
+                        affiliation_context=profile_account_contexts.get(
+                            str(it.get("author_id") or it.get("authorId") or "")
+                        ),
+                    )
                     if created:
                         n_inserted += 1
                     else:
@@ -2135,7 +2256,11 @@ class CycleRunner:
                     mentions: list[MentionRow] = list(it.get("mentions") or [])
                     classifications: dict = it.get("classifications") or {}
                     n_attr = _persist_attribution(
-                        post, brand_ids, mentions, classifications
+                        post,
+                        brand_ids,
+                        mentions,
+                        classifications,
+                        allow_unattributed=bool(it.get("_discovery_lane")),
                     )
                     n_attributed += n_attr
                 # The timestamp is taken after the atomic block exits: this
@@ -2321,6 +2446,14 @@ class CycleRunner:
 
         # Convert Django Brand models to v1 BrandRow shape expected by classifier
         from x_monitor.attribution import BrandRow as _BrandRow
+        brand_rows = BrandModel.objects.filter(is_sentinel=False)
+        if any(
+            UNATTRIBUTED_BRAND_ID in tweet.get("brand_ids", [])
+            for tweet in classification_tweets
+        ):
+            brand_rows = BrandModel.objects.filter(
+                Q(is_sentinel=False) | Q(nickname=UNATTRIBUTED_BRAND_ID)
+            )
         brand_registry = [
             _BrandRow(
                 brand_id=b.nickname,
@@ -2328,7 +2461,7 @@ class CycleRunner:
                 accent_color=b.accent_color or "#9ca3af",
                 is_sentinel=b.is_sentinel,
             )
-            for b in BrandModel.objects.filter(is_sentinel=False)
+            for b in brand_rows
         ]
 
         # ---- Stage 1: translate ----
@@ -2513,6 +2646,13 @@ class CycleRunner:
         )
 
         classification_succeeded: set[str] = set()
+        targeted_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
+        counters["n_targeted_extraction_calls"] = 0
+        counters["n_targeted_records_written"] = 0
+        counters["n_targeted_evidence_written"] = 0
+        counters["n_targeted_organization_candidates"] = 0
+        counters["targeted_failed_roles"] = []
+        counters["targeted_deferred_roles"] = []
         for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
             tid = tweet["tweet_id"]
             try:
@@ -2534,6 +2674,39 @@ class CycleRunner:
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
+                from core.targeted_extraction import run_targeted_extractions
+
+                post_types = {
+                    post_type
+                    for classification in (result.get("by_brand") or {}).values()
+                    if isinstance(classification, dict)
+                    for post_type in classification.get("post_types", [])
+                }
+                targeted = run_targeted_extractions(
+                    post=Post.objects.get(pk=tid),
+                    post_types=post_types,
+                    config=self.cfg.targeted_extraction,
+                    calls=getattr(self, "_targeted_extraction_calls", {}),
+                    max_calls=targeted_calls_remaining,
+                    deadline=deadline,
+                )
+                targeted_calls_remaining -= targeted.calls_made
+                counters["n_targeted_extraction_calls"] += targeted.calls_made
+                counters["n_targeted_records_written"] += targeted.records_written
+                counters["n_targeted_evidence_written"] += targeted.evidence_written
+                counters["n_targeted_organization_candidates"] += (
+                    targeted.organization_candidates_written
+                )
+                counters["targeted_failed_roles"].extend(targeted.failed_roles)
+                counters["targeted_deferred_roles"].extend(targeted.deferred_roles)
+                if targeted.failed_roles:
+                    self._error_counts["targeted_extraction_failed"] += len(
+                        targeted.failed_roles
+                    )
+                    self._errors.extend(
+                        f"post_fetch.targeted_extraction_failed:{role}"
+                        for role in targeted.failed_roles
+                    )
             if flag_result is not None and flag_result.degraded:
                 self._error_counts["classifier_flags_invalid"] += 1
                 self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
@@ -2690,14 +2863,23 @@ class CycleRunner:
                     reports.append(report)
                     continue
 
+                discovery_window = (
+                    int(claim.remaining_since.timestamp()),
+                    int(claim.remaining_until.timestamp()),
+                )
                 items, outcome = self._fetch_tweets(
                     call,
                     api,
-                    window=(
-                        int(claim.remaining_since.timestamp()),
-                        int(claim.remaining_until.timestamp()),
-                    ),
+                    window=discovery_window,
                     deadline=deadline,
+                )
+                self._record_discovery_run_safe(
+                    call=call,
+                    run_id=run_id,
+                    window=discovery_window,
+                    outcome=outcome,
+                    items=items,
+                    accepted_post_count=0,
                 )
                 replay_finished = self._monotonic()
                 replay_page_receipts, first_page_received_at, first_page_mono = (
@@ -2735,12 +2917,15 @@ class CycleRunner:
                             *role_degraded,
                         ]
                     self._attribute_items(items, index, search_terms)
-                    kept = [
-                        item
-                        for item in items
-                        if not item.get("_unattributed")
-                        or item.get("_call_a_staff_candidate")
-                    ]
+                    if self._mark_discovery_items(call, items):
+                        kept = list(items)
+                    else:
+                        kept = [
+                            item
+                            for item in items
+                            if not item.get("_unattributed")
+                            or item.get("_call_a_staff_candidate")
+                        ]
                     terms = [term.lower() for term in (call.not_include or []) if term]
                     if terms:
                         kept = [
@@ -2786,8 +2971,23 @@ class CycleRunner:
                         relevancy_degraded=relevancy_degraded,
                     )
                     report["n_attributed"] = attributed
+                    self._record_discovery_run_safe(
+                        call=call,
+                        run_id=run_id,
+                        window=discovery_window,
+                        outcome=outcome,
+                        items=items,
+                        accepted_post_count=len(kept),
+                        exclusion_reasons={
+                            "persistence_failed": persist_failed,
+                        },
+                    )
 
-                if outcome in {"error", "length_cap_exceeded"} or persist_failed:
+                if outcome in {
+                    "error",
+                    "length_cap_exceeded",
+                    "daily_credit_ceiling",
+                } or persist_failed:
                     report["status"] = return_claim(
                         claim.pk,
                         reason=(
@@ -3035,6 +3235,16 @@ class CycleRunner:
                 "n_persist_failed": 0,
                 "request_started_at": request_started_at,
             }
+            if call.discovery_lane is not None:
+                call_entry["discovery"] = {
+                    "lane": call.discovery_lane,
+                    "query_family": call.query_family,
+                    "language": call.language,
+                    "query_pack_version": call.query_pack_version,
+                    "max_results": call.max_results,
+                    "max_pages": call.max_pages,
+                    "daily_credit_ceiling": call.daily_credit_ceiling,
+                }
 
             # Resolve this call's time window from its cursor (or the
             # operator-supplied override) BEFORE fetching, so the value we
@@ -3052,6 +3262,15 @@ class CycleRunner:
                 api,
                 window=(since_epoch, until_epoch),
                 tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
+            )
+            discovery_window = (since_epoch, until_epoch)
+            self._record_discovery_run_safe(
+                call=call,
+                run_id=run_id,
+                window=discovery_window,
+                outcome=outcome,
+                items=items,
+                accepted_post_count=0,
             )
             fetch_finished_mono = self._monotonic()
             fetch_finished_wall = self._wall_now()
@@ -3101,7 +3320,11 @@ class CycleRunner:
             # "truncated" is NOT a hard failure -- items were retrieved and
             # must be persisted; only the cursor advance is withheld so the
             # remainder of the window is re-swept next cycle.
-            if outcome in ("error", "length_cap_exceeded"):
+            if outcome in (
+                "error",
+                "length_cap_exceeded",
+                "daily_credit_ceiling",
+            ):
                 logger.warning(
                     "run: call_id=%s outcome=%s -- holding cursor, no persist",
                     call.call_id,
@@ -3179,12 +3402,15 @@ class CycleRunner:
 
             # Staff-only Call A candidates may have no body keyword yet; keep
             # them until the bounded relevance decision can seed author brands.
-            kept = [
-                it
-                for it in items
-                if not it.get("_unattributed")
-                or it.get("_call_a_staff_candidate")
-            ]
+            if self._mark_discovery_items(call, items):
+                kept = list(items)
+            else:
+                kept = [
+                    it
+                    for it in items
+                    if not it.get("_unattributed")
+                    or it.get("_call_a_staff_candidate")
+                ]
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
 
@@ -3239,6 +3465,18 @@ class CycleRunner:
             call_entry["n_updated"] = n_updated
             call_entry["n_persist_failed"] = n_persist_failed
             call_entry["n_attributed"] = _n_attributed
+            self._record_discovery_run_safe(
+                call=call,
+                run_id=run_id,
+                window=discovery_window,
+                outcome=outcome,
+                items=items,
+                accepted_post_count=len(kept),
+                exclusion_reasons={
+                    "not_include": ni_drop_count,
+                    "persistence_failed": n_persist_failed,
+                },
+            )
 
             # Accumulate for post-fetch
             seen_ids: set[str] = {

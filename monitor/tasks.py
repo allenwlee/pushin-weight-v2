@@ -157,17 +157,28 @@ def _execute_cycle(*, dry_run: bool) -> dict:
         from x_monitor.reattribute import build_anthropic_client_from_env
 
         relevancy_client = build_anthropic_client_from_env(cfg)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - preserve existing no-op fallback
         logger.warning("failed to build relevancy client: %s", exc)
     relevancy_llm_call = build_binary_relevancy_llm_call(
         client=relevancy_client,
         model=cfg.llm.relevancy_model,
         timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
     )
+    targeted_extraction_calls = {}
+    targeted_extraction = getattr(cfg, "targeted_extraction", None)
+    if targeted_extraction is not None and targeted_extraction.enabled:
+        from core.targeted_extraction import build_targeted_extraction_calls
+
+        targeted_extraction_calls = build_targeted_extraction_calls(
+            client=relevancy_client,
+            roles=targeted_extraction.roles,
+            timeout_seconds=targeted_extraction.request_timeout_seconds,
+        )
     runner = CycleRunner(cfg=cfg,
         dry_run=dry_run,
         cycle_kind="scheduled",
         _relevancy_llm_call=relevancy_llm_call,
+        _targeted_extraction_calls=targeted_extraction_calls,
     )
     try:
         stats = runner.run()
@@ -178,7 +189,7 @@ def _execute_cycle(*, dry_run: bool) -> dict:
         dispatch_harvest_completion(stats, dry_run=dry_run)
         logger.info("monitor run_cycle complete: %s", stats.get("status"))
         return stats
-    except Exception as exc:
-        logger.exception("monitor run_cycle failed: %s", exc)
+    except Exception:
+        logger.exception("monitor run_cycle failed")
         # Don't auto-retry — Celery beat will fire the next cycle on schedule
         raise

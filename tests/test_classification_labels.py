@@ -73,7 +73,7 @@ def test_stage1_label_constants_match_the_frozen_taxonomy():
         "nationalism": (NATIONALISM_KEYS, NATIONALISM_LABELS),
     }
 
-    assert sum(len(keys) for keys, _ in active.values()) == 25
+    assert sum(len(keys) for keys, _ in active.values()) == 28
     for keys, labels_by_key in active.values():
         assert all(set(labels_by_key[key]) == {"en", "zh-cn", "ja"} for key in keys)
         assert all(
@@ -104,7 +104,10 @@ def test_japanese_labels_match_the_reviewed_implementation_copy():
         "results_evaluations": "結果・評価",
         "questions_requests": "質問・要望",
         "advertising_marketing": "広告・マーケティング",
-        "events_opportunities": "イベント・機会",
+        "events": "イベント",
+        "opportunities": "機会",
+        "job_listings": "求人情報",
+        "personnel_changes": "人事異動",
         "opinions_reactions": "意見・反応",
         "research_explanations": "研究・解説",
         "business_finance": "ビジネス・金融",
@@ -144,7 +147,7 @@ def test_legacy_alias_labels_remain_english_chinese_only():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_seed_command_restores_v1_aliases_and_supports_active_v2_writer():
+def test_seed_command_restores_v1_aliases_and_supports_active_v3_writer():
     from django.core.management import call_command
 
     from core.models import (
@@ -237,7 +240,7 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v2_writer():
             (NationalismLabel, "nationalism_id", NATIONALISM_KEYS),
         )
     )
-    assert active_ja_count == 25
+    assert active_ja_count == 28
     assert PostTypeLabel.objects.get(post_type_id="other", lang="en").label == (
         "Preserved custom Other"
     )
@@ -246,17 +249,20 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v2_writer():
         "releases_updates",
         "results_evaluations",
         "questions_requests",
-        "events_opportunities",
+        "events",
+        "opportunities",
+        "job_listings",
+        "personnel_changes",
     )
     writer_product_labels = ("ideas_requests",)
     assert set(writer_post_types) <= set(CANONICAL_POST_TYPE_KEYS)
     assert set(writer_product_labels) <= set(CANONICAL_PRODUCT_LABEL_KEYS)
     post = Post.objects.create(
-        tweet_id="seed-v2-writer", text="seed v2 writer", lang_detected="en"
+        tweet_id="seed-v3-writer", text="seed v3 writer", lang_detected="en"
     )
-    brand = Brand.objects.create(nickname="seed-v2-writer", display_name="Seed V2")
+    brand = Brand.objects.create(nickname="seed-v3-writer", display_name="Seed V3")
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v2-writer")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v3-writer")
     classification = {
         "outcome": "classified",
         "post_types": list(writer_post_types),
@@ -274,7 +280,7 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v2_writer():
         },
         tweet={"text": post.text, "context": []},
         model="seed-test-model",
-        run_id="seed-v2-writer",
+        run_id="seed-v3-writer",
     )
 
     assert published is not None

@@ -129,6 +129,19 @@ class PlannedCall:
     query_string: str
     query_length: int
     not_include: list[str] = field(default_factory=list)
+    discovery_lane: str | None = None
+    query_family: str | None = None
+    language: str | None = None
+    query_pack_version: str | None = None
+    cadence_minutes: int | None = None
+    max_lookback_hours: float | None = None
+    max_results: int | None = None
+    max_pages: int | None = None
+    max_per_page: int | None = None
+    request_timeout_seconds: int | None = None
+    daily_credit_ceiling: int | None = None
+    credits_per_result: int | None = None
+    minimum_credits_per_call: int | None = None
 
 
 @dataclass

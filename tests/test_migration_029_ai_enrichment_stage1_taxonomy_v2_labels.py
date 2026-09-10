@@ -7,13 +7,13 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 from core.classification_contract import (
-    CANONICAL_POST_TYPE_KEYS,
     CANONICAL_PRODUCT_LABEL_KEYS,
     CONTRACT_VERSION,
     LEGACY_POST_TYPE_KEYS,
     LEGACY_PRODUCT_LABEL_KEYS,
     NATIONALISM_KEYS,
     SENTIMENT_KEYS,
+    STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
 )
 from core.classification_labels import CLASSIFICATION_LABELS
 
@@ -48,7 +48,9 @@ def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges()
         Signal = apps.get_model("core", "PostBrandSignal")
         ProductEdge = apps.get_model("core", "PostBrandProductLabel")
 
-        new_post_type_keys = set(CANONICAL_POST_TYPE_KEYS) - set(LEGACY_POST_TYPE_KEYS)
+        new_post_type_keys = set(STAGE1_TAXONOMY_V2_POST_TYPE_KEYS) - set(
+            LEGACY_POST_TYPE_KEYS
+        )
         new_product_keys = set(CANONICAL_PRODUCT_LABEL_KEYS) - set(
             LEGACY_PRODUCT_LABEL_KEYS
         )
@@ -135,7 +137,12 @@ def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges()
         apps = MigrationExecutor(connection).loader.project_state(RELEASE_A).apps
 
         family_specs = (
-            ("post_type", "PostTypeLabel", "post_type_id", CANONICAL_POST_TYPE_KEYS),
+            (
+                "post_type",
+                "PostTypeLabel",
+                "post_type_id",
+                STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+            ),
             (
                 "product_label", "ProductLabelLabel", "product_label_id",
                 CANONICAL_PRODUCT_LABEL_KEYS,

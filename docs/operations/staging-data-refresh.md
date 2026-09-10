@@ -61,19 +61,23 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
-  account_based_in_mappings, account_post_appearances, accounts,
+  account_based_in_mappings, account_post_appearances,
+  account_profile_snapshots, accounts, brand_discovery_candidates,
   brand_hashtags, brand_keywords,
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
-  django_site, hf_orgs, nationalism_keys,
-  nationalism_labels, post_type_keys, post_type_labels, posts, posts_brands,
+  django_site, events, hf_orgs, job_discovery_runs, job_listing_evidence,
+  job_listings, nationalism_keys, nationalism_labels, opportunities, people,
+  people_accounts, people_brand_affiliation_evidence,
+  people_brand_affiliations, personnel_discovery_runs, post_type_keys,
+  post_type_labels, posts, posts_brands,
   posts_brands_classification_states, posts_brands_discourse,
   posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
   posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
   region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
-  sentiment_labels, trend_narrative_subjects, trend_narratives,
-  unsanctioned_flag_keys
+  sentiment_labels, targeted_extraction_attempts, targeted_extraction_states,
+  trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys
 TO staging_refresh_reader;
 
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
@@ -93,13 +97,19 @@ TO staging_refresh_reader;
 
 GRANT SELECT ON
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
+  account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
-  brand_trend_narratives_id_seq, django_content_type_id_seq,
-  django_migrations_id_seq, django_site_id_seq,
-  harvest_backlog_windows_id_seq, products_id_seq, search_queries_id_seq,
+  brand_discovery_candidates_id_seq, brand_trend_narratives_id_seq,
+  django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
+  events_id_seq, harvest_backlog_windows_id_seq, job_discovery_runs_id_seq,
+  job_listing_evidence_id_seq, job_listings_id_seq, opportunities_id_seq,
+  people_brand_affiliation_evidence_id_seq,
+  people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
+  products_id_seq, search_queries_id_seq,
   socialaccount_socialaccount_id_seq, socialaccount_socialapp_id_seq,
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
+  targeted_extraction_attempts_id_seq, targeted_extraction_states_id_seq,
   trend_narrative_provider_calls_id_seq, trend_narrative_runs_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
   twitter_list_memberships_id_seq

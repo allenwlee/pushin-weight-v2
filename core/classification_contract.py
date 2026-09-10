@@ -13,12 +13,15 @@ from typing import Any
 CONTRACT_VERSION = "stage1-v1"
 LEGACY_STAGE1_TAXONOMY_VERSION = "stage1-taxonomy-v1"
 LEGACY_STAGE1_PROMPT_VERSION = "stage1-prompt-v2"
-CANONICAL_TAXONOMY_VERSION = "stage1-taxonomy-v2"
-CANONICAL_PROMPT_VERSION = "stage1-prompt-v3"
+STAGE1_TAXONOMY_V2_VERSION = "stage1-taxonomy-v2"
+STAGE1_PROMPT_V3_VERSION = "stage1-prompt-v3"
+CANONICAL_TAXONOMY_VERSION = "stage1-taxonomy-v3"
+CANONICAL_PROMPT_VERSION = "stage1-prompt-v4"
 TAXONOMY_VERSION = CANONICAL_TAXONOMY_VERSION
 PROMPT_VERSION = CANONICAL_PROMPT_VERSION
 COMPATIBLE_TAXONOMY_VERSIONS = (
     LEGACY_STAGE1_TAXONOMY_VERSION,
+    STAGE1_TAXONOMY_V2_VERSION,
     CANONICAL_TAXONOMY_VERSION,
 )
 
@@ -41,13 +44,28 @@ LEGACY_PRODUCT_LABEL_KEYS = (
     "product_request",
     "misinformation",
 )
-CANONICAL_POST_TYPE_KEYS = (
+STAGE1_TAXONOMY_V2_POST_TYPE_KEYS = (
     "releases_updates",
     "hands_on_usage",
     "results_evaluations",
     "questions_requests",
     "advertising_marketing",
     "events_opportunities",
+    "opinions_reactions",
+    "research_explanations",
+    "business_finance",
+    "other",
+)
+CANONICAL_POST_TYPE_KEYS = (
+    "releases_updates",
+    "hands_on_usage",
+    "results_evaluations",
+    "questions_requests",
+    "advertising_marketing",
+    "events",
+    "opportunities",
+    "job_listings",
+    "personnel_changes",
     "opinions_reactions",
     "research_explanations",
     "business_finance",
@@ -80,6 +98,10 @@ TAXONOMY_KEY_CROSSWALK = (
     ("post_type", "advertising_marketing", "advertising_marketing"),
     ("post_type", "event_announcement", "events_opportunities"),
     ("post_type", "events_opportunities", "events_opportunities"),
+    ("post_type", "events", "events"),
+    ("post_type", "opportunities", "opportunities"),
+    ("post_type", "job_listings", "job_listings"),
+    ("post_type", "personnel_changes", "personnel_changes"),
     ("post_type", "opinions_reactions", "opinions_reactions"),
     ("post_type", "research_explanations", "research_explanations"),
     ("post_type", "business_finance", "business_finance"),
@@ -93,7 +115,9 @@ TAXONOMY_KEY_CROSSWALK = (
 )
 
 _CANONICAL_KEYS_BY_FAMILY = {
-    "post_type": frozenset(CANONICAL_POST_TYPE_KEYS),
+    "post_type": frozenset(
+        (*STAGE1_TAXONOMY_V2_POST_TYPE_KEYS, *CANONICAL_POST_TYPE_KEYS)
+    ),
     "product_label": frozenset(CANONICAL_PRODUCT_LABEL_KEYS),
 }
 
@@ -128,7 +152,7 @@ def taxonomy_crosswalk_rows(family: str) -> tuple[tuple[str, str], ...]:
 
 
 def canonicalize_taxonomy_key(family: str, key: str) -> str | None:
-    """Return the canonical v2 key for one recognized compatible input."""
+    """Return the stable key for one recognized compatible input."""
 
     return _TAXONOMY_KEY_MAP.get((family, key))
 
@@ -171,7 +195,11 @@ _INVALID = object()
 
 
 def parse_stage1_classifications(
-    classifications: Any, expected_brand_ids: Iterable[str]
+    classifications: Any,
+    expected_brand_ids: Iterable[str],
+    *,
+    post_type_keys: Iterable[str] = POST_TYPE_KEYS,
+    product_label_keys: Iterable[str] = PRODUCT_LABEL_KEYS,
 ) -> dict[str, dict[str, Any]] | None:
     """Return canonical per-brand rows or ``None`` when output is unsafe.
 
@@ -203,9 +231,9 @@ def parse_stage1_classifications(
         outcome = row.get("outcome")
         if outcome not in OUTCOMES:
             return None
-        post_types = _unique_enum_array(row.get("post_types"), POST_TYPE_KEYS)
+        post_types = _unique_enum_array(row.get("post_types"), post_type_keys)
         product_labels = _unique_enum_array(
-            row.get("product_labels"), PRODUCT_LABEL_KEYS
+            row.get("product_labels"), product_label_keys
         )
         sentiment = _nullable_enum(row.get("sentiment"), SENTIMENT_KEYS)
         china = _nullable_enum(row.get("china_nationalism"), NATIONALISM_KEYS)
