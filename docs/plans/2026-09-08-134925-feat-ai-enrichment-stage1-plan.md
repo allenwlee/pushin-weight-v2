@@ -1379,6 +1379,18 @@ prompt-v10 proposal, frozen in
 at 30 rows unless it clears the exact-set continuation floors; no production
 code or unseen cohort changes before that result.
 
+The v16 Pro evidence audit completed its predeclared 30 rows in six attempts,
+using 23,265 reported input tokens and 7,966 reported output tokens. It passed
+product-label exactness at 86.7%, outcome accuracy at 100%, and sentiment at
+83.3%, but post-type exact sets reached only 60.0% and the one supported event
+was missed. The Pro judge role is rejected and the remaining 90 rows will not
+be purchased. The next test is a shorter Flash check pass limited to the eight
+common overlapping post types and `ideas_requests`, because the saved
+prompt-v10 base already passes the rare-type and product exactness floors. Its
+direct replacement rule, prompt bytes, and $0.35 hard cap are frozen in
+`docs/analysis/2026-09-11-170000-u18-v17-common-checks-probe-budget.json`.
+The probe forbids choosing per-language or per-label sources after scoring.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
