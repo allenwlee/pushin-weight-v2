@@ -256,6 +256,75 @@ def test_invalid_candidate_retry_uses_remaining_frozen_fallback_attempt():
     assert by_id["post-1"]["classification"]["post_types"] == ["other"]
 
 
+def test_invalid_candidate_repair_reuses_persisted_fallback_response(
+    monkeypatch, tmp_path
+):
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "source_language": "en",
+        "context_provenance": [],
+        "input_context_fingerprint": "a" * 64,
+        "stratum": "prevalence",
+        "source_role": "third_party",
+        "source_hint": None,
+        "input": {
+            "tweet_id": "post-1",
+            "text": "Source text",
+            "brand_ids": ["llama"],
+            "context": [],
+        },
+    }
+    response_dir = tmp_path / "responses" / "fallback"
+    response_dir.mkdir(parents=True)
+    (response_dir / "fallback_post-1-2.json").write_text(
+        json.dumps({"results": [{"invalid": True}]})
+    )
+    monkeypatch.setattr(quality, "PRIVATE", tmp_path)
+
+    class _RepairTransport:
+        def call(self, request_id, **kwargs):
+            assert request_id == "repair:post-1"
+            assert "invalid_response" in kwargs["user"]
+            return {
+                "results": [
+                    {
+                        "tweet_id": "post-1",
+                        "classifications": [
+                            {
+                                "brand_id": "llama",
+                                "outcome": "classified",
+                                "post_types": ["other"],
+                                "product_labels": [],
+                                "sentiment": "neutral",
+                                "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    by_id = {
+        "post-1": quality._invalid_candidate_row(
+            source, {"results": []}, ValueError("invalid")
+        )
+    }
+    quality._repair_invalid_candidate_rows(
+        cohort={"rows": [source]},
+        by_id=by_id,
+        fallback_lane="fallback",
+        repair_lane="repair",
+        repair_transport=_RepairTransport(),
+        post_types=quality.CANONICAL_POST_TYPE_KEYS,
+    )
+
+    assert by_id["post-1"]["classification"]["post_types"] == ["other"]
+    assert by_id["post-1"]["semantic_repair"]["prompt_version"].endswith(
+        "repair-v1"
+    )
+
+
 def test_blinded_review_packet_excludes_selection_and_role_hints():
     source = {
         "example_id": "post-1",
@@ -395,6 +464,15 @@ def test_gold_audit_resolves_source_line_wrapping_to_actual_source_span():
     )
 
 
+def test_gold_audit_resolves_omitted_tracking_url_to_actual_source_span():
+    source = "北京智譜華章科技（https://t.co/9kBp6g3hQR）やアリババ"
+
+    assert (
+        quality._resolve_source_quote(source, "北京智譜華章科技やアリババ")
+        == source
+    )
+
+
 def test_gold_audit_resolves_curly_quote_to_actual_source_span():
     source = "the world’s most advanced technologies"
 
@@ -402,6 +480,56 @@ def test_gold_audit_resolves_curly_quote_to_actual_source_span():
         quality._resolve_source_quote(source, "the world's most advanced technologies")
         == source
     )
+
+
+def test_gold_audit_reuses_only_a_persisted_response_that_now_validates(
+    monkeypatch,
+):
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "input": {
+            "text": "北京智譜華章科技（https://t.co/9kBp6g3hQR）やアリババ",
+            "context": [],
+        },
+    }
+    response = {
+        "results": [
+            {
+                "example_id": "post-1",
+                "brand_id": "llama",
+                "v3": {
+                    "outcome": "classified",
+                    "post_types": ["other"],
+                    "product_labels": [],
+                    "sentiment": "neutral",
+                    "china_nationalism": "none",
+                    "us_nationalism": "none",
+                },
+                "job_discovery_relevant": False,
+                "personnel_discovery_relevant": False,
+                "evidence": [
+                    {
+                        "field": "post_types",
+                        "quote": "北京智譜華章科技やアリババ",
+                    }
+                ],
+                "uncertainty_notes": [],
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        quality,
+        "_latest_persisted_response",
+        lambda lane, request_id: response,
+    )
+
+    parsed = quality._validated_persisted_contract_audit(
+        "contract_gold_auditor:061", [source]
+    )
+
+    assert parsed is not None
+    assert parsed[0]["evidence"][0]["quote"] == source["input"]["text"]
 
 
 def test_audited_v3_projection_recovers_frozen_v2_type_semantics():

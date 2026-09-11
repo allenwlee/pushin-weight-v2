@@ -31,7 +31,12 @@ from core.classification_contract import (
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
     parse_stage1_classifications,
 )
-from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+from x_monitor.attribution import (
+    _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+    _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+    _PRAGMATICS_FULL_SYSTEM_PROMPT,
+    build_pragmatics_full_repair_prompt,
+)
 from x_monitor.provider_telemetry import normalize_usage
 from x_monitor.translator import AnthropicClaudeClient
 
@@ -96,6 +101,9 @@ BUDGET_FINAL_GATE_V2_PATH = (
 )
 BUDGET_FINAL_GATE_V3_PATH = (
     ROOT / "docs/analysis/2026-09-11-131137-u18-final-provider-budgets-v3.json"
+)
+BUDGET_FINAL_GATE_V4_PATH = (
+    ROOT / "docs/analysis/2026-09-11-132312-u18-final-provider-budgets-v4.json"
 )
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
@@ -273,11 +281,12 @@ class BudgetedTransport:
     def __init__(self, lane: str):
         self.lane = lane
         budget_profile = os.environ.get("U18_BUDGET_PROFILE")
-        if budget_profile in {"final", "final-v2", "final-v3"}:
+        if budget_profile in {"final", "final-v2", "final-v3", "final-v4"}:
             path = {
                 "final": BUDGET_FINAL_GATE_PATH,
                 "final-v2": BUDGET_FINAL_GATE_V2_PATH,
                 "final-v3": BUDGET_FINAL_GATE_V3_PATH,
+                "final-v4": BUDGET_FINAL_GATE_V4_PATH,
             }[budget_profile]
             final_document = _read_json(path)
             try:
@@ -576,6 +585,64 @@ def _retry_invalid_candidate_rows(
             )
 
 
+def _latest_persisted_response(lane: str, request_id: str) -> Mapping[str, Any] | None:
+    stem = request_id.replace(":", "_")
+    candidates = sorted(
+        (PRIVATE / "responses" / lane).glob(f"{stem}-*.json"),
+        key=lambda path: int(path.stem.rsplit("-", 1)[1]),
+    )
+    return _read_json(candidates[-1]) if candidates else None
+
+
+def _repair_invalid_candidate_rows(
+    *,
+    cohort: Mapping[str, Any],
+    by_id: dict[str, dict[str, Any]],
+    fallback_lane: str | None,
+    repair_lane: str | None,
+    repair_transport: BudgetedTransport | None,
+    post_types: Sequence[str],
+) -> None:
+    if fallback_lane is None or repair_lane is None or repair_transport is None:
+        return
+    for source in cohort["rows"]:
+        existing = by_id.get(source["example_id"])
+        if existing is None or "classification" in existing:
+            continue
+        fallback_id = f"{fallback_lane}:{source['example_id']}"
+        invalid_response = _latest_persisted_response(fallback_lane, fallback_id)
+        if invalid_response is None:
+            continue
+        repair_id = f"{repair_lane}:{source['example_id']}"
+        response: Mapping[str, Any] = {}
+        try:
+            response = repair_transport.call(
+                repair_id,
+                system=_PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+                user=build_pragmatics_full_repair_prompt(
+                    source["input"]["text"],
+                    [source["brand_id"]],
+                    invalid_response,
+                    context=source["input"].get("context", []),
+                    tweet_id=source["example_id"],
+                ),
+            )
+            parsed = _parse_candidate(response, [source], post_types)[0]
+            parsed["semantic_repair"] = {
+                "invalid_response_sha256": hashlib.sha256(
+                    json.dumps(
+                        invalid_response, ensure_ascii=False, sort_keys=True
+                    ).encode("utf-8")
+                ).hexdigest(),
+                "prompt_version": _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+            }
+            by_id[source["example_id"]] = parsed
+        except (RuntimeError, TypeError, ValueError) as exc:
+            by_id[source["example_id"]] = _invalid_candidate_row(
+                source, response, exc
+            )
+
+
 def run_candidate(taxonomy_name: str) -> None:
     taxonomy = TAXONOMIES[taxonomy_name]
     cohort = _read_cohort()
@@ -593,6 +660,13 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3r9": "candidate_v3r9_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
+    repair_lane = (
+        "candidate_v3r9_repair"
+        if taxonomy_name == "v3r9"
+        and os.environ.get("U18_BUDGET_PROFILE") == "final-v4"
+        else None
+    )
+    repair_transport = BudgetedTransport(repair_lane) if repair_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"
     completed = (
         _read_json(progress_path).get("rows", []) if progress_path.exists() else []
@@ -605,6 +679,14 @@ def run_candidate(taxonomy_name: str) -> None:
         fallback_lane=fallback_lane,
         fallback_transport=fallback_transport,
         system=system,
+        post_types=taxonomy["post_types"],
+    )
+    _repair_invalid_candidate_rows(
+        cohort=cohort,
+        by_id=by_id,
+        fallback_lane=fallback_lane,
+        repair_lane=repair_lane,
+        repair_transport=repair_transport,
         post_types=taxonomy["post_types"],
     )
     _write_json(progress_path, {"rows": list(by_id.values())})
@@ -1057,7 +1139,8 @@ def _parse_contract_audit(
             resolved_quote = _resolve_source_quote(source_blob, quote)
             if resolved_quote is None:
                 raise ValueError(
-                    "audit evidence quote must be an exact source substring"
+                    "audit evidence quote must be an exact source substring: "
+                    f"{quote!r}"
                 )
             normalized_evidence.append({"field": field, "quote": resolved_quote})
         output.append(
@@ -1079,6 +1162,12 @@ def _resolve_source_quote(source: str, quote: str) -> str | None:
         positions: list[tuple[int, int]] = []
         index = 0
         while index < len(value):
+            linked_url = re.match(
+                r"[（(]?https?://[^\s）)]+[）)]?", value[index:]
+            )
+            if linked_url:
+                index += len(linked_url.group(0))
+                continue
             entity = re.match(r"&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z]+);", value[index:])
             if entity:
                 raw_text = entity.group(0)
@@ -1113,6 +1202,18 @@ def _resolve_source_quote(source: str, quote: str) -> str | None:
     return source[source_positions[start][0] : source_positions[end][1]]
 
 
+def _validated_persisted_contract_audit(
+    request_id: str, batch: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]] | None:
+    persisted = _latest_persisted_response("contract_gold_auditor", request_id)
+    if persisted is None:
+        return None
+    try:
+        return _parse_contract_audit(persisted, batch)
+    except (TypeError, ValueError):
+        return None
+
+
 def run_contract_gold_auditor() -> None:
     cohort = _read_cohort()
     first = _read_json(PRIVATE / "contract_reviewer_a.json")
@@ -1141,6 +1242,15 @@ def run_contract_gold_auditor() -> None:
         ]
         user = json.dumps(packets, ensure_ascii=False, sort_keys=True)
         request_id = f"contract_gold_auditor:{index:03d}"
+        parsed = _validated_persisted_contract_audit(request_id, batch)
+        if parsed is not None:
+            by_id.update({row["example_id"]: row for row in parsed})
+            _write_json(progress_path, {"rows": list(by_id.values())})
+            print(
+                f"contract_gold_auditor: {len(by_id)}/{len(cohort['rows'])}",
+                flush=True,
+            )
+            continue
         try:
             response = transport.call(
                 request_id, system=CONTRACT_GOLD_AUDIT_SYSTEM, user=user

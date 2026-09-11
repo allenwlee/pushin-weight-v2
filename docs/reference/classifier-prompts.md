@@ -5,7 +5,7 @@ Last reviewed: 2026-09-11
 This document describes the Stage 1 per-brand classifier implemented by
 `x_monitor.attribution.classify_batch_pragmatics_full` and its single-post
 fallback. It records the exact contract, prompt, user-message envelope, parser,
-and Django publication boundary.
+bounded semantic-repair envelope, and Django publication boundary.
 
 This taxonomy-v3 reference describes the candidate source on the pull request
 branch. Taxonomy v2 completed exact-revision staging verification before this
@@ -141,6 +141,28 @@ and `tweet_id`. `json.dumps(..., ensure_ascii=False, separators=(",", ":"),
 sort_keys=True)` preserves Unicode, removes incidental whitespace, and sorts
 object keys. `build_pragmatics_full_prompt` uses the same builder with the
 reserved tweet ID `_single_`.
+
+If a single-post fallback returns a complete JSON object that still violates
+the closed classification schema, the classifier may make one semantic-repair
+call for that post. One invocation of the batch classifier can claim at most
+20 such calls across all worker threads. The repair input contains exactly the
+original four-field source object, the invalid response, and the validation
+error; it does not receive database state, another post, or candidate or gold
+labels. Its prompt identity is `stage1-prompt-v10-repair-v1`.
+
+The repair system value is the following prefix followed by the exact primary
+system prompt reproduced below:
+
+```text
+Repair one malformed classifier response. Re-read the supplied source and
+invalid response, then return the complete classifier JSON schema.
+Product-label keys are forbidden in post_types, and other is exclusive. Use
+only the exact closed vocabularies below. Preserve the tweet and brand IDs. Do
+not add prose, markdown, unknown keys, or an explanation of the repair.
+```
+
+The complete repair system value is 11,808 UTF-8 bytes. Its SHA-256 is
+`985c5d28b7d79f32ca1ecfcd9eef9a5d603d1eb7d9ceff52868f06cd2b7495bb`.
 
 `CycleRunner` supplies source `Post.text` and only already stored context:
 `Post.quoted_text` becomes `{"provenance":"stored_quote",...}`; a parent found
@@ -517,12 +539,13 @@ compatibility exception: it accepts a one-row `results` envelope with tweet ID
 `_single_` or `single`, and also accepts an unwrapped entry; its per-brand
 semantic validation remains the same.
 
-An absent client or an individual failed or invalid single result produces the
-invalid-empty shape with `valid=False` and is not published. Deadline
-exhaustion during full-batch fallback can instead raise `TimeoutError` out of
-the classifier; `CycleRunner` catches it, retains an empty results list, and
-publishes none of that call's results. Durable enrichment state is then
-requeued or terminalized by its configured attempt and age limits.
+An absent client, exhausted repair allowance, or invalid repair result produces
+the invalid-empty shape with `valid=False` and is not published. Deadline
+exhaustion during full-batch fallback or repair can instead raise
+`TimeoutError` out of the classifier; `CycleRunner` catches it, retains an
+empty results list, and publishes none of that call's results. Durable
+enrichment state is then requeued or terminalized by its configured attempt and
+age limits.
 
 ## Caller, provider, retry, and telemetry
 
@@ -564,6 +587,12 @@ python manage.py run_cycle / scheduled harvest task
   fallback iterates the original batch, retains the same input context, and is
   bounded by the same deadline. Only items with `brand_ids` make a per-post
   provider call; no-brand items become invalid-empty without a call.
+- A semantically invalid single-post fallback may use one repair call. The
+  thread-safe allowance caps repairs at 20 logical calls for the complete
+  `classify_batch_pragmatics_full` invocation. The repair uses the same
+  explicit model, temperature zero, thinking setting, deadline, strict parser,
+  and source/context evidence; it has its own prompt version and telemetry
+  attempt kind.
 - Each transport attempt emits metadata-only telemetry: role, stage/run ID,
   allowlisted provider class, model, a 16-hex prompt-identity hash, batch size,
   attempt number/kind, outcome, elapsed time, error type, and provider-reported
@@ -614,14 +643,14 @@ reproduced here.
   `core/classification_contract.py:13-113` and `:154-264`.
 - Retry transport and role-separated system/user fields:
   `x_monitor/attribution.py:1030-1107`.
-- Batch size, system prompt, and JSON builders:
-  `x_monitor/attribution.py:1163-1284`.
+- Batch size, primary and repair system prompts, and JSON builders:
+  `x_monitor/attribution.py:1168-1360`.
 - Entry, wire, ID, and per-brand validation:
-  `x_monitor/attribution.py:1287-1467`.
-- Full-batch per-post fallback: `x_monitor/attribution.py:1470-1576`.
-- Bounded ordered batch execution: `x_monitor/attribution.py:1579-1644`.
+  `x_monitor/attribution.py:1376-1580`.
+- Full-batch per-post fallback: `x_monitor/attribution.py:1581-1694`.
+- Bounded ordered batch execution: `x_monitor/attribution.py:1695-1769`.
 - HTTP response envelope and text extraction:
-  `x_monitor/attribution.py:1650-1744`.
+  `x_monitor/attribution.py:1770-1897`.
 - Provider client and model/base-URL routing:
   `x_monitor/reattribute.py:428-463` and `x_monitor/attribution.py:806-871`.
 - Stored quote/local-parent context and active call:
@@ -636,7 +665,7 @@ reproduced here.
 Reviewed source hashes:
 
 - `x_monitor/attribution.py`:
-  `f4e8ea1dbbb6d9112ba319284c895e5da1a185a98f240bc18c250dbde536c505`
+  `984adb10cfe77b1379587b66469dbc98068be3ea9645b6c4455d59ec81084c08`
 - `core/classification_contract.py`:
   `b3f5986651f42d1fc425e0bc86d60c6e72cb3ad9bc56528a5e7c00de5cd8e53c`
 - `monitor/cycle.py`:

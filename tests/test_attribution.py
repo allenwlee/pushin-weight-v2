@@ -963,6 +963,76 @@ def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
     assert "shape drift" in str(captured_exc[0])
 
 
+def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch):
+    """The production path repairs semantic drift once and keeps strict parsing."""
+    from x_monitor.attribution import (
+        _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+        classify_batch_pragmatics_full,
+    )
+
+    calls = []
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) < 3:
+                tweet_id = "t1" if len(calls) == 1 else "_single_"
+                return {
+                    "results": [
+                        {
+                            "tweet_id": tweet_id,
+                            "classifications": [
+                                {
+                                    "brand_id": "minimax",
+                                    "outcome": "classified",
+                                    "post_types": ["complaint"],
+                                    "product_labels": ["complaint"],
+                                    "sentiment": "negative",
+                                    "china_nationalism": "none",
+                                    "us_nationalism": "none",
+                                }
+                            ],
+                            "unsanctioned_flags": [],
+                        }
+                    ]
+                }
+            return {
+                "results": [
+                    {
+                        "tweet_id": "_single_",
+                        "classifications": [
+                            {
+                                "brand_id": "minimax",
+                                "outcome": "classified",
+                                "post_types": ["opinions_reactions"],
+                                "product_labels": ["complaint"],
+                                "sentiment": "negative",
+                                "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }
+                        ],
+                        "unsanctioned_flags": [],
+                    }
+                ]
+            }
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    result = classify_batch_pragmatics_full(
+        tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        telemetry_context={"prompt_version": "stage1-prompt-v10"},
+    )
+
+    assert len(calls) == 3
+    assert calls[2]["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT
+    assert result[0]["valid"] is True
+    assert result[0]["by_brand"]["minimax"]["post_types"] == [
+        "opinions_reactions"
+    ]
+    assert "invalid_response" in calls[2]["messages"][0]["content"]
+
+
 def test_classify_batch_pragmatics_full_uses_max_tokens_helper_at_call_site(
     monkeypatch,
 ):

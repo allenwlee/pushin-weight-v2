@@ -1166,6 +1166,7 @@ def classify_post(
 # --- Stage 1 full pragmatics classifier ----------------------------------
 
 _CLASSIFY_BATCH_SIZE: int = 20
+_CLASSIFY_REPAIR_LIMIT: int = 20
 _VALID_UNSANCTIONED_FLAGS = frozenset(
     {"marketing_spam", "scam", "crypto", "unauthorized"}
 )
@@ -1265,6 +1266,27 @@ Before returning, verify that every post_types value is one of: {", ".join(_STAG
 Verify separately that every product_labels value is one of: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
 Never copy a product_labels value into post_types. If any post_types value is bug, complaint, testimonial, ideas_requests, or misinformation, remove it from post_types and keep it only in product_labels. A classified result still needs a valid post type; use other alone only when no other post type definition applies.
 """
+_PRAGMATICS_FULL_REPAIR_PROMPT_VERSION = "stage1-prompt-v10-repair-v1"
+_PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT = (
+    """Repair one malformed classifier response. Re-read the supplied source and invalid response, then return the complete classifier JSON schema. Product-label keys are forbidden in post_types, and other is exclusive. Use only the exact closed vocabularies below. Preserve the tweet and brand IDs. Do not add prose, markdown, unknown keys, or an explanation of the repair."""
+    + "\n\n"
+    + _PRAGMATICS_FULL_SYSTEM_PROMPT
+)
+
+
+class _Stage1RepairAllowance:
+    """Thread-safe logical-call cap shared by one batch-classifier invocation."""
+
+    def __init__(self, limit: int):
+        self._remaining = limit
+        self._lock = threading.Lock()
+
+    def claim(self) -> bool:
+        with self._lock:
+            if self._remaining <= 0:
+                return False
+            self._remaining -= 1
+            return True
 
 
 def _stage1_payload(tweets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1304,6 +1326,35 @@ def build_pragmatics_full_prompt(
                 "context": context or [],
             }
         ]
+    )
+
+
+def build_pragmatics_full_repair_prompt(
+    text: str,
+    brand_ids: list[str],
+    invalid_response: Any,
+    *,
+    context: list[dict[str, Any]] | None = None,
+    tweet_id: str = "_single_",
+) -> str:
+    return json.dumps(
+        {
+            "invalid_response": invalid_response,
+            "source": _stage1_payload(
+                [
+                    {
+                        "tweet_id": tweet_id,
+                        "text": text,
+                        "brand_ids": brand_ids,
+                        "context": context or [],
+                    }
+                ]
+            )[0],
+            "validation_error": "invalid Stage 1 per-brand classification",
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
     )
 
 
@@ -1418,6 +1469,7 @@ def classify_pragmatics_full(
     telemetry_context: dict[str, Any] | None = None,
     context: list[dict[str, Any]] | None = None,
     max_tokens: int = 4096,
+    repair_allowance: _Stage1RepairAllowance | None = None,
 ) -> dict[str, Any]:
     """Classify one post through the same contract used for batch fallback."""
     if not text or not brand_ids or anthropic_client is None:
@@ -1452,8 +1504,43 @@ def classify_pragmatics_full(
             exc,
         )
         return _stage1_empty()
+    parsed = _parse_stage1_entry(_extract_single_stage1_entry(response), brand_ids)
+    if parsed["valid"]:
+        return parsed
+    if repair_allowance is not None and not repair_allowance.claim():
+        logger.warning("classify_pragmatics_full: repair call cap exhausted")
+        return parsed
+    try:
+        repaired_response = _call_signal_with_retry(
+            anthropic_client,
+            build_pragmatics_full_repair_prompt(
+                text,
+                brand_ids,
+                response,
+                context=context,
+            ),
+            system=_PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=0,
+            thinking=thinking,
+            deadline=deadline,
+            telemetry_context={
+                **(telemetry_context or {}),
+                "batch_size": 1,
+                "prompt_version": _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+            },
+            operation_kind="repair",
+        )
+    except Exception as exc:
+        logger.warning(
+            "classify_pragmatics_full: repair call failed after %d retries: %s",
+            _MAX_RETRIES,
+            exc,
+        )
+        return parsed
     return _parse_stage1_entry(
-        _extract_single_stage1_entry(response), brand_ids
+        _extract_single_stage1_entry(repaired_response), brand_ids
     )
 
 
@@ -1501,6 +1588,7 @@ def _fallback_stage1_batch(
     thinking: "dict | None",
     deadline: Any | None,
     telemetry_context: dict[str, Any] | None,
+    repair_allowance: _Stage1RepairAllowance,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for tweet in batch:
@@ -1521,6 +1609,7 @@ def _fallback_stage1_batch(
                 deadline=deadline,
                 telemetry_context=telemetry_context,
                 context=list(tweet.get("context") or []),
+                repair_allowance=repair_allowance,
             )
         )
     return results
@@ -1537,6 +1626,7 @@ def _classify_stage1_batch(
     deadline: Any | None,
     telemetry_context: dict[str, Any] | None,
     on_batch_error: Callable[[list[dict[str, Any]], Exception], None] | None,
+    repair_allowance: _Stage1RepairAllowance,
 ) -> list[dict[str, Any]]:
     kept = [tweet for tweet in batch if tweet.get("brand_ids")]
     if not kept:
@@ -1592,6 +1682,7 @@ def _classify_stage1_batch(
             thinking=thinking,
             deadline=deadline,
             telemetry_context=telemetry_context,
+            repair_allowance=repair_allowance,
         )
 
     parsed_iterator = iter(parsed_kept)
@@ -1634,6 +1725,9 @@ def classify_batch_pragmatics_full(
         for start in range(0, len(tweets), _CLASSIFY_BATCH_SIZE)
     ]
     callback_lock = threading.Lock()
+    repair_allowance = _Stage1RepairAllowance(
+        min(_CLASSIFY_REPAIR_LIMIT, len(tweets))
+    )
 
     def classify_one(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         def serialized_error(
@@ -1654,6 +1748,7 @@ def classify_batch_pragmatics_full(
             deadline=deadline,
             telemetry_context=telemetry_context,
             on_batch_error=serialized_error,
+            repair_allowance=repair_allowance,
         )
 
     if len(batches) == 1 or max_workers <= 1:
