@@ -25,6 +25,7 @@ from scripts.staging_refresh.database import (
     ScrubReport,
     SnapshotRestoreEngine,
     SourceCensus,
+    _pending_migration_count_deltas,
     inspect_staging_quiescence,
     scrub_candidate_data,
 )
@@ -59,6 +60,8 @@ class FakeAdapter:
             row_counts={
                 "accounts": 5,
                 "brands": 2,
+                "brands_companies": 2,
+                "companies": 2,
                 "posts": 12,
                 "posts_brands": 10,
                 "products": 3,
@@ -75,6 +78,7 @@ class FakeAdapter:
             },
             terminal_narrative_count=4,
             current_narrative_count=4,
+            pending_migration_count_deltas={},
         )
         self.candidate_census = CandidateCensus(
             base_tables=policy.relations.classified_tables,
@@ -546,6 +550,50 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
     assert events[-2] == f"candidate:validated:{candidate.name}"
     assert result.candidate.marker != candidate.marker
     assert result.scrub.removed_narratives == 3
+
+
+def test_pending_migration_count_deltas_apply_only_until_migration_is_present() -> None:
+    policy = load_policy(POLICY_PATH)
+    migration = "0033_stage1c_frontier_organization_brands"
+
+    assert _pending_migration_count_deltas(policy, [("core", "0032", None)]) == {
+        "brands": 2,
+        "brands_companies": 2,
+    }
+    assert _pending_migration_count_deltas(policy, [("core", migration, None)]) == {}
+
+
+def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, runner, _events = _engine(tmp_path)
+    deltas = {"brands": 2, "brands_companies": 2}
+    adapter.census = replace(
+        adapter.census,
+        pending_migration_count_deltas=deltas,
+    )
+    adapter.candidate_census = replace(
+        adapter.candidate_census,
+        row_counts={
+            **adapter.candidate_census.row_counts,
+            "brands": adapter.census.row_counts["brands"] + 2,
+            "brands_companies": adapter.census.row_counts["brands_companies"] + 2,
+        },
+    )
+    artifact = engine.export_dump()
+
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        result = CandidateProcessor(
+            policy=engine.policy,
+            target_url=engine.target_url,
+            adapter=adapter,
+            runner=runner,
+            python="/usr/local/bin/python",
+        ).process(candidate)
+
+    assert result.census.row_counts["brands"] == 4
+    assert result.census.row_counts["brands_companies"] == 4
 
 
 @pytest.mark.parametrize(

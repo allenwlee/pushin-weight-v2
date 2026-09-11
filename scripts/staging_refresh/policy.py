@@ -77,6 +77,7 @@ class ValidationPolicy:
     latest_timestamp_table: str
     latest_timestamp_column: str
     maximum_latest_timestamp_lag_seconds: int
+    forward_migration_count_deltas: Mapping[str, Mapping[str, int]]
     required_columns: Mapping[str, frozenset[str]]
     translation_columns: Mapping[str, tuple[str, ...]]
     classification_tables: tuple[str, ...]
@@ -175,6 +176,7 @@ _TOP_LEVEL = {
     "database_lifecycle",
 }
 _DATABASE_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}\Z")
+_MIGRATION_NAME = re.compile(r"[a-z0-9_]{1,255}\Z")
 _MUTATING_ACTIONS = frozenset({"refresh", "rollback", "prune"})
 
 
@@ -305,6 +307,36 @@ def _identifier_mapping(
     return result
 
 
+def _migration_count_delta_mapping(
+    raw: Mapping[str, Any], key: str, *, field: str
+) -> dict[str, dict[str, int]]:
+    value = raw.get(key)
+    if not isinstance(value, Mapping) or not value:
+        raise PolicyError(f"policy_field_invalid:{field}.{key}")
+    result: dict[str, dict[str, int]] = {}
+    for migration, deltas in value.items():
+        if not isinstance(migration, str) or migration.count(".") != 1:
+            raise PolicyError(f"policy_field_invalid:{field}.{key}")
+        app, name = migration.split(".", 1)
+        if not _DATABASE_NAME.fullmatch(app) or not _MIGRATION_NAME.fullmatch(name):
+            raise PolicyError(f"policy_field_invalid:{field}.{key}")
+        if not isinstance(deltas, Mapping) or not deltas:
+            raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
+        parsed: dict[str, int] = {}
+        for table, delta in deltas.items():
+            if (
+                not isinstance(table, str)
+                or not _DATABASE_NAME.fullmatch(table)
+                or not isinstance(delta, int)
+                or isinstance(delta, bool)
+                or delta <= 0
+            ):
+                raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
+            parsed[table] = delta
+        result[migration] = parsed
+    return result
+
+
 def load_policy(path: str | Path) -> RefreshPolicy:
     resolved = Path(path).expanduser().resolve()
     try:
@@ -407,6 +439,7 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         "latest_timestamp_table",
         "latest_timestamp_column",
         "maximum_latest_timestamp_lag_seconds",
+        "forward_migration_count_deltas",
         "required_columns",
         "translation_columns",
         "classification_tables",
@@ -430,6 +463,11 @@ def load_policy(path: str | Path) -> RefreshPolicy:
             "maximum_latest_timestamp_lag_seconds",
             field="validation",
         ),
+        forward_migration_count_deltas=_migration_count_delta_mapping(
+            validation_raw,
+            "forward_migration_count_deltas",
+            field="validation",
+        ),
         required_columns=_identifier_mapping(
             validation_raw, "required_columns", field="validation"
         ),
@@ -450,6 +488,13 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     )
     if not validated_tables <= relations.copied_tables:
         raise PolicyError("policy_validation_table_not_copied")
+    delta_tables = {
+        table
+        for deltas in validation.forward_migration_count_deltas.values()
+        for table in deltas
+    }
+    if not delta_tables <= set(validation.exact_count_tables):
+        raise PolicyError("policy_migration_delta_table_not_exact_counted")
     configured_validation_tables = (
         set(validation.required_columns)
         | set(validation.translation_columns)

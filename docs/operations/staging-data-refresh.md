@@ -139,6 +139,10 @@ production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count
 the complete post-migration relation set.
+When migration `core.0033_stage1c_frontier_organization_brands` is pending on
+the source, validation requires exactly two additional `brands` rows and two
+additional `brands_companies` rows after migration. Once the source has that
+migration, the expected delta automatically returns to zero.
 Once those migrations are in production, apply the new grants above before the
 next refresh; preflight then requires each present optional relation to have
 its declared read or maintenance privilege.

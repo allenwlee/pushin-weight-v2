@@ -56,6 +56,7 @@ class SourceCensus:
     classification_counts: Mapping[str, int]
     terminal_narrative_count: int
     current_narrative_count: int
+    pending_migration_count_deltas: Mapping[str, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,6 +311,20 @@ def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
     return counts
 
 
+def _pending_migration_count_deltas(
+    policy: RefreshPolicy, migration_rows: list[tuple[Any, ...]]
+) -> dict[str, int]:
+    applied = {(str(row[0]), str(row[1])) for row in migration_rows}
+    pending: dict[str, int] = {}
+    for migration, deltas in policy.validation.forward_migration_count_deltas.items():
+        app, name = migration.split(".", 1)
+        if (app, name) in applied:
+            continue
+        for table, delta in deltas.items():
+            pending[table] = pending.get(table, 0) + delta
+    return pending
+
+
 def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
     """Scrub one already-restored non-serving database inside its transaction."""
 
@@ -385,7 +400,11 @@ class PsycopgSnapshotAdapter:
             cursor.execute(
                 "SELECT app, name, applied FROM django_migrations ORDER BY app, name"
             )
-            migration_checksum = _hash_rows(list(cursor.fetchall()))
+            migration_rows = list(cursor.fetchall())
+            migration_checksum = _hash_rows(migration_rows)
+            pending_migration_count_deltas = _pending_migration_count_deltas(
+                self.policy, migration_rows
+            )
             row_counts: dict[str, int] = {}
             for table in self.policy.validation.exact_count_tables:
                 cursor.execute(
@@ -431,6 +450,7 @@ class PsycopgSnapshotAdapter:
                 classification_counts=classification_counts,
                 terminal_narrative_count=terminal_narrative_count,
                 current_narrative_count=current_narrative_count,
+                pending_migration_count_deltas=pending_migration_count_deltas,
             )
             try:
                 yield census
@@ -1154,6 +1174,7 @@ class CandidateProcessor:
             if missing:
                 raise RefreshError(f"candidate_column_missing:{table}.{min(missing)}")
         for table, expected in source.row_counts.items():
+            expected += source.pending_migration_count_deltas.get(table, 0)
             if census.row_counts.get(table) != expected:
                 raise RefreshError(f"candidate_count_mismatch:{table}")
         for table in self.policy.validation.required_nonempty_tables:

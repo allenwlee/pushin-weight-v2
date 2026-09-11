@@ -266,6 +266,8 @@ validation:
   exact_count_tables:
     - accounts
     - brands
+    - brands_companies
+    - companies
     - posts
     - posts_brands
     - products
@@ -277,6 +279,10 @@ validation:
   latest_timestamp_table: posts
   latest_timestamp_column: created_at
   maximum_latest_timestamp_lag_seconds: 0
+  forward_migration_count_deltas:
+    core.0033_stage1c_frontier_organization_brands:
+      brands: 2
+      brands_companies: 2
   required_columns:
     accounts:
       - author_id

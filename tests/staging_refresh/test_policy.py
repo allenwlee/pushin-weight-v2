@@ -73,6 +73,15 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     assert "auth_user" in policy.relations.excluded_tables
     assert "posts" in policy.relations.copied_tables
     assert "trend_narrative_versions" in policy.relations.views
+    assert policy.validation.forward_migration_count_deltas == {
+        "core.0033_stage1c_frontier_organization_brands": {
+            "brands": 2,
+            "brands_companies": 2,
+        }
+    }
+    assert {"brands", "brands_companies", "companies"} <= set(
+        policy.validation.exact_count_tables
+    )
 
 
 def test_migration_graph_tables_are_exhaustively_classified() -> None:
@@ -179,8 +188,7 @@ def test_staging_first_preflight_accepts_declared_post_migration_relations_absen
         ),
         sequences=source.sequences - policy.relations.optional_source_sequences,
         readable_sequences=(
-            source.readable_sequences
-            - policy.relations.optional_source_sequences
+            source.readable_sequences - policy.relations.optional_source_sequences
         ),
     )
 
