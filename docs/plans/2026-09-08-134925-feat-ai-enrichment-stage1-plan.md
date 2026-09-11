@@ -1349,6 +1349,23 @@ classified judgments, while retaining either-pass `context_missing`, reached
 that conditional consensus into the exact production path under a new frozen
 120-row budget. This probe still cannot approve release.
 
+Runtime v14 completed all 120 rows but failed its continuation rule: post-type
+exact-set accuracy was 61.7%, product-label exact-set accuracy was 76.7%,
+outcome accuracy was 97.5%, and `context_missing` recall was 40%. Jobs scored
+1.00 F1, events 0.909, and opportunities 0.952. The raw saved responses show
+that 42 of the 46 wrong post-type sets occurred when both base reviews agreed,
+so disagreement-only consensus cannot correct the dominant error. Union,
+majority, and intersection merges of the saved answers all remained below
+63.4% exact sets. Pro, thinking mode, and another from-scratch label pass are
+therefore still rejected. The frozen v15 consumed-development probe instead
+audits every row in five-row batches, treats both saved v14 reviews as fallible,
+requires source-verifiable quotes, and makes no new base-classification call.
+Its independent transport cap is recorded in
+`docs/analysis/2026-09-11-162500-u18-v15-full-audit-probe-budget.json`. It must
+pass overall and per-language continuation floors before this shape can enter
+the production path or consume the full development cohort; it still cannot
+approve release.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
