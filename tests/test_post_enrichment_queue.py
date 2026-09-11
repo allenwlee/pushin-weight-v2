@@ -401,7 +401,8 @@ def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
     assert classifier_calls[0][1]["model"] == "deepseek-v4-flash"
     assert translator_calls[0][1]["cfg"].llm.translator_model == "deepseek-v4-flash"
     assert translator._TRANSLATION_BATCH_SIZE == 20
-    assert attribution._CLASSIFY_BATCH_SIZE == 10
+    assert attribution._CLASSIFY_BASE_BATCH_SIZE == 20
+    assert attribution._CLASSIFY_REVIEW_BATCH_SIZE == 10
 
 
 def test_no_cutoff_preserves_legacy_fifty_row_capacity():

@@ -97,6 +97,7 @@ VIEWPORTS = {
     "mobile": {"width": 390, "height": 844},
 }
 LOCALES = ("zh_cn", "en", "original")
+PRODUCT_LOCALES = ("zh_cn", "en", "ja", "original")
 REGION_SELECTORS = dict(AUTHORED_REGIONS)
 STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 # The threshold is intentionally below a wholly unrelated frame.  It is not a
@@ -2519,11 +2520,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
     def test_v24_locale_and_window_controls_keep_geometry_and_copy(self) -> None:
         """V24 control labels change without moving or resizing the controls."""
         cookies_by_locale = {
-            locale: self._anonymous_cookies(locale) for locale in LOCALES
+            locale: self._anonymous_cookies(locale) for locale in PRODUCT_LOCALES
         }
         expected_labels = {
             "en": ["1d", "7d", "30d", "365d"],
             "zh_cn": ["1天", "7天", "30天", "365天"],
+            "ja": ["1日", "7日", "30日", "365日"],
             "original": ["1d", "7d", "30d", "365d"],
         }
         with sync_playwright() as playwright:
@@ -2536,7 +2538,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     "mobile-320": {"width": 320, "height": 844},
                 }.items():
                     baseline = None
-                    for locale in LOCALES:
+                    for locale in PRODUCT_LOCALES:
                         with self.subTest(viewport=viewport_name, locale=locale):
                             context = self._context_with_cookies(
                                 browser, cookies_by_locale[locale], viewport
@@ -3330,9 +3332,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
+                            feed_rows = page.locator(".feed-row")
                             self.assertEqual(
-                                page.locator(".feed-row .enrichment-status").count(),
+                                page.locator(
+                                    ".feed-row .enrichment-status:not(.synthesis-status)"
+                                ).count(),
                                 0,
+                            )
+                            self.assertEqual(
+                                page.locator(".feed-row .synthesis-status").count(),
+                                feed_rows.count(),
                             )
                             initial_feed_stamp = feed_stamp.text_content()
                             initial_time = tz.locator("[data-tz-time]").text_content()
@@ -6056,10 +6065,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_terminal_completion_reveals_the_exact_hidden_row_on_first_page_refresh(self) -> None:
+    def test_terminal_completion_updates_the_visible_pending_row_on_first_page_refresh(self) -> None:
         from core.models import PostEnrichmentState
 
-        ordered_posts = list(Post.objects.order_by("-created_at")[:3])
+        ordered_posts = list(
+            Post.objects.filter(unsanctioned_flags__isnull=True)
+            .order_by("-created_at")[:3]
+        )
         pending_post = ordered_posts[0]
         failed_post = ordered_posts[1]
         expected_fill = ordered_posts[2]
@@ -6096,23 +6108,29 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 page = context.new_page()
                 try:
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    rendered_ids = page.locator(
+                        ".feed-row[data-tweet-id]"
+                    ).evaluate_all("rows => rows.map(row => row.dataset.tweetId)")
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
+                        rendered_ids,
                     )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
+                        rendered_ids,
                     )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{expected_fill.tweet_id}']"
                         ).count(),
                         1,
+                        rendered_ids,
                     )
                     first_page = page.evaluate(
                         """async () => {
@@ -6123,7 +6141,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(
                         [row["tweet_id"] for row in first_page["rows"]],
-                        [expected_fill.tweet_id],
+                        [pending_post.tweet_id],
                     )
                     callback_names = page.evaluate(
                         "() => window.__feedEligibilityMinuteCallbacks.map(fn => fn.name)"
@@ -6184,12 +6202,17 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(
                         revealed.get_attribute("data-enrichment-status"), "succeeded"
                     )
-                    self.assertEqual(revealed.locator(".enrichment-status").count(), 0)
+                    self.assertEqual(
+                        revealed.locator(
+                            ".enrichment-status:not(.synthesis-status)"
+                        ).count(),
+                        0,
+                    )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
                     )
                 finally:
                     context.close()

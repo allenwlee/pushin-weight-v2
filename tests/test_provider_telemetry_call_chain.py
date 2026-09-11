@@ -332,16 +332,18 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
 
     states = list(PostEnrichmentState.objects.order_by("post_id"))
     assert counters["n_enrichment_claimed"] == 21
-    assert len(requests) == 4  # 20 + 1 batches through each real role factory
+    # Two translation calls plus the classifier's two base, three secondary,
+    # and three review calls for a 21-post production-shaped batch.
+    assert len(requests) == 10
     assert {request["host"] for request in requests} == {"api.deepseek.com"}
     assert all(request["headers"]["x-api-key"] == "test-key" for request in requests)
     assert all(state.translation_status == "succeeded" for state in states)
     assert all(state.classification_status == "succeeded" for state in states)
     events = _events(caplog)
-    assert len(events) == 4  # 20 + 1, through max_workers=3 batching
+    assert len(events) == 10
     assert {event["run_id"] for event in events} == {"telemetry-cycle"}
     assert {event["stage"] for event in events} == {"post_fetch"}
-    assert {event["batch_size"] for event in events} == {1, 20}
+    assert {event["batch_size"] for event in events} == {1, 10, 20}
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
     assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
@@ -350,7 +352,7 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         for request in requests
         if "unsanctioned_flags" in request["body"].get("system", "")
     ]
-    assert len(classifier_requests) == 2
+    assert len(classifier_requests) == 8
     assert all(
         len(request["messages"]) == 1
         and request["messages"][0]["role"] == "user"
