@@ -136,6 +136,9 @@ the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
 `0028`–`0039`. It allows the staging-first release to refresh from the prior
 production schema and then create those empty relations with Django migrations.
+The source census omits validation counts only for optional relations that are
+absent at that boundary. Candidate and active-database validation still count
+the complete post-migration relation set.
 Once those migrations are in production, apply the new grants above before the
 next refresh; preflight then requires each present optional relation to have
 its declared read or maintenance privilege.

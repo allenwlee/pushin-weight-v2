@@ -379,7 +379,9 @@ class PsycopgSnapshotAdapter:
                 "COALESCE(column_default, '') FROM information_schema.columns "
                 "WHERE table_schema = 'public' ORDER BY table_name, ordinal_position"
             )
-            schema_checksum = _hash_rows(list(cursor.fetchall()))
+            schema_rows = list(cursor.fetchall())
+            schema_checksum = _hash_rows(schema_rows)
+            source_tables = frozenset(str(row[0]) for row in schema_rows)
             cursor.execute(
                 "SELECT app, name, applied FROM django_migrations ORDER BY app, name"
             )
@@ -405,6 +407,7 @@ class PsycopgSnapshotAdapter:
             classification_counts = {
                 table: _table_count(cursor, table)
                 for table in self.policy.validation.classification_tables
+                if table in source_tables
             }
             cursor.execute(
                 "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
