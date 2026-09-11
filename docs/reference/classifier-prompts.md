@@ -1,8 +1,8 @@
-# Stage 1 classifier prompts — current R79 reference
+# Stage 1 classifier prompts — current R80 reference
 
 Last reviewed: 2026-09-12
 
-This exhibit describes the current R79/KTD35 runtime in
+This exhibit describes the current R80/KTD36 runtime in
 `x_monitor.attribution.classify_batch_pragmatics_full`. Every publishable
 post-brand judgment now has exactly two classification passes: one complete
 primary classification and one candidate-aware completeness review. The review
@@ -19,10 +19,10 @@ contract validation, `x_monitor/attribution.py` for prompts and transport, and
 contract_version: stage1-v1
 taxonomy_version: stage1-taxonomy-v3
 primary_prompt_version: stage1-prompt-v18-full-v1
-review_prompt_version: stage1-prompt-v22-completeness-review-v1
+review_prompt_version: stage1-prompt-v26-completeness-review-v1
 primary_repair_prompt_version: stage1-prompt-v18-fallback-repair-v1
-review_repair_prompt_version: stage1-prompt-v22-completeness-review-repair-v1
-selector_version: stage1-selector-v24-review-authoritative-derived-metadata-v1
+review_repair_prompt_version: stage1-prompt-v26-completeness-review-repair-v1
+selector_version: stage1-selector-v26-review-authoritative-verdict-audit-v1
 provider_role: classifier
 scheduled_provider: DeepSeek via its Anthropic-compatible Messages API
 ```
@@ -64,7 +64,7 @@ at three calls. A shared repair allowance caps malformed-response repairs across
 the invocation. Deadline exhaustion, a call-budget stop, or an invalid review
 leaves that post unpublished. Valid neighbouring rows still publish.
 
-Unsanctioned flags are retained from the complete primary response. The v22 path
+Unsanctioned flags are retained from the complete primary response. The R80 path
 does not run an extra general type classifier or a rare-type merge/audit.
 
 ## Runtime user envelopes
@@ -139,6 +139,28 @@ The reviewer returns exactly one row per packet:
     "sentiment": "neutral",
     "china_nationalism": "none",
     "us_nationalism": "none"
+  },
+  "post_type_verdicts": {
+    "releases_updates": true,
+    "hands_on_usage": false,
+    "results_evaluations": false,
+    "questions_requests": false,
+    "advertising_marketing": false,
+    "events": false,
+    "opportunities": false,
+    "job_listings": false,
+    "personnel_changes": false,
+    "opinions_reactions": false,
+    "research_explanations": true,
+    "business_finance": false,
+    "other": false
+  },
+  "product_label_verdicts": {
+    "bug": false,
+    "complaint": false,
+    "testimonial": false,
+    "ideas_requests": false,
+    "misinformation": false
   },
   "change_reasons": ["missing_post_type"],
   "evidence": [
@@ -392,10 +414,10 @@ other alone only when no other post type definition applies.
 
 ## Literal completeness-review system prompt
 
-Runtime identity: `stage1-prompt-v22-completeness-review-v1`
+Runtime identity: `stage1-prompt-v26-completeness-review-v1`
 
-UTF-8 bytes: `10716`
-SHA-256: `107a7cf79648eae2dc7376c24ed472acef87bc0070a6ed1fa46f74ca305f0b8d`
+UTF-8 bytes: `11523`
+SHA-256: `64f5e6c05885c4f32e3dd46cf22262cc9894af313ce155903e5790d4fd8088e4`
 
 The review prompt begins with the exact primary prompt text from `POST TYPES`
 through `CHINA_NATIONALISM and US_NATIONALISM` above. This is the literal
@@ -412,8 +434,17 @@ Each packet has source text, stored context, one attributed brand, and a canonic
 instructions.
 
 For every packet:
-- Re-read source and stored context for this packet and independently check every
-allowed post type and product label for omitted or unsupported decisions.
+- Re-read source and stored context for this packet and independently decide every
+  allowed post type and product label before comparing the primary classification.
+- Return `post_type_verdicts` with exactly these boolean keys: releases_updates,
+  hands_on_usage, results_evaluations, questions_requests, advertising_marketing,
+  events, opportunities, job_listings, personnel_changes, opinions_reactions,
+  research_explanations, business_finance, other. Return `product_label_verdicts`
+  with exactly these boolean keys: bug, complaint, testimonial, ideas_requests,
+  misinformation. These are exhaustive audit fields: a classified result's true
+  keys must exactly equal its `post_types` and `product_labels`; a context_missing
+  result must set every verdict to false. They validate the complete classification;
+  never use them to mechanically inject labels.
 - Return `decision: "accept"` only when the supplied primary classification is already
 the complete canonical judgment. In that case return that same complete classification
 and empty `change_reasons` and `evidence` arrays.
@@ -440,6 +471,8 @@ Return exactly
 {"results":[{"example_id":str,"brand_id":str,"decision":"accept|replace",
 "classification":{"outcome":str,"post_types":[str],"product_labels":[str],
 "sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null},
+"post_type_verdicts":{"every canonical post type":bool},
+"product_label_verdicts":{"every canonical product label":bool},
 "change_reasons":[str],"evidence":[{"source":str,"context_index":int|null,
 "quote":str}]}]}.
 No prose, markdown, or extra keys.
@@ -462,9 +495,9 @@ explanation of the repair.
 ```
 
 The review repair uses runtime identity
-`stage1-prompt-v22-completeness-review-repair-v1`, 10,886 UTF-8 bytes, and
+`stage1-prompt-v26-completeness-review-repair-v1`, 11,693 UTF-8 bytes, and
 SHA-256
-`0a6c732dd78b87b111ad4baafb33a3a913282f1e977527d275fa79b2198acff4`.
+`98a0d3a38653271912bfad7a02545cce64181a3dbbb61648836a14965dcd0ac2`.
 Its system prompt is the following literal prefix, two newline characters,
 then the complete review system prompt above:
 
@@ -476,7 +509,8 @@ schema for the supplied packet; do not omit identities, evidence, or changed fie
 ## Validation, repair, and durable provenance
 
 The runtime validates exact response envelopes, ID ownership, cardinality,
-closed enums, every per-brand classification, and review change evidence before
+closed enums, every per-brand classification, exhaustive 13-key and 5-key verdict
+maps, and review change evidence before
 publishing. A malformed primary post row can use the existing single-post
 complete repair path. A malformed review post-brand packet can use one bounded
 review-repair call. A review that remains invalid produces no selected final
@@ -484,13 +518,14 @@ classification and cannot silently fall back to primary.
 
 For each valid post-brand publication, `classification_trace` carries canonical
 `primary`, `review`, and `final` maps. `review.metadata_by_brand` stores the
-reviewer `decision`, `change_reasons`, and evidence. Each stage carries its
-prompt version, contract version, taxonomy version, selector version,
-validation state, provider role, and model. `monitor.cycle` validates that all
-three canonical maps cover the same brands and that `final` equals the selected
-output, then writes an append-only primary → review → final judgment chain
-through the publisher. The database enforces parent nullability; the publisher
-validates stage order and matching post, brand, and revision identities.
+reviewer `decision`, `change_reasons`, evidence, and both exhaustive verdict
+maps. Each stage carries its prompt version, contract version, taxonomy version,
+selector version, validation state, provider role, and model. `monitor.cycle`
+validates that all three canonical maps cover the same brands and that `final`
+equals the selected output, then writes an append-only primary → review → final
+judgment chain through the publisher. The database enforces parent nullability;
+the publisher validates stage order and matching post, brand, and revision
+identities.
 
 The publisher derives one stable revision identity from post, brand, run,
 input-context fingerprint, and selector version. Current classification state,
@@ -503,6 +538,10 @@ retains why a review accepted or replaced the primary proposal.
   transport, parsing, reviewer selection, and `classification_trace`.
 - `core/classification_contract.py`: canonical taxonomy and semantic parser.
 - `monitor/cycle.py`: trace validation and versioned judgment persistence.
-- `tests/test_classify_batch_pragmatics_full.py`: provider-free R79 regression
-  net for evidence, omission, no-primary-fallback, rare labels,
+- `tests/test_classify_batch_pragmatics_full.py`: provider-free R80 regression net for
+  verdict-map completeness, evidence, omission, no-primary-fallback, rare labels,
   `context_missing`, ordering, batching, and concurrency.
+- `tests/test_classify_pragmatics_full_prompt.py`: source-map identity tests import the
+  runtime constants and check prompt versions and SHA-256 values, including the R80
+  primary, review, repair, and selector identities. The browser wrapping in this
+  exhibit is presentation-only and cannot alter provider input.

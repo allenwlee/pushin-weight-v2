@@ -271,6 +271,22 @@ The production classifier asks for six post types, sentiment, discourse, and two
   consumed-development pilot and its budget before transport, and require its
   unchanged overall and per-language exact-set floors before spending on the
   500-row development run or opening a new zero-overlap release cohort.
+- R80. After the v25 reviewer-authoritative pilot failed to improve the
+  primary's complete-set accuracy, require the reviewer to return exhaustive
+  boolean verdict maps for all thirteen post types and all five product
+  labels before returning its complete classification. The maps must contain
+  exactly the canonical keys and booleans, and must agree with the complete
+  classification; `context_missing` requires every verdict to be false. A
+  mismatch is malformed and receives only the existing one-packet repair
+  before failing closed. These maps validate the reviewer's own judgment and
+  are retained as bounded review metadata; they never inject, union, or select
+  labels. Keep every other R79 authority, provenance, evidence, batching,
+  concurrency, provider, and budget boundary unchanged. Freeze and run this
+  final DeepSeek Flash prompt-topology test on the same consumed 120-row
+  cohort. If it misses any unchanged continuation floor, stop Flash prompt
+  tuning and make the next classifier architecture decision between a
+  stronger configured model and a fresh human review of taxonomy/gate
+  ambiguity before opening the sealed release cohort.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -453,6 +469,15 @@ The production classifier asks for six post types, sentiment, discourse, and two
   Durable primary/review/final records make later analysis able to separate
   primary model errors, reviewer changes, selector behavior, and the published
   state.
+- KTD36. **Make the completeness review prove its per-label audit.** V25
+  accepted 111/120 primary rows, changed no product-label exact sets, and
+  reduced post-type exact sets from 64 to 63. The review therefore returns an
+  exhaustive boolean verdict for each allowed post type and product label and
+  a matching complete canonical classification. Parser equality is a
+  fail-closed consistency check; the reviewer classification remains
+  authoritative and no deterministic label merge is introduced. This is the
+  last bounded Flash prompt topology justified before a model/taxonomy
+  decision.
 
 ### High-Level Technical Design
 
@@ -986,10 +1011,10 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 ### U18. Complete the real-label quality and cost gates
 
 - **Goal:** Turn the frozen evaluation contracts into measured pass/block decisions before enabling any new live lane.
-- **Requirements:** R16–R17, R40, R48–R59, R79; KTD14, KTD18–KTD22, KTD24, and KTD35.
+- **Requirements:** R16–R17, R40, R48–R59, R79–R80; KTD14, KTD18–KTD22, KTD24, and KTD35–KTD36.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; exact prompt/model/provider-role identities. Execute U12A as this unit's first measured sub-gate.
 - **Files:** versioned floor and budget JSON under `docs/analysis/` or `docs/reference/`; ignored source/context, candidate, reviewer, and adjudication packets; classification/discovery/extraction evaluator modules and commands; dated durable taxonomy-v2, taxonomy-v3, job, personnel, extraction, and cost reports; focused evaluator tests; this plan's execution state.
-- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the exact R79 primary-plus-completeness-review path and its durable judgment provenance. The reviewer sees the canonical primary proposal, returns a complete candidate, and supplies source-bound evidence for every change; the fixed selector uses the reviewer result in full. Prove this path provider-free, then through a preregistered 120-row consumed-development pilot. Continue to all 500 consumed-development rows only if every continuation floor passes. Neither development result can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
+- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the R79 primary-plus-completeness-review path and its durable judgment provenance. After v25 shows that the reviewer usually anchors on the primary, implement R80's exhaustive verdict maps and require them to agree with the reviewer's complete candidate; the maps validate but never generate labels. The fixed selector continues to use the reviewer result in full. Prove this path provider-free, then through a separately preregistered run on the same 120-row consumed-development cohort. Continue to all 500 consumed-development rows only if every continuation floor passes. Neither development result can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
 - **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact cannot load as gold; v2 and v3 results never merge; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost evidence, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
 - **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 report separately covers prevalence, rare positives, and event/opportunity boundaries across EN/ZH-CN/JA and required source roles. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U19 activation or U23.
 
@@ -1739,6 +1764,55 @@ The second zero-transport replay budget at
 pins the same 26-response manifest, the new
 `stage1-selector-v24-review-authoritative-derived-metadata-v1` identity, and
 zero request, attempt, token, and dollar caps. Its result remains
-consumed-development evidence that cannot approve release. The next action is
-to verify, commit, push, replay, and score v25. Only a full continuation-floor
-pass permits a separately frozen 500-row consumed-development run.
+consumed-development evidence that cannot approve release.
+
+The v25 replay completed 120/120 rows from 18 pinned cache hits with zero new
+provider transport, tokens, or cost. It failed the unchanged continuation
+gate: overall post-type exact sets were 52.5%, with EN/JA/ZH-CN at
+52.5%/62.5%/42.5%, and overall product-label exact sets were 82.5%. Outcome
+accuracy was 95.8%; `context_missing` precision/recall were 50%/100%; every
+supported per-label F1 passed. The cohort still lacks positive support for
+`other`, `personnel_changes`, and product `bug`. The reviewer accepted 111/120
+rows, improved one post-type exact set, regressed two, and changed no product
+exact sets. Its selected output scored 63/120 post-type exact sets versus
+64/120 for the primary. The complete aggregate evidence and artifact hashes
+are recorded in
+`docs/analysis/2026-09-12-022841-u18-v25-classification-quality-assessment.md`.
+The 500-row assessment is forbidden.
+
+R80/KTD36 define the final bounded DeepSeek Flash prompt-topology test. Its
+reviewer must return all thirteen post-type and all five product-label boolean
+verdicts plus a matching complete classification. Parser equality validates
+the reviewer's own audit and cannot inject labels. The primary, batching,
+reviewer authority, derived metadata, evidence, failure behavior, provider,
+and concurrency remain unchanged. Provider transport is forbidden until the
+provider-free tests pass and a new budget pins the exact prompt, parser,
+selector, cohort, request, retry, token, and dollar identities. Failure on any
+unchanged 120-row continuation floor stops Flash prompt tuning before a
+stronger-model or taxonomy/gate decision.
+
+The R80 provider-free implementation is complete. Review and repair identities
+advance to `stage1-prompt-v26-completeness-review-v1` and
+`stage1-prompt-v26-completeness-review-repair-v1`; the selector identity is
+`stage1-selector-v26-review-authoritative-verdict-audit-v1`. The parser
+requires exact boolean maps for all thirteen post types and five product
+labels and equality with the reviewer's complete classification. The trace and
+durable review judgment retain only validated, canonical-order maps; arbitrary,
+malformed, or classification-mismatched map metadata is rejected. The maps
+never change the selected labels. The prompt exhibit is updated at
+`docs/reference/classifier-prompts.md` with browser-wrapped display text and
+runtime-verified byte counts and hashes.
+
+The final wider classifier regression net passed 244 checks, including all 66
+PostgreSQL-required checks, with no failures, skips,
+or errors. One overlapping local rerun temporarily lost its disposable test
+database while another test process recreated the same default database; a
+subsequent isolated `--create-db` run passed and supplies the recorded result.
+
+The paid pilot budget is frozen at
+`docs/analysis/2026-09-12-023646-u18-runtime-v26-exhaustive-verdict-review-budget.json`.
+It keeps the fixed 120-row multilingual consumed-development cohort, six
+expected primary requests, twelve expected review requests, three-call maximum
+concurrency, the existing shared repair/retry ceilings, and the $0.72 hard cap.
+Expected cost is $0.27. No provider call may occur until this candidate and
+budget are committed and pushed and the Ollija delivery check passes.

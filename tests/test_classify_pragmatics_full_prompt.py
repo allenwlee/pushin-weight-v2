@@ -172,7 +172,7 @@ def test_superseded_v18_three_pass_and_audit_prompt_bytes_remain_frozen():
         assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
 
 
-def test_v22_primary_review_and_repair_prompt_bytes_are_frozen():
+def test_v26_primary_review_and_repair_prompt_bytes_are_frozen():
     from x_monitor import attribution
 
     expected = {
@@ -181,12 +181,12 @@ def test_v22_primary_review_and_repair_prompt_bytes_are_frozen():
             "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
         ),
         "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
-            "stage1-prompt-v22-completeness-review-v1",
-            "107a7cf79648eae2dc7376c24ed472acef87bc0070a6ed1fa46f74ca305f0b8d",
+            "stage1-prompt-v26-completeness-review-v1",
+            "64f5e6c05885c4f32e3dd46cf22262cc9894af313ce155903e5790d4fd8088e4",
         ),
         "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
-            "stage1-prompt-v22-completeness-review-repair-v1",
-            "0a6c732dd78b87b111ad4baafb33a3a913282f1e977527d275fa79b2198acff4",
+            "stage1-prompt-v26-completeness-review-repair-v1",
+            "98a0d3a38653271912bfad7a02545cce64181a3dbbb61648836a14965dcd0ac2",
         ),
     }
     versions = {
@@ -208,7 +208,7 @@ def test_v22_primary_review_and_repair_prompt_bytes_are_frozen():
 
     assert (
         attribution._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
-        == "stage1-selector-v24-review-authoritative-derived-metadata-v1"
+        == "stage1-selector-v26-review-authoritative-verdict-audit-v1"
     )
 
 

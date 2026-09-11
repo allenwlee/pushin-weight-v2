@@ -44,6 +44,8 @@ from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone as django_timezone
 
 from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
     CONTRACT_VERSION,
     PROMPT_VERSION,
     TAXONOMY_VERSION,
@@ -108,6 +110,7 @@ from x_monitor.attribution import (
     LLMCallBudgetExhausted,
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     attribute_to_brands,
     compile_keyword_index,
 )
@@ -238,7 +241,11 @@ def _trace_stage_rows(stage: str, payload: dict[str, Any]) -> dict[str, dict[str
 
 
 def _trace_changes(
-    stage: str, payload: dict[str, Any], brand_id: str
+    stage: str,
+    payload: dict[str, Any],
+    brand_id: str,
+    *,
+    selector_version: str | None = None,
 ) -> dict[str, Any]:
     """Keep bounded review metadata while excluding arbitrary trace envelopes."""
 
@@ -257,6 +264,8 @@ def _trace_changes(
             "change_reasons": row.get("change_reasons", []),
             "evidence": row.get("evidence", []),
             "metadata_normalized": row.get("metadata_normalized", False),
+            "post_type_verdicts": row.get("post_type_verdicts"),
+            "product_label_verdicts": row.get("product_label_verdicts"),
         }
     if isinstance(details, dict):
         details = {
@@ -266,11 +275,59 @@ def _trace_changes(
                 "change_reasons",
                 "evidence",
                 "metadata_normalized",
+                "post_type_verdicts",
+                "product_label_verdicts",
             )
             if key in details
         }
         if not isinstance(details.get("metadata_normalized"), bool):
             details.pop("metadata_normalized", None)
+        if stage == "review":
+            classification = _trace_stage_rows(stage, payload).get(brand_id, {})
+            require_verdict_audit = (
+                (selector_version or payload.get("selector_version"))
+                == _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+            )
+            for key, canonical_keys, classification_key in (
+                (
+                    "post_type_verdicts",
+                    CANONICAL_POST_TYPE_KEYS,
+                    "post_types",
+                ),
+                (
+                    "product_label_verdicts",
+                    CANONICAL_PRODUCT_LABEL_KEYS,
+                    "product_labels",
+                ),
+            ):
+                verdicts = details.get(key)
+                expected_true = (
+                    set(classification.get(classification_key, []))
+                    if classification.get("outcome") == "classified"
+                    else set()
+                )
+                if (
+                    isinstance(verdicts, dict)
+                    and set(verdicts) == set(canonical_keys)
+                    and all(type(value) is bool for value in verdicts.values())
+                    and {
+                        verdict_key
+                        for verdict_key, selected in verdicts.items()
+                        if selected
+                    }
+                    == expected_true
+                ):
+                    details[key] = {
+                        canonical_key: verdicts[canonical_key]
+                        for canonical_key in canonical_keys
+                    }
+                elif require_verdict_audit:
+                    raise ValueError(f"classification_trace_review_{key}_invalid")
+                else:
+                    details.pop(key, None)
+        else:
+            details.pop("post_type_verdicts", None)
+            details.pop("product_label_verdicts", None)
     return details if isinstance(details, dict) else {}
 
 
@@ -362,7 +419,12 @@ def _persist_classification_trace(
             brand_prompt_version = _trace_brand_prompt_version(payload, brand_id)
             if brand_prompt_version is not None:
                 metadata["prompt_version"] = brand_prompt_version
-            metadata["changes_json"] = _trace_changes(stage, payload, brand_id)
+            metadata["changes_json"] = _trace_changes(
+                stage,
+                payload,
+                brand_id,
+                selector_version=metadata["selector_version"],
+            )
             row, created = PostBrandClassificationJudgment.objects.get_or_create(
                 post_id=post_id,
                 brand_id=brand_id,

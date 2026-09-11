@@ -1,4 +1,4 @@
-"""Provider-free regression net for the R79/KTD35 classifier runtime."""
+"""Provider-free regression net for the R80/KTD36 classifier runtime."""
 
 from __future__ import annotations
 
@@ -62,13 +62,40 @@ def _primary_response(payload: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _accept(packet: dict[str, Any]) -> dict[str, Any]:
+    classification = packet["primary"]
+    from x_monitor import attribution
+
     return {
         "example_id": packet["example_id"],
         "brand_id": packet["brand_id"],
         "decision": "accept",
-        "classification": packet["primary"],
+        "classification": classification,
+        "post_type_verdicts": {
+            key: key in classification["post_types"]
+            for key in attribution._STAGE1_POST_TYPE_KEYS
+        },
+        "product_label_verdicts": {
+            key: key in classification["product_labels"]
+            for key in attribution._STAGE1_PRODUCT_LABEL_KEYS
+        },
         "change_reasons": [],
         "evidence": [],
+    }
+
+
+def _verdicts(classification: dict[str, Any]) -> dict[str, dict[str, bool]]:
+    from x_monitor import attribution
+
+    classified = classification["outcome"] == "classified"
+    return {
+        "post_type_verdicts": {
+            key: classified and key in classification["post_types"]
+            for key in attribution._STAGE1_POST_TYPE_KEYS
+        },
+        "product_label_verdicts": {
+            key: classified and key in classification["product_labels"]
+            for key in attribution._STAGE1_PRODUCT_LABEL_KEYS
+        },
     }
 
 
@@ -122,9 +149,87 @@ def test_primary_then_candidate_aware_review_selects_canonical_final_and_trace()
     assert trace["review"]["metadata_by_brand"]["deepseek"]["decision"] == "accept"
     assert (
         trace["final"]["selector_version"]
-        == "stage1-selector-v24-review-authoritative-derived-metadata-v1"
+        == "stage1-selector-v26-review-authoritative-verdict-audit-v1"
     )
     assert trace["final"]["model"] == "deepseek-v4-flash"
+
+
+def test_reviewer_verdicts_are_exhaustive_audit_fields_and_do_not_inject_labels():
+    from x_monitor import attribution
+
+    primary_system, review_system, repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        packet = payload[0] if isinstance(payload, list) else payload["packet"]
+        row = _accept(packet)
+        if kwargs["system"] == review_system:
+            # A true audit verdict without the corresponding classification
+            # label must be rejected, never mechanically copied into output.
+            row["post_type_verdicts"]["job_listings"] = True
+            return {"results": [row]}
+        assert kwargs["system"] == repair_system
+        return {"results": [_accept(packet)]}
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(
+        _tweets(1), [], client, model="deepseek-v4-flash"
+    )
+
+    assert result[0]["valid"] is True
+    assert result[0]["by_brand"]["deepseek"]["post_types"] == [
+        "releases_updates"
+    ]
+    metadata = result[0]["classification_trace"]["review"]["metadata_by_brand"][
+        "deepseek"
+    ]
+    assert metadata["post_type_verdicts"]["releases_updates"] is True
+    assert metadata["post_type_verdicts"]["job_listings"] is False
+    assert [call["system"] for call in client.calls] == [
+        primary_system,
+        review_system,
+        repair_system,
+    ]
+
+
+@pytest.mark.parametrize("malformation", ["missing", "extra", "non_bool"])
+def test_invalid_exhaustive_verdicts_use_one_repair_then_fail_closed(malformation):
+    from x_monitor import attribution
+
+    primary_system, review_system, repair_system = _system_names()
+
+    def malformed(row):
+        if malformation == "missing":
+            row["post_type_verdicts"].pop("job_listings")
+        elif malformation == "extra":
+            row["product_label_verdicts"]["unexpected"] = False
+        else:
+            row["post_type_verdicts"]["releases_updates"] = "true"
+        return row
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        packet = payload[0] if isinstance(payload, list) else payload["packet"]
+        row = malformed(_accept(packet))
+        assert kwargs["system"] in {review_system, repair_system}
+        return {"results": [row]}
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(
+        _tweets(1), [], client, model="deepseek-v4-flash"
+    )
+
+    assert result[0]["valid"] is False
+    assert result[0]["by_brand"] == {}
+    assert [call["system"] for call in client.calls] == [
+        primary_system,
+        review_system,
+        repair_system,
+    ]
 
 
 def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_packet(
@@ -146,6 +251,7 @@ def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_
             "brand_id": packet["brand_id"],
             "decision": "replace",
             "classification": replacement,
+            **_verdicts(replacement),
             "change_reasons": ["missing_post_type", "unsupported_post_type"],
             "evidence": [
                 {"source": "source", "context_index": None, "quote": "not present"}
@@ -177,7 +283,7 @@ def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_
     assert metadata["decision"] == "replace"
     assert len(metadata["evidence"]) == 2
     assert (
-        metadata["prompt_version"] == "stage1-prompt-v22-completeness-review-repair-v1"
+        metadata["prompt_version"] == "stage1-prompt-v26-completeness-review-repair-v1"
     )
 
 
@@ -240,6 +346,7 @@ def test_changed_classification_derives_reasons_and_accepts_exact_evidence():
                     "brand_id": packet["brand_id"],
                     "decision": "replace",
                     "classification": replacement,
+                    **_verdicts(replacement),
                     "change_reasons": ["sentiment", "sentiment"],
                     "evidence": [
                         {"source": "source", "context_index": None, "quote": "release"}
@@ -292,6 +399,7 @@ def test_reordered_classification_arrays_preserve_primary_canonical_order():
                 {
                     **_accept(packet),
                     "classification": classification,
+                    **_verdicts(classification),
                 }
             ]
         }
@@ -329,9 +437,12 @@ def test_context_missing_to_classified_is_one_coupled_outcome_change():
                     "example_id": packet["example_id"],
                     "brand_id": packet["brand_id"],
                     "decision": "replace",
-                    "classification": _classification(
-                        post_types=["research_explanations"]
+                    "classification": (
+                        replacement := _classification(
+                            post_types=["research_explanations"]
+                        )
                     ),
+                    **_verdicts(replacement),
                     "change_reasons": ["outcome"],
                     "evidence": [
                         {
@@ -504,9 +615,12 @@ def test_reviewer_owns_rare_labels_and_context_missing_without_a_third_type_call
                         "example_id": packet["example_id"],
                         "brand_id": packet["brand_id"],
                         "decision": "replace",
-                        "classification": _classification(
-                            post_types=["personnel_changes"]
+                        "classification": (
+                            replacement := _classification(
+                                post_types=["personnel_changes"]
+                            )
                         ),
+                        **_verdicts(replacement),
                         "change_reasons": [
                             "missing_post_type",
                             "unsupported_post_type",
@@ -534,6 +648,11 @@ def test_reviewer_owns_rare_labels_and_context_missing_without_a_third_type_call
 
     assert result[0]["by_brand"]["deepseek"]["post_types"] == ["personnel_changes"]
     assert result[1]["by_brand"]["deepseek"]["outcome"] == "context_missing"
+    context_missing_metadata = result[1]["classification_trace"]["review"][
+        "metadata_by_brand"
+    ]["deepseek"]
+    assert not any(context_missing_metadata["post_type_verdicts"].values())
+    assert not any(context_missing_metadata["product_label_verdicts"].values())
     assert len(client.calls) == 2
 
 

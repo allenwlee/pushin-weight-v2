@@ -973,6 +973,8 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
     """The production path repairs semantic drift once and keeps strict parsing."""
     from x_monitor.attribution import (
         _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+        _STAGE1_POST_TYPE_KEYS,
+        _STAGE1_PRODUCT_LABEL_KEYS,
         classify_batch_pragmatics_full,
     )
 
@@ -1011,6 +1013,14 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
                             "brand_id": packet["brand_id"],
                             "decision": "accept",
                             "classification": packet["primary"],
+                            "post_type_verdicts": {
+                                key: key in packet["primary"]["post_types"]
+                                for key in _STAGE1_POST_TYPE_KEYS
+                            },
+                            "product_label_verdicts": {
+                                key: key in packet["primary"]["product_labels"]
+                                for key in _STAGE1_PRODUCT_LABEL_KEYS
+                            },
                             "change_reasons": [],
                             "evidence": [],
                         }

@@ -5,6 +5,11 @@ from copy import deepcopy
 import pytest
 from django.db import DatabaseError, connection
 
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+)
+
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
@@ -19,6 +24,12 @@ def _row(*, outcome: str = "classified", post_types: list[str] | None = None) ->
     }
 
 
+def _valid_verdict_map(
+    keys: tuple[str, ...], selected: str | None
+) -> dict[str, bool]:
+    return {key: key == selected for key in keys}
+
+
 def _trace(brand_id: str, *, final: dict | None = None) -> dict:
     primary = {brand_id: _row(post_types=["hands_on_usage"])}
     review = {brand_id: _row(post_types=["hands_on_usage"])}
@@ -28,7 +39,7 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
         "taxonomy_version": "stage1-taxonomy-v3",
         "prompt_version": "stage1-prompt-v22",
         "provider_role": "scheduled_classifier",
-        "selector_version": "r79-test-selector-v1",
+        "selector_version": "stage1-selector-v26-review-authoritative-verdict-audit-v1",
         "validation_state": "validated",
     }
     return {
@@ -49,7 +60,13 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
                         {"source": "source", "quote": "classification source"}
                     ],
                     "metadata_normalized": True,
-                    "prompt_version": "stage1-prompt-v22-completeness-review-repair-v1",
+                    "post_type_verdicts": _valid_verdict_map(
+                        CANONICAL_POST_TYPE_KEYS, "hands_on_usage"
+                    ),
+                    "product_label_verdicts": _valid_verdict_map(
+                        CANONICAL_PRODUCT_LABEL_KEYS, None
+                    ),
+                    "prompt_version": "stage1-prompt-v26-completeness-review-repair-v1",
                 }
             },
         },
@@ -137,7 +154,7 @@ def test_judgment_history_links_lineage_and_reruns_idempotently():
     assert rows[1].changes_json["metadata_normalized"] is True
     assert "prompt" not in rows[1].changes_json
     assert "source" not in rows[1].changes_json
-    assert rows[1].prompt_version == "stage1-prompt-v22-completeness-review-repair-v1"
+    assert rows[1].prompt_version == "stage1-prompt-v26-completeness-review-repair-v1"
     state = PostBrandClassificationState.objects.get(post=post, brand=brand)
     assert state.selected_final_judgment_id == rows[2].pk
     assert PostBrandClassificationJudgment.objects.filter(post=post).count() == 3
@@ -163,6 +180,157 @@ def test_trace_changes_rejects_non_boolean_normalization_metadata():
         "change_reasons": [],
         "evidence": [],
     }
+
+
+def test_review_verdict_maps_persist_as_bounded_metadata():
+    from core.models import PostBrandClassificationJudgment
+
+    post, brand = _publish_setup("verdict-maps")
+    result = {
+        "valid": True,
+        "unsanctioned_flags": [],
+        "by_brand": {brand.pk: _row(post_types=["hands_on_usage"])},
+        "classification_trace": _trace(brand.pk),
+    }
+    result["classification_trace"]["review"]["metadata_by_brand"][brand.pk].update(
+        {
+            "post_type_verdicts": _valid_verdict_map(
+                CANONICAL_POST_TYPE_KEYS, "hands_on_usage"
+            ),
+            "product_label_verdicts": {
+                key: False for key in CANONICAL_PRODUCT_LABEL_KEYS
+            },
+        }
+    )
+
+    _publish(post, result, run_id="provenance-run-verdict-maps")
+
+    review = PostBrandClassificationJudgment.objects.get(
+        post=post, brand=brand, stage="review"
+    )
+    assert review.changes_json["post_type_verdicts"] == _valid_verdict_map(
+        CANONICAL_POST_TYPE_KEYS, "hands_on_usage"
+    )
+    assert review.changes_json["product_label_verdicts"] == {
+        key: False for key in CANONICAL_PRODUCT_LABEL_KEYS
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param(
+            "post_type_verdicts",
+            {
+                **_valid_verdict_map(CANONICAL_POST_TYPE_KEYS, "hands_on_usage"),
+                "extra": False,
+            },
+            id="post-types-extra-key",
+        ),
+        pytest.param(
+            "product_label_verdicts",
+            {**_valid_verdict_map(CANONICAL_PRODUCT_LABEL_KEYS, "bug"), "extra": False},
+            id="product-labels-extra-key",
+        ),
+        pytest.param(
+            "post_type_verdicts",
+            {
+                **_valid_verdict_map(CANONICAL_POST_TYPE_KEYS, "hands_on_usage"),
+                "other": "true",
+            },
+            id="post-types-non-boolean",
+        ),
+        pytest.param(
+            "product_label_verdicts", {"bug": True}, id="product-labels-missing-key"
+        ),
+        pytest.param(
+            "product_label_verdicts",
+            _valid_verdict_map(CANONICAL_PRODUCT_LABEL_KEYS, "bug"),
+            id="product-labels-classification-mismatch",
+        ),
+    ],
+)
+def test_malformed_review_verdict_maps_reject_the_trace_atomically(
+    field, value, request
+):
+    from core.models import (
+        PostBrandClassificationJudgment,
+        PostBrandClassificationState,
+    )
+
+    run_id = f"provenance-run-{request.node.callspec.id}"
+    post, brand = _publish_setup(request.node.callspec.id)
+    result = {
+        "valid": True,
+        "unsanctioned_flags": [],
+        "by_brand": {brand.pk: _row(post_types=["hands_on_usage"])},
+        "classification_trace": _trace(brand.pk),
+    }
+    result["classification_trace"]["review"]["metadata_by_brand"][brand.pk][
+        field
+    ] = value
+
+    with pytest.raises(ValueError, match="classification_trace_review_"):
+        _publish(post, result, run_id=run_id)
+
+    assert not PostBrandClassificationJudgment.objects.filter(post=post).exists()
+    assert not PostBrandClassificationState.objects.filter(post=post).exists()
+
+
+@pytest.mark.parametrize(
+    "missing_field", ["post_type_verdicts", "product_label_verdicts"]
+)
+def test_v26_trace_requires_both_verdict_maps(missing_field):
+    from core.models import (
+        PostBrandClassificationJudgment,
+        PostBrandClassificationState,
+    )
+
+    post, brand = _publish_setup(f"missing-{missing_field}")
+    result = {
+        "valid": True,
+        "unsanctioned_flags": [],
+        "by_brand": {brand.pk: _row(post_types=["hands_on_usage"])},
+        "classification_trace": _trace(brand.pk),
+    }
+    del result["classification_trace"]["review"]["metadata_by_brand"][brand.pk][
+        missing_field
+    ]
+
+    with pytest.raises(ValueError, match=f"classification_trace_review_{missing_field}"):
+        _publish(post, result, run_id=f"provenance-run-missing-{missing_field}")
+
+    assert not PostBrandClassificationJudgment.objects.filter(post=post).exists()
+    assert not PostBrandClassificationState.objects.filter(post=post).exists()
+
+
+def test_inherited_v26_selector_still_requires_both_verdict_maps():
+    from core.models import (
+        PostBrandClassificationJudgment,
+        PostBrandClassificationState,
+    )
+
+    suffix = "inherited-selector-missing-maps"
+    post, brand = _publish_setup(suffix)
+    trace = _trace(brand.pk)
+    for stage in ("primary", "review", "final"):
+        trace[stage].pop("selector_version")
+    trace["review"]["metadata_by_brand"][brand.pk].pop("post_type_verdicts")
+    trace["review"]["metadata_by_brand"][brand.pk].pop("product_label_verdicts")
+    result = {
+        "valid": True,
+        "unsanctioned_flags": [],
+        "by_brand": {brand.pk: _row(post_types=["hands_on_usage"])},
+        "classification_trace": trace,
+    }
+
+    with pytest.raises(
+        ValueError, match="classification_trace_review_post_type_verdicts"
+    ):
+        _publish(post, result, run_id=f"provenance-run-{suffix}")
+
+    assert not PostBrandClassificationJudgment.objects.filter(post=post).exists()
+    assert not PostBrandClassificationState.objects.filter(post=post).exists()
 
 
 def test_trace_final_mismatch_rejects_before_any_projection_write():
