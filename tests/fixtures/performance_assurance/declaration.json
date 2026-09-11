@@ -4,7 +4,7 @@
   "package_source_revision": "0390f3c42195856a67afcb1d62464052cebf3476",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
-    "sha256": "af261de46674a3072b9b33299a48231cbf3499664a0c75e098d0dba587cb91a4"
+    "sha256": "0d45d13925beaddc04c128314a2bc1b6b063571347ba2b6b8f6655545c981cf6"
   },
   "base_origin": "https://pushinweight-web.onrender.com",
   "asset_origins": ["https://unpkg.com"],
