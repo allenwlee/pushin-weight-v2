@@ -1,0 +1,76 @@
+{
+  "baseline": {
+    "exact_post_type_sets": 76,
+    "exact_product_label_sets": 102,
+    "post_type_exact_set_accuracy": 0.6333333333333333,
+    "product_label_exact_set_accuracy": 0.85,
+    "rows": 120,
+    "source_candidate": "candidate-v3r9.json"
+  },
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort",
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "Strictly validate both candidate-blind annotation-shaped passes. Final outcome is context_missing if either pass says context_missing; otherwise it is classified. For classified rows, post types and product labels are the unions of both passes with other removed whenever any defined type is present; scalar values come from pass A. Continue to a full consumed-development assessment only if every row is valid, post-type exact sets reach at least 0.70, product-label exact sets remain at least 0.85, outcome accuracy reaches at least 0.90, and context_missing recall reaches at least 0.50. A selected implementation must then pass a fresh unseen final cohort under unchanged floors.",
+  "frozen_at": "2026-09-11T05:25:00Z",
+  "global_stop": "Each pass refuses request seven and reserves worst-case bytes and output tokens before every call. There are no retries or fallback calls, capacity cannot transfer between passes, and both passes use the same frozen prompt, model, sample, batch size, and temperature.",
+  "lanes": {
+    "candidate_review_shape_a_dev120": {
+      "batch_size": 20,
+      "input_usd_per_million": "0.44",
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.11",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 250000,
+      "maximum_output_tokens": 24576,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 6,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    },
+    "candidate_review_shape_b_dev120": {
+      "batch_size": 20,
+      "input_usd_per_million": "0.44",
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.11",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 250000,
+      "maximum_output_tokens": 24576,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 6,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "prior_probe_results": {
+    "explicit_type_checks": "failed",
+    "high_effort_thinking": "invalid",
+    "low_effort_thinking": "failed",
+    "ordinary_second_pass_union": "post-type exact sets were 71/120 or 0.5917 and failed"
+  },
+  "prompt": {
+    "bytes": 9403,
+    "sha256": "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+    "source_envelope": "blinded example_id, brand_id, source_language, context_provenance, and source",
+    "version": "stage1-prompt-v10-contract-review-shape"
+  },
+  "reason": "Two existing independent review-shaped Flash passes had 82.6% pairwise exact-set agreement, and their union exceeded the locked exact-set floor on both consumed cohorts. This probe tests that task shape at the required production batch size before altering the production call chain.",
+  "schema_version": "u18-development-provider-budget-v5"
+}
