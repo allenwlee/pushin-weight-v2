@@ -50,6 +50,7 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(quality, "BUDGET_PROMPT_V7_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_TEMPERATURE_ZERO_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_GOLD_AUDIT_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_PRODUCTION_BATCH_PATH", budget_path)
     monkeypatch.setattr(quality, "PRIVATE", tmp_path)
     monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
