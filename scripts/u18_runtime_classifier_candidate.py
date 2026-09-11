@@ -290,7 +290,11 @@ def run(*, budget_path: Path, cohort_path: Path, output_path: Path, private_dir:
     )
     results = classify_batch_pragmatics_full(
         [
-            {**dict(row["input"]), "source_language": row["source_language"]}
+            {
+                **dict(row["input"]),
+                "source_language": row["source_language"],
+                "source_role": row["source_role"],
+            }
             for row in rows
         ],
         [],

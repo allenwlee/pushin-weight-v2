@@ -170,7 +170,7 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
     input_rows = [
         {
             "tweet_id": "multi-brand",
-            "text": "DeepSeek and Qwen released updates",
+            "text": "DeepSeek and Qwen released updates https://t.co/example",
             "brand_ids": ["deepseek", "qwen"],
             "source_language": "en",
         }
@@ -178,6 +178,17 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
 
     def handler(kwargs):
         packets = json.loads(kwargs["messages"][0]["content"])
+        if packets and "proposals" in packets[0]:
+            return {
+                "results": [
+                    {
+                        "tweet_id": packet["tweet_id"],
+                        "unsanctioned_flags": ["unauthorized"],
+                        "decisions": [],
+                    }
+                    for packet in packets
+                ]
+            }
         return {
             "results": [
                 {
@@ -190,11 +201,6 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
                     },
                     "job_discovery_relevant": False,
                     "personnel_discovery_relevant": False,
-                    "unsanctioned_flags": (
-                        ["unauthorized"]
-                        if packet["brand_id"] == "qwen"
-                        else []
-                    ),
                 }
                 for packet in packets
             ]
@@ -205,6 +211,58 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
     assert result[0]["valid"] is True
     assert set(result[0]["by_brand"]) == {"deepseek", "qwen"}
     assert result[0]["unsanctioned_flags"] == ["unauthorized"]
+
+
+def test_review_wire_rejects_unknown_row_keys_and_requires_two_valid_passes():
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    input_rows = tweets(1)
+    call_count = 0
+
+    def handler(kwargs):
+        nonlocal call_count
+        call_count += 1
+        packets = json.loads(kwargs["messages"][0]["content"])
+        if call_count == 1:
+            return {
+                "results": [
+                    {
+                        "example_id": packets[0]["example_id"],
+                        "brand_id": packets[0]["brand_id"],
+                        "v3": {
+                            key: value
+                            for key, value in classification("deepseek").items()
+                            if key != "brand_id"
+                        },
+                        "job_discovery_relevant": False,
+                        "personnel_discovery_relevant": False,
+                        "unexpected": True,
+                    }
+                ]
+            }
+        if call_count == 2:
+            raise RuntimeError("fallback transport unavailable")
+        return {
+            "results": [
+                {
+                    "example_id": packets[0]["example_id"],
+                    "brand_id": packets[0]["brand_id"],
+                    "v3": {
+                        key: value
+                        for key, value in classification("deepseek").items()
+                        if key != "brand_id"
+                    },
+                    "job_discovery_relevant": False,
+                    "personnel_discovery_relevant": False,
+                }
+            ]
+        }
+
+    result = classify_batch_pragmatics_full(input_rows, [], FakeClient(handler))
+
+    assert result == [
+        {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
+    ]
 
 
 def test_empty_input_and_missing_client_make_no_transport_calls():
@@ -302,6 +360,7 @@ def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
                 "results": [
                     {
                         "tweet_id": "person",
+                        "unsanctioned_flags": ["crypto", "marketing_spam"],
                         "decisions": [
                             {
                                 "brand_id": "deepseek",
@@ -312,6 +371,7 @@ def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
                     },
                     {
                         "tweet_id": "residual",
+                        "unsanctioned_flags": [],
                         "decisions": [
                             {
                                 "brand_id": "qwen",
