@@ -94,6 +94,9 @@ BUDGET_FINAL_GATE_PATH = (
 BUDGET_FINAL_GATE_V2_PATH = (
     ROOT / "docs/analysis/2026-09-11-125833-u18-final-provider-budgets-v2.json"
 )
+BUDGET_FINAL_GATE_V3_PATH = (
+    ROOT / "docs/analysis/2026-09-11-131137-u18-final-provider-budgets-v3.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -227,6 +230,11 @@ Use these exact production semantics:
 outcome is classified or context_missing. classified requires at least one post_type and one valid sentiment. context_missing is only for missing source/context that prevents classification and requires empty post_types and product_labels. A bare reply or acknowledgment whose meaning or brand relationship depends on an absent parent is context_missing. For nationalism, none means the supplied source can be assessed and lacks that nationalism layer; null is only for missing or unusable context that prevents judgment.
 
 Return exactly {{"results":[{{"example_id":str,"brand_id":str,"v3":{{"outcome":str,"post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}},"job_discovery_relevant":bool,"personnel_discovery_relevant":bool,"evidence":[{{"field":str,"quote":str}}],"uncertainty_notes":[str]}}]}}. For classified rows, evidence must contain one to twelve short exact substrings copied from source text or stored context and identify the field each quote supports. A context_missing row may use an empty evidence array because a quote cannot prove absent brand context. Preserve every example_id and brand_id. No prose, markdown, unknown keys, or unsanctioned_flags."""
+CONTRACT_GOLD_AUDIT_REPAIR_SYSTEM = (
+    """Repair one malformed candidate-blind gold audit. Re-read the supplied source, reviewers, invalid audit, and validation error. Return the complete gold-audit JSON schema, including source-verifiable evidence and uncertainty_notes. Product-label keys are forbidden in post_types. Use only the exact closed vocabularies in the contract. Do not merely copy the invalid field, omit a required field, add prose, or mention the repair."""
+    + "\n\n"
+    + CONTRACT_GOLD_AUDIT_SYSTEM
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -265,12 +273,12 @@ class BudgetedTransport:
     def __init__(self, lane: str):
         self.lane = lane
         budget_profile = os.environ.get("U18_BUDGET_PROFILE")
-        if budget_profile in {"final", "final-v2"}:
-            path = (
-                BUDGET_FINAL_GATE_V2_PATH
-                if budget_profile == "final-v2"
-                else BUDGET_FINAL_GATE_PATH
-            )
+        if budget_profile in {"final", "final-v2", "final-v3"}:
+            path = {
+                "final": BUDGET_FINAL_GATE_PATH,
+                "final-v2": BUDGET_FINAL_GATE_V2_PATH,
+                "final-v3": BUDGET_FINAL_GATE_V3_PATH,
+            }[budget_profile]
             final_document = _read_json(path)
             try:
                 self.budget = final_document["lanes"][lane]
@@ -1070,6 +1078,8 @@ def run_contract_gold_auditor() -> None:
     second_by_id = {row["example_id"]: row for row in second["rows"]}
     transport = BudgetedTransport("contract_gold_auditor")
     fallback = BudgetedTransport("contract_gold_auditor_fallback")
+    repair = BudgetedTransport("contract_gold_auditor_repair")
+    final_repair = BudgetedTransport("contract_gold_auditor_final_repair")
     progress_path = PRIVATE / "contract-gold-auditor-progress.json"
     completed = (
         _read_json(progress_path).get("rows", []) if progress_path.exists() else []
@@ -1099,16 +1109,53 @@ def run_contract_gold_auditor() -> None:
                     request_id, system=CONTRACT_GOLD_AUDIT_SYSTEM, user=user
                 )
                 parsed = _parse_contract_audit(response, batch)
-        except (RuntimeError, TypeError, ValueError):
+        except (RuntimeError, TypeError, ValueError) as batch_error:
             parsed = []
             for source, packet in zip(batch, packets, strict=True):
                 fallback_id = f"contract_gold_auditor_fallback:{source['example_id']}"
-                response = fallback.call(
-                    fallback_id,
-                    system=CONTRACT_GOLD_AUDIT_SYSTEM,
-                    user=json.dumps([packet], ensure_ascii=False, sort_keys=True),
+                invalid_response: Mapping[str, Any] | None = None
+                validation_error = str(batch_error)
+                try:
+                    invalid_response = fallback.call(
+                        fallback_id,
+                        system=CONTRACT_GOLD_AUDIT_SYSTEM,
+                        user=json.dumps([packet], ensure_ascii=False, sort_keys=True),
+                    )
+                    parsed.extend(_parse_contract_audit(invalid_response, [source]))
+                    continue
+                except (RuntimeError, TypeError, ValueError) as exc:
+                    validation_error = str(exc)
+                repair_packet = {
+                    "source_and_reviews": packet,
+                    "invalid_audit": invalid_response,
+                    "validation_error": validation_error,
+                    "required_post_types": list(CANONICAL_POST_TYPE_KEYS),
+                    "required_product_labels": list(PRODUCT_LABEL_KEYS),
+                }
+                repair_id = f"contract_gold_auditor_repair:{source['example_id']}"
+                repaired: Mapping[str, Any] | None = None
+                try:
+                    repaired = repair.call(
+                        repair_id,
+                        system=CONTRACT_GOLD_AUDIT_REPAIR_SYSTEM,
+                        user=json.dumps(
+                            repair_packet, ensure_ascii=False, sort_keys=True
+                        ),
+                    )
+                    parsed.extend(_parse_contract_audit(repaired, [source]))
+                    continue
+                except (RuntimeError, TypeError, ValueError) as exc:
+                    repair_packet["invalid_audit"] = repaired
+                    repair_packet["validation_error"] = str(exc)
+                final_id = (
+                    f"contract_gold_auditor_final_repair:{source['example_id']}"
                 )
-                parsed.extend(_parse_contract_audit(response, [source]))
+                repaired = final_repair.call(
+                    final_id,
+                    system=CONTRACT_GOLD_AUDIT_REPAIR_SYSTEM,
+                    user=json.dumps(repair_packet, ensure_ascii=False, sort_keys=True),
+                )
+                parsed.extend(_parse_contract_audit(repaired, [source]))
         by_id.update({row["example_id"]: row for row in parsed})
         _write_json(progress_path, {"rows": list(by_id.values())})
         print(f"contract_gold_auditor: {len(by_id)}/{len(cohort['rows'])}", flush=True)

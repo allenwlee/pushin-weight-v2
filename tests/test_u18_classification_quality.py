@@ -163,6 +163,11 @@ def test_corrected_gold_uses_exact_production_semantics_without_candidates():
         "Product-label keys are forbidden in post_types"
         in quality.CONTRACT_REPAIR_SYSTEM
     )
+    assert (
+        "Product-label keys are forbidden in post_types"
+        in quality.CONTRACT_GOLD_AUDIT_REPAIR_SYSTEM
+    )
+    assert "source-verifiable evidence" in quality.CONTRACT_GOLD_AUDIT_REPAIR_SYSTEM
     assert quality.TAXONOMIES["v3r3"]["prompt_version"] == "stage1-prompt-v6"
     assert quality.TAXONOMIES["v3r4"]["prompt_version"] == "stage1-prompt-v7"
     assert quality.TAXONOMIES["v3r5"]["prompt_version"] == "stage1-prompt-v8"
