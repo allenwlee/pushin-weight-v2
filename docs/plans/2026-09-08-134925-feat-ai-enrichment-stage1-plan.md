@@ -1366,6 +1366,19 @@ pass overall and per-language continuation floors before this shape can enter
 the production path or consume the full development cohort; it still cannot
 approve release.
 
+The v15 Flash audit completed 120/120 rows in 26 attempts with 82,753
+reported input tokens and 25,627 reported output tokens. It improved outcome
+accuracy to 99.2% and `context_missing` recall to 80%, but failed the label
+gates: post-type exact sets were 62.5%, product-label exact sets were 76.7%,
+and EN/ZH-CN post-type exact sets were 50.0%/60.0%. The complete audit shape
+therefore does not solve the repeated Flash judgment ceiling. A Pro classifier
+from scratch remains rejected by the earlier 43.6% result. The next bounded
+test is a different role: a six-request, 30-row Pro evidence audit of the saved
+prompt-v10 proposal, frozen in
+`docs/analysis/2026-09-11-164000-u18-v16-pro-audit-probe-budget.json`. It stops
+at 30 rows unless it clears the exact-set continuation floors; no production
+code or unseen cohort changes before that result.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
