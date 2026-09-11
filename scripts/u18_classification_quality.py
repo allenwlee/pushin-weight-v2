@@ -91,6 +91,9 @@ BUDGET_PROMPT_V10_PATH = (
 BUDGET_FINAL_GATE_PATH = (
     ROOT / "docs/analysis/2026-09-11-125004-u18-final-provider-budgets.json"
 )
+BUDGET_FINAL_GATE_V2_PATH = (
+    ROOT / "docs/analysis/2026-09-11-125833-u18-final-provider-budgets-v2.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -247,11 +250,28 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _read_cohort() -> dict[str, Any]:
+    cohort = _read_json(COHORT_PATH)
+    rows = cohort.get("rows")
+    if not isinstance(rows, list):
+        raise TypeError("cohort rows must be an array")
+    example_ids = [row.get("example_id") for row in rows if isinstance(row, Mapping)]
+    if len(example_ids) != len(rows) or len(set(example_ids)) != len(rows):
+        raise ValueError("cohort example_id values must be unique")
+    return cohort
+
+
 class BudgetedTransport:
     def __init__(self, lane: str):
         self.lane = lane
-        if os.environ.get("U18_BUDGET_PROFILE") == "final":
-            final_document = _read_json(BUDGET_FINAL_GATE_PATH)
+        budget_profile = os.environ.get("U18_BUDGET_PROFILE")
+        if budget_profile in {"final", "final-v2"}:
+            path = (
+                BUDGET_FINAL_GATE_V2_PATH
+                if budget_profile == "final-v2"
+                else BUDGET_FINAL_GATE_PATH
+            )
+            final_document = _read_json(path)
             try:
                 self.budget = final_document["lanes"][lane]
             except KeyError as exc:
@@ -516,7 +536,7 @@ def _invalid_candidate_row(
 
 def run_candidate(taxonomy_name: str) -> None:
     taxonomy = TAXONOMIES[taxonomy_name]
-    cohort = _read_json(COHORT_PATH)
+    cohort = _read_cohort()
     lane = f"candidate_{taxonomy_name}"
     transport = BudgetedTransport(lane)
     fallback_lane = {
@@ -671,7 +691,7 @@ def _project_v3_to_v2(classification: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def run_reviewer(lane: str) -> None:
-    cohort = _read_json(COHORT_PATH)
+    cohort = _read_cohort()
     contract_review = lane in {"contract_reviewer_a", "contract_reviewer_b"}
     batch_size = 5 if lane == "reviewer_minimax" else BATCH_SIZE
     transport_lane = (
@@ -789,7 +809,7 @@ def run_reviewer(lane: str) -> None:
 
 
 def run_adjudicator(*, contract_review: bool = False) -> None:
-    cohort = _read_json(COHORT_PATH)
+    cohort = _read_cohort()
     first_name = "contract_reviewer_a" if contract_review else "reviewer_deepseek"
     second_name = "contract_reviewer_b" if contract_review else "reviewer_minimax"
     first = _read_json(PRIVATE / f"{first_name}.json")
@@ -1043,7 +1063,7 @@ def _resolve_source_quote(source: str, quote: str) -> str | None:
 
 
 def run_contract_gold_auditor() -> None:
-    cohort = _read_json(COHORT_PATH)
+    cohort = _read_cohort()
     first = _read_json(PRIVATE / "contract_reviewer_a.json")
     second = _read_json(PRIVATE / "contract_reviewer_b.json")
     first_by_id = {row["example_id"]: row for row in first["rows"]}

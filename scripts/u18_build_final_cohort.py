@@ -19,8 +19,8 @@ import psycopg
 
 LANGUAGES = ("en", "zh", "ja")
 LANGUAGE_OUTPUT = {"en": "en", "zh": "zh-cn", "ja": "ja"}
-SEED = "u18-2026-09-11-final-v1"
-COHORT_ID = "u18-prod-dump-20260910-final-v1"
+SEED = "u18-2026-09-11-final-v3"
+COHORT_ID = "u18-prod-dump-20260910-final-v3"
 
 PATTERNS = {
     "job_listing_terms": {
@@ -65,6 +65,14 @@ PATTERNS = {
     },
 }
 
+ROLE_QUOTAS = {
+    ("job_listing_terms", "en"): {"official": 7},
+    ("job_listing_terms", "ja"): {"official": 1},
+    ("personnel_transition_terms", "en"): {"official": 10, "staff": 3},
+    ("event_opportunity_terms", "en"): {"official": 10, "staff": 7},
+    ("event_opportunity_terms", "ja"): {"official": 1},
+}
+
 _SELECT = """
 SELECT DISTINCT ON (p.tweet_id, pb.brand_id)
        p.tweet_id,
@@ -101,11 +109,11 @@ def _rank(category: str, row: tuple[Any, ...]) -> str:
     ).hexdigest()
 
 
-def _excluded_pairs(path: Path | None) -> set[tuple[str, str]]:
+def _excluded_example_ids(path: Path | None) -> set[str]:
     if path is None:
         return set()
     document = json.loads(path.read_text(encoding="utf-8"))
-    return {(str(row["example_id"]), str(row["brand_id"])) for row in document["rows"]}
+    return {str(row["example_id"]) for row in document["rows"]}
 
 
 def _fetch(
@@ -161,29 +169,62 @@ def _take(
     *,
     category: str,
     quota: int,
-    chosen: set[tuple[str, str]],
-    excluded: set[tuple[str, str]],
+    chosen: set[str],
+    excluded: set[str],
 ) -> list[tuple[Any, ...]]:
     output = []
     for row in sorted(candidates, key=lambda item: _rank(category, item)):
-        pair = (str(row[0]), str(row[1]))
-        if pair in chosen or pair in excluded:
+        example_id = str(row[0])
+        if example_id in chosen or example_id in excluded:
             continue
-        chosen.add(pair)
+        chosen.add(example_id)
         output.append(row)
         if len(output) == quota:
             return output
     raise RuntimeError(f"{category} supplied {len(output)} rows; required {quota}")
 
 
-def build(connection: psycopg.Connection[Any], excluded: set[tuple[str, str]]) -> dict[str, Any]:
-    chosen: set[tuple[str, str]] = set()
+def _take_with_role_support(
+    candidates: list[tuple[Any, ...]],
+    *,
+    category: str,
+    language: str,
+    quota: int,
+    chosen: set[str],
+    excluded: set[str],
+) -> list[tuple[Any, ...]]:
+    output = []
+    for role, role_quota in ROLE_QUOTAS.get((category, language), {}).items():
+        output.extend(
+            _take(
+                (row for row in candidates if row[8] == role),
+                category=f"{category}:{language}:{role}",
+                quota=role_quota,
+                chosen=chosen,
+                excluded=excluded,
+            )
+        )
+    output.extend(
+        _take(
+            candidates,
+            category=f"{category}:{language}:remainder",
+            quota=quota - len(output),
+            chosen=chosen,
+            excluded=excluded,
+        )
+    )
+    return output
+
+
+def build(connection: psycopg.Connection[Any], excluded: set[str]) -> dict[str, Any]:
+    chosen: set[str] = set()
     rows: list[dict[str, Any]] = []
     for category in ("job_listing_terms", "personnel_transition_terms"):
         for language in LANGUAGES:
-            selected = _take(
+            selected = _take_with_role_support(
                 _fetch(connection, language, PATTERNS[category][language]),
-                category=f"{category}:{language}",
+                category=category,
+                language=language,
                 quota=25,
                 chosen=chosen,
                 excluded=excluded,
@@ -213,9 +254,10 @@ def build(connection: psycopg.Connection[Any], excluded: set[tuple[str, str]]) -
             )
     for language in LANGUAGES:
         category = "event_opportunity_terms"
-        selected = _take(
+        selected = _take_with_role_support(
             _fetch(connection, language, PATTERNS[category][language]),
-            category=f"{category}:{language}",
+            category=category,
+            language=language,
             quota=30,
             chosen=chosen,
             excluded=excluded,
@@ -242,6 +284,7 @@ def build(connection: psycopg.Connection[Any], excluded: set[tuple[str, str]]) -
             for row in selected
         )
     assert len(rows) == 700
+    assert len({row["example_id"] for row in rows}) == len(rows)
     return {
         "cohort_id": COHORT_ID,
         "rows": sorted(rows, key=lambda row: (row["example_id"], row["brand_id"])),
@@ -259,7 +302,7 @@ def main() -> None:
     if not database_url:
         raise RuntimeError("DATABASE_URL is required")
     with psycopg.connect(database_url) as connection:
-        document = build(connection, _excluded_pairs(args.exclude_cohort))
+        document = build(connection, _excluded_example_ids(args.exclude_cohort))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",

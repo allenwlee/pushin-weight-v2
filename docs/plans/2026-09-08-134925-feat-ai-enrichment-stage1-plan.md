@@ -1254,17 +1254,21 @@ extraction, profile backfill, synthesis demand/prewarm, and other new live
 activation flags remain off until their owning gates pass.
 
 U18 is now in progress. Development prompt iterations ended at the frozen
-taxonomy-v3/prompt-v10 production candidate. A separate deterministic 700-row
-final cohort was selected from the verified September 10 dump with 310
-prevalence rows, 300 multilingual rare-term candidates, and 90
-event/opportunity boundary candidates; its SHA-256 is
-`a966547cea10cef16c89e2151e251233a9ce6284678d204ce0d5c7920b829afb`, and it
+taxonomy-v3/prompt-v10 production candidate. The first final reviewer preflight
+exposed 16 duplicated post IDs among 700 post-brand rows and was stopped before
+producing a complete reviewer, candidate, or gold artifact. Its partial private
+packets are excluded, and its bounded usage is recorded in the replacement
+budget. A corrected deterministic 700-row cohort contains 700 unique post IDs,
+310 prevalence rows, 300 multilingual rare-term candidates, 90
+event/opportunity boundary candidates, 30 official-account rows, and 12
+staff-account rows. Its SHA-256 is
+`3c7ddbe896f0fc5b5f163f7ac300af4431d8aacac2c3da615b6e239960f1598b`, and it
 has zero overlap with the 500-row development cohort. The final reviewer and
 auditor envelope excludes `stratum`, `source_role`, and `source_hint`, because
 those selection fields are not production evidence and their inclusion in the
-development review packet could bias gold labels. The isolated final provider
+development review packet could bias gold labels. The isolated replacement
 budget is frozen in
-`docs/analysis/2026-09-11-125004-u18-final-provider-budgets.json`; no final
-candidate or gold call has run yet. The original machine-readable quality
-floors remain unchanged. U19–U24 and every live activation flag remain gated
-on the complete U18 decision.
+`docs/analysis/2026-09-11-125833-u18-final-provider-budgets-v2.json`; no final
+candidate or gold call has run on the corrected cohort. The original
+machine-readable quality floors remain unchanged. U19–U24 and every live
+activation flag remain gated on the complete U18 decision.

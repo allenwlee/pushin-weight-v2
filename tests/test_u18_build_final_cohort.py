@@ -22,6 +22,12 @@ def _row(tweet_id: str = "post-1") -> tuple[object, ...]:
     )
 
 
+def _row_for_brand(tweet_id: str, brand_id: str) -> tuple[object, ...]:
+    row = list(_row(tweet_id))
+    row[1] = brand_id
+    return tuple(row)
+
+
 def test_source_row_keeps_selection_metadata_outside_classifier_input():
     row = cohort._source_row(
         _row(), stratum="rare_positive", source_hint="job_listing_terms"
@@ -46,9 +52,9 @@ def test_source_row_keeps_selection_metadata_outside_classifier_input():
     assert row["input_context_fingerprint"] == hashlib.sha256(canonical).hexdigest()
 
 
-def test_take_is_deterministic_and_excludes_development_pairs():
+def test_take_is_deterministic_and_excludes_development_posts():
     candidates = [_row("post-3"), _row("post-1"), _row("post-2")]
-    excluded = {("post-2", "llama")}
+    excluded = {"post-2"}
 
     first = cohort._take(
         candidates,
@@ -67,3 +73,21 @@ def test_take_is_deterministic_and_excludes_development_pairs():
 
     assert first == second
     assert {row[0] for row in first} == {"post-1", "post-3"}
+
+
+def test_take_keeps_only_one_brand_attribution_per_post():
+    candidates = [
+        _row("post-1"),
+        _row_for_brand("post-1", "other-brand"),
+        _row("post-2"),
+    ]
+
+    selected = cohort._take(
+        candidates,
+        category="prevalence:ja",
+        quota=2,
+        chosen=set(),
+        excluded=set(),
+    )
+
+    assert len({row[0] for row in selected}) == 2

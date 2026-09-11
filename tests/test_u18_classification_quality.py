@@ -103,6 +103,24 @@ def test_final_budget_profile_cannot_fall_through_to_development_budget(
         quality.BudgetedTransport("development_only")
 
 
+def test_cohort_rejects_duplicate_example_ids_before_transport(monkeypatch, tmp_path):
+    cohort_path = tmp_path / "cohort-source.json"
+    cohort_path.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {"example_id": "post-1", "brand_id": "brand-a"},
+                    {"example_id": "post-1", "brand_id": "brand-b"},
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(quality, "COHORT_PATH", cohort_path)
+
+    with pytest.raises(ValueError, match="example_id values must be unique"):
+        quality._read_cohort()
+
+
 def test_v2_and_v3_parsers_keep_separate_type_vocabularies():
     classification = {
         "outcome": "classified",
