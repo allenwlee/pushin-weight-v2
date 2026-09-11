@@ -16,7 +16,6 @@ class CustomLocaleMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        from django.utils import translation
         # 1. Read our `locale` cookie
         cookie_locale = request.COOKIES.get("locale")
         if cookie_locale:

@@ -164,6 +164,40 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
     }
 
 
+def test_person_reader_exposes_pending_organization_review():
+    person = Person.objects.create(display_name="Lee Jiyin")
+    candidate = BrandDiscoveryCandidate.objects.create(
+        observed_name="New AI Co",
+        candidate_handles=["new_ai_co"],
+        source_identities=["post:personnel-news"],
+        verification_status="pending",
+        candidate_identity="9" * 64,
+        first_observed_at=NOW,
+        last_observed_at=NOW,
+    )
+    PersonBrandAffiliation.objects.create(
+        person=person,
+        brand_discovery_candidate=candidate,
+        affiliation_type="employment",
+        observed_organization_name="New AI Co",
+        observed_organization_handle="new_ai_co",
+        status="current",
+        claim_identity="8" * 64,
+    )
+
+    affiliation = person_intelligence(person.pk)["affiliations"][0]
+
+    assert affiliation["brand_id"] is None
+    assert affiliation["brand_discovery_candidate_id"] == candidate.pk
+    assert affiliation["organization_review"] == {
+        "candidate_id": candidate.pk,
+        "observed_name": "New AI Co",
+        "candidate_handles": ["new_ai_co"],
+        "verification_status": "pending",
+        "reviewed_brand_id": None,
+    }
+
+
 def test_job_reader_keeps_one_post_as_evidence_for_several_roles(
     django_assert_num_queries,
 ):

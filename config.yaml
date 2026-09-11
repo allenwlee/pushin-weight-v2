@@ -186,15 +186,15 @@ targeted_extraction:
       max_tokens: 2000
     job_listing_extraction:
       model: deepseek-v4-flash
-      prompt_version: job-listing-extraction-v1
+      prompt_version: job-listing-extraction-v2
       max_tokens: 4000
     personnel_change_extraction:
       model: deepseek-v4-flash
-      prompt_version: personnel-change-extraction-v1
+      prompt_version: personnel-change-extraction-v2
       max_tokens: 3000
     profile_affiliation_extraction:
       model: deepseek-v4-flash
-      prompt_version: profile-affiliation-extraction-v1
+      prompt_version: profile-affiliation-extraction-v2
       max_tokens: 2000
 
 # Reply-chain cluster threshold. Tune via PR.

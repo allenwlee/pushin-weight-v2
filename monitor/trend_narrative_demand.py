@@ -158,46 +158,56 @@ def select_demanded_snapshot(
     current = now or timezone.now()
     copied = deepcopy(dict(snapshot))
     window_days = int(copied["window_days"])
-    rows = {
-        row.brand_id: row
-        for row in TrendNarrativeDemand.objects.filter(window_days=window_days).filter(
-            Q(is_pinned=True) | Q(hot_until__gte=current)
-        )
-    }
-    selected = []
-    fingerprints: dict[str, str] = {}
-    for dossier in copied.get("dossiers") or []:
-        key = str(dossier.get("brand_key") or "")
-        demand = rows.get(key)
-        if demand is None:
-            continue
-        fingerprint = material_input_fingerprint(dossier, config=config)
-        operator_refresh = (
-            demand.operator_request_count > demand.last_enqueued_operator_request_count
-        )
-        changed = demand.last_material_input_fingerprint != fingerprint
-        if changed or operator_refresh:
-            selected.append(dossier)
-            fingerprints[key] = fingerprint
-            TrendNarrativeDemand.objects.filter(pk=demand.pk).update(
-                state=TrendNarrativeDemand.State.SCHEDULED,
-                last_enqueued_at=current,
-                last_enqueued_request_count=F("request_count"),
-                last_enqueued_operator_request_count=F("operator_request_count"),
-                last_decision_reason=(
-                    "operator_refresh" if operator_refresh else "material_change"
-                ),
+    with transaction.atomic():
+        rows = {
+            row.brand_id: row
+            for row in TrendNarrativeDemand.objects.select_for_update()
+            .filter(window_days=window_days)
+            .filter(Q(is_pinned=True) | Q(hot_until__gte=current))
+        }
+        selected = []
+        fingerprints: dict[str, str] = {}
+        targets: dict[str, dict[str, Any]] = {}
+        for dossier in copied.get("dossiers") or []:
+            key = str(dossier.get("brand_key") or "")
+            demand = rows.get(key)
+            if demand is None:
+                continue
+            fingerprint = material_input_fingerprint(dossier, config=config)
+            operator_refresh = (
+                demand.operator_request_count
+                > demand.last_enqueued_operator_request_count
             )
-        else:
-            TrendNarrativeDemand.objects.filter(pk=demand.pk).update(
-                state=TrendNarrativeDemand.State.SUPPRESSED,
-                last_decision_reason="unchanged",
-                suppression_count=F("suppression_count") + 1,
-            )
+            changed = demand.last_material_input_fingerprint != fingerprint
+            if changed or operator_refresh:
+                selected.append(dossier)
+                fingerprints[key] = fingerprint
+                targets[key] = {
+                    "contract_version": demand.target_contract_version,
+                    "prompt_version": demand.target_prompt_version,
+                    "model": demand.target_model,
+                    "operator_request_count": demand.operator_request_count,
+                }
+                TrendNarrativeDemand.objects.filter(pk=demand.pk).update(
+                    state=TrendNarrativeDemand.State.SCHEDULED,
+                    last_enqueued_at=current,
+                    last_enqueued_request_count=F("request_count"),
+                    last_enqueued_operator_request_count=F("operator_request_count"),
+                    last_decision_reason=(
+                        "operator_refresh" if operator_refresh else "material_change"
+                    ),
+                )
+            else:
+                TrendNarrativeDemand.objects.filter(pk=demand.pk).update(
+                    state=TrendNarrativeDemand.State.SUPPRESSED,
+                    last_decision_reason="unchanged",
+                    suppression_count=F("suppression_count") + 1,
+                )
     copied["dossiers"] = selected
     copied["demand_selection"] = {
         "policy_version": config.materiality_policy_version,
         "fingerprints": fingerprints,
+        "targets": targets,
     }
     return copied
 
@@ -487,14 +497,22 @@ def _stable_value(value: Any) -> Any:
 def mark_run_demands_satisfied(run: TrendNarrativeRun, *, now=None) -> int:
     selection = (run.snapshot or {}).get("demand_selection") or {}
     fingerprints = selection.get("fingerprints") or {}
-    if not isinstance(fingerprints, dict):
+    targets = selection.get("targets") or {}
+    if not isinstance(fingerprints, dict) or not isinstance(targets, dict):
         return 0
     current = now or timezone.now()
     updated = 0
     for brand_key, fingerprint in fingerprints.items():
+        target = targets.get(brand_key)
+        if not isinstance(target, Mapping):
+            continue
         updated += TrendNarrativeDemand.objects.filter(
             brand_id=brand_key,
             window_days=run.window_days,
+            target_contract_version=target.get("contract_version"),
+            target_prompt_version=target.get("prompt_version"),
+            target_model=target.get("model"),
+            operator_request_count=target.get("operator_request_count"),
         ).update(
             state=TrendNarrativeDemand.State.SATISFIED,
             last_material_input_fingerprint=str(fingerprint),

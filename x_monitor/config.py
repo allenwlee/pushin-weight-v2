@@ -245,10 +245,15 @@ class TargetedExtractionRoleConfig(BaseModel):
 
 
 def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
+    versions = {
+        "job_listing_extraction": "job-listing-extraction-v2",
+        "personnel_change_extraction": "personnel-change-extraction-v2",
+        "profile_affiliation_extraction": "profile-affiliation-extraction-v2",
+    }
     return {
         role: TargetedExtractionRoleConfig(
             model="deepseek-v4-flash",
-            prompt_version=f"{role}-v1",
+            prompt_version=versions.get(role, f"{role}-v1"),
         )
         for role in sorted(TARGETED_EXTRACTION_ROLES)
     }

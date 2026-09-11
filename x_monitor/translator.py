@@ -1531,7 +1531,6 @@ class AnthropicClaudeClient:
         model returns non-JSON (e.g., wrapped in code fences), we
         attempt to strip the fences before parsing.
         """
-        import json as _json
         msg = self._client.messages.create(**kwargs)
         # Concatenate all text blocks (the model may emit multiple).
         text_parts = []

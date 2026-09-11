@@ -649,7 +649,7 @@ natural keys, index definitions, JSONField `db_column` renames
 
 ## Stage 1C intelligence tables: 2026-09-10
 
-Migrations 0031–0036 add the thirteen-type taxonomy, organization seeds,
+Migrations 0031–0039 add the thirteen-type taxonomy, organization seeds,
 normalized intelligence storage, targeted-extraction state, and database
 invariants. They are additive and do not rewrite existing posts, accounts, or
 taxonomy-v2 classification rows.
@@ -659,7 +659,7 @@ taxonomy-v2 classification rows.
 | `people` | UUID `id` | Person identity with localized names, reduced-precision DOB, `sexs`, nationality, ethnicity, and primary language |
 | `people_accounts` | Composite `(person_id, author_id)` | Person-to-account junction; `author_id` is an FK to `accounts.author_id` |
 | `account_profile_snapshots` | `BigAutoField id` plus unique account/hash/first observation | Consecutive-hash-compressed observed profile history and business-label facts |
-| `people_brand_affiliations` | `BigAutoField id`, unique `claim_identity` | Interpreted person-to-brand relationship; company is derived from the brand-company edge |
+| `people_brand_affiliations` | `BigAutoField id`, unique `claim_identity` | Interpreted person relationship owned by exactly one known brand or pending organization candidate; company is derived after brand review |
 | `people_brand_affiliation_evidence` | `BigAutoField id`, unique affiliation/evidence hash | Source post, profile snapshot, or validated URL supporting an affiliation |
 | `brand_discovery_candidates` | `BigAutoField id`, unique `candidate_identity` | Pending identity-review queue for untracked organizations; optional reviewed brand FK |
 | `job_listings` | `BigAutoField id`, unique `listing_identity` | One role/requisition owned by a known brand or pending organization candidate |

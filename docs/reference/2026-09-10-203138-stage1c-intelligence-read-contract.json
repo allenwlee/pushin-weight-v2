@@ -17,6 +17,8 @@
         "person.primary_language",
         "person.accounts[].author_id",
         "affiliations[].brand_id",
+        "affiliations[].brand_discovery_candidate_id",
+        "affiliations[].organization_review",
         "affiliations[].affiliation_type",
         "affiliations[].status",
         "affiliations[].start_date.precision",
@@ -118,7 +120,7 @@
         "source_language": "en",
         "organization_ai_relationship": null,
         "role_ai_relationship": null,
-        "extraction": {"version": "job-listing-extraction-v1", "confidence": 0.9},
+        "extraction": {"version": "job-listing-extraction-v2", "confidence": 0.9},
         "evidence": []
       }
     },

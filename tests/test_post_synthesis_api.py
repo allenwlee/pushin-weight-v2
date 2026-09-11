@@ -7,6 +7,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.signing import salted_hmac
 from django.test import Client, RequestFactory
 
 from core.models import Post, PostSynthesisDemand, PostSynthesisRateLimitBucket
@@ -102,18 +103,28 @@ def test_database_rate_limit_is_atomic_per_identity_bucket():
     assert _accept_synthesis_rate(request, cost=119)
     assert _accept_synthesis_rate(request, cost=1)
     assert not _accept_synthesis_rate(request, cost=1)
-    assert sorted(PostSynthesisRateLimitBucket.objects.values_list("count", flat=True)) == [
+    assert sorted(
+        PostSynthesisRateLimitBucket.objects.values_list("count", flat=True)
+    ) == [
         120,
         120,
     ]
+    assert set(
+        PostSynthesisRateLimitBucket.objects.values_list("scope_hash", flat=True)
+    ) == {
+        salted_hmac(
+            "post-synthesis-rate-limit",
+            identity,
+            algorithm="sha256",
+        ).hexdigest()
+        for identity in (f"user:{user.pk}", "ip:127.0.0.1")
+    }
 
 
 def test_management_command_uses_the_shared_demand_and_poll_shape():
     post = Post.objects.create(tweet_id="command-demand", text="Post")
     created_out = StringIO()
-    call_command(
-        "request_post_synthesis", post.pk, "--json", stdout=created_out
-    )
+    call_command("request_post_synthesis", post.pk, "--json", stdout=created_out)
     polled_out = StringIO()
     call_command(
         "request_post_synthesis",

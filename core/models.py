@@ -3971,6 +3971,15 @@ class PersonBrandAffiliation(models.Model):
         on_delete=models.PROTECT,
         related_name="person_affiliations",
         to_field="nickname",
+        blank=True,
+        null=True,
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        "BrandDiscoveryCandidate",
+        on_delete=models.PROTECT,
+        related_name="person_affiliations",
+        blank=True,
+        null=True,
     )
     affiliation_type = models.CharField(max_length=32, choices=AFFILIATION_TYPES)
     observed_organization_name = models.TextField()
@@ -4032,6 +4041,19 @@ class PersonBrandAffiliation(models.Model):
             ),
         ]
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        brand__isnull=False,
+                        brand_discovery_candidate__isnull=True,
+                    )
+                    | models.Q(
+                        brand__isnull=True,
+                        brand_discovery_candidate__isnull=False,
+                    )
+                ),
+                name="ck_pba_one_organization",
+            ),
             models.CheckConstraint(
                 condition=models.Q(
                     affiliation_type__in=[

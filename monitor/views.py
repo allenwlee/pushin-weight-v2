@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import json
 import logging
 import re
@@ -3596,7 +3595,9 @@ def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
     address = str(request.META.get("REMOTE_ADDR") or "-")
     identities = (f"user:{request.user.pk}", f"ip:{address}")
     scope_hashes = [
-        hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        salted_hmac(
+            "post-synthesis-rate-limit", identity, algorithm="sha256"
+        ).hexdigest()
         for identity in identities
     ]
     limit = 120

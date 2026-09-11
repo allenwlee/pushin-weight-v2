@@ -37,6 +37,19 @@ def _config():
     return config
 
 
+def test_replay_sensitive_targeted_roles_use_v2_identities():
+    roles = _config().roles
+    assert roles["job_listing_extraction"].prompt_version == (
+        "job-listing-extraction-v2"
+    )
+    assert roles["personnel_change_extraction"].prompt_version == (
+        "personnel-change-extraction-v2"
+    )
+    assert roles["profile_affiliation_extraction"].prompt_version == (
+        "profile-affiliation-extraction-v2"
+    )
+
+
 def _post(
     tweet_id="targeted",
     *,
@@ -259,26 +272,34 @@ def test_later_job_evidence_converges_on_listing_and_advances_last_seen():
     )
     later.fetched_at = first.fetched_at.replace(year=first.fetched_at.year + 1)
     later.save(update_fields=["fetched_at"])
-    response = {
-        "records": [
-            {
-                "brand_id": "anthropic",
-                "organization_name": "Anthropic",
-                "title": "Researcher",
-                "canonical_url": canonical_url,
-                "application_url": canonical_url,
-                "application_route_kind": "direct_url",
-                "status": "open",
-            }
-        ]
+    first_record = {
+        "brand_id": "anthropic",
+        "organization_name": "Anthropic",
+        "title": "Researcher",
+        "canonical_url": canonical_url,
+        "application_url": canonical_url,
+        "application_route_kind": "direct_url",
+        "status": "unknown",
+    }
+    later_record = {
+        **first_record,
+        "status": "open",
+        "posted_at": "2026-09-10T01:00:00Z",
+        "education_requirements": "Doctorate or equivalent experience",
+        "experience_requirements": "Published machine-learning research",
+        "locations": ["San Francisco"],
     }
 
-    for post in (first, later):
+    for post, record in ((first, first_record), (later, later_record)):
         result = run_targeted_extractions(
             post=post,
             post_types={"job_listings"},
             config=_config(),
-            calls={"job_listing_extraction": lambda *_args: response},
+            calls={
+                "job_listing_extraction": (
+                    lambda *_args, record=record: {"records": [record]}
+                )
+            },
             max_calls=20,
         )
         assert result.failed_roles == ()
@@ -286,7 +307,93 @@ def test_later_job_evidence_converges_on_listing_and_advances_last_seen():
     listing = JobListing.objects.get()
     assert listing.first_seen_at == first.fetched_at
     assert listing.last_seen_at == later.fetched_at
+    assert listing.status == "open"
+    assert listing.posted_at.isoformat() == "2026-09-10T01:00:00+00:00"
+    assert listing.education_requirements == "Doctorate or equivalent experience"
+    assert listing.experience_requirements == "Published machine-learning research"
+    assert listing.locations == ["San Francisco"]
     assert listing.evidence.count() == 2
+
+
+def test_job_extraction_keeps_source_timestamps_and_requirements():
+    application_url = "https://example.com/jobs/source-fields"
+    post = _post(
+        "job-source-fields",
+        text="Apply for our research role.",
+        source_urls=(application_url,),
+    )
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"job_listings"},
+        config=_config(),
+        calls={
+            "job_listing_extraction": lambda *_args: {
+                "records": [
+                    {
+                        "brand_id": "anthropic",
+                        "organization_name": "Anthropic",
+                        "title": "Research Engineer",
+                        "application_url": application_url,
+                        "application_route_kind": "direct_url",
+                        "posted_at": "2026-09-10T01:00:00Z",
+                        "updated_source_at": "2026-09-10T11:00:00+09:00",
+                        "expires_at": "2026-10-01T00:00:00Z",
+                        "education_requirements": "Bachelor's degree or equivalent",
+                        "experience_requirements": "Three years of Python",
+                    }
+                ]
+            }
+        },
+        max_calls=20,
+    )
+
+    assert result.failed_roles == ()
+    listing = JobListing.objects.get()
+    assert listing.posted_at.isoformat() == "2026-09-10T01:00:00+00:00"
+    assert listing.updated_source_at.isoformat() == "2026-09-10T02:00:00+00:00"
+    assert listing.expires_at.isoformat() == "2026-10-01T00:00:00+00:00"
+    assert listing.education_requirements == "Bachelor's degree or equivalent"
+    assert listing.experience_requirements == "Three years of Python"
+
+
+def test_job_fallback_identity_normalizes_case_whitespace_and_location_order():
+    records = [
+        {
+            "brand_id": "anthropic",
+            "organization_name": "Anthropic",
+            "title": "Research Engineer",
+            "application_route_kind": "direct_message",
+            "locations": ["Tokyo", "Remote"],
+        },
+        {
+            "brand_id": "anthropic",
+            "organization_name": "  ANTHROPIC  ",
+            "title": "research   engineer",
+            "application_route_kind": "direct_message",
+            "locations": ["remote", "TOKYO"],
+        },
+    ]
+    for index, record in enumerate(records):
+        post = _post(
+            f"normalized-job-{index}",
+            text="Anthropic is hiring a research engineer in Tokyo or remotely.",
+            author_handle=f"normalized_source_{index}",
+        )
+        result = run_targeted_extractions(
+            post=post,
+            post_types={"job_listings"},
+            config=_config(),
+            calls={
+                "job_listing_extraction": (
+                    lambda *_args, record=record: {"records": [record]}
+                )
+            },
+            max_calls=20,
+        )
+        assert result.failed_roles == ()
+
+    assert JobListing.objects.count() == 1
+    assert JobListingEvidence.objects.count() == 2
 
 
 def test_anna_transition_keeps_current_and_former_with_unknown_dates():
@@ -341,6 +448,127 @@ def test_anna_transition_keeps_current_and_former_with_unknown_dates():
     assert all(row.start_date is None and row.end_date is None for row in affiliations)
     assert all(row.start_date_precision == "unknown" for row in affiliations)
     assert PersonBrandAffiliationEvidence.objects.filter(source_post=post).count() == 2
+
+
+def test_untracked_personnel_organization_keeps_affiliation_and_evidence():
+    post = _post(
+        "untracked-personnel",
+        text="Lee Jiyin has joined New AI Co.",
+        brand_ids=(),
+        author_handle="industry_news",
+    )
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"personnel_changes"},
+        config=_config(),
+        calls={
+            "personnel_change_extraction": lambda *_args: {
+                "records": [
+                    {
+                        "person_name": "Lee Jiyin",
+                        "person_handle": "lee_jiyin",
+                        "brand_id": None,
+                        "organization_name": "New AI Co",
+                        "organization_handle": "new_ai_co",
+                        "affiliation_type": "employment",
+                        "status": "current",
+                        "start_date": None,
+                        "start_date_precision": "unknown",
+                        "end_date": None,
+                        "end_date_precision": "unknown",
+                        "confidence": 0.91,
+                    }
+                ]
+            }
+        },
+        max_calls=20,
+    )
+
+    assert result.records_written == 1
+    assert result.evidence_written == 1
+    assert result.organization_candidates_written == 1
+    candidate = BrandDiscoveryCandidate.objects.get()
+    affiliation = PersonBrandAffiliation.objects.get()
+    assert affiliation.brand_id is None
+    assert affiliation.brand_discovery_candidate == candidate
+    assert affiliation.observed_organization_name == "New AI Co"
+    assert affiliation.evidence.get().source_post == post
+
+
+@pytest.mark.parametrize(
+    ("post_type", "role", "record"),
+    [
+        (
+            "personnel_changes",
+            "personnel_change_extraction",
+            {
+                "person_name": "Date Person",
+                "brand_id": "anthropic",
+                "organization_name": "Anthropic",
+                "affiliation_type": "employment",
+                "status": "current",
+                "start_date": "2026-99-99",
+                "start_date_precision": "day",
+            },
+        ),
+        (
+            "events",
+            "event_extraction",
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Anthropic",
+                "title": "Backwards event",
+                "attendance_mode": "online_live",
+                "start_value": "2026-09-20",
+                "start_precision": "day",
+                "end_value": "2026-09-19",
+                "end_precision": "day",
+            },
+        ),
+        (
+            "opportunities",
+            "opportunity_extraction",
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Anthropic",
+                "opportunity_type": "contest",
+                "action_type": "submit",
+                "benefit_type": "prize",
+                "open_value": "2026-13",
+                "open_precision": "month",
+            },
+        ),
+        (
+            "job_listings",
+            "job_listing_extraction",
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Anthropic",
+                "title": "Naive timestamp role",
+                "application_route_kind": "direct_message",
+                "posted_at": "2026-09-10T01:00:00",
+            },
+        ),
+    ],
+)
+def test_invalid_source_dates_fail_the_role_atomically(post_type, role, record):
+    post = _post(
+        f"bad-date-{role}",
+        text="Source with a malformed or backwards date.",
+    )
+    result = run_targeted_extractions(
+        post=post,
+        post_types={post_type},
+        config=_config(),
+        calls={role: lambda *_args: {"records": [record]}},
+        max_calls=20,
+    )
+
+    assert result.failed_roles == (role,)
+    assert not Event.objects.exists()
+    assert not Opportunity.objects.exists()
+    assert not JobListing.objects.exists()
+    assert not PersonBrandAffiliation.objects.exists()
 
 
 def test_self_authored_personnel_reuses_person_created_by_profile_capture():
@@ -472,9 +700,7 @@ def test_official_handle_announcement_and_later_self_post_share_one_person():
         post=official,
         post_types={"personnel_changes"},
         config=_config(),
-        calls={
-            "personnel_change_extraction": lambda *_args: {"records": [record]}
-        },
+        calls={"personnel_change_extraction": lambda *_args: {"records": [record]}},
         max_calls=20,
     )
     capture_post_profile_snapshot(
@@ -495,9 +721,7 @@ def test_official_handle_announcement_and_later_self_post_share_one_person():
         post=self_post,
         post_types={"personnel_changes"},
         config=_config(),
-        calls={
-            "personnel_change_extraction": lambda *_args: {"records": [record]}
-        },
+        calls={"personnel_change_extraction": lambda *_args: {"records": [record]}},
         max_calls=20,
     )
 

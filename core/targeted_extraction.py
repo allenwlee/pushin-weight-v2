@@ -11,6 +11,7 @@ import unicodedata
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlparse
@@ -108,9 +109,12 @@ application_resolution_status, title, description_text, department, team,
 job_function, seniority, employment_type, workplace_type, locations_raw,
 locations, remote_applicant_restrictions, salary_text, salary_min, salary_max,
 salary_currency, salary_period, status (open, closed, future, or unknown),
-campaign_openings, role_openings, skills, responsibilities, qualifications,
-benefits, eligibility, source_language, organization_ai_relationship,
-role_ai_relationship, linked_urls, media_url, extraction_method, and confidence.
+posted_at, updated_source_at, expires_at, and closed_at (source-stated ISO 8601
+timestamps with timezone or null), campaign_openings, role_openings, skills,
+responsibilities, qualifications, education_requirements,
+experience_requirements, benefits, eligibility, source_language,
+organization_ai_relationship, role_ai_relationship, linked_urls, media_url,
+extraction_method, and confidence.
 """,
     "personnel_change_extraction": """
 Return one record per named person's joining, leaving, appointment, or explicit
@@ -302,9 +306,109 @@ def _number(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
     try:
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
     except InvalidOperation as exc:
         raise ValueError("invalid decimal value") from exc
+    if not parsed.is_finite():
+        raise ValueError("decimal value must be finite")
+    return parsed
+
+
+def _temporal_value(
+    value: Any,
+    precision_value: Any,
+    *,
+    field: str,
+    allow_datetime: bool,
+) -> tuple[str | None, str, date | datetime | None]:
+    """Validate one reduced-precision value before it reaches PostgreSQL."""
+
+    allowed = ALLOWED_PRECISIONS if allow_datetime else ALLOWED_PRECISIONS - {
+        "datetime"
+    }
+    precision = _choice(
+        precision_value,
+        allowed=allowed,
+        default="unknown",
+        field=f"{field} precision",
+    )
+    parsed_value = _text(value, maximum=64 if allow_datetime else 10)
+    if parsed_value is None:
+        if precision != "unknown":
+            raise ValueError(f"{field} precision requires a value")
+        return None, precision, None
+    if precision == "unknown":
+        raise ValueError(f"{field} value requires a known precision")
+    try:
+        if precision == "datetime":
+            if not re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}"
+                r"(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})",
+                parsed_value,
+            ):
+                raise ValueError
+            parsed: date | datetime = datetime.fromisoformat(
+                parsed_value.replace("Z", "+00:00")
+            )
+            if parsed.tzinfo is None:
+                raise ValueError
+        elif precision == "day":
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", parsed_value):
+                raise ValueError
+            parsed = date.fromisoformat(parsed_value)
+        elif precision == "month":
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}", parsed_value):
+                raise ValueError
+            parsed = date.fromisoformat(f"{parsed_value}-01")
+        else:
+            if not re.fullmatch(r"[0-9]{4}", parsed_value):
+                raise ValueError
+            parsed = date(int(parsed_value), 1, 1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid {field} value") from exc
+    return parsed_value, precision, parsed
+
+
+def _temporal_range(
+    *,
+    start: tuple[str | None, str, date | datetime | None],
+    end: tuple[str | None, str, date | datetime | None],
+    field: str,
+) -> None:
+    if (
+        start[2] is not None
+        and end[2] is not None
+        and start[1] == end[1]
+        and start[2] > end[2]
+    ):
+        raise ValueError(f"{field} end precedes start")
+
+
+def _source_datetime(value: Any, *, field: str) -> datetime | None:
+    parsed_value = _text(value, maximum=64)
+    if parsed_value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(parsed_value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"invalid {field}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field} must include a timezone")
+    return parsed
+
+
+def _identity_value(value: Any) -> Any:
+    """Normalize only the fallback identity, retaining source values verbatim."""
+
+    if isinstance(value, str):
+        return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    if isinstance(value, list):
+        return sorted((_identity_value(item) for item in value), key=str)
+    return value
+
+
+def _missing_job_value(value: Any) -> bool:
+    return value is None or value == "" or value == []
 
 
 def _choice(value: Any, *, allowed: set[str], default: str, field: str) -> str:
@@ -532,74 +636,123 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             if canonical_url
             else [organization, title, locations, application_url]
         )
-        listing_identity = _hash({"job": identity_basis})
+        listing_identity = _hash({"job": _identity_value(identity_basis)})
         now = post.fetched_at
+        listing_values = {
+            "brand": brand,
+            "brand_discovery_candidate": candidate,
+            "hiring_organization": organization,
+            "source_name": source_name,
+            "source_listing_id": source_listing_id,
+            "canonical_url": canonical_url,
+            "application_url": application_url,
+            "application_route_kind": application_route_kind,
+            "application_contact": application_contact,
+            "application_resolution_status": _text(
+                record.get("application_resolution_status")
+            ),
+            "title": title,
+            "description_text": _text(record.get("description_text")),
+            "department": _text(record.get("department")),
+            "team": _text(record.get("team")),
+            "job_function": _text(record.get("job_function")),
+            "seniority": _text(record.get("seniority")),
+            "employment_type": _text(record.get("employment_type")),
+            "workplace_type": _text(record.get("workplace_type")),
+            "locations_raw": _text(record.get("locations_raw")),
+            "locations": locations,
+            "remote_applicant_restrictions": _text(
+                record.get("remote_applicant_restrictions")
+            ),
+            "salary_text": _text(record.get("salary_text")),
+            "salary_min": _number(record.get("salary_min")),
+            "salary_max": _number(record.get("salary_max")),
+            "salary_currency": _text(record.get("salary_currency"), maximum=3),
+            "salary_period": _text(record.get("salary_period"), maximum=32),
+            "posted_at": _source_datetime(
+                record.get("posted_at"), field="posted_at"
+            ),
+            "updated_source_at": _source_datetime(
+                record.get("updated_source_at"), field="updated_source_at"
+            ),
+            "first_seen_at": now,
+            "last_seen_at": now,
+            "expires_at": _source_datetime(
+                record.get("expires_at"), field="expires_at"
+            ),
+            "closed_at": _source_datetime(
+                record.get("closed_at"), field="closed_at"
+            ),
+            "status": status,
+            "campaign_openings": record.get("campaign_openings"),
+            "role_openings": record.get("role_openings"),
+            "skills": record.get("skills")
+            if isinstance(record.get("skills"), list)
+            else [],
+            "responsibilities": record.get("responsibilities")
+            if isinstance(record.get("responsibilities"), list)
+            else [],
+            "qualifications": record.get("qualifications")
+            if isinstance(record.get("qualifications"), list)
+            else [],
+            "education_requirements": _text(
+                record.get("education_requirements")
+            ),
+            "experience_requirements": _text(
+                record.get("experience_requirements")
+            ),
+            "benefits": record.get("benefits")
+            if isinstance(record.get("benefits"), list)
+            else [],
+            "eligibility": _text(record.get("eligibility")),
+            "source_language": _text(record.get("source_language"), maximum=32),
+            "organization_ai_relationship": _text(
+                record.get("organization_ai_relationship")
+            ),
+            "role_ai_relationship": _text(record.get("role_ai_relationship")),
+            "content_hash": _hash(record),
+            "extraction_version": version,
+            "extraction_confidence": _confidence(record.get("confidence")),
+            "raw_payload": dict(record),
+        }
         listing, created = JobListing.objects.get_or_create(
             listing_identity=listing_identity,
-            defaults={
-                "brand": brand,
-                "brand_discovery_candidate": candidate,
-                "hiring_organization": organization,
-                "source_name": source_name,
-                "source_listing_id": source_listing_id,
-                "canonical_url": canonical_url,
-                "application_url": application_url,
-                "application_route_kind": application_route_kind,
-                "application_contact": application_contact,
-                "application_resolution_status": _text(
-                    record.get("application_resolution_status")
-                ),
-                "title": title,
-                "description_text": _text(record.get("description_text")),
-                "department": _text(record.get("department")),
-                "team": _text(record.get("team")),
-                "job_function": _text(record.get("job_function")),
-                "seniority": _text(record.get("seniority")),
-                "employment_type": _text(record.get("employment_type")),
-                "workplace_type": _text(record.get("workplace_type")),
-                "locations_raw": _text(record.get("locations_raw")),
-                "locations": locations,
-                "remote_applicant_restrictions": _text(
-                    record.get("remote_applicant_restrictions")
-                ),
-                "salary_text": _text(record.get("salary_text")),
-                "salary_min": _number(record.get("salary_min")),
-                "salary_max": _number(record.get("salary_max")),
-                "salary_currency": _text(record.get("salary_currency"), maximum=3),
-                "salary_period": _text(record.get("salary_period"), maximum=32),
-                "first_seen_at": now,
-                "last_seen_at": now,
-                "status": status,
-                "campaign_openings": record.get("campaign_openings"),
-                "role_openings": record.get("role_openings"),
-                "skills": record.get("skills")
-                if isinstance(record.get("skills"), list)
-                else [],
-                "responsibilities": record.get("responsibilities")
-                if isinstance(record.get("responsibilities"), list)
-                else [],
-                "qualifications": record.get("qualifications")
-                if isinstance(record.get("qualifications"), list)
-                else [],
-                "benefits": record.get("benefits")
-                if isinstance(record.get("benefits"), list)
-                else [],
-                "eligibility": _text(record.get("eligibility")),
-                "source_language": _text(record.get("source_language"), maximum=32),
-                "organization_ai_relationship": _text(
-                    record.get("organization_ai_relationship")
-                ),
-                "role_ai_relationship": _text(record.get("role_ai_relationship")),
-                "content_hash": _hash(record),
-                "extraction_version": version,
-                "extraction_confidence": _confidence(record.get("confidence")),
-                "raw_payload": dict(record),
-            },
+            defaults=listing_values,
         )
         written += int(created)
-        if not created and now > listing.last_seen_at:
-            JobListing.objects.filter(pk=listing.pk).update(last_seen_at=now)
-            listing.last_seen_at = now
+        if not created:
+            updates: list[str] = []
+            if now < listing.first_seen_at:
+                listing.first_seen_at = now
+                updates.append("first_seen_at")
+            if now > listing.last_seen_at:
+                listing.last_seen_at = now
+                updates.append("last_seen_at")
+            for field, value in listing_values.items():
+                if field in {
+                    "brand",
+                    "brand_discovery_candidate",
+                    "hiring_organization",
+                    "title",
+                    "first_seen_at",
+                    "last_seen_at",
+                    "status",
+                    "content_hash",
+                    "extraction_version",
+                    "extraction_confidence",
+                    "raw_payload",
+                }:
+                    continue
+                if _missing_job_value(getattr(listing, field)) and not _missing_job_value(
+                    value
+                ):
+                    setattr(listing, field, value)
+                    updates.append(field)
+            if listing.status == "unknown" and status != "unknown":
+                listing.status = status
+                updates.append("status")
+            if updates:
+                listing.save(update_fields=[*updates, "updated_at"])
         evidence_hash = _hash(
             {"listing": listing_identity, "post": str(post.pk), "version": version}
         )
@@ -670,12 +823,10 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
     brand_context = _brand_evidence_context(post)
     for record in records:
         person_name = _text(record.get("person_name"), required=True) or ""
-        brand, _candidate, candidate_created = _brand_or_candidate(
+        brand, candidate, candidate_created = _brand_or_candidate(
             post, record, brand_context
         )
         candidates += candidate_created
-        if brand is None:
-            continue
         person_handle = _text(record.get("person_handle"), maximum=64)
         normalized_handle = (person_handle or "").removeprefix("@").casefold()
         self_authored = bool(
@@ -777,20 +928,28 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             or status not in ALLOWED_RELATIONSHIP_STATUSES
         ):
             raise ValueError("invalid affiliation type or status")
-        start_value = _text(record.get("start_date"), maximum=10)
-        end_value = _text(record.get("end_date"), maximum=10)
-        start_precision = (
-            _text(record.get("start_date_precision"), maximum=16) or "unknown"
+        start = _temporal_value(
+            record.get("start_date"),
+            record.get("start_date_precision"),
+            field="affiliation start date",
+            allow_datetime=False,
         )
-        end_precision = _text(record.get("end_date_precision"), maximum=16) or "unknown"
-        if start_precision not in ALLOWED_PRECISIONS - {
-            "datetime"
-        } or end_precision not in ALLOWED_PRECISIONS - {"datetime"}:
-            raise ValueError("invalid affiliation date precision")
+        end = _temporal_value(
+            record.get("end_date"),
+            record.get("end_date_precision"),
+            field="affiliation end date",
+            allow_datetime=False,
+        )
+        _temporal_range(start=start, end=end, field="affiliation")
+        start_value, start_precision, _start_parsed = start
+        end_value, end_precision, _end_parsed = end
+        organization_identity = (
+            f"brand:{brand.pk}" if brand is not None else f"candidate:{candidate.pk}"
+        )
         claim_identity = _hash(
             {
                 "person": str(person.pk),
-                "brand": str(brand.pk),
+                "organization": organization_identity,
                 "type": affiliation_type,
                 "status": status,
                 "title": _text(record.get("title_raw")),
@@ -803,6 +962,7 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             defaults={
                 "person": person,
                 "brand": brand,
+                "brand_discovery_candidate": candidate,
                 "affiliation_type": affiliation_type,
                 "observed_organization_name": _text(
                     record.get("organization_name"), required=True
@@ -867,18 +1027,21 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
             default="unknown",
             field="event source status",
         )
-        start_precision = _choice(
+        start = _temporal_value(
+            record.get("start_value"),
             record.get("start_precision"),
-            allowed=ALLOWED_PRECISIONS,
-            default="unknown",
-            field="event start precision",
+            field="event start",
+            allow_datetime=True,
         )
-        end_precision = _choice(
+        end = _temporal_value(
+            record.get("end_value"),
             record.get("end_precision"),
-            allowed=ALLOWED_PRECISIONS,
-            default="unknown",
-            field="event end precision",
+            field="event end",
+            allow_datetime=True,
         )
+        _temporal_range(start=start, end=end, field="event")
+        start_value, start_precision, _start_parsed = start
+        end_value, end_precision, _end_parsed = end
         brand = _known_brand(brand_context, record.get("brand_id"))
         if brand is None:
             _candidate, created = _organization_candidate(
@@ -913,9 +1076,9 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
                     source_urls=source_urls,
                     field="attendance",
                 ),
-                "start_value": _text(record.get("start_value"), maximum=64),
+                "start_value": start_value,
                 "start_precision": start_precision,
-                "end_value": _text(record.get("end_value"), maximum=64),
+                "end_value": end_value,
                 "end_precision": end_precision,
                 "source_timezone": _text(record.get("source_timezone"), maximum=64),
                 "source_schedule_text": _text(record.get("source_schedule_text")),
@@ -953,18 +1116,21 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
             default="unknown",
             field="opportunity source status",
         )
-        open_precision = _choice(
+        opens = _temporal_value(
+            record.get("open_value"),
             record.get("open_precision"),
-            allowed=ALLOWED_PRECISIONS,
-            default="unknown",
-            field="opportunity open precision",
+            field="opportunity open",
+            allow_datetime=True,
         )
-        close_precision = _choice(
+        closes = _temporal_value(
+            record.get("close_value"),
             record.get("close_precision"),
-            allowed=ALLOWED_PRECISIONS,
-            default="unknown",
-            field="opportunity close precision",
+            field="opportunity close",
+            allow_datetime=True,
         )
+        _temporal_range(start=opens, end=closes, field="opportunity")
+        open_value, open_precision, _open_parsed = opens
+        close_value, close_precision, _close_parsed = closes
         brand = _known_brand(brand_context, record.get("brand_id"))
         if brand is None:
             _candidate, created = _organization_candidate(
@@ -1016,9 +1182,9 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
                 "benefit_text": _text(record.get("benefit_text")),
                 "eligibility": _text(record.get("eligibility")),
                 "geographic_restrictions": _text(record.get("geographic_restrictions")),
-                "open_value": _text(record.get("open_value"), maximum=64),
+                "open_value": open_value,
                 "open_precision": open_precision,
-                "close_value": _text(record.get("close_value"), maximum=64),
+                "close_value": close_value,
                 "close_precision": close_precision,
                 "source_timezone": _text(record.get("source_timezone"), maximum=64),
                 "source_availability_text": _text(

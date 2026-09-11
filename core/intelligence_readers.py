@@ -65,9 +65,22 @@ def _evidence(row: PersonBrandAffiliationEvidence) -> dict[str, Any]:
 
 
 def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
+    candidate = row.brand_discovery_candidate
     return {
         "id": row.pk,
         "brand_id": row.brand_id,
+        "brand_discovery_candidate_id": row.brand_discovery_candidate_id,
+        "organization_review": (
+            {
+                "candidate_id": candidate.pk,
+                "observed_name": candidate.observed_name,
+                "candidate_handles": candidate.candidate_handles,
+                "verification_status": candidate.verification_status,
+                "reviewed_brand_id": candidate.reviewed_brand_id,
+            }
+            if candidate is not None
+            else None
+        ),
         "organization_name": row.observed_organization_name,
         "organization_handle": row.observed_organization_handle,
         "affiliation_type": row.affiliation_type,
@@ -98,9 +111,11 @@ def person_intelligence(person_id) -> dict[str, Any]:
     evidence = PersonBrandAffiliationEvidence.objects.select_related(
         "source_profile_snapshot"
     ).order_by("observed_at", "id")
-    affiliations = PersonBrandAffiliation.objects.prefetch_related(
-        Prefetch("evidence", queryset=evidence)
-    ).order_by("brand_id", "id")
+    affiliations = (
+        PersonBrandAffiliation.objects.select_related("brand_discovery_candidate")
+        .prefetch_related(Prefetch("evidence", queryset=evidence))
+        .order_by("brand_id", "id")
+    )
     person = Person.objects.prefetch_related(
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(

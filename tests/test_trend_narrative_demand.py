@@ -162,9 +162,7 @@ def test_material_fingerprint_ignores_nonmaterial_jitter_and_order() -> None:
     jittered["enrichment_coverage"]["total_post_count"] = 101
     jittered["family_summaries"]["post_type"]["denominator"] = 101
     jittered["shape_summary"]["peak"]["at"] = "2026-09-10T01:05:00Z"
-    jittered["shape_summary"]["dominant_transition"]["to"] = (
-        "2026-09-10T01:05:00Z"
-    )
+    jittered["shape_summary"]["dominant_transition"]["to"] = "2026-09-10T01:05:00Z"
     jittered["corpus_signals"][0]["burst_interval"] = {
         "start_bucket": 0,
         "end_bucket": 1,
@@ -188,7 +186,9 @@ def test_material_fingerprint_changes_for_semantic_evidence_or_fact_band() -> No
     changed_evidence["evidence"][0]["original_text"] = "A corrected research result"
 
     original_fingerprint = material_input_fingerprint(original, config=config)
-    assert material_input_fingerprint(changed_fact, config=config) != original_fingerprint
+    assert (
+        material_input_fingerprint(changed_fact, config=config) != original_fingerprint
+    )
     assert (
         material_input_fingerprint(changed_evidence, config=config)
         != original_fingerprint
@@ -273,3 +273,73 @@ def test_operator_request_forces_one_refresh_without_changing_identity():
     assert [row["brand_key"] for row in forced["dossiers"]] == ["minimax"]
     demand = TrendNarrativeDemand.objects.get()
     assert demand.last_decision_reason == "operator_refresh"
+
+
+def test_old_run_cannot_satisfy_a_new_operator_request():
+    Brand.objects.create(nickname="minimax", display_name="MiniMax")
+    config = _config()
+    record_trend_narrative_demand(
+        brand_keys=["minimax"],
+        window_days=1,
+        reason="visible",
+        config=config,
+        now=NOW,
+    )
+    selected = select_demanded_snapshot(_snapshot(), config=config, now=NOW)
+    old_run = TrendNarrativeRun.objects.create(
+        source_cycle_id="before-new-operator-demand",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot=selected,
+        brand_manifest=["minimax"],
+    )
+    record_trend_narrative_demand(
+        brand_keys=["minimax"],
+        window_days=1,
+        reason="operator",
+        config=config,
+        now=NOW + timedelta(minutes=1),
+        pinned=True,
+    )
+
+    assert mark_run_demands_satisfied(old_run, now=NOW + timedelta(minutes=2)) == 0
+    demand = TrendNarrativeDemand.objects.get()
+    assert demand.state == TrendNarrativeDemand.State.PENDING
+    assert demand.operator_request_count == 1
+    assert demand.last_material_input_fingerprint == ""
+
+
+def test_old_run_cannot_satisfy_a_new_target_version():
+    Brand.objects.create(nickname="minimax", display_name="MiniMax")
+    original = _config()
+    revised = _config(prompt_version="headline-narrative-v-next")
+    record_trend_narrative_demand(
+        brand_keys=["minimax"],
+        window_days=1,
+        reason="visible",
+        config=original,
+        now=NOW,
+    )
+    selected = select_demanded_snapshot(_snapshot(), config=original, now=NOW)
+    old_run = TrendNarrativeRun.objects.create(
+        source_cycle_id="before-version-change",
+        window_days=1,
+        facts_as_of=NOW,
+        packet_schema_version=3,
+        snapshot=selected,
+        brand_manifest=["minimax"],
+    )
+    record_trend_narrative_demand(
+        brand_keys=["minimax"],
+        window_days=1,
+        reason="visible",
+        config=revised,
+        now=NOW + timedelta(minutes=1),
+    )
+
+    assert mark_run_demands_satisfied(old_run, now=NOW + timedelta(minutes=2)) == 0
+    demand = TrendNarrativeDemand.objects.get()
+    assert demand.state == TrendNarrativeDemand.State.PENDING
+    assert demand.target_prompt_version.startswith("headline-narrative-v-next:")
+    assert demand.last_material_input_fingerprint == ""

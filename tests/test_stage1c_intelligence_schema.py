@@ -381,6 +381,37 @@ def test_comparable_affiliation_dates_cannot_run_backwards():
     )
 
 
+def test_affiliation_requires_exactly_one_known_or_candidate_organization():
+    person = Person.objects.create(display_name="Organization Person")
+    brand = Brand.objects.create(nickname="known-org", display_name="Known Org")
+    candidate = BrandDiscoveryCandidate.objects.create(
+        observed_name="Candidate Org",
+        candidate_identity="e" * 64,
+        first_observed_at=timezone.now(),
+        last_observed_at=timezone.now(),
+    )
+    common = {
+        "person": person,
+        "affiliation_type": "employment",
+        "observed_organization_name": "Organization",
+    }
+
+    _assert_integrity_error(
+        lambda: PersonBrandAffiliation.objects.create(
+            **common,
+            claim_identity="f" * 64,
+        )
+    )
+    _assert_integrity_error(
+        lambda: PersonBrandAffiliation.objects.create(
+            **common,
+            brand=brand,
+            brand_discovery_candidate=candidate,
+            claim_identity="0" * 64,
+        )
+    )
+
+
 def test_targeted_extraction_role_and_status_are_database_enforced():
     post = Post.objects.create(tweet_id="bad-targeted-state", text="Join us")
 
