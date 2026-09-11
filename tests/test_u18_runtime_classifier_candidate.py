@@ -14,6 +14,7 @@ from scripts.u18_runtime_classifier_candidate import (
     DEFAULT_COHORT,
     FrozenRuntimeClient,
     _candidate_row,
+    _response_manifest_sha256,
     _runtime_trace_provenance,
 )
 from scripts.u18_runtime_grouped_label_probe import _merge_group_decisions
@@ -286,7 +287,7 @@ def test_runtime_trace_provenance_pins_current_prompts_and_selector():
     }
 
 
-def test_default_v23_budget_pins_cohort_runtime_prompts_and_hard_caps():
+def test_default_v24_budget_pins_zero_transport_replay_and_current_selector():
     budget = json.loads(DEFAULT_BUDGET.read_text(encoding="utf-8"))
     lane = budget["lanes"][budget["lane"]]
     provenance = _runtime_trace_provenance()
@@ -299,7 +300,7 @@ def test_default_v23_budget_pins_cohort_runtime_prompts_and_hard_caps():
         "rows": 120,
         "selection": (
             "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development "
-            "cohort; unchanged from the v18 all-locale probe"
+            "cohort; unchanged from v18 and v23"
         ),
         "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
     }
@@ -309,10 +310,73 @@ def test_default_v23_budget_pins_cohort_runtime_prompts_and_hard_caps():
         provenance["review_prompt_sha256"],
         provenance["review_repair_prompt_sha256"],
     } == set(lane["allowed_system_sha256"])
-    assert lane["maximum_requests"] == 18 + 20
+    assert budget["prompt"]["selector_version"] == (
+        _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+    )
+    assert budget["replay"]["network_transport_allowed"] is False
+    assert lane["maximum_requests"] == 0
+    assert lane["maximum_transport_attempts"] == 0
     assert lane["maximum_output_tokens"] == (
         lane["maximum_transport_attempts"] * lane["max_tokens_per_attempt"]
     )
+
+
+def test_runtime_replays_external_frozen_response_with_transport_disabled(
+    tmp_path, monkeypatch
+):
+    budget = _budget(tmp_path)
+    document = json.loads(budget.read_text(encoding="utf-8"))
+    lane = document["lanes"]["test"]
+    lane.update(
+        {
+            "maximum_requests": 0,
+            "maximum_transport_attempts": 0,
+            "maximum_input_tokens": 0,
+            "maximum_output_tokens": 0,
+            "maximum_cost_usd": "0",
+        }
+    )
+    budget.write_text(json.dumps(document), encoding="utf-8")
+    response_dir = tmp_path / "source-responses"
+    response_dir.mkdir()
+    request_id = FrozenRuntimeClient._signature(_kwargs())
+    (response_dir / f"{request_id}_00.json").write_text(
+        json.dumps({"results": [{"cached": True}]}), encoding="utf-8"
+    )
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    local_response_dir = tmp_path / "replay-state" / "responses"
+    local_response_dir.mkdir(parents=True)
+    (local_response_dir / f"{request_id}_00.json").write_text(
+        json.dumps({"results": [{"cached": False}]}), encoding="utf-8"
+    )
+
+    client = FrozenRuntimeClient(
+        budget_path=budget,
+        lane="test",
+        private_dir=tmp_path / "replay-state",
+        replay_response_dirs=(response_dir,),
+    )
+
+    assert client.messages_create(**_kwargs()) == {"results": [{"cached": True}]}
+    assert client.state["replay_hits"] == 1
+    assert client.state["transport_attempts"] == 0
+
+    missed = {**_kwargs(), "messages": [{"role": "user", "content": "miss"}]}
+    with pytest.raises(RuntimeError, match="cap exhausted"):
+        client.messages_create(**missed)
+
+
+def test_response_manifest_detects_cached_response_tampering(tmp_path):
+    response_dir = tmp_path / "responses"
+    response_dir.mkdir()
+    response = response_dir / "request_00.json"
+    response.write_text('{"results":[]}', encoding="utf-8")
+
+    original = _response_manifest_sha256(response_dir)
+    response.write_text('{"results":[{}]}', encoding="utf-8")
+
+    assert _response_manifest_sha256(response_dir)[0] == original[0]
+    assert _response_manifest_sha256(response_dir)[1] != original[1]
 
 
 def test_retired_v18_review_probe_requires_explicit_acknowledgement():

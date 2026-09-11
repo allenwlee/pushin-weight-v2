@@ -44,11 +44,11 @@ from x_monitor.translator import AnthropicClaudeClient
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUDGET = (
     ROOT
-    / "docs/analysis/2026-09-12-015231-u18-runtime-v23-completeness-review-pilot-budget.json"
+    / "docs/analysis/2026-09-12-020703-u18-runtime-v24-derived-metadata-replay-budget.json"
 )
 DEFAULT_COHORT = ROOT / ".context/u18/thinking-probe-cohort.json"
-DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v23-completeness-review-pilot.json"
-DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v23-completeness-review-pilot"
+DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v24-derived-metadata-replay.json"
+DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v24-derived-metadata-replay"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -76,6 +76,14 @@ def _sha256_file(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
 
 
+def _response_manifest_sha256(path: Path) -> tuple[int, str]:
+    files = sorted(path.glob("*.json"))
+    manifest = "".join(
+        f"{item.name}\t{_sha256_file(item)}\n" for item in files
+    ).encode("utf-8")
+    return len(files), _sha256_bytes(manifest)
+
+
 class FrozenRuntimeClient:
     """Anthropic-compatible client with a preregistered, persistent cap."""
 
@@ -86,6 +94,7 @@ class FrozenRuntimeClient:
         lane: str,
         private_dir: Path,
         delegate: Any | None = None,
+        replay_response_dirs: tuple[Path, ...] = (),
     ) -> None:
         document = _read_json(budget_path)
         self.budget_path = budget_path
@@ -93,6 +102,7 @@ class FrozenRuntimeClient:
         self.lane = lane
         self.private_dir = private_dir
         self.response_dir = private_dir / "responses"
+        self.replay_response_dirs = replay_response_dirs
         self.state_path = private_dir / "usage.json"
         self._lock = threading.Lock()
         self._occurrences: dict[str, int] = {}
@@ -110,12 +120,14 @@ class FrozenRuntimeClient:
                 "reserved_output_tokens": 0,
                 "observed_input_tokens": 0,
                 "observed_output_tokens": 0,
+                "replay_hits": 0,
+                "replayed_request_ids": [],
                 "errors": [],
             }
         )
         if self.state.get("budget_sha256") != _sha256_file(budget_path):
             raise RuntimeError("runtime budget changed after usage began")
-        if delegate is None:
+        if delegate is None and self.budget["maximum_transport_attempts"] > 0:
             api_key = os.environ.get("DEEPSEEK_API_KEY")
             if not api_key:
                 raise RuntimeError("DEEPSEEK_API_KEY is required")
@@ -222,12 +234,24 @@ class FrozenRuntimeClient:
         signature = self._signature(kwargs)
         with self._lock:
             request_id = self._request_id(signature)
-            response_path = self.response_dir / f"{request_id.replace(':', '_')}.json"
-            if response_path.exists():
-                response = _read_json(response_path)
-                self._complete(signature)
-                return response
+            response_name = f"{request_id.replace(':', '_')}.json"
+            response_paths = (
+                tuple(path / response_name for path in self.replay_response_dirs)
+                if self.replay_response_dirs
+                else (self.response_dir / response_name,)
+            )
+            for response_path in response_paths:
+                if response_path.exists():
+                    response = _read_json(response_path)
+                    if response_path.parent != self.response_dir:
+                        self.state["replay_hits"] = self.state.get("replay_hits", 0) + 1
+                        self.state.setdefault("replayed_request_ids", []).append(request_id)
+                        self._persist()
+                    self._complete(signature)
+                    return response
             self._reserve(request_id, system=system, user=user)
+        if self._delegate is None:
+            raise RuntimeError("runtime transport is disabled and replay cache missed")
         try:
             response = self._delegate.messages_create(**kwargs)
         except Exception as exc:
@@ -378,10 +402,21 @@ def run(*, budget_path: Path, cohort_path: Path, output_path: Path, private_dir:
         capture_output=True,
         text=True,
     ).stdout.strip()
+    replay = budget_document.get("replay")
+    replay_response_dirs: tuple[Path, ...] = ()
+    if replay is not None:
+        replay_path = ROOT / replay["response_directory"]
+        count, manifest_sha256 = _response_manifest_sha256(replay_path)
+        if count != replay["response_count"]:
+            raise RuntimeError("replay response count differs from frozen budget")
+        if manifest_sha256 != replay["response_manifest_sha256"]:
+            raise RuntimeError("replay response bytes differ from frozen budget")
+        replay_response_dirs = (replay_path,)
     client = FrozenRuntimeClient(
         budget_path=budget_path,
         lane=lane,
         private_dir=private_dir,
+        replay_response_dirs=replay_response_dirs,
     )
     results = classify_batch_pragmatics_full(
         [

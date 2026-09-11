@@ -48,6 +48,7 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
                     "evidence": [
                         {"source": "source", "quote": "classification source"}
                     ],
+                    "metadata_normalized": True,
                     "prompt_version": "stage1-prompt-v22-completeness-review-repair-v1",
                 }
             },
@@ -133,12 +134,35 @@ def test_judgment_history_links_lineage_and_reruns_idempotently():
     assert not any("prompt" in row.canonical_judgment for row in rows)
     assert rows[1].changes_json["decision"] == "replace"
     assert rows[1].changes_json["change_reasons"] == ["missing_post_type"]
+    assert rows[1].changes_json["metadata_normalized"] is True
     assert "prompt" not in rows[1].changes_json
     assert "source" not in rows[1].changes_json
     assert rows[1].prompt_version == "stage1-prompt-v22-completeness-review-repair-v1"
     state = PostBrandClassificationState.objects.get(post=post, brand=brand)
     assert state.selected_final_judgment_id == rows[2].pk
     assert PostBrandClassificationJudgment.objects.filter(post=post).count() == 3
+
+
+def test_trace_changes_rejects_non_boolean_normalization_metadata():
+    from monitor.cycle import _trace_changes
+
+    payload = {
+        "by_brand": {"deepseek": _row()},
+        "metadata_by_brand": {
+            "deepseek": {
+                "decision": "accept",
+                "change_reasons": [],
+                "evidence": [],
+                "metadata_normalized": {"unbounded": "value"},
+            }
+        },
+    }
+
+    assert _trace_changes("review", payload, "deepseek") == {
+        "decision": "accept",
+        "change_reasons": [],
+        "evidence": [],
+    }
 
 
 def test_trace_final_mismatch_rejects_before_any_projection_write():

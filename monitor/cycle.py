@@ -256,13 +256,21 @@ def _trace_changes(
             "decision": row.get("decision"),
             "change_reasons": row.get("change_reasons", []),
             "evidence": row.get("evidence", []),
+            "metadata_normalized": row.get("metadata_normalized", False),
         }
     if isinstance(details, dict):
         details = {
             key: details[key]
-            for key in ("decision", "change_reasons", "evidence")
+            for key in (
+                "decision",
+                "change_reasons",
+                "evidence",
+                "metadata_normalized",
+            )
             if key in details
         }
+        if not isinstance(details.get("metadata_normalized"), bool):
+            details.pop("metadata_normalized", None)
     return details if isinstance(details, dict) else {}
 
 

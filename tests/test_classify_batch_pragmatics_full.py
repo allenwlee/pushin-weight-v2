@@ -122,7 +122,7 @@ def test_primary_then_candidate_aware_review_selects_canonical_final_and_trace()
     assert trace["review"]["metadata_by_brand"]["deepseek"]["decision"] == "accept"
     assert (
         trace["final"]["selector_version"]
-        == "stage1-selector-v22-review-authoritative-v1"
+        == "stage1-selector-v23-review-authoritative-derived-metadata-v1"
     )
     assert trace["final"]["model"] == "deepseek-v4-flash"
 
@@ -181,6 +181,159 @@ def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_
     )
 
 
+def test_identical_reviewer_classification_normalizes_replacement_metadata_without_repair():
+    from x_monitor import attribution
+
+    primary_system, review_system, repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        assert kwargs["system"] == review_system
+        packet = payload[0]
+        return {
+            "results": [
+                {
+                    **_accept(packet),
+                    "decision": "replace",
+                    "change_reasons": ["sentiment"],
+                    "evidence": [
+                        {"source": "source", "context_index": None, "quote": "release"}
+                    ],
+                }
+            ]
+        }
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(
+        _tweets(1), [], client, model="deepseek-v4-flash"
+    )
+
+    metadata = result[0]["classification_trace"]["review"]["metadata_by_brand"][
+        "deepseek"
+    ]
+    assert result[0]["valid"] is True
+    assert metadata["decision"] == "accept"
+    assert metadata["change_reasons"] == []
+    assert metadata["evidence"] == []
+    assert metadata["metadata_normalized"] is True
+    assert [call["system"] for call in client.calls] == [primary_system, review_system]
+
+
+def test_changed_classification_derives_reasons_and_accepts_exact_evidence():
+    from x_monitor import attribution
+
+    primary_system, review_system, repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        assert kwargs["system"] == review_system
+        packet = payload[0]
+        replacement = _classification(sentiment="positive")
+        return {
+            "results": [
+                {
+                    "example_id": packet["example_id"],
+                    "brand_id": packet["brand_id"],
+                    "decision": "replace",
+                    "classification": replacement,
+                    "change_reasons": ["sentiment", "sentiment"],
+                    "evidence": [
+                        {"source": "source", "context_index": None, "quote": "release"}
+                    ],
+                }
+            ]
+        }
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(
+        _tweets(1), [], client, model="deepseek-v4-flash"
+    )
+
+    metadata = result[0]["classification_trace"]["review"]["metadata_by_brand"][
+        "deepseek"
+    ]
+    assert result[0]["valid"] is True
+    assert result[0]["by_brand"]["deepseek"]["sentiment"] == "positive"
+    assert metadata["decision"] == "replace"
+    assert metadata["change_reasons"] == ["sentiment"]
+    assert len(metadata["evidence"]) == 1
+    assert metadata["metadata_normalized"] is True
+    assert [call["system"] for call in client.calls] == [primary_system, review_system]
+
+
+def test_reordered_classification_arrays_preserve_primary_canonical_order():
+    from x_monitor import attribution
+
+    primary_system, review_system, _repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            response = _primary_response(payload)
+            classification = response["results"][0]["classifications"][0]
+            classification["post_types"] = [
+                "releases_updates",
+                "opinions_reactions",
+            ]
+            return response
+        assert kwargs["system"] == review_system
+        packet = payload[0]
+        classification = dict(packet["primary"])
+        classification["post_types"] = [
+            "opinions_reactions",
+            "releases_updates",
+        ]
+        return {
+            "results": [
+                {
+                    **_accept(packet),
+                    "classification": classification,
+                }
+            ]
+        }
+
+    result = attribution.classify_batch_pragmatics_full(
+        _tweets(1), [], FakeClient(handler)
+    )
+
+    assert result[0]["valid"] is True
+    assert result[0]["by_brand"]["deepseek"]["post_types"] == [
+        "releases_updates",
+        "opinions_reactions",
+    ]
+
+
+def test_unknown_review_reason_stays_invalid_after_bounded_repair(monkeypatch):
+    from x_monitor import attribution
+
+    monkeypatch.setattr(attribution, "_BACKOFF_BASE_SECONDS", 0)
+    primary_system, review_system, repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        packet = payload[0] if isinstance(payload, list) else payload["packet"]
+        bad = _accept(packet)
+        bad["change_reasons"] = ["unknown_reason"]
+        return {"results": [bad]}
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(_tweets(1), [], client)
+
+    assert result[0]["valid"] is False
+    assert result[0]["by_brand"] == {}
+    assert [call["system"] for call in client.calls] == [
+        primary_system,
+        review_system,
+        repair_system,
+    ]
+
+
 def test_omitted_reviewer_id_retries_only_that_post_brand_packet(monkeypatch):
     from x_monitor import attribution
 
@@ -209,6 +362,40 @@ def test_omitted_reviewer_id_retries_only_that_post_brand_packet(monkeypatch):
     ]
     repair_payload = json.loads(client.calls[-1]["messages"][0]["content"])
     assert repair_payload["packet"]["example_id"] == "tweet-1"
+    assert repair_payload["invalid_response"] is None
+
+
+def test_multirow_review_repair_payload_contains_only_offending_row(monkeypatch):
+    from x_monitor import attribution
+
+    monkeypatch.setattr(attribution, "_BACKOFF_BASE_SECONDS", 0)
+    primary_system, review_system, repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        packets = payload if isinstance(payload, list) else [payload["packet"]]
+        if kwargs["system"] == review_system:
+            bad = _accept(packets[1])
+            bad["classification"] = _classification(post_types=["job_listings"])
+            bad["decision"] = "replace"
+            bad["change_reasons"] = ["missing_post_type", "unsupported_post_type"]
+            bad["evidence"] = [
+                {"source": "source", "context_index": None, "quote": "absent"}
+            ]
+            return {"results": [_accept(packets[0]), bad]}
+        assert kwargs["system"] == repair_system
+        assert len(packets) == 1
+        return {"results": [_accept(packets[0])]}
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(_tweets(2), [], client)
+
+    assert all(row["valid"] for row in result)
+    repair_payload = json.loads(client.calls[-1]["messages"][0]["content"])
+    assert repair_payload["packet"]["example_id"] == "tweet-1"
+    assert repair_payload["invalid_response"]["example_id"] == "tweet-1"
 
 
 def test_invalid_reviewer_never_silently_publishes_primary(monkeypatch):
@@ -224,7 +411,12 @@ def test_invalid_reviewer_never_silently_publishes_primary(monkeypatch):
         packet = payload[0] if isinstance(payload, list) else payload["packet"]
         assert kwargs["system"] in {review_system, repair_system}
         bad = _accept(packet)
-        bad["evidence"] = [{"source": "source", "context_index": None, "quote": "bad"}]
+        bad["classification"] = _classification(post_types=["job_listings"])
+        bad["decision"] = "replace"
+        bad["change_reasons"] = ["missing_post_type", "unsupported_post_type"]
+        bad["evidence"] = [
+            {"source": "source", "context_index": None, "quote": "bad"}
+        ]
         return {"results": [bad]}
 
     result = attribution.classify_batch_pragmatics_full(

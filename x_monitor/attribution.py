@@ -1334,7 +1334,7 @@ _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION = (
     "stage1-prompt-v22-completeness-review-repair-v1"
 )
 _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION = (
-    "stage1-selector-v22-review-authoritative-v1"
+    "stage1-selector-v23-review-authoritative-derived-metadata-v1"
 )
 _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT = f"""You review one proposed, complete taxonomy-v3 classification for each supplied post-brand packet. Return JSON only.
 
@@ -2029,17 +2029,18 @@ def _partition_stage1_review_response(
     return parsed, invalid, error
 
 
+_COMPLETENESS_REVIEW_CHANGE_REASON_ORDER = (
+    "missing_post_type",
+    "unsupported_post_type",
+    "missing_product_label",
+    "unsupported_product_label",
+    "outcome",
+    "sentiment",
+    "china_nationalism",
+    "us_nationalism",
+)
 _COMPLETENESS_REVIEW_CHANGE_REASONS = frozenset(
-    {
-        "missing_post_type",
-        "unsupported_post_type",
-        "missing_product_label",
-        "unsupported_product_label",
-        "outcome",
-        "sentiment",
-        "china_nationalism",
-        "us_nationalism",
-    }
+    _COMPLETENESS_REVIEW_CHANGE_REASON_ORDER
 )
 
 
@@ -2123,7 +2124,7 @@ def _parse_completeness_review_row(
             or reason not in _COMPLETENESS_REVIEW_CHANGE_REASONS
             for reason in row["change_reasons"]
         )
-        or len(set(row["change_reasons"])) != len(row["change_reasons"])
+        or not isinstance(row.get("evidence"), list)
     ):
         return None
     parsed = parse_stage1_classifications(
@@ -2133,6 +2134,8 @@ def _parse_completeness_review_row(
     if parsed is None:
         return None
     primary = packet.get("primary")
+    if not isinstance(primary, dict):
+        return None
     replacement = parsed[packet["brand_id"]]
     expected_reasons: set[str] = set()
     if replacement["outcome"] != primary.get("outcome"):
@@ -2141,32 +2144,43 @@ def _parse_completeness_review_row(
         ("post_types", "missing_post_type", "unsupported_post_type"),
         ("product_labels", "missing_product_label", "unsupported_product_label"),
     ):
-        primary_values = set(primary.get(field) or [])
+        primary_list = list(primary.get(field) or [])
+        primary_values = set(primary_list)
         replacement_values = set(replacement[field])
         if replacement_values - primary_values:
             expected_reasons.add(missing_reason)
         if primary_values - replacement_values:
             expected_reasons.add(unsupported_reason)
+        if replacement_values == primary_values:
+            replacement[field] = primary_list
     for field in ("sentiment", "china_nationalism", "us_nationalism"):
         if replacement[field] != primary.get(field):
             expected_reasons.add(field)
-    if row["decision"] == "accept":
-        if replacement != primary or row["change_reasons"] or row["evidence"]:
-            return None
-    elif (
-        not expected_reasons
-        or set(row["change_reasons"]) != expected_reasons
-        or len(row["evidence"]) < len(expected_reasons)
+    derived_reasons = [
+        reason
+        for reason in _COMPLETENESS_REVIEW_CHANGE_REASON_ORDER
+        if reason in expected_reasons
+    ]
+    decision = "replace" if derived_reasons else "accept"
+    if decision == "replace" and (
+        len(row["evidence"]) < len(derived_reasons)
         or not _valid_completeness_review_evidence(
             row["evidence"], packet, required=True
         )
     ):
         return None
+    evidence = list(row["evidence"]) if decision == "replace" else []
+    metadata_normalized = (
+        row["decision"] != decision
+        or row["change_reasons"] != derived_reasons
+        or row["evidence"] != evidence
+    )
     return {
         "classification": replacement,
-        "decision": row["decision"],
-        "change_reasons": list(row["change_reasons"]),
-        "evidence": list(row["evidence"]),
+        "decision": decision,
+        "change_reasons": derived_reasons,
+        "evidence": evidence,
+        "metadata_normalized": metadata_normalized,
     }
 
 
@@ -2529,6 +2543,31 @@ def _completeness_review_repair_prompt(
     )
 
 
+def _completeness_review_failure_context(
+    response: Any, packet: dict[str, Any]
+) -> tuple[Any, str]:
+    """Return only the response fragment attributable to one repair packet."""
+
+    if not isinstance(response, dict) or set(response) != {"results"}:
+        return None, "review response has invalid envelope"
+    rows = response.get("results")
+    if not isinstance(rows, list):
+        return None, "review response results is not an array"
+    matches = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("example_id") == packet["example_id"]
+        and row.get("brand_id") == packet["brand_id"]
+    ]
+    if len(matches) != 1:
+        return (
+            matches or None,
+            f"expected one review row for packet, got {len(matches)}",
+        )
+    return matches[0], "invalid completeness review row"
+
+
 def _review_one_completeness_packet(
     packet: dict[str, Any],
     anthropic_client: "ClaudeClient",
@@ -2644,6 +2683,9 @@ def _classify_completeness_review_packets(
             error,
         )
     for packet in invalid:
+        invalid_fragment, packet_error = _completeness_review_failure_context(
+            response, packet
+        )
         repaired = _review_one_completeness_packet(
             packet,
             anthropic_client,
@@ -2653,8 +2695,8 @@ def _classify_completeness_review_packets(
             deadline=deadline,
             telemetry_context=telemetry_context,
             repair_allowance=repair_allowance,
-            invalid_response=response,
-            validation_error=str(error or "invalid completeness review"),
+            invalid_response=invalid_fragment,
+            validation_error=packet_error,
         )
         if repaired is not None:
             parsed[(packet["example_id"], packet["brand_id"])] = repaired
@@ -3523,6 +3565,9 @@ def classify_batch_pragmatics_full(
                                 "decision": item["decision"],
                                 "change_reasons": item["change_reasons"],
                                 "evidence": item["evidence"],
+                                "metadata_normalized": item[
+                                    "metadata_normalized"
+                                ],
                                 "prompt_version": item["prompt_version"],
                             }
                             for brand_id, item in review_metadata_by_brand.items()

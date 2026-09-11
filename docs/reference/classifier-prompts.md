@@ -1,4 +1,4 @@
-# Stage 1 classifier prompts — current v22 reference
+# Stage 1 classifier prompts — current R79 reference
 
 Last reviewed: 2026-09-12
 
@@ -22,7 +22,7 @@ primary_prompt_version: stage1-prompt-v18-full-v1
 review_prompt_version: stage1-prompt-v22-completeness-review-v1
 primary_repair_prompt_version: stage1-prompt-v18-fallback-repair-v1
 review_repair_prompt_version: stage1-prompt-v22-completeness-review-repair-v1
-selector_version: stage1-selector-v22-review-authoritative-v1
+selector_version: stage1-selector-v23-review-authoritative-derived-metadata-v1
 provider_role: classifier
 scheduled_provider: DeepSeek via its Anthropic-compatible Messages API
 ```
@@ -151,9 +151,10 @@ The reviewer returns exactly one row per packet:
 }
 ```
 
-`accept` must reproduce the canonical primary classification and have empty
-`change_reasons` and `evidence`. `replace` must return a complete replacement,
-not a patch, and uses only these reasons:
+The wire prompt asks `accept` to reproduce the canonical primary classification
+with empty `change_reasons` and `evidence`, and asks `replace` to return a
+complete replacement rather than a patch. The response may use only these
+reason values:
 
 ```text
 missing_post_type       unsupported_post_type
@@ -162,12 +163,25 @@ outcome                 sentiment
 china_nationalism       us_nationalism
 ```
 
-Each replacement must carry enough exact evidence rows for its changes. A
-`source` quote must be a non-empty literal substring of `source.text` and use
+Runtime validation treats the complete canonical `classification` as the
+reviewer's judgment. It derives `decision` and the ordered `change_reasons`
+from the actual primary-versus-review diff. An unchanged classification becomes
+`accept` with empty reasons and evidence even when the reviewer supplied
+contradictory closed metadata. A changed classification becomes `replace` and
+its evidence array must contain at least as many exact rows as there are derived
+change categories. The wire schema does not map an individual evidence row to a
+reason, so this count is a structural guard rather than proof of a one-to-one
+association. The trace and durable review judgment record
+`metadata_normalized: true` when the derived metadata differs from the reviewer
+response. Unknown reason values still invalidate the row.
+
+A `source` quote must be a non-empty literal substring of `source.text` and use
 `context_index: null`. A `context` quote must be a non-empty literal substring
 of `source.context[context_index].text` and name that non-negative index.
 Paraphrases, inferred facts, URLs, omitted IDs, duplicate IDs, extra keys, an
-unknown reason, or unsupported labels invalidate that review row.
+unknown reason, insufficient changed-case evidence, or unsupported labels
+invalidate that review row. A repair receives only the response fragment that
+matches its one post-brand packet; it never receives another packet's response.
 
 ## Literal primary system prompt
 

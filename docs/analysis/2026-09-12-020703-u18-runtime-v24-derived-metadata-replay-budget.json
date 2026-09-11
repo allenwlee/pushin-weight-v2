@@ -1,0 +1,81 @@
+{
+  "schema_version": "u18-runtime-development-replay-budget/v1",
+  "frozen_at": "2026-09-11T17:07:47Z",
+  "reason": "The paid v23 development run completed 26 successful transports but candidate assembly stopped because eight otherwise-canonical reviewer classifications contradicted their own redundant decision or change_reasons metadata. After inspecting those consumed-development outputs, v24 derives decision and ordered closed reasons from the validated primary-versus-review classification, records whether metadata was normalized, preserves exact evidence validation for every derived changed category, and repairs only the response fragment for one packet. This zero-transport replay measures that parser and selector correction against the already-consumed responses. It was designed after seeing those outputs and cannot approve release.",
+  "lane": "runtime_v24_derived_metadata_replay",
+  "cohort": {
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "development_only": true,
+    "rows": 120,
+    "bytes": 248569,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort; unchanged from v18 and v23"
+  },
+  "source_run": {
+    "lane": "runtime_v23_completeness_review_pilot",
+    "budget_path": "docs/analysis/2026-09-12-015231-u18-runtime-v23-completeness-review-pilot-budget.json",
+    "budget_sha256": "fe367265348cd97ee90a5067b8f1a0c4e2916a85f243cd05902ba0884dfab89b",
+    "transport_attempts": 26,
+    "observed_input_tokens": 130406,
+    "observed_output_tokens": 24725,
+    "reserved_input_tokens": 370519,
+    "reserved_output_tokens": 106496,
+    "assembly_result": "blocked before candidate write because eight review rows failed the v22 redundant-metadata consistency parser"
+  },
+  "replay": {
+    "response_directory": ".context/u18/runtime-v23-completeness-review-pilot/responses",
+    "response_count": 26,
+    "response_manifest_sha256": "7243e1bbae9a012e33b53c00a0c8bdc2c0ba7151ae28cd050b39e2929b559850",
+    "expected_cache_hits": 18,
+    "network_transport_allowed": false
+  },
+  "prompt": {
+    "contract_version": "stage1-v1",
+    "taxonomy_version": "stage1-taxonomy-v3",
+    "composite_version": "stage1-prompt-v22",
+    "primary_version": "stage1-prompt-v18-full-v1",
+    "primary_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "primary_repair_version": "stage1-prompt-v18-fallback-repair-v1",
+    "primary_repair_sha256": "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+    "review_version": "stage1-prompt-v22-completeness-review-v1",
+    "review_sha256": "107a7cf79648eae2dc7376c24ed472acef87bc0070a6ed1fa46f74ca305f0b8d",
+    "review_repair_version": "stage1-prompt-v22-completeness-review-repair-v1",
+    "review_repair_sha256": "0a6c732dd78b87b111ad4baafb33a3a913282f1e977527d275fa79b2198acff4",
+    "selector_version": "stage1-selector-v23-review-authoritative-derived-metadata-v1"
+  },
+  "selection": {
+    "classification_authority": "the reviewer's complete validated canonical classification",
+    "derived_metadata": "decision and ordered change_reasons are derived from the canonical primary-versus-review diff",
+    "unchanged": "accept with empty change_reasons and evidence; contradictory closed reviewer metadata is discarded and metadata_normalized is true",
+    "changed": "replace with derived ordered reasons; the evidence array must contain at least as many exact valid rows as there are derived changed categories, but the wire schema does not map individual rows to reasons",
+    "repair_scope": "one invalid post-brand packet receives only its matching response fragment, never the whole batch response",
+    "failure": "unknown reason values, invalid canonical classifications, invalid or insufficient changed-case evidence, identity/cardinality errors, or a failed repair leave the post unpublished"
+  },
+  "lanes": {
+    "runtime_v24_derived_metadata_replay": {
+      "provider": "deepseek-cached-response-replay",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "maximum_examples": 120,
+      "maximum_requests": 0,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 0,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 0,
+      "maximum_output_tokens": 0,
+      "maximum_cost_usd": "0",
+      "twitterapi_credits": 0,
+      "allowed_system_sha256": [
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+        "107a7cf79648eae2dc7376c24ed472acef87bc0070a6ed1fa46f74ca305f0b8d",
+        "0a6c732dd78b87b111ad4baafb33a3a913282f1e977527d275fa79b2198acff4"
+      ]
+    }
+  },
+  "decision_rule": "Apply the same consumed-development continuation floors frozen for v23. A pass may justify a separately frozen 500-row development run but cannot approve release because this parser was designed after inspecting these responses.",
+  "global_stop": "Every provider call must resolve from the exact frozen response corpus. The first cache miss stops the replay before transport because request, attempt, token, and dollar caps are all zero."
+}

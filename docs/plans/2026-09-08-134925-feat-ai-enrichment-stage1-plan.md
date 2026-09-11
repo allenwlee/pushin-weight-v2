@@ -253,8 +253,12 @@ The production classifier asks for six post types, sentiment, discourse, and two
   unsupported additions, and returns one complete replacement classification
   plus `accept|replace`, a closed set of change reasons, and exact source
   evidence for every changed decision. The deterministic selector publishes
-  the complete reviewer classification; it never unions labels, chooses
-  results by language, or silently falls back to the primary result. Both
+  the complete reviewer classification and derives `accept|replace` plus the
+  ordered closed change reasons from the canonical primary-versus-review diff.
+  It records when redundant reviewer metadata required normalization, and
+  still rejects unknown reason values or insufficient exact evidence for the
+  derived changes. It never unions labels, chooses results by language, or
+  silently falls back to the primary result. Both
   passes must be complete and valid, and only malformed post-brand rows may be
   retried. Keep DeepSeek as the scheduled classifier provider, preserve
   explicit model/thinking/deadline/repair/call-budget controls, and cap
@@ -442,10 +446,13 @@ The production classifier asks for six post types, sentiment, discourse, and two
   while micro F1 shows that many individual judgments remain useful. One full
   primary pass supplies a concrete proposal; one full reviewer must either
   accept it or replace it with a complete canonical judgment and evidence for
-  each change. A fixed reviewer-authoritative selector avoids post-hoc union,
-  majority, language-specific, and deterministic label injection. Durable
-  primary/review/final records make later analysis able to separate primary
-  model errors, reviewer changes, selector behavior, and the published state.
+  each change. The fixed reviewer-authoritative selector derives decision and
+  closed reason metadata from the actual canonical diff and records whether it
+  normalized contradictory redundant fields; it never injects classification
+  labels. This avoids post-hoc union, majority, and language-specific choice.
+  Durable primary/review/final records make later analysis able to separate
+  primary model errors, reviewer changes, selector behavior, and the published
+  state.
 
 ### High-Level Technical Design
 
@@ -1676,7 +1683,45 @@ normal calls. The hard envelope permits at most 38 logical requests, 58
 transport attempts, 900,000 reserved input tokens, 237,568 reserved output
 tokens, and $0.72 at the recorded DeepSeek rates. The runner now preserves
 primary/review/final trace data in its ignored candidate artifact while
-retaining `classification` as the final-output compatibility field. The next
-action is to commit and push this exact code and budget, then run and score the
-120-row pilot; only a full continuation-floor pass permits the 500-row
-consumed-development run.
+retaining `classification` as the final-output compatibility field.
+
+The v23 paid development transport completed 26 successful DeepSeek calls: six
+primary calls, twelve completeness-review calls, and eight review repairs. It
+used 130,406 observed input tokens and 24,725 observed output tokens with no
+transport errors. Candidate assembly then stopped because eight review rows had
+valid complete classifications and exact evidence but contradicted those
+classifications in redundant `decision` or `change_reasons` fields. Five of the
+repair requests also exposed a runtime defect: each repair received the entire
+invalid batch response instead of the one matching row. No candidate or quality
+decision was produced from v23.
+
+Selector v23 corrects that development failure without another provider call.
+It keeps the complete validated reviewer classification authoritative, derives
+the decision and ordered closed reasons from the canonical diff, requires the
+evidence array to contain at least as many exact rows as derived change
+categories, and records `metadata_normalized` in the review trace and durable
+judgment. The wire format does not map rows to individual reasons, so this is a
+structural count guard rather than proof of one-to-one association. Unknown
+reasons and invalid or insufficient changed-case evidence still fail closed. Repair
+requests now receive only the response fragment attributable to their one
+post-brand packet. The prompt bytes remain unchanged; the selector identity is
+`stage1-selector-v23-review-authoritative-derived-metadata-v1`.
+
+The replay budget at
+`docs/analysis/2026-09-12-020703-u18-runtime-v24-derived-metadata-replay-budget.json`
+pins the 26-response corpus by manifest hash and permits zero requests, retries,
+transport attempts, tokens, and dollars. This parser was designed after
+inspecting consumed-development output, so its replay can guide the next
+development iteration but cannot approve release. The affected regression net
+passes 333 tests across two disjoint groups, including all 47 required
+PostgreSQL checks with no skips or errors. Schema generation, Django system
+checks, Python compilation, focused Ruff undefined-name/import checks, and diff
+whitespace checks also pass. A separate read-only review found and closed three
+provenance gaps: replay now ignores unpinned local response files, persistence
+accepts `metadata_normalized` only as a boolean, and label arrays with identical
+members retain the primary canonical order. It also documented the evidence
+wire format's lack of reason-to-row mapping. The resulting 67-test focused net,
+including nine required PostgreSQL checks, passes. The next action is to commit
+and push, followed by the cache-only v24 replay and scoring. Only a full
+continuation-floor pass permits a separately frozen 500-row consumed-development
+run.
