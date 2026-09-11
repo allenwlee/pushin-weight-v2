@@ -334,9 +334,14 @@ def test_snapshot_census_and_dump_use_one_exported_snapshot(tmp_path: Path) -> N
         f"--exclude-table-data=public.{table}" in dump_command
         for table in engine.policy.relations.excluded_tables
     )
-    assert {"--exit-on-error", "--no-owner", "--no-privileges", "--jobs=1"} <= set(
-        restore_command
-    )
+    assert {
+        "--clean",
+        "--exit-on-error",
+        "--if-exists",
+        "--no-owner",
+        "--no-privileges",
+        "--jobs=1",
+    } <= set(restore_command)
     assert candidate.name.startswith(engine.policy.lifecycle.shadow_prefix)
     assert artifact.checksum
     assert artifact.path.stat().st_mode & 0o777 == 0o600

@@ -1010,7 +1010,9 @@ class SnapshotRestoreEngine:
             )
             command = [
                 self._executables["pg_restore"],
+                "--clean",
                 "--exit-on-error",
+                "--if-exists",
                 "--no-owner",
                 "--no-privileges",
                 "--jobs=1",

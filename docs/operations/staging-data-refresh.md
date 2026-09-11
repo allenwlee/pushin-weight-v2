@@ -249,6 +249,8 @@ command's guaranteed cleanup path.
 The dump explicitly includes only the `public` application schema. Operational
 recovery schemas such as `account_user_about_backup` and
 `account_geography_backup` remain production-only and never enter staging.
+Restore uses `--clean --if-exists` against the newly created, non-serving
+candidate so the archive replaces PostgreSQL's default empty `public` schema.
 
 Immediately recover the same receipt from database metadata and rerun the
 active census:
