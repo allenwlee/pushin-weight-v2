@@ -1,0 +1,58 @@
+{
+  "schema_version": "u18-runtime-development-budget/v6",
+  "frozen_at": "2026-09-11T08:25:00Z",
+  "reason": "The exact v18 runtime probe failed and saved-output analysis found no deterministic three-pass merge whose worst saved run clears the locale floor. The base pass changes materially when unrelated batch peers change. This bounded development pilot isolates that variable by retaining the byte-exact base prompt, production parser, fallback, repair, model, and temperature while reducing the base batch from 20 posts to 5. It cannot approve release.",
+  "lane": "runtime_v19_en_batch5_pilot",
+  "cohort": {
+    "cohort_id": "u18-development-v19-en30-batch5-pilot-v1",
+    "development_only": true,
+    "rows": 30,
+    "bytes": 82097,
+    "sha256": "5386093a5c156accbe817d1c49778eeb8f9a84bf9da2f450acd784e0571dc74b",
+    "selection": "first 30 EN rows sorted by (example_id, brand_id) from the locked 120-row consumed development cohort"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v18-base-v1",
+    "bytes": 11439,
+    "sha256": "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "fallback_repair_sha256": "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326"
+  },
+  "production_shape_under_test": {
+    "base_batch_size": 5,
+    "max_concurrent_transport_calls": 3,
+    "all_other_runtime_behavior": "byte-exact v18 base prompt and existing strict parser, fallback, repair allowance, and telemetry"
+  },
+  "lanes": {
+    "runtime_v19_en_batch5_pilot": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "base_batch_size": 5,
+      "max_concurrent_transport_calls": 3,
+      "maximum_examples": 30,
+      "expected_logical_requests_before_fallback": 6,
+      "maximum_requests": 30,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 36,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 360000,
+      "maximum_output_tokens": 147456,
+      "expected_cost_usd": "0.08",
+      "maximum_cost_usd": "0.36",
+      "twitterapi_credits": 0,
+      "allowed_system_sha256": [
+        "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326"
+      ]
+    }
+  },
+  "decision_rule": "Continue this batch-size architecture only if all 30 rows validate, EN exact post-type sets are at least 0.70, exact product-label sets are at least 0.85, outcome accuracy is at least 0.90, and every supported post/product label meets its unchanged floor. A pass authorizes a new all-locale development probe; it does not approve release. A failure rejects batch size 5 and permits one preregistered singleton pilot on the same development rows.",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, batch size, or lane."
+}

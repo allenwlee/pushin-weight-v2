@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from scripts import u18_runtime_base_batch_probe
+from scripts.u18_runtime_base_batch_probe import _run_base_batches
 from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
 from x_monitor.attribution import (
     _PRAGMATICS_BASE_SYSTEM_PROMPT,
@@ -107,3 +109,33 @@ def test_budgeted_runtime_keeps_independent_passes_and_replays_without_spend(tmp
 
     with pytest.raises(RuntimeError, match="request cap"):
         replay.messages_create(**_kwargs())
+
+
+def test_base_batch_probe_freezes_five_post_batches(monkeypatch):
+    calls = []
+
+    def classify(batch, *_args, **_kwargs):
+        calls.append([row["tweet_id"] for row in batch])
+        return [{"tweet_id": row["tweet_id"]} for row in batch]
+
+    monkeypatch.setattr(
+        u18_runtime_base_batch_probe,
+        "_classify_stage1_base_batch",
+        classify,
+    )
+    client = type(
+        "Client",
+        (),
+        {"budget": {"model": "deepseek-v4-flash", "max_tokens_per_attempt": 4096}},
+    )()
+    tweets = [{"tweet_id": str(index)} for index in range(12)]
+
+    results = _run_base_batches(
+        tweets,
+        client=client,
+        batch_size=5,
+        max_workers=1,
+    )
+
+    assert calls == [["0", "1", "2", "3", "4"], ["5", "6", "7", "8", "9"], ["10", "11"]]
+    assert [row["tweet_id"] for row in results] == [str(index) for index in range(12)]

@@ -1416,6 +1416,22 @@ It must reproduce the continuation floors before the full 500-row consumed
 development assessment. Neither development result may approve release; a new
 unique-ID zero-overlap cohort remains mandatory.
 
+The exact v18 runtime probe completed all 120 rows in 42 attempts, using
+56,577 reported input tokens and 33,014 reported output tokens, but failed its
+continuation rule: post-type exact sets were 63.3%, EN/JA/ZH-CN exact sets were
+55.0%/70.0%/65.0%, and product-label exact sets were 83.3%. A search over all
+saved base, secondary, and review runs found no fixed per-label merge whose
+worst saved English and Chinese runs clear the 70% locale floor; the best
+worst-case scores were 57.5% and 67.5%. The dominant remaining variable is
+batch-peer sensitivity in the exact base prompt, whose score fell from 63.3%
+to 56.7% when the same 120 posts were merely repacked. The next bounded test
+therefore changes only the base batch size from 20 to 5 on 30 frozen English
+development rows. Its prompt identity, cohort, cost ceiling, and stop rule are
+frozen in
+`docs/analysis/2026-09-11-172500-u18-runtime-v19-en-batch5-pilot-budget.json`.
+A pass permits an all-locale development probe; a failure rejects batch size 5
+and permits one preregistered singleton pilot. Neither can approve release.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
