@@ -902,6 +902,7 @@ class SnapshotRestoreEngine:
                     "--format=custom",
                     "--no-owner",
                     "--no-privileges",
+                    "--schema=public",
                     f"--snapshot={census.snapshot_id}",
                     *(
                         f"--exclude-table-data=public.{table}"

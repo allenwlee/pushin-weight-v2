@@ -329,6 +329,7 @@ def test_snapshot_census_and_dump_use_one_exported_snapshot(tmp_path: Path) -> N
     )
     assert "--snapshot=00000003-0000001B-1" in dump_command
     assert "--format=custom" in dump_command
+    assert "--schema=public" in dump_command
     assert all(
         f"--exclude-table-data=public.{table}" in dump_command
         for table in engine.policy.relations.excluded_tables

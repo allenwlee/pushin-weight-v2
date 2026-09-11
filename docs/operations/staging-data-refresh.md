@@ -246,6 +246,10 @@ name, and exact rollback confirmation. Copy the JSON receipt to the operation
 record, but never create a tracked receipt file. The dump is removed in the
 command's guaranteed cleanup path.
 
+The dump explicitly includes only the `public` application schema. Operational
+recovery schemas such as `account_user_about_backup` and
+`account_geography_backup` remain production-only and never enter staging.
+
 Immediately recover the same receipt from database metadata and rerun the
 active census:
 
