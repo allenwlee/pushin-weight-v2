@@ -104,6 +104,18 @@ assertEq(pwIcon.isAllowed('icon-heart'), true, 'approved symbol is recognized');
 assertEq(pwIcon.isAllowed('not-approved'), false, 'unknown symbol is rejected');
 assertEq(pwIcon.semanticSymbol('sentiment', 'negative'), 'icon-sentiment-negative',
   'filter and feed sentiment share the semantic symbol registry');
+[
+  ['opportunities', 'a-opportunity'],
+  ['job_listings', 'a-jobs'],
+  ['personnel_changes', 'a-personnel'],
+  ['opinions_reactions', 'a-opinions'],
+  ['research_explanations', 'a-research'],
+  ['business_finance', 'a-finance'],
+  ['other', 'a-other'],
+].forEach(function (entry) {
+  assertEq(pwIcon.semanticSymbol('post_types', entry[0]), entry[1],
+    entry[0] + ' uses the locked Column A glyph');
+});
 assertEq(pwIcon.semanticClass('role', 'staff'), 'role-staff',
   'role filter colors share the semantic class registry');
 

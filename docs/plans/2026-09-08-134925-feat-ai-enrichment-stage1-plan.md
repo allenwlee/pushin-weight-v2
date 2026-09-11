@@ -1487,9 +1487,27 @@ If that slot also fails authentication, direct-Haiku evaluation is blocked
 until the owner refreshes a local direct-Anthropic credential; no DeepSeek
 fallback may stand in for the named provider.
 
+The v22b replacement also made zero successful provider calls: the local
+`ANTHROPIC_API_KEY_CO_JP` credential returned HTTP 401 on every permitted
+attempt, after which the frozen 18-attempt cap stopped transport. Both local
+direct-Anthropic credential slots are therefore rejected by Anthropic, and the
+Haiku quality pilot remains unmeasured. U18 is blocked at this external
+credential boundary; its unchanged next step is to rerun the exact frozen
+30-row v22 pilot after the owner refreshes one local direct-Anthropic
+credential. No additional DeepSeek experiment, unseen cohort, feature
+activation, staging refresh, or production promotion is permitted in place of
+that result.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
 demand API, and visible/lookahead feed requests. They remain unaccepted and
-disabled until U18 passes. U22 still requires the locked Column A glyphs and
-the integrated browser/cost proof before U23 may refresh and activate staging.
+disabled until U18 passes. The U22 locked Column A glyph unit is now
+implemented: all seven exact prototype bodies use 24 × 24 `currentColor`
+symbols, the semantic registry maps the seven canonical post types to Column A,
+and all 33 pre-existing runtime symbols remain byte-normalized-identical.
+Focused sprite and JavaScript tests pass (4 and 102 tests respectively), and a
+real homepage browser test passes at 1440 × 960, 390 × 844, and 320 × 700 while
+asserting every affected filter icon renders at exactly 15 × 15 CSS pixels.
+The integrated U22 browser/cost proof remains required after U18 passes and
+before U23 may refresh and activate staging.

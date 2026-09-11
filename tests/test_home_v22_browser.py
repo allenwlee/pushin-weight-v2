@@ -5037,6 +5037,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "icon-hands-on-hammer", "icon-compare", "icon-announce", "icon-question",
             "icon-marketing", "icon-event", "icon-discourse", "icon-nationalism",
             "icon-unsanctioned", "icon-caret", "icon-star",
+            "a-opportunity", "a-jobs", "a-personnel", "a-opinions",
+            "a-research", "a-finance", "a-other",
             "icon-sunrise", "icon-day", "icon-dusk", "icon-night",
             "icon-california", "icon-beijing",
         }
@@ -5129,6 +5131,29 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 page.locator('[data-group="lang"] [data-pw-semantic-icon]').count(),
                                 0,
                             )
+                            locked_post_type_symbols = {
+                                "opportunities": "#a-opportunity",
+                                "job_listings": "#a-jobs",
+                                "personnel_changes": "#a-personnel",
+                                "opinions_reactions": "#a-opinions",
+                                "research_explanations": "#a-research",
+                                "business_finance": "#a-finance",
+                                "other": "#a-other",
+                            }
+                            page.locator('[data-group="post_types"]').click()
+                            for post_type, symbol in locked_post_type_symbols.items():
+                                icon = page.locator(
+                                    '[data-pw-semantic-family="post_types"]'
+                                    f'[data-pw-semantic-key="{post_type}"] svg'
+                                )
+                                self.assertEqual(icon.locator("use").get_attribute("href"), symbol)
+                                self.assertEqual(
+                                    icon.evaluate(
+                                        "node => ({ width: getComputedStyle(node).width, "
+                                        "height: getComputedStyle(node).height })"
+                                    ),
+                                    {"width": "15px", "height": "15px"},
+                                )
                             sentiment_pill = page.locator('[data-group="sentiment"]')
                             sentiment_pill.click()
                             visible_sentiment_icons = page.locator(
