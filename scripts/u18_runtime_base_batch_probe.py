@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from core.classification_contract import (
+    CANONICAL_PROMPT_VERSION,
     CANONICAL_TAXONOMY_VERSION,
     CONTRACT_VERSION,
 )
@@ -148,7 +149,8 @@ def run(
             "cohort_id": cohort["cohort_id"],
             "contract_version": CONTRACT_VERSION,
             "taxonomy_version": CANONICAL_TAXONOMY_VERSION,
-            "prompt_version": _PRAGMATICS_BASE_PROMPT_VERSION,
+            "prompt_version": CANONICAL_PROMPT_VERSION,
+            "classifier_pass_prompt_version": _PRAGMATICS_BASE_PROMPT_VERSION,
             "model": client.budget["model"],
             "source_revision": revision,
             "generated_at": datetime.now(UTC).isoformat(),

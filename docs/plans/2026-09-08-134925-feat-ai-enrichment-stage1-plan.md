@@ -1432,6 +1432,17 @@ frozen in
 A pass permits an all-locale development probe; a failure rejects batch size 5
 and permits one preregistered singleton pilot. Neither can approve release.
 
+The v19 batch-5 pilot completed all 30 rows in six attempts with 17,463
+reported input tokens and 2,418 reported output tokens. It failed at 56.7%
+post-type exact sets even though product-label exact sets reached 90%, outcome
+accuracy reached 100%, and sentiment reached 90%. Reducing batch peers from 19
+to four therefore did not improve the common-type judgment. The one permitted
+singleton isolation test is frozen in
+`docs/analysis/2026-09-11-173000-u18-runtime-v20-en-singleton-pilot-budget.json`.
+It uses the same 30 rows and exact base prompt with one post per call. Failure
+rejects further batch-size tuning and requires a decomposed classification task
+before any more provider transport.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
