@@ -1523,5 +1523,19 @@ normalized-artifact queries, and the visual mask did not include the approved
 Japanese locale control. Those pins now express the current contract. The
 rerun passed all 3,598 declared obligations with 171 Python/browser tests (44
 required PostgreSQL checks and zero skips/errors), 108 chart JavaScript tests,
-and 102 feed JavaScript tests. U19's fixed old-policy/new-policy cost replay
-and the later production-shaped integrated U22 proof remain open.
+and 102 feed JavaScript tests.
+
+The first U19 production-dump replay exposed that the configured 5% materiality
+band was not used: volatile evidence ranks, engagement counters, and sliding
+bucket timestamps changed every dossier fingerprint. The corrected
+`headline-materiality-v2` projection retains semantic facts/evidence/topics,
+bands numeric jitter, and ignores those volatile fields. Its fixed seven-day,
+160-run replay suppressed 2,106 of 5,280 unchanged dossiers. Under an
+all-brands-visible upper bound where every retained editor batch still receives
+a critic, provider calls fell 6.81%, total tokens fell 2.34%, and estimated
+cost fell 2.54%; the risk-routed estimate reduced calls 7.98% and cost 3.38%.
+Historical and replayed last-good coverage were both 77.5947%, and replayed
+publication validity was 100%. The machine-readable and plain-English evidence
+is in `docs/analysis/2026-09-11-180315-headline-demand-replay.json` and its
+Markdown sibling. The provider-free U19 replay gate now passes. The
+production-shaped integrated U22 proof remains open after U18.
