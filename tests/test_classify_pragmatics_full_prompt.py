@@ -133,10 +133,10 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v18"
+    assert PROMPT_VERSION == "stage1-prompt-v22"
 
 
-def test_v18_three_pass_and_audit_prompt_bytes_are_frozen():
+def test_superseded_v18_three_pass_and_audit_prompt_bytes_remain_frozen():
     from x_monitor import attribution
 
     expected = {
@@ -170,6 +170,46 @@ def test_v18_three_pass_and_audit_prompt_bytes_are_frozen():
         assert versions[constant] == version
         value = getattr(attribution, constant)
         assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
+
+
+def test_v22_primary_review_and_repair_prompt_bytes_are_frozen():
+    from x_monitor import attribution
+
+    expected = {
+        "_PRAGMATICS_PRIMARY_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-full-v1",
+            "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
+            "stage1-prompt-v22-completeness-review-v1",
+            "107a7cf79648eae2dc7376c24ed472acef87bc0070a6ed1fa46f74ca305f0b8d",
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
+            "stage1-prompt-v22-completeness-review-repair-v1",
+            "0a6c732dd78b87b111ad4baafb33a3a913282f1e977527d275fa79b2198acff4",
+        ),
+    }
+    versions = {
+        "_PRAGMATICS_PRIMARY_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_PRIMARY_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION
+        ),
+    }
+
+    for constant, (version, digest) in expected.items():
+        assert versions[constant] == version
+        value = getattr(attribution, constant)
+        assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
+
+    assert (
+        attribution._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+        == "stage1-selector-v22-review-authoritative-v1"
+    )
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

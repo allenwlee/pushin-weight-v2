@@ -25,18 +25,30 @@ from core.classification_contract import (
     CANONICAL_TAXONOMY_VERSION,
     CONTRACT_VERSION,
 )
-from x_monitor.attribution import classify_batch_pragmatics_full
+from x_monitor.attribution import (
+    _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION,
+    _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+    _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+    _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+    _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+    _PRAGMATICS_PRIMARY_PROMPT_VERSION,
+    _PRAGMATICS_PRIMARY_SYSTEM_PROMPT,
+    classify_batch_pragmatics_full,
+)
 from x_monitor.provider_telemetry import normalize_usage
 from x_monitor.translator import AnthropicClaudeClient
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUDGET = (
-    ROOT / "docs/analysis/2026-09-11-153500-u18-runtime-v11-development-budget.json"
+    ROOT
+    / "docs/analysis/2026-09-12-015231-u18-runtime-v23-completeness-review-pilot-budget.json"
 )
-DEFAULT_COHORT = ROOT / ".context/u18/cohort-source.json"
-DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v11-runtime-development.json"
-DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v11-development"
+DEFAULT_COHORT = ROOT / ".context/u18/thinking-probe-cohort.json"
+DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v23-completeness-review-pilot.json"
+DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v23-completeness-review-pilot"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -235,11 +247,66 @@ class FrozenRuntimeClient:
         return dict(response)
 
 
+def _candidate_trace(
+    result: Mapping[str, Any], *, brand_id: str
+) -> dict[str, Any]:
+    """Keep the runtime's three decisions with the evaluator's single row."""
+
+    raw_trace = result.get("classification_trace")
+    if not isinstance(raw_trace, Mapping):
+        raise RuntimeError("runtime classifier omitted its classification trace")
+    selector_version = raw_trace.get("selector_version")
+    if selector_version != _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION:
+        raise RuntimeError("runtime classifier trace has an unexpected selector version")
+
+    trace: dict[str, Any] = {"selector_version": selector_version}
+    for stage_name in ("primary", "review", "final"):
+        raw_stage = raw_trace.get(stage_name)
+        if not isinstance(raw_stage, Mapping):
+            raise RuntimeError(f"runtime classifier trace omitted {stage_name}")
+        by_brand = raw_stage.get("by_brand")
+        classification = (
+            by_brand.get(brand_id) if isinstance(by_brand, Mapping) else None
+        )
+        if not isinstance(classification, Mapping):
+            raise RuntimeError(
+                f"runtime classifier trace omitted {stage_name} for {brand_id}"
+            )
+        stage = {
+            key: value
+            for key, value in raw_stage.items()
+            if key not in {"by_brand", "metadata_by_brand"}
+        }
+        stage["classification"] = dict(classification)
+        if stage_name == "review":
+            metadata_by_brand = raw_stage.get("metadata_by_brand")
+            metadata = (
+                metadata_by_brand.get(brand_id)
+                if isinstance(metadata_by_brand, Mapping)
+                else None
+            )
+            if not isinstance(metadata, Mapping):
+                raise RuntimeError(
+                    f"runtime classifier trace omitted review metadata for {brand_id}"
+                )
+            stage["metadata"] = dict(metadata)
+        trace[stage_name] = stage
+    return trace
+
+
 def _candidate_row(source: Mapping[str, Any], result: Mapping[str, Any]) -> dict[str, Any]:
     brand_id = source["brand_id"]
-    classification = (result.get("by_brand") or {}).get(brand_id)
-    if not result.get("valid") or not isinstance(classification, Mapping):
+    trace = _candidate_trace(result, brand_id=brand_id)
+    classification = trace["final"]["classification"]
+    result_classification = (result.get("by_brand") or {}).get(brand_id)
+    if (
+        not result.get("valid")
+        or not isinstance(classification, Mapping)
+        or not isinstance(result_classification, Mapping)
+    ):
         raise RuntimeError(f"runtime classifier returned no valid row for {source['example_id']}")
+    if dict(result_classification) != classification:
+        raise RuntimeError("runtime classifier final trace differs from its final output")
     return {
         **{
             key: source[key]
@@ -254,7 +321,35 @@ def _candidate_row(source: Mapping[str, Any], result: Mapping[str, Any]) -> dict
                 "source_hint",
             )
         },
+        # Kept for consumers that predate the R79 primary/review/final trace.
         "classification": dict(classification),
+        "classification_trace": trace,
+    }
+
+
+def _runtime_trace_provenance() -> dict[str, str]:
+    """Pin the runtime trace topology and prompt bytes in candidate artifacts."""
+
+    return {
+        "primary_prompt_version": _PRAGMATICS_PRIMARY_PROMPT_VERSION,
+        "primary_prompt_sha256": _sha256_bytes(
+            _PRAGMATICS_PRIMARY_SYSTEM_PROMPT.encode("utf-8")
+        ),
+        "primary_repair_prompt_version": _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+        "primary_repair_prompt_sha256": _sha256_bytes(
+            _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT.encode("utf-8")
+        ),
+        "review_prompt_version": _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+        "review_prompt_sha256": _sha256_bytes(
+            _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT.encode("utf-8")
+        ),
+        "review_repair_prompt_version": (
+            _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION
+        ),
+        "review_repair_prompt_sha256": _sha256_bytes(
+            _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT.encode("utf-8")
+        ),
+        "selector_version": _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     }
 
 
@@ -321,6 +416,7 @@ def run(*, budget_path: Path, cohort_path: Path, output_path: Path, private_dir:
             "generated_at": datetime.now(UTC).isoformat(),
             "budget_sha256": _sha256_file(budget_path),
             "production_call_path": "classify_batch_pragmatics_full",
+            "runtime_trace": _runtime_trace_provenance(),
         },
         "rows": sorted(
             (_candidate_row(source, result) for source, result in zip(rows, results)),

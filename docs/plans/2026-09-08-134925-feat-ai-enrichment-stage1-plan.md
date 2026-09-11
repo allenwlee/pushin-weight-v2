@@ -1654,3 +1654,29 @@ durable primary/review/final provenance. No new provider call is permitted
 until that path passes provider-free tests and a new 120-row budget freezes the
 cohort hash, prompt/parser/model identities, selector, attempt/token/cost caps,
 and stop rule.
+
+The R79 provider-free implementation is complete in the working candidate.
+The production call path now runs one complete primary classification in
+20-post batches followed by one candidate-aware completeness review in
+10-post-brand batches. A valid reviewer judgment is the complete final result;
+an invalid reviewer is repaired only for its malformed packet and never falls
+back to publishing the primary. The runtime records the actual normal or
+repair prompt identity, and migration `0040` adds versioned primary, review,
+and final judgment rows linked to the current classification projection.
+Publisher validation enforces matching post, brand, revision, selector, and
+canonical final output before the transaction writes anything. The affected
+PostgreSQL suite passes 257 tests, including all 21 required PostgreSQL checks,
+with no failures, skips, or errors.
+
+The consumed-development pilot is frozen before transport in
+`docs/analysis/2026-09-12-015231-u18-runtime-v23-completeness-review-pilot-budget.json`.
+It reuses the unchanged 120-row, 40-per-locale cohort, pins the complete
+primary, primary repair, review, and review repair hashes, and expects 18
+normal calls. The hard envelope permits at most 38 logical requests, 58
+transport attempts, 900,000 reserved input tokens, 237,568 reserved output
+tokens, and $0.72 at the recorded DeepSeek rates. The runner now preserves
+primary/review/final trace data in its ignored candidate artifact while
+retaining `classification` as the final-output compatibility field. The next
+action is to commit and push this exact code and budget, then run and score the
+120-row pilot; only a full continuation-floor pass permits the 500-row
+consumed-development run.

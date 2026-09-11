@@ -1,21 +1,38 @@
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
 from scripts import u18_runtime_base_batch_probe
 from scripts.u18_runtime_base_batch_probe import _run_base_batches
-from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
+from scripts import u18_runtime_review_model_probe
+from scripts.u18_runtime_classifier_candidate import (
+    DEFAULT_BUDGET,
+    DEFAULT_COHORT,
+    FrozenRuntimeClient,
+    _candidate_row,
+    _runtime_trace_provenance,
+)
 from scripts.u18_runtime_grouped_label_probe import _merge_group_decisions
 from scripts.u18_runtime_review_model_probe import DirectAnthropicDelegate
 from x_monitor.attribution import (
     _PRAGMATICS_BASE_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION,
+    _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+    _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
+    _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
     _PRAGMATICS_FULL_SYSTEM_PROMPT,
     _PRAGMATICS_RARE_REPAIR_SYSTEM_PROMPT,
     _PRAGMATICS_RARE_SYSTEM_PROMPT,
     _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+    _PRAGMATICS_PRIMARY_PROMPT_VERSION,
+    _PRAGMATICS_PRIMARY_SYSTEM_PROMPT,
     _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
 )
 
@@ -190,3 +207,119 @@ def test_direct_anthropic_delegate_omits_proxy_thinking_field():
 
     assert "thinking" not in result
     assert result["model"] == "claude-haiku-4-5-20251001"
+
+
+def test_candidate_row_preserves_primary_review_final_trace():
+    primary = {"outcome": "classified", "post_types": ["opinions_reactions"]}
+    review = {"outcome": "classified", "post_types": ["releases_updates"]}
+    source = {
+        "example_id": "example-1",
+        "brand_id": "minimax",
+        "source_language": "en",
+        "context_provenance": {},
+        "input_context_fingerprint": "fingerprint",
+        "stratum": "common",
+        "source_role": "official",
+        "source_hint": "hint",
+    }
+    result = {
+        "valid": True,
+        "by_brand": {"minimax": review},
+        "classification_trace": {
+            "selector_version": _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+            "primary": {
+                "valid": True,
+                "by_brand": {"minimax": primary},
+                "prompt_version": _PRAGMATICS_PRIMARY_PROMPT_VERSION,
+            },
+            "review": {
+                "valid": True,
+                "by_brand": {"minimax": review},
+                "metadata_by_brand": {
+                    "minimax": {
+                        "decision": "replace",
+                        "change_reasons": ["missing_post_type"],
+                        "evidence": [{"source": "source", "quote": "launch"}],
+                    }
+                },
+                "prompt_version": _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+            },
+            "final": {
+                "valid": True,
+                "by_brand": {"minimax": review},
+            },
+        },
+    }
+
+    row = _candidate_row(source, result)
+
+    assert row["classification"] == review
+    assert row["classification"] == row["classification_trace"]["final"]["classification"]
+    assert row["classification_trace"]["primary"]["classification"] == primary
+    assert row["classification_trace"]["review"]["classification"] == review
+    assert row["classification_trace"]["review"]["metadata"]["decision"] == "replace"
+
+
+def test_runtime_trace_provenance_pins_current_prompts_and_selector():
+    provenance = _runtime_trace_provenance()
+
+    assert provenance == {
+        "primary_prompt_version": _PRAGMATICS_PRIMARY_PROMPT_VERSION,
+        "primary_prompt_sha256": hashlib.sha256(
+            _PRAGMATICS_PRIMARY_SYSTEM_PROMPT.encode("utf-8")
+        ).hexdigest(),
+        "primary_repair_prompt_version": _PRAGMATICS_FULL_REPAIR_PROMPT_VERSION,
+        "primary_repair_prompt_sha256": hashlib.sha256(
+            _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT.encode("utf-8")
+        ).hexdigest(),
+        "review_prompt_version": _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+        "review_prompt_sha256": hashlib.sha256(
+            _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT.encode("utf-8")
+        ).hexdigest(),
+        "review_repair_prompt_version": (
+            _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION
+        ),
+        "review_repair_prompt_sha256": hashlib.sha256(
+            _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT.encode("utf-8")
+        ).hexdigest(),
+        "selector_version": _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+    }
+
+
+def test_default_v23_budget_pins_cohort_runtime_prompts_and_hard_caps():
+    budget = json.loads(DEFAULT_BUDGET.read_text(encoding="utf-8"))
+    lane = budget["lanes"][budget["lane"]]
+    provenance = _runtime_trace_provenance()
+
+    assert DEFAULT_COHORT.name == "thinking-probe-cohort.json"
+    assert budget["cohort"] == {
+        "bytes": 248569,
+        "cohort_id": "u18-development-thinking-probe-v1",
+        "development_only": True,
+        "rows": 120,
+        "selection": (
+            "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development "
+            "cohort; unchanged from the v18 all-locale probe"
+        ),
+        "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    }
+    assert {
+        provenance["primary_prompt_sha256"],
+        provenance["primary_repair_prompt_sha256"],
+        provenance["review_prompt_sha256"],
+        provenance["review_repair_prompt_sha256"],
+    } == set(lane["allowed_system_sha256"])
+    assert lane["maximum_requests"] == 18 + 20
+    assert lane["maximum_output_tokens"] == (
+        lane["maximum_transport_attempts"] * lane["max_tokens_per_attempt"]
+    )
+
+
+def test_retired_v18_review_probe_requires_explicit_acknowledgement():
+    with pytest.raises(RuntimeError, match="retired historical v18 experiment"):
+        u18_runtime_review_model_probe.run(
+            budget_path=Path("unused-budget.json"),
+            cohort_path=Path("unused-cohort.json"),
+            output_path=Path("unused-output.json"),
+            private_dir=Path("unused-private"),
+        )

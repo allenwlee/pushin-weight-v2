@@ -101,6 +101,21 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
 
         def messages_create(self, **kwargs):
             self.calls.append(kwargs)
+            payload = json.loads(kwargs["messages"][0]["content"])
+            if kwargs["system"] == attribution._PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT:
+                return {
+                    "results": [
+                        {
+                            "example_id": packet["example_id"],
+                            "brand_id": packet["brand_id"],
+                            "decision": "accept",
+                            "classification": packet["primary"],
+                            "change_reasons": [],
+                            "evidence": [],
+                        }
+                        for packet in payload
+                    ]
+                }
             return {
                 "results": [{
                     "tweet_id": post.pk,
@@ -153,11 +168,10 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     )
     CycleRunner(cfg=cfg)._run_post_fetch([], run_id="classifier-model-pin")
 
-    assert len(classifier_client.calls) == 3
+    assert len(classifier_client.calls) == 2
     assert [call["system"] for call in classifier_client.calls] == [
-        attribution._PRAGMATICS_BASE_SYSTEM_PROMPT,
-        attribution._PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
-        attribution._PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        attribution._PRAGMATICS_PRIMARY_SYSTEM_PROMPT,
+        attribution._PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT,
     ]
     for call in classifier_client.calls:
         assert call["model"] == "deepseek-v4-flash"
@@ -196,4 +210,8 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     state = post.classification_states.get(brand_id="deepseek")
     assert state.contract_version == "stage1-v1"
     assert state.taxonomy_version == "stage1-taxonomy-v3"
-    assert state.prompt_version == "stage1-prompt-v18"
+    assert state.prompt_version == "stage1-prompt-v22"
+    assert state.selected_final_judgment is not None
+    assert state.selected_final_judgment.selector_version == (
+        "stage1-selector-v22-review-authoritative-v1"
+    )

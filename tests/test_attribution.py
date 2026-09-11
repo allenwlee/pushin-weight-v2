@@ -959,11 +959,12 @@ def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
         on_batch_error=lambda batch, exc: captured_exc.append(exc),
         max_tokens=4096,
     )
-    assert results == [
-        {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
-    ]
-    # Each independent pass surfaces its own shape drift.
-    assert len(captured_exc) == 3
+    assert len(results) == 1
+    assert results[0]["valid"] is False
+    assert results[0]["by_brand"] == {}
+    assert results[0]["classification_trace"]["final"]["by_brand"] == {}
+    # The malformed primary is reported once; no review packet is fabricated.
+    assert len(captured_exc) == 1
     assert all(isinstance(exc, ValueError) for exc in captured_exc)
     assert all("shape drift" in str(exc) for exc in captured_exc)
 
@@ -1002,26 +1003,16 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
                 }
             payload = json.loads(kwargs["messages"][0]["content"])
             if "source" in payload[0]:
+                packet = payload[0]
                 return {
                     "results": [
                         {
-                            "tweet_id": "t1",
-                            "classifications": [
-                                {
-                                    "brand_id": "minimax",
-                                    "outcome": "classified",
-                                    "post_types": (
-                                        ["complaint"]
-                                        if len(calls) == 1
-                                        else ["opinions_reactions"]
-                                    ),
-                                    "product_labels": ["complaint"],
-                                    "sentiment": "negative",
-                                    "china_nationalism": "none",
-                                    "us_nationalism": "none",
-                                }
-                            ],
-                            "unsanctioned_flags": [],
+                            "example_id": packet["example_id"],
+                            "brand_id": packet["brand_id"],
+                            "decision": "accept",
+                            "classification": packet["primary"],
+                            "change_reasons": [],
+                            "evidence": [],
                         }
                     ]
                 }
@@ -1074,10 +1065,10 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
         brand_registry=[],
         anthropic_client=FakeClient(),
-        telemetry_context={"prompt_version": "stage1-prompt-v18"},
+        telemetry_context={"prompt_version": "stage1-prompt-v22"},
     )
 
-    assert len(calls) == 5
+    assert len(calls) == 4
     assert calls[2]["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT
     assert result[0]["valid"] is True
     assert result[0]["by_brand"]["minimax"]["post_types"] == [

@@ -1,4 +1,11 @@
-"""Measure the frozen candidate-blind review through a direct provider model."""
+"""Retired historical v18 candidate-blind review-model experiment.
+
+This script reproduces the rejected v18 three-pass topology for historical
+analysis only. It is not the production classifier, the active U18 evaluator,
+or a release gate. The active runtime evaluator is
+``scripts/u18_runtime_classifier_candidate.py`` and uses the R79
+primary/candidate-aware-review/final trace.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,7 @@ import argparse
 import json
 import os
 import subprocess
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,7 +26,6 @@ from core.classification_contract import (
 )
 from scripts.u18_runtime_classifier_candidate import (
     FrozenRuntimeClient,
-    _candidate_row,
     _read_json,
     _sha256_file,
     _write_json,
@@ -32,6 +39,11 @@ from x_monitor.attribution import (
 from x_monitor.translator import AnthropicClaudeClient
 
 ROOT = Path(__file__).resolve().parents[1]
+
+RETIRED_EXPERIMENT_MESSAGE = (
+    "u18_runtime_review_model_probe is a retired historical v18 experiment; "
+    "it is not the active U18 runtime evaluator"
+)
 
 
 class DirectAnthropicDelegate:
@@ -48,6 +60,35 @@ class DirectAnthropicDelegate:
         request = dict(kwargs)
         request.pop("thinking", None)
         return self._delegate.messages_create(**request)
+
+
+def _historical_candidate_row(
+    source: Mapping[str, Any], result: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Serialize the v18 experiment's single blind-review judgment as-is."""
+
+    brand_id = source["brand_id"]
+    classification = (result.get("by_brand") or {}).get(brand_id)
+    if not result.get("valid") or not isinstance(classification, Mapping):
+        raise RuntimeError(
+            f"historical review model returned no valid row for {source['example_id']}"
+        )
+    return {
+        **{
+            key: source[key]
+            for key in (
+                "example_id",
+                "brand_id",
+                "source_language",
+                "context_provenance",
+                "input_context_fingerprint",
+                "stratum",
+                "source_role",
+                "source_hint",
+            )
+        },
+        "classification": dict(classification),
+    }
 
 
 def _run_review_batches(
@@ -99,7 +140,10 @@ def run(
     cohort_path: Path,
     output_path: Path,
     private_dir: Path,
+    acknowledge_retired_v18_experiment: bool = False,
 ) -> None:
+    if not acknowledge_retired_v18_experiment:
+        raise RuntimeError(RETIRED_EXPERIMENT_MESSAGE)
     budget_document = _read_json(budget_path)
     lane = budget_document["lane"]
     cohort = _read_json(cohort_path)
@@ -169,7 +213,10 @@ def run(
             "batch_size": client.budget["batch_size"],
         },
         "rows": sorted(
-            (_candidate_row(source, result) for source, result in zip(rows, results)),
+            (
+                _historical_candidate_row(source, result)
+                for source, result in zip(rows, results)
+            ),
             key=lambda row: (row["example_id"], row["brand_id"]),
         ),
     }
@@ -195,12 +242,14 @@ def main() -> None:
     parser.add_argument("--cohort", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--private-dir", type=Path, required=True)
+    parser.add_argument("--acknowledge-retired-v18-experiment", action="store_true")
     args = parser.parse_args()
     run(
         budget_path=args.budget.resolve(),
         cohort_path=args.cohort.resolve(),
         output_path=args.output.resolve(),
         private_dir=args.private_dir.resolve(),
+        acknowledge_retired_v18_experiment=args.acknowledge_retired_v18_experiment,
     )
 
 

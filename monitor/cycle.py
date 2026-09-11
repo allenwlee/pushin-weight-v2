@@ -63,6 +63,7 @@ from core.models import (
     HarvestBacklogWindow,
     Post,
     PostBrand,
+    PostBrandClassificationJudgment,
     PostBrandClassificationState,
     PostBrandMention,
     PostBrandProductLabel,
@@ -117,6 +118,269 @@ from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
+
+
+def _classification_revision_id(
+    *,
+    post_id: str,
+    brand_id: str,
+    run_id: str,
+    input_fingerprint: str,
+    selector_version: str,
+) -> str:
+    """Return the stable identity shared by one traced post-brand decision."""
+
+    payload = {
+        "run_id": str(run_id),
+        "post_id": str(post_id),
+        "brand_id": str(brand_id),
+        "input_context_fingerprint": str(input_fingerprint),
+        "selector_version": str(selector_version),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _trace_stage_payload(trace: dict[str, Any], stage: str) -> dict[str, Any]:
+    payload = trace.get(stage)
+    if not isinstance(payload, dict):
+        raise ValueError(f"classification_trace_{stage}_missing")
+    if isinstance(payload.get("by_brand"), dict):
+        return payload
+    # Permit a compact trace where the stage itself is the by-brand mapping.
+    if payload and all(isinstance(value, dict) for value in payload.values()):
+        return {"by_brand": payload}
+    raise ValueError(f"classification_trace_{stage}_invalid")
+
+
+def _trace_metadata(
+    trace: dict[str, Any],
+    stage_payload: dict[str, Any],
+    *,
+    model: str,
+    fingerprint: str,
+) -> dict[str, Any]:
+    metadata = trace.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    stage_metadata = stage_payload.get("metadata")
+    if isinstance(stage_metadata, dict):
+        metadata = {**metadata, **stage_metadata}
+    for key in (
+        "contract_version",
+        "taxonomy_version",
+        "prompt_version",
+        "model",
+        "provider_role",
+        "input_context_fingerprint",
+        "selector_version",
+        "validation_state",
+    ):
+        if key in trace and key not in metadata:
+            metadata[key] = trace[key]
+    # These are deliberately scalar allowlisted fields.  In particular, do
+    # not copy prompts, source packets, or arbitrary provider response data.
+    return {
+        "contract_version": str(
+            stage_payload.get(
+                "contract_version", metadata.get("contract_version", CONTRACT_VERSION)
+            )
+        )[:64],
+        "taxonomy_version": str(
+            stage_payload.get(
+                "taxonomy_version", metadata.get("taxonomy_version", TAXONOMY_VERSION)
+            )
+        )[:64],
+        "prompt_version": str(
+            stage_payload.get(
+                "prompt_version", metadata.get("prompt_version", PROMPT_VERSION)
+            )
+        )[:64],
+        "model": str(stage_payload.get("model", metadata.get("model", model)))[:256],
+        "provider_role": str(
+            stage_payload.get(
+                "provider_role", metadata.get("provider_role", "classifier")
+            )
+        )[:64],
+        "input_context_fingerprint": str(
+            stage_payload.get(
+                "input_context_fingerprint",
+                metadata.get("input_context_fingerprint", fingerprint),
+            )
+        )[:64],
+        "selector_version": str(
+            stage_payload.get("selector_version", metadata.get("selector_version", ""))
+        )[:64],
+        "validation_state": str(
+            stage_payload.get(
+                "validation_state", metadata.get("validation_state", "validated")
+            )
+        )[:32],
+        "changes_json": {},
+    }
+
+
+def _trace_stage_rows(stage: str, payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Extract canonical rows from a stage, including the old review envelope."""
+
+    rows = payload["by_brand"]
+    if stage != "review":
+        return rows
+    return {
+        brand_id: (
+            value["classification"]
+            if isinstance(value, dict) and isinstance(value.get("classification"), dict)
+            else value
+        )
+        for brand_id, value in rows.items()
+    }
+
+
+def _trace_changes(
+    stage: str, payload: dict[str, Any], brand_id: str
+) -> dict[str, Any]:
+    """Keep bounded review metadata while excluding arbitrary trace envelopes."""
+
+    details: Any = {}
+    metadata_by_brand = payload.get("metadata_by_brand")
+    if isinstance(metadata_by_brand, dict):
+        details = metadata_by_brand.get(brand_id, {})
+    row = payload.get("by_brand", {}).get(brand_id)
+    if (
+        isinstance(row, dict)
+        and isinstance(row.get("classification"), dict)
+        and stage == "review"
+    ):
+        details = {
+            "decision": row.get("decision"),
+            "change_reasons": row.get("change_reasons", []),
+            "evidence": row.get("evidence", []),
+        }
+    if isinstance(details, dict):
+        details = {
+            key: details[key]
+            for key in ("decision", "change_reasons", "evidence")
+            if key in details
+        }
+    return details if isinstance(details, dict) else {}
+
+
+def _trace_brand_prompt_version(payload: dict[str, Any], brand_id: str) -> str | None:
+    """Return the actual per-brand prompt identity for repaired review rows."""
+
+    metadata_by_brand = payload.get("metadata_by_brand")
+    if not isinstance(metadata_by_brand, dict):
+        return None
+    details = metadata_by_brand.get(brand_id)
+    if not isinstance(details, dict):
+        return None
+    prompt_version = details.get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        return None
+    return prompt_version[:64]
+
+
+def _persist_classification_trace(
+    *,
+    post_id: str,
+    brand_ids: set[str],
+    trace: dict[str, Any],
+    final_by_brand: dict[str, dict[str, Any]],
+    model: str,
+    run_id: str,
+    fingerprint: str,
+) -> dict[str, Any]:
+    """Persist primary → review → final history for every attributed brand.
+
+    The caller owns the surrounding transaction.  Validation happens before
+    any writes, and the returned final-row IDs are used to link the current
+    projection.
+    """
+
+    if not isinstance(trace, dict):
+        raise ValueError("classification_trace_invalid")
+    stages = {
+        stage: _trace_stage_payload(trace, stage)
+        for stage in ("primary", "review", "final")
+    }
+    selector_values = [
+        _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)[
+            "selector_version"
+        ]
+        for payload in stages.values()
+    ]
+    if not all(selector_values) or len(set(selector_values)) != 1:
+        raise ValueError("classification_trace_selector_missing_or_conflicting")
+    canonical_by_stage: dict[str, dict[str, dict[str, Any]]] = {}
+    for stage, payload in stages.items():
+        rows = _trace_stage_rows(stage, payload)
+        metadata = _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)
+        if metadata["input_context_fingerprint"] != fingerprint:
+            raise ValueError("classification_trace_input_fingerprint_mismatch")
+        if set(rows) != brand_ids:
+            raise ValueError(f"classification_trace_{stage}_brands_mismatch")
+        parsed = parse_stage1_classifications(
+            [
+                {"brand_id": brand_id, **classification}
+                for brand_id, classification in rows.items()
+            ],
+            brand_ids,
+        )
+        if parsed is None or parsed != rows:
+            raise ValueError(f"classification_trace_{stage}_invalid")
+        canonical_by_stage[stage] = parsed
+    if canonical_by_stage["final"] != final_by_brand:
+        raise ValueError("classification_trace_final_mismatch")
+
+    final_ids: dict[str, Any] = {}
+    for brand_id in sorted(brand_ids):
+        selector_version = _trace_metadata(
+            trace, stages["final"], model=model, fingerprint=fingerprint
+        )["selector_version"]
+        revision_id = _classification_revision_id(
+            post_id=post_id,
+            brand_id=brand_id,
+            run_id=run_id,
+            input_fingerprint=fingerprint,
+            selector_version=selector_version,
+        )
+        parent = None
+        for stage in ("primary", "review", "final"):
+            payload = stages[stage]
+            metadata = _trace_metadata(
+                trace, payload, model=model, fingerprint=fingerprint
+            )
+            brand_prompt_version = _trace_brand_prompt_version(payload, brand_id)
+            if brand_prompt_version is not None:
+                metadata["prompt_version"] = brand_prompt_version
+            metadata["changes_json"] = _trace_changes(stage, payload, brand_id)
+            row, created = PostBrandClassificationJudgment.objects.get_or_create(
+                post_id=post_id,
+                brand_id=brand_id,
+                revision_id=revision_id,
+                stage=stage,
+                defaults={
+                    "canonical_judgment": canonical_by_stage[stage][brand_id],
+                    **metadata,
+                    "parent_judgment": parent,
+                },
+            )
+            if not created:
+                expected_values = {
+                    "canonical_judgment": canonical_by_stage[stage][brand_id],
+                    **metadata,
+                    "parent_judgment_id": parent.pk if parent is not None else None,
+                }
+                if any(
+                    getattr(row, field) != value
+                    for field, value in expected_values.items()
+                ):
+                    raise ValueError("classification_trace_revision_conflict")
+            parent = row
+            if stage == "final":
+                final_ids[brand_id] = row.pk
+    return final_ids
 
 
 class _BoundedClassifierClient:
@@ -577,6 +841,18 @@ def _publish_stage1_classification(
         if canonical is None or canonical != by_brand:
             return None
 
+        final_judgment_ids = {}
+        if "classification_trace" in result:
+            final_judgment_ids = _persist_classification_trace(
+                post_id=post_id,
+                brand_ids=expected,
+                trace=result["classification_trace"],
+                final_by_brand=canonical,
+                model=model,
+                run_id=run_id,
+                fingerprint=fingerprint,
+            )
+
         post = claim.post
         for brand_id, classification in canonical.items():
             PostBrandSignal.objects.filter(
@@ -599,6 +875,7 @@ def _publish_stage1_classification(
                     "sentiment_id": classification["sentiment"],
                     "china_nationalism_id": classification["china_nationalism"],
                     "us_nationalism_id": classification["us_nationalism"],
+                    "selected_final_judgment_id": final_judgment_ids.get(brand_id),
                 },
             )
             if classification["outcome"] == "classified":

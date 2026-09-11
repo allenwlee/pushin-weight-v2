@@ -2029,6 +2029,13 @@ class PostBrandClassificationState(models.Model):
         NationalismKey, on_delete=models.PROTECT, related_name="+",
         db_column="us_nationalism", to_field="key", blank=True, null=True,
     )
+    selected_final_judgment = models.ForeignKey(
+        "PostBrandClassificationJudgment",
+        on_delete=models.SET_NULL,
+        related_name="selected_states",
+        blank=True,
+        null=True,
+    )
     classified_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -2039,6 +2046,86 @@ class PostBrandClassificationState(models.Model):
                 name="idx_pb_cls_state_brand_outcome",
             ),
             models.Index(fields=["contract_version"], name="idx_pb_cls_state_contract"),
+        ]
+
+
+class PostBrandClassificationJudgment(models.Model):
+    """One stage record for a versioned post-brand judgment.
+
+    The current projection in ``PostBrandClassificationState`` remains the
+    read path for the dashboard.  This history records the primary proposal,
+    completeness review, and reviewer-authoritative final decision without
+    retaining prompts or source packets.  The publisher and its tests enforce
+    the stage lineage and same post/brand/revision relationship; the database
+    constraint only enforces the local parent-nullability shape.
+    """
+
+    class Stage(models.TextChoices):
+        PRIMARY = "primary", "Primary"
+        REVIEW = "review", "Review"
+        FINAL = "final", "Final"
+
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="classification_judgments",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="classification_judgments",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    revision_id = models.CharField(max_length=64)
+    stage = models.CharField(max_length=16, choices=Stage.choices)
+    canonical_judgment = models.JSONField()
+    contract_version = models.CharField(max_length=64)
+    taxonomy_version = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=256)
+    provider_role = models.CharField(max_length=64)
+    input_context_fingerprint = models.CharField(max_length=64)
+    selector_version = models.CharField(max_length=64)
+    validation_state = models.CharField(max_length=32)
+    changes_json = models.JSONField(default=dict, db_default={})
+    parent_judgment = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="children",
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "posts_brands_classification_judgments"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["post", "brand", "revision_id", "stage"],
+                name="uq_pb_cls_judgment_revision_stage",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(stage="primary", parent_judgment__isnull=True)
+                    | models.Q(stage="review", parent_judgment__isnull=False)
+                    | models.Q(stage="final", parent_judgment__isnull=False)
+                ),
+                name="ck_pb_cls_judgment_parent",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["post", "brand", "-created_at"],
+                name="idx_pb_cls_judgment_history",
+            ),
+            models.Index(
+                fields=["revision_id", "stage"],
+                name="idx_pb_cls_judgment_revision",
+            ),
         ]
 
 
