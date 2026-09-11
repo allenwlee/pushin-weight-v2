@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v6"
+PROMPT_VERSION = "stage1-prompt-v7"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -227,8 +227,8 @@ text matches the runtime source. It was regenerated from the runtime constant in
 using the literal allowlists from `core/classification_contract.py`.
 
 The authoritative runtime source value, including its trailing newline, is
-8,902 UTF-8 bytes. Its SHA-256 is
-`994ec828f6320a63cc5a6a72ac7ab28875805cbc0128e9e42a0ad1c08f23fb4a`.
+9,477 UTF-8 bytes. Its SHA-256 is
+`4047f96a58e83dde311647503130bc61bf63e773096c859a12aa5147b7306ca4`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
@@ -385,6 +385,15 @@ Return
 {"results":[{"tweet_id":str,"classifications":[{"brand_id":str,"outcome":"classified|context_missing","post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}],"unsanctioned_flags":[str]}]}.
 Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or
 code fences.
+Before returning, verify that every post_types value is one of:
+releases_updates, hands_on_usage, results_evaluations, questions_requests,
+advertising_marketing, events, opportunities, job_listings, personnel_changes,
+opinions_reactions, research_explanations, business_finance, other.
+Verify separately that every product_labels value is one of: bug, complaint,
+testimonial, ideas_requests, misinformation.
+Never copy a product_labels value into post_types. A classified result still
+needs a valid post type; use other alone only when no other post type
+definition applies.
 ```
 
 ## Required response and strict parser

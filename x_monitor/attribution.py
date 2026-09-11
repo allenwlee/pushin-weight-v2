@@ -1243,6 +1243,9 @@ Advertising or CTA-heavy wrapper content should also carry marketing_spam. Do no
 
 Return {{"results":[{{"tweet_id":str,"classifications":[{{"brand_id":str,"outcome":"classified|context_missing","post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}}],"unsanctioned_flags":[str]}}]}}.
 Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or code fences.
+Before returning, verify that every post_types value is one of: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
+Verify separately that every product_labels value is one of: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
+Never copy a product_labels value into post_types. A classified result still needs a valid post type; use other alone only when no other post type definition applies.
 """
 
 

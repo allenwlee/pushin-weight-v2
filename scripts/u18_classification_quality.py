@@ -61,6 +61,9 @@ BUDGET_V3R2_REPAIR_PATH = (
 BUDGET_CONTRACT_REVIEW_PATH = (
     ROOT / "docs/analysis/2026-09-11-020000-u18-provider-budget-amendment-v10.json"
 )
+BUDGET_PROMPT_V7_PATH = (
+    ROOT / "docs/analysis/2026-09-11-022000-u18-provider-budget-amendment-v11.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -92,6 +95,13 @@ TAXONOMIES = {
         "prompt_version": "stage1-prompt-v6",
         "post_types": CANONICAL_POST_TYPE_KEYS,
         "prompt_path": PRIVATE / "v6-system-prompt.txt",
+        "source_revision": "HEAD",
+    },
+    "v3r4": {
+        "version": "stage1-taxonomy-v3",
+        "prompt_version": "stage1-prompt-v7",
+        "post_types": CANONICAL_POST_TYPE_KEYS,
+        "prompt_path": PRIVATE / "v7-system-prompt.txt",
         "source_revision": "HEAD",
     },
 }
@@ -173,6 +183,7 @@ class BudgetedTransport:
         v3r2_document = _read_json(BUDGET_V3R2_PATH)
         v3r2_repair_document = _read_json(BUDGET_V3R2_REPAIR_PATH)
         contract_review_document = _read_json(BUDGET_CONTRACT_REVIEW_PATH)
+        prompt_v7_document = _read_json(BUDGET_PROMPT_V7_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -185,6 +196,7 @@ class BudgetedTransport:
             or v3r2_document["lanes"].get(lane)
             or v3r2_repair_document["lanes"].get(lane)
             or contract_review_document["lanes"].get(lane)
+            or prompt_v7_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -376,6 +388,29 @@ def _parse_candidate(
     return parsed
 
 
+def _invalid_candidate_row(
+    source: Mapping[str, Any], response: Mapping[str, Any], error: Exception
+) -> dict[str, Any]:
+    canonical = json.dumps(response, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    return {
+        **{
+            key: source[key]
+            for key in (
+                "example_id",
+                "brand_id",
+                "source_language",
+                "context_provenance",
+                "input_context_fingerprint",
+                "stratum",
+                "source_role",
+                "source_hint",
+            )
+        },
+        "invalid_reason": str(error),
+        "invalid_response_sha256": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
 def run_candidate(taxonomy_name: str) -> None:
     taxonomy = TAXONOMIES[taxonomy_name]
     cohort = _read_json(COHORT_PATH)
@@ -385,13 +420,9 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3": "candidate_v3_fallback",
         "v3r2": "candidate_v3r2_fallback",
         "v3r3": "candidate_v3r3_fallback",
+        "v3r4": "candidate_v3r4_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
-    repair_lane = {
-        "v3r2": "candidate_v3r2_repair",
-        "v3r3": "candidate_v3r3_repair",
-    }.get(taxonomy_name)
-    repair_transport = BudgetedTransport(repair_lane) if repair_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"
     completed = (
         _read_json(progress_path).get("rows", []) if progress_path.exists() else []
@@ -407,72 +438,26 @@ def run_candidate(taxonomy_name: str) -> None:
         request_id = f"{lane}:{index:03d}"
         try:
             response = transport.call(request_id, system=system, user=user)
-            try:
-                parsed = _parse_candidate(response, batch, taxonomy["post_types"])
-            except (TypeError, ValueError):
-                response = transport.call(request_id, system=system, user=user)
-                parsed = _parse_candidate(response, batch, taxonomy["post_types"])
+            parsed = _parse_candidate(response, batch, taxonomy["post_types"])
         except (RuntimeError, TypeError, ValueError):
             if fallback_transport is None:
                 raise
             parsed = []
             for source in batch:
-                malformed_response = None
-                validation_error = (
-                    "candidate fallback did not satisfy the closed schema"
-                )
                 fallback_user = json.dumps(
                     [source["input"]], ensure_ascii=False, sort_keys=True
                 )
                 fallback_id = f"{fallback_lane}:{source['example_id']}"
+                response: Mapping[str, Any] = {}
                 try:
                     response = fallback_transport.call(
                         fallback_id, system=system, user=fallback_user
                     )
-                    malformed_response = response
-                    try:
-                        parsed.extend(
-                            _parse_candidate(response, [source], taxonomy["post_types"])
-                        )
-                        continue
-                    except (TypeError, ValueError):
-                        response = fallback_transport.call(
-                            fallback_id, system=system, user=fallback_user
-                        )
-                        malformed_response = response
-                        parsed.extend(
-                            _parse_candidate(response, [source], taxonomy["post_types"])
-                        )
-                        continue
+                    parsed.extend(
+                        _parse_candidate(response, [source], taxonomy["post_types"])
+                    )
                 except (RuntimeError, TypeError, ValueError) as exc:
-                    validation_error = str(exc)
-                if repair_transport is None:
-                    raise ValueError(validation_error)
-                repair_id = f"{repair_lane}:{source['example_id']}"
-                repair_user = json.dumps(
-                    {
-                        "source": source["input"],
-                        "invalid_candidate": malformed_response,
-                        "validation_error": validation_error,
-                        "required_post_types": list(taxonomy["post_types"]),
-                        "required_product_labels": list(PRODUCT_LABEL_KEYS),
-                    },
-                    ensure_ascii=False,
-                    sort_keys=True,
-                )
-                repaired = repair_transport.call(
-                    repair_id,
-                    system=(
-                        system
-                        + "\nRepair the supplied invalid_candidate. Return exactly the "
-                        "same one-result production schema. A product label never belongs "
-                        "in post_types; use other only when no defined post type applies."
-                    ),
-                    user=repair_user,
-                )
-                parsed.extend(
-                    _parse_candidate(repaired, [source], taxonomy["post_types"])
-                )
+                    parsed.append(_invalid_candidate_row(source, response, exc))
         by_id.update({row["example_id"]: row for row in parsed})
         _write_json(progress_path, {"rows": list(by_id.values())})
         print(f"{lane}: {len(by_id)}/{len(cohort['rows'])}", flush=True)

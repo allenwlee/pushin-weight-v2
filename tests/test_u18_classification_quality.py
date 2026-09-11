@@ -47,6 +47,7 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(quality, "BUDGET_V3R2_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_V3R2_REPAIR_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_CONTRACT_REVIEW_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_PROMPT_V7_PATH", budget_path)
     monkeypatch.setattr(quality, "PRIVATE", tmp_path)
     monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
@@ -107,3 +108,27 @@ def test_corrected_gold_uses_exact_production_semantics_without_candidates():
         in quality.CONTRACT_REPAIR_SYSTEM
     )
     assert quality.TAXONOMIES["v3r3"]["prompt_version"] == "stage1-prompt-v6"
+    assert quality.TAXONOMIES["v3r4"]["prompt_version"] == "stage1-prompt-v7"
+
+
+def test_invalid_candidate_row_preserves_coverage_and_raw_response_identity():
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "source_language": "en",
+        "context_provenance": [],
+        "input_context_fingerprint": "a" * 64,
+        "stratum": "prevalence",
+        "source_role": "third_party",
+        "source_hint": None,
+    }
+    row = quality._invalid_candidate_row(
+        source,
+        {"results": [{"invalid": True}]},
+        ValueError("closed contract"),
+    )
+
+    assert row["example_id"] == "post-1"
+    assert "classification" not in row
+    assert row["invalid_reason"] == "closed contract"
+    assert len(row["invalid_response_sha256"]) == 64

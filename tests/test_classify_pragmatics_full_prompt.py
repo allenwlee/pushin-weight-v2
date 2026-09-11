@@ -111,7 +111,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v6"
+    assert PROMPT_VERSION == "stage1-prompt-v7"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():
