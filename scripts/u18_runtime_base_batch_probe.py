@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import threading
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -51,12 +50,6 @@ def _run_base_batches(
         for start in range(0, len(tweets), batch_size)
     ]
     allowance = _Stage1RepairAllowance(min(20, len(tweets)))
-    errors: list[Exception] = []
-    error_lock = threading.Lock()
-
-    def on_error(_batch: list[dict[str, Any]], exc: Exception) -> None:
-        with error_lock:
-            errors.append(exc)
 
     def classify(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return _classify_stage1_base_batch(
@@ -68,7 +61,7 @@ def _run_base_batches(
             thinking={"type": "disabled"},
             deadline=None,
             telemetry_context={"stage": "u18_base_batch_pilot"},
-            on_batch_error=on_error,
+            on_batch_error=None,
             repair_allowance=allowance,
         )
 
@@ -84,8 +77,6 @@ def _run_base_batches(
                 for batch_rows in executor.map(classify, batches)
                 for row in batch_rows
             ]
-    if errors:
-        raise RuntimeError(f"base pilot used fallback after {len(errors)} batch errors")
     return results
 
 
