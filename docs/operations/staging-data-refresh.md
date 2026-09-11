@@ -71,7 +71,8 @@ GRANT SELECT ON
   job_listings, nationalism_keys, nationalism_labels, opportunities, people,
   people_accounts, people_brand_affiliation_evidence,
   people_brand_affiliations, personnel_discovery_runs, post_type_keys,
-  post_type_labels, posts, posts_brands,
+  post_type_labels, post_synthesis_artifacts, post_synthesis_texts,
+  post_translation_artifacts, post_translation_texts, posts, posts_brands,
   posts_brands_classification_states, posts_brands_discourse,
   posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
   posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
@@ -86,11 +87,13 @@ GRANT MAINTAIN ON
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
-  call_state, django_session,
+  brand_trend_narrative_texts, call_state, django_session,
   harvest_backlog_windows, post_enrichment_states,
+  post_synthesis_daily_budgets, post_synthesis_demands,
+  post_synthesis_rate_limit_buckets,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
-  trend_narrative_provider_calls, trend_narrative_runs,
+  trend_narrative_demands, trend_narrative_provider_calls, trend_narrative_runs,
   trend_narrative_visible_runs, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
@@ -101,16 +104,22 @@ GRANT SELECT ON
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
   brand_discovery_candidates_id_seq, brand_trend_narratives_id_seq,
+  brand_trend_narrative_texts_id_seq,
   django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
   events_id_seq, harvest_backlog_windows_id_seq, job_discovery_runs_id_seq,
   job_listing_evidence_id_seq, job_listings_id_seq, opportunities_id_seq,
+  post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
+  post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
+  post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
+  post_translation_texts_id_seq,
   people_brand_affiliation_evidence_id_seq,
   people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
   products_id_seq, search_queries_id_seq,
   socialaccount_socialaccount_id_seq, socialaccount_socialapp_id_seq,
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
   targeted_extraction_attempts_id_seq, targeted_extraction_states_id_seq,
-  trend_narrative_provider_calls_id_seq, trend_narrative_runs_id_seq,
+  trend_narrative_demands_id_seq, trend_narrative_provider_calls_id_seq,
+  trend_narrative_runs_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
   twitter_list_memberships_id_seq
 TO staging_refresh_reader;
@@ -120,6 +129,14 @@ The sequence `SELECT` grants both preserve copied sequence state and permit
 `pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded
 tables receive `MAINTAIN` only, so the refresh role can lock their schema but
 cannot read their rows.
+
+Policy version 2 marks the relations and sequences introduced by headline
+demand shaping and split translation/synthesis as optional on the source. This
+allows the staging-first release to refresh from the prior production schema
+and then create those empty relations with Django migrations. Once those
+migrations are in production, apply the new grants above before the next
+refresh; preflight then requires each present optional relation to have its
+declared read or maintenance privilege.
 
 Do not add default privileges. A new production table must fail the exhaustive
 preflight until `config/staging_refresh.yaml`, this grant list, and the scrub or
@@ -151,7 +168,10 @@ Before every preflight or refresh:
 2. Suspend `pushinweight-staging-headlines` in the Render Dashboard and wait
    until the service is fully stopped. Do not merely scale it while a task is
    finishing.
-3. From the staging web shell, purge the stage-owned broker. The broker has no
+3. Suspend `pushinweight-staging-synthesis` and wait until it is fully stopped.
+   The worker holds a PostgreSQL coordination lock for its full lifetime, so
+   preflight will refuse an idle worker as well as one processing a demand.
+4. From the staging web shell, purge the stage-owned broker. The broker has no
    production consumers or data, so clearing these exact queue-coordination
    keys cannot affect production:
 
@@ -171,8 +191,9 @@ print({"staging_broker_keys_deleted": deleted})
 PY
 ```
 
-The refresh command independently pings the staging broker, checks that no
-Celery worker responds, and requires the `trend-narratives` queue, `unacked`
+The refresh command independently acquires the synthesis-worker coordination
+lock, pings the staging broker, checks that no Celery worker responds, and
+requires the `trend-narratives` queue, `unacked`
 hash, `unacked_index` sorted set, every additional `trend-narratives*` key, and
 latest-envelope watermark to be empty. Missing broker access or an unavailable
 worker-state probe is a hard refusal. It checks twice: before dump work and
@@ -186,7 +207,8 @@ The administration-database session survives termination and renaming of the
 active staging database. `harvest_lock_unavailable` is a hard refusal; never
 retry it until the active staging harvest or refresh has ended.
 
-Expected refusal codes are `staging_headline_worker_active:<node>`,
+Expected refusal codes are `synthesis_lock_unavailable`,
+`staging_headline_worker_active:<node>`,
 `staging_headline_queue_not_empty`, and
 `staging_headline_envelope_present`. Broker or worker inspection failure is
 also a refusal, never permission to proceed.
@@ -295,8 +317,10 @@ be empty. Compare product counts and the latest timestamp to the receipt, not
 to an earlier observation of production.
 
 Only after `verify` and the independent zero-state census both pass may the
-staging headline worker be resumed. The staging harvester remains dormant;
-each later acceptance run is a separate intentional Render Trigger Run.
+staging headline worker be resumed. Resume the synthesis worker only after its
+provider-call flag and lane budget have passed the staged activation gate.
+The staging harvester remains dormant; each later acceptance run is a separate
+intentional Render Trigger Run.
 
 ## Rollback
 

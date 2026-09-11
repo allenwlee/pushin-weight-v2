@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v4"
+PROMPT_VERSION = "stage1-prompt-v5"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -228,28 +228,30 @@ using the literal tuples from `core/classification_contract.py`; neither
 module was imported.
 
 The authoritative runtime source value, including its trailing newline, is
-8,132 UTF-8 bytes. Its SHA-256 is
-`f2ad602cbe169864755f587625e96a31488adbf25b15a63e0a256c4babb4d755`.
+8,738 UTF-8 bytes. Its SHA-256 is
+`7c2ef1dbb1b7d42aa1d7f5f858096cfa237331ac5de6c58b04407772130a38bd`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
 You classify stored social posts for each attributed brand. Return JSON only.
 
-POST TYPES (no count cap; return every supported type):
+POST TYPES (no count cap; return every supported type supported by the
+source):
 Allowed keys exactly: releases_updates, hands_on_usage, results_evaluations,
 questions_requests, advertising_marketing, events, opportunities,
 job_listings, personnel_changes, opinions_reactions, research_explanations,
 business_finance, other.
 - releases_updates: concrete releases, features, integrations, availability,
-  or pricing changes.
-- hands_on_usage: actual use, demos, artifacts, workflows, setup, or
-  tutorials.
-- results_evaluations: substantive evaluations, benchmarks, rankings, results,
-  or comparisons.
+  or pricing changes, including a third party reporting them.
+- hands_on_usage: actual use, demos, built artifacts, workflows, setup,
+  tutorials, or participation in a task that exercises a product.
+- results_evaluations: substantive performance or quality judgments,
+  benchmarks, rankings, results, or comparisons; include it when the author
+  evaluates an actual use outcome.
 - questions_requests: genuine product questions, support requests,
   corrections, or desired changes.
 - advertising_marketing: observable pitches, calls to action, discounts,
-  services, or product showcases.
+  services, promotional launches, or product showcases.
 - events: an organized occurrence that requires attendance at a scheduled
   in-person, live-online, or hybrid venue or session. Past, live, upcoming,
   cancelled, and postponed events may qualify.
@@ -262,16 +264,18 @@ business_finance, other.
   explicit direct-message instruction.
 - personnel_changes: a named person joining, leaving, or explicitly describing
   a before-and-after employment transition involving an AI organization.
-- opinions_reactions: views, predictions, anticipation, or reactions that are
-  not principally another defined type.
+- opinions_reactions: views, predictions, anticipation, or reactions,
+  including a supported secondary opinion alongside another type.
 - research_explanations: technical mechanisms, architecture, research
-  interpretation, or conceptual teaching.
+  interpretation, explanatory analysis, or conceptual teaching.
 - business_finance: funding, ownership, investment, valuation, revenue,
   monetization, commercial strategy, suppliers, partners, or parent companies.
 - other: a confident residual only. It is exclusive and cannot accompany
   another post type.
 
 TYPE BOUNDARIES:
+- Types are independent and may overlap. Include each supported secondary
+  type; do not omit it merely because another type is more prominent.
 - Future intent, a bare recommendation, praise, or a news roundup is not
   hands_on_usage.
 - A bare release date, launch, feature availability, integration, or pricing
@@ -297,9 +301,9 @@ TYPE BOUNDARIES:
   not personnel_changes. The announcement may be first-person, official,
   staff-authored, or a corroborated third-party statement, and effective dates
   may be unknown.
-- Mentioning a benchmark, latency, ranking, or model is not enough for
-  results_evaluations; the post must make a substantive evaluation or
-  comparison.
+- Mentioning a benchmark, latency, ranking, metric, or model is not enough for
+  results_evaluations; the post must report a result or make a substantive
+  performance or quality judgment or comparison.
 - Rhetorical headings are not questions_requests. Use questions_requests for
   genuine questions or requests.
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial
@@ -328,8 +332,10 @@ launch is neutral without evaluative language.
 
 CHINA_NATIONALISM and US_NATIONALISM: none, mild_pro, pro,
 constructive_critical, anti, mixed, or null when unknown.
-- none means an explicit judgment that no nationalism layer is present; null
-  means the value is unknown.
+- none means the supplied source can be assessed and has no nationalism layer.
+  Use none for ordinary product, business, research, event, job, and personnel
+  content without national framing. Use null only when missing or unusable
+  context prevents a judgment.
 - mild_pro is subtle favorable national framing; pro is overt favorable
   national framing; constructive_critical is criticism from a broadly
   favorable national frame; anti is hostile national framing; mixed combines
@@ -374,25 +380,7 @@ not infer scam, crypto, or unauthorized without their specific evidence. Use
 only these four keys.
 
 Return
-{
-  "results":[
-    {
-      "tweet_id":str,
-      "classifications":[
-        {
-          "brand_id":str,
-          "outcome":"classified|context_missing",
-          "post_types":[str],
-          "product_labels":[str],
-          "sentiment":str|null,
-          "china_nationalism":str|null,
-          "us_nationalism":str|null
-        }
-      ],
-      "unsanctioned_flags":[str]
-    }
-  ]
-}.
+{"results":[{"tweet_id":str,"classifications":[{"brand_id":str,"outcome":"classified|context_missing","post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}],"unsanctioned_flags":[str]}]}.
 Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or
 code fences.
 ```

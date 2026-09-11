@@ -13,6 +13,7 @@ from django.db.models import Q, QuerySet
 from core.models import (
     Brand,
     BrandTrendNarrative,
+    BrandTrendNarrativeText,
     Product,
     TrendNarrative,
     TrendNarrativeProviderCall,
@@ -228,6 +229,8 @@ def prepare_brand_trend_narrative(
     headline_zh_cn: str = "",
     secondary_en: str = "",
     secondary_zh_cn: str = "",
+    headline_ja: str = "",
+    secondary_ja: str = "",
     critic_decision: str = "",
     critic_review_state: str = "",
     critic_reason_codes: list[str] | None = None,
@@ -280,7 +283,7 @@ def prepare_brand_trend_narrative(
                     )
             if last_good is None:
                 status = BrandTrendNarrative.Status.UNAVAILABLE
-        return BrandTrendNarrative.objects.create(
+        outcome = BrandTrendNarrative.objects.create(
             run=run,
             brand=Brand.objects.filter(pk=brand_key).first(),
             brand_key_snapshot=brand_key,
@@ -308,6 +311,24 @@ def prepare_brand_trend_narrative(
             error_code=error_code[:64],
             last_good=last_good,
         )
+        localized = {
+            "en": (headline_en, secondary_en),
+            "zh-cn": (headline_zh_cn, secondary_zh_cn),
+            "ja": (headline_ja, secondary_ja),
+        }
+        BrandTrendNarrativeText.objects.bulk_create(
+            [
+                BrandTrendNarrativeText(
+                    narrative=outcome,
+                    locale=locale,
+                    headline=headline,
+                    secondary=secondary,
+                )
+                for locale, (headline, secondary) in localized.items()
+                if headline and secondary
+            ]
+        )
+        return outcome
 
 
 def activate_trend_narrative_run(run_id: int, *, now) -> bool:

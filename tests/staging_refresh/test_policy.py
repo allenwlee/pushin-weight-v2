@@ -165,6 +165,36 @@ def test_valid_staging_preflight_is_authorized() -> None:
     assert result.target.database == "pushinweight_staging"
 
 
+def test_staging_first_preflight_accepts_declared_post_migration_relations_absent():
+    policy = load_policy(POLICY_PATH)
+    source = _inspection(policy, source=True)
+    source = replace(
+        source,
+        base_tables=source.base_tables - policy.relations.optional_source_tables,
+        readable_tables=(
+            source.readable_tables - policy.relations.optional_source_tables
+        ),
+        maintainable_tables=(
+            source.maintainable_tables - policy.relations.optional_source_tables
+        ),
+        sequences=source.sequences - policy.relations.optional_source_sequences,
+        readable_sequences=(
+            source.readable_sequences
+            - policy.relations.optional_source_sequences
+        ),
+    )
+
+    result = authorize(
+        policy,
+        action="preflight",
+        environ=_environment(policy),
+        source=source,
+        target=_inspection(policy, source=False),
+    )
+
+    assert result.source.database == "pushinweight_shadow"
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [

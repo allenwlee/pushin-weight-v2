@@ -35,8 +35,8 @@ def test_prompt_enumerates_sentiment_and_nationalism_values():
         "negative: criticism",
         "neutral: informational",
         "mixed: materially both",
-        "none means an explicit judgment",
-        "null means the value is unknown",
+        "none means the supplied source can be assessed",
+        "Use null only when missing or unusable context",
         "Nationalism requires explicit US-China",
     ):
         assert meaning in _PRAGMATICS_FULL_SYSTEM_PROMPT
@@ -111,7 +111,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v4"
+    assert PROMPT_VERSION == "stage1-prompt-v5"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

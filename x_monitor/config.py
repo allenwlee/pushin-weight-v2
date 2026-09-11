@@ -460,6 +460,7 @@ class LlmConfig(BaseModel):
         default="claude-haiku-4-5",
         description="Model name for the per-post signal classifier. Default matches x_monitor/attribution.py::_resolve_signal_model().",
     )
+    literal_translation_v2_enabled: bool = False
 
 
 class HeadlineNarrativeConfig(BaseModel):
@@ -674,6 +675,64 @@ class HeadlineNarrativeConfig(BaseModel):
         return self
 
 
+class SynthesisConfig(BaseModel):
+    """Fail-closed PostgreSQL worker controls for rich post synthesis."""
+
+    provider: Literal["deepseek"] = "deepseek"
+    base_url: str = "https://api.deepseek.com/anthropic"
+    model: str = "deepseek-v4-flash"
+    prompt_version: str = Field(default="post-synthesis-v1", max_length=64)
+    output_schema_version: int = Field(default=1, ge=1, le=32)
+    activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
+    provider_calls_enabled: bool = False
+    control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
+    batch_size: int = Field(default=5, ge=1, le=10)
+    poll_seconds: int = Field(default=2, ge=1, le=30)
+    lease_seconds: int = Field(default=300, ge=30, le=900)
+    timeout_seconds: int = Field(default=60, ge=5, le=120)
+    max_attempts: int = Field(default=3, ge=1, le=5)
+    max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
+    max_output_tokens_per_post: int = Field(default=1_200, ge=256, le=4_000)
+    daily_request_cap: int = Field(default=200, ge=1, le=10_000)
+    daily_input_token_cap: int = Field(default=800_000, ge=1_000)
+    daily_output_token_cap: int = Field(default=240_000, ge=1_000)
+    input_usd_per_million: Decimal = Field(default=Decimal("0.44"), ge=0)
+    output_usd_per_million: Decimal = Field(default=Decimal("1.32"), ge=0)
+    daily_cost_cap_usd: Decimal = Field(default=Decimal("0.70"), gt=0)
+    pricing_version: str = Field(
+        default="deepseek-v4-flash-peak-2026-09-02", min_length=1, max_length=96
+    )
+    demand_batch_limit: int = Field(default=20, ge=1, le=50)
+    visible_expiry_minutes: int = Field(default=120, ge=15, le=1440)
+    lookahead_expiry_minutes: int = Field(default=15, ge=1, le=120)
+    prewarm_enabled: bool = False
+    prewarm_per_cycle: int = Field(default=0, ge=0, le=10)
+
+    @property
+    def provider_calls_active(self) -> bool:
+        return self.provider_calls_enabled and self.activation_state != "pending"
+
+    @model_validator(mode="after")
+    def _validate_route(self) -> SynthesisConfig:
+        if (
+            self.provider != "deepseek"
+            or self.base_url != "https://api.deepseek.com/anthropic"
+            or self.model != "deepseek-v4-flash"
+        ):
+            raise ValueError("synthesis provider route must match the evaluated route")
+        if self.prewarm_enabled and self.prewarm_per_cycle < 1:
+            raise ValueError("enabled synthesis prewarm requires a positive cap")
+        maximum_cost = (
+            Decimal(self.daily_input_token_cap) * self.input_usd_per_million
+            + Decimal(self.daily_output_token_cap) * self.output_usd_per_million
+        ) / Decimal(1_000_000)
+        if maximum_cost > self.daily_cost_cap_usd:
+            raise ValueError(
+                "synthesis token caps must fit inside the daily dollar cap"
+            )
+        return self
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
@@ -688,6 +747,7 @@ class Config(BaseModel):
     harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()
     headline_narrative: HeadlineNarrativeConfig = HeadlineNarrativeConfig()
+    synthesis: SynthesisConfig = SynthesisConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(
@@ -903,6 +963,9 @@ def load_config(path: Path) -> Config:
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
+            "literal_translation_v2_enabled": os.environ.get(
+                "X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"
+            ),
         }.items()
         if v is not None
     }
@@ -953,6 +1016,37 @@ def load_config(path: Path) -> Config:
             "headline_narrative": {
                 **env_headline_overrides,
                 **raw_headline_filtered,
+            },
+        }
+    raw_synthesis = (
+        raw.get("synthesis", {})
+        if isinstance(raw.get("synthesis"), dict)
+        else {}
+    )
+    synthesis_env_names = {
+        "activation_state": "X_MONITOR_SYNTHESIS_ACTIVATION_STATE",
+        "provider_calls_enabled": "X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED",
+        "control_revision": "X_MONITOR_SYNTHESIS_CONTROL_REVISION",
+        "prewarm_enabled": "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
+        "daily_request_cap": "X_MONITOR_SYNTHESIS_DAILY_REQUEST_CAP",
+        "daily_input_token_cap": "X_MONITOR_SYNTHESIS_DAILY_INPUT_TOKEN_CAP",
+        "daily_output_token_cap": "X_MONITOR_SYNTHESIS_DAILY_OUTPUT_TOKEN_CAP",
+        "daily_cost_cap_usd": "X_MONITOR_SYNTHESIS_DAILY_COST_CAP_USD",
+    }
+    env_synthesis_overrides = {
+        field: os.environ[env_name]
+        for field, env_name in synthesis_env_names.items()
+        if env_name in os.environ
+    }
+    raw_synthesis_filtered = {
+        key: value for key, value in raw_synthesis.items() if value is not None
+    }
+    if raw_synthesis or env_synthesis_overrides:
+        raw = {
+            **raw,
+            "synthesis": {
+                **env_synthesis_overrides,
+                **raw_synthesis_filtered,
             },
         }
     try:

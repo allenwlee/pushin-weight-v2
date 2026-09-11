@@ -26,6 +26,8 @@ class CustomLocaleMiddleware:
                 "zh-CN": "zh-hans",
                 "zh_hans": "zh-hans",
                 "en": "en",
+                "ja": "ja",
+                "ja-JP": "ja",
                 "original": "en",
             }.get(cookie_locale, "zh-hans")
             # 3. Activate translation for {% trans %} resolution

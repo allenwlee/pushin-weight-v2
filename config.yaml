@@ -275,6 +275,7 @@ llm:
   classifier_model: "deepseek-v4-flash"
   relevancy_model: "claude-haiku-4-5"
   signal_model: "claude-haiku-4-5"
+  literal_translation_v2_enabled: null
 
 # Shared V22 trend-narrative generation. This role never inherits the
 # translator/classifier route. Service-specific environment variables request
@@ -284,14 +285,14 @@ headline_narrative:
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-flash"
   rank_prompt_version: "headline-rank-v1"
-  editor_prompt_version: "headline-editor-v6"
-  critic_prompt_version: "headline-critic-v6"
+  editor_prompt_version: "headline-editor-v7-ja"
+  critic_prompt_version: "headline-critic-v7-ja"
   rank_max_tokens: 2400
-  editor_max_tokens: 8000
-  critic_max_tokens: 9000
+  editor_max_tokens: 10000
+  critic_max_tokens: 11000
   timeout_seconds: 60
-  prompt_version: "headline-v10-why-first-quantitative-color"
-  publication_epoch: 10
+  prompt_version: "headline-v11-ja-parity"
+  publication_epoch: 11
   materiality_policy_version: "headline-materiality-v1"
   demand_shaping_enabled: null
   demand_hot_minutes: 180
@@ -320,7 +321,7 @@ headline_narrative:
   call_cap: 4
   per_brand_call_cap: 25
   per_brand_input_token_cap: 700000
-  per_brand_output_token_cap: 160000
+  per_brand_output_token_cap: 180000
   # Conservative peak, cache-miss rates from DeepSeek's official 2026-09-02
   # pricing page. Off-peak/cache-hit billing can only reduce actual cost.
   per_brand_cost_cap_usd: "1.50"
@@ -343,6 +344,35 @@ headline_narrative:
   publication_source: null
   legacy_fallback_enabled: null
   control_revision: null
+
+synthesis:
+  provider: "deepseek"
+  base_url: "https://api.deepseek.com/anthropic"
+  model: "deepseek-v4-flash"
+  prompt_version: "post-synthesis-v1"
+  output_schema_version: 1
+  activation_state: null
+  provider_calls_enabled: null
+  control_revision: null
+  batch_size: 5
+  poll_seconds: 2
+  lease_seconds: 300
+  timeout_seconds: 60
+  max_attempts: 3
+  max_input_tokens_per_post: 4000
+  max_output_tokens_per_post: 1200
+  daily_request_cap: 200
+  daily_input_token_cap: 800000
+  daily_output_token_cap: 240000
+  input_usd_per_million: "0.44"
+  output_usd_per_million: "1.32"
+  daily_cost_cap_usd: "0.70"
+  pricing_version: "deepseek-v4-flash-peak-2026-09-02"
+  demand_batch_limit: 20
+  visible_expiry_minutes: 120
+  lookahead_expiry_minutes: 15
+  prewarm_enabled: null
+  prewarm_per_cycle: 0
 
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.

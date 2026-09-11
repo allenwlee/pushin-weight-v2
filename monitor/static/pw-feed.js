@@ -57,6 +57,184 @@
     return bodyLocale || (root && root.getAttribute('data-pw-locale')) || 'en';
   }
 
+  var synthesisGeneration = 0;
+  var synthesisVisibleObserver = null;
+  var synthesisLookaheadObserver = null;
+  var synthesisLookaheadCount = 0;
+  var synthesisQueues = { visible: {}, expanded: {}, lookahead: {} };
+  var synthesisFlushTimer = null;
+  var synthesisPollTimers = [];
+  var synthesisControllers = [];
+  var SYNTHESIS_POLL_DELAYS = [2000, 4000, 8000, 16000, 30000, 30000];
+
+  function csrfToken() {
+    var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function synthesisLabel(status) {
+    var locale = currentLocale();
+    if (locale === 'ja' || locale === 'ja-JP') {
+      return status === 'failed' ? '分析を生成できませんでした' :
+        status === 'cancelled' ? '分析リクエストは期限切れです' : '分析を生成中';
+    }
+    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans') {
+      return status === 'failed' ? '分析生成失败' :
+        status === 'cancelled' ? '分析请求已过期' : '正在生成分析';
+    }
+    return status === 'failed' ? 'Analysis failed' :
+      status === 'cancelled' ? 'Analysis request expired' : 'Analysis pending';
+  }
+
+  function resetSynthesisDemand() {
+    synthesisGeneration += 1;
+    if (synthesisVisibleObserver) synthesisVisibleObserver.disconnect();
+    if (synthesisLookaheadObserver) synthesisLookaheadObserver.disconnect();
+    synthesisVisibleObserver = null;
+    synthesisLookaheadObserver = null;
+    synthesisLookaheadCount = 0;
+    synthesisQueues = { visible: {}, expanded: {}, lookahead: {} };
+    if (synthesisFlushTimer != null) clearTimeout(synthesisFlushTimer);
+    synthesisFlushTimer = null;
+    synthesisPollTimers.forEach(clearTimeout);
+    synthesisPollTimers = [];
+    synthesisControllers.forEach(function (controller) { controller.abort(); });
+    synthesisControllers = [];
+  }
+
+  function updateSynthesisRow(result) {
+    var row = $$('.feed-row[data-tweet-id]').find(function (candidate) {
+      return candidate.getAttribute('data-tweet-id') === String(result.post_id);
+    });
+    if (!row) return;
+    var status = result.status || 'pending';
+    row.setAttribute('data-synthesis-status', status);
+    var text = $('.text[data-text-cycle]', row);
+    var synthesis = result.synthesis || {};
+    var literal = result.literal || {};
+    if (text) {
+      if (synthesis.en) text.setAttribute('data-commentary-en', synthesis.en);
+      if (synthesis['zh-cn']) text.setAttribute('data-commentary-zh-cn', synthesis['zh-cn']);
+      if (synthesis.ja) text.setAttribute('data-commentary-ja', synthesis.ja);
+      if (literal.en) text.setAttribute('data-text-en', literal.en);
+      if (literal['zh-cn']) text.setAttribute('data-literal-cn', literal['zh-cn']);
+      if (literal.ja) text.setAttribute('data-text-ja', literal.ja);
+      text.setAttribute('data-layer-idx', '0');
+      renderTextLayer(text);
+    }
+    var badge = $('.synthesis-status', row);
+    if (status === 'ready') {
+      if (badge) badge.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.setAttribute('role', 'status');
+      badge.setAttribute('aria-live', 'polite');
+      var meta = $('.meta', row);
+      if (meta) meta.appendChild(badge);
+    }
+    badge.className = 'enrichment-status synthesis-status synthesis-status-' + status;
+    badge.textContent = synthesisLabel(status);
+  }
+
+  function requestSynthesis(postIds, reason, generation, pollAttempt) {
+    if (!postIds.length || document.hidden || generation !== synthesisGeneration) return;
+    var controller = typeof AbortController === 'undefined' ? null : new AbortController();
+    if (controller) synthesisControllers.push(controller);
+    fetch('/api/v2/post-synthesis-demands/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken(),
+      },
+      body: JSON.stringify({
+        post_ids: postIds,
+        reason: reason,
+        poll_only: pollAttempt > 0,
+      }),
+    }).then(function (response) {
+      if (!response.ok) throw new Error('synthesis request failed');
+      return response.json();
+    }).then(function (payload) {
+      if (generation !== synthesisGeneration || !payload || !Array.isArray(payload.results)) return;
+      payload.results.forEach(updateSynthesisRow);
+      var pending = payload.results.filter(function (result) {
+        return ['ready', 'failed', 'cancelled'].indexOf(result.status) === -1;
+      }).map(function (result) { return String(result.post_id); });
+      if (pending.length && pollAttempt < SYNTHESIS_POLL_DELAYS.length) {
+        var timer = setTimeout(function () {
+          synthesisPollTimers = synthesisPollTimers.filter(function (item) {
+            return item !== timer;
+          });
+          requestSynthesis(pending, reason, generation, pollAttempt + 1);
+        }, SYNTHESIS_POLL_DELAYS[pollAttempt]);
+        synthesisPollTimers.push(timer);
+      }
+    }).catch(function () {
+      // Feed content remains readable from source/literal text during outages.
+    }).finally(function () {
+      if (!controller) return;
+      synthesisControllers = synthesisControllers.filter(function (item) {
+        return item !== controller;
+      });
+    });
+  }
+
+  function flushSynthesisQueues() {
+    synthesisFlushTimer = null;
+    if (document.hidden) return;
+    var generation = synthesisGeneration;
+    ['expanded', 'visible', 'lookahead'].forEach(function (reason) {
+      var cap = reason === 'lookahead' ? 10 : 20;
+      var ids = Object.keys(synthesisQueues[reason]).slice(0, cap);
+      synthesisQueues[reason] = {};
+      requestSynthesis(ids, reason, generation, 0);
+    });
+  }
+
+  function queueSynthesis(row, reason) {
+    if (!row || document.hidden ||
+        ['ready', 'failed', 'cancelled'].indexOf(
+          row.getAttribute('data-synthesis-status')
+        ) !== -1) return;
+    var postId = row.getAttribute('data-tweet-id');
+    if (!postId) return;
+    synthesisQueues[reason][postId] = true;
+    if (synthesisFlushTimer == null) {
+      synthesisFlushTimer = setTimeout(flushSynthesisQueues, 50);
+    }
+  }
+
+  function observeSynthesisRows(rows) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    var scrollRoot = $('[data-pw-feed-scroll]') || null;
+    if (!synthesisVisibleObserver) {
+      synthesisVisibleObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) queueSynthesis(entry.target, 'visible');
+        });
+      }, { root: scrollRoot, rootMargin: '0px' });
+    }
+    if (!synthesisLookaheadObserver) {
+      synthesisLookaheadObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting || synthesisLookaheadCount >= 10) return;
+          synthesisLookaheadCount += 1;
+          queueSynthesis(entry.target, 'lookahead');
+          synthesisLookaheadObserver.unobserve(entry.target);
+        });
+      }, { root: scrollRoot, rootMargin: '250px 0px' });
+    }
+    rows.forEach(function (row) {
+      if (row.getAttribute('data-synthesis-status') === 'ready') return;
+      synthesisVisibleObserver.observe(row);
+      synthesisLookaheadObserver.observe(row);
+    });
+  }
+
   // ---------------------------------------------------------------------
   // U2: pretty relative-time formatter
   // ---------------------------------------------------------------------
@@ -139,6 +317,7 @@
     div.setAttribute('data-signal-inspections', JSON.stringify(row.signal_inspections || {}));
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
     div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
+    div.setAttribute('data-synthesis-status', row.synthesis_status || 'not_requested');
     div.setAttribute('data-tint', tint);
     div.innerHTML = renderRowHtml(row);
     return div;
@@ -159,6 +338,15 @@
     var label = row.enrichment_status_label || ('enrichment ' + status);
     return '<span class="enrichment-status enrichment-status-' + status +
       '" role="status">' + escapeHtml(label) + '</span>';
+  }
+
+  function synthesisStatusHtml(row) {
+    var status = row.synthesis_status || 'not_requested';
+    if (status === 'ready') return '';
+    var label = row.synthesis_status_label || synthesisLabel(status);
+    return '<span class="enrichment-status synthesis-status synthesis-status-' +
+      escapeHtml(status) + '" role="status" aria-live="polite">' +
+      escapeHtml(label) + '</span>';
   }
 
   // U3 helper: strip a leading "@" if present.
@@ -319,13 +507,17 @@
     var sourceText = row.text_original || row.text || '';
     var commentaryZhCn = row.commentary_zh_cn || '';
     var commentaryEn = row.commentary_en || '';
+    var commentaryJa = row.commentary_ja || '';
     var literalCnText = row.text_zh_cn || '';
     var englishText = row.text_en || '';
+    var japaneseText = row.text_ja || '';
     var languageDisplay = row.language_display || 'undetected';
     var leadMetadata = accountLeadMetadataHtml(row);
     var locale = currentLocale();
     var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
       ? (commentaryZhCn || literalCnText || sourceText)
+      : locale === 'ja' || locale === 'ja-JP'
+        ? (commentaryJa || japaneseText || sourceText)
       : locale === 'original'
         ? sourceText
         : (commentaryEn || englishText || sourceText);
@@ -347,14 +539,16 @@
           '<div class="body">' +
             '<div class="head">' +
               '<span class="handle">' + handleHtml + '</span>' +
-              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + '</span>' +
+              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + synthesisStatusHtml(row) + '</span>' +
             '</div>' +
             '<div class="text" data-text-cycle role="button" tabindex="0"' +
               ' data-language-display="' + escapeHtml(languageDisplay) + '"' +
               ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
               ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
+              ' data-commentary-ja="' + escapeHtml(commentaryJa) + '"' +
               ' data-literal-cn="' + escapeHtml(literalCnText) + '"' +
               ' data-text-en="' + escapeHtml(englishText) + '"' +
+              ' data-text-ja="' + escapeHtml(japaneseText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
               '<span class="post-language-tag">' + escapeHtml(languageDisplay) + '</span>' +
               escapeHtml((initialText || '').toString()) +
@@ -367,7 +561,8 @@
                 encodeURIComponent(row.tweet_id || '') + '" target="_blank"' +
                 ' rel="noopener noreferrer" aria-label="' +
                 escapeHtml((locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans')
-                  ? '在 X 查看原帖' : 'Open original post on X') + '">' +
+                  ? '在 X 查看原帖' : (locale === 'ja' || locale === 'ja-JP')
+                    ? 'X で元の投稿を表示' : 'Open original post on X') + '">' +
                 '<svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
                   '<path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path>' +
                 '</svg></a>' +
@@ -705,6 +900,13 @@
         { key: 'en', label: 'en', value: english },
       ]);
     }
+    if (locale === 'ja' || locale === 'ja-JP') {
+      return uniqueTextLayers([
+        { key: 'synthesis', label: '分析', value: textValue(el, 'commentary-ja') },
+        { key: 'literal_ja', label: '直訳', value: textValue(el, 'text-ja') },
+        { key: 'source', label: '原文', value: source },
+      ]);
+    }
     return uniqueTextLayers([
       { key: 'synthesis', label: 'synthesis', value: textValue(el, 'commentary-en') },
       { key: 'en', label: 'en', value: english },
@@ -747,6 +949,7 @@
       attachCellClickHandlers(row);
       formatRowTimestamp(row, now);
     });
+    observeSynthesisRows(rows);
   }
 
   function appendRows(body, rows) {
@@ -768,6 +971,7 @@
   }
 
   function replaceRows(body, rows) {
+    resetSynthesisDemand();
     if (inspectionPopover) {
       var trigger = inspectionPopover.activeTrigger();
       if (trigger && body.contains(trigger)) inspectionPopover.close();
@@ -880,6 +1084,7 @@
           if (other !== el) collapseText(other);
         });
         el.classList.add('is-expanded');
+        queueSynthesis(row, 'expanded');
         advanceTextLayer(el);
         e.stopPropagation();
       });
@@ -970,8 +1175,10 @@
     if (!root) return;
     var zh = ['zh_cn', 'zh-cn', 'zh_hans', 'zh-hans']
       .indexOf(String(currentLocale()).toLowerCase()) !== -1;
-    setFeedTitle(root.getAttribute(zh ? 'data-pw-default-title-zh' : 'data-pw-default-title-en') ||
-      (zh ? '本窗口最新' : 'Latest in window'));
+    var ja = ['ja', 'ja-jp'].indexOf(String(currentLocale()).toLowerCase()) !== -1;
+    setFeedTitle(root.getAttribute(zh ? 'data-pw-default-title-zh' :
+      ja ? 'data-pw-default-title-ja' : 'data-pw-default-title-en') ||
+      (zh ? '本窗口最新' : ja ? 'この期間の最新投稿' : 'Latest in window'));
   }
 
   function showFeedStatus(kind) {
@@ -1018,6 +1225,7 @@
     if (!root) return;
     var body = $('[data-pw-feed-body]', root);
     if (!body) return;
+    resetSynthesisDemand();
     // Clear the body but preserve the first batch (already rendered by
     // Jinja). For the simplest behavior, refetch from the server and
     // replace the entire body. U4 (2026-07-16): pass the current
@@ -1226,6 +1434,16 @@
     wireSortHeaders();
     wireFilterChange();
     startAutoRefresh();
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        resetSynthesisDemand();
+        return;
+      }
+      var currentBody = $('[data-pw-feed-body]');
+      if (currentBody) {
+        observeSynthesisRows($$('.feed-row[data-pw-feed-row]', currentBody));
+      }
+    });
   }
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -1235,6 +1453,7 @@
       formatRelative: formatRelative,
       formatLocalTooltip: formatLocalTooltip,
       enrichmentStatusHtml: enrichmentStatusHtml,
+      synthesisStatusHtml: synthesisStatusHtml,
       textLayers: textLayers,
       hydrateRows: hydrateRows,
       paintSignals: paintSignals,

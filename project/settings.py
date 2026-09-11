@@ -61,6 +61,7 @@ LANGUAGE_CODE = "zh-hans"
 LANGUAGES = [
     ("en", "English"),
     ("zh-hans", "简体中文"),
+    ("ja", "日本語"),
 ]
 
 LOCALE_PATHS = [BASE_DIR / "locale"]

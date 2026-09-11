@@ -490,6 +490,17 @@ assertEq(
   'en,source',
   'blank commentary_en leaves the English cycle unchanged'
 );
+global.document.body = { getAttribute: (name) => name === 'data-pw-locale' ? 'ja' : null };
+layers = textLayers(textElement({
+  'data-commentary-ja': '日本語の分析',
+  'data-text-ja': '日本語の直訳',
+  'data-text-source': 'English source',
+}));
+assertEq(
+  layers.map((layer) => layer.key).join(','),
+  'synthesis,literal_ja,source',
+  'Japanese cycles synthesis, literal translation, then original source'
+);
 assertEq(
   isFeedPayload({ rows: [], next_cursor: { stale: true } }),
   false,

@@ -44,12 +44,22 @@ class ProductionDenyPolicy:
 class RelationsPolicy:
     copied_tables: frozenset[str]
     excluded_tables: frozenset[str]
+    optional_source_tables: frozenset[str]
     views: frozenset[str]
     sequences: frozenset[str]
+    optional_source_sequences: frozenset[str]
 
     @property
     def classified_tables(self) -> frozenset[str]:
         return self.copied_tables | self.excluded_tables
+
+    @property
+    def required_source_tables(self) -> frozenset[str]:
+        return self.classified_tables - self.optional_source_tables
+
+    @property
+    def required_source_sequences(self) -> frozenset[str]:
+        return self.sequences - self.optional_source_sequences
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,7 +348,14 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     relations_raw = _mapping(raw, "relations")
     _strict(
         relations_raw,
-        {"copied_tables", "excluded_tables", "views", "sequences"},
+        {
+            "copied_tables",
+            "excluded_tables",
+            "optional_source_tables",
+            "views",
+            "sequences",
+            "optional_source_sequences",
+        },
         field="relations",
     )
     relations = RelationsPolicy(
@@ -348,11 +365,21 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         excluded_tables=frozenset(
             _strings(relations_raw, "excluded_tables", field="relations")
         ),
+        optional_source_tables=frozenset(
+            _strings(relations_raw, "optional_source_tables", field="relations")
+        ),
         views=frozenset(_strings(relations_raw, "views", field="relations")),
         sequences=frozenset(_strings(relations_raw, "sequences", field="relations")),
+        optional_source_sequences=frozenset(
+            _strings(relations_raw, "optional_source_sequences", field="relations")
+        ),
     )
     if relations.copied_tables & relations.excluded_tables:
         raise PolicyError("policy_relation_classification_overlap")
+    if not relations.optional_source_tables <= relations.classified_tables:
+        raise PolicyError("policy_optional_source_table_unclassified")
+    if not relations.optional_source_sequences <= relations.sequences:
+        raise PolicyError("policy_optional_source_sequence_unclassified")
 
     scrub_raw = _mapping(raw, "scrub")
     _strict(
@@ -686,7 +713,7 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     unknown = source.base_tables - policy.relations.classified_tables
     if unknown:
         raise PolicyError(f"source_unclassified_table:{min(unknown)}")
-    missing = policy.relations.classified_tables - source.base_tables
+    missing = policy.relations.required_source_tables - source.base_tables
     if missing:
         raise PolicyError(f"source_classified_table_missing:{min(missing)}")
     unknown_views = source.views - policy.relations.views
@@ -694,13 +721,17 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
         raise PolicyError(f"source_unclassified_view:{min(unknown_views)}")
     if source.views != policy.relations.views:
         raise PolicyError("source_view_policy_mismatch")
-    if source.sequences != policy.relations.sequences:
+    if not source.sequences <= policy.relations.sequences:
+        raise PolicyError("source_sequence_policy_mismatch")
+    if not policy.relations.required_source_sequences <= source.sequences:
         raise PolicyError("source_sequence_policy_mismatch")
 
     excluded_readable = source.readable_tables & policy.relations.excluded_tables
     if excluded_readable:
         raise PolicyError(f"source_excluded_table_readable:{min(excluded_readable)}")
-    unreadable = policy.relations.copied_tables - source.readable_tables
+    unreadable = (
+        policy.relations.copied_tables & source.base_tables
+    ) - source.readable_tables
     if unreadable:
         raise PolicyError(f"source_required_table_unreadable:{min(unreadable)}")
     unexpected_maintenance = (
@@ -710,10 +741,12 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
         raise PolicyError(
             f"source_maintenance_privilege_unexpected:{min(unexpected_maintenance)}"
         )
-    unlockable = policy.relations.excluded_tables - source.maintainable_tables
+    unlockable = (
+        policy.relations.excluded_tables & source.base_tables
+    ) - source.maintainable_tables
     if unlockable:
         raise PolicyError(f"source_excluded_table_unlockable:{min(unlockable)}")
-    if source.readable_sequences != policy.relations.sequences:
+    if source.readable_sequences != source.sequences:
         raise PolicyError("source_sequence_privileges_invalid")
 
 

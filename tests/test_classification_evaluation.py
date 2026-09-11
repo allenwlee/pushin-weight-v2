@@ -313,6 +313,35 @@ def test_multilabel_exact_set_jaccard_and_scalar_confusion_are_deterministic():
     assert result["identity"]["evaluation_identity"].startswith("sha256:")
 
 
+def test_taxonomy_v3_is_scored_as_a_separate_closed_vocabulary():
+    candidate, gold = _documents()
+    for document in (candidate, gold):
+        document["provenance"]["taxonomy_version"] = "stage1-taxonomy-v3"
+        document["provenance"]["prompt_version"] = "stage1-prompt-v5"
+        document["rows"][0]["classification"]["post_types"] = ["job_listings"]
+    policy = _complete_policy()
+    policy["floors"] = {
+        path: 0.0
+        for path in required_floor_paths(
+            policy["required_contexts"], "stage1-taxonomy-v3"
+        )
+    }
+
+    result = evaluate_classifications(
+        candidate,
+        gold,
+        policy=policy,
+        source_identity=SOURCE_IDENTITY,
+    )
+
+    assert result["cohort"]["taxonomy_version"] == "stage1-taxonomy-v3"
+    assert "job_listings" in result["metrics"]["all"]["post_types"]["labels"]
+    assert "events_opportunities" not in result["metrics"]["all"]["post_types"][
+        "labels"
+    ]
+    assert result["support_gaps"]
+
+
 def test_invalid_and_missing_candidates_are_excluded_but_reported():
     candidate, gold = _documents()
     candidate["rows"] = [candidate["rows"][0], deepcopy(candidate["rows"][1])]

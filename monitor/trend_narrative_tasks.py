@@ -1061,8 +1061,10 @@ def _critic_risk_reasons(
                 for key in (
                     "headline_en",
                     "headline_zh_cn",
+                    "headline_ja",
                     "secondary_en",
                     "secondary_zh_cn",
+                    "secondary_ja",
                 )
             )
             claim_types = {
@@ -1115,6 +1117,8 @@ def _apply_editor_bypass(
             headline_zh_cn=narrative["headline_zh_cn"],
             secondary_en=narrative["secondary_en"],
             secondary_zh_cn=narrative["secondary_zh_cn"],
+            headline_ja=narrative.get("headline_ja", ""),
+            secondary_ja=narrative.get("secondary_ja", ""),
             critic_review_state="bypassed",
             critic_reason_codes=["mechanically_valid_low_risk"],
             critic_audit_eligible=audit_eligible,
@@ -1190,6 +1194,8 @@ def _apply_critic(run, batch, call, *, now):
             headline_zh_cn=narrative["headline_zh_cn"],
             secondary_en=narrative["secondary_en"],
             secondary_zh_cn=narrative["secondary_zh_cn"],
+            headline_ja=narrative.get("headline_ja", ""),
+            secondary_ja=narrative.get("secondary_ja", ""),
             critic_decision=decision["decision"],
             critic_review_state="reviewed",
             critic_reason_codes=list(routing.get("reason_codes") or ["risk_routed"]),

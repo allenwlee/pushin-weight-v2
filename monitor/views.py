@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.contrib.auth.decorators import login_required
 from django.core.signing import salted_hmac
+from django.db import transaction
 from django.db.models import (
     Count,
     Exists,
@@ -70,6 +72,7 @@ from core.models import (
     PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
+    PostSynthesisRateLimitBucket,
     PostTypeLabel,
     PostUnsanctionedFlag,
     ProductLabelLabel,
@@ -79,7 +82,6 @@ from core.models import (
     SentimentLabel,
 )
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
-from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
 
@@ -91,13 +93,23 @@ APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
-SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "zh_hans", "en", "original")
+SUPPORTED_LOCALES: tuple[str, ...] = (
+    "zh_cn",
+    "zh-CN",
+    "zh_hans",
+    "ja",
+    "ja-JP",
+    "en",
+    "original",
+)
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
     "zh-CN": "zh_cn",
     "zh_cn": "zh_cn",
     "zh_hans": "zh_cn",
+    "ja": "ja",
+    "ja-JP": "ja",
     "original": "__source__",
 }
 
@@ -318,6 +330,8 @@ def _normalize_locale(locale: str | None) -> str:
         return "original"
     if locale.casefold() == "zh-hans":
         return "zh_hans"
+    if locale.casefold() in {"ja-jp", "ja_jp"}:
+        return "ja"
     for sup in SUPPORTED_LOCALES:
         if locale.casefold() == sup.casefold():
             return sup
@@ -328,6 +342,29 @@ def _normalize_locale(locale: str | None) -> str:
 def _is_zh_locale(locale: str) -> bool:
     """Whether a display-locale alias should render the Chinese v22 chrome."""
     return locale in {"zh_cn", "zh-CN", "zh_hans"}
+
+
+def _is_ja_locale(locale: str) -> bool:
+    return locale in {"ja", "ja-JP"}
+
+
+def _synthesis_status_label(status: str, locale: str) -> str:
+    if status == "ready":
+        return ""
+    if _is_ja_locale(locale):
+        return {
+            "failed": "分析を生成できませんでした",
+            "cancelled": "分析リクエストは期限切れです",
+        }.get(status, "分析を生成中")
+    if _is_zh_locale(locale):
+        return {
+            "failed": "分析生成失败",
+            "cancelled": "分析请求已过期",
+        }.get(status, "正在生成分析")
+    return {
+        "failed": "Analysis failed",
+        "cancelled": "Analysis request expired",
+    }.get(status, "Analysis pending")
 
 
 def _pretty_followers(count: int | None) -> str:
@@ -374,6 +411,8 @@ def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
         return (text, False) if text else (None, False)
     if column == "zh_cn":
         translated = getattr(post, "text_zh_cn", None) if hasattr(post, "text_zh_cn") else post.get("text_zh_cn")
+    elif column == "ja":
+        translated = getattr(post, "text_ja", None) if hasattr(post, "text_ja") else post.get("text_ja")
     else:
         translated = getattr(post, "text_en", None) if hasattr(post, "text_en") else post.get("text_en")
     return (translated, True) if translated else (None, False)
@@ -392,6 +431,7 @@ _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
 # (legacy seed). See KTD9.
 _ZHCN_LANG_CODES: tuple[str, ...] = ("zh-cn", "zh_cn", "zh-hans")
 _EN_LANG_CODES: tuple[str, ...] = ("en",)
+_JA_LANG_CODES: tuple[str, ...] = ("ja",)
 
 def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     """Return the ordered tuple of lang codes to try for a display locale.
@@ -402,6 +442,8 @@ def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     """
     if locale in {"zh_cn", "zh-CN", "zh_hans"}:
         return _ZHCN_LANG_CODES
+    if locale in {"ja", "ja-JP"}:
+        return _JA_LANG_CODES
     return _EN_LANG_CODES
 
 
@@ -435,7 +477,13 @@ def _localize_classification_value(
         cached = label_cache.get((family, key, lang))
         if cached:
             return cached
-    display_locale = "zh-cn" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "en"
+    display_locale = (
+        "zh-cn"
+        if locale in {"zh_cn", "zh-CN", "zh_hans"}
+        else "ja"
+        if locale in {"ja", "ja-JP"}
+        else "en"
+    )
     canonical = CLASSIFICATION_LABELS.get(family, {}).get(key, {})
     if canonical.get(display_locale):
         return canonical[display_locale]
@@ -551,6 +599,8 @@ def _resolve_locale(request: HttpRequest) -> str:
         "zh-CN": "zh-hans",
         "zh_hans": "zh-hans",
         "en": "en",
+        "ja": "ja",
+        "ja-JP": "ja",
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
@@ -646,13 +696,8 @@ def _get_feed_posts(
     if window_days:
         cutoff = django_timezone.now() - timedelta(days=window_days)
 
-    translation_ready = Q(
-        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
-    )
     qs = (
-        Post.objects.filter(persisted_output_complete_q())
-        .filter(Q(enrichment_state__isnull=True) | translation_ready)
-        .select_related("author")
+        Post.objects.select_related("author")
         .prefetch_related(
             Prefetch(
                 "brands",
@@ -1595,13 +1640,16 @@ def _enrich_posts_with_classifications(
 
     When brand_nickname is provided, classifications are scoped to that brand.
     """
-    # Accept both QuerySets and plain lists
-    if hasattr(posts, "values_list"):
-        tweet_ids = list(posts.values_list("tweet_id", flat=True))
-    else:
-        tweet_ids = [p.tweet_id if hasattr(p, "tweet_id") else p.get("tweet_id") for p in posts]
+    # Materialize once so every bulk reader and serializer shares the same
+    # prefetched page and does not accidentally re-run the feed query.
+    posts = list(posts)
+    tweet_ids = [post.tweet_id for post in posts]
     if not tweet_ids:
         return []
+
+    from monitor.post_artifacts import read_post_content_many
+
+    content_by_tweet = read_post_content_many(posts)
 
     # Bulk fetch classifications
     current_classified_pair = PostBrandClassificationState.objects.filter(
@@ -1735,12 +1783,14 @@ def _enrich_posts_with_classifications(
     label_cache_by_locale: dict[str, dict[tuple[str, str, str], str]] = {
         "zh_cn": _build_label_cache(keys_by_family, "zh_cn"),
         "en": _build_label_cache(keys_by_family, "en"),
+        "ja": _build_label_cache(keys_by_family, "ja"),
     }
 
     # Build enriched dicts
     result: list[dict[str, Any]] = []
     for post in posts:
         tid = post.tweet_id
+        content = content_by_tweet[str(tid)]
         account_handle = (
             post.author.handle if post.author else post.author_handle
         ) or "@unknown"
@@ -1753,10 +1803,15 @@ def _enrich_posts_with_classifications(
             "tweet_id": tid,
             "created_at": post.created_at.isoformat() if post.created_at else None,
             "text": post.text,
-            "text_en": post.text_en,
-            "text_zh_cn": post.text_zh_cn,
-            "commentary_en": post.commentary_en,
-            "commentary_zh_cn": post.commentary_zh_cn,
+            "text_en": content.literal.get("en"),
+            "text_zh_cn": content.literal.get("zh-cn"),
+            "text_ja": content.literal.get("ja"),
+            "commentary_en": content.synthesis.get("en"),
+            "commentary_zh_cn": content.synthesis.get("zh-cn"),
+            "commentary_ja": content.synthesis.get("ja"),
+            "literal_source": content.literal_source,
+            "synthesis_source": content.synthesis_source,
+            "synthesis_status": content.synthesis_status,
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
@@ -2849,6 +2904,7 @@ def home(request: HttpRequest) -> HttpResponse:
         },
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -2913,6 +2969,7 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         },
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -2979,6 +3036,7 @@ def brand_home(
         },
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -3131,8 +3189,16 @@ def _serialize_feed_row(
         "is_translated": is_translated,
         "text_en": post.get("text_en"),
         "text_zh_cn": post.get("text_zh_cn"),
+        "text_ja": post.get("text_ja"),
         "commentary_en": post.get("commentary_en"),
         "commentary_zh_cn": post.get("commentary_zh_cn"),
+        "commentary_ja": post.get("commentary_ja"),
+        "literal_source": post.get("literal_source", "legacy"),
+        "synthesis_source": post.get("synthesis_source", "legacy"),
+        "synthesis_status": post.get("synthesis_status", "not_requested"),
+        "synthesis_status_label": _synthesis_status_label(
+            post.get("synthesis_status", "not_requested"), locale
+        ),
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
@@ -3255,17 +3321,11 @@ def _feed_page_posts(
     if brand_nickname:
         normalized["brands"] = [brand_nickname]
     current = now or django_timezone.now()
-    translation_ready = Q(
-        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
-    )
-    eligible = Post.objects.filter(persisted_output_complete_q()).filter(
-        Q(enrichment_state__isnull=True) | translation_ready
-    )
     queryset = _filter_home_posts_queryset(
         window_days,
         normalized,
         now=current,
-        queryset=eligible,
+        queryset=Post.objects.all(),
         created_at_start=created_at_start,
         created_at_end=created_at_end,
     )
@@ -3459,6 +3519,105 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         "applied_filters": _applied_home_filters(filters, normalized),
         "locale": locale,
     })
+
+
+@login_required
+@require_POST
+def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
+    """Create/read shared synthesis demand for feed-visible post IDs."""
+    if len(request.body) > 32_768:
+        return JsonResponse({"error": "request too large"}, status=413)
+    try:
+        body = json.loads(request.body or b"{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    post_ids = body.get("post_ids") if isinstance(body, dict) else None
+    reason = body.get("reason", "visible") if isinstance(body, dict) else ""
+    poll_only = body.get("poll_only", False) if isinstance(body, dict) else False
+    if (
+        not isinstance(post_ids, list)
+        or any(not isinstance(post_id, str) or not post_id for post_id in post_ids)
+    ):
+        return JsonResponse({"error": "post_ids must be a string array"}, status=400)
+    if not isinstance(poll_only, bool):
+        return JsonResponse({"error": "poll_only must be a boolean"}, status=400)
+
+    from pathlib import Path
+
+    from monitor.post_artifacts import read_post_content_many
+    from monitor.post_synthesis import request_post_synthesis
+    from x_monitor.config import load_config
+
+    config = load_config(Path("config.yaml")).synthesis
+    unique_ids = list(dict.fromkeys(post_ids))
+    if len(unique_ids) > config.demand_batch_limit:
+        return JsonResponse({"error": "post_ids limit exceeded"}, status=400)
+    if reason not in {"visible", "expanded", "lookahead"}:
+        return JsonResponse({"error": "unsupported reason"}, status=400)
+    # Charge the content-bearing request by row count. Status polls cost one
+    # unit so the browser's bounded backoff can complete without exhausting
+    # the same minute bucket merely by observing already-requested work.
+    rate_cost = 1 if poll_only else max(1, len(unique_ids))
+    if not _accept_synthesis_rate(request, cost=rate_cost):
+        return JsonResponse({"error": "rate limit exceeded"}, status=429)
+
+    # The owner-only feed has one visibility scope today. Keep this query as
+    # the explicit authorization boundary so a future scoped feed cannot
+    # accidentally expose demand or content for an unseen row.
+    posts = list(Post.objects.filter(pk__in=unique_ids).order_by("pk"))
+    allowed = {str(post.pk) for post in posts}
+    if allowed != set(unique_ids):
+        return JsonResponse({"error": "post not visible"}, status=404)
+    if not poll_only:
+        request_post_synthesis(
+            post_ids=unique_ids,
+            reason=reason,
+            config=config,
+        )
+    projections = read_post_content_many(posts)
+    return JsonResponse(
+        {
+            "results": [
+                {
+                    "post_id": post_id,
+                    "status": projections[post_id].synthesis_status,
+                    "synthesis": dict(projections[post_id].synthesis),
+                    "literal": dict(projections[post_id].literal),
+                }
+                for post_id in unique_ids
+            ]
+        }
+    )
+
+
+def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
+    now = django_timezone.now()
+    bucket_start = now.replace(second=0, microsecond=0)
+    address = str(request.META.get("REMOTE_ADDR") or "-")
+    identities = (f"user:{request.user.pk}", f"ip:{address}")
+    scope_hashes = [
+        hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        for identity in identities
+    ]
+    limit = 120
+    with transaction.atomic():
+        buckets = []
+        for scope_hash in scope_hashes:
+            bucket, _created = PostSynthesisRateLimitBucket.objects.get_or_create(
+                bucket_start=bucket_start,
+                scope_hash=scope_hash,
+            )
+            buckets.append(
+                PostSynthesisRateLimitBucket.objects.select_for_update().get(
+                    pk=bucket.pk
+                )
+            )
+        if any(bucket.count + cost > limit for bucket in buckets):
+            return False
+        for bucket in buckets:
+            bucket.count += cost
+            bucket.save(update_fields=["count", "updated_at"])
+    return True
 
 
 # ============================================================================
@@ -3718,6 +3877,8 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "zh-CN": "zh-hans",
         "zh_hans": "zh-hans",
         "en": "en",
+        "ja": "ja",
+        "ja-JP": "ja",
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)

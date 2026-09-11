@@ -1,0 +1,30 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T01:15:00Z",
+  "reason": "after 310 accepted MiniMax reviews, ten-example responses repeatedly truncated or timed out; the remaining at most 190 examples use five-example packets with a new request identity while preserving all accepted rows",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-004257-u18-provider-budget-amendment-v4.json",
+    "2026-09-11-005100-u18-provider-budget-amendment-v6.json"
+  ],
+  "lanes": {
+    "reviewer_minimax_v3only_batch5": {
+      "provider": "minimax",
+      "model": "MiniMax-M2.7",
+      "pricing_version": "minimax-m2.7-paygo-2026-09-11",
+      "input_usd_per_million": "0.30",
+      "output_usd_per_million": "1.20",
+      "batch_size": 5,
+      "maximum_examples": 190,
+      "maximum_requests": 38,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 76,
+      "max_tokens_per_attempt": 2048,
+      "maximum_input_tokens": 1500000,
+      "maximum_output_tokens": 155648,
+      "maximum_cost_usd": "0.64",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The batch-five lane refuses its next request when any request, per-request retry, token, or dollar cap would be exceeded; it cannot fund another lane."
+}

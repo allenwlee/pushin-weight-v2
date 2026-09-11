@@ -1175,23 +1175,24 @@ def _max_tokens_for_batch(batch_size: int) -> int:
 
 _PRAGMATICS_FULL_SYSTEM_PROMPT = f"""You classify stored social posts for each attributed brand. Return JSON only.
 
-POST TYPES (no count cap; return every supported type):
+POST TYPES (no count cap; return every supported type supported by the source):
 Allowed keys exactly: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
-- releases_updates: concrete releases, features, integrations, availability, or pricing changes.
-- hands_on_usage: actual use, demos, artifacts, workflows, setup, or tutorials.
-- results_evaluations: substantive evaluations, benchmarks, rankings, results, or comparisons.
+- releases_updates: concrete releases, features, integrations, availability, or pricing changes, including a third party reporting them.
+- hands_on_usage: actual use, demos, built artifacts, workflows, setup, tutorials, or participation in a task that exercises a product.
+- results_evaluations: substantive performance or quality judgments, benchmarks, rankings, results, or comparisons; include it when the author evaluates an actual use outcome.
 - questions_requests: genuine product questions, support requests, corrections, or desired changes.
-- advertising_marketing: observable pitches, calls to action, discounts, services, or product showcases.
+- advertising_marketing: observable pitches, calls to action, discounts, services, promotional launches, or product showcases.
 - events: an organized occurrence that requires attendance at a scheduled in-person, live-online, or hybrid venue or session. Past, live, upcoming, cancelled, and postponed events may qualify.
 - opportunities: a bounded or ending chance to take an action for a concrete benefit or a chance to receive one, such as a grant, bounty, contest, token giveaway, discount, credits, access, allocation, referral reward, or collaboration.
 - job_listings: a concrete role or vacancy with an actionable application route such as a direct or careers-page URL, email, source-stated QR code, or explicit direct-message instruction.
 - personnel_changes: a named person joining, leaving, or explicitly describing a before-and-after employment transition involving an AI organization.
-- opinions_reactions: views, predictions, anticipation, or reactions that are not principally another defined type.
-- research_explanations: technical mechanisms, architecture, research interpretation, or conceptual teaching.
+- opinions_reactions: views, predictions, anticipation, or reactions, including a supported secondary opinion alongside another type.
+- research_explanations: technical mechanisms, architecture, research interpretation, explanatory analysis, or conceptual teaching.
 - business_finance: funding, ownership, investment, valuation, revenue, monetization, commercial strategy, suppliers, partners, or parent companies.
 - other: a confident residual only. It is exclusive and cannot accompany another post type.
 
 TYPE BOUNDARIES:
+- Types are independent and may overlap. Include each supported secondary type; do not omit it merely because another type is more prominent.
 - Future intent, a bare recommendation, praise, or a news roundup is not hands_on_usage.
 - A bare release date, launch, feature availability, integration, or pricing change is releases_updates, not events. A substantive recap of a named attendance-bearing occasion may still be events even after it has ended.
 - Attendance means presence at a scheduled physical or live-online venue or session. Merely submitting, applying, claiming, purchasing, voting, referring, or completing an asynchronous task before a deadline is not events.
@@ -1199,7 +1200,7 @@ TYPE BOUNDARIES:
 - Jobs use job_listings rather than opportunities solely because applying is time-bounded. A separate grant, prize, discount, or attendance-bearing hiring event may justify another type.
 - A job listing needs a concrete role and application route. General recruiting promotion, workplace culture, employee spotlights, unrelated jobs with AI hashtags, and vague "we are growing" claims are not job_listings.
 - A personnel change needs a named person and a joining, leaving, appointment, or before-and-after employment transition. A static biography, employee spotlight, unchanged role, or model/team change without a named person is not personnel_changes. The announcement may be first-person, official, staff-authored, or a corroborated third-party statement, and effective dates may be unknown.
-- Mentioning a benchmark, latency, ranking, or model is not enough for results_evaluations; the post must make a substantive evaluation or comparison.
+- Mentioning a benchmark, latency, ranking, metric, or model is not enough for results_evaluations; the post must report a result or make a substantive performance or quality judgment or comparison.
 - Rhetorical headings are not questions_requests. Use questions_requests for genuine questions or requests.
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial strategy are business_finance.
 
@@ -1219,7 +1220,7 @@ SENTIMENT (required for classified): {", ".join(_STAGE1_SENTIMENT_KEYS)}.
 A comparative mention is not automatically negative. "X is better than Y" is positive for X and neutral for Y unless Y is directly criticized. A factual launch is neutral without evaluative language.
 
 CHINA_NATIONALISM and US_NATIONALISM: {", ".join(_STAGE1_NATIONALISM_KEYS)}, or null when unknown.
-- none means an explicit judgment that no nationalism layer is present; null means the value is unknown.
+- none means the supplied source can be assessed and has no nationalism layer. Use none for ordinary product, business, research, event, job, and personnel content without national framing. Use null only when missing or unusable context prevents a judgment.
 - mild_pro is subtle favorable national framing; pro is overt favorable national framing; constructive_critical is criticism from a broadly favorable national frame; anti is hostile national framing; mixed combines materially different modes.
 - Nationalism requires explicit US-China relational or national framing. Never infer it from vendor nationality, product criticism, a benchmark miss, trap language, or superlative product praise.
 

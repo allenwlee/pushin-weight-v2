@@ -31,8 +31,9 @@ def _fake_row():
         "created_at_iso": "2026-08-09T01:51:00Z",
         "lang_detected": "en",
         "language_display": "en",
-        "text_en": "Mock en", "text_zh_cn": "模拟直译", "text_translated": "模拟直译",
-        "commentary_en": None, "commentary_zh_cn": "模拟综合",
+        "text_en": "Mock en", "text_zh_cn": "模拟直译", "text_ja": "日本語の直訳", "text_translated": "模拟直译",
+        "commentary_en": None, "commentary_zh_cn": "模拟综合", "commentary_ja": "日本語の分析",
+        "synthesis_status": "ready", "synthesis_status_label": "",
         "text_original": "Mock", "text": "Mock",
         "is_translated": True, "like_count": 1200,
         "sentiment_keys": ["positive"], "post_type_keys": ["releases_updates"],
@@ -77,7 +78,7 @@ def _fake_chart_payload():
 class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
     """Pins mockup-canon 2-column feed row shape on /."""
 
-    def _get_home(self):
+    def _get_home(self, locale="en"):
         """Return rendered HTML of / with DB-free data path."""
         fake = _fake_row()
         brands = [{**fake["brands"][0], "accent_color": "#ec4899"}]
@@ -101,7 +102,7 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         for p in cm:
             p.start()
         try:
-            r = self.client.get("/?locale=en", secure=True)
+            r = self.client.get(f"/?locale={locale}", secure=True)
         finally:
             for p in cm:
                 p.stop()
@@ -199,6 +200,17 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
             'data-x-url="https://x.com/i/web/status/1"',
         ):
             self.assertIn(attr, body)
+
+    def test_japanese_home_has_localized_chrome_and_japanese_text_layers(self):
+        body = self._get_home("ja").content.decode("utf-8")
+
+        self.assertIn('<html lang="ja">', body)
+        self.assertIn('aria-label="表示言語"', body)
+        self.assertIn('aria-label="フィルター項目"', body)
+        self.assertIn('data-commentary-ja="日本語の分析"', body)
+        self.assertIn('data-text-ja="日本語の直訳"', body)
+        self.assertIn('class="text-layer-tag">分析</span>日本語の分析', body)
+        self.assertIn("この期間の最新投稿", body)
 
     def test_home_internal_unchanged(self):
         """Regression: /internal/ (Net F legacy) must still render the legacy chrome."""

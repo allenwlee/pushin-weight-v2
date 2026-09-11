@@ -84,20 +84,12 @@ from monitor.list_membership import (
 )
 from monitor.post_enrichment import (
     CANONICAL_LANG_CODES as _CANONICAL_LANG_CODES,
-)
-from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
+    commentary_is_distinct as _commentary_is_distinct,
     enrichment_stage_outcome,
+    persisted_output_complete as _legacy_translation_output_complete,
     persisted_output_complete_q,
     post_persisted_output_complete,
-)
-from monitor.post_enrichment import (
-    commentary_is_distinct as _commentary_is_distinct,
-)
-from monitor.post_enrichment import (
-    persisted_output_complete as _translation_output_complete,
-)
-from monitor.post_enrichment import (
     present_text as _present_text,
 )
 
@@ -159,15 +151,23 @@ def _now_iso() -> str:
 
 
 def _requeue_recent_incomplete_translations(
-    *, cfg: Any, now: datetime | None = None
+    *, cfg: Any, literal_v2_enabled: bool = False, now: datetime | None = None
 ) -> int:
     """Reopen recent false successes without resurrecting historical debt."""
     now = now or django_timezone.now()
     age_cutoff = now - timedelta(hours=cfg.max_age_hours)
-    return PostEnrichmentState.objects.filter(
+    candidates = PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
-    ).exclude(persisted_output_complete_q(prefix="post__")).update(
+    )
+    if literal_v2_enabled:
+        candidates = candidates.exclude(
+            post__translation_artifacts__is_current=True,
+            post__translation_artifacts__state="succeeded",
+        )
+    else:
+        candidates = candidates.exclude(persisted_output_complete_q(prefix="post__"))
+    return candidates.update(
         translation_status=PostEnrichmentState.Status.PENDING,
         translation_next_attempt_at=now,
         translation_error_code="translation_output_incomplete",
@@ -2290,9 +2290,10 @@ class CycleRunner:
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
-        Stage 1 (translate): calls translate_batch_pragmatics to produce
-        text_en / text_zh_cn / bilingual commentary / lang_detected for each
-        post.
+        Stage 1 (translate): the split feature flag calls
+        translate_batch_literal to produce locale-complete literal EN / ZH-CN
+        / JA output independently of rich synthesis; the rollback lane keeps
+        the prior combined translator.
 
         Stage 2 (classify): calls classify_batch_pragmatics_full and atomically
         publishes the versioned per-brand Stage 1 state, type edges, product
@@ -2341,7 +2342,10 @@ class CycleRunner:
             return counters
 
         counters["n_translation_requeued"] = (
-            _requeue_recent_incomplete_translations(cfg=enrichment_cfg)
+            _requeue_recent_incomplete_translations(
+                cfg=enrichment_cfg,
+                literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
+            )
         )
 
         claim_batch = _claim_enrichment_states(
@@ -2465,7 +2469,12 @@ class CycleRunner:
         ]
 
         # ---- Stage 1: translate ----
-        from x_monitor.translator import translate_batch_pragmatics
+        # The feature flag preserves the prior combined translator as the
+        # rollback lane until the split literal contract passes staging.
+        from x_monitor.translator import (
+            translate_batch_literal,
+            translate_batch_pragmatics,
+        )
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
@@ -2484,19 +2493,29 @@ class CycleRunner:
                 monotonic=self._monotonic
             )
             try:
-                translation_rows = translate_batch_pragmatics(
-                    translation_tweets,
-                    ["en", "zh_cn"],
-                    translator_client,
-                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
-                        "translator_batch_failed",
-                        self._error_counts["translator_batch_failed"] + 1,
-                    ),
-                    cfg=self.cfg,
-                    deadline=translation_deadline,
-                    max_workers=3,
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
-                )
+                if self.cfg.llm.literal_translation_v2_enabled:
+                    translation_rows = translate_batch_literal(
+                        translation_tweets,
+                        translator_client,
+                        cfg=self.cfg,
+                        deadline=translation_deadline,
+                        max_workers=3,
+                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    )
+                else:
+                    translation_rows = translate_batch_pragmatics(
+                        translation_tweets,
+                        ["en", "zh_cn"],
+                        translator_client,
+                        on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
+                            "translator_batch_failed",
+                            self._error_counts["translator_batch_failed"] + 1,
+                        ),
+                        cfg=self.cfg,
+                        deadline=translation_deadline,
+                        max_workers=3,
+                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
@@ -2504,27 +2523,18 @@ class CycleRunner:
         else:
             translation_rows = []
 
-        # Persist translations back to Post rows.
-        # Invariant: if lang_detected is canonical Simplified Chinese,
-        # text_zh_cn MUST equal the source text. Same for EN when
-        # lang_detected is "en". Without this, the dashboard's 翻译 column under
-        # zh_CN falls back to text_translated -> text (the English
-        # source) which is wrong for already-Chinese posts.
-        #
-        # Note: translation_rows from translate_batch_pragmatics do NOT
-        # carry the source `text` (the LLM already saw it). We do one
-        # bulk SELECT for the affected tweet_ids to fetch the source
-        # text, then apply the per-row invariant.
+        # Publish immutable normalized artifacts when the split lane is active;
+        # otherwise preserve the existing combined compatibility writer.
         if translation_rows:
-            from core.models import Post as PostModel
-
-            CHINESE_LANG_CODES = {"zh-Hans"}
             tids = [r.get("tweet_id") for r in translation_rows if r.get("tweet_id")]
+            translation_input_text = {
+                str(tweet.get("tweet_id") or tweet.get("id") or ""): tweet.get("text")
+                for tweet in translation_tweets
+            }
             posts_by_tid: dict[str, Any] = {}
             if tids:
                 posts_by_tid = {
-                    str(post.tweet_id): post
-                    for post in PostModel.objects.filter(tweet_id__in=tids)
+                    str(post.tweet_id): post for post in Post.objects.filter(tweet_id__in=tids)
                 }
             for r in translation_rows:
                 tid = r.get("tweet_id")
@@ -2534,20 +2544,55 @@ class CycleRunner:
                 if post is None:
                     continue
                 if r.get("translation_failed"):
+                    if self.cfg.llm.literal_translation_v2_enabled:
+                        from monitor.post_artifacts import (
+                            record_literal_translation_failure,
+                            source_text_fingerprint,
+                        )
+                        from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
+
+                        record_literal_translation_failure(
+                            post=post,
+                            prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
+                            model=self.cfg.llm.translator_model,
+                            expected_source_fingerprint=source_text_fingerprint(
+                                translation_input_text.get(str(tid))
+                            ),
+                            source_language=r.get("lang_detected"),
+                            error_code="translation_incomplete",
+                        )
                     continue
+                if self.cfg.llm.literal_translation_v2_enabled:
+                    from monitor.post_artifacts import (
+                        publish_literal_translation,
+                        source_text_fingerprint,
+                    )
+                    from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
+
+                    artifact = publish_literal_translation(
+                        post=post,
+                        row=r,
+                        prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
+                        model=self.cfg.llm.translator_model,
+                        expected_source_fingerprint=source_text_fingerprint(
+                            translation_input_text.get(str(tid))
+                        ),
+                        input_tokens=int(r.get("input_tokens") or 0),
+                        output_tokens=int(r.get("output_tokens") or 0),
+                        latency_ms=r.get("latency_ms"),
+                    )
+                    if artifact is not None:
+                        translation_succeeded.add(str(tid))
+                    continue
+
                 lang_detected = _present_text(r.get("lang_detected"))
                 if lang_detected not in _CANONICAL_LANG_CODES:
                     lang_detected = None
                 source_text = post.text or ""
-                text_zh_cn = _present_text(
-                    r.get("text_zh_cn") or r.get("literal_zh")
-                )
+                text_zh_cn = _present_text(r.get("text_zh_cn") or r.get("literal_zh"))
                 text_en = _present_text(r.get("text_en"))
-                # Invariant: Chinese-detected posts must have text_zh_cn
-                # populated (use the source text if the LLM didn't emit one).
-                if lang_detected in CHINESE_LANG_CODES and not text_zh_cn:
+                if lang_detected == "zh-Hans" and not text_zh_cn:
                     text_zh_cn = source_text or None
-                # Same for English-detected posts and text_en.
                 if lang_detected == "en" and not text_en:
                     text_en = source_text or None
                 comparison_values = (
@@ -2556,14 +2601,10 @@ class CycleRunner:
                     text_zh_cn or post.text_zh_cn,
                 )
                 commentary_en = _present_text(r.get("en_equivalent"))
-                if not _commentary_is_distinct(
-                    commentary_en, *comparison_values
-                ):
+                if not _commentary_is_distinct(commentary_en, *comparison_values):
                     commentary_en = None
                 commentary_zh_cn = _present_text(r.get("cn_equivalent"))
-                if not _commentary_is_distinct(
-                    commentary_zh_cn, *comparison_values
-                ):
+                if not _commentary_is_distinct(commentary_zh_cn, *comparison_values):
                     commentary_zh_cn = None
                 effective = {
                     "text_en": text_en or post.text_en,
@@ -2578,8 +2619,8 @@ class CycleRunner:
                     if _present_text(value) is not None
                 }
                 if updates:
-                    PostModel.objects.filter(tweet_id=tid).update(**updates)
-                if _translation_output_complete(
+                    Post.objects.filter(tweet_id=tid).update(**updates)
+                if _legacy_translation_output_complete(
                     source_text=source_text,
                     **effective,
                 ):

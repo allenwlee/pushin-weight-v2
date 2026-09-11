@@ -52,15 +52,36 @@
       feed_title: 'Latest in window',
       tz_local: 'local',
       tz_title: 'Toggle local ⇄ California time'
+    },
+    ja: {
+      locale_aria: '表示言語',
+      window_aria: '期間',
+      pill_brands: 'ブランド',
+      pill_post_type: '投稿タイプ',
+      pill_product_labels: '製品',
+      pill_role: '役割',
+      pill_lang: '言語',
+      pill_sentiment: '感情',
+      pill_nationalism: 'ナショナリズム',
+      pill_unsanctioned: '非公式',
+      lens_open: 'オープン',
+      lens_closed: 'クローズド',
+      btn_all: 'すべて',
+      btn_clear: 'クリア',
+      feed_title: 'この期間の最新投稿',
+      tz_local: '現地',
+      tz_title: '現地時間 ⇄ カリフォルニア時間'
     }
   };
 
   function chromeLocale(locale) {
-    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' || locale === 'zh_hans' || locale === 'zh-hans' ? 'zh_cn' : 'en';
+    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh-cn' || locale === 'zh_hans' || locale === 'zh-hans') return 'zh_cn';
+    return locale === 'ja' || locale === 'ja-JP' ? 'ja' : 'en';
   }
 
   function selectedLocale(locale) {
     if (chromeLocale(locale) === 'zh_cn') return 'zh_cn';
+    if (chromeLocale(locale) === 'ja') return 'ja';
     return locale === 'original' ? 'original' : 'en';
   }
 
@@ -69,8 +90,9 @@
     var activeLocale = selectedLocale(locale);
     var dict = CHROME[key];
     var useZh = key === 'zh_cn';
+    var useJa = key === 'ja';
     document.body.setAttribute('data-pw-locale', locale);
-    document.documentElement.lang = useZh ? 'zh-CN' : 'en';
+    document.documentElement.lang = useZh ? 'zh-CN' : useJa ? 'ja' : 'en';
 
     document.querySelectorAll('[data-i18n], [data-i18n-tz-local]').forEach(function (element) {
       var key = element.getAttribute('data-i18n') || 'tz_local';
@@ -82,7 +104,7 @@
     if (localeNav) {
       localeNav.setAttribute('aria-label', dict.locale_aria);
       localeNav.querySelectorAll('[data-pw-locale-btn]').forEach(function (button) {
-        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : useJa ? 'data-label-ja' : 'data-label-en') || button.textContent;
         button.classList.toggle(
           'is-active',
           selectedLocale(button.getAttribute('data-pw-locale-btn')) === activeLocale
@@ -93,7 +115,7 @@
     document.querySelectorAll('.window-toggle:not(.locale-toggle)').forEach(function (windowNav) {
       windowNav.setAttribute('aria-label', dict.window_aria);
       windowNav.querySelectorAll('[data-pw-window-btn]').forEach(function (button) {
-        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : 'data-label-en') || button.textContent;
+        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : useJa ? 'data-label-ja' : 'data-label-en') || button.textContent;
       });
     });
 

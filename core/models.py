@@ -1427,6 +1427,383 @@ class PostEnrichmentState(models.Model):
         ]
 
 
+class PostTranslationArtifact(models.Model):
+    """One versioned literal-translation lifecycle for a post body."""
+
+    class State(models.TextChoices):
+        GENERATING = "generating", "Generating"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="translation_artifacts",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    source_content_fingerprint = models.CharField(max_length=64)
+    source_language = models.CharField(max_length=16)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=128)
+    provider_role = models.CharField(max_length=64)
+    state = models.CharField(max_length=16, choices=State.choices)
+    attempts = models.PositiveSmallIntegerField(default=1)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    is_current = models.BooleanField(default=False)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_translation_artifacts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "post",
+                    "source_content_fingerprint",
+                    "source_language",
+                    "prompt_version",
+                    "model",
+                    "provider_role",
+                ],
+                name="uq_post_translation_identity",
+            ),
+            models.UniqueConstraint(
+                fields=["post"],
+                condition=models.Q(is_current=True),
+                name="uq_post_translation_current",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        state="generating",
+                        completed_at__isnull=True,
+                        is_current=False,
+                    )
+                    | models.Q(
+                        state="succeeded",
+                        completed_at__isnull=False,
+                        error_code="",
+                    )
+                    | models.Q(
+                        state="failed",
+                        completed_at__isnull=False,
+                        is_current=False,
+                        error_code__gt="",
+                    )
+                ),
+                name="ck_post_translation_state",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["post", "-created_at"], name="idx_post_translation_post"
+            ),
+            models.Index(fields=["state", "updated_at"], name="idx_post_translation_state"),
+        ]
+
+
+class PostTranslationText(models.Model):
+    artifact = models.ForeignKey(
+        PostTranslationArtifact,
+        on_delete=models.CASCADE,
+        related_name="texts",
+    )
+    locale = models.CharField(max_length=8)
+    text = models.TextField()
+    is_source = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "post_translation_texts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["artifact", "locale"], name="uq_post_translation_locale"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(locale__in=["en", "zh-cn", "ja"]),
+                name="ck_post_translation_locale",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(text=""), name="ck_post_translation_text"
+            ),
+        ]
+
+
+class PostSynthesisArtifact(models.Model):
+    """One versioned locale-complete analyst synthesis for a post context."""
+
+    class State(models.TextChoices):
+        GENERATING = "generating", "Generating"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="synthesis_artifacts",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    input_context_fingerprint = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=128)
+    provider_role = models.CharField(max_length=64)
+    output_schema_version = models.PositiveSmallIntegerField(default=1)
+    state = models.CharField(max_length=16, choices=State.choices)
+    attempts = models.PositiveSmallIntegerField(default=1)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    evidence_provenance = models.JSONField(default=list, db_default=[])
+    review_state = models.CharField(max_length=32, blank=True, default="")
+    is_current = models.BooleanField(default=False)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_synthesis_artifacts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "post",
+                    "input_context_fingerprint",
+                    "prompt_version",
+                    "model",
+                    "provider_role",
+                    "output_schema_version",
+                ],
+                name="uq_post_synthesis_identity",
+            ),
+            models.UniqueConstraint(
+                fields=["post"],
+                condition=models.Q(is_current=True),
+                name="uq_post_synthesis_current",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        state="generating",
+                        completed_at__isnull=True,
+                        is_current=False,
+                    )
+                    | models.Q(
+                        state="succeeded",
+                        completed_at__isnull=False,
+                        error_code="",
+                    )
+                    | models.Q(
+                        state="failed",
+                        completed_at__isnull=False,
+                        is_current=False,
+                        error_code__gt="",
+                    )
+                ),
+                name="ck_post_synthesis_state",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["post", "-created_at"], name="idx_post_synthesis_post"
+            ),
+            models.Index(fields=["state", "updated_at"], name="idx_post_synthesis_state"),
+        ]
+
+
+class PostSynthesisText(models.Model):
+    artifact = models.ForeignKey(
+        PostSynthesisArtifact,
+        on_delete=models.CASCADE,
+        related_name="texts",
+    )
+    locale = models.CharField(max_length=8)
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "post_synthesis_texts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["artifact", "locale"], name="uq_post_synthesis_locale"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(locale__in=["en", "zh-cn", "ja"]),
+                name="ck_post_synthesis_locale",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(text=""), name="ck_post_synthesis_text"
+            ),
+        ]
+
+
+class PostSynthesisDemand(models.Model):
+    """PostgreSQL-backed, coalesced synthesis work request."""
+
+    class Reason(models.TextChoices):
+        PREWARM = "prewarm", "Prewarm"
+        LOOKAHEAD = "lookahead", "Lookahead"
+        VISIBLE = "visible", "Visible"
+        EXPANDED = "expanded", "Expanded"
+        OPERATOR = "operator", "Operator"
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="synthesis_demands",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    input_context_fingerprint = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=128)
+    output_schema_version = models.PositiveSmallIntegerField(default=1)
+    reason = models.CharField(max_length=16, choices=Reason.choices)
+    priority = models.PositiveSmallIntegerField()
+    request_count = models.PositiveIntegerField(default=1)
+    first_requested_at = models.DateTimeField()
+    last_requested_at = models.DateTimeField()
+    not_before = models.DateTimeField()
+    expires_at = models.DateTimeField(blank=True, null=True)
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.PENDING
+    )
+    lease_owner = models.CharField(max_length=128, blank=True, default="")
+    lease_expires_at = models.DateTimeField(blank=True, null=True)
+    lease_fence = models.PositiveIntegerField(default=0)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.CharField(max_length=128, blank=True, default="")
+    artifact = models.ForeignKey(
+        PostSynthesisArtifact,
+        on_delete=models.SET_NULL,
+        related_name="demands",
+        blank=True,
+        null=True,
+    )
+    budget = models.ForeignKey(
+        "PostSynthesisDailyBudget",
+        on_delete=models.PROTECT,
+        related_name="demands",
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_synthesis_demands"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "post",
+                    "input_context_fingerprint",
+                    "prompt_version",
+                    "model",
+                    "output_schema_version",
+                ],
+                name="uq_post_synthesis_demand_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(priority__gte=1, priority__lte=100),
+                name="ck_post_synth_demand_priority",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_requested_at__gte=models.F("first_requested_at")),
+                name="ck_post_synth_request_order",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        state="processing",
+                        lease_owner__gt="",
+                        lease_fence__gt=0,
+                        lease_expires_at__isnull=False,
+                    )
+                    | (
+                        ~models.Q(state="processing")
+                        & models.Q(
+                            lease_owner="",
+                            lease_expires_at__isnull=True,
+                        )
+                    )
+                ),
+                name="ck_post_synth_demand_lease",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["state", "not_before", "-priority"],
+                name="idx_post_synth_demand_due",
+            ),
+            models.Index(
+                fields=["lease_expires_at"], name="idx_post_synth_lease_expiry"
+            ),
+        ]
+
+
+class PostSynthesisDailyBudget(models.Model):
+    """Conservative per-day reservations for synthesis provider transport."""
+
+    usage_date = models.DateField()
+    control_revision = models.CharField(max_length=64)
+    provider = models.CharField(max_length=32)
+    model = models.CharField(max_length=128)
+    reserved_requests = models.PositiveIntegerField(default=0)
+    reserved_input_tokens = models.PositiveBigIntegerField(default=0)
+    reserved_output_tokens = models.PositiveBigIntegerField(default=0)
+    observed_input_tokens = models.PositiveBigIntegerField(default=0)
+    observed_output_tokens = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_synthesis_daily_budgets"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usage_date", "control_revision", "provider", "model"],
+                name="uq_post_synth_daily_budget",
+            )
+        ]
+
+
+class PostSynthesisRateLimitBucket(models.Model):
+    """Cross-process request throttle without storing a user ID or IP address."""
+
+    bucket_start = models.DateTimeField()
+    scope_hash = models.CharField(max_length=64)
+    count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "post_synthesis_rate_limit_buckets"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bucket_start", "scope_hash"],
+                name="uq_post_synth_rate_bucket",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["bucket_start"], name="idx_psynth_rate_time"
+            )
+        ]
+
+
 # ============================================================================
 # Edges / junctions
 # ============================================================================
@@ -3149,6 +3526,37 @@ class BrandTrendNarrative(models.Model):
         indexes = [
             models.Index(fields=["brand_key_snapshot", "-attempted_at"], name="idx_btn_brand_attempt"),
             models.Index(fields=["run", "status"], name="idx_btn_run_status"),
+        ]
+
+
+class BrandTrendNarrativeText(models.Model):
+    """Locale-complete text bundle for a versioned brand narrative."""
+
+    narrative = models.ForeignKey(
+        BrandTrendNarrative,
+        on_delete=models.CASCADE,
+        related_name="localized_texts",
+    )
+    locale = models.CharField(max_length=8)
+    headline = models.TextField()
+    secondary = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "brand_trend_narrative_texts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["narrative", "locale"],
+                name="uq_brand_trend_narrative_locale",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(locale__in=["en", "zh-cn", "ja"]),
+                name="ck_brand_trend_narrative_locale",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(headline="") & ~models.Q(secondary=""),
+                name="ck_brand_trend_narrative_text",
+            ),
         ]
 
 

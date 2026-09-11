@@ -46,7 +46,13 @@ services:
       - key: X_MONITOR_HEADLINE_PUBLICATION_SOURCE
         value: prefer_per_brand
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v23-per-brand-why-first-v2-activation-20260827
+        value: v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "True"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "True"
+      - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
+        value: v1-demand-ja-20260911
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
@@ -90,7 +96,41 @@ services:
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v23-per-brand-why-first-v2-activation-20260827
+        value: v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "True"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "True"
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL-only rich-synthesis worker. It has no scheduler, Twitter key,
+  # Celery broker, or headline queue access.
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: pushinweight-synthesis
+    runtime: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: python manage.py run_synthesis_worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED
+        value: "True"
+      - key: X_MONITOR_SYNTHESIS_ACTIVATION_STATE
+        value: owner_override
+      - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
+        value: v1-demand-ja-20260911
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
@@ -132,7 +172,13 @@ services:
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: v23-per-brand-why-first-v2-activation-20260827
+        value: v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "True"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "True"
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "True"
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets

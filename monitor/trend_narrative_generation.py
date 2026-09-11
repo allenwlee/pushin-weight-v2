@@ -86,13 +86,22 @@ def _resolve_provider_credential(config: HeadlineNarrativeConfig) -> str | None:
 PER_BRAND_RANK_RESPONSE_SCHEMA_VERSION = 1
 PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION = 1
 PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION = 1
+PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION_JA = 2
+PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION_JA = 2
 PER_BRAND_TEXT_LIMITS = {
     "headline_en": 320,
     "headline_zh_cn": 180,
     "secondary_en": 900,
     "secondary_zh_cn": 500,
+    "headline_ja": 240,
+    "secondary_ja": 700,
 }
 _PER_BRAND_TEXT_LIMIT_PROMPT = "; ".join(
+    f"{field}: at most {limit} characters"
+    for field, limit in PER_BRAND_TEXT_LIMITS.items()
+    if field not in {"headline_ja", "secondary_ja"}
+)
+_PER_BRAND_TEXT_LIMIT_PROMPT_JA = "; ".join(
     f"{field}: at most {limit} characters"
     for field, limit in PER_BRAND_TEXT_LIMITS.items()
 )
@@ -109,6 +118,34 @@ CRITIC_SYSTEM_PROMPT_V1 = """You are the independent bilingual trend narrative c
 Use no more than two propositions per approved or repaired brand: one primarily supporting the headline and one primarily supporting the secondary; each proposition may carry every relevant fact and evidence citation. Keep the entire five-brand response below 3,500 output tokens.
 
 Return raw JSON only: {"critic_response_schema_version":1,"packet_hash":"copy","batch_key":"copy","decisions":[{"brand_key":"manifest brand","decision":"approve|repair|hold","narrative":"complete editor-schema brand object for approve or repair, otherwise null","hold_code":"null for approve/repair; for hold use unsupported_event|unsupported_causality|unsupported_number|unsupported_quote|event_conflation|cross_brand_evidence|translation_not_equivalent|secondary_not_substantive|proportionality_failure|unsafe_instruction_following"}]}. Return every manifest brand exactly once."""
+
+EDITOR_SYSTEM_PROMPT_V3_JA = (
+    EDITOR_SYSTEM_PROMPT_V2
+    .replace("bilingual", "trilingual")
+    .replace("Every trilingual output field", "Every trilingual output field")
+    .replace("below 3,500 output tokens", "below 4,500 output tokens")
+    .replace(_PER_BRAND_TEXT_LIMIT_PROMPT, _PER_BRAND_TEXT_LIMIT_PROMPT_JA)
+    .replace("editor_response_schema_version=1", "editor_response_schema_version=2")
+    .replace(
+        "headline_en; headline_zh_cn; secondary_en; secondary_zh_cn;",
+        "headline_en; headline_zh_cn; headline_ja; secondary_en; secondary_zh_cn; secondary_ja;",
+    )
+    .replace(
+        "claim_en; claim_zh_cn; claim_type",
+        "claim_en; claim_zh_cn; claim_ja; claim_type",
+    )
+    .replace(
+        "label_en, label_zh_cn, occurred_at",
+        "label_en, label_zh_cn, label_ja, occurred_at",
+    )
+)
+CRITIC_SYSTEM_PROMPT_V2_JA = (
+    CRITIC_SYSTEM_PROMPT_V1
+    .replace("bilingual", "trilingual")
+    .replace("below 3,500 output tokens", "below 4,500 output tokens")
+    .replace(_PER_BRAND_TEXT_LIMIT_PROMPT, _PER_BRAND_TEXT_LIMIT_PROMPT_JA)
+    .replace("critic_response_schema_version\":1", "critic_response_schema_version\":2")
+)
 CRITIC_HOLD_CODES = frozenset(
     {
         "unsupported_event",
@@ -126,6 +163,10 @@ CRITIC_HOLD_CODES = frozenset(
 )
 
 
+def _japanese_contract(prompt_version: object) -> bool:
+    return "ja" in str(prompt_version or "").casefold().split("-")
+
+
 def build_per_brand_rank_request(
     packet: Mapping[str, Any], config: HeadlineNarrativeConfig
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -140,9 +181,12 @@ def build_per_brand_editor_request(
     packet: Mapping[str, Any], config: HeadlineNarrativeConfig
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build one exact one-to-five brand editor request."""
-    return _build_per_brand_request(
-        packet, config, stage="editor", system=EDITOR_SYSTEM_PROMPT_V2
+    system = (
+        EDITOR_SYSTEM_PROMPT_V3_JA
+        if _japanese_contract(config.editor_prompt_version)
+        else EDITOR_SYSTEM_PROMPT_V2
     )
+    return _build_per_brand_request(packet, config, stage="editor", system=system)
 
 
 def _build_per_brand_request(
@@ -229,7 +273,11 @@ def build_per_brand_critic_request(
     request = _messages_request(
         model=config.model,
         max_tokens=config.critic_max_tokens,
-        system=CRITIC_SYSTEM_PROMPT_V1,
+        system=(
+            CRITIC_SYSTEM_PROMPT_V2_JA
+            if _japanese_contract(config.critic_prompt_version)
+            else CRITIC_SYSTEM_PROMPT_V1
+        ),
         content="Critique this closed packet and editor result. Return raw JSON only.\n"
         + _canonical_json(critic),
     )
@@ -318,10 +366,13 @@ def validate_per_brand_editor_response(
         raise HeadlineGenerationError(
             "editor_response_schema_invalid", transport_completed=True
         )
-    if (
-        response.get("editor_response_schema_version")
-        != PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION
-    ):
+    require_ja = _japanese_contract(envelope.get("prompt_version"))
+    expected_schema = (
+        PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION_JA
+        if require_ja
+        else PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION
+    )
+    if response.get("editor_response_schema_version") != expected_schema:
         raise HeadlineGenerationError(
             "editor_response_schema_invalid", transport_completed=True
         )
@@ -340,7 +391,7 @@ def validate_per_brand_editor_response(
             "editor_response_manifest_mismatch", transport_completed=True
         )
     for narrative in brands:
-        _validate_per_brand_narrative(narrative, packet)
+        _validate_per_brand_narrative(narrative, packet, require_ja=require_ja)
     return _copy_json(response)
 
 
@@ -440,12 +491,17 @@ def validate_per_brand_critic_response(
     )
     if envelope.get("packet_hash") != _packet_hash(packet):
         raise HeadlineGenerationError("per_brand_packet_hash_invalid")
+    require_ja = _japanese_contract(envelope.get("prompt_version"))
+    expected_schema = (
+        PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION_JA
+        if require_ja
+        else PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION
+    )
     if (
         not isinstance(response, Mapping)
         or set(response)
         != {"critic_response_schema_version", "packet_hash", "batch_key", "decisions"}
-        or response.get("critic_response_schema_version")
-        != PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION
+        or response.get("critic_response_schema_version") != expected_schema
     ):
         raise HeadlineGenerationError(
             "critic_response_schema_invalid", transport_completed=True
@@ -488,7 +544,9 @@ def validate_per_brand_critic_response(
                     "critic_response_decision_invalid", transport_completed=True
                 )
             try:
-                _validate_per_brand_narrative(narrative, packet)
+                _validate_per_brand_narrative(
+                    narrative, packet, require_ja=require_ja
+                )
             except HeadlineGenerationError:
                 decision.update(
                     decision="hold",
@@ -572,7 +630,10 @@ def _packet_hash(packet: Mapping[str, Any]) -> str:
 
 
 def _validate_per_brand_narrative(
-    narrative: Mapping[str, Any], packet: Mapping[str, Any]
+    narrative: Mapping[str, Any],
+    packet: Mapping[str, Any],
+    *,
+    require_ja: bool = False,
 ) -> None:
     if (
         not isinstance(narrative, Mapping)
@@ -594,11 +655,20 @@ def _validate_per_brand_narrative(
         "propositions",
         "events",
     }
+    if require_ja:
+        required_keys.update({"headline_ja", "secondary_ja"})
     if set(narrative) != required_keys:
         raise HeadlineGenerationError(
             "editor_response_narrative_incomplete", transport_completed=True
         )
-    required_text = ("headline_en", "headline_zh_cn", "secondary_en", "secondary_zh_cn")
+    required_text = [
+        "headline_en",
+        "headline_zh_cn",
+        "secondary_en",
+        "secondary_zh_cn",
+    ]
+    if require_ja:
+        required_text.extend(["headline_ja", "secondary_ja"])
     if (
         any(
             not isinstance(narrative.get(key), str)
@@ -648,7 +718,7 @@ def _validate_per_brand_narrative(
     fact_values = {str(row.get("fact_id")): row for row in dossier.get("facts", [])}
     evidence_ids = {str(row.get("evidence_id")) for row in dossier.get("evidence", [])}
     for proposition_id, proposition in by_id.items():
-        if set(proposition) != {
+        proposition_keys = {
             "proposition_id",
             "output_section",
             "claim_en",
@@ -656,7 +726,10 @@ def _validate_per_brand_narrative(
             "claim_type",
             "fact_ids",
             "evidence_ids",
-        }:
+        }
+        if require_ja:
+            proposition_keys.add("claim_ja")
+        if set(proposition) != proposition_keys:
             raise HeadlineGenerationError(
                 "editor_response_propositions_invalid", transport_completed=True
             )
@@ -689,6 +762,7 @@ def _validate_per_brand_narrative(
         if (
             not str(proposition.get("claim_en") or "").strip()
             or not str(proposition.get("claim_zh_cn") or "").strip()
+            or (require_ja and not str(proposition.get("claim_ja") or "").strip())
         ):
             raise HeadlineGenerationError(
                 "editor_response_propositions_invalid", transport_completed=True
@@ -719,7 +793,7 @@ def _validate_per_brand_narrative(
         )
     event_ids = set()
     for event in events:
-        if not isinstance(event, Mapping) or set(event) != {
+        event_keys = {
             "event_id",
             "label_en",
             "label_zh_cn",
@@ -727,7 +801,10 @@ def _validate_per_brand_narrative(
             "support_kind",
             "evidence_ids",
             "proposition_ids",
-        }:
+        }
+        if require_ja:
+            event_keys.add("label_ja")
+        if not isinstance(event, Mapping) or set(event) != event_keys:
             raise HeadlineGenerationError(
                 "editor_response_events_invalid", transport_completed=True
             )
@@ -742,6 +819,13 @@ def _validate_per_brand_narrative(
             or not event["label_en"].strip()
             or not isinstance(event.get("label_zh_cn"), str)
             or not event["label_zh_cn"].strip()
+            or (
+                require_ja
+                and (
+                    not isinstance(event.get("label_ja"), str)
+                    or not event["label_ja"].strip()
+                )
+            )
             or not isinstance(event.get("occurred_at"), str)
             or not event["occurred_at"].strip()
             or event.get("support_kind")

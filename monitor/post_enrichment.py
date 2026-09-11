@@ -97,6 +97,16 @@ def post_persisted_output_complete(post: Any) -> bool:
     )
 
 
+def literal_translation_complete(
+    *, source_text: Any, lang_detected: Any, text_en: Any, text_zh_cn: Any
+) -> bool:
+    """Return whether the eager literal translation is safe to publish."""
+    lang = present_text(lang_detected)
+    if lang not in CANONICAL_LANG_CODES or present_text(source_text) is None:
+        return False
+    return all(present_text(value) is not None for value in (text_en, text_zh_cn))
+
+
 def enrichment_stage_outcome(
     *, translation_status: Any, classification_status: Any
 ) -> str:
@@ -183,3 +193,19 @@ def persisted_output_complete_q(*, prefix: str = "") -> Q:
             distinct &= _commentary_distinct_q(commentary, comparison)
     distinct &= _commentary_distinct_q(commentary_en, commentary_zh_cn)
     return required & distinct
+
+
+def literal_translation_complete_q(*, prefix: str = "") -> Q:
+    """ORM predicate for the EN/ZH compatibility projection of literal text."""
+    source = _field(prefix, "text")
+    lang = _field(prefix, "lang_detected")
+    return (
+        Q(
+            **{
+                f"{lang}__regex": r"^\s*(en|zh-Hans|zh-Hant|ja|ko|other)\s*$"
+            }
+        )
+        & _present_text_q(source)
+        & _present_text_q(_field(prefix, "text_en"))
+        & _present_text_q(_field(prefix, "text_zh_cn"))
+    )

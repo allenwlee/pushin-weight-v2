@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Any
 
 from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PROMPT_VERSION,
+    CANONICAL_TAXONOMY_VERSION,
     CLASSIFICATION_FIELDS,
     CONTRACT_VERSION,
     NATIONALISM_KEYS,
@@ -86,11 +89,37 @@ REQUIRED_FLOOR_PATHS = frozenset(
     }
 )
 
+SUPPORTED_TAXONOMIES = {
+    STAGE1_TAXONOMY_V2_VERSION: {
+        "prompt_version": STAGE1_PROMPT_V3_VERSION,
+        "post_type_keys": STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+    },
+    CANONICAL_TAXONOMY_VERSION: {
+        "prompt_version": CANONICAL_PROMPT_VERSION,
+        "post_type_keys": CANONICAL_POST_TYPE_KEYS,
+    },
+}
 
-def required_floor_paths(required_contexts: Sequence[str]) -> frozenset[str]:
+
+def required_floor_paths(
+    required_contexts: Sequence[str],
+    taxonomy_version: str = STAGE1_TAXONOMY_V2_VERSION,
+) -> frozenset[str]:
     """Return mandatory paths, including any optional exact context slices."""
-
-    return REQUIRED_FLOOR_PATHS | frozenset(
+    taxonomy = SUPPORTED_TAXONOMIES.get(taxonomy_version)
+    if taxonomy is None:
+        raise ValueError(f"unsupported evaluation taxonomy: {taxonomy_version}")
+    paths = REQUIRED_FLOOR_PATHS
+    if taxonomy_version != STAGE1_TAXONOMY_V2_VERSION:
+        paths = frozenset(
+            path
+            for path in REQUIRED_FLOOR_PATHS
+            if not path.startswith("all.post_types.labels.")
+        ) | frozenset(
+            f"all.post_types.labels.{label}.f1"
+            for label in taxonomy["post_type_keys"]
+        )
+    return paths | frozenset(
         f"by_context.{context}.{suffix}"
         for context in required_contexts
         for suffix in REQUIRED_SLICE_FLOOR_SUFFIXES
@@ -381,16 +410,14 @@ def _validate_provenance(document: Mapping[str, Any], role: str) -> dict[str, An
         required += ["adjudicator", "adjudication_version", "adjudicated_at"]
     for field in required:
         _require_text(provenance.get(field), f"provenance.{field}")
-    if (
-        provenance["contract_version"] != CONTRACT_VERSION
-        or provenance["taxonomy_version"] != STAGE1_TAXONOMY_V2_VERSION
-    ):
+    taxonomy = SUPPORTED_TAXONOMIES.get(provenance["taxonomy_version"])
+    if provenance["contract_version"] != CONTRACT_VERSION or taxonomy is None:
         raise EvaluationInputError(
             "unsupported_contract",
             f"{role} artifact must use the frozen Stage 1 contract and taxonomy",
             field="provenance",
         )
-    if provenance["prompt_version"] != STAGE1_PROMPT_V3_VERSION:
+    if provenance["prompt_version"] != taxonomy["prompt_version"]:
         raise EvaluationInputError(
             "unsupported_prompt",
             f"{role} artifact must use the frozen Stage 1 prompt",
@@ -510,7 +537,7 @@ def _validate_document(
 
 
 def _classification(
-    raw: Any, brand_id: str
+    raw: Any, brand_id: str, post_type_keys: Sequence[str]
 ) -> tuple[dict[str, Any] | None, str | None]:
     if raw is None:
         return None, None
@@ -525,7 +552,7 @@ def _classification(
     parsed = parse_stage1_classifications(
         [row],
         [brand_id],
-        post_type_keys=STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+        post_type_keys=post_type_keys,
     )
     if parsed is None:
         return None, "invalid_contract"
@@ -693,7 +720,11 @@ def _confusion(
     }
 
 
-def _population(rows: Sequence[dict[str, Any]], min_support: int) -> dict[str, Any]:
+def _population(
+    rows: Sequence[dict[str, Any]],
+    min_support: int,
+    post_type_keys: Sequence[str],
+) -> dict[str, Any]:
     type_pairs = [
         (set(row["gold"]["post_types"]), set(row["candidate"]["post_types"]))
         for row in rows
@@ -704,7 +735,7 @@ def _population(rows: Sequence[dict[str, Any]], min_support: int) -> dict[str, A
     ]
     return {
         "post_types": _multilabel(
-            type_pairs, STAGE1_TAXONOMY_V2_POST_TYPE_KEYS, min_support
+            type_pairs, post_type_keys, min_support
         ),
         "product_labels": _multilabel(product_pairs, PRODUCT_LABEL_KEYS, min_support),
         "outcome": _confusion(
@@ -741,6 +772,7 @@ def _gold_support(
     min_support: int,
     min_slice_support: int,
     required_contexts: Sequence[str],
+    post_type_keys: Sequence[str],
 ) -> tuple[dict[str, Any], list[str]]:
     post_types = Counter(
         label
@@ -780,7 +812,7 @@ def _gold_support(
     if min_support:
         gaps.extend(
             f"post_types.{label}"
-            for label in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
+            for label in post_type_keys
             if post_types[label] < min_support
         )
         gaps.extend(
@@ -815,7 +847,7 @@ def _gold_support(
             "label_and_scalar_threshold": min_support,
             "slice_threshold": min_slice_support,
             "post_types": {
-                label: post_types[label] for label in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
+                label: post_types[label] for label in post_type_keys
             },
             "product_labels": {
                 label: product_labels[label] for label in PRODUCT_LABEL_KEYS
@@ -837,7 +869,10 @@ def _gold_support(
     )
 
 
-def _validate_policy(policy: Mapping[str, Any] | None) -> dict[str, Any]:
+def _validate_policy(
+    policy: Mapping[str, Any] | None,
+    taxonomy_version: str = STAGE1_TAXONOMY_V2_VERSION,
+) -> dict[str, Any]:
     if policy is None:
         return {}
     if not isinstance(policy, Mapping):
@@ -846,6 +881,7 @@ def _validate_policy(policy: Mapping[str, Any] | None) -> dict[str, Any]:
         )
     allowed_fields = {
         "policy_version",
+        "taxonomy_version",
         "min_support",
         "min_slice_support",
         "required_contexts",
@@ -863,6 +899,13 @@ def _validate_policy(policy: Mapping[str, Any] | None) -> dict[str, Any]:
             "policy_invalid",
             "policy.policy_version must be 1",
             field="policy.policy_version",
+        )
+    declared_taxonomy = policy.get("taxonomy_version", taxonomy_version)
+    if declared_taxonomy != taxonomy_version:
+        raise EvaluationInputError(
+            "policy_invalid",
+            "policy taxonomy_version must match the evaluated artifacts",
+            field="policy.taxonomy_version",
         )
     minimum = policy.get("min_support")
     if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1:
@@ -929,7 +972,9 @@ def _validate_policy(policy: Mapping[str, Any] | None) -> dict[str, Any]:
             "policy.required_contexts must include none, stored_quote, and local_parent",
             field="policy.required_contexts",
         )
-    missing_floors = sorted(required_floor_paths(required_contexts) - set(floors))
+    missing_floors = sorted(
+        required_floor_paths(required_contexts, taxonomy_version) - set(floors)
+    )
     if missing_floors:
         raise EvaluationInputError(
             "policy_invalid",
@@ -938,6 +983,7 @@ def _validate_policy(policy: Mapping[str, Any] | None) -> dict[str, Any]:
         )
     return {
         "policy_version": 1,
+        "taxonomy_version": taxonomy_version,
         "min_support": minimum,
         "min_slice_support": minimum_slice,
         "required_contexts": list(required_contexts),
@@ -1007,7 +1053,20 @@ def evaluate_classification_artifacts(
 
     candidate_provenance, candidate_rows = _validate_document(candidate, "candidate")
     gold_provenance, gold_rows = _validate_document(gold, "gold")
-    normalized_policy = _validate_policy(policy)
+    if (
+        candidate_provenance["taxonomy_version"]
+        != gold_provenance["taxonomy_version"]
+        or candidate_provenance["prompt_version"]
+        != gold_provenance["prompt_version"]
+    ):
+        raise EvaluationInputError(
+            "taxonomy_mismatch",
+            "candidate and gold taxonomy/prompt identities differ",
+            field="provenance",
+        )
+    taxonomy_version = candidate_provenance["taxonomy_version"]
+    post_type_keys = SUPPORTED_TAXONOMIES[taxonomy_version]["post_type_keys"]
+    normalized_policy = _validate_policy(policy, taxonomy_version)
     min_support = normalized_policy.get("min_support", 0)
     min_slice_support = normalized_policy.get("min_slice_support", 0)
     required_contexts = normalized_policy.get("required_contexts", [])
@@ -1035,7 +1094,7 @@ def evaluate_classification_artifacts(
     for pair in sorted(gold_index):
         gold_row = gold_index[pair]
         gold_classification, gold_error = _classification(
-            gold_row["classification"], pair[1]
+            gold_row["classification"], pair[1], post_type_keys
         )
         if gold_error or gold_classification is None:
             raise EvaluationInputError(
@@ -1075,7 +1134,7 @@ def evaluate_classification_artifacts(
             )
             continue
         candidate_classification, candidate_error = _classification(
-            candidate_row["classification"], pair[1]
+            candidate_row["classification"], pair[1], post_type_keys
         )
         if candidate_error or candidate_classification is None:
             missing_reason = (
@@ -1125,7 +1184,9 @@ def evaluate_classification_artifacts(
             sorted(Counter(row["reason"] for row in invalid).items())
         ),
     }
-    populations: dict[str, Any] = {"all": _population(scored, min_support)}
+    populations: dict[str, Any] = {
+        "all": _population(scored, min_support, post_type_keys)
+    }
     languages = sorted(
         {row["language"] for row in scored}
         | {row["source_language"] for row in gold_rows}
@@ -1136,7 +1197,9 @@ def evaluate_classification_artifacts(
     )
     populations["by_language"] = {
         language: _population(
-            [row for row in scored if row["language"] == language], min_support
+            [row for row in scored if row["language"] == language],
+            min_support,
+            post_type_keys,
         )
         for language in languages
     }
@@ -1144,6 +1207,7 @@ def evaluate_classification_artifacts(
         context: _population(
             [row for row in scored if ("+".join(row["context"]) or "none") == context],
             min_support,
+            post_type_keys,
         )
         for context in contexts
     }
@@ -1152,6 +1216,7 @@ def evaluate_classification_artifacts(
         min_support=min_support,
         min_slice_support=min_slice_support,
         required_contexts=required_contexts,
+        post_type_keys=post_type_keys,
     )
     evaluator_source = _normalize_source_identity(
         source_identity or _resolve_source_identity()
@@ -1195,6 +1260,7 @@ def evaluate_classification_artifacts(
             "cohort_id": candidate_provenance["cohort_id"],
             "required_languages": list(REQUIRED_LANGUAGES),
             "gold_languages": sorted({row["source_language"] for row in gold_rows}),
+            "taxonomy_version": taxonomy_version,
         },
         "policy": normalized_policy or None,
         "coverage": coverage,

@@ -1,0 +1,63 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T00:41:34Z",
+  "reason": "reviewer_deepseek batch 002 remained contract-invalid after its allowed retry; separate single-example lanes isolate review and adjudication failures without increasing any frozen batch lane",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-003704-u18-provider-budget-amendment-v2.json"
+  ],
+  "lanes": {
+    "reviewer_deepseek_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 480,
+      "maximum_requests": 480,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 960,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 4000000,
+      "maximum_output_tokens": 1152000,
+      "maximum_cost_usd": "0.89",
+      "twitterapi_credits": 0
+    },
+    "reviewer_minimax_fallback": {
+      "provider": "minimax",
+      "model": "MiniMax-M2.7",
+      "pricing_version": "minimax-m2.7-paygo-2026-09-11",
+      "input_usd_per_million": "0.30",
+      "output_usd_per_million": "1.20",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 1000,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 4200000,
+      "maximum_output_tokens": 1200000,
+      "maximum_cost_usd": "2.70",
+      "twitterapi_credits": 0
+    },
+    "adjudicator_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 1000,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 5000000,
+      "maximum_output_tokens": 1200000,
+      "maximum_cost_usd": "1.04",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "Each lane refuses its next request when any request, per-request retry, token, or dollar cap would be exceeded; unused capacity cannot move between lanes."
+}
