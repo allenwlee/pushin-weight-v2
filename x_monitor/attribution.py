@@ -1334,7 +1334,7 @@ _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION = (
     "stage1-prompt-v22-completeness-review-repair-v1"
 )
 _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION = (
-    "stage1-selector-v23-review-authoritative-derived-metadata-v1"
+    "stage1-selector-v24-review-authoritative-derived-metadata-v1"
 )
 _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT = f"""You review one proposed, complete taxonomy-v3 classification for each supplied post-brand packet. Return JSON only.
 
@@ -2138,24 +2138,26 @@ def _parse_completeness_review_row(
         return None
     replacement = parsed[packet["brand_id"]]
     expected_reasons: set[str] = set()
-    if replacement["outcome"] != primary.get("outcome"):
+    outcome_changed = replacement["outcome"] != primary.get("outcome")
+    if outcome_changed:
         expected_reasons.add("outcome")
-    for field, missing_reason, unsupported_reason in (
-        ("post_types", "missing_post_type", "unsupported_post_type"),
-        ("product_labels", "missing_product_label", "unsupported_product_label"),
-    ):
-        primary_list = list(primary.get(field) or [])
-        primary_values = set(primary_list)
-        replacement_values = set(replacement[field])
-        if replacement_values - primary_values:
-            expected_reasons.add(missing_reason)
-        if primary_values - replacement_values:
-            expected_reasons.add(unsupported_reason)
-        if replacement_values == primary_values:
-            replacement[field] = primary_list
-    for field in ("sentiment", "china_nationalism", "us_nationalism"):
-        if replacement[field] != primary.get(field):
-            expected_reasons.add(field)
+    else:
+        for field, missing_reason, unsupported_reason in (
+            ("post_types", "missing_post_type", "unsupported_post_type"),
+            ("product_labels", "missing_product_label", "unsupported_product_label"),
+        ):
+            primary_list = list(primary.get(field) or [])
+            primary_values = set(primary_list)
+            replacement_values = set(replacement[field])
+            if replacement_values - primary_values:
+                expected_reasons.add(missing_reason)
+            if primary_values - replacement_values:
+                expected_reasons.add(unsupported_reason)
+            if replacement_values == primary_values:
+                replacement[field] = primary_list
+        for field in ("sentiment", "china_nationalism", "us_nationalism"):
+            if replacement[field] != primary.get(field):
+                expected_reasons.add(field)
     derived_reasons = [
         reason
         for reason in _COMPLETENESS_REVIEW_CHANGE_REASON_ORDER

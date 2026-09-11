@@ -1702,9 +1702,9 @@ evidence array to contain at least as many exact rows as derived change
 categories, and records `metadata_normalized` in the review trace and durable
 judgment. The wire format does not map rows to individual reasons, so this is a
 structural count guard rather than proof of one-to-one association. Unknown
-reasons and invalid or insufficient changed-case evidence still fail closed. Repair
-requests now receive only the response fragment attributable to their one
-post-brand packet. The prompt bytes remain unchanged; the selector identity is
+reasons and invalid or insufficient changed-case evidence still fail closed.
+Repair requests now receive only the response fragment attributable to their
+one post-brand packet. The prompt bytes remain unchanged; the selector identity is
 `stage1-selector-v23-review-authoritative-derived-metadata-v1`.
 
 The replay budget at
@@ -1721,7 +1721,24 @@ provenance gaps: replay now ignores unpinned local response files, persistence
 accepts `metadata_normalized` only as a boolean, and label arrays with identical
 members retain the primary canonical order. It also documented the evidence
 wire format's lack of reason-to-row mapping. The resulting 67-test focused net,
-including nine required PostgreSQL checks, passes. The next action is to commit
-and push, followed by the cache-only v24 replay and scoring. Only a full
-continuation-floor pass permits a separately frozen 500-row consumed-development
-run.
+including nine required PostgreSQL checks, passes. Commit
+`f8cbf5546ed95fcda38c9e0ccf4b5e076611c6d7` pins and pushes that exact
+selector and replay budget.
+
+The v24 replay then resolved 119 rows from 18 pinned cache hits, used zero
+provider transports and tokens, and stopped before candidate publication on
+one `context_missing`-to-`classified` review. The parser had counted the type,
+sentiment, and nationalism fields required by the new outcome as separate
+decisions, demanding repeated evidence rows without any corresponding wire
+mapping. Selector v24 treats a transition into or out of `context_missing` as
+one coupled `outcome` reason; when the outcome is unchanged, it continues to
+derive dimension-specific reasons and enforce the evidence count guard.
+
+The second zero-transport replay budget at
+`docs/analysis/2026-09-12-021845-u18-runtime-v25-coupled-outcome-replay-budget.json`
+pins the same 26-response manifest, the new
+`stage1-selector-v24-review-authoritative-derived-metadata-v1` identity, and
+zero request, attempt, token, and dollar caps. Its result remains
+consumed-development evidence that cannot approve release. The next action is
+to verify, commit, push, replay, and score v25. Only a full continuation-floor
+pass permits a separately frozen 500-row consumed-development run.

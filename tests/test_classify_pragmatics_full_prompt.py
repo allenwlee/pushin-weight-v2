@@ -208,7 +208,7 @@ def test_v22_primary_review_and_repair_prompt_bytes_are_frozen():
 
     assert (
         attribution._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
-        == "stage1-selector-v23-review-authoritative-derived-metadata-v1"
+        == "stage1-selector-v24-review-authoritative-derived-metadata-v1"
     )
 
 

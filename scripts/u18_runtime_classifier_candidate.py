@@ -44,11 +44,11 @@ from x_monitor.translator import AnthropicClaudeClient
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUDGET = (
     ROOT
-    / "docs/analysis/2026-09-12-020703-u18-runtime-v24-derived-metadata-replay-budget.json"
+    / "docs/analysis/2026-09-12-021845-u18-runtime-v25-coupled-outcome-replay-budget.json"
 )
 DEFAULT_COHORT = ROOT / ".context/u18/thinking-probe-cohort.json"
-DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v24-derived-metadata-replay.json"
-DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v24-derived-metadata-replay"
+DEFAULT_OUTPUT = ROOT / ".context/u18/candidate-v25-coupled-outcome-replay.json"
+DEFAULT_PRIVATE = ROOT / ".context/u18/runtime-v25-coupled-outcome-replay"
 
 
 def _read_json(path: Path) -> dict[str, Any]:

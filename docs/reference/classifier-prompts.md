@@ -22,7 +22,7 @@ primary_prompt_version: stage1-prompt-v18-full-v1
 review_prompt_version: stage1-prompt-v22-completeness-review-v1
 primary_repair_prompt_version: stage1-prompt-v18-fallback-repair-v1
 review_repair_prompt_version: stage1-prompt-v22-completeness-review-repair-v1
-selector_version: stage1-selector-v23-review-authoritative-derived-metadata-v1
+selector_version: stage1-selector-v24-review-authoritative-derived-metadata-v1
 provider_role: classifier
 scheduled_provider: DeepSeek via its Anthropic-compatible Messages API
 ```
@@ -174,6 +174,12 @@ reason, so this count is a structural guard rather than proof of a one-to-one
 association. The trace and durable review judgment record
 `metadata_normalized: true` when the derived metadata differs from the reviewer
 response. Unknown reason values still invalidate the row.
+
+A transition between `context_missing` and `classified` is one coupled
+`outcome` change. The type, product, sentiment, and nationalism values required
+by the new outcome are part of that transition and do not create separate
+change reasons or duplicate evidence requirements. When the outcome stays the
+same, those dimensions are compared independently.
 
 A `source` quote must be a non-empty literal substring of `source.text` and use
 `context_index: null`. A `context` quote must be a non-empty literal substring

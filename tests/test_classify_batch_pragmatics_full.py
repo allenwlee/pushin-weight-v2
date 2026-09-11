@@ -122,7 +122,7 @@ def test_primary_then_candidate_aware_review_selects_canonical_final_and_trace()
     assert trace["review"]["metadata_by_brand"]["deepseek"]["decision"] == "accept"
     assert (
         trace["final"]["selector_version"]
-        == "stage1-selector-v23-review-authoritative-derived-metadata-v1"
+        == "stage1-selector-v24-review-authoritative-derived-metadata-v1"
     )
     assert trace["final"]["model"] == "deepseek-v4-flash"
 
@@ -305,6 +305,56 @@ def test_reordered_classification_arrays_preserve_primary_canonical_order():
         "releases_updates",
         "opinions_reactions",
     ]
+
+
+def test_context_missing_to_classified_is_one_coupled_outcome_change():
+    from x_monitor import attribution
+
+    primary_system, review_system, _repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            response = _primary_response(payload)
+            response["results"][0]["classifications"][0] = {
+                "brand_id": "deepseek",
+                **_classification(outcome="context_missing"),
+            }
+            return response
+        assert kwargs["system"] == review_system
+        packet = payload[0]
+        return {
+            "results": [
+                {
+                    "example_id": packet["example_id"],
+                    "brand_id": packet["brand_id"],
+                    "decision": "replace",
+                    "classification": _classification(
+                        post_types=["research_explanations"]
+                    ),
+                    "change_reasons": ["outcome"],
+                    "evidence": [
+                        {
+                            "source": "source",
+                            "context_index": None,
+                            "quote": "DeepSeek release",
+                        }
+                    ],
+                }
+            ]
+        }
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(_tweets(1), [], client)
+
+    metadata = result[0]["classification_trace"]["review"]["metadata_by_brand"][
+        "deepseek"
+    ]
+    assert result[0]["valid"] is True
+    assert metadata["decision"] == "replace"
+    assert metadata["change_reasons"] == ["outcome"]
+    assert len(metadata["evidence"]) == 1
+    assert [call["system"] for call in client.calls] == [primary_system, review_system]
 
 
 def test_unknown_review_reason_stays_invalid_after_bounded_repair(monkeypatch):

@@ -287,7 +287,7 @@ def test_runtime_trace_provenance_pins_current_prompts_and_selector():
     }
 
 
-def test_default_v24_budget_pins_zero_transport_replay_and_current_selector():
+def test_default_v25_budget_pins_zero_transport_replay_and_current_selector():
     budget = json.loads(DEFAULT_BUDGET.read_text(encoding="utf-8"))
     lane = budget["lanes"][budget["lane"]]
     provenance = _runtime_trace_provenance()
@@ -300,7 +300,7 @@ def test_default_v24_budget_pins_zero_transport_replay_and_current_selector():
         "rows": 120,
         "selection": (
             "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development "
-            "cohort; unchanged from v18 and v23"
+            "cohort; unchanged from v18, v23, and v24"
         ),
         "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
     }
