@@ -7,6 +7,7 @@ import pytest
 from scripts import u18_runtime_base_batch_probe
 from scripts.u18_runtime_base_batch_probe import _run_base_batches
 from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
+from scripts.u18_runtime_grouped_label_probe import _merge_group_decisions
 from x_monitor.attribution import (
     _PRAGMATICS_BASE_SYSTEM_PROMPT,
     _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
@@ -139,3 +140,35 @@ def test_base_batch_probe_freezes_five_post_batches(monkeypatch):
 
     assert calls == [["0", "1", "2", "3", "4"], ["5", "6", "7", "8", "9"], ["10", "11"]]
     assert [row["tweet_id"] for row in results] == [str(index) for index in range(12)]
+
+
+def test_grouped_probe_replaces_only_its_common_labels():
+    base = {
+        "outcome": "classified",
+        "post_types": ["events", "opinions_reactions", "releases_updates"],
+        "product_labels": ["testimonial"],
+        "sentiment": "positive",
+    }
+
+    merged = _merge_group_decisions(
+        base,
+        {
+            "releases_updates": False,
+            "business_finance": True,
+            "research_explanations": False,
+            "hands_on_usage": True,
+            "results_evaluations": True,
+            "opinions_reactions": True,
+            "questions_requests": False,
+            "advertising_marketing": False,
+        },
+    )
+
+    assert set(merged["post_types"]) == {
+        "business_finance",
+        "events",
+        "hands_on_usage",
+        "opinions_reactions",
+        "results_evaluations",
+    }
+    assert merged["product_labels"] == ["testimonial"]

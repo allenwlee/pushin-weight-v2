@@ -1443,6 +1443,21 @@ It uses the same 30 rows and exact base prompt with one post per call. Failure
 rejects further batch-size tuning and requires a decomposed classification task
 before any more provider transport.
 
+The v20 singleton transport completed the 30 base requests plus one ordinary
+single-row fallback, using 19,845 reported input tokens and 2,603 output
+tokens. A runner-only error initially rejected that valid fallback while
+assembling the candidate; the runner was corrected and all saved provider
+responses replayed without new transport. The resulting singleton candidate
+failed at 40.0% post-type exact sets, 80.0% product-label exact sets, and 96.7%
+outcome accuracy. Batch size is therefore rejected as the cause or remedy. The
+v21 pilot replaces the eight common post-type decisions with three short,
+independent, candidate-blind judgment groups requiring exact source evidence;
+it preserves the stronger v19 base fields outside those eight labels. Its
+nine-request envelope and $0.28 hard ceiling are frozen in
+`docs/analysis/2026-09-11-174000-u18-runtime-v21-grouped-label-pilot-budget.json`.
+A pass permits one all-locale development probe; a failure blocks further
+transport until the architecture and gate are reconsidered.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
