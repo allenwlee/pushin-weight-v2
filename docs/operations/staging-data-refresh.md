@@ -273,6 +273,8 @@ do not substitute estimates from `pg_stat_user_tables`:
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
 SELECT 'accounts' AS relation, count(*) AS rows FROM accounts
 UNION ALL SELECT 'brands', count(*) FROM brands
+UNION ALL SELECT 'brands_companies', count(*) FROM brands_companies
+UNION ALL SELECT 'companies', count(*) FROM companies
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
 UNION ALL SELECT 'products', count(*) FROM products
@@ -289,14 +291,19 @@ UNION ALL SELECT 'auth_user', count(*) FROM auth_user
 UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
 UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
 UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
+UNION ALL SELECT 'brand_trend_narrative_texts', count(*) FROM brand_trend_narrative_texts
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
 UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
+UNION ALL SELECT 'post_synthesis_daily_budgets', count(*) FROM post_synthesis_daily_budgets
+UNION ALL SELECT 'post_synthesis_demands', count(*) FROM post_synthesis_demands
+UNION ALL SELECT 'post_synthesis_rate_limit_buckets', count(*) FROM post_synthesis_rate_limit_buckets
 UNION ALL SELECT 'socialaccount_socialaccount', count(*) FROM socialaccount_socialaccount
 UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialapp
 UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
+UNION ALL SELECT 'trend_narrative_demands', count(*) FROM trend_narrative_demands
 UNION ALL SELECT 'trend_narrative_provider_calls', count(*) FROM trend_narrative_provider_calls
 UNION ALL SELECT 'trend_narrative_runs', count(*) FROM trend_narrative_runs
 UNION ALL SELECT 'trend_narrative_visible_runs', count(*) FROM trend_narrative_visible_runs
@@ -320,14 +327,29 @@ WHERE n.nspname = 'public' AND c.contype = 'f' AND NOT c.convalidated;
 SELECT domain, name FROM django_site WHERE id = 1;
 SQL
 
-psql "$DATABASE_URL" -X -d postgres -v ON_ERROR_STOP=1 -c \
-  "SELECT datname, datallowconn FROM pg_database WHERE datname LIKE 'pushinweight_staging_recovery_%' ORDER BY datname;"
+python - <<'PY'
+import os
 
-find /tmp -maxdepth 1 -type f -name 'staging-refresh-*.dump' -print
+import psycopg
+
+from scripts.database_lock import admin_connection_parameters
+
+parameters = admin_connection_parameters(os.environ["DATABASE_URL"])
+with psycopg.connect(**parameters) as connection, connection.cursor() as cursor:
+    cursor.execute(
+        "SELECT datname, datallowconn FROM pg_database "
+        "WHERE datname LIKE 'pushinweight_staging_recovery_%' ORDER BY datname"
+    )
+    for row in cursor:
+        print(*row)
+PY
+
+find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
+  -name 'staging-refresh-*.dump' -print 2>/dev/null
 ```
 
-Record the exact counts and latest timestamp next to the receipt. Every scrub
-count must be zero; both invariant queries must return no rows; the site must
+Record the exact counts and latest timestamp next to the receipt. All 29 scrub
+counts must be zero; both invariant queries must return no rows; the site must
 be `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must
 be empty. Compare product counts and the latest timestamp to the receipt, not

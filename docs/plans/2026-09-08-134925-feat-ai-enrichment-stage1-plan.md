@@ -1575,3 +1575,27 @@ and production on classification quality, not authentication. The next staging
 candidate keeps discovery, targeted extraction, synthesis, and staging harvest
 provider calls disabled while the guarded data refresh and integration checks
 run.
+
+The guarded U23 data refresh and disabled-lane integration pass is now complete
+on candidate `cb715ce205b2e5417d981981971a7cb9c14d0334`. Production snapshot
+`2026-09-11T15:21:42.081758+00:00` restored 217,402 posts and 261,233
+post-brand edges into the canonical staging database, applied the additive
+migrations through core 0039, scrubbed all 29 private and operational tables,
+and retained disabled recovery database
+`pushinweight_staging_recovery_20260911t154614z`. The database-stored receipt,
+independent census, exact service revisions, controls, and browser evidence are
+recorded in
+`docs/analysis/2026-09-12-010055-integrated-staging-refresh-verification.md`.
+
+Authenticated staging renders the seven-day chart and feed in EN, ZH-CN, and
+JA. All 13 localized post-type labels are present; every locked Column A symbol
+uses its exact ID, 24 by 24 `currentColor` source, and 15 by 15 runtime size on
+desktop and mobile. Historical rows remain visible under the all-types state
+and are excluded by a narrowed post-type filter because staging has zero
+current versioned classification states; that is the intentional no-silent-
+reclassification boundary, not a failed compatibility read. The staging
+headline worker is live on the candidate with provider calls, demand shaping,
+and critic routing disabled. The synthesis worker and staging harvester remain
+suspended. This closes only the refresh, migration, scrub, service-isolation,
+and browser portions of U23. U18 classification quality and every dependent
+live-lane, interval, disable-drill, and production gate remain open.
