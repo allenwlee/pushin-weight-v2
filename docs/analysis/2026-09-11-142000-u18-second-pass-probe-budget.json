@@ -1,0 +1,54 @@
+{
+  "baseline": {
+    "exact_post_type_sets": 76,
+    "exact_product_label_sets": 102,
+    "post_type_exact_set_accuracy": 0.6333333333333333,
+    "product_label_exact_set_accuracy": 0.85,
+    "rows": 120,
+    "source_candidate": "candidate-v3r9.json"
+  },
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort",
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "Strictly validate the second pass, then compare a deterministic union with the saved first pass. Discard other whenever either pass supplies a defined non-other type. Continue to a full consumed-development assessment only if all 120 second-pass rows are valid, unioned exact post-type sets reach at least 0.70, and unioned product-label exact sets do not fall below 0.85. A selected implementation must still pass a fresh unseen final cohort under unchanged floors.",
+  "frozen_at": "2026-09-11T05:20:00Z",
+  "global_stop": "The transport refuses request seven and reserves worst-case bytes and output tokens before every call. There are no retries or fallback calls, and capacity cannot transfer to another lane, prompt, cohort, or provider.",
+  "lanes": {
+    "candidate_v10_second_pass_dev120": {
+      "batch_size": 20,
+      "input_usd_per_million": "0.44",
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.11",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 250000,
+      "maximum_output_tokens": 24576,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 6,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "prior_probe_results": {
+    "explicit_type_checks": "120/120 valid but post-type exact sets fell from 76/120 to 56/120 and product-label exact sets from 102/120 to 96/120",
+    "high_effort_thinking": "invalid after exhausting the first request's 16384-token output cap",
+    "low_effort_thinking": "valid first batch but worse on both post types and product labels"
+  },
+  "prompt": {
+    "bytes": 11439,
+    "sha256": "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+    "version": "stage1-prompt-v10"
+  },
+  "reason": "Both independent Flash reviewers were stable and their union crossed the locked exact-set floor, while one-pass candidates chiefly omitted secondary labels. This probe isolates a second production-shaped non-thinking pass before changing semantics or production call topology.",
+  "schema_version": "u18-development-provider-budget-v4"
+}
