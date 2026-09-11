@@ -1070,7 +1070,7 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
         brand_registry=[],
         anthropic_client=FakeClient(),
-        telemetry_context={"prompt_version": "stage1-prompt-v13"},
+        telemetry_context={"prompt_version": "stage1-prompt-v14"},
     )
 
     assert len(calls) == 4

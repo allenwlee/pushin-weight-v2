@@ -6,6 +6,7 @@ import pytest
 
 from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
 from x_monitor.attribution import (
+    _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
     _PRAGMATICS_FULL_SYSTEM_PROMPT,
     _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
     _PRAGMATICS_RARE_REPAIR_SYSTEM_PROMPT,
@@ -29,6 +30,7 @@ def _budget(tmp_path):
     systems = (
         _PRAGMATICS_FULL_SYSTEM_PROMPT,
         _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_REPAIR_SYSTEM_PROMPT,
     )

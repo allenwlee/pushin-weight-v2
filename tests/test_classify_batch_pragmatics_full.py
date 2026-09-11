@@ -340,8 +340,9 @@ def test_out_of_order_result_ids_are_realigned_to_input_order():
     assert list(result[1]["by_brand"]) == ["qwen"]
 
 
-def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
+def test_two_pass_consensus_completes_labels_and_adjudicates_rare_labels():
     from x_monitor.attribution import (
+        _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_SYSTEM_PROMPT,
         classify_batch_pragmatics_full,
     )
@@ -355,6 +356,42 @@ def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
 
     def handler(kwargs):
         nonlocal base_calls
+        if kwargs["system"] == _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT:
+            packets = json.loads(kwargs["messages"][0]["content"])
+            return {
+                "results": [
+                    {
+                        "example_id": packet["example_id"],
+                        "brand_id": packet["brand_id"],
+                        "v3": {
+                            key: value
+                            for key, value in (
+                                classification(
+                                    "deepseek",
+                                    post_types=[
+                                        "releases_updates",
+                                        "research_explanations",
+                                        "personnel_changes",
+                                    ],
+                                    product_labels=[
+                                        "testimonial",
+                                        "ideas_requests",
+                                    ],
+                                    sentiment="positive",
+                                )
+                                if packet["brand_id"] == "deepseek"
+                                else classification("qwen", post_types=["other"])
+                            ).items()
+                            if key != "brand_id"
+                        },
+                        "job_discovery_relevant": False,
+                        "personnel_discovery_relevant": (
+                            packet["brand_id"] == "deepseek"
+                        ),
+                    }
+                    for packet in packets
+                ]
+            }
         if kwargs["system"] == _PRAGMATICS_RARE_SYSTEM_PROMPT:
             return {
                 "results": [
@@ -452,7 +489,7 @@ def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
     client = FakeClient(handler)
     result = classify_batch_pragmatics_full(input_rows, [], client)
 
-    assert len(client.calls) == 3
+    assert len(client.calls) == 4
     assert result[0] == {
         "by_brand": {
             "deepseek": {
@@ -476,6 +513,37 @@ def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
         "china_nationalism": None,
         "us_nationalism": None,
     }
+
+
+def test_unresolved_required_consensus_keeps_post_invalid():
+    from x_monitor.attribution import (
+        _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
+        classify_batch_pragmatics_full,
+    )
+
+    base_calls = 0
+
+    def handler(kwargs):
+        nonlocal base_calls
+        if kwargs["system"] == _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT:
+            return {"results": []}
+        base_calls += 1
+        payload = prompt_payload(kwargs)
+        response = response_for_payload(payload)
+        response["results"][0]["classifications"][0]["post_types"] = [
+            "releases_updates" if base_calls == 1 else "research_explanations"
+        ]
+        return response
+
+    result = classify_batch_pragmatics_full(
+        tweets(1),
+        [],
+        FakeClient(handler),
+    )
+
+    assert result == [
+        {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
+    ]
 
 
 @pytest.mark.parametrize(

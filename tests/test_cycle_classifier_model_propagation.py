@@ -179,4 +179,4 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     state = post.classification_states.get(brand_id="deepseek")
     assert state.contract_version == "stage1-v1"
     assert state.taxonomy_version == "stage1-taxonomy-v3"
-    assert state.prompt_version == "stage1-prompt-v13"
+    assert state.prompt_version == "stage1-prompt-v14"

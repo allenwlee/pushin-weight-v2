@@ -1,0 +1,66 @@
+{
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "development_only": true,
+    "rows": 120,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "Continue to a new full consumed-development assessment only if all 120 rows are valid, post-type exact-set accuracy is at least 0.70, product-label exact-set accuracy is at least 0.85, outcome accuracy is at least 0.90, and context_missing recall is at least 0.50. This probe cannot approve release.",
+  "frozen_at": "2026-09-11T07:09:00Z",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, or lane.",
+  "lane": "runtime_v14_consensus_probe",
+  "lanes": {
+    "runtime_v14_consensus_probe": {
+      "allowed_system_sha256": [
+        "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+        "93f35e056ad1628fc52d482707ef8e7a57e6d87db2bd0a5839cac0f2ac511348",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+        "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+        "1454f453db3c22682faab78f0ac49e084845630f4a625f883af80f6ab0042500"
+      ],
+      "batch_size": 10,
+      "expected_cost_usd": "0.18",
+      "input_token_reservation": "ceil((UTF-8 system bytes + UTF-8 user bytes) / 2) per transport attempt",
+      "input_usd_per_million": "0.44",
+      "max_concurrent_transport_calls": 3,
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "1.03",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 1200000,
+      "maximum_output_tokens": 368640,
+      "maximum_requests": 80,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 90,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "production_shape": {
+    "base_passes": 2,
+    "base_requests": 24,
+    "batch_size": 10,
+    "consensus": "one candidate-blind call per batch only when two classified judgments differ; exact agreements and either-pass context_missing skip it",
+    "maximum_shared_semantic_repairs": 20,
+    "narrow_audit": "only batches with a rare-label proposal from a base or consensus judgment, or a broad unsanctioned-signal lexical candidate",
+    "row_fallback": "only posts or consensus pairs containing missing, duplicate, or schema-invalid rows"
+  },
+  "prompt": {
+    "consensus_bytes": 9714,
+    "consensus_sha256": "93f35e056ad1628fc52d482707ef8e7a57e6d87db2bd0a5839cac0f2ac511348",
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "narrow_audit_sha256": "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+    "review_bytes": 9403,
+    "review_sha256": "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+    "version": "stage1-prompt-v14"
+  },
+  "reason": "Runtime v13 proved that arbitrary production-like batch peers reduce two-pass exact-set quality to 0.60 and that no deterministic per-label merge of those two judgments reaches the 0.70 continuation floor. Existing candidate-blind development evidence shows that adjudicating only disagreements and retaining either-pass context_missing reaches 0.775 post-type exact sets and 0.933 product exact sets. This probe tests that measured consensus pattern through the exact production runtime path.",
+  "schema_version": "u18-runtime-development-budget/v4"
+}
