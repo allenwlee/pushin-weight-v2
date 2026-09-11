@@ -241,7 +241,32 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - R75. Synthesis cache identity is shared across users and navigation and changes only when source/context, prompt, model, or schema identity changes. Instrument demand-to-ready latency, duplicate suppression, cancellations/expiry, cache reuse, queue depth/age, attempts, calls, tokens, cost, validation failures, last-good use, and locale completeness. The measured staging target is at most the preregistered demand/cost envelope and materially below the eager all-post synthesis replay; missing instrumentation blocks activation.
 - R76. Integrated staging activation may enable the bounded job, personnel, targeted-extraction, headline-demand, translation, and synthesis lanes only after their individual offline gates and machine caps pass. Production receives the unchanged staging candidate and the same or tighter caps; activation proceeds through reversible configuration flags, one lane at a time, with normal-cycle observation after each dependency. Any quality, budget, backlog-age, error-rate, data-integrity, or locale-completeness breach disables the affected lane while retaining durable source facts and last-good output.
 - R77. Before the next integrated staging deployment, implement the seven owner-locked Column A post-type glyphs from `/Users/fuchitalee/development/pushin-weight-v2/.context/compound-engineering/ce-prototype/2026-09-11-130557-post-type-glyphs/decisions.md` exactly as drawn in its linked comparison screen. Map `opportunities`, `job_listings`, `personnel_changes`, `opinions_reactions`, `research_explanations`, `business_finance`, and `other` to `a-opportunity`, `a-jobs`, `a-personnel`, `a-opinions`, `a-research`, `a-finance`, and `a-other` respectively. Preserve every existing glyph and all other UI behavior, retain the 24 × 24 `currentColor` system and exact 15 × 15 CSS runtime size, update focused icon/rendering tests, and use no Column B geometry. The locked decisions file has SHA-256 `bcfcc9bfc515cb06524afaa90b826631f46365ca6b500bddd0d6265680c807da`; the SVG comparison screen has SHA-256 `2f93dc0cd4279ea16d957f35041c211ac5fe59e4dae7ca0f10ea7ed092a71c15`.
-- R78. Replace the blocked single-pass and consensus candidates with the frozen three-pass v18 selector measured on consumed development data. Run one twenty-post byte-exact prompt-v10 base, one ten-post byte-exact v12 secondary review, and one ten-post byte-exact candidate-blind v14 review. Select only the preregistered source-language/type decisions: EN `events` from review and `research_explanations` from secondary; JA `advertising_marketing` and `opinions_reactions` from secondary plus `hands_on_usage` and `research_explanations` from review; ZH-CN `business_finance` from secondary plus `releases_updates` and `research_explanations` from review. Select `ideas_requests` from secondary for every language; retain every other product label, every unlisted post type, outcome, sentiment, and nationalism from base. Base `context_missing` is authoritative. Route base proposals for `personnel_changes` or `other`, base unsanctioned flags, and frozen lexical candidates through the separately versioned narrow audit; the audit cannot add an unproposed rare label, and an audit-required post cannot publish if the audit remains invalid. If a classified merge contains no supported type, publish `other` only. Require all three pass rows and every required audit to validate; salvage valid neighboring rows and retry only malformed posts. Preserve atomic per-post publication, explicit DeepSeek model and thinking mode, deadlines, strict vocabularies, telemetry, the shared repair cap, stable output order, twenty-/ten-post batch sizes, and maximum three concurrent transport calls. The selector is development-tuned and cannot approve itself: prove the exact runtime on the locked 120 rows, then on the full consumed 500 rows, then freeze and score a new unique-ID zero-overlap final cohort under separately enforced request/token/cost budgets.
+- R78 (superseded). The frozen three-pass v18 selector was the selected
+  development candidate. Its exact runtime reached only 63.3% post-type exact
+  sets, and the following batch-size and grouped-label probes also failed. R79
+  therefore replaces this topology; retain R78 only as historical experiment
+  provenance and do not activate or extend it.
+- R79. Replace the failed v18-v21 topology with one complete primary
+  classification followed by one candidate-aware completeness review. The
+  reviewer receives the source packet and the valid canonical primary
+  judgment, checks every taxonomy-v3 type independently for omissions and
+  unsupported additions, and returns one complete replacement classification
+  plus `accept|replace`, a closed set of change reasons, and exact source
+  evidence for every changed decision. The deterministic selector publishes
+  the complete reviewer classification; it never unions labels, chooses
+  results by language, or silently falls back to the primary result. Both
+  passes must be complete and valid, and only malformed post-brand rows may be
+  retried. Keep DeepSeek as the scheduled classifier provider, preserve
+  explicit model/thinking/deadline/repair/call-budget controls, and cap
+  concurrency at three transport calls. Persist canonical primary, review,
+  and selected-final judgments under one revision identity, with stage,
+  contract/taxonomy/prompt/model/provider role, input fingerprint, selector
+  version, validation state, and parent provenance. The current
+  `PostBrandClassificationState` and signal/product edges remain the selected
+  final projection. Prove the exact path provider-free, freeze one 120-row
+  consumed-development pilot and its budget before transport, and require its
+  unchanged overall and per-language exact-set floors before spending on the
+  500-row development run or opening a new zero-overlap release cohort.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -408,31 +433,39 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - KTD31. **Serve feed rows independently of synthesis readiness.** Feed selection no longer requires completed legacy commentary. The browser requests only visible, expanded, and bounded lookahead work and renders original/literal/last-good content with explicit state. This implements R71–R72.
 - KTD32. **Promote Japanese to a complete product locale in Stage 3.** Locale routing, catalogs, labels, content artifacts, headlines, caches, pending states, and browser evidence receive the same completeness contract as EN and ZH-CN. This implements R66–R69. (session-settled: user-directed — Japanese must be equivalent to the existing two product languages.)
 - KTD33. **Activate one bounded lane at a time while preserving the integrated candidate.** Offline proof unlocks staging flags; measured staging proof unlocks equal-or-tighter production flags. A failing lane is disabled through configuration without reverting additive data or changing the candidate SHA. This implements R59 and R76.
-- KTD34. **Use the measured three-pass selector and a narrow rare audit.** The first frozen candidate showed that the twenty-post prompt-v10 base protects outcomes, scalars, rare types, and most product labels while omitting common overlapping types. Later runtime probes showed that repeated reviews, disagreement consensus, full audits, and direct common-label replacement did not clear the locked exact-set floor. Saved candidate-blind outputs identified one fixed, reproducible selector that clears the 120-row continuation metrics: prompt-v10 base for default decisions, byte-exact v12 secondary and v14 review only for the source-language/type map in R78, secondary for `ideas_requests`, and a conditional narrow audit for `personnel_changes`, `other`, and unsanctioned flags. All three required rows must validate and valid neighbors survive malformed rows. This supersedes the consensus topology without changing taxonomy or quality floors, and it remains subject to full-development and unseen final gates because the selector was chosen on consumed development data.
+- KTD34 (superseded). **The measured three-pass selector remains historical
+  evidence.** Its saved-output analysis did not reproduce through the exact
+  runtime, so no language-specific or per-label selector from that experiment
+  may enter production.
+- KTD35. **Use one candidate-aware completeness review and preserve every
+  judgment.** Exact-set failures are chiefly incomplete overlapping type sets,
+  while micro F1 shows that many individual judgments remain useful. One full
+  primary pass supplies a concrete proposal; one full reviewer must either
+  accept it or replace it with a complete canonical judgment and evidence for
+  each change. A fixed reviewer-authoritative selector avoids post-hoc union,
+  majority, language-specific, and deterministic label injection. Durable
+  primary/review/final records make later analysis able to separate primary
+  model errors, reviewer changes, selector behavior, and the published state.
 
 ### High-Level Technical Design
 
-The active data flow has one strict publication boundary:
+The revised classifier data flow has one strict publication boundary:
 
 ```mermaid
 flowchart TB
-  A[Claimed post and attributed brands] --> B[Two independent batch 10 reviews]
-  B --> C{Both complete and valid?}
-  C -->|no| D[Per-post fallback and retry]
+  A[Claimed post and attributed brands] --> B[Complete primary classification]
+  B --> C{Primary valid?}
+  C -->|no| D[Retry malformed post-brand row]
   D --> C
-  C -->|yes| E{Classified judgments differ?}
-  E -->|yes| F[Candidate-blind consensus]
-  E -->|no| G{Rare label or unsanctioned candidate?}
-  F -->|valid| G
-  F -->|invalid| H[Leave pending]
-  G -->|yes| I[Narrow audit]
-  G -->|no| J[Atomic current-version publication]
-  I -->|valid| J
-  I -->|invalid| H
-  J --> K[Signal rows and product-label edges]
-  J --> L[Per-brand outcome version and nationalism]
-  K --> M[Feed charts and headline facts]
-  L --> M
+  C -->|yes| E[Candidate-aware completeness review]
+  E --> F{Review complete and valid?}
+  F -->|no| G[Leave pending after bounded retry]
+  F -->|yes| H[Persist primary review and selected final]
+  H --> I[Atomic current-version publication]
+  I --> J[Signal rows and product-label edges]
+  I --> K[Per-brand outcome version and nationalism]
+  J --> L[Feed charts and headline facts]
+  K --> L
 ```
 
 Classification state stays explicit across current and historical data:
@@ -946,10 +979,10 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 ### U18. Complete the real-label quality and cost gates
 
 - **Goal:** Turn the frozen evaluation contracts into measured pass/block decisions before enabling any new live lane.
-- **Requirements:** R16–R17, R40, R48–R59, R78; KTD14, KTD18–KTD22, KTD24, and KTD34.
+- **Requirements:** R16–R17, R40, R48–R59, R79; KTD14, KTD18–KTD22, KTD24, and KTD35.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; exact prompt/model/provider-role identities. Execute U12A as this unit's first measured sub-gate.
 - **Files:** versioned floor and budget JSON under `docs/analysis/` or `docs/reference/`; ignored source/context, candidate, reviewer, and adjudication packets; classification/discovery/extraction evaluator modules and commands; dated durable taxonomy-v2, taxonomy-v3, job, personnel, extraction, and cost reports; focused evaluator tests; this plan's execution state.
-- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the exact R78 v18 topology: twenty-post prompt-v10 base, ten-post v12 secondary, ten-post v14 review, the frozen source-language/type selector, base-owned outcomes/scalars, secondary-owned `ideas_requests`, per-row salvage, and the conditional narrow rare-label/unsanctioned audit. Prove the exact production call path first on the locked 120-row probe and then on all 500 consumed-development rows. Because the selector was chosen after inspecting development outcomes, neither run can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
+- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the exact R79 primary-plus-completeness-review path and its durable judgment provenance. The reviewer sees the canonical primary proposal, returns a complete candidate, and supplies source-bound evidence for every change; the fixed selector uses the reviewer result in full. Prove this path provider-free, then through a preregistered 120-row consumed-development pilot. Continue to all 500 consumed-development rows only if every continuation floor passes. Neither development result can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
 - **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact cannot load as gold; v2 and v3 results never merge; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost evidence, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
 - **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 report separately covers prevalence, rare positives, and event/opportunity boundaries across EN/ZH-CN/JA and required source roles. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U19 activation or U23.
 
@@ -1262,11 +1295,13 @@ application behavior, so no UI fix is required for that symptom. The selected
 delivery target is now production after U18–U23 complete.
 
 The verified September 10 local dump remains the frozen offline evaluation
-source. U23 will use `bin/refresh-staging-data` to obtain a new scrubbed source
-snapshot and will not restore the local dump directly into the active staging
-database. U19–U24 are unstarted. All job/personnel discovery, targeted
-extraction, profile backfill, synthesis demand/prewarm, and other new live
-activation flags remain off until their owning gates pass.
+source. At this checkpoint U23 was still expected to use
+`bin/refresh-staging-data` for a new scrubbed snapshot rather than restoring the
+local dump directly into the active staging database. The later execution
+entries record that refresh and the implemented U19–U22 work. Job/personnel
+discovery, targeted extraction, profile backfill, synthesis provider calls,
+prewarm, and other new live activation flags remain off until their owning
+gates pass.
 
 U18 is now in progress. Development prompt iterations ended at the frozen
 taxonomy-v3/prompt-v10 production candidate. The first final reviewer preflight
@@ -1476,7 +1511,8 @@ A pass permits one all-locale development probe; a failure requires an
 owner-visible decision about provider quality, taxonomy ambiguity, or the
 exact-set gate before more classifier transport.
 
-The v22 direct-Haiku attempt made zero successful provider calls: the local
+The following direct-Haiku attempts are superseded historical dead ends, not
+current instructions. The v22 attempt made zero successful provider calls: the local
 `ANTHROPIC_API_KEY_AL` credential returned HTTP 401, then the frozen 18-attempt
 cap stopped the production fallback loop. This is an infrastructure failure
 and supplies no quality result. Both existing local Anthropic credential slots
@@ -1484,20 +1520,16 @@ have the expected secret shape; the replacement v22b lane changes only the
 credential slot to `ANTHROPIC_API_KEY_CO_JP` while preserving the exact cohort,
 prompt, model, pricing, and caps. It is frozen in
 `docs/analysis/2026-09-11-180000-u18-runtime-v22b-haiku-review-pilot-budget.json`.
-If that slot also fails authentication, direct-Haiku evaluation is blocked
-until the owner refreshes a local direct-Anthropic credential; no DeepSeek
-fallback may stand in for the named provider.
+At that checkpoint, a second authentication failure would have blocked the
+direct-Haiku evaluation; the later owner correction cancelled this provider
+path entirely.
 
 The v22b replacement also made zero successful provider calls: the local
 `ANTHROPIC_API_KEY_CO_JP` credential returned HTTP 401 on every permitted
 attempt, after which the frozen 18-attempt cap stopped transport. Both local
-direct-Anthropic credential slots are therefore rejected by Anthropic, and the
-Haiku quality pilot remains unmeasured. U18 is blocked at this external
-credential boundary; its unchanged next step is to rerun the exact frozen
-30-row v22 pilot after the owner refreshes one local direct-Anthropic
-credential. No additional DeepSeek experiment, unseen cohort, feature
-activation, staging refresh, or production promotion is permitted in place of
-that result.
+direct-Anthropic credential slots were rejected by Anthropic, and the Haiku
+quality pilot remained unmeasured. This did not establish a current U18 next
+step; the owner correction below supersedes it.
 
 That provider path was superseded by owner correction later on September 11:
 Anthropic is not part of the active stack. The 401 attempts are retained only
@@ -1509,14 +1541,16 @@ a drop-in classifier. Staging may receive the integrated code and refreshed
 scrubbed data with paid feature lanes disabled; no failed classification result
 is relabeled as passing, and production remains gated.
 
-U19–U21 and most of U22 already have implementation commits on this branch:
+U19–U21 and most of U22 have implementation commits and provider-free local
+verification on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
 demand API, and visible/lookahead feed requests. They remain unaccepted and
-disabled until U18 passes. The U22 locked Column A glyph unit is now
-implemented: all seven exact prototype bodies use 24 × 24 `currentColor`
-symbols, the semantic registry maps the seven canonical post types to Column A,
-and all 33 pre-existing runtime symbols remain byte-normalized-identical.
+their paid/live controls remain disabled until U18 passes. The U22 locked
+Column A glyph unit is now implemented: all seven exact prototype bodies use
+24 × 24 `currentColor` symbols, the semantic registry maps the seven canonical
+post types to Column A, and all 33 pre-existing runtime symbols remain
+byte-normalized-identical.
 Focused sprite and JavaScript tests pass (4 and 102 tests respectively), and a
 real homepage browser test passes at 1440 × 960, 390 × 844, and 320 × 700 while
 asserting every affected filter icon renders at exactly 15 × 15 CSS pixels.
@@ -1599,3 +1633,24 @@ and critic routing disabled. The synthesis worker and staging harvester remain
 suspended. This closes only the refresh, migration, scrub, service-isolation,
 and browser portions of U23. U18 classification quality and every dependent
 live-lane, interval, disable-drill, and production gate remain open.
+
+Metadata revision `d3ad0f0141a0a8d6a1105270b2330ffa4041eba7` adds only this
+execution record, the staging report, the runbook correction, and screenshots.
+It does not supersede `cb715ce205b2e5417d981981971a7cb9c14d0334` as the deployed
+product revision. A later U18 implementation will establish and stage a new
+exact product candidate before any live-lane or production decision.
+
+The September 12 U18 architecture audit distinguishes label-level usefulness
+from complete-set correctness. The v18 runtime produced 63.3% exact post-type
+sets despite 0.868 micro F1, so the release problem is chiefly incomplete or
+over-complete label sets. Its language-specific selector is rejected because
+the saved-output gain did not reproduce through the exact call path. Batch-5,
+singleton, and v21 grouped-label probes also failed; v21's normalized
+diagnostic reached only 33.3% exact sets. R79/KTD35 therefore supersede
+R78/KTD34 for future implementation while retaining every failed experiment as
+evidence. The next candidate is one complete primary classification plus one
+candidate-aware completeness review with a reviewer-authoritative selector and
+durable primary/review/final provenance. No new provider call is permitted
+until that path passes provider-free tests and a new 120-row budget freezes the
+cohort hash, prompt/parser/model identities, selector, attempt/token/cost caps,
+and stop rule.
