@@ -183,3 +183,59 @@ def test_gold_audit_resolves_markdown_and_unicode_to_actual_source_span():
         == "general‑purpose AI"
     )
     assert quality._resolve_source_quote(source, "unrelated claim") is None
+
+
+def test_gold_audit_resolves_rendered_html_entity_to_actual_source_span():
+    source = "speed of &gt; 100 tok/s"
+
+    assert (
+        quality._resolve_source_quote(source, "speed of > 100 tok/s")
+        == "speed of &gt; 100 tok/s"
+    )
+
+
+def test_gold_audit_resolves_source_line_wrapping_to_actual_source_span():
+    source = "美国最大的优势集中在：\n\nfrontier model、\n\n芯片"
+
+    assert (
+        quality._resolve_source_quote(
+            source, "美国最大的优势集中在：frontier model、芯片"
+        )
+        == source
+    )
+
+
+def test_gold_audit_resolves_curly_quote_to_actual_source_span():
+    source = "the world’s most advanced technologies"
+
+    assert (
+        quality._resolve_source_quote(source, "the world's most advanced technologies")
+        == source
+    )
+
+
+def test_audited_v3_projection_recovers_frozen_v2_type_semantics():
+    common = {
+        "outcome": "classified",
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": "none",
+        "us_nationalism": "none",
+    }
+
+    combined = quality._project_v3_classification_to_v2(
+        {
+            **common,
+            "post_types": ["opportunities", "events", "job_listings"],
+        }
+    )
+    personnel_only = quality._project_v3_classification_to_v2(
+        {**common, "post_types": ["personnel_changes"]}
+    )
+    personnel_with_business = quality._project_v3_classification_to_v2(
+        {**common, "post_types": ["personnel_changes", "business_finance"]}
+    )
+
+    assert combined["post_types"] == ["events_opportunities"]
+    assert personnel_only["post_types"] == ["other"]
+    assert personnel_with_business["post_types"] == ["business_finance"]

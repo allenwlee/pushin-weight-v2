@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import math
 import os
+import re
 import subprocess
 import time
 import unicodedata
@@ -924,25 +926,34 @@ def _resolve_source_quote(source: str, quote: str) -> str | None:
     if quote in source:
         return quote
 
-    def searchable(value: str) -> tuple[str, list[int]]:
+    def searchable(value: str) -> tuple[str, list[tuple[int, int]]]:
         chars: list[str] = []
-        positions: list[int] = []
-        prior_space = False
-        for index, raw_char in enumerate(value):
-            for char in unicodedata.normalize("NFKC", raw_char):
+        positions: list[tuple[int, int]] = []
+        index = 0
+        while index < len(value):
+            entity = re.match(r"&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z]+);", value[index:])
+            if entity:
+                raw_text = entity.group(0)
+                decoded = html.unescape(raw_text)
+                end = index + len(raw_text)
+            else:
+                raw_text = value[index]
+                decoded = raw_text
+                end = index + 1
+            for char in unicodedata.normalize("NFKC", decoded):
                 if char in "*_`":
                     continue
+                if char in "‘’":
+                    char = "'"
+                if char in "“”":
+                    char = '"'
                 if char in "‐‑‒–—―−":
                     char = "-"
                 if char.isspace():
-                    if prior_space:
-                        continue
-                    char = " "
-                    prior_space = True
-                else:
-                    prior_space = False
+                    continue
                 chars.append(char)
-                positions.append(index)
+                positions.append((index, end))
+            index = end
         return "".join(chars), positions
 
     normalized_source, source_positions = searchable(source)
@@ -951,7 +962,7 @@ def _resolve_source_quote(source: str, quote: str) -> str | None:
     if start < 0 or not normalized_quote:
         return None
     end = start + len(normalized_quote) - 1
-    return source[source_positions[start] : source_positions[end] + 1]
+    return source[source_positions[start][0] : source_positions[end][1]]
 
 
 def run_contract_gold_auditor() -> None:
@@ -1063,6 +1074,84 @@ def write_audited_gold(cohort: Mapping[str, Any], audited: Mapping[str, Any]) ->
         "rows": sorted(rows, key=lambda row: (row["example_id"], row["brand_id"])),
     }
     path = PRIVATE / "gold-v3-audited.json"
+    _write_json(path, document)
+    print(f"wrote {path} sha256={_sha256(path)}")
+    write_audited_v2_gold(cohort, audited)
+
+
+def _project_v3_classification_to_v2(
+    classification: Mapping[str, Any],
+) -> dict[str, Any]:
+    projected = dict(classification)
+    source_types = set(classification.get("post_types", []))
+    projected_types = {
+        post_type
+        for post_type in source_types
+        if post_type not in {"events", "opportunities", "job_listings", "personnel_changes"}
+    }
+    if source_types & {"events", "opportunities", "job_listings"}:
+        projected_types.add("events_opportunities")
+    if classification.get("outcome") == "classified" and not projected_types:
+        projected_types.add("other")
+    projected["post_types"] = [
+        post_type
+        for post_type in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
+        if post_type in projected_types
+    ]
+    return projected
+
+
+def write_audited_v2_gold(
+    cohort: Mapping[str, Any], audited: Mapping[str, Any]
+) -> None:
+    source_by_id = {row["example_id"]: row for row in cohort["rows"]}
+    rows = []
+    for review in audited["rows"]:
+        source = source_by_id[review["example_id"]]
+        rows.append(
+            {
+                **{
+                    key: source[key]
+                    for key in (
+                        "example_id",
+                        "brand_id",
+                        "source_language",
+                        "context_provenance",
+                        "input_context_fingerprint",
+                        "stratum",
+                        "source_role",
+                        "source_hint",
+                    )
+                },
+                "classification": _project_v3_classification_to_v2(review["v3"]),
+                "job_discovery_relevant": review["job_discovery_relevant"],
+                "personnel_discovery_relevant": review[
+                    "personnel_discovery_relevant"
+                ],
+            }
+        )
+    document = {
+        "schema_version": 1,
+        "provenance": {
+            "kind": "heldout_gold",
+            "gold": True,
+            "cohort_id": cohort["cohort_id"],
+            "contract_version": "stage1-v1",
+            "taxonomy_version": "stage1-taxonomy-v2",
+            "prompt_version": "stage1-prompt-v3",
+            "annotators": [
+                "deepseek-v4-flash-contract-review-a",
+                "deepseek-v4-flash-contract-review-b",
+            ],
+            "adjudicator": "deepseek-v4-pro-contract-audit",
+            "blind_to_candidate": True,
+            "adjudication_method": "candidate_blind_v3_audit_then_deterministic_v2_semantic_projection",
+            "adjudication_version": "u18-gold-v3-v2-projection",
+            "adjudicated_at": datetime.now(UTC).isoformat(),
+        },
+        "rows": sorted(rows, key=lambda row: (row["example_id"], row["brand_id"])),
+    }
+    path = PRIVATE / "gold-v2-audited.json"
     _write_json(path, document)
     print(f"wrote {path} sha256={_sha256(path)}")
 
