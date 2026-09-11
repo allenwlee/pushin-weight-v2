@@ -42,6 +42,11 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(quality, "BUDGET_FALLBACK_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_V3_ONLY_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_REPAIR_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_FINAL_REPAIR_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_MINIMAX_BATCH5_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_V3R2_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_V3R2_REPAIR_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_CONTRACT_REVIEW_PATH", budget_path)
     monkeypatch.setattr(quality, "PRIVATE", tmp_path)
     monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
@@ -91,3 +96,14 @@ def test_v3_review_projects_combined_legacy_types_without_mixing_populations():
         }
     )
     assert projected["post_types"] == ["events_opportunities"]
+
+
+def test_corrected_gold_uses_exact_production_semantics_without_candidates():
+    assert quality._CONTRACT_SEMANTICS in quality.CONTRACT_REVIEW_SYSTEM
+    assert "blind to classifier candidates" in quality.CONTRACT_REVIEW_SYSTEM
+    assert "candidate_v3r3" not in quality.CONTRACT_REVIEW_SYSTEM
+    assert (
+        "Product-label keys are forbidden in post_types"
+        in quality.CONTRACT_REPAIR_SYSTEM
+    )
+    assert quality.TAXONOMIES["v3r3"]["prompt_version"] == "stage1-prompt-v6"

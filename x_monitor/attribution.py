@@ -1206,6 +1206,7 @@ TYPE BOUNDARIES:
 
 PRODUCT LABELS (independent multi-label array; an empty array is valid):
 Allowed keys exactly: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
+- Product-label keys are forbidden in post_types. In particular, bug, complaint, testimonial, ideas_requests, and misinformation may appear only in product_labels.
 - bug: a concrete malfunction or regression.
 - complaint: dissatisfaction or a negative customer experience.
 - testimonial: praise, endorsement, or a favorable product experience.

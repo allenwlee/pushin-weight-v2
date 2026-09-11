@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v5"
+PROMPT_VERSION = "stage1-prompt-v6"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -223,13 +223,12 @@ model quality.
 The fenced block is a display-wrapped copy of the evaluated
 `_PRAGMATICS_FULL_SYSTEM_PROMPT`. Line breaks and indentation were added for
 browser readability. After removing whitespace from both values, the display
-text matches the runtime source. It was extracted from the assignment AST
-using the literal tuples from `core/classification_contract.py`; neither
-module was imported.
+text matches the runtime source. It was regenerated from the runtime constant in an isolated local process
+using the literal allowlists from `core/classification_contract.py`.
 
 The authoritative runtime source value, including its trailing newline, is
-8,738 UTF-8 bytes. Its SHA-256 is
-`7c2ef1dbb1b7d42aa1d7f5f858096cfa237331ac5de6c58b04407772130a38bd`.
+8,902 UTF-8 bytes. Its SHA-256 is
+`994ec828f6320a63cc5a6a72ac7ab28875805cbc0128e9e42a0ad1c08f23fb4a`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
@@ -312,6 +311,9 @@ TYPE BOUNDARIES:
 PRODUCT LABELS (independent multi-label array; an empty array is valid):
 Allowed keys exactly: bug, complaint, testimonial, ideas_requests,
 misinformation.
+- Product-label keys are forbidden in post_types. In particular, bug,
+  complaint, testimonial, ideas_requests, and misinformation may appear only
+  in product_labels.
 - bug: a concrete malfunction or regression.
 - complaint: dissatisfaction or a negative customer experience.
 - testimonial: praise, endorsement, or a favorable product experience.

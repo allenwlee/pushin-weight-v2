@@ -26,8 +26,7 @@ def test_prompt_enumerates_every_product_label(key):
 
 def test_prompt_enumerates_sentiment_and_nationalism_values():
     assert (
-        "SENTIMENT (required for classified): "
-        + ", ".join(SENTIMENT_KEYS)
+        "SENTIMENT (required for classified): " + ", ".join(SENTIMENT_KEYS)
     ) in _PRAGMATICS_FULL_SYSTEM_PROMPT
     assert ", ".join(NATIONALISM_KEYS) in _PRAGMATICS_FULL_SYSTEM_PROMPT
     for meaning in (
@@ -82,6 +81,7 @@ def test_prompt_defines_product_labels_as_independent_and_non_adjudicating():
     prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
     assert "independent multi-label array" in prompt
     assert "empty array is valid" in prompt
+    assert "Product-label keys are forbidden in post_types" in prompt
     assert "ideas and requests stay combined" in prompt
     assert "never adjudicates the claim false" in prompt
 
@@ -111,7 +111,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v5"
+    assert PROMPT_VERSION == "stage1-prompt-v6"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():
@@ -123,21 +123,25 @@ def test_prompt_identity_is_shared_by_batch_and_single_builders():
     )
 
     single = build_pragmatics_full_prompt("text", ["deepseek"])
-    batch = build_batch_pragmatics_full_prompt([
-        {"tweet_id": "one", "text": "text", "brand_ids": ["deepseek"]}
-    ])
+    batch = build_batch_pragmatics_full_prompt(
+        [{"tweet_id": "one", "text": "text", "brand_ids": ["deepseek"]}]
+    )
 
     assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in single
     assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in batch
-    assert json.loads(single) == [{
-        "tweet_id": "_single_",
-        "text": "text",
-        "brand_ids": ["deepseek"],
-        "context": [],
-    }]
-    assert json.loads(batch) == [{
-        "tweet_id": "one",
-        "text": "text",
-        "brand_ids": ["deepseek"],
-        "context": [],
-    }]
+    assert json.loads(single) == [
+        {
+            "tweet_id": "_single_",
+            "text": "text",
+            "brand_ids": ["deepseek"],
+            "context": [],
+        }
+    ]
+    assert json.loads(batch) == [
+        {
+            "tweet_id": "one",
+            "text": "text",
+            "brand_ids": ["deepseek"],
+            "context": [],
+        }
+    ]
