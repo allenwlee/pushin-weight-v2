@@ -73,6 +73,9 @@ BUDGET_TEMPERATURE_ZERO_PATH = (
 BUDGET_GOLD_AUDIT_PATH = (
     ROOT / "docs/analysis/2026-09-11-030000-u18-provider-budget-amendment-v13.json"
 )
+BUDGET_PRODUCTION_BATCH_PATH = (
+    ROOT / "docs/analysis/2026-09-11-031000-u18-provider-budget-amendment-v14.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -119,6 +122,14 @@ TAXONOMIES = {
         "post_types": CANONICAL_POST_TYPE_KEYS,
         "prompt_path": PRIVATE / "v8-system-prompt.txt",
         "source_revision": "HEAD",
+    },
+    "v3r6": {
+        "version": "stage1-taxonomy-v3",
+        "prompt_version": "stage1-prompt-v8",
+        "post_types": CANONICAL_POST_TYPE_KEYS,
+        "prompt_path": PRIVATE / "v8-system-prompt.txt",
+        "source_revision": "HEAD",
+        "batch_size": 20,
     },
 }
 
@@ -211,6 +222,7 @@ class BudgetedTransport:
         prompt_v7_document = _read_json(BUDGET_PROMPT_V7_PATH)
         temperature_zero_document = _read_json(BUDGET_TEMPERATURE_ZERO_PATH)
         gold_audit_document = _read_json(BUDGET_GOLD_AUDIT_PATH)
+        production_batch_document = _read_json(BUDGET_PRODUCTION_BATCH_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -226,6 +238,7 @@ class BudgetedTransport:
             or prompt_v7_document["lanes"].get(lane)
             or temperature_zero_document["lanes"].get(lane)
             or gold_audit_document["lanes"].get(lane)
+            or production_batch_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -453,6 +466,7 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3r3": "candidate_v3r3_fallback",
         "v3r4": "candidate_v3r4_fallback",
         "v3r5": "candidate_v3r5_fallback",
+        "v3r6": "candidate_v3r6_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"
@@ -461,7 +475,9 @@ def run_candidate(taxonomy_name: str) -> None:
     )
     by_id = {row["example_id"]: row for row in completed}
     system = taxonomy["prompt_path"].read_text(encoding="utf-8")
-    for index, batch in enumerate(_batches(cohort["rows"])):
+    for index, batch in enumerate(
+        _batches(cohort["rows"], taxonomy.get("batch_size", BATCH_SIZE))
+    ):
         if all(row["example_id"] in by_id for row in batch):
             continue
         user = json.dumps(

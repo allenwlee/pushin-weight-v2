@@ -239,3 +239,8 @@ def test_audited_v3_projection_recovers_frozen_v2_type_semantics():
     assert combined["post_types"] == ["events_opportunities"]
     assert personnel_only["post_types"] == ["other"]
     assert personnel_with_business["post_types"] == ["business_finance"]
+
+
+def test_v3r6_candidate_uses_the_production_batch_size():
+    assert quality.TAXONOMIES["v3r6"]["batch_size"] == 20
+    assert quality.TAXONOMIES["v3r6"]["prompt_version"] == "stage1-prompt-v8"
