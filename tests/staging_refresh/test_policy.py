@@ -195,6 +195,47 @@ def test_staging_first_preflight_accepts_declared_post_migration_relations_absen
     assert result.source.database == "pushinweight_shadow"
 
 
+def test_optional_source_policy_covers_every_post_0027_relation() -> None:
+    """Staging may migrate an exact production-0027 snapshot forward."""
+    policy = load_policy(POLICY_PATH)
+
+    assert {
+        "product_label_keys",
+        "product_label_labels",
+        "posts_brands_classification_states",
+        "posts_brands_product_labels",
+        "account_profile_snapshots",
+        "brand_discovery_candidates",
+        "events",
+        "job_discovery_runs",
+        "job_listing_evidence",
+        "job_listings",
+        "opportunities",
+        "people",
+        "people_accounts",
+        "people_brand_affiliation_evidence",
+        "people_brand_affiliations",
+        "personnel_discovery_runs",
+        "targeted_extraction_attempts",
+        "targeted_extraction_states",
+        "trend_narrative_demands",
+        "brand_trend_narrative_texts",
+        "post_synthesis_artifacts",
+        "post_synthesis_daily_budgets",
+        "post_synthesis_demands",
+        "post_synthesis_rate_limit_buckets",
+        "post_synthesis_texts",
+        "post_translation_artifacts",
+        "post_translation_texts",
+    } == policy.relations.optional_source_tables
+
+    assert {
+        f"{table}_id_seq"
+        for table in policy.relations.optional_source_tables
+        if f"{table}_id_seq" in policy.relations.sequences
+    } == policy.relations.optional_source_sequences
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [

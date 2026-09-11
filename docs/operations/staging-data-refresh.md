@@ -130,13 +130,15 @@ The sequence `SELECT` grants both preserve copied sequence state and permit
 tables receive `MAINTAIN` only, so the refresh role can lock their schema but
 cannot read their rows.
 
-Policy version 2 marks the relations and sequences introduced by headline
-demand shaping and split translation/synthesis as optional on the source. This
-allows the staging-first release to refresh from the prior production schema
-and then create those empty relations with Django migrations. Once those
-migrations are in production, apply the new grants above before the next
-refresh; preflight then requires each present optional relation to have its
-declared read or maintenance privilege.
+Policy version 3 marks every relation and sequence introduced after the
+production migration boundary at `0027` as optional on the source. This covers
+the Stage 1 classification state, people/jobs/events/opportunities, targeted
+extraction, headline demand, and split translation/synthesis migrations
+`0028`–`0039`. It allows the staging-first release to refresh from the prior
+production schema and then create those empty relations with Django migrations.
+Once those migrations are in production, apply the new grants above before the
+next refresh; preflight then requires each present optional relation to have
+its declared read or maintenance privilege.
 
 Do not add default privileges. A new production table must fail the exhaustive
 preflight until `config/staging_refresh.yaml`, this grant list, and the scrub or

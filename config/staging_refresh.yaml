@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 
 service:
   id: srv-d9vb8t49v7es738lf2ng
@@ -127,7 +127,21 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - account_profile_snapshots
+    - brand_discovery_candidates
     - brand_trend_narrative_texts
+    - events
+    - job_discovery_runs
+    - job_listing_evidence
+    - job_listings
+    - opportunities
+    - people
+    - people_accounts
+    - people_brand_affiliation_evidence
+    - people_brand_affiliations
+    - personnel_discovery_runs
+    - posts_brands_classification_states
+    - posts_brands_product_labels
     - post_synthesis_artifacts
     - post_synthesis_daily_budgets
     - post_synthesis_demands
@@ -135,6 +149,10 @@ relations:
     - post_synthesis_texts
     - post_translation_artifacts
     - post_translation_texts
+    - product_label_keys
+    - product_label_labels
+    - targeted_extraction_attempts
+    - targeted_extraction_states
     - trend_narrative_demands
   views:
     - trend_narrative_versions
@@ -185,7 +203,17 @@ relations:
     - trend_narrative_versions_id_seq
     - twitter_list_memberships_id_seq
   optional_source_sequences:
+    - account_profile_snapshots_id_seq
+    - brand_discovery_candidates_id_seq
     - brand_trend_narrative_texts_id_seq
+    - events_id_seq
+    - job_discovery_runs_id_seq
+    - job_listing_evidence_id_seq
+    - job_listings_id_seq
+    - opportunities_id_seq
+    - people_brand_affiliation_evidence_id_seq
+    - people_brand_affiliations_id_seq
+    - personnel_discovery_runs_id_seq
     - post_synthesis_artifacts_id_seq
     - post_synthesis_daily_budgets_id_seq
     - post_synthesis_demands_id_seq
@@ -193,6 +221,8 @@ relations:
     - post_synthesis_texts_id_seq
     - post_translation_artifacts_id_seq
     - post_translation_texts_id_seq
+    - targeted_extraction_attempts_id_seq
+    - targeted_extraction_states_id_seq
     - trend_narrative_demands_id_seq
 
 scrub:
