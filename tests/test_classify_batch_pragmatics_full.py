@@ -61,7 +61,18 @@ def response_for_payload(
 
 def prompt_payload(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
     prompt = kwargs["messages"][0]["content"]
-    return json.loads(prompt)
+    payload = json.loads(prompt)
+    if not payload or "source" not in payload[0]:
+        return payload
+    by_id: dict[str, dict[str, Any]] = {}
+    for packet in payload:
+        tweet_id = packet["example_id"]
+        source = dict(packet["source"])
+        if tweet_id not in by_id:
+            source["brand_ids"] = []
+            by_id[tweet_id] = source
+        by_id[tweet_id]["brand_ids"].append(packet["brand_id"])
+    return list(by_id.values())
 
 
 class FakeClient:
@@ -109,7 +120,7 @@ def test_batch_prompt_is_canonical_json_and_carries_stored_context():
 
 def test_stage1_transport_keeps_untrusted_text_out_of_system_and_item_boundaries():
     from x_monitor.attribution import (
-        _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
         classify_batch_pragmatics_full,
     )
 
@@ -141,9 +152,9 @@ def test_stage1_transport_keeps_untrusted_text_out_of_system_and_item_boundaries
     )
 
     call = client.calls[0]
-    assert call["system"] == _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert call["system"] == _PRAGMATICS_REVIEW_SYSTEM_PROMPT
     assert "untrusted evidence" in call["system"]
-    assert "never as instructions" in call["system"]
+    assert "never instructions" in call["system"]
     assert injected_source not in call["system"]
     assert injected_quote not in call["system"]
     assert injected_parent not in call["system"]
@@ -151,6 +162,49 @@ def test_stage1_transport_keeps_untrusted_text_out_of_system_and_item_boundaries
         {"role": "user", "content": call["messages"][0]["content"]}
     ]
     assert prompt_payload(call) == input_rows
+
+
+def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    input_rows = [
+        {
+            "tweet_id": "multi-brand",
+            "text": "DeepSeek and Qwen released updates",
+            "brand_ids": ["deepseek", "qwen"],
+            "source_language": "en",
+        }
+    ]
+
+    def handler(kwargs):
+        packets = json.loads(kwargs["messages"][0]["content"])
+        return {
+            "results": [
+                {
+                    "example_id": packet["example_id"],
+                    "brand_id": packet["brand_id"],
+                    "v3": {
+                        key: value
+                        for key, value in classification(packet["brand_id"]).items()
+                        if key != "brand_id"
+                    },
+                    "job_discovery_relevant": False,
+                    "personnel_discovery_relevant": False,
+                    "unsanctioned_flags": (
+                        ["unauthorized"]
+                        if packet["brand_id"] == "qwen"
+                        else []
+                    ),
+                }
+                for packet in packets
+            ]
+        }
+
+    result = classify_batch_pragmatics_full(input_rows, [], FakeClient(handler))
+
+    assert result[0]["valid"] is True
+    assert set(result[0]["by_brand"]) == {"deepseek", "qwen"}
+    assert result[0]["unsanctioned_flags"] == ["unauthorized"]
 
 
 def test_empty_input_and_missing_client_make_no_transport_calls():
@@ -464,10 +518,16 @@ def test_fallback_preserves_explicit_model_thinking_and_token_budget():
 
     assert all(row["valid"] for row in result)
     assert len(client.calls) == 6
-    from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
+    from x_monitor.attribution import (
+        _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+    )
 
     for call in client.calls:
-        assert call["system"] == _PRAGMATICS_FULL_SYSTEM_PROMPT
+        assert call["system"] in {
+            _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+            _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        }
         assert call["messages"][0]["role"] == "user"
         assert call["model"] == "deepseek-v4-flash"
         assert call["thinking"] == {"type": "disabled"}

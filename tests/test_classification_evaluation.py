@@ -317,7 +317,7 @@ def test_taxonomy_v3_is_scored_as_a_separate_closed_vocabulary():
     candidate, gold = _documents()
     for document in (candidate, gold):
         document["provenance"]["taxonomy_version"] = "stage1-taxonomy-v3"
-        document["provenance"]["prompt_version"] = "stage1-prompt-v11"
+        document["provenance"]["prompt_version"] = "stage1-prompt-v12"
         document["rows"][0]["classification"]["post_types"] = ["job_listings"]
     policy = _complete_policy()
     policy["floors"] = {

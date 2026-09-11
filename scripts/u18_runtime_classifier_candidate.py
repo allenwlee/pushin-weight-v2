@@ -289,7 +289,10 @@ def run(*, budget_path: Path, cohort_path: Path, output_path: Path, private_dir:
         private_dir=private_dir,
     )
     results = classify_batch_pragmatics_full(
-        [dict(row["input"]) for row in rows],
+        [
+            {**dict(row["input"]), "source_language": row["source_language"]}
+            for row in rows
+        ],
         [],
         client,
         model=client.budget["model"],

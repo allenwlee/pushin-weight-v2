@@ -997,6 +997,30 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
                     ]
                 }
             payload = json.loads(kwargs["messages"][0]["content"])
+            if "source" in payload[0]:
+                return {
+                    "results": [
+                        {
+                            "tweet_id": "t1",
+                            "classifications": [
+                                {
+                                    "brand_id": "minimax",
+                                    "outcome": "classified",
+                                    "post_types": (
+                                        ["complaint"]
+                                        if len(calls) == 1
+                                        else ["opinions_reactions"]
+                                    ),
+                                    "product_labels": ["complaint"],
+                                    "sentiment": "negative",
+                                    "china_nationalism": "none",
+                                    "us_nationalism": "none",
+                                }
+                            ],
+                            "unsanctioned_flags": [],
+                        }
+                    ]
+                }
             if payload[0]["tweet_id"] == "_single_":
                 return {
                     "results": [
@@ -1046,7 +1070,7 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
         brand_registry=[],
         anthropic_client=FakeClient(),
-        telemetry_context={"prompt_version": "stage1-prompt-v11"},
+        telemetry_context={"prompt_version": "stage1-prompt-v12"},
     )
 
     assert len(calls) == 4

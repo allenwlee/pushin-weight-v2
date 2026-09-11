@@ -7,6 +7,7 @@ import pytest
 from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
 from x_monitor.attribution import (
     _PRAGMATICS_FULL_SYSTEM_PROMPT,
+    _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
     _PRAGMATICS_RARE_REPAIR_SYSTEM_PROMPT,
     _PRAGMATICS_RARE_SYSTEM_PROMPT,
 )
@@ -27,6 +28,7 @@ def _budget(tmp_path):
     path = tmp_path / "budget.json"
     systems = (
         _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_REPAIR_SYSTEM_PROMPT,
     )
@@ -65,7 +67,7 @@ def _kwargs():
         "max_tokens": 4096,
         "temperature": 0,
         "thinking": {"type": "disabled"},
-        "system": _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        "system": _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": "[]"}],
     }
 

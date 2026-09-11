@@ -2462,6 +2462,7 @@ class CycleRunner:
                     "text": text,
                     "brand_ids": list(brand_ids),
                     "context": context,
+                    "source_language": post.lang_detected or post.lang or "",
                 }
                 if state.translation_status == PostEnrichmentState.Status.PENDING:
                     translation_tweets.append(tweet)
