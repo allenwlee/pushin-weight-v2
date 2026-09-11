@@ -77,6 +77,15 @@ def test_prompt_contains_taxonomy_boundaries_from_settled_contract():
         assert boundary in prompt
 
 
+def test_prompt_requires_an_independent_type_pass_and_separate_namespaces():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "decide yes or no for every allowed post type" in prompt
+    assert "Do not choose a primary type and stop" in prompt
+    assert "both results_evaluations and opinions_reactions" in prompt
+    assert "both hands_on_usage and results_evaluations" in prompt
+    assert "keep it only in product_labels" in prompt
+
+
 def test_prompt_defines_product_labels_as_independent_and_non_adjudicating():
     prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
     assert "independent multi-label array" in prompt
@@ -111,7 +120,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v8"
+    assert PROMPT_VERSION == "stage1-prompt-v9"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

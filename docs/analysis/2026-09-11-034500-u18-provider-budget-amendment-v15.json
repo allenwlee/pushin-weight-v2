@@ -1,0 +1,47 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T03:45:00Z",
+  "reason": "candidate v3r6 completed the preregistered production-batch trial but missed the post-type exact-set floor and produced one invalid fallback row; v3r7 changes only the prompt instructions, keeps the taxonomy, model, temperature, cohort, strict parser, and production batch size fixed, and is a development iteration rather than the final unseen gate",
+  "source_budgets": [
+    "2026-09-11-031000-u18-provider-budget-amendment-v14.json"
+  ],
+  "lanes": {
+    "candidate_v3r7": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 20,
+      "maximum_examples": 500,
+      "maximum_requests": 25,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 50,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 2500000,
+      "maximum_output_tokens": 204800,
+      "maximum_cost_usd": "0.55",
+      "twitterapi_credits": 0
+    },
+    "candidate_v3r7_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 1000,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 5000000,
+      "maximum_output_tokens": 1200000,
+      "maximum_cost_usd": "1.04",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The development candidate and fallback refuse the next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; unused capacity cannot move between lanes, invalid fallback output remains invalid, and this tuned cohort cannot serve as the final unseen classification gate."
+}

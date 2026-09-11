@@ -1,6 +1,6 @@
 # Stage 1 classifier prompt — literal reference
 
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-11
 
 This document describes the Stage 1 per-brand classifier implemented by
 `x_monitor.attribution.classify_batch_pragmatics_full` and its single-post
@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v8"
+PROMPT_VERSION = "stage1-prompt-v9"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -227,8 +227,8 @@ text matches the runtime source. It was regenerated from the runtime constant in
 using the literal allowlists from `core/classification_contract.py`.
 
 The authoritative runtime source value, including its trailing newline, is
-9,477 UTF-8 bytes. Its SHA-256 is
-`4047f96a58e83dde311647503130bc61bf63e773096c859a12aa5147b7306ca4`.
+10,843 UTF-8 bytes. Its SHA-256 is
+`45b74cca00cddc34d563648c1f1c98d09ccff769852b32d5c0b4d68f92c7a205`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
@@ -308,6 +308,27 @@ TYPE BOUNDARIES:
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial
   strategy are business_finance.
 
+INDEPENDENT TYPE PASS:
+- For each attributed brand, decide yes or no for every allowed post type
+  before writing post_types. Do not choose a primary type and stop. Output
+  every yes; omit every no.
+- When a source both states a release, availability, integration, or pricing
+  change and pitches it, include both releases_updates and
+  advertising_marketing.
+- When a source both reports a result or comparison and expresses a view,
+  prediction, or reaction, include both results_evaluations and
+  opinions_reactions.
+- When technical explanation supports a result, opinion, business claim, or
+  release, include research_explanations as well as the other supported type.
+- When actual use or a built artifact includes an evaluation of its outcome,
+  include both hands_on_usage and results_evaluations.
+- A bounded discount, free-access period, credit, prize, or giveaway may
+  support opportunities alongside advertising_marketing and, only when the
+  source states new availability or pricing, releases_updates.
+- Keep this pass scoped to the attributed brand. A third-party product's
+  release is not a release of a merely named underlying brand unless the
+  source states a new integration or availability involving that brand.
+
 PRODUCT LABELS (independent multi-label array; an empty array is valid):
 Allowed keys exactly: bug, complaint, testimonial, ideas_requests,
 misinformation.
@@ -381,8 +402,17 @@ Advertising or CTA-heavy wrapper content should also carry marketing_spam. Do
 not infer scam, crypto, or unauthorized without their specific evidence. Use
 only these four keys.
 
-Return
-{"results":[{"tweet_id":str,"classifications":[{"brand_id":str,"outcome":"classified|context_missing","post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}],"unsanctioned_flags":[str]}]}.
+Return {"results":[
+  {"tweet_id":str,
+   "classifications":[
+     {"brand_id":str,
+      "outcome":"classified|context_missing",
+      "post_types":[str],
+      "product_labels":[str],
+      "sentiment":str|null,
+      "china_nationalism":str|null,
+      "us_nationalism":str|null}],
+   "unsanctioned_flags":[str]}]}.
 Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or
 code fences.
 Before returning, verify that every post_types value is one of:
@@ -391,9 +421,11 @@ advertising_marketing, events, opportunities, job_listings, personnel_changes,
 opinions_reactions, research_explanations, business_finance, other.
 Verify separately that every product_labels value is one of: bug, complaint,
 testimonial, ideas_requests, misinformation.
-Never copy a product_labels value into post_types. A classified result still
-needs a valid post type; use other alone only when no other post type
-definition applies.
+Never copy a product_labels value into post_types. If any post_types value is
+bug, complaint, testimonial, ideas_requests, or misinformation, remove it from
+post_types and keep it only in product_labels. A classified result still needs
+a valid post type; use other alone only when no other post type definition
+applies.
 ```
 
 ## Required response and strict parser

@@ -1207,6 +1207,15 @@ TYPE BOUNDARIES:
 - Rhetorical headings are not questions_requests. Use questions_requests for genuine questions or requests.
 - Investment, funding, valuation, earnings, ownership, revenue, and commercial strategy are business_finance.
 
+INDEPENDENT TYPE PASS:
+- For each attributed brand, decide yes or no for every allowed post type before writing post_types. Do not choose a primary type and stop. Output every yes; omit every no.
+- When a source both states a release, availability, integration, or pricing change and pitches it, include both releases_updates and advertising_marketing.
+- When a source both reports a result or comparison and expresses a view, prediction, or reaction, include both results_evaluations and opinions_reactions.
+- When technical explanation supports a result, opinion, business claim, or release, include research_explanations as well as the other supported type.
+- When actual use or a built artifact includes an evaluation of its outcome, include both hands_on_usage and results_evaluations.
+- A bounded discount, free-access period, credit, prize, or giveaway may support opportunities alongside advertising_marketing and, only when the source states new availability or pricing, releases_updates.
+- Keep this pass scoped to the attributed brand. A third-party product's release is not a release of a merely named underlying brand unless the source states a new integration or availability involving that brand.
+
 PRODUCT LABELS (independent multi-label array; an empty array is valid):
 Allowed keys exactly: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
 - Product-label keys are forbidden in post_types. In particular, bug, complaint, testimonial, ideas_requests, and misinformation may appear only in product_labels.
@@ -1248,7 +1257,7 @@ Return {{"results":[{{"tweet_id":str,"classifications":[{{"brand_id":str,"outcom
 Keep one result per input tweet. Preserve tweet IDs. No prose, explanation, or code fences.
 Before returning, verify that every post_types value is one of: {", ".join(_STAGE1_POST_TYPE_KEYS)}.
 Verify separately that every product_labels value is one of: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
-Never copy a product_labels value into post_types. A classified result still needs a valid post type; use other alone only when no other post type definition applies.
+Never copy a product_labels value into post_types. If any post_types value is bug, complaint, testimonial, ideas_requests, or misinformation, remove it from post_types and keep it only in product_labels. A classified result still needs a valid post type; use other alone only when no other post type definition applies.
 """
 
 

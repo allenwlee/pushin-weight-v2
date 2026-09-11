@@ -76,6 +76,9 @@ BUDGET_GOLD_AUDIT_PATH = (
 BUDGET_PRODUCTION_BATCH_PATH = (
     ROOT / "docs/analysis/2026-09-11-031000-u18-provider-budget-amendment-v14.json"
 )
+BUDGET_PROMPT_V9_PATH = (
+    ROOT / "docs/analysis/2026-09-11-034500-u18-provider-budget-amendment-v15.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -128,6 +131,14 @@ TAXONOMIES = {
         "prompt_version": "stage1-prompt-v8",
         "post_types": CANONICAL_POST_TYPE_KEYS,
         "prompt_path": PRIVATE / "v8-system-prompt.txt",
+        "source_revision": "HEAD",
+        "batch_size": 20,
+    },
+    "v3r7": {
+        "version": "stage1-taxonomy-v3",
+        "prompt_version": "stage1-prompt-v9",
+        "post_types": CANONICAL_POST_TYPE_KEYS,
+        "prompt_path": PRIVATE / "v9-system-prompt.txt",
         "source_revision": "HEAD",
         "batch_size": 20,
     },
@@ -223,6 +234,7 @@ class BudgetedTransport:
         temperature_zero_document = _read_json(BUDGET_TEMPERATURE_ZERO_PATH)
         gold_audit_document = _read_json(BUDGET_GOLD_AUDIT_PATH)
         production_batch_document = _read_json(BUDGET_PRODUCTION_BATCH_PATH)
+        prompt_v9_document = _read_json(BUDGET_PROMPT_V9_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -239,6 +251,7 @@ class BudgetedTransport:
             or temperature_zero_document["lanes"].get(lane)
             or gold_audit_document["lanes"].get(lane)
             or production_batch_document["lanes"].get(lane)
+            or prompt_v9_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -467,6 +480,7 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3r4": "candidate_v3r4_fallback",
         "v3r5": "candidate_v3r5_fallback",
         "v3r6": "candidate_v3r6_fallback",
+        "v3r7": "candidate_v3r7_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"
