@@ -184,7 +184,7 @@ Use these exact production semantics:
 
 outcome is classified or context_missing. classified requires at least one post_type and one valid sentiment. context_missing is only for missing source/context that prevents classification and requires empty post_types and product_labels. A bare reply or acknowledgment whose meaning or brand relationship depends on an absent parent is context_missing. For nationalism, none means the supplied source can be assessed and lacks that nationalism layer; null is only for missing or unusable context that prevents judgment.
 
-Return exactly {{"results":[{{"example_id":str,"brand_id":str,"v3":{{"outcome":str,"post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}},"job_discovery_relevant":bool,"personnel_discovery_relevant":bool,"evidence":[{{"field":str,"quote":str}}],"uncertainty_notes":[str]}}]}}. evidence must contain one to twelve short exact substrings copied from source text or stored context and identify the field each quote supports. Preserve every example_id and brand_id. No prose, markdown, unknown keys, or unsanctioned_flags."""
+Return exactly {{"results":[{{"example_id":str,"brand_id":str,"v3":{{"outcome":str,"post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}},"job_discovery_relevant":bool,"personnel_discovery_relevant":bool,"evidence":[{{"field":str,"quote":str}}],"uncertainty_notes":[str]}}]}}. For classified rows, evidence must contain one to twelve short exact substrings copied from source text or stored context and identify the field each quote supports. A context_missing row may use an empty evidence array because a quote cannot prove absent brand context. Preserve every example_id and brand_id. No prose, markdown, unknown keys, or unsanctioned_flags."""
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -898,8 +898,10 @@ def _parse_contract_audit(
         raw = raw_by_id[source["example_id"]]
         evidence = raw.get("evidence")
         notes = raw.get("uncertainty_notes")
-        if not isinstance(evidence, list) or not 1 <= len(evidence) <= 12:
-            raise ValueError("audit evidence must contain one to twelve entries")
+        if not isinstance(evidence, list) or len(evidence) > 12:
+            raise ValueError("audit evidence must contain zero to twelve entries")
+        if row["v3"]["outcome"] == "classified" and not evidence:
+            raise ValueError("classified audit evidence must not be empty")
         if not isinstance(notes, list) or any(
             not isinstance(note, str) for note in notes
         ):

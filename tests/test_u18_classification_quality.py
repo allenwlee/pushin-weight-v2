@@ -176,6 +176,46 @@ def test_gold_audit_requires_exact_source_evidence():
         quality._parse_contract_audit(response, [source])
 
 
+def test_gold_audit_allows_empty_evidence_only_for_context_missing():
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "input": {"text": "Unrelated sports recap", "context": []},
+    }
+    classification = {
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": None,
+        "china_nationalism": None,
+        "us_nationalism": None,
+    }
+    response = {
+        "results": [
+            {
+                "example_id": "post-1",
+                "brand_id": "llama",
+                "v3": classification,
+                "job_discovery_relevant": False,
+                "personnel_discovery_relevant": False,
+                "evidence": [],
+                "uncertainty_notes": ["No usable brand context."],
+            }
+        ]
+    }
+
+    assert quality._parse_contract_audit(response, [source])[0]["evidence"] == []
+
+    response["results"][0]["v3"] = {
+        **classification,
+        "outcome": "classified",
+        "post_types": ["other"],
+        "sentiment": "neutral",
+    }
+    with pytest.raises(ValueError, match="must not be empty"):
+        quality._parse_contract_audit(response, [source])
+
+
 def test_gold_audit_resolves_markdown_and_unicode_to_actual_source_span():
     source = "**general‑purpose AI** works"
 
