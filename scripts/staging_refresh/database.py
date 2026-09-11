@@ -57,6 +57,7 @@ class SourceCensus:
     terminal_narrative_count: int
     current_narrative_count: int
     pending_migration_count_deltas: Mapping[str, int]
+    pending_migration_translation_count_deltas: Mapping[str, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,9 +315,27 @@ def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
 def _pending_migration_count_deltas(
     policy: RefreshPolicy, migration_rows: list[tuple[Any, ...]]
 ) -> dict[str, int]:
+    return _pending_migration_deltas(
+        policy.validation.forward_migration_count_deltas, migration_rows
+    )
+
+
+def _pending_migration_translation_count_deltas(
+    policy: RefreshPolicy, migration_rows: list[tuple[Any, ...]]
+) -> dict[str, int]:
+    return _pending_migration_deltas(
+        policy.validation.forward_migration_translation_count_deltas,
+        migration_rows,
+    )
+
+
+def _pending_migration_deltas(
+    configured: Mapping[str, Mapping[str, int]],
+    migration_rows: list[tuple[Any, ...]],
+) -> dict[str, int]:
     applied = {(str(row[0]), str(row[1])) for row in migration_rows}
     pending: dict[str, int] = {}
-    for migration, deltas in policy.validation.forward_migration_count_deltas.items():
+    for migration, deltas in configured.items():
         app, name = migration.split(".", 1)
         if (app, name) in applied:
             continue
@@ -405,6 +424,9 @@ class PsycopgSnapshotAdapter:
             pending_migration_count_deltas = _pending_migration_count_deltas(
                 self.policy, migration_rows
             )
+            pending_migration_translation_count_deltas = (
+                _pending_migration_translation_count_deltas(self.policy, migration_rows)
+            )
             row_counts: dict[str, int] = {}
             for table in self.policy.validation.exact_count_tables:
                 cursor.execute(
@@ -451,6 +473,9 @@ class PsycopgSnapshotAdapter:
                 terminal_narrative_count=terminal_narrative_count,
                 current_narrative_count=current_narrative_count,
                 pending_migration_count_deltas=pending_migration_count_deltas,
+                pending_migration_translation_count_deltas=(
+                    pending_migration_translation_count_deltas
+                ),
             )
             try:
                 yield census
@@ -1181,6 +1206,7 @@ class CandidateProcessor:
             if census.row_counts.get(table, 0) <= 0:
                 raise RefreshError(f"candidate_required_table_empty:{table}")
         for key, expected in source.translation_counts.items():
+            expected += source.pending_migration_translation_count_deltas.get(key, 0)
             if census.translation_counts.get(key) != expected:
                 raise RefreshError(f"candidate_translation_mismatch:{key}")
         for table, expected in source.classification_counts.items():

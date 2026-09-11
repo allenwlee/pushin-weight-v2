@@ -26,6 +26,7 @@ from scripts.staging_refresh.database import (
     SnapshotRestoreEngine,
     SourceCensus,
     _pending_migration_count_deltas,
+    _pending_migration_translation_count_deltas,
     inspect_staging_quiescence,
     scrub_candidate_data,
 )
@@ -79,6 +80,7 @@ class FakeAdapter:
             terminal_narrative_count=4,
             current_narrative_count=4,
             pending_migration_count_deltas={},
+            pending_migration_translation_count_deltas={},
         )
         self.candidate_census = CandidateCensus(
             base_tables=policy.relations.classified_tables,
@@ -561,6 +563,13 @@ def test_pending_migration_count_deltas_apply_only_until_migration_is_present() 
         "brands_companies": 2,
     }
     assert _pending_migration_count_deltas(policy, [("core", migration, None)]) == {}
+    assert _pending_migration_translation_count_deltas(
+        policy, [("core", "0032", None)]
+    ) == {"brands.display_name_en": 2}
+    assert (
+        _pending_migration_translation_count_deltas(policy, [("core", migration, None)])
+        == {}
+    )
 
 
 def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
@@ -571,6 +580,7 @@ def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
     adapter.census = replace(
         adapter.census,
         pending_migration_count_deltas=deltas,
+        pending_migration_translation_count_deltas={"brands.display_name_en": 2},
     )
     adapter.candidate_census = replace(
         adapter.candidate_census,
@@ -578,6 +588,12 @@ def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
             **adapter.candidate_census.row_counts,
             "brands": adapter.census.row_counts["brands"] + 2,
             "brands_companies": adapter.census.row_counts["brands_companies"] + 2,
+        },
+        translation_counts={
+            **adapter.candidate_census.translation_counts,
+            "brands.display_name_en": (
+                adapter.census.translation_counts["brands.display_name_en"] + 2
+            ),
         },
     )
     artifact = engine.export_dump()

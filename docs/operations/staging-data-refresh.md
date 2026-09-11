@@ -142,7 +142,9 @@ the complete post-migration relation set.
 When migration `core.0033_stage1c_frontier_organization_brands` is pending on
 the source, validation requires exactly two additional `brands` rows and two
 additional `brands_companies` rows after migration. Once the source has that
-migration, the expected delta automatically returns to zero.
+migration, the expected delta automatically returns to zero. The same migration
+must add exactly two nonempty `brands.display_name_en` values and no undeclared
+translation-count changes.
 Once those migrations are in production, apply the new grants above before the
 next refresh; preflight then requires each present optional relation to have
 its declared read or maintenance privilege.

@@ -78,6 +78,7 @@ class ValidationPolicy:
     latest_timestamp_column: str
     maximum_latest_timestamp_lag_seconds: int
     forward_migration_count_deltas: Mapping[str, Mapping[str, int]]
+    forward_migration_translation_count_deltas: Mapping[str, Mapping[str, int]]
     required_columns: Mapping[str, frozenset[str]]
     translation_columns: Mapping[str, tuple[str, ...]]
     classification_tables: tuple[str, ...]
@@ -308,7 +309,7 @@ def _identifier_mapping(
 
 
 def _migration_count_delta_mapping(
-    raw: Mapping[str, Any], key: str, *, field: str
+    raw: Mapping[str, Any], key: str, *, field: str, dotted_metrics: bool = False
 ) -> dict[str, dict[str, int]]:
     value = raw.get(key)
     if not isinstance(value, Mapping) or not value:
@@ -323,16 +324,22 @@ def _migration_count_delta_mapping(
         if not isinstance(deltas, Mapping) or not deltas:
             raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
         parsed: dict[str, int] = {}
-        for table, delta in deltas.items():
+        for metric, delta in deltas.items():
+            metric_parts = metric.split(".") if isinstance(metric, str) else []
+            valid_metric = (
+                len(metric_parts) == 2
+                and all(_DATABASE_NAME.fullmatch(part) for part in metric_parts)
+                if dotted_metrics
+                else isinstance(metric, str) and bool(_DATABASE_NAME.fullmatch(metric))
+            )
             if (
-                not isinstance(table, str)
-                or not _DATABASE_NAME.fullmatch(table)
+                not valid_metric
                 or not isinstance(delta, int)
                 or isinstance(delta, bool)
                 or delta <= 0
             ):
                 raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
-            parsed[table] = delta
+            parsed[metric] = delta
         result[migration] = parsed
     return result
 
@@ -440,6 +447,7 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         "latest_timestamp_column",
         "maximum_latest_timestamp_lag_seconds",
         "forward_migration_count_deltas",
+        "forward_migration_translation_count_deltas",
         "required_columns",
         "translation_columns",
         "classification_tables",
@@ -467,6 +475,12 @@ def load_policy(path: str | Path) -> RefreshPolicy:
             validation_raw,
             "forward_migration_count_deltas",
             field="validation",
+        ),
+        forward_migration_translation_count_deltas=_migration_count_delta_mapping(
+            validation_raw,
+            "forward_migration_translation_count_deltas",
+            field="validation",
+            dotted_metrics=True,
         ),
         required_columns=_identifier_mapping(
             validation_raw, "required_columns", field="validation"
@@ -502,6 +516,18 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     )
     if not configured_validation_tables <= relations.copied_tables:
         raise PolicyError("policy_validation_table_not_copied")
+    translation_metrics = {
+        f"{table}.{column}"
+        for table, columns in validation.translation_columns.items()
+        for column in columns
+    }
+    delta_translation_metrics = {
+        metric
+        for deltas in validation.forward_migration_translation_count_deltas.values()
+        for metric in deltas
+    }
+    if not delta_translation_metrics <= translation_metrics:
+        raise PolicyError("policy_migration_delta_translation_not_validated")
 
     storage_raw = _mapping(raw, "storage")
     _strict(

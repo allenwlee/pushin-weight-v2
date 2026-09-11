@@ -79,6 +79,9 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
             "brands_companies": 2,
         }
     }
+    assert policy.validation.forward_migration_translation_count_deltas == {
+        "core.0033_stage1c_frontier_organization_brands": {"brands.display_name_en": 2}
+    }
     assert {"brands", "brands_companies", "companies"} <= set(
         policy.validation.exact_count_tables
     )
