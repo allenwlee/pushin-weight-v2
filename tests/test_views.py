@@ -430,7 +430,9 @@ class TestFeedViewIntegration:
         assert "locale" in data
 
     @pytest.mark.requires_postgres
-    def test_feed_routes_hide_ineligible_rows_before_page_limit(self, client, django_user_model):
+    def test_feed_routes_keep_enrichment_states_visible_before_page_limit(
+        self, client, django_user_model
+    ):
         from datetime import timedelta
 
         from django.utils import timezone
@@ -523,18 +525,23 @@ class TestFeedViewIntegration:
             response = client.get(feed_url, secure=True)
             assert response.status_code == 200
             assert [row["tweet_id"] for row in response.json()["rows"]] == [
-                succeeded.tweet_id,
-                legacy.tweet_id,
+                pending.tweet_id,
+                failed.tweet_id,
             ]
 
         for route in ("/", "/internal/", "/brands/deepseek/"):
             html_response = client.get(route, secure=True)
             assert html_response.status_code == 200
             html = html_response.content.decode("utf-8")
-            for visible in (succeeded, legacy):
+            for visible in (
+                pending,
+                failed,
+                succeeded,
+                legacy,
+                invalid_succeeded,
+                incomplete_legacy,
+            ):
                 assert f'data-tweet-id="{visible.tweet_id}"' in html
-            for hidden in (pending, failed, invalid_succeeded, incomplete_legacy):
-                assert f'data-tweet-id="{hidden.tweet_id}"' not in html
 
     def test_feed_is_public_for_the_anonymous_home(self, client):
         resp = client.get("/feed/", secure=True)

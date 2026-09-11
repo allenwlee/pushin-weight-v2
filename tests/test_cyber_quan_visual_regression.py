@@ -179,6 +179,11 @@ def _release_a_mask(page: Page) -> bytes:
           // by the reviewed Cyber-Quan golden.
           document.querySelectorAll('[data-group="product_labels"]')
             .forEach(node => paint(node));
+          // U20 adds Japanese as an equal product locale. The added control
+          // changes the width and positions of the existing locale buttons,
+          // so the complete locale switcher is the intentional surface.
+          document.querySelectorAll('.locale-toggle')
+            .forEach(node => paint(node));
           // Preserve the same known Chromium rounded-edge seam allowance as
           // the reviewed icon mask above. This is a two-pixel raster boundary,
           // not an additional owner-approved product surface.

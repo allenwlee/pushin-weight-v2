@@ -1511,3 +1511,17 @@ real homepage browser test passes at 1440 × 960, 390 × 844, and 320 × 700 whi
 asserting every affected filter icon renders at exactly 15 × 15 CSS pixels.
 The integrated U22 browser/cost proof remains required after U18 passes and
 before U23 may refresh and activate staging.
+
+The first aggregate U19–U22 local pass executed 199 focused tests, including
+82 PostgreSQL-required checks, with zero skips or errors. A fresh disposable
+PostgreSQL database then applied the complete migration chain through `0038`,
+reported no model drift, and passed Django system checks. The affected
+Bridgewright UI assurance gate initially exposed four stale pre-U20/U22 pins:
+pending posts were still expected to be hidden, translation and synthesis
+status shared an overly broad selector, the query ceiling omitted five bounded
+normalized-artifact queries, and the visual mask did not include the approved
+Japanese locale control. Those pins now express the current contract. The
+rerun passed all 3,598 declared obligations with 171 Python/browser tests (44
+required PostgreSQL checks and zero skips/errors), 108 chart JavaScript tests,
+and 102 feed JavaScript tests. U19's fixed old-policy/new-policy cost replay
+and the later production-shaped integrated U22 proof remain open.

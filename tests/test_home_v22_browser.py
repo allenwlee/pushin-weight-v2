@@ -3925,14 +3925,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 self.assertEqual(
                                     page.locator(
                                         '[data-tweet-id="v22-metadata-004"] '
-                                        ".enrichment-status"
+                                        ".enrichment-status-pending"
                                     ).inner_text(),
                                     "补充处理中",
                                 )
                                 self.assertEqual(
                                     page.locator(
                                         '[data-tweet-id="v22-metadata-005"] '
-                                        ".enrichment-status"
+                                        ".enrichment-status-failed"
                                     ).inner_text(),
                                     "补充失败",
                                 )
@@ -5627,8 +5627,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertLessEqual(
             len(full_queries),
-            30,
-            "52 enriched rows must use bounded bulk metadata queries, not per-row lookups",
+            35,
+            "52 enriched rows must use bounded bulk metadata and artifact queries, not per-row lookups",
         )
 
     def test_feed_eligibility_query_keeps_request_latency_and_roundtrips_bounded(
