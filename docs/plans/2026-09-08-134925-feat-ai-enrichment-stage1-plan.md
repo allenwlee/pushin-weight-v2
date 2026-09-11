@@ -1539,3 +1539,24 @@ publication validity was 100%. The machine-readable and plain-English evidence
 is in `docs/analysis/2026-09-11-180315-headline-demand-replay.json` and its
 Markdown sibling. The provider-free U19 replay gate now passes. The
 production-shaped integrated U22 proof remains open after U18.
+
+The integrated data, migration, concurrency, and security review is complete
+on product revision `1b3d73e6a36c5e053c70942fc7e9c786d2de8d8f`. It closes six
+candidate defects before activation: untracked personnel affiliations now
+retain a pending organization owner and evidence; impossible or backwards
+source dates and timezone-free job timestamps fail atomically; fallback job
+identity normalizes text and unordered locations; later canonical job evidence
+fills missing listing facts without erasing first-seen provenance; an older
+headline run cannot satisfy a newer provider/version or operator request; and
+synthesis rate-limit identities use a secret-keyed digest. Extraction prompt
+identities advance to v2 for every replay-sensitive role. Migration `0039`
+applied cleanly to the frozen 211,245-post production copy, where the new
+affiliation table remains empty, and the exact-one-organization constraint is
+present. The focused review suite passes 55 PostgreSQL-required tests with no
+skips or errors. Full findings, SQL, rollback boundaries, and remaining gates
+are recorded in
+`docs/analysis/2026-09-11-214911-integrated-candidate-integrity-review.md`.
+The selected aggregate and exact-candidate replays are next. U18 still blocks
+staging refresh and activation because both local direct-Anthropic credentials
+and the production web credential return HTTP 401, while staging web has no
+`ANTHROPIC_API_KEY`; these checks made no classifier call and exposed no key.
