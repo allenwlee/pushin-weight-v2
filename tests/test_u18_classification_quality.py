@@ -290,3 +290,8 @@ def test_v3r6_candidate_uses_the_production_batch_size():
 def test_v3r7_candidate_tests_prompt_v9_at_the_production_batch_size():
     assert quality.TAXONOMIES["v3r7"]["batch_size"] == 20
     assert quality.TAXONOMIES["v3r7"]["prompt_version"] == "stage1-prompt-v9"
+
+
+def test_v3r8_candidate_tests_pro_model_with_the_same_prompt_and_batch_size():
+    assert quality.TAXONOMIES["v3r8"]["batch_size"] == 20
+    assert quality.TAXONOMIES["v3r8"]["prompt_version"] == "stage1-prompt-v9"

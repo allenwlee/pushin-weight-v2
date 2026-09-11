@@ -1,0 +1,48 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T04:00:00Z",
+  "reason": "the v9 instruction-only Flash candidate remained below the unchanged post-type floor and repeated a deterministic closed-contract failure; v3r8 keeps prompt v9, taxonomy v3, temperature zero, strict parsing, the development cohort, and production batch size 20 while testing DeepSeek V4 Pro as an explicit quality-versus-cost alternative",
+  "source_budgets": [
+    "2026-09-11-034500-u18-provider-budget-amendment-v15.json",
+    "2026-09-11-030000-u18-provider-budget-amendment-v13.json"
+  ],
+  "lanes": {
+    "candidate_v3r8": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "batch_size": 20,
+      "maximum_examples": 500,
+      "maximum_requests": 25,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 50,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 650000,
+      "maximum_output_tokens": 110000,
+      "maximum_cost_usd": "1.30",
+      "twitterapi_credits": 0
+    },
+    "candidate_v3r8_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "batch_size": 1,
+      "maximum_examples": 100,
+      "maximum_requests": 100,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 100,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 1000000,
+      "maximum_output_tokens": 120000,
+      "maximum_cost_usd": "1.80",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The Pro-model development candidate and fallback refuse the next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; fallback is capped at 100 posts, unused capacity cannot move between lanes, and this tuned cohort cannot serve as the final unseen classification gate."
+}
