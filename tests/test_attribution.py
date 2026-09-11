@@ -9,6 +9,7 @@ case-insensitive, unknown handles, NULL entities, etc.).
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -957,10 +958,10 @@ def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
     assert results == [
         {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
     ]
-    # on_batch_error was called with the shape-drift ValueError
-    assert len(captured_exc) == 1
-    assert isinstance(captured_exc[0], ValueError)
-    assert "shape drift" in str(captured_exc[0])
+    # Each independent pass surfaces its own shape drift.
+    assert len(captured_exc) == 2
+    assert all(isinstance(exc, ValueError) for exc in captured_exc)
+    assert all("shape drift" in str(exc) for exc in captured_exc)
 
 
 def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch):
@@ -975,12 +976,32 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
     class FakeClient:
         def messages_create(self, **kwargs):
             calls.append(kwargs)
-            if len(calls) < 3:
-                tweet_id = "t1" if len(calls) == 1 else "_single_"
+            if kwargs["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT:
                 return {
                     "results": [
                         {
-                            "tweet_id": tweet_id,
+                            "tweet_id": "_single_",
+                            "classifications": [
+                                {
+                                    "brand_id": "minimax",
+                                    "outcome": "classified",
+                                    "post_types": ["opinions_reactions"],
+                                    "product_labels": ["complaint"],
+                                    "sentiment": "negative",
+                                    "china_nationalism": "none",
+                                    "us_nationalism": "none",
+                                }
+                            ],
+                            "unsanctioned_flags": [],
+                        }
+                    ]
+                }
+            payload = json.loads(kwargs["messages"][0]["content"])
+            if payload[0]["tweet_id"] == "_single_":
+                return {
+                    "results": [
+                        {
+                            "tweet_id": "_single_",
                             "classifications": [
                                 {
                                     "brand_id": "minimax",
@@ -999,12 +1020,16 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
             return {
                 "results": [
                     {
-                        "tweet_id": "_single_",
+                        "tweet_id": "t1",
                         "classifications": [
                             {
                                 "brand_id": "minimax",
                                 "outcome": "classified",
-                                "post_types": ["opinions_reactions"],
+                                "post_types": (
+                                    ["complaint"]
+                                    if len(calls) == 1
+                                    else ["opinions_reactions"]
+                                ),
                                 "product_labels": ["complaint"],
                                 "sentiment": "negative",
                                 "china_nationalism": "none",
@@ -1021,10 +1046,10 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
         brand_registry=[],
         anthropic_client=FakeClient(),
-        telemetry_context={"prompt_version": "stage1-prompt-v10"},
+        telemetry_context={"prompt_version": "stage1-prompt-v11"},
     )
 
-    assert len(calls) == 3
+    assert len(calls) == 4
     assert calls[2]["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT
     assert result[0]["valid"] is True
     assert result[0]["by_brand"]["minimax"]["post_types"] == [

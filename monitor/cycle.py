@@ -18,8 +18,8 @@ The cycle flow:
   9. Emit run summary in LATEST.json compatible shape
 
 LLM guardrails (U2):
-  - Pause between classifier batches via X_MONITOR_LLM_PAUSE_SECONDS
-  - Hard cap via _max_llm_calls (None = no cap, used by backfill command)
+  - Minimum spacing between classifier requests via X_MONITOR_LLM_PAUSE_SECONDS
+  - Hard transport cap via _max_llm_calls (None = no cap)
 
 Key constraint (KTD2): The legacy x_monitor/run.py and macOS launchd
 agents MUST remain untouched. This is a NEW entry point.
@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -103,6 +104,7 @@ from x_monitor.apify import (
     TwitterApiServerError,
 )
 from x_monitor.attribution import (
+    LLMCallBudgetExhausted,
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
     attribute_to_brands,
@@ -115,6 +117,51 @@ from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
+
+
+class _BoundedClassifierClient:
+    """Apply a shared request cap and start-rate limit at transport time."""
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        maximum_calls: int | None,
+        pause_seconds: float,
+        monotonic: Any = time.monotonic,
+        sleep: Any = time.sleep,
+    ) -> None:
+        self._delegate = client
+        self._base_url = getattr(client, "_base_url", None)
+        self._maximum_calls = maximum_calls
+        self._pause_seconds = max(0.0, float(pause_seconds))
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._lock = threading.Lock()
+        self._calls = 0
+        self._last_started: float | None = None
+
+    @property
+    def calls(self) -> int:
+        with self._lock:
+            return self._calls
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        with self._lock:
+            if (
+                self._maximum_calls is not None
+                and self._calls >= self._maximum_calls
+            ):
+                raise LLMCallBudgetExhausted("classifier transport cap exhausted")
+            if self._last_started is not None and self._pause_seconds:
+                wait_seconds = (
+                    self._last_started + self._pause_seconds - self._monotonic()
+                )
+                if wait_seconds > 0:
+                    self._sleep(wait_seconds)
+            self._calls += 1
+            self._last_started = self._monotonic()
+        return self._delegate.messages_create(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -2300,10 +2347,9 @@ class CycleRunner:
         labels, scalar judgments, and top-level unsanctioned flags.
 
         Guardrails:
-          - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).
-          - Hard cap on LLM batches (self._max_llm_calls).  When reached,
-            classification stops — remaining posts are persisted without
-            labels and will be picked up by the next invocation.
+          - Space classifier request starts (X_MONITOR_LLM_PAUSE_SECONDS).
+          - Enforce the LLM request cap (self._max_llm_calls) immediately
+            before transport. Remaining posts stay pending for a later run.
 
         Lazy imports are used so the module loads without LLM deps.
         """
@@ -2661,11 +2707,22 @@ class CycleRunner:
             classification_deadline = enrichment_cfg.start_attempt_deadline(
                 monotonic=self._monotonic
             )
+            remaining_llm_calls = (
+                None
+                if self._max_llm_calls is None
+                else max(0, self._max_llm_calls - self._llm_call_count)
+            )
+            bounded_classifier_client = _BoundedClassifierClient(
+                classifier_client,
+                maximum_calls=remaining_llm_calls,
+                pause_seconds=pause_sec,
+                monotonic=self._monotonic,
+            )
             try:
                 results = classify_batch_pragmatics_full(
                     classification_tweets,
                     brand_registry,
-                    classifier_client,
+                    bounded_classifier_client,
                     model=self.cfg.llm.classifier_model,
                     on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
                         "classifier_batch_failed",
@@ -2681,10 +2738,8 @@ class CycleRunner:
                 )
                 self._error_counts["classifier_batch_failed"] += 1
                 classification_error_code = "classifier_exception"
-
-        _CLASSIFY_BATCH_SIZE = getattr(
-            settings, "X_MONITOR_CLASSIFY_BATCH_SIZE", 20
-        )
+            finally:
+                self._llm_call_count += bounded_classifier_client.calls
 
         classification_succeeded: set[str] = set()
         targeted_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
@@ -2758,32 +2813,6 @@ class CycleRunner:
                 counters["n_classifications_published"] = (
                     counters.get("n_classifications_published", 0) + 1
                 )
-
-            # Guard: pause / cap at batch boundaries.
-            # classify_batch_pragmatics_full batches 20 posts per LLM call
-            # internally.  We track boundaries in the result loop so the
-            # max_llm_calls cap can stop processing past a boundary.
-            if (
-                (i + 1) % _CLASSIFY_BATCH_SIZE == 0
-                and i + 1 < len(classification_tweets)
-            ):
-                if pause_sec > 0:
-                    import time as _time
-
-                    _time.sleep(pause_sec)
-                self._llm_call_count += 1
-                if (
-                    self._max_llm_calls is not None
-                    and self._llm_call_count >= self._max_llm_calls
-                ):
-                    logger.info(
-                        "_run_post_fetch: max_llm_calls (%d) reached — "
-                        "stopping classification",
-                        self._max_llm_calls,
-                    )
-                    break
-            elif (i + 1) % _CLASSIFY_BATCH_SIZE == 0:
-                self._llm_call_count += 1
 
         newly_failed += _finish_enrichment_stage(
             post_ids=claimed_post_ids,

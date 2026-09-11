@@ -165,14 +165,14 @@ def test_empty_input_and_missing_client_make_no_transport_calls():
     assert client.calls == []
 
 
-def test_one_transport_call_classifies_twenty_posts():
+def test_two_independent_calls_classify_each_ten_post_batch():
     from x_monitor.attribution import classify_batch_pragmatics_full
 
     client = FakeClient()
     result = classify_batch_pragmatics_full(tweets(20), [], client)
 
-    assert len(client.calls) == 1
-    assert len(prompt_payload(client.calls[0])) == 20
+    assert len(client.calls) == 4
+    assert [len(prompt_payload(call)) for call in client.calls] == [10, 10, 10, 10]
     assert len(result) == 20
     assert all(row["valid"] for row in result)
 
@@ -182,7 +182,6 @@ def test_concurrent_batches_are_bounded_at_three_and_keep_input_order():
 
     class ConcurrentClient:
         def __init__(self):
-            self.barrier = threading.Barrier(3)
             self.lock = threading.Lock()
             self.active = 0
             self.max_active = 0
@@ -194,8 +193,7 @@ def test_concurrent_batches_are_bounded_at_three_and_keep_input_order():
                 self.active += 1
                 self.max_active = max(self.max_active, self.active)
                 self.batch_sizes.append(len(payload))
-            self.barrier.wait(timeout=2)
-            time.sleep(0.01)
+            time.sleep(0.02)
             with self.lock:
                 self.active -= 1
             return response_for_payload(payload)
@@ -207,7 +205,7 @@ def test_concurrent_batches_are_bounded_at_three_and_keep_input_order():
     )
 
     assert client.max_active == 3
-    assert sorted(client.batch_sizes) == [1, 20, 20]
+    assert sorted(client.batch_sizes) == [1, 1, *([10] * 8)]
     assert [
         next(iter(row["by_brand"])) for row in result
     ] == ["deepseek"] * 41
@@ -228,6 +226,142 @@ def test_out_of_order_result_ids_are_realigned_to_input_order():
 
     assert list(result[0]["by_brand"]) == ["deepseek"]
     assert list(result[1]["by_brand"]) == ["qwen"]
+
+
+def test_two_pass_merge_unions_general_labels_and_adjudicates_rare_labels():
+    from x_monitor.attribution import (
+        _PRAGMATICS_RARE_SYSTEM_PROMPT,
+        classify_batch_pragmatics_full,
+    )
+
+    input_rows = [
+        {"tweet_id": "person", "text": "A profile update", "brand_ids": ["deepseek"]},
+        {"tweet_id": "residual", "text": "A residual post", "brand_ids": ["qwen"]},
+        {"tweet_id": "missing", "text": "thank you", "brand_ids": ["mistral"]},
+    ]
+    base_calls = 0
+
+    def handler(kwargs):
+        nonlocal base_calls
+        if kwargs["system"] == _PRAGMATICS_RARE_SYSTEM_PROMPT:
+            return {
+                "results": [
+                    {
+                        "tweet_id": "person",
+                        "decisions": [
+                            {
+                                "brand_id": "deepseek",
+                                "personnel_changes": False,
+                                "other": False,
+                            }
+                        ],
+                    },
+                    {
+                        "tweet_id": "residual",
+                        "decisions": [
+                            {
+                                "brand_id": "qwen",
+                                "personnel_changes": False,
+                                "other": True,
+                            }
+                        ],
+                    },
+                ]
+            }
+        base_calls += 1
+        if base_calls == 1:
+            return {
+                "results": [
+                    {
+                        "tweet_id": "person",
+                        "classifications": [
+                            classification(
+                                "deepseek",
+                                post_types=["releases_updates", "personnel_changes"],
+                                product_labels=["testimonial"],
+                                sentiment="positive",
+                            )
+                        ],
+                        "unsanctioned_flags": ["crypto"],
+                    },
+                    {
+                        "tweet_id": "residual",
+                        "classifications": [classification("qwen", post_types=["other"])],
+                        "unsanctioned_flags": [],
+                    },
+                    {
+                        "tweet_id": "missing",
+                        "classifications": [classification("mistral")],
+                        "unsanctioned_flags": [],
+                    },
+                ]
+            }
+        return {
+            "results": [
+                {
+                    "tweet_id": "person",
+                    "classifications": [
+                        classification(
+                            "deepseek",
+                            post_types=["research_explanations"],
+                            product_labels=["ideas_requests"],
+                            sentiment="neutral",
+                        )
+                    ],
+                    "unsanctioned_flags": ["marketing_spam"],
+                },
+                {
+                    "tweet_id": "residual",
+                    "classifications": [
+                        classification("qwen", post_types=["opinions_reactions"])
+                    ],
+                    "unsanctioned_flags": [],
+                },
+                {
+                    "tweet_id": "missing",
+                    "classifications": [
+                        classification(
+                            "mistral",
+                            post_types=[],
+                            product_labels=[],
+                            sentiment=None,
+                            china_nationalism=None,
+                            us_nationalism=None,
+                            outcome="context_missing",
+                        )
+                    ],
+                    "unsanctioned_flags": [],
+                },
+            ]
+        }
+
+    client = FakeClient(handler)
+    result = classify_batch_pragmatics_full(input_rows, [], client)
+
+    assert len(client.calls) == 3
+    assert result[0] == {
+        "by_brand": {
+            "deepseek": {
+                "outcome": "classified",
+                "post_types": ["releases_updates", "research_explanations"],
+                "product_labels": ["testimonial", "ideas_requests"],
+                "sentiment": "positive",
+                "china_nationalism": "none",
+                "us_nationalism": "none",
+            }
+        },
+        "unsanctioned_flags": ["crypto", "marketing_spam"],
+        "valid": True,
+    }
+    assert result[1]["by_brand"]["qwen"]["post_types"] == ["other"]
+    assert result[2]["by_brand"]["mistral"] == {
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": None,
+        "china_nationalism": None,
+        "us_nationalism": None,
+    }
 
 
 @pytest.mark.parametrize(
@@ -268,14 +402,15 @@ def test_invalid_batch_falls_back_per_post_with_all_local_context(invalid_mode):
         on_batch_error=lambda _batch, exc: errors.append(exc),
     )
 
-    assert [len(payload) for payload in seen_payloads] == [2, 1, 1]
-    assert len(errors) == 1
+    assert [len(payload) for payload in seen_payloads] == [2, 1, 2, 1]
+    assert len(errors) == 2
     assert all(row["valid"] for row in result)
-    for index, fallback_payload in enumerate(seen_payloads[1:]):
-        assert fallback_payload[0]["context"] == [
-            {"provenance": "stored_quote", "text": f"quote {index}"},
-            {"provenance": "local_parent", "text": f"parent {index}"},
-        ]
+    fallback_payload = next(payload for payload in seen_payloads if len(payload) == 1)
+    invalid_index = 1 if invalid_mode == "cardinality" else 0
+    assert fallback_payload[0]["context"] == [
+        {"provenance": "stored_quote", "text": f"quote {invalid_index}"},
+        {"provenance": "local_parent", "text": f"parent {invalid_index}"},
+    ]
 
 
 def test_transport_exception_retries_then_falls_back_once_per_post(monkeypatch):
@@ -301,7 +436,7 @@ def test_transport_exception_retries_then_falls_back_once_per_post(monkeypatch):
         on_batch_error=lambda _batch, exc: errors.append(exc),
     )
 
-    assert calls == 5
+    assert calls == 6
     assert len(errors) == 1
     assert all(row["valid"] for row in result)
 
@@ -328,7 +463,7 @@ def test_fallback_preserves_explicit_model_thinking_and_token_budget():
     )
 
     assert all(row["valid"] for row in result)
-    assert len(client.calls) == 3
+    assert len(client.calls) == 6
     from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
 
     for call in client.calls:
@@ -368,7 +503,7 @@ def test_duplicate_or_missing_brand_objects_trigger_strict_fallback():
     client = FakeClient(handler)
     result = classify_batch_pragmatics_full(input_rows, [], client)
 
-    assert len(client.calls) == 2
+    assert len(client.calls) == 3
     assert result[0]["valid"] is True
     assert set(result[0]["by_brand"]) == {"deepseek", "qwen"}
 

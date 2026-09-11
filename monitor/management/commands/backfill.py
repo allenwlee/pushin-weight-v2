@@ -203,7 +203,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--max-llm-calls", type=int, default=None,
-            help="Hard cap on LLM classify batches per invocation (default: no cap).",
+            help="Hard cap on classifier transport requests per invocation (default: no cap).",
         )
 
     def handle(self, *args, **options) -> None:

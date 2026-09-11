@@ -110,6 +110,9 @@ def test_prompt_defines_classified_context_missing_and_other_without_defaults():
     assert "use null for an unknown scalar" in prompt
     assert "other: a confident residual only" in prompt
     assert "exclusive" in prompt
+    assert "separately for each attributed brand" in prompt
+    assert "bare careers-page pointer without a concrete role" in prompt
+    assert "content about the attributed brand" in prompt
 
 
 def test_prompt_limits_context_to_stored_provenance_and_forbids_fetches():
@@ -128,7 +131,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v10"
+    assert PROMPT_VERSION == "stage1-prompt-v11"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():
