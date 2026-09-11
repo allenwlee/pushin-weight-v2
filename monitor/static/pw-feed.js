@@ -216,7 +216,7 @@
   function countryFlagSpriteUrl() {
     var body = typeof document !== 'undefined' ? document.body : null;
     var spriteUrl = body && body.getAttribute('data-pw-country-flag-sprite-url');
-    return spriteUrl && spriteUrl.indexOf('country-flags.svg') !== -1 ? spriteUrl : '';
+    return spriteUrl && /(^|\/)country-flags(?:\.[a-f0-9]+)?\.svg(?:[?#]|$)/i.test(spriteUrl) ? spriteUrl : '';
   }
 
   function countryFlagHref(symbolId) {

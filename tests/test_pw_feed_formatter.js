@@ -150,15 +150,28 @@ assertEq(
 console.log('\n--- feed row identity and follower lead ---');
 assertEq(typeof renderRowHtml, 'function', 'renderRowHtml is available to contract tests');
 if (typeof renderRowHtml === 'function') {
+  const flagSpriteUrl = '/static/country-flags.e1ef2c1d1cff.svg';
   global.document = {
     body: { getAttribute: (name) => ({
-      'data-pw-country-flag-sprite-url': '/static/country-flags.svg',
+      'data-pw-country-flag-sprite-url': flagSpriteUrl,
       'data-pw-country-flag-codes': JSON.stringify(['CN', 'HK', 'US']),
     }[name] || null) },
     querySelector: () => null,
     getElementById: (id) => ['flag-cn', 'flag-hk', 'flag-us'].includes(id) ? {} : null,
+    createElement: () => {
+      const attributes = {};
+      return {
+        className: '',
+        innerHTML: '',
+        setAttribute: (name, value) => { attributes[name] = value; },
+        getAttribute: (name) => attributes[name] || '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+    },
   };
-  const rowHtml = renderRowHtml({
+  const geographyRow = {
+    tweet_id: 'production-refresh-row',
     account: {
       handle: '@account_handle',
       display_name: 'Account Name',
@@ -179,7 +192,8 @@ if (typeof renderRowHtml === 'function') {
     follower_bin: '50k-plus',
     followers_label: '52.1k followers',
     engagement_pretty: { followers: '52.1k', likes: '3', retweets: '2', replies: '1' },
-  });
+  };
+  const rowHtml = renderRowHtml(geographyRow);
   assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus has-account-metadata"'), true,
     'feed row reserves a fixed follower lead column');
   assertEq(rowHtml.includes('class="follower-glyph"'), true,
@@ -208,7 +222,7 @@ if (typeof renderRowHtml === 'function') {
     'role badge uses the shared inspection popover without a native tooltip');
   assertEq(rowHtml.includes('class="account-geography geography-hierarchy"'), true,
     'guiding-country geography is rendered in the follower lead');
-  assertEq(rowHtml.includes('href="/static/country-flags.svg#flag-cn"') && rowHtml.includes('href="/static/country-flags.svg#flag-hk"'), true,
+  assertEq(rowHtml.includes('href="' + flagSpriteUrl + '#flag-cn"') && rowHtml.includes('href="' + flagSpriteUrl + '#flag-hk"'), true,
     'guiding flag precedes the child flag');
   assertEq(rowHtml.indexOf('role-official') < rowHtml.indexOf('account-geography'), true,
     'official role precedes geography');
@@ -224,6 +238,18 @@ if (typeof renderRowHtml === 'function') {
     'truncated display name retains its full-value title');
   assertEq(rowHtml.includes('class="followers"'), false,
     'engagement no longer duplicates the follower count');
+
+  const refreshedBody = {
+    innerHTML: 'server-rendered rows',
+    children: [],
+    contains: () => false,
+    appendChild(node) { this.children.push(node); },
+  };
+  replaceRows(refreshedBody, [geographyRow]);
+  assertEq(refreshedBody.children.length, 1,
+    'feed refresh replaces the server-rendered batch');
+  assertEq(refreshedBody.children[0].innerHTML.includes(flagSpriteUrl + '#flag-cn'), true,
+    'feed refresh retains country flags with a production-hashed sprite URL');
 
   const unknownFollowerHtml = renderRowHtml({
     account: { handle: '@unknown' },
@@ -252,7 +278,7 @@ if (typeof renderRowHtml === 'function') {
     follower_bin: '0-1k',
     engagement_pretty: { followers: '0' },
   });
-  assertEq(nonOfficialTaiwanHtml.includes('country-flags.svg#flag-tw'), false,
+  assertEq(nonOfficialTaiwanHtml.includes('#flag-tw'), false,
     'Taiwan signal never references the Taiwan flag');
   assertEq(nonOfficialTaiwanHtml.includes('TW · Taiwan'), true,
     'Taiwan signal remains visibly explicit');
@@ -276,7 +302,7 @@ if (typeof renderRowHtml === 'function') {
     follower_bin: '0-1k',
     engagement_pretty: { followers: '0' },
   });
-  assertEq(unknownFlagHtml.includes('country-flags.svg#flag-zz'), false,
+  assertEq(unknownFlagHtml.includes('#flag-zz'), false,
     'unknown runtime symbols never reach an SVG use href');
   assertEq(unknownFlagHtml.includes('class="account-geography'), false,
     'an invalid geography object reserves no metadata slot');
