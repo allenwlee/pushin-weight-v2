@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v9"
+PROMPT_VERSION = "stage1-prompt-v10"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -227,8 +227,8 @@ text matches the runtime source. It was regenerated from the runtime constant in
 using the literal allowlists from `core/classification_contract.py`.
 
 The authoritative runtime source value, including its trailing newline, is
-10,843 UTF-8 bytes. Its SHA-256 is
-`45b74cca00cddc34d563648c1f1c98d09ccff769852b32d5c0b4d68f92c7a205`.
+11,439 UTF-8 bytes. Its SHA-256 is
+`006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f`.
 The display-wrapped block is not byte-identical to that source value.
 
 ```text
@@ -342,6 +342,19 @@ misinformation.
   ideas and requests stay combined.
 - misinformation: a potentially misleading claim that may warrant review. This
   label never adjudicates the claim false.
+
+INDEPENDENT PRODUCT-LABEL PASS:
+- After post_types is complete, decide yes or no separately for bug,
+  complaint, testimonial, ideas_requests, and misinformation. Output every
+  yes; omit every no.
+- Explicit praise or endorsement supports testimonial even when
+  advertising_marketing, opinions_reactions, results_evaluations, or
+  hands_on_usage also applies.
+- A desired product change or capability uses questions_requests in post_types
+  and ideas_requests in product_labels. ideas_requests never appears in
+  post_types.
+- Do not infer a product label merely because a post type or sentiment
+  applies.
 
 SENTIMENT (required for classified): positive, negative, neutral, mixed.
 - positive: praise or favorable evaluation of this brand.

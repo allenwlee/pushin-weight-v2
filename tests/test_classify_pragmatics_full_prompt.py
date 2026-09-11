@@ -86,6 +86,14 @@ def test_prompt_requires_an_independent_type_pass_and_separate_namespaces():
     assert "keep it only in product_labels" in prompt
 
 
+def test_prompt_requires_an_independent_product_label_pass():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "decide yes or no separately for bug" in prompt
+    assert "Explicit praise or endorsement supports testimonial" in prompt
+    assert "questions_requests in post_types and ideas_requests in product_labels" in prompt
+    assert "ideas_requests never appears in post_types" in prompt
+
+
 def test_prompt_defines_product_labels_as_independent_and_non_adjudicating():
     prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
     assert "independent multi-label array" in prompt
@@ -120,7 +128,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v9"
+    assert PROMPT_VERSION == "stage1-prompt-v10"
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

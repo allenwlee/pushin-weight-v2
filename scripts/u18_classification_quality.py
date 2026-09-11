@@ -82,6 +82,9 @@ BUDGET_PROMPT_V9_PATH = (
 BUDGET_PRO_MODEL_PATH = (
     ROOT / "docs/analysis/2026-09-11-040000-u18-provider-budget-amendment-v16.json"
 )
+BUDGET_PROMPT_V10_PATH = (
+    ROOT / "docs/analysis/2026-09-11-042000-u18-provider-budget-amendment-v17.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -150,6 +153,14 @@ TAXONOMIES = {
         "prompt_version": "stage1-prompt-v9",
         "post_types": CANONICAL_POST_TYPE_KEYS,
         "prompt_path": PRIVATE / "v9-system-prompt.txt",
+        "source_revision": "HEAD",
+        "batch_size": 20,
+    },
+    "v3r9": {
+        "version": "stage1-taxonomy-v3",
+        "prompt_version": "stage1-prompt-v10",
+        "post_types": CANONICAL_POST_TYPE_KEYS,
+        "prompt_path": PRIVATE / "v10-system-prompt.txt",
         "source_revision": "HEAD",
         "batch_size": 20,
     },
@@ -247,6 +258,7 @@ class BudgetedTransport:
         production_batch_document = _read_json(BUDGET_PRODUCTION_BATCH_PATH)
         prompt_v9_document = _read_json(BUDGET_PROMPT_V9_PATH)
         pro_model_document = _read_json(BUDGET_PRO_MODEL_PATH)
+        prompt_v10_document = _read_json(BUDGET_PROMPT_V10_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -265,6 +277,7 @@ class BudgetedTransport:
             or production_batch_document["lanes"].get(lane)
             or prompt_v9_document["lanes"].get(lane)
             or pro_model_document["lanes"].get(lane)
+            or prompt_v10_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -495,6 +508,7 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3r6": "candidate_v3r6_fallback",
         "v3r7": "candidate_v3r7_fallback",
         "v3r8": "candidate_v3r8_fallback",
+        "v3r9": "candidate_v3r9_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"

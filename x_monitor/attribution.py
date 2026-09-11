@@ -1225,6 +1225,12 @@ Allowed keys exactly: {", ".join(_STAGE1_PRODUCT_LABEL_KEYS)}.
 - ideas_requests: an idea, desired capability, improvement, or unmet need; ideas and requests stay combined.
 - misinformation: a potentially misleading claim that may warrant review. This label never adjudicates the claim false.
 
+INDEPENDENT PRODUCT-LABEL PASS:
+- After post_types is complete, decide yes or no separately for bug, complaint, testimonial, ideas_requests, and misinformation. Output every yes; omit every no.
+- Explicit praise or endorsement supports testimonial even when advertising_marketing, opinions_reactions, results_evaluations, or hands_on_usage also applies.
+- A desired product change or capability uses questions_requests in post_types and ideas_requests in product_labels. ideas_requests never appears in post_types.
+- Do not infer a product label merely because a post type or sentiment applies.
+
 SENTIMENT (required for classified): {", ".join(_STAGE1_SENTIMENT_KEYS)}.
 - positive: praise or favorable evaluation of this brand.
 - negative: criticism or unfavorable evaluation of this brand.
