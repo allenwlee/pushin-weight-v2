@@ -29,7 +29,7 @@ will not turn them into labels or merge them with the primary.
 - The source v23 transport used 26 successful DeepSeek calls, 130,406 observed
   input tokens, and 24,725 observed output tokens, with no transport errors.
 
-The gold file carries the same 120 human-development judgments used by the
+The model-generated reference carries the same 120 development judgments used by the
 v18 probe. Its metadata was advanced from the old prompt identifier to the
 current canonical taxonomy-v3 identifier so the evaluator could read the
 zero-transport replay. No gold labels changed. This makes the result suitable

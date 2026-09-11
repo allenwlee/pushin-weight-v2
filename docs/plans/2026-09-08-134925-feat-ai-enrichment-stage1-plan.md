@@ -287,6 +287,28 @@ The production classifier asks for six post types, sentiment, discourse, and two
   tuning and make the next classifier architecture decision between a
   stronger configured model and a fresh human review of taxonomy/gate
   ambiguity before opening the sealed release cohort.
+- R81. Treat every existing U18 taxonomy-v3 reference and score as
+  model-generated development evidence. The references were candidate-blind,
+  but their two annotators were model passes and their adjudicator was another
+  model pass; they are not human ground truth and cannot support a human-label
+  accuracy or release-quality claim. Before any further provider call, build a
+  deterministic candidate-blind 45-case human ambiguity study from the
+  consumed 120-row cohort: 15 EN, 15 JA, and 15 ZH-CN, with five stable
+  model-versus-reference disagreements, five model-run conflicts, and five
+  model/reference agreement controls per language. Two qualified humans per
+  language independently label the complete v3 contract and a distinct human
+  adjudicates disagreements without seeing model outputs. Keep source text,
+  reviewer packets, identities, answers, and selection details ignored; track
+  only the protocol, aggregate result, hashes, and decision.
+- R82. Freeze the human ambiguity gate before opening the packets. Exact
+  `outcome` plus complete post-type-set agreement between the independent human
+  reviews must reach 80% overall and 70% in each language, and no unresolved
+  taxonomy boundary code may recur in three or more cases. Failure requires a
+  taxonomy/example revision and focused human re-review before provider spend.
+  Passing authorizes only one separately budgeted 30-row DeepSeek Pro
+  candidate-aware reviewer pilot against the adjudicated human reference. The
+  45 rows remain consumed development evidence and cannot replace the final
+  zero-overlap, human-reviewed release cohort.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -478,6 +500,15 @@ The production classifier asks for six post types, sentiment, discourse, and two
   authoritative and no deterministic label merge is introduced. This is the
   last bounded Flash prompt topology justified before a model/taxonomy
   decision.
+- KTD37. **Establish human taxonomy reliability before changing models.** The
+  earlier candidate-blind reference was still made entirely by models, so its
+  exact-set scores cannot distinguish classifier error from reference error.
+  Use the frozen, balanced 45-case ambiguity study to measure whether qualified
+  humans can apply the definitions consistently. Keep all prior model outputs
+  hidden until independent review and adjudication are complete. Only a passing
+  human gate can authorize the small DeepSeek Pro architecture pilot; a failed
+  gate sends the work back to taxonomy wording and examples without another
+  provider call.
 
 ### High-Level Technical Design
 
@@ -1816,3 +1847,48 @@ expected primary requests, twelve expected review requests, three-call maximum
 concurrency, the existing shared repair/retry ceilings, and the $0.72 hard cap.
 Expected cost is $0.27. No provider call may occur until this candidate and
 budget are committed and pushed and the Ollija delivery check passes.
+
+Revision `4f9405b7872edbd1078357198f32b14e2c0b25ae` committed and pushed the
+v26 runtime, durable verdict provenance, prompt exhibit, failure evidence, and
+budget before transport. The paid pilot then completed 120/120 rows in 26
+successful DeepSeek calls with no errors. It observed 64,384 input and 36,174
+output tokens, approximately $0.0761 at the frozen rates, and stayed within
+every request, retry, token, concurrency, and dollar cap.
+
+V26 failed the continuation gate. Overall post-type exact sets were 50.8%,
+with EN/JA/ZH-CN at 45.0%/60.0%/47.5%. Overall product-label exact sets were
+83.3%. Outcome accuracy was 93.3%, but `context_missing` precision was 38.5%.
+The exhaustive reviewer reached 61/120 exact post-type sets versus 62/120 for
+its primary, while product exact sets improved only from 99 to 100. The full
+aggregate result and artifact hashes are in
+`docs/analysis/2026-09-12-024922-u18-v26-classification-quality-assessment.md`.
+The 500-row run and sealed release cohort remain closed. Per R80/KTD36, all
+further DeepSeek Flash prompt-topology tuning is stopped. The next classifier
+work requires a recorded architecture decision between a preregistered
+stronger-DeepSeek reviewer pilot and fresh candidate-blind human review of the
+taxonomy/gold boundary; no provider call precedes that decision and budget.
+
+The provenance audit then established that the v18/v25 reference and its
+500-row parent were made by two candidate-blind DeepSeek Flash reviews and a
+DeepSeek Pro audit, with no human annotator. R81–R82/KTD37 therefore select the
+human-first path. Existing classifier scores are development agreement against
+a model-generated reference and cannot be presented as human-grounded
+accuracy.
+
+The provider-free human-study builder froze 45 consumed-development cases:
+15 each for EN, JA, and ZH-CN, and within each language five stable
+model-versus-reference disagreements, five model-run conflicts, and five
+agreement controls. The private manifest SHA-256 is
+`50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91`;
+the two independently shuffled blinded packet hashes are
+`f69557a8467579d49d601a37b8204768c597a635466a9b42dde788945bbded35`
+and `4ce7330d5976a0b968b6db7fb2271a441e540a59e0b3332cd749acc58a20ec1f`.
+Automated checks confirm that reviewer packets omit source IDs, selection
+hints, prior labels, candidate labels, and model identities. The protocol,
+validator, adjudication packet, finalizer, and locked floors are tracked; the
+source and human answers remain ignored. Zero provider calls or dollars were
+used. U18 now waits on two independent qualified human reviews per language
+and a distinct human adjudicator before any new model budget or transport.
+Finalization requires a private per-language attestation of proficiency,
+independence, no model assistance, and three distinct human references; a
+failed reliability gate emits only a non-gold diagnostic artifact.
