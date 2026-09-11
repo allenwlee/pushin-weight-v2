@@ -7,6 +7,7 @@ import json
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from django.db import IntegrityError, transaction
@@ -205,20 +206,282 @@ def material_input_fingerprint(
     dossier: Mapping[str, Any], *, config: HeadlineNarrativeConfig
 ) -> str:
     """Hash only inputs that can materially change published narrative text."""
-    payload = {
-        "policy": config.materiality_policy_version,
-        "brand_key": dossier.get("brand_key"),
-        "outcome": dossier.get("outcome"),
-        "enrichment_coverage": dossier.get("enrichment_coverage"),
-        "comparison_status": dossier.get("comparison_status"),
-        "family_summaries": dossier.get("family_summaries"),
-        "facts": dossier.get("facts"),
-        "shape_summary": dossier.get("shape_summary"),
-        "corpus_signals": dossier.get("corpus_signals"),
-        "evidence": dossier.get("evidence"),
-    }
+    payload = _material_dossier_projection(
+        dossier,
+        policy_version=config.materiality_policy_version,
+        band_percent=config.fingerprint_band_percent,
+    )
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _material_dossier_projection(
+    dossier: Mapping[str, Any], *, policy_version: str, band_percent: int
+) -> dict[str, Any]:
+    facts = sorted(
+        (
+            {
+                key: fact.get(key)
+                for key in (
+                    "fact_id",
+                    "unit",
+                    "family",
+                    "metric",
+                    "direction",
+                    "label_key",
+                )
+            }
+            | {
+                "current_band": _band_value(
+                    fact.get("current_value"),
+                    unit=str(fact.get("unit") or ""),
+                    band_percent=band_percent,
+                ),
+                "baseline_band": _band_value(
+                    fact.get("baseline_value"),
+                    unit=str(fact.get("unit") or ""),
+                    band_percent=band_percent,
+                ),
+                "coverage_status": (fact.get("coverage_scope") or {}).get("status"),
+            }
+            for fact in dossier.get("facts") or []
+            if isinstance(fact, Mapping)
+        ),
+        key=lambda row: str(row.get("fact_id") or ""),
+    )
+    evidence = sorted(
+        (
+            {
+                key: _stable_value(row.get(key))
+                for key in (
+                    "evidence_id",
+                    "author_group_id",
+                    "classification_status",
+                    "created_at",
+                    "discourse_keys",
+                    "excerpt",
+                    "first_party_role",
+                    "handle_snapshot",
+                    "original_text",
+                    "post_type_keys",
+                    "roles",
+                    "sentiment_keys",
+                    "source_cluster_id",
+                    "source_flags",
+                    "source_language",
+                    "taxonomy",
+                    "text_en",
+                    "text_ja",
+                    "text_zh_cn",
+                    "theme_cluster_id",
+                    "translation_status",
+                )
+                if key in row
+            }
+            for row in dossier.get("evidence") or []
+            if isinstance(row, Mapping)
+        ),
+        key=lambda row: str(row.get("evidence_id") or ""),
+    )
+    family_summaries = {
+        str(family): {
+            key: summary.get(key)
+            for key in ("status", "current_leader", "largest_change")
+        }
+        for family, summary in (dossier.get("family_summaries") or {}).items()
+        if isinstance(summary, Mapping)
+    }
+    corpus_signals = sorted(
+        (
+            {
+                "corpus_signal_id": row.get("corpus_signal_id"),
+                "phrase": row.get("phrase"),
+                "prevalence_band": _band_value(
+                    row.get("prevalence"), unit="posts", band_percent=band_percent
+                ),
+                "prior_prevalence_band": _band_value(
+                    row.get("prior_prevalence"),
+                    unit="posts",
+                    band_percent=band_percent,
+                ),
+                "peer_brand_count_band": _band_value(
+                    row.get("peer_brand_count"),
+                    unit="posts",
+                    band_percent=band_percent,
+                ),
+                "representative_excerpt": row.get("representative_excerpt"),
+                "representative_evidence_ids": sorted(
+                    str(value)
+                    for value in row.get("representative_evidence_ids") or []
+                ),
+            }
+            for row in dossier.get("corpus_signals") or []
+            if isinstance(row, Mapping)
+        ),
+        key=lambda row: (
+            str(row.get("corpus_signal_id") or ""),
+            str(row.get("phrase") or ""),
+        ),
+    )
+    return {
+        "policy": policy_version,
+        "brand_key": dossier.get("brand_key"),
+        "outcome": dossier.get("outcome"),
+        "enrichment_coverage": _coverage_projection(
+            dossier.get("enrichment_coverage") or {}, band_percent=band_percent
+        ),
+        "comparison_status": _comparison_projection(
+            dossier.get("comparison_status") or {}, band_percent=band_percent
+        ),
+        "family_summaries": family_summaries,
+        "facts": facts,
+        "shape_summary": _shape_projection(
+            dossier.get("shape_summary") or {}, band_percent=band_percent
+        ),
+        "corpus_signals": corpus_signals,
+        "evidence": evidence,
+    }
+
+
+def _coverage_projection(
+    value: Mapping[str, Any], *, band_percent: int
+) -> dict[str, Any]:
+    return {
+        "translation_status": value.get("translation_status"),
+        "classification_status": value.get("classification_status"),
+        "total_post_count_band": _band_value(
+            value.get("total_post_count"), unit="posts", band_percent=band_percent
+        ),
+        "fully_enriched_count_band": _band_value(
+            value.get("fully_enriched_count"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+        "translation_succeeded_count_band": _band_value(
+            value.get("translation_succeeded_count"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+        "classification_succeeded_count_band": _band_value(
+            value.get("classification_succeeded_count"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+    }
+
+
+def _comparison_projection(
+    value: Mapping[str, Any], *, band_percent: int
+) -> dict[str, Any]:
+    selected = value.get("selected_coverage") or {}
+    prior = value.get("prior_coverage") or {}
+    return {
+        "allowed": value.get("allowed"),
+        "suppression_reasons": sorted(
+            str(reason) for reason in value.get("suppression_reasons") or []
+        ),
+        "current_post_count_band": _band_value(
+            value.get("current_post_count"), unit="posts", band_percent=band_percent
+        ),
+        "prior_post_count_band": _band_value(
+            value.get("prior_post_count"), unit="posts", band_percent=band_percent
+        ),
+        "selected_coverage": {
+            "state": selected.get("state"),
+            "ratio_band": _band_value(
+                selected.get("ratio"), unit="ratio", band_percent=band_percent
+            ),
+            "known_backlog_overlap": selected.get("known_backlog_overlap"),
+        },
+        "prior_coverage": {
+            "state": prior.get("state"),
+            "ratio_band": _band_value(
+                prior.get("ratio"), unit="ratio", band_percent=band_percent
+            ),
+            "known_backlog_overlap": prior.get("known_backlog_overlap"),
+        },
+    }
+
+
+def _shape_projection(
+    value: Mapping[str, Any], *, band_percent: int
+) -> dict[str, Any]:
+    peak = value.get("peak") or {}
+    trough = value.get("trough") or {}
+    transition = value.get("dominant_transition") or {}
+    return {
+        "direction": value.get("direction"),
+        "comparison_state": value.get("comparison_state"),
+        "total_change_band": _band_value(
+            value.get("total_change_pct"),
+            unit="percent",
+            band_percent=band_percent,
+        ),
+        "start_segment_count_band": _band_value(
+            value.get("start_segment_post_count"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+        "end_segment_count_band": _band_value(
+            value.get("end_segment_post_count"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+        "peak_count_band": _band_value(
+            peak.get("post_count"), unit="posts", band_percent=band_percent
+        ),
+        "trough_count_band": _band_value(
+            trough.get("post_count"), unit="posts", band_percent=band_percent
+        ),
+        "transition_count_band": _band_value(
+            transition.get("post_count_change"),
+            unit="posts",
+            band_percent=band_percent,
+        ),
+        "transition_share_band": _band_value(
+            transition.get("net_change_share_pct"),
+            unit="percent",
+            band_percent=band_percent,
+        ),
+    }
+
+
+def _band_value(value: Any, *, unit: str, band_percent: int) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return str(value)
+    if unit == "percent":
+        step = Decimal(band_percent)
+    elif unit == "ratio":
+        step = Decimal(band_percent) / Decimal(100)
+    elif unit == "posts":
+        step = max(
+            Decimal(1),
+            (abs(number) * Decimal(band_percent) / Decimal(100)).quantize(
+                Decimal(1), rounding=ROUND_HALF_UP
+            ),
+        )
+    else:
+        return format(number.normalize(), "f")
+    banded = (number / step).quantize(Decimal(1), rounding=ROUND_HALF_UP) * step
+    return format(banded.normalize(), "f")
+
+
+def _stable_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _stable_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        projected = [_stable_value(item) for item in value]
+        if all(
+            isinstance(item, (str, int, float, bool, type(None)))
+            for item in projected
+        ):
+            return sorted(projected, key=lambda item: (type(item).__name__, str(item)))
+        return projected
+    return value
 
 
 def mark_run_demands_satisfied(run: TrendNarrativeRun, *, now=None) -> int:

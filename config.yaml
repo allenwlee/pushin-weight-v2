@@ -293,7 +293,7 @@ headline_narrative:
   timeout_seconds: 60
   prompt_version: "headline-v11-ja-parity"
   publication_epoch: 11
-  materiality_policy_version: "headline-materiality-v1"
+  materiality_policy_version: "headline-materiality-v2"
   demand_shaping_enabled: null
   demand_hot_minutes: 180
   prewarm_brand_keys: []
