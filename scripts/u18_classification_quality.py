@@ -14,6 +14,7 @@ import math
 import os
 import subprocess
 import time
+import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -901,15 +902,14 @@ def _parse_contract_audit(
             quote = item["quote"]
             if not isinstance(field, str) or not field.strip():
                 raise TypeError("audit evidence field must be a nonblank string")
-            if (
-                not isinstance(quote, str)
-                or not quote.strip()
-                or quote not in source_blob
-            ):
+            if not isinstance(quote, str) or not quote.strip():
+                raise ValueError("audit evidence quote must be a nonblank string")
+            resolved_quote = _resolve_source_quote(source_blob, quote)
+            if resolved_quote is None:
                 raise ValueError(
                     "audit evidence quote must be an exact source substring"
                 )
-            normalized_evidence.append({"field": field, "quote": quote})
+            normalized_evidence.append({"field": field, "quote": resolved_quote})
         output.append(
             {
                 **row,
@@ -918,6 +918,40 @@ def _parse_contract_audit(
             }
         )
     return output
+
+
+def _resolve_source_quote(source: str, quote: str) -> str | None:
+    if quote in source:
+        return quote
+
+    def searchable(value: str) -> tuple[str, list[int]]:
+        chars: list[str] = []
+        positions: list[int] = []
+        prior_space = False
+        for index, raw_char in enumerate(value):
+            for char in unicodedata.normalize("NFKC", raw_char):
+                if char in "*_`":
+                    continue
+                if char in "‐‑‒–—―−":
+                    char = "-"
+                if char.isspace():
+                    if prior_space:
+                        continue
+                    char = " "
+                    prior_space = True
+                else:
+                    prior_space = False
+                chars.append(char)
+                positions.append(index)
+        return "".join(chars), positions
+
+    normalized_source, source_positions = searchable(source)
+    normalized_quote, _ = searchable(quote)
+    start = normalized_source.find(normalized_quote)
+    if start < 0 or not normalized_quote:
+        return None
+    end = start + len(normalized_quote) - 1
+    return source[source_positions[start] : source_positions[end] + 1]
 
 
 def run_contract_gold_auditor() -> None:

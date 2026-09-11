@@ -173,3 +173,13 @@ def test_gold_audit_requires_exact_source_evidence():
     response["results"][0]["evidence"][0]["quote"] = "fabricated quote"
     with pytest.raises(ValueError, match="exact source substring"):
         quality._parse_contract_audit(response, [source])
+
+
+def test_gold_audit_resolves_markdown_and_unicode_to_actual_source_span():
+    source = "**general‑purpose AI** works"
+
+    assert (
+        quality._resolve_source_quote(source, "general-purpose AI")
+        == "general‑purpose AI"
+    )
+    assert quality._resolve_source_quote(source, "unrelated claim") is None
