@@ -1458,6 +1458,23 @@ nine-request envelope and $0.28 hard ceiling are frozen in
 A pass permits one all-locale development probe; a failure blocks further
 transport until the architecture and gate are reconsidered.
 
+The v21 grouped probe used nine attempts, 55,854 reported input tokens, and
+6,212 output tokens, but failed its strict response contract when one false
+action decision omitted its required null evidence key. Provider-free
+normalization of only that omitted null was retained as diagnostic evidence,
+not a passing candidate; the grouped decisions scored 33.3% post-type exact
+sets. DeepSeek Flash has now failed the full, review, consensus, evidence,
+common-check, three-pass, smaller-batch, singleton, and grouped architectures.
+The next reconsidered candidate holds the byte-exact candidate-blind review
+contract constant and changes the provider role to direct Claude Haiku 4.5,
+which the repository already uses for relevance and signal judgments. The
+30-row English pilot, current $1/$5 per-million-token standard list prices,
+and $0.61 hard ceiling are frozen in
+`docs/analysis/2026-09-11-175000-u18-runtime-v22-haiku-review-pilot-budget.json`.
+A pass permits one all-locale development probe; a failure requires an
+owner-visible decision about provider quality, taxonomy ambiguity, or the
+exact-set gate before more classifier transport.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated

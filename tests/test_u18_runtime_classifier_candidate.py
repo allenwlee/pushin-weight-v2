@@ -8,6 +8,7 @@ from scripts import u18_runtime_base_batch_probe
 from scripts.u18_runtime_base_batch_probe import _run_base_batches
 from scripts.u18_runtime_classifier_candidate import FrozenRuntimeClient
 from scripts.u18_runtime_grouped_label_probe import _merge_group_decisions
+from scripts.u18_runtime_review_model_probe import DirectAnthropicDelegate
 from x_monitor.attribution import (
     _PRAGMATICS_BASE_SYSTEM_PROMPT,
     _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
@@ -172,3 +173,20 @@ def test_grouped_probe_replaces_only_its_common_labels():
         "results_evaluations",
     }
     assert merged["product_labels"] == ["testimonial"]
+
+
+def test_direct_anthropic_delegate_omits_proxy_thinking_field():
+    class Delegate:
+        def messages_create(self, **kwargs):
+            return kwargs
+
+    delegate = DirectAnthropicDelegate("unused", delegate=Delegate())
+
+    result = delegate.messages_create(
+        model="claude-haiku-4-5-20251001",
+        thinking={"type": "disabled"},
+        messages=[],
+    )
+
+    assert "thinking" not in result
+    assert result["model"] == "claude-haiku-4-5-20251001"
