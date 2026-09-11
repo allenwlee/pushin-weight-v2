@@ -199,14 +199,8 @@ services:
         sync: false
       - key: TWITTERAPI_IO_ON_DEMAND_API_KEY
         sync: false
-      # The effective translator/classifier URLs decide which one of these
-      # service-scoped credentials the acceptance preflight requires.
-      - key: ANTHROPIC_BASE_URL
-        sync: false
-      - key: X_MONITOR_CLASSIFIER_BASE_URL
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
+      # Translation and classification are explicitly pinned to DeepSeek in
+      # config.yaml; MiniMax remains available to separately configured roles.
       - key: MINIMAX_API_TOKEN
         sync: false
       - key: DEEPSEEK_API_KEY

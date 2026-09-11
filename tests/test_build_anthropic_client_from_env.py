@@ -1,9 +1,8 @@
 """Tests for x_monitor.reattribute.build_anthropic_client_from_env.
 
-The factory resolves three env-var routing branches (Plan 2026-07-15-002):
-  1. Direct Anthropic API (ANTHROPIC_API_KEY, no proxy)
-  2. MiniMax M3 proxy (ANTHROPIC_BASE_URL contains "minimax.io", MINIMAX_API_TOKEN)
-  3. DeepSeek V4 Pro (ANTHROPIC_BASE_URL contains "deepseek.com", DEEPSEEK_API_KEY)
+The factory resolves three explicitly configured provider routes while routine
+harvest enrichment defaults to DeepSeek. A stale shared ANTHROPIC_BASE_URL does
+not redirect a role.
 
 All three return an AnthropicClaudeClient constructed with the right
 api_key + base_url. The factory returns None (not raise) when the
@@ -22,7 +21,7 @@ def _clean_env(monkeypatch):
     for var in (
         "ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "MINIMAX_API_TOKEN",
         "DEEPSEEK_API_KEY", "DEEPSEEK_API_TOKEN", "ANTHROPIC_BASE_URL",
-        "X_MONITOR_CLASSIFIER_BASE_URL",
+        "X_MONITOR_CLASSIFIER_BASE_URL", "X_MONITOR_TRANSLATOR_BASE_URL",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -64,49 +63,66 @@ def _assert_route(result, construction, *, api_key, base_url):
 
 
 def test_direct_anthropic_uses_anthropic_api_key(monkeypatch, client_construction):
-    """No proxy -> ANTHROPIC_API_KEY (or ANTHROPIC_KEY alias) -> direct."""
+    """An explicit Anthropic role route still uses ANTHROPIC_API_KEY."""
+    from x_monitor.config import Config, LlmConfig
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-123")
-    client = build_anthropic_client_from_env()
+    cfg = Config(
+        enabled_models=["minimax"],
+        daily_ceiling=1,
+        llm=LlmConfig(classifier_base_url="https://api.anthropic.com"),
+    )
+    client = build_anthropic_client_from_env(cfg)
     _assert_route(
         client,
         client_construction,
         api_key="sk-ant-test-123",
-        base_url=None,
+        base_url="https://api.anthropic.com",
     )
 
 
 def test_direct_anthropic_anthropic_key_alias(monkeypatch, client_construction):
     """ANTHROPIC_KEY is the legacy alias and is honored."""
+    from x_monitor.config import Config, LlmConfig
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     monkeypatch.setenv("ANTHROPIC_KEY", "sk-ant-alias-456")
-    client = build_anthropic_client_from_env()
+    cfg = Config(
+        enabled_models=["minimax"],
+        daily_ceiling=1,
+        llm=LlmConfig(classifier_base_url="https://api.anthropic.com"),
+    )
+    client = build_anthropic_client_from_env(cfg)
     _assert_route(
         client,
         client_construction,
         api_key="sk-ant-alias-456",
-        base_url=None,
+        base_url="https://api.anthropic.com",
     )
 
 
 def test_direct_anthropic_missing_key_returns_none(monkeypatch, client_construction):
-    """No credential -> None (not raise) so the reattribute falls back
-    to non-LLM mode."""
+    """An explicit Anthropic route without its key fails closed."""
+    from x_monitor.config import Config, LlmConfig
     from x_monitor.reattribute import build_anthropic_client_from_env
 
-    client = build_anthropic_client_from_env()
+    cfg = Config(
+        enabled_models=["minimax"],
+        daily_ceiling=1,
+        llm=LlmConfig(classifier_base_url="https://api.anthropic.com"),
+    )
+    client = build_anthropic_client_from_env(cfg)
     assert client is None
     assert client_construction[1] == []
 
 
 def test_minimax_proxy_uses_minimax_api_token(monkeypatch, client_construction):
-    """ANTHROPIC_BASE_URL contains 'minimax.io' -> MINIMAX_API_TOKEN."""
+    """An explicit classifier MiniMax route uses MINIMAX_API_TOKEN."""
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     base_url = "https://api.minimax.io/anthropic"
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", base_url)
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", base_url)
     monkeypatch.setenv("MINIMAX_API_TOKEN", "sk-cp-minimax-789")
     client = build_anthropic_client_from_env()
     _assert_route(
@@ -127,7 +143,7 @@ def test_minimax_proxy_missing_token_returns_none_with_warning(
     """
     from x_monitor.reattribute import build_anthropic_client_from_env
 
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", "https://api.minimax.io/anthropic")
     client = build_anthropic_client_from_env()
     assert client is None
     assert client_construction[1] == []
@@ -135,12 +151,10 @@ def test_minimax_proxy_missing_token_returns_none_with_warning(
 
 
 def test_deepseek_proxy_uses_deepseek_api_key(monkeypatch, client_construction):
-    """ANTHROPIC_BASE_URL contains 'deepseek.com' -> DEEPSEEK_API_KEY
-    (the new branch from Plan 2026-07-15-002)."""
+    """The default DeepSeek route uses DEEPSEEK_API_KEY."""
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     base_url = "https://api.deepseek.com/anthropic"
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", base_url)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-abc")
     client = build_anthropic_client_from_env()
     _assert_route(
@@ -156,7 +170,6 @@ def test_deepseek_proxy_deepseek_api_token_alias(monkeypatch, client_constructio
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     base_url = "https://api.deepseek.com/anthropic"
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", base_url)
     monkeypatch.setenv("DEEPSEEK_API_TOKEN", "sk-deepseek-token-xyz")
     client = build_anthropic_client_from_env()
     _assert_route(
@@ -173,9 +186,6 @@ def test_deepseek_proxy_missing_key_returns_none_with_warning(
     """DeepSeek proxy + missing DEEPSEEK_API_KEY -> None + WARNING log."""
     from x_monitor.reattribute import build_anthropic_client_from_env
 
-    monkeypatch.setenv(
-        "ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic"
-    )
     client = build_anthropic_client_from_env()
     assert client is None
     assert client_construction[1] == []
@@ -192,7 +202,7 @@ def test_minimax_route_uses_minimax_token_when_both_tokens_are_present(
     # actual ordering. The current implementation checks minimax
     # first, so this is the regression net.
     base_url = "https://api.minimax.io/anthropic"
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", base_url)
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", base_url)
     monkeypatch.setenv("MINIMAX_API_TOKEN", "sk-cp-minimax")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek")
     client = build_anthropic_client_from_env()
@@ -230,25 +240,68 @@ def test_classifier_override_routes_to_deepseek_while_process_stays_minimax(
     )
 
 
-def test_classifier_override_unset_falls_back_to_anthropic_base_url(
+def test_classifier_override_unset_ignores_anthropic_base_url(
     monkeypatch, client_construction
 ):
-    """X_MONITOR_CLASSIFIER_BASE_URL unset -> falls back to ANTHROPIC_BASE_URL.
-
-    Regression net for the precedence rule. Without the fallback, the
-    factory would only route via the override, breaking operators who
-    haven't set it.
-    """
+    """The default route ignores the obsolete shared provider URL."""
     from x_monitor.reattribute import build_anthropic_client_from_env
 
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
-    base_url = "https://api.minimax.io/anthropic"
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", base_url)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.setenv("MINIMAX_API_TOKEN", "sk-cp-minimax-fb")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-default")
     client = build_anthropic_client_from_env()
     _assert_route(
         client,
         client_construction,
-        api_key="sk-cp-minimax-fb",
-        base_url=base_url,
+        api_key="sk-deepseek-default",
+        base_url="https://api.deepseek.com/anthropic",
+    )
+
+
+def test_configured_classifier_ignores_stale_anthropic_route(
+    monkeypatch, client_construction
+):
+    """The scheduled Config route stays on DeepSeek despite stale shared env."""
+    from x_monitor.config import Config
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "stale-anthropic-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "scheduled-deepseek-key")
+
+    cfg = Config.model_validate(
+        {"enabled_models": ["minimax"], "daily_ceiling": 1}
+    )
+    client = build_anthropic_client_from_env(cfg)
+
+    _assert_route(
+        client,
+        client_construction,
+        api_key="scheduled-deepseek-key",
+        base_url="https://api.deepseek.com/anthropic",
+    )
+
+
+def test_configured_translator_ignores_stale_anthropic_route(
+    monkeypatch, client_construction
+):
+    """The scheduled translation path uses the same explicit DeepSeek route."""
+    from x_monitor.config import Config
+    from x_monitor.reattribute import build_translator_client_from_env
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "stale-anthropic-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "scheduled-deepseek-key")
+
+    cfg = Config.model_validate(
+        {"enabled_models": ["minimax"], "daily_ceiling": 1}
+    )
+    client = build_translator_client_from_env(cfg)
+
+    _assert_route(
+        client,
+        client_construction,
+        api_key="scheduled-deepseek-key",
+        base_url="https://api.deepseek.com/anthropic",
     )

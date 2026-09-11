@@ -553,8 +553,7 @@ def _run_post_fetch(
     if not kept_posts:
         return counters
     # Use the translator-specific client when provided; fall back to the
-    # shared anthropic_client for backward compatibility (single-client
-    # mode when X_MONITOR_CLASSIFIER_BASE_URL is not set).
+    # shared protocol-compatible client for backward compatibility.
     _translator = translator_client or anthropic_client
     if _translator is None:
         return counters
@@ -1353,17 +1352,12 @@ class RunPipeline:
                 if not dry_run and summary["status"] != "aborted" and cycle_kept:
                     _t_pf = time.monotonic()
                     try:
-                        # Lazy import to avoid pulling the anthropic
-                        # SDK at module load (offline / no-key paths
+                        # Lazy import to avoid pulling the provider SDK at
+                        # module load (offline / no-key paths
                         # still work via _run_post_fetch's no-client
                         # short-circuit).
-                        # Use the env-driven factory so the classifier
-                        # respects ANTHROPIC_BASE_URL /
-                        # X_MONITOR_CLASSIFIER_BASE_URL / DEEPSEEK_API_KEY
-                        # routing. Constructing AnthropicClaudeClient()
-                        # bare here would route to api.anthropic.com via
-                        # the SDK's default (ANTHROPIC_API_KEY), bypassing
-                        # the operator's proxy / DeepSeek override.
+                        # Use the role-aware factories so both stages follow
+                        # the committed DeepSeek route and credential.
                         from x_monitor.reattribute import (
                             build_anthropic_client_from_env,
                             build_translator_client_from_env,

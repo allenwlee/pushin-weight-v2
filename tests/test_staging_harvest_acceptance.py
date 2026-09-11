@@ -77,7 +77,7 @@ def _environment(**overrides) -> dict[str, str]:
         "RENDER_SERVICE_NAME": "pushinweight-staging-harvest",
         "X_MONITOR_STAGING_ACCEPTANCE_SERVICE": "pushinweight-staging-harvest",
         "TWITTERAPI_IO_SCHEDULED_API_KEY": "twitter-fixture",
-        "ANTHROPIC_API_KEY": "anthropic-fixture",
+        "DEEPSEEK_API_KEY": "deepseek-fixture",
     }
     values.update(overrides)
     return values
@@ -388,7 +388,7 @@ def test_acceptance_fails_closed_for_independently_corrupted_evidence(
             None,
             "provider_credential_missing:twitter",
         ),
-        ({"ANTHROPIC_API_KEY": ""}, None, "provider_credential_missing:translator"),
+        ({"DEEPSEEK_API_KEY": ""}, None, "provider_credential_missing:translator"),
         ({}, _Connection(host="production.internal"), "database_host_mismatch"),
         ({}, _Connection(database="pushinweight"), "database_name_mismatch"),
         ({}, _Connection(role="pushinweight_prod"), "database_role_mismatch"),

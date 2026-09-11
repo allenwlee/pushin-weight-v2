@@ -127,36 +127,46 @@ The pattern matters because operators triaging failures want to grep a stable pr
 - "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the current short-code call ids (`A`, `B1`..`B3`, `C1`..`C3`). The short-code call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
 
-## Translator env-vs-yaml precedence
+## Enrichment provider routing
 
-The rule that resolves which source wins when both `config.yaml` and process env vars supply a value for the same translator setting.
+The rule that keeps scheduled translation, classification, relevancy, and
+signal work on the intended provider.
 
 ### Rule
 
-**`yaml wins over env for non-null values. A yaml literal `null` is NOT "set" — it is an explicit instruction to use the default fallback path, and the env override takes effect.**
+**A non-null role value in `config.yaml` wins. A null or omitted value may use
+the matching `X_MONITOR_*` role override, followed by the committed DeepSeek
+default. Shared Anthropic environment values do not redirect enrichment.**
 
-The rule encodes the distinction between *an active pin* (yaml sets a value the operator wants enforced) and *an inert placeholder* (yaml keeps the key but signals "use the default"). Reading `config.yaml:99-105` and seeing `translator_base_url: null` with the comment `# uses ANTHROPIC_BASE_URL env when null` is the canonical reference; the `x_monitor/config.py:384-397` env-merge block is the canonical implementation.
+The rule keeps model and endpoint selection in the same role-specific config
+object and prevents a stale process-wide key or URL from silently changing the
+provider.
 
 ### Resolution chain (translator client)
 
 `build_translator_client_from_env` resolves the translator's base URL as:
 
-1. `cfg.llm.translator_base_url` (yaml-loaded, env-merged) if non-null
-2. otherwise `ANTHROPIC_BASE_URL` env var (the process-wide default)
-3. otherwise direct Anthropic
+1. `cfg.llm.translator_base_url` when non-null
+2. otherwise `X_MONITOR_TRANSLATOR_BASE_URL`
+3. otherwise `https://api.deepseek.com/anthropic`
 
 The production model name is `cfg.llm.translator_model`, whose committed yaml
-value is `deepseek-v4-flash`. A non-null yaml value wins over
+value is `deepseek-v4-flash`. A non-null YAML value wins over
 `X_MONITOR_TRANSLATOR_MODEL`; the environment value applies when the yaml field
 is omitted or null, and the Pydantic default is also `deepseek-v4-flash`. The
 model name and base URL are independent — a yaml `null` for one does not block
 the environment fallback for the other. Production classification follows the
-same committed-yaml rule through `cfg.llm.classifier_model`, also pinned to
+same rule through `cfg.llm.classifier_model` and
+`cfg.llm.classifier_base_url`; relevancy and signal roles are also pinned to
 `deepseek-v4-flash`.
 
 ### Translator base URL
 
-The endpoint the translator pipeline calls for the message-translate stage. Set via `X_MONITOR_TRANSLATOR_BASE_URL` env var or `config.yaml llm.translator_base_url`. The classifier has a separate env override (`X_MONITOR_CLASSIFIER_BASE_URL`) and field (`cfg.llm.classifier_base_url`) because the translator and classifier may need different endpoints.
+The endpoint the translator pipeline calls for the message-translate stage.
+Set it through `config.yaml llm.translator_base_url`, or through
+`X_MONITOR_TRANSLATOR_BASE_URL` when the YAML field is omitted/null. The
+classifier has the parallel `classifier_base_url` field and
+`X_MONITOR_CLASSIFIER_BASE_URL` override.
 
 *Avoid:* `translator_endpoint` — the canonical name is base URL, matching the Anthropic SDK's `base_url` parameter.
 

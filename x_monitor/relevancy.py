@@ -213,10 +213,9 @@ def call_binary_relevancy_llm(
 # Production wire-in helper (U6 runtime)
 # ---------------------------------------------------------------------------
 
-# Default model for the binary relevancy gate. Sonnet-class — small,
-# fast, cheap. The gate's prompt is tiny (one tweet + brand context)
-# so a smaller model is fine.
-DEFAULT_RELEVANCY_MODEL = "claude-haiku-4-5"
+# Default model for the binary relevancy gate. It shares the explicit
+# DeepSeek harvest credential and endpoint while keeping its own model pin.
+DEFAULT_RELEVANCY_MODEL = "deepseek-v4-flash"
 
 
 def build_binary_relevancy_llm_call(
@@ -233,7 +232,7 @@ def build_binary_relevancy_llm_call(
 
     The returned closure is the dependency `monitor/cycle.py::CycleRunner`
     consumes via its `_relevancy_llm_call` injection point. When the
-    Anthropic client is None (env not configured), returns None — the
+    provider client is None (credential not configured), returns None — the
     cycle then runs with the gate as a no-op (KEEP).
 
     Usage in management commands:
@@ -244,6 +243,8 @@ def build_binary_relevancy_llm_call(
     """
     if client is None:
         return None
+    from .attribution import _resolve_thinking_default
+
     telemetry_context = {"provider_host_class": provider_host_class(client)}
 
     def llm_call(system: str, user: str) -> str:
@@ -254,6 +255,9 @@ def build_binary_relevancy_llm_call(
             "messages": [{"role": "user", "content": user}],
             "timeout": timeout_seconds,
         }
+        thinking = _resolve_thinking_default(getattr(client, "_base_url", ""))
+        if thinking is not None:
+            kwargs["thinking"] = thinking
         started = time.monotonic()
         try:
             result = client.messages_create(**kwargs)

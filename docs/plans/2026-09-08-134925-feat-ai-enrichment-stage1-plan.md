@@ -84,6 +84,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 8. The owner authorized this versioned taxonomy follow-up through staging. Add Japanese labels for the active classification vocabulary, rename only the five identifiers in R19, and add explicit historical analysis without historical LLM reclassification. Use the compatibility-first two-release staging sequence in KTD9; do not run a new paid call, passive baseline, production cohort capture, or production deployment. The completed Stage 1 receipts remain immutable historical evidence, and this follow-up receives new candidate and staging proof.
 9. On 2026-09-11, after reviewing the staging receipt and remaining production gates, the owner selected production delivery for Stage 1 before Stages 2–4. Complete the taxonomy-v2 baseline, taxonomy-v3 three-stratum assessment, job/personnel discovery assessments, role/affiliation extraction assessments, and incremental cost measurement before promotion. If those gates pass, promote Stage 1 and verify normal production harvest cycles while keeping job discovery, personnel discovery, targeted extraction, profile backfill, and public MCP/API access disabled. This supersedes the production prohibition in exceptions 2, 7, and 8 only after the named gates pass; it does not authorize activating those disabled features or manually mutating production data.
 10. Later on 2026-09-11, the owner superseded exception 9's release sequence: complete the remaining Stage 1 quality gates and Stages 2–4 on this same candidate, refresh staging through the guarded scrubbed-production procedure, activate and debug the integrated feature set on staging, and then promote that exact passing candidate to production. This authorizes bounded paid staging evaluations and feature activation within the explicit caps and stop conditions in U18–U24. It does not authorize a production pause, an ad hoc production provider run, bypassing the single harvester scheduler, publishing the future public MCP/API, or weakening any migration, quality, cost, or exact-SHA gate.
+11. On 2026-09-11 the owner clarified that Anthropic is not an active PushinWeight provider: scheduled translation, classification, relevancy, and signal work use DeepSeek, while MiniMax remains available only to separately configured roles. The v22/v22b direct-Haiku attempts remain historical zero-quality-result evidence and no longer block delivery on a credential. This does not convert the failed DeepSeek semantic score into a pass or weaken the U18 floors. The integrated candidate may deploy to staging with the new paid discovery, extraction, and synthesis lanes disabled so schema, data-refresh, UI, and worker isolation can be debugged while U18 quality remains open; production promotion still requires every named gate.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -1498,6 +1499,16 @@ credential. No additional DeepSeek experiment, unseen cohort, feature
 activation, staging refresh, or production promotion is permitted in place of
 that result.
 
+That provider path was superseded by owner correction later on September 11:
+Anthropic is not part of the active stack. The 401 attempts are retained only
+as historical evidence that no quality result was produced. U18 is now open on
+the measured DeepSeek quality decision itself: the exact runtime remains below
+the frozen exact-set floor, while further direct-Haiku work is cancelled. A
+saved-response diagnostic also rejected the existing MiniMax review output as
+a drop-in classifier. Staging may receive the integrated code and refreshed
+scrubbed data with paid feature lanes disabled; no failed classification result
+is relabeled as passing, and production remains gated.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated
@@ -1556,7 +1567,11 @@ present. The focused review suite passes 55 PostgreSQL-required tests with no
 skips or errors. Full findings, SQL, rollback boundaries, and remaining gates
 are recorded in
 `docs/analysis/2026-09-11-214911-integrated-candidate-integrity-review.md`.
-The selected aggregate and exact-candidate replays are next. U18 still blocks
-staging refresh and activation because both local direct-Anthropic credentials
-and the production web credential return HTTP 401, while staging web has no
-`ANTHROPIC_API_KEY`; these checks made no classifier call and exposed no key.
+The selected aggregate and exact-candidate replays passed. The current routing
+correction now pins scheduled translator, classifier, relevancy, and signal
+roles to the explicit DeepSeek endpoint and credential even when a stale shared
+Anthropic environment value is present. U18 still blocks paid lane activation
+and production on classification quality, not authentication. The next staging
+candidate keeps discovery, targeted extraction, synthesis, and staging harvest
+provider calls disabled while the guarded data refresh and integration checks
+run.

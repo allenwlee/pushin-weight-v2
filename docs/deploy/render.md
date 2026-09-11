@@ -249,9 +249,8 @@ deploy status alone as the retirement gate.
 The headline route is pinned to DeepSeek V4 via
 `https://api.deepseek.com/anthropic` + `deepseek-v4-flash`. Translation and
 classification use the same endpoint, credential, and explicit model through
-their separate role configuration. Anthropic is a separate explicit route using
-`https://api.anthropic.com` + `claude-haiku-4-5-20251001`; MiniMax is a
-separate explicit/evaluated route using
+their separate role configuration. Scheduled enrichment does not read a shared
+Anthropic route or credential. MiniMax remains a separately configured route using
 `https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and
 the deprecated endpoint are rejected.
 

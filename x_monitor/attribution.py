@@ -814,10 +814,9 @@ def _resolve_signal_model(cfg: "Config | None" = None) -> str:
     Resolution order (plan 2026-08-01-002 U2):
       1. `cfg.llm.signal_model` when cfg is provided (single source of truth).
       2. X_MONITOR_CLASSIFIER_MODEL env var (classifier-specific override)
-      3. ANTHROPIC_MODEL env var (set by the operator's shell / wrapper)
-      4. "MiniMax-M3.0" if classifier base URL routes through api.minimax.io
-      5. "deepseek-v4-flash" if classifier base URL routes through api.deepseek.com
-      6. "claude-haiku-4-5" default (when talking to api.anthropic.com directly)
+      3. ANTHROPIC_MODEL env var (legacy explicit override)
+      4. "MiniMax-M3.0" if the explicit classifier URL routes through MiniMax
+      5. "deepseek-v4-flash" otherwise
     """
     import os
     if cfg is not None and getattr(cfg.llm, "signal_model", None):
@@ -833,7 +832,7 @@ def _resolve_signal_model(cfg: "Config | None" = None) -> str:
         return "MiniMax-M3.0"
     if "deepseek.com" in base_url:
         return "deepseek-v4-flash"
-    return "claude-haiku-4-5"
+    return "deepseek-v4-flash"
 
 
 def _resolve_thinking_default(base_url: str = "", *, role: str = "classifier") -> "dict | None":
@@ -849,8 +848,8 @@ def _resolve_thinking_default(base_url: str = "", *, role: str = "classifier") -
     Args:
         base_url: the actual base URL the call will be made against.
                   Caller passes the resolved URL (not the operator's
-                  other env config). Empty string falls back to the
-                  per-role override + ANTHROPIC_BASE_URL.
+                  other env config). Empty string keeps the legacy
+                  environment-only fallback for retired callers.
         role: "classifier" (default) or "translator". Determines
               which per-role override env var is read when base_url
               is empty: "classifier" -> X_MONITOR_CLASSIFIER_BASE_URL,
@@ -895,7 +894,7 @@ def _resolve_translator_model(cfg: "Config | None" = None) -> str:
     Inference rules:
       - "deepseek.com" in base_url -> "deepseek-v4-flash"
       - "minimax.io"   in base_url -> "MiniMax-M3.0"
-      - otherwise                  -> "claude-haiku-4-5"
+      - otherwise                  -> "deepseek-v4-flash"
     """
     import os
     if cfg is not None and getattr(cfg.llm, "translator_model", None):
@@ -917,7 +916,7 @@ def _resolve_translator_model(cfg: "Config | None" = None) -> str:
         return "deepseek-v4-flash"
     if "minimax.io" in base_url:
         return "MiniMax-M3.0"
-    return "claude-haiku-4-5"
+    return "deepseek-v4-flash"
 
 
 _TRANSLATOR_MODEL = _resolve_translator_model()
@@ -2934,7 +2933,8 @@ def classify_batch_pragmatics_full(
         import os as _os
 
         thinking = _resolve_thinking_default(
-            _os.environ.get(
+            getattr(anthropic_client, "_base_url", "")
+            or _os.environ.get(
                 "X_MONITOR_CLASSIFIER_BASE_URL",
                 _os.environ.get("ANTHROPIC_BASE_URL", ""),
             )
@@ -3120,11 +3120,7 @@ class AnthropicClaudeClient:
         # always carries at least one TextBlock. MiniMax / direct
         # Anthropic paths return None (no-op).
         if "thinking" not in kwargs:
-            import os as _os
-            thinking = _resolve_thinking_default(_os.environ.get(
-                "X_MONITOR_CLASSIFIER_BASE_URL",
-                _os.environ.get("ANTHROPIC_BASE_URL", ""),
-            ))
+            thinking = _resolve_thinking_default(self._base_url)
             if thinking is not None:
                 kwargs["thinking"] = thinking
 

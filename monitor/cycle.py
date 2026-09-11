@@ -2527,8 +2527,8 @@ class CycleRunner:
         translation_succeeded: set[str] = set()
         if translation_tweets and translator_client is None:
             logger.warning(
-                "_run_post_fetch: no translator client (ANTHROPIC_BASE_URL "
-                "+ MINIMAX_API_TOKEN not set) — skipping translate; "
+                "_run_post_fetch: no translator client (configured provider "
+                "credential unavailable) — skipping translate; "
                 "classifier stage will run if its client is available"
             )
             self._error_counts["translator_unavailable"] += 1

@@ -267,14 +267,15 @@ metrics_refresh:
 
 # LLM routing (plan 2026-08-01-002 U6). Non-null yaml model values win
 # over role-specific environment values. Environment values apply when
-# the corresponding yaml field is omitted or null. translator_base_url
-# falls back to ANTHROPIC_BASE_URL when null.
+# the corresponding yaml field is omitted or null. Routine harvest enrichment
+# routes explicitly to DeepSeek and does not inherit a shared provider URL.
 llm:
   translator_model: "deepseek-v4-flash"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
-  translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
+  translator_base_url: "https://api.deepseek.com/anthropic"
   classifier_model: "deepseek-v4-flash"
-  relevancy_model: "claude-haiku-4-5"
-  signal_model: "claude-haiku-4-5"
+  classifier_base_url: "https://api.deepseek.com/anthropic"
+  relevancy_model: "deepseek-v4-flash"
+  signal_model: "deepseek-v4-flash"
   literal_translation_v2_enabled: null
 
 # Shared V22 trend-narrative generation. This role never inherits the

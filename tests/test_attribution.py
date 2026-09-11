@@ -636,17 +636,17 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
       1. ANTHROPIC_MODEL env wins always.
       2. else, MiniMax-M3.0 if ANTHROPIC_BASE_URL routes through minimax.io.
       3. else, deepseek-v4-flash if ANTHROPIC_BASE_URL routes through deepseek.com.
-      4. else, claude-haiku-4-5 (direct api.anthropic.com).
+      4. else, deepseek-v4-flash.
     """
     from x_monitor.attribution import _resolve_signal_model
 
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_MODEL", raising=False)
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
 
-    # (env unset, no proxy) -> claude-haiku-4-5
+    # (env unset, no explicit route) -> deepseek-v4-flash
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
-    assert _resolve_signal_model() == "claude-haiku-4-5"
+    assert _resolve_signal_model() == "deepseek-v4-flash"
 
     # (env unset, minimax proxy) -> MiniMax-M3.0 (the fix's default)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
@@ -856,6 +856,8 @@ def test_call_signal_with_retry_threads_thinking_through():
     captured = {}
 
     class FakeClient:
+        _base_url = ""
+
         def messages_create(self, **kwargs):
             captured.update(kwargs)
             return {"results": []}
@@ -907,6 +909,7 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
             }
 
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    FakeClient._base_url = "https://api.deepseek.com/anthropic"
     captured.clear()
     tweets = [{"tweet_id": f"t{i}", "text": f"tweet {i}", "brand_ids": ["minimax"]} for i in range(3)]
     classify_batch_pragmatics_full(
@@ -921,6 +924,7 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
 
     # M3 path: thinking=None, parameter omitted
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    FakeClient._base_url = "https://api.minimax.io/anthropic"
     captured.clear()
     classify_batch_pragmatics_full(
         tweets=tweets,

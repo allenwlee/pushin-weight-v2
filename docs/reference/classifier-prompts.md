@@ -52,6 +52,12 @@ Every publishable row is built from three independent provider answers:
    the base returns an unsanctioned flag, or the frozen lexical screen finds a possible
    flag signal. It alone publishes those rare types and flags.
 
+All four calls use `deepseek-v4-flash` through
+`https://api.deepseek.com/anthropic` and the DeepSeek service credential.
+Scheduled classification does not inherit `ANTHROPIC_BASE_URL` or require an
+Anthropic credential. MiniMax remains available only to roles that configure
+its endpoint explicitly.
+
 All three required classification rows must validate. Base `context_missing` is
 authoritative. A required narrow audit must also validate. A malformed row falls back
 individually while valid neighboring rows survive. The caller caps each stage at three

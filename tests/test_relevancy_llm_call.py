@@ -17,8 +17,13 @@ class FakeAnthropicClient:
     """Mimics the messages_create(**kwargs) -> dict interface used by
     translator + classifier (see x_monitor.translator.AnthropicClaudeClient)."""
 
-    def __init__(self, response_text: str = "KEEP"):
+    def __init__(
+        self,
+        response_text: str = "KEEP",
+        base_url: str = "",
+    ):
         self.response_text = response_text
+        self._base_url = base_url
         self.calls: list[dict] = []
 
     def messages_create(self, **kwargs):
@@ -49,6 +54,19 @@ def test_llm_call_invokes_client_with_system_and_user():
         {"role": "user", "content": "USER_PROMPT"}
     ]
     assert kwargs["max_tokens"] <= 128  # gate output is small
+
+
+def test_llm_call_uses_actual_deepseek_route_for_thinking(monkeypatch):
+    """A stale shared URL cannot change a DeepSeek relevancy request."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    fake = FakeAnthropicClient(
+        base_url="https://api.deepseek.com/anthropic",
+    )
+    llm_call = build_binary_relevancy_llm_call(client=fake)
+
+    llm_call("sys", "user")
+
+    assert fake.calls[0]["thinking"] == {"type": "disabled"}
 
 
 def test_llm_call_returns_empty_string_on_empty_content():

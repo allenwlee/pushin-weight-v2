@@ -436,33 +436,40 @@ class HarvestConfig(BaseModel):
         )
 
 
+DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
+
+
 class LlmConfig(BaseModel):
     """LLM model-name configuration (plan 2026-08-01-002 U1).
 
     Committed non-null yaml model values are authoritative. Role-specific
     environment values apply when the corresponding yaml field is omitted or
-    null. The translator_base_url defaults to ANTHROPIC_BASE_URL when the
-    configured value is null.
+    null. Routine harvest enrichment defaults to the explicit DeepSeek
+    Anthropic-compatible endpoint for every role.
     """
 
     translator_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the translator stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_TRANSLATOR_MODEL.",
     )
-    translator_base_url: str | None = Field(
-        default=None,
-        description="Optional override for the translator's base URL. When None, falls back to ANTHROPIC_BASE_URL env (resolves to MiniMax proxy if set).",
+    translator_base_url: str = Field(
+        default=DEEPSEEK_ANTHROPIC_BASE_URL,
+        description="Explicit translator base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
     )
     classifier_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the classifier stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_CLASSIFIER_MODEL.",
     )
+    classifier_base_url: str = Field(
+        default=DEEPSEEK_ANTHROPIC_BASE_URL,
+        description="Explicit classifier/relevancy base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
+    )
     relevancy_model: str = Field(
-        default="claude-haiku-4-5",
+        default="deepseek-v4-flash",
         description="Model name for the relevancy gate. Default matches x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.",
     )
     signal_model: str = Field(
-        default="claude-haiku-4-5",
+        default="deepseek-v4-flash",
         description="Model name for the per-post signal classifier. Default matches x_monitor/attribution.py::_resolve_signal_model().",
     )
     literal_translation_v2_enabled: bool = False
@@ -952,11 +959,9 @@ def load_config(path: Path) -> Config:
     # Plan 2026-07-13-002 U4: same rename handling for call_b_groups.
     # Legacy v1.7.x config files may also carry this under a different
     # shape — pass through as-is when the key is present.
-    # Plan 2026-08-01-002 U1: env-var resolution into Config.llm.*.
-    # The translator's model name + base URL live in env vars on the
-    # operator's shell (ANTHROPIC_MODEL, ANTHROPIC_BASE_URL) and may
-    # differ from config.yaml. Merge env vars into Config.llm only
-    # when the field is not already explicitly set in yaml — yaml wins.
+    # Role-specific environment values may fill omitted/null Config.llm
+    # fields. Non-null YAML values remain authoritative, so shared provider
+    # environment variables cannot redirect scheduled enrichment.
     import os
 
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
@@ -968,6 +973,7 @@ def load_config(path: Path) -> Config:
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
+            "classifier_base_url": os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL"),
             "literal_translation_v2_enabled": os.environ.get(
                 "X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"
             ),

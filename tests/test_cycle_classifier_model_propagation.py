@@ -90,12 +90,13 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.setenv(
         "X_MONITOR_CLASSIFIER_BASE_URL",
-        "https://api.deepseek.com/anthropic",
+        "https://api.anthropic.com",
     )
     monkeypatch.setattr(attribution, "_SIGNAL_MODEL", "ambient-model")
 
     class ClassifierClient:
         def __init__(self):
+            self._base_url = "https://api.deepseek.com/anthropic"
             self.calls: list[dict[str, Any]] = []
 
         def messages_create(self, **kwargs):
@@ -145,7 +146,10 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     cfg = Config(
         enabled_models=["deepseek"],
         daily_ceiling=100,
-        llm=LlmConfig(classifier_model="deepseek-v4-flash"),
+        llm=LlmConfig(
+            classifier_model="deepseek-v4-flash",
+            classifier_base_url="https://api.deepseek.com/anthropic",
+        ),
     )
     CycleRunner(cfg=cfg)._run_post_fetch([], run_id="classifier-model-pin")
 

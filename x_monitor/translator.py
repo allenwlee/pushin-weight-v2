@@ -239,13 +239,10 @@ def _call_with_retry(
     catches and marks the batch as failed.
 
     Pass `cfg` to thread cfg.llm.translator_model + cfg.llm.translator_base_url
-    into the model/thinking resolution. Without cfg, resolution falls back
-    to env inference (ANTHROPIC_BASE_URL / X_MONITOR_TRANSLATOR_BASE_URL
-    substring) which can pick the wrong model when the env-group still
-    points at api.minimax.io/anthropic while the cron override routes
-    through api.deepseek.com/anthropic. This is the missing call-site
-    wire-up for the swap-translator plan 2026-08-04-001; commit a46d2de
-    fixed `_resolve_translator_model` but missed this call site.
+    into the model/thinking resolution. The configured URL is authoritative
+    when present, so a stale shared provider environment value cannot change
+    DeepSeek request semantics. Environment inference remains only for legacy
+    callers that do not pass cfg.
     """
     last_exc: Exception | None = None
     from .attribution import _resolve_thinking_default
@@ -253,11 +250,16 @@ def _call_with_retry(
     # cfg-threaded resolution: cfg.llm.translator_model is canonical
     # when provided; env inference is the fallback.
     model = _resolve_model(cfg)
-    # Plan 2026-08-04-001: thinking kwarg follows the base URL the
-    # call is actually routing to, not the operator's other env config.
-    # The helper reads X_MONITOR_TRANSLATOR_BASE_URL first (per-role
-    # override) when role="translator", else ANTHROPIC_BASE_URL.
-    thinking = _resolve_thinking_default(role="translator")
+    # Thinking follows the URL the client is actually routing to. Scheduled
+    # callers pass cfg, whose explicit DeepSeek URL must win over all ambient
+    # provider variables. The empty legacy path retains env inference.
+    configured_base_url = getattr(
+        getattr(cfg, "llm", None), "translator_base_url", ""
+    )
+    thinking = _resolve_thinking_default(
+        configured_base_url,
+        role="translator",
+    )
     # Plan 2026-08-04-001: per-batch output budget sized by
     # _max_tokens_for_batch_size. The prior 4096 was too tight for
     # 20-tweet M3 batches (proxy-side cap truncated responses
@@ -1486,12 +1488,12 @@ def translate_registry_rows(
 
 
 class AnthropicClaudeClient:
-    """Production Claude client using the Anthropic SDK.
+    """Anthropic-compatible client used with the configured provider.
 
     Imports `anthropic` lazily (only when an instance is constructed)
     so test environments without the SDK installed can still import
-    this module and use FakeClaudeClient. The fuchitalee gateway's
-    `ANTHROPIC_API_KEY` env var is the credential.
+    this module and use FakeClaudeClient. Scheduled harvest construction
+    supplies the DeepSeek endpoint and `DEEPSEEK_API_KEY` explicitly.
     """
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
@@ -1503,6 +1505,7 @@ class AnthropicClaudeClient:
                 "Install with `pip install anthropic`. Tests can use "
                 "FakeClaudeClient instead."
             ) from e
+        self._base_url = (base_url or "https://api.anthropic.com").rstrip("/")
         kwargs: dict[str, Any] = {}
         if api_key:
             kwargs["api_key"] = api_key
