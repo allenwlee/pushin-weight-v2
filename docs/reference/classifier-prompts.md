@@ -30,7 +30,7 @@ These values are literal at the reviewed source:
 ```python
 CONTRACT_VERSION = "stage1-v1"
 TAXONOMY_VERSION = "stage1-taxonomy-v3"
-PROMPT_VERSION = "stage1-prompt-v7"
+PROMPT_VERSION = "stage1-prompt-v8"
 
 POST_TYPE_KEYS = (
     "releases_updates",
@@ -499,7 +499,9 @@ python manage.py run_cycle / scheduled harvest task
   environment value. The client base URL uses
   `X_MONITOR_CLASSIFIER_BASE_URL`, then `ANTHROPIC_BASE_URL`; credentials are
   selected for the resolved provider host. The DeepSeek-compatible route sends
-  `thinking={"type":"disabled"}`. The wrapper posts to
+  `thinking={"type":"disabled"}`. Stage 1 classification also sends
+  `temperature=0` so repeated classifications use the provider's least-random
+  sampling mode. The wrapper posts to
   `<effective-base-url>/v1/messages` with `x-api-key` and
   `anthropic-version: 2023-06-01`. This document contains no credentials.
 - Inputs are split into batches of 20. The Django caller requests

@@ -1034,6 +1034,7 @@ def _call_signal_with_retry(
     system: str | None = None,
     model: str | None = None,
     max_tokens: int = 4096,
+    temperature: float | None = None,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
@@ -1062,6 +1063,8 @@ def _call_signal_with_retry(
     }
     if system is not None:
         create_kwargs["system"] = system
+    if temperature is not None:
+        create_kwargs["temperature"] = temperature
     if thinking is not None:
         create_kwargs["thinking"] = thinking
     telemetry_prompt = (
@@ -1421,6 +1424,7 @@ def classify_pragmatics_full(
             system=_PRAGMATICS_FULL_SYSTEM_PROMPT,
             model=model,
             max_tokens=max_tokens,
+            temperature=0,
             thinking=thinking,
             deadline=deadline,
             telemetry_context={**(telemetry_context or {}), "batch_size": 1},
@@ -1545,6 +1549,7 @@ def _classify_stage1_batch(
             system=_PRAGMATICS_FULL_SYSTEM_PROMPT,
             model=model,
             max_tokens=max_tokens,
+            temperature=0,
             thinking=thinking,
             deadline=deadline,
             telemetry_context={

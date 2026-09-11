@@ -336,6 +336,7 @@ def test_fallback_preserves_explicit_model_thinking_and_token_budget():
         assert call["messages"][0]["role"] == "user"
         assert call["model"] == "deepseek-v4-flash"
         assert call["thinking"] == {"type": "disabled"}
+        assert call["temperature"] == 0
         assert call["max_tokens"] == 6144
 
 

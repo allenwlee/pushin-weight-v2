@@ -103,6 +103,7 @@ def test_single_preserves_multilabel_result_and_explicit_unknown():
     }
     assert client.calls[0]["model"] == "deepseek-v4-flash"
     assert client.calls[0]["thinking"] == {"type": "disabled"}
+    assert client.calls[0]["temperature"] == 0
     from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
 
     assert client.calls[0]["system"] == _PRAGMATICS_FULL_SYSTEM_PROMPT

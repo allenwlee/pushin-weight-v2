@@ -48,6 +48,7 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(quality, "BUDGET_V3R2_REPAIR_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_CONTRACT_REVIEW_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_PROMPT_V7_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_TEMPERATURE_ZERO_PATH", budget_path)
     monkeypatch.setattr(quality, "PRIVATE", tmp_path)
     monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
@@ -109,6 +110,7 @@ def test_corrected_gold_uses_exact_production_semantics_without_candidates():
     )
     assert quality.TAXONOMIES["v3r3"]["prompt_version"] == "stage1-prompt-v6"
     assert quality.TAXONOMIES["v3r4"]["prompt_version"] == "stage1-prompt-v7"
+    assert quality.TAXONOMIES["v3r5"]["prompt_version"] == "stage1-prompt-v8"
 
 
 def test_invalid_candidate_row_preserves_coverage_and_raw_response_identity():

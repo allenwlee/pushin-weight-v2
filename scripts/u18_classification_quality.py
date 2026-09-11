@@ -64,6 +64,9 @@ BUDGET_CONTRACT_REVIEW_PATH = (
 BUDGET_PROMPT_V7_PATH = (
     ROOT / "docs/analysis/2026-09-11-022000-u18-provider-budget-amendment-v11.json"
 )
+BUDGET_TEMPERATURE_ZERO_PATH = (
+    ROOT / "docs/analysis/2026-09-11-024000-u18-provider-budget-amendment-v12.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -102,6 +105,13 @@ TAXONOMIES = {
         "prompt_version": "stage1-prompt-v7",
         "post_types": CANONICAL_POST_TYPE_KEYS,
         "prompt_path": PRIVATE / "v7-system-prompt.txt",
+        "source_revision": "HEAD",
+    },
+    "v3r5": {
+        "version": "stage1-taxonomy-v3",
+        "prompt_version": "stage1-prompt-v8",
+        "post_types": CANONICAL_POST_TYPE_KEYS,
+        "prompt_path": PRIVATE / "v8-system-prompt.txt",
         "source_revision": "HEAD",
     },
 }
@@ -184,6 +194,7 @@ class BudgetedTransport:
         v3r2_repair_document = _read_json(BUDGET_V3R2_REPAIR_PATH)
         contract_review_document = _read_json(BUDGET_CONTRACT_REVIEW_PATH)
         prompt_v7_document = _read_json(BUDGET_PROMPT_V7_PATH)
+        temperature_zero_document = _read_json(BUDGET_TEMPERATURE_ZERO_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -197,6 +208,7 @@ class BudgetedTransport:
             or v3r2_repair_document["lanes"].get(lane)
             or contract_review_document["lanes"].get(lane)
             or prompt_v7_document["lanes"].get(lane)
+            or temperature_zero_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -290,6 +302,8 @@ class BudgetedTransport:
                 }
                 if self.budget["provider"] == "deepseek":
                     kwargs["thinking"] = {"type": "disabled"}
+                if "temperature" in self.budget:
+                    kwargs["temperature"] = self.budget["temperature"]
                 response = self.client.messages_create(**kwargs)
                 usage = normalize_usage(getattr(response, "provider_usage", None))
                 self.state["observed_input_tokens"] += usage["input_tokens"] or 0
@@ -421,6 +435,7 @@ def run_candidate(taxonomy_name: str) -> None:
         "v3r2": "candidate_v3r2_fallback",
         "v3r3": "candidate_v3r3_fallback",
         "v3r4": "candidate_v3r4_fallback",
+        "v3r5": "candidate_v3r5_fallback",
     }.get(taxonomy_name)
     fallback_transport = BudgetedTransport(fallback_lane) if fallback_lane else None
     progress_path = PRIVATE / f"candidate-{taxonomy_name}-progress.json"

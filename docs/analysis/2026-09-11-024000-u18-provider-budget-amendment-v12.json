@@ -1,0 +1,48 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T02:40:00Z",
+  "reason": "prompt-v7 achieved complete schema coverage but independent repeated classification remained unstable on overlapping post-type sets; candidate v3r5 binds temperature zero in the production classifier transport and measures the same frozen cohort without changing category semantics or release floors",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-022000-u18-provider-budget-amendment-v11.json"
+  ],
+  "lanes": {
+    "candidate_v3r5": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 10,
+      "maximum_examples": 500,
+      "maximum_requests": 50,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 100,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 3500000,
+      "maximum_output_tokens": 409600,
+      "maximum_cost_usd": "0.62",
+      "twitterapi_credits": 0
+    },
+    "candidate_v3r5_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 1000,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 5000000,
+      "maximum_output_tokens": 1200000,
+      "maximum_cost_usd": "1.04",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "Each temperature-zero candidate lane refuses its next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; unused capacity cannot move between lanes, and invalid fallback output remains an invalid candidate row."
+}
