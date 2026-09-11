@@ -959,7 +959,7 @@ def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
         {"by_brand": {}, "unsanctioned_flags": [], "valid": False}
     ]
     # Each independent pass surfaces its own shape drift.
-    assert len(captured_exc) == 2
+    assert len(captured_exc) == 3
     assert all(isinstance(exc, ValueError) for exc in captured_exc)
     assert all("shape drift" in str(exc) for exc in captured_exc)
 
@@ -1070,10 +1070,10 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
         brand_registry=[],
         anthropic_client=FakeClient(),
-        telemetry_context={"prompt_version": "stage1-prompt-v14"},
+        telemetry_context={"prompt_version": "stage1-prompt-v18"},
     )
 
-    assert len(calls) == 4
+    assert len(calls) == 5
     assert calls[2]["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT
     assert result[0]["valid"] is True
     assert result[0]["by_brand"]["minimax"]["post_types"] == [

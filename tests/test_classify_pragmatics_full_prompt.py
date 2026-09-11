@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from core.classification_contract import (
@@ -131,7 +133,43 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v14"
+    assert PROMPT_VERSION == "stage1-prompt-v18"
+
+
+def test_v18_three_pass_and_audit_prompt_bytes_are_frozen():
+    from x_monitor import attribution
+
+    expected = {
+        "_PRAGMATICS_BASE_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-base-v1",
+            "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+        ),
+        "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-secondary-v1",
+            "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+        ),
+        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-review-v1",
+            "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+        ),
+        "_PRAGMATICS_RARE_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-narrow-audit-v1",
+            "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+        ),
+    }
+    versions = {
+        "_PRAGMATICS_BASE_SYSTEM_PROMPT": attribution._PRAGMATICS_BASE_PROMPT_VERSION,
+        "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_SECONDARY_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": attribution._PRAGMATICS_REVIEW_PROMPT_VERSION,
+        "_PRAGMATICS_RARE_SYSTEM_PROMPT": attribution._PRAGMATICS_RARE_PROMPT_VERSION,
+    }
+
+    for constant, (version, digest) in expected.items():
+        assert versions[constant] == version
+        value = getattr(attribution, constant)
+        assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
 
 
 def test_prompt_identity_is_shared_by_batch_and_single_builders():

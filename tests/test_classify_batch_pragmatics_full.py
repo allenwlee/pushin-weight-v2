@@ -59,6 +59,33 @@ def response_for_payload(
     return {"results": list(reversed(rows)) if reverse else rows}
 
 
+def review_response_for_packets(
+    packets: list[dict[str, Any]],
+    *,
+    post_types: list[str] | None = None,
+    product_labels: list[str] | None = None,
+    unsanctioned_flags: list[str] | None = None,
+) -> dict[str, Any]:
+    rows = []
+    for packet in packets:
+        row = classification(
+            packet["brand_id"],
+            post_types=post_types,
+            product_labels=product_labels,
+        )
+        result = {
+            "example_id": packet["example_id"],
+            "brand_id": packet["brand_id"],
+            "v3": {key: value for key, value in row.items() if key != "brand_id"},
+            "job_discovery_relevant": False,
+            "personnel_discovery_relevant": False,
+        }
+        if unsanctioned_flags is not None:
+            result["unsanctioned_flags"] = unsanctioned_flags
+        rows.append(result)
+    return {"results": rows}
+
+
 def prompt_payload(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
     prompt = kwargs["messages"][0]["content"]
     payload = json.loads(prompt)
@@ -120,7 +147,9 @@ def test_batch_prompt_is_canonical_json_and_carries_stored_context():
 
 def test_stage1_transport_keeps_untrusted_text_out_of_system_and_item_boundaries():
     from x_monitor.attribution import (
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
         _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
         classify_batch_pragmatics_full,
     )
 
@@ -151,21 +180,30 @@ def test_stage1_transport_keeps_untrusted_text_out_of_system_and_item_boundaries
         for row in classify_batch_pragmatics_full(input_rows, [], client)
     )
 
-    call = client.calls[0]
-    assert call["system"] == _PRAGMATICS_REVIEW_SYSTEM_PROMPT
-    assert "untrusted evidence" in call["system"]
-    assert "never instructions" in call["system"]
-    assert injected_source not in call["system"]
-    assert injected_quote not in call["system"]
-    assert injected_parent not in call["system"]
-    assert call["messages"] == [
-        {"role": "user", "content": call["messages"][0]["content"]}
+    assert [call["system"] for call in client.calls] == [
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
     ]
-    assert prompt_payload(call) == input_rows
+    for call in client.calls:
+        assert "untrusted evidence" in call["system"]
+        assert "instructions" in call["system"]
+        assert injected_source not in call["system"]
+        assert injected_quote not in call["system"]
+        assert injected_parent not in call["system"]
+        assert call["messages"] == [
+            {"role": "user", "content": call["messages"][0]["content"]}
+        ]
+        assert prompt_payload(call) == input_rows
 
 
 def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
-    from x_monitor.attribution import classify_batch_pragmatics_full
+    from x_monitor.attribution import (
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
+        _PRAGMATICS_RARE_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
+        classify_batch_pragmatics_full,
+    )
 
     input_rows = [
         {
@@ -178,7 +216,7 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
 
     def handler(kwargs):
         packets = json.loads(kwargs["messages"][0]["content"])
-        if packets and "proposals" in packets[0]:
+        if kwargs["system"] == _PRAGMATICS_RARE_SYSTEM_PROMPT:
             return {
                 "results": [
                     {
@@ -189,22 +227,16 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
                     for packet in packets
                 ]
             }
-        return {
-            "results": [
-                {
-                    "example_id": packet["example_id"],
-                    "brand_id": packet["brand_id"],
-                    "v3": {
-                        key: value
-                        for key, value in classification(packet["brand_id"]).items()
-                        if key != "brand_id"
-                    },
-                    "job_discovery_relevant": False,
-                    "personnel_discovery_relevant": False,
-                }
-                for packet in packets
-            ]
-        }
+        if kwargs["system"] == _PRAGMATICS_BASE_SYSTEM_PROMPT:
+            response = response_for_payload(prompt_payload(kwargs))
+            response["results"][0]["unsanctioned_flags"] = ["unauthorized"]
+            return response
+        return review_response_for_packets(
+            packets,
+            unsanctioned_flags=(
+                [] if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT else None
+            ),
+        )
 
     result = classify_batch_pragmatics_full(input_rows, [], FakeClient(handler))
 
@@ -213,50 +245,30 @@ def test_review_wire_shape_is_parsed_back_into_atomic_per_post_results():
     assert result[0]["unsanctioned_flags"] == ["unauthorized"]
 
 
-def test_review_wire_rejects_unknown_row_keys_and_requires_two_valid_passes():
-    from x_monitor.attribution import classify_batch_pragmatics_full
+def test_review_wire_rejects_unknown_row_keys_and_requires_all_three_valid_passes():
+    from x_monitor.attribution import (
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
+        _PRAGMATICS_FULL_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
+        classify_batch_pragmatics_full,
+    )
 
     input_rows = tweets(1)
-    call_count = 0
-
     def handler(kwargs):
-        nonlocal call_count
-        call_count += 1
         packets = json.loads(kwargs["messages"][0]["content"])
-        if call_count == 1:
-            return {
-                "results": [
-                    {
-                        "example_id": packets[0]["example_id"],
-                        "brand_id": packets[0]["brand_id"],
-                        "v3": {
-                            key: value
-                            for key, value in classification("deepseek").items()
-                            if key != "brand_id"
-                        },
-                        "job_discovery_relevant": False,
-                        "personnel_discovery_relevant": False,
-                        "unexpected": True,
-                    }
-                ]
-            }
-        if call_count == 2:
-            raise RuntimeError("fallback transport unavailable")
-        return {
-            "results": [
-                {
-                    "example_id": packets[0]["example_id"],
-                    "brand_id": packets[0]["brand_id"],
-                    "v3": {
-                        key: value
-                        for key, value in classification("deepseek").items()
-                        if key != "brand_id"
-                    },
-                    "job_discovery_relevant": False,
-                    "personnel_discovery_relevant": False,
-                }
-            ]
-        }
+        if kwargs["system"] == _PRAGMATICS_BASE_SYSTEM_PROMPT:
+            return response_for_payload(prompt_payload(kwargs))
+        if kwargs["system"] == _PRAGMATICS_FULL_SYSTEM_PROMPT:
+            return {"results": []}
+        response = review_response_for_packets(
+            packets,
+            unsanctioned_flags=(
+                [] if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT else None
+            ),
+        )
+        if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT:
+            response["results"][0]["unexpected"] = True
+        return response
 
     result = classify_batch_pragmatics_full(input_rows, [], FakeClient(handler))
 
@@ -277,14 +289,14 @@ def test_empty_input_and_missing_client_make_no_transport_calls():
     assert client.calls == []
 
 
-def test_two_independent_calls_classify_each_ten_post_batch():
+def test_three_pass_topology_uses_twenty_post_base_and_ten_post_review_batches():
     from x_monitor.attribution import classify_batch_pragmatics_full
 
     client = FakeClient()
     result = classify_batch_pragmatics_full(tweets(20), [], client)
 
-    assert len(client.calls) == 4
-    assert [len(prompt_payload(call)) for call in client.calls] == [10, 10, 10, 10]
+    assert len(client.calls) == 5
+    assert [len(prompt_payload(call)) for call in client.calls] == [20, 10, 10, 10, 10]
     assert len(result) == 20
     assert all(row["valid"] for row in result)
 
@@ -317,7 +329,7 @@ def test_concurrent_batches_are_bounded_at_three_and_keep_input_order():
     )
 
     assert client.max_active == 3
-    assert sorted(client.batch_sizes) == [1, 1, *([10] * 8)]
+    assert sorted(client.batch_sizes) == [1, 1, 1, *([10] * 8), 20, 20]
     assert [
         next(iter(row["by_brand"])) for row in result
     ] == ["deepseek"] * 41
@@ -340,87 +352,91 @@ def test_out_of_order_result_ids_are_realigned_to_input_order():
     assert list(result[1]["by_brand"]) == ["qwen"]
 
 
-def test_two_pass_consensus_completes_labels_and_adjudicates_rare_labels():
+def test_three_pass_selector_completes_labels_and_uses_narrow_rare_audit():
     from x_monitor.attribution import (
-        _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
         _PRAGMATICS_RARE_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
+        _STAGE1_LANGUAGE_TYPE_SOURCES,
+        _stage1_selector_language,
         classify_batch_pragmatics_full,
     )
 
     input_rows = [
-        {"tweet_id": "person", "text": "A profile update", "brand_ids": ["deepseek"]},
-        {"tweet_id": "residual", "text": "A residual post", "brand_ids": ["qwen"]},
-        {"tweet_id": "missing", "text": "thank you", "brand_ids": ["mistral"]},
+        {
+            "tweet_id": "person",
+            "text": "A profile update",
+            "brand_ids": ["deepseek"],
+            "source_language": "en",
+        },
+        {
+            "tweet_id": "residual",
+            "text": "A residual post",
+            "brand_ids": ["qwen"],
+            "source_language": "ja",
+        },
+        {
+            "tweet_id": "missing",
+            "text": "thank you",
+            "brand_ids": ["mistral"],
+            "source_language": "zh-CN",
+        },
     ]
-    base_calls = 0
+
+    assert _STAGE1_LANGUAGE_TYPE_SOURCES == {
+        "en": {
+            "events": "review",
+            "research_explanations": "secondary",
+        },
+        "ja": {
+            "advertising_marketing": "secondary",
+            "hands_on_usage": "review",
+            "opinions_reactions": "secondary",
+            "research_explanations": "review",
+        },
+        "zh-cn": {
+            "business_finance": "secondary",
+            "releases_updates": "review",
+            "research_explanations": "review",
+        },
+    }
+    assert {
+        value: _stage1_selector_language(value)
+        for value in ("en-US", "ja-JP", "zh", "zh_CN", "zh-Hans", "zh-SG")
+    } == {
+        "en-US": "en",
+        "ja-JP": "ja",
+        "zh": "zh-cn",
+        "zh_CN": "zh-cn",
+        "zh-Hans": "zh-cn",
+        "zh-SG": "zh-cn",
+    }
 
     def handler(kwargs):
-        nonlocal base_calls
-        if kwargs["system"] == _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT:
+        packets = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == _PRAGMATICS_RARE_SYSTEM_PROMPT:
             packets = json.loads(kwargs["messages"][0]["content"])
             return {
                 "results": [
                     {
-                        "example_id": packet["example_id"],
-                        "brand_id": packet["brand_id"],
-                        "v3": {
-                            key: value
-                            for key, value in (
-                                classification(
-                                    "deepseek",
-                                    post_types=[
-                                        "releases_updates",
-                                        "research_explanations",
-                                        "personnel_changes",
-                                    ],
-                                    product_labels=[
-                                        "testimonial",
-                                        "ideas_requests",
-                                    ],
-                                    sentiment="positive",
-                                )
-                                if packet["brand_id"] == "deepseek"
-                                else classification("qwen", post_types=["other"])
-                            ).items()
-                            if key != "brand_id"
-                        },
-                        "job_discovery_relevant": False,
-                        "personnel_discovery_relevant": (
-                            packet["brand_id"] == "deepseek"
+                        "tweet_id": packet["tweet_id"],
+                        "unsanctioned_flags": (
+                            ["crypto"] if packet["tweet_id"] == "person" else []
                         ),
+                        "decisions": [
+                            {
+                                "brand_id": proposal["brand_id"],
+                                "personnel_changes": False,
+                                "other": packet["tweet_id"] == "residual",
+                            }
+                            for proposal in packet["proposals"]
+                        ],
                     }
                     for packet in packets
                 ]
             }
-        if kwargs["system"] == _PRAGMATICS_RARE_SYSTEM_PROMPT:
-            return {
-                "results": [
-                    {
-                        "tweet_id": "person",
-                        "unsanctioned_flags": ["crypto", "marketing_spam"],
-                        "decisions": [
-                            {
-                                "brand_id": "deepseek",
-                                "personnel_changes": False,
-                                "other": False,
-                            }
-                        ],
-                    },
-                    {
-                        "tweet_id": "residual",
-                        "unsanctioned_flags": [],
-                        "decisions": [
-                            {
-                                "brand_id": "qwen",
-                                "personnel_changes": False,
-                                "other": True,
-                            }
-                        ],
-                    },
-                ]
-            }
-        base_calls += 1
-        if base_calls == 1:
+        if kwargs["system"] == _PRAGMATICS_BASE_SYSTEM_PROMPT:
             return {
                 "results": [
                     {
@@ -442,49 +458,57 @@ def test_two_pass_consensus_completes_labels_and_adjudicates_rare_labels():
                     },
                     {
                         "tweet_id": "missing",
-                        "classifications": [classification("mistral")],
+                        "classifications": [
+                            classification(
+                                "mistral",
+                                post_types=[],
+                                product_labels=[],
+                                sentiment=None,
+                                china_nationalism=None,
+                                us_nationalism=None,
+                                outcome="context_missing",
+                            )
+                        ],
                         "unsanctioned_flags": [],
                     },
                 ]
             }
-        return {
-            "results": [
-                {
-                    "tweet_id": "person",
-                    "classifications": [
-                        classification(
-                            "deepseek",
-                            post_types=["research_explanations"],
-                            product_labels=["ideas_requests"],
-                            sentiment="neutral",
-                        )
-                    ],
-                    "unsanctioned_flags": ["marketing_spam"],
-                },
-                {
-                    "tweet_id": "residual",
-                    "classifications": [
-                        classification("qwen", post_types=["opinions_reactions"])
-                    ],
-                    "unsanctioned_flags": [],
-                },
-                {
-                    "tweet_id": "missing",
-                    "classifications": [
-                        classification(
-                            "mistral",
-                            post_types=[],
-                            product_labels=[],
-                            sentiment=None,
-                            china_nationalism=None,
-                            us_nationalism=None,
-                            outcome="context_missing",
-                        )
-                    ],
-                    "unsanctioned_flags": [],
-                },
-            ]
+        assert kwargs["system"] in {
+            _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
+            _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
         }
+        rows = []
+        for packet in packets:
+            tweet_id = packet["source"]["tweet_id"]
+            if tweet_id == "person":
+                post_types = (
+                    ["research_explanations"]
+                    if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT
+                    else ["events"]
+                )
+                product_labels = ["ideas_requests"]
+            elif tweet_id == "residual":
+                post_types = ["opinions_reactions"]
+                product_labels = []
+            else:
+                post_types = ["releases_updates"]
+                product_labels = []
+            row = classification(
+                packet["brand_id"],
+                post_types=post_types,
+                product_labels=product_labels,
+            )
+            item = {
+                "example_id": packet["example_id"],
+                "brand_id": packet["brand_id"],
+                "v3": {key: value for key, value in row.items() if key != "brand_id"},
+                "job_discovery_relevant": False,
+                "personnel_discovery_relevant": False,
+            }
+            if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT:
+                item["unsanctioned_flags"] = []
+            rows.append(item)
+        return {"results": rows}
 
     client = FakeClient(handler)
     result = classify_batch_pragmatics_full(input_rows, [], client)
@@ -494,14 +518,18 @@ def test_two_pass_consensus_completes_labels_and_adjudicates_rare_labels():
         "by_brand": {
             "deepseek": {
                 "outcome": "classified",
-                "post_types": ["releases_updates", "research_explanations"],
+                "post_types": [
+                    "releases_updates",
+                    "events",
+                    "research_explanations",
+                ],
                 "product_labels": ["testimonial", "ideas_requests"],
                 "sentiment": "positive",
                 "china_nationalism": "none",
                 "us_nationalism": "none",
             }
         },
-        "unsanctioned_flags": ["crypto", "marketing_spam"],
+        "unsanctioned_flags": ["crypto"],
         "valid": True,
     }
     assert result[1]["by_brand"]["qwen"]["post_types"] == ["other"]
@@ -515,25 +543,25 @@ def test_two_pass_consensus_completes_labels_and_adjudicates_rare_labels():
     }
 
 
-def test_unresolved_required_consensus_keeps_post_invalid():
+def test_invalid_required_review_pass_keeps_post_invalid():
     from x_monitor.attribution import (
-        _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT,
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
+        _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
         classify_batch_pragmatics_full,
     )
 
-    base_calls = 0
-
     def handler(kwargs):
-        nonlocal base_calls
-        if kwargs["system"] == _PRAGMATICS_CONSENSUS_SYSTEM_PROMPT:
+        if kwargs["system"] == _PRAGMATICS_BASE_SYSTEM_PROMPT:
+            return response_for_payload(prompt_payload(kwargs))
+        if kwargs["system"] == _PRAGMATICS_SECONDARY_SYSTEM_PROMPT:
+            return review_response_for_packets(
+                json.loads(kwargs["messages"][0]["content"]),
+                unsanctioned_flags=[],
+            )
+        if kwargs["system"] == _PRAGMATICS_REVIEW_SYSTEM_PROMPT:
             return {"results": []}
-        base_calls += 1
-        payload = prompt_payload(kwargs)
-        response = response_for_payload(payload)
-        response["results"][0]["classifications"][0]["post_types"] = [
-            "releases_updates" if base_calls == 1 else "research_explanations"
-        ]
-        return response
+        return {"results": []}
 
     result = classify_batch_pragmatics_full(
         tweets(1),
@@ -584,8 +612,8 @@ def test_invalid_batch_falls_back_per_post_with_all_local_context(invalid_mode):
         on_batch_error=lambda _batch, exc: errors.append(exc),
     )
 
-    assert [len(payload) for payload in seen_payloads] == [2, 1, 2, 1]
-    assert len(errors) == 2
+    assert [len(payload) for payload in seen_payloads] == [2, 1, 2, 1, 2, 1]
+    assert len(errors) == 3
     assert all(row["valid"] for row in result)
     fallback_payload = next(payload for payload in seen_payloads if len(payload) == 1)
     invalid_index = 1 if invalid_mode == "cardinality" else 0
@@ -618,7 +646,7 @@ def test_transport_exception_retries_then_falls_back_once_per_post(monkeypatch):
         on_batch_error=lambda _batch, exc: errors.append(exc),
     )
 
-    assert calls == 6
+    assert calls == 7
     assert len(errors) == 1
     assert all(row["valid"] for row in result)
 
@@ -645,14 +673,18 @@ def test_fallback_preserves_explicit_model_thinking_and_token_budget():
     )
 
     assert all(row["valid"] for row in result)
-    assert len(client.calls) == 6
+    assert len(client.calls) == 9
     from x_monitor.attribution import (
+        _PRAGMATICS_BASE_SYSTEM_PROMPT,
         _PRAGMATICS_FULL_SYSTEM_PROMPT,
         _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
+        _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
     )
 
     for call in client.calls:
         assert call["system"] in {
+            _PRAGMATICS_BASE_SYSTEM_PROMPT,
+            _PRAGMATICS_SECONDARY_SYSTEM_PROMPT,
             _PRAGMATICS_REVIEW_SYSTEM_PROMPT,
             _PRAGMATICS_FULL_SYSTEM_PROMPT,
         }
@@ -691,7 +723,7 @@ def test_duplicate_or_missing_brand_objects_trigger_strict_fallback():
     client = FakeClient(handler)
     result = classify_batch_pragmatics_full(input_rows, [], client)
 
-    assert len(client.calls) == 3
+    assert len(client.calls) == 4
     assert result[0]["valid"] is True
     assert set(result[0]["by_brand"]) == {"deepseek", "qwen"}
 

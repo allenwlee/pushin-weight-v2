@@ -19,11 +19,11 @@ from core.classification_contract import (
     POST_TYPE_KEYS,
     PRODUCT_LABEL_KEYS,
     PROMPT_VERSION,
-    TAXONOMY_KEY_CROSSWALK,
-    TAXONOMY_VERSION,
     STAGE1_PROMPT_V3_VERSION,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
     STAGE1_TAXONOMY_V2_VERSION,
+    TAXONOMY_KEY_CROSSWALK,
+    TAXONOMY_VERSION,
     canonicalize_taxonomy_key,
     parse_stage1_classifications,
     taxonomy_crosswalk_rows,
@@ -94,7 +94,7 @@ def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
     assert STAGE1_TAXONOMY_V2_VERSION == "stage1-taxonomy-v2"
     assert STAGE1_PROMPT_V3_VERSION == "stage1-prompt-v3"
     assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v3"
-    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v14"
+    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v18"
     assert COMPATIBLE_TAXONOMY_VERSIONS == (
         LEGACY_STAGE1_TAXONOMY_VERSION,
         STAGE1_TAXONOMY_V2_VERSION,

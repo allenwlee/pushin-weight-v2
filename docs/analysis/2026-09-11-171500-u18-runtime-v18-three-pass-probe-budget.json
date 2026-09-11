@@ -1,0 +1,98 @@
+{
+  "schema_version": "u18-runtime-development-budget/v5",
+  "frozen_at": "2026-09-11T08:15:00Z",
+  "reason": "Saved candidate-blind development outputs show that one byte-exact prompt-v10 base, one byte-exact v12 secondary review, and one byte-exact v14 review can be combined by a fixed source-language and label selector to reach 72.5% exact post-type sets and 85.8% exact product-label sets on the locked 120-row development probe. This budget tests that fixed topology through the exact production call path. The selector was chosen on consumed development data, so this probe can reject the implementation but cannot approve release.",
+  "lane": "runtime_v18_three_pass_probe",
+  "cohort": {
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "development_only": true,
+    "rows": 120,
+    "bytes": 248569,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v18",
+    "base_version": "stage1-prompt-v18-base-v1",
+    "base_bytes": 11439,
+    "base_sha256": "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+    "secondary_version": "stage1-prompt-v18-secondary-v1",
+    "secondary_bytes": 10640,
+    "secondary_sha256": "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+    "review_version": "stage1-prompt-v18-review-v1",
+    "review_bytes": 9403,
+    "review_sha256": "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "fallback_repair_sha256": "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+    "narrow_audit_sha256": "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+    "narrow_audit_repair_sha256": "1454f453db3c22682faab78f0ac49e084845630f4a625f883af80f6ab0042500"
+  },
+  "production_shape": {
+    "base": "one twenty-post call using the byte-exact prompt-v10 classifier",
+    "secondary": "one ten-post call using the byte-exact v12 review prompt including discovery checks and unsanctioned flags",
+    "review": "one ten-post call using the byte-exact candidate-blind v14 review prompt",
+    "selector": {
+      "en": {
+        "events": "review",
+        "research_explanations": "secondary"
+      },
+      "ja": {
+        "advertising_marketing": "secondary",
+        "hands_on_usage": "review",
+        "opinions_reactions": "secondary",
+        "research_explanations": "review"
+      },
+      "zh-cn": {
+        "business_finance": "secondary",
+        "releases_updates": "review",
+        "research_explanations": "review"
+      },
+      "all_languages": {
+        "ideas_requests": "secondary",
+        "all_other_product_labels": "base",
+        "all_unlisted_post_types": "base",
+        "outcome_and_scalars": "base"
+      }
+    },
+    "rare_audit": "personnel_changes, other, and unsanctioned flags are published only from a conditional ten-post narrow audit seeded by base rare proposals, base flags, or the frozen lexical screen",
+    "validity": "all three required pass rows and every required narrow audit must validate; context_missing from base is authoritative; an empty classified type set becomes other",
+    "maximum_shared_semantic_repairs": 20,
+    "max_concurrent_transport_calls": 3
+  },
+  "lanes": {
+    "runtime_v18_three_pass_probe": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "base_batch_size": 20,
+      "review_batch_size": 10,
+      "maximum_examples": 120,
+      "expected_logical_requests_before_fallback": 42,
+      "maximum_requests": 80,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 90,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 1200000,
+      "maximum_output_tokens": 368640,
+      "expected_cost_usd": "0.30",
+      "maximum_cost_usd": "1.03",
+      "twitterapi_credits": 0,
+      "allowed_system_sha256": [
+        "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+        "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+        "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+        "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+        "1454f453db3c22682faab78f0ac49e084845630f4a625f883af80f6ab0042500"
+      ]
+    }
+  },
+  "decision_rule": "Continue to the full consumed 500-row development assessment only if all 120 rows validate, overall and each-locale exact post-type sets are at least 0.70, overall exact product-label sets are at least 0.85 and each locale is at least 0.70, outcome accuracy is at least 0.90, context_missing precision and recall are at least 0.50 when supported, and every supported post/product label F1 meets its unchanged floor. Unsupported labels remain support gaps and cannot pass a release gate.",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, or lane."
+}

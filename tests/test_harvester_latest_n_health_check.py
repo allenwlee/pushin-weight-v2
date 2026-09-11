@@ -563,8 +563,8 @@ def test_stage1_canonical_taxonomy_state_is_current_compatible(checker):
     assert classification["taxonomy_version_current_compatible"] is True
     assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v3"
     assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v3"
-    assert classification["active_write_prompt_version"] == "stage1-prompt-v14"
-    assert classification["latest_prompt_version"] == "stage1-prompt-v14"
+    assert classification["active_write_prompt_version"] == "stage1-prompt-v18"
+    assert classification["latest_prompt_version"] == "stage1-prompt-v18"
 
 
 def test_stage1_current_null_scalars_suppress_legacy_fallback(checker):
