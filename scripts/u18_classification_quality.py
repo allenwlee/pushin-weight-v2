@@ -25,6 +25,7 @@ from typing import Any
 
 from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PROMPT_VERSION,
     CLASSIFICATION_FIELDS,
     PRODUCT_LABEL_KEYS,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
@@ -35,7 +36,9 @@ from x_monitor.provider_telemetry import normalize_usage
 from x_monitor.translator import AnthropicClaudeClient
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE = ROOT / ".context" / "u18"
+PRIVATE = Path(
+    os.environ.get("U18_PRIVATE_DIR", ROOT / ".context" / "u18")
+).expanduser().resolve()
 BUDGET_PATH = ROOT / "docs/analysis/2026-09-11-002632-u18-provider-budgets.json"
 BUDGET_AMENDMENT_PATH = (
     ROOT / "docs/analysis/2026-09-11-003704-u18-provider-budget-amendment-v2.json"
@@ -84,6 +87,9 @@ BUDGET_PRO_MODEL_PATH = (
 )
 BUDGET_PROMPT_V10_PATH = (
     ROOT / "docs/analysis/2026-09-11-042000-u18-provider-budget-amendment-v17.json"
+)
+BUDGET_FINAL_GATE_PATH = (
+    ROOT / "docs/analysis/2026-09-11-125004-u18-final-provider-budgets.json"
 )
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
@@ -243,6 +249,17 @@ def _sha256(path: Path) -> str:
 
 class BudgetedTransport:
     def __init__(self, lane: str):
+        self.lane = lane
+        if os.environ.get("U18_BUDGET_PROFILE") == "final":
+            final_document = _read_json(BUDGET_FINAL_GATE_PATH)
+            try:
+                self.budget = final_document["lanes"][lane]
+            except KeyError as exc:
+                raise RuntimeError(
+                    f"{lane}: lane is absent from the final evaluation budget"
+                ) from exc
+            self._initialize_state_and_client()
+            return
         budget_document = _read_json(BUDGET_PATH)
         fallback_document = _read_json(BUDGET_FALLBACK_PATH)
         v3_only_document = _read_json(BUDGET_V3_ONLY_PATH)
@@ -259,7 +276,6 @@ class BudgetedTransport:
         prompt_v9_document = _read_json(BUDGET_PROMPT_V9_PATH)
         pro_model_document = _read_json(BUDGET_PRO_MODEL_PATH)
         prompt_v10_document = _read_json(BUDGET_PROMPT_V10_PATH)
-        self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
             budget_document["lanes"].get(lane)
@@ -280,13 +296,17 @@ class BudgetedTransport:
             or prompt_v10_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
+
+        self._initialize_state_and_client()
+
+    def _initialize_state_and_client(self) -> None:
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
-        self.state_path = PRIVATE / f"usage-{lane}.json"
+        self.state_path = PRIVATE / f"usage-{self.lane}.json"
         self.state = (
             _read_json(self.state_path)
             if self.state_path.exists()
             else {
-                "lane": lane,
+                "lane": self.lane,
                 "logical_request_ids": [],
                 "attempts_by_request": {},
                 "transport_attempts": 0,
@@ -592,9 +612,6 @@ def _review_input(source: Mapping[str, Any]) -> dict[str, Any]:
                 "brand_id",
                 "source_language",
                 "context_provenance",
-                "stratum",
-                "source_role",
-                "source_hint",
             )
         },
         "source": source["input"],
@@ -1120,7 +1137,7 @@ def write_audited_gold(cohort: Mapping[str, Any], audited: Mapping[str, Any]) ->
             "cohort_id": cohort["cohort_id"],
             "contract_version": "stage1-v1",
             "taxonomy_version": "stage1-taxonomy-v3",
-            "prompt_version": "stage1-prompt-v8",
+            "prompt_version": CANONICAL_PROMPT_VERSION,
             "annotators": [
                 "deepseek-v4-flash-contract-review-a",
                 "deepseek-v4-flash-contract-review-b",

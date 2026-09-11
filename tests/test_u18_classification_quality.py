@@ -68,6 +68,41 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     assert state["observed_output_tokens"] == 3
 
 
+def test_final_budget_profile_cannot_fall_through_to_development_budget(
+    monkeypatch, tmp_path
+):
+    final_budget = {
+        "lanes": {
+            "final_only": {
+                "provider": "deepseek",
+                "model": "deepseek-v4-flash",
+                "maximum_examples": 700,
+                "maximum_requests": 1,
+                "maximum_transport_attempts": 1,
+                "maximum_input_tokens": 100,
+                "maximum_output_tokens": 4096,
+                "input_usd_per_million": "0.14",
+                "output_usd_per_million": "0.28",
+                "maximum_cost_usd": "1",
+                "maximum_retries_per_request": 0,
+            }
+        }
+    }
+    budget_path = tmp_path / "final-budget.json"
+    budget_path.write_text(json.dumps(final_budget))
+    monkeypatch.setattr(quality, "BUDGET_FINAL_GATE_PATH", budget_path)
+    monkeypatch.setattr(quality, "PRIVATE", tmp_path)
+    monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
+    monkeypatch.setenv("U18_BUDGET_PROFILE", "final")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+
+    transport = quality.BudgetedTransport("final_only")
+
+    assert transport.budget["maximum_examples"] == 700
+    with pytest.raises(RuntimeError, match="absent from the final evaluation budget"):
+        quality.BudgetedTransport("development_only")
+
+
 def test_v2_and_v3_parsers_keep_separate_type_vocabularies():
     classification = {
         "outcome": "classified",
@@ -136,6 +171,37 @@ def test_invalid_candidate_row_preserves_coverage_and_raw_response_identity():
     assert "classification" not in row
     assert row["invalid_reason"] == "closed contract"
     assert len(row["invalid_response_sha256"]) == 64
+
+
+def test_blinded_review_packet_excludes_selection_and_role_hints():
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "source_language": "en",
+        "context_provenance": [],
+        "stratum": "event_opportunity_boundary",
+        "source_role": "official",
+        "source_hint": "opportunity",
+        "input": {
+            "tweet_id": "post-1",
+            "text": "Source text",
+            "brand_ids": ["llama"],
+            "context": [],
+        },
+    }
+
+    packet = quality._review_input(source)
+
+    assert packet == {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "source_language": "en",
+        "context_provenance": [],
+        "source": source["input"],
+    }
+    assert "stratum" not in packet
+    assert "source_role" not in packet
+    assert "source_hint" not in packet
 
 
 def test_gold_audit_requires_exact_source_evidence():
