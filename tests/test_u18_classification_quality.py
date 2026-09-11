@@ -49,6 +49,7 @@ def test_transport_refuses_attempt_after_its_frozen_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(quality, "BUDGET_CONTRACT_REVIEW_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_PROMPT_V7_PATH", budget_path)
     monkeypatch.setattr(quality, "BUDGET_TEMPERATURE_ZERO_PATH", budget_path)
+    monkeypatch.setattr(quality, "BUDGET_GOLD_AUDIT_PATH", budget_path)
     monkeypatch.setattr(quality, "PRIVATE", tmp_path)
     monkeypatch.setattr(quality, "AnthropicClaudeClient", _Client)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
@@ -134,3 +135,41 @@ def test_invalid_candidate_row_preserves_coverage_and_raw_response_identity():
     assert "classification" not in row
     assert row["invalid_reason"] == "closed contract"
     assert len(row["invalid_response_sha256"]) == 64
+
+
+def test_gold_audit_requires_exact_source_evidence():
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "input": {"text": "Lee joined the lab.", "context": []},
+    }
+    classification = {
+        "outcome": "classified",
+        "post_types": ["personnel_changes"],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": "none",
+        "us_nationalism": "none",
+    }
+    response = {
+        "results": [
+            {
+                "example_id": "post-1",
+                "brand_id": "llama",
+                "v3": classification,
+                "job_discovery_relevant": False,
+                "personnel_discovery_relevant": True,
+                "evidence": [
+                    {"field": "personnel_changes", "quote": "Lee joined the lab"}
+                ],
+                "uncertainty_notes": [],
+            }
+        ]
+    }
+
+    parsed = quality._parse_contract_audit(response, [source])
+    assert parsed[0]["evidence"][0]["quote"] == "Lee joined the lab"
+
+    response["results"][0]["evidence"][0]["quote"] = "fabricated quote"
+    with pytest.raises(ValueError, match="exact source substring"):
+        quality._parse_contract_audit(response, [source])

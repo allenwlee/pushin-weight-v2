@@ -67,6 +67,9 @@ BUDGET_PROMPT_V7_PATH = (
 BUDGET_TEMPERATURE_ZERO_PATH = (
     ROOT / "docs/analysis/2026-09-11-024000-u18-provider-budget-amendment-v12.json"
 )
+BUDGET_GOLD_AUDIT_PATH = (
+    ROOT / "docs/analysis/2026-09-11-030000-u18-provider-budget-amendment-v13.json"
+)
 COHORT_PATH = PRIVATE / "cohort-source.json"
 BATCH_SIZE = 10
 MAX_TOKENS = 4096
@@ -159,6 +162,15 @@ CONTRACT_REPAIR_SYSTEM = (
     + "\n\n"
     + CONTRACT_REVIEW_SYSTEM
 )
+CONTRACT_GOLD_AUDIT_SYSTEM = f"""You are the final candidate-blind gold auditor for stored social-post classifications. Independently re-read every source. reviewer_a and reviewer_b are fallible suggestions, including when they agree; correct them whenever the source and contract require it. You cannot see classifier candidate output.
+
+Use these exact production semantics:
+
+{_CONTRACT_SEMANTICS}
+
+outcome is classified or context_missing. classified requires at least one post_type and one valid sentiment. context_missing is only for missing source/context that prevents classification and requires empty post_types and product_labels. A bare reply or acknowledgment whose meaning or brand relationship depends on an absent parent is context_missing. For nationalism, none means the supplied source can be assessed and lacks that nationalism layer; null is only for missing or unusable context that prevents judgment.
+
+Return exactly {{"results":[{{"example_id":str,"brand_id":str,"v3":{{"outcome":str,"post_types":[str],"product_labels":[str],"sentiment":str|null,"china_nationalism":str|null,"us_nationalism":str|null}},"job_discovery_relevant":bool,"personnel_discovery_relevant":bool,"evidence":[{{"field":str,"quote":str}}],"uncertainty_notes":[str]}}]}}. evidence must contain one to twelve short exact substrings copied from source text or stored context and identify the field each quote supports. Preserve every example_id and brand_id. No prose, markdown, unknown keys, or unsanctioned_flags."""
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -195,6 +207,7 @@ class BudgetedTransport:
         contract_review_document = _read_json(BUDGET_CONTRACT_REVIEW_PATH)
         prompt_v7_document = _read_json(BUDGET_PROMPT_V7_PATH)
         temperature_zero_document = _read_json(BUDGET_TEMPERATURE_ZERO_PATH)
+        gold_audit_document = _read_json(BUDGET_GOLD_AUDIT_PATH)
         self.lane = lane
         amendment = _read_json(BUDGET_AMENDMENT_PATH)
         self.budget = (
@@ -209,6 +222,7 @@ class BudgetedTransport:
             or contract_review_document["lanes"].get(lane)
             or prompt_v7_document["lanes"].get(lane)
             or temperature_zero_document["lanes"].get(lane)
+            or gold_audit_document["lanes"].get(lane)
             or final_repair_document["lanes"][lane]
         )
         self.max_tokens = self.budget.get("max_tokens_per_attempt", MAX_TOKENS)
@@ -848,6 +862,177 @@ def run_adjudicator(*, contract_review: bool = False) -> None:
         write_gold(cohort, output)
 
 
+def _parse_contract_audit(
+    response: Mapping[str, Any], batch: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    parsed = _parse_review(response, batch)
+    raw_results = response.get("results")
+    if not isinstance(raw_results, list):
+        raise TypeError("audit response has no results array")
+    raw_by_id = {
+        str(row.get("example_id")): row
+        for row in raw_results
+        if isinstance(row, Mapping)
+    }
+    output = []
+    for source, row in zip(batch, parsed, strict=True):
+        raw = raw_by_id[source["example_id"]]
+        evidence = raw.get("evidence")
+        notes = raw.get("uncertainty_notes")
+        if not isinstance(evidence, list) or not 1 <= len(evidence) <= 12:
+            raise ValueError("audit evidence must contain one to twelve entries")
+        if not isinstance(notes, list) or any(
+            not isinstance(note, str) for note in notes
+        ):
+            raise TypeError("audit uncertainty_notes must be an array of strings")
+        source_blob = "\n".join(
+            [str(source["input"].get("text") or "")]
+            + [
+                str(context.get("text") or "")
+                for context in source["input"].get("context", [])
+                if isinstance(context, Mapping)
+            ]
+        )
+        normalized_evidence = []
+        for item in evidence:
+            if not isinstance(item, Mapping) or set(item) != {"field", "quote"}:
+                raise ValueError("audit evidence entries require field and quote only")
+            field = item["field"]
+            quote = item["quote"]
+            if not isinstance(field, str) or not field.strip():
+                raise TypeError("audit evidence field must be a nonblank string")
+            if (
+                not isinstance(quote, str)
+                or not quote.strip()
+                or quote not in source_blob
+            ):
+                raise ValueError(
+                    "audit evidence quote must be an exact source substring"
+                )
+            normalized_evidence.append({"field": field, "quote": quote})
+        output.append(
+            {
+                **row,
+                "evidence": normalized_evidence,
+                "uncertainty_notes": notes,
+            }
+        )
+    return output
+
+
+def run_contract_gold_auditor() -> None:
+    cohort = _read_json(COHORT_PATH)
+    first = _read_json(PRIVATE / "contract_reviewer_a.json")
+    second = _read_json(PRIVATE / "contract_reviewer_b.json")
+    first_by_id = {row["example_id"]: row for row in first["rows"]}
+    second_by_id = {row["example_id"]: row for row in second["rows"]}
+    transport = BudgetedTransport("contract_gold_auditor")
+    fallback = BudgetedTransport("contract_gold_auditor_fallback")
+    progress_path = PRIVATE / "contract-gold-auditor-progress.json"
+    completed = (
+        _read_json(progress_path).get("rows", []) if progress_path.exists() else []
+    )
+    by_id = {row["example_id"]: row for row in completed}
+    for index, batch in enumerate(_batches(cohort["rows"], 5)):
+        if all(row["example_id"] in by_id for row in batch):
+            continue
+        packets = [
+            {
+                **_review_input(source),
+                "reviewer_a": first_by_id[source["example_id"]],
+                "reviewer_b": second_by_id[source["example_id"]],
+            }
+            for source in batch
+        ]
+        user = json.dumps(packets, ensure_ascii=False, sort_keys=True)
+        request_id = f"contract_gold_auditor:{index:03d}"
+        try:
+            response = transport.call(
+                request_id, system=CONTRACT_GOLD_AUDIT_SYSTEM, user=user
+            )
+            try:
+                parsed = _parse_contract_audit(response, batch)
+            except (TypeError, ValueError):
+                response = transport.call(
+                    request_id, system=CONTRACT_GOLD_AUDIT_SYSTEM, user=user
+                )
+                parsed = _parse_contract_audit(response, batch)
+        except (RuntimeError, TypeError, ValueError):
+            parsed = []
+            for source, packet in zip(batch, packets, strict=True):
+                fallback_id = f"contract_gold_auditor_fallback:{source['example_id']}"
+                response = fallback.call(
+                    fallback_id,
+                    system=CONTRACT_GOLD_AUDIT_SYSTEM,
+                    user=json.dumps([packet], ensure_ascii=False, sort_keys=True),
+                )
+                parsed.extend(_parse_contract_audit(response, [source]))
+        by_id.update({row["example_id"]: row for row in parsed})
+        _write_json(progress_path, {"rows": list(by_id.values())})
+        print(f"contract_gold_auditor: {len(by_id)}/{len(cohort['rows'])}", flush=True)
+    output = {
+        "auditor": "deepseek-v4-pro-contract-audit",
+        "blind_to_candidate": True,
+        "audits_all_rows": True,
+        "rows": sorted(by_id.values(), key=lambda row: row["example_id"]),
+    }
+    path = PRIVATE / "contract_gold_auditor.json"
+    _write_json(path, output)
+    print(f"wrote {path} sha256={_sha256(path)}")
+    write_audited_gold(cohort, output)
+
+
+def write_audited_gold(cohort: Mapping[str, Any], audited: Mapping[str, Any]) -> None:
+    source_by_id = {row["example_id"]: row for row in cohort["rows"]}
+    rows = []
+    for review in audited["rows"]:
+        source = source_by_id[review["example_id"]]
+        rows.append(
+            {
+                **{
+                    key: source[key]
+                    for key in (
+                        "example_id",
+                        "brand_id",
+                        "source_language",
+                        "context_provenance",
+                        "input_context_fingerprint",
+                        "stratum",
+                        "source_role",
+                        "source_hint",
+                    )
+                },
+                "classification": review["v3"],
+                "job_discovery_relevant": review["job_discovery_relevant"],
+                "personnel_discovery_relevant": review["personnel_discovery_relevant"],
+            }
+        )
+    document = {
+        "schema_version": 1,
+        "provenance": {
+            "kind": "heldout_gold",
+            "gold": True,
+            "cohort_id": cohort["cohort_id"],
+            "contract_version": "stage1-v1",
+            "taxonomy_version": "stage1-taxonomy-v3",
+            "prompt_version": "stage1-prompt-v8",
+            "annotators": [
+                "deepseek-v4-flash-contract-review-a",
+                "deepseek-v4-flash-contract-review-b",
+            ],
+            "adjudicator": "deepseek-v4-pro-contract-audit",
+            "blind_to_candidate": True,
+            "adjudication_method": "two_independent_candidate_blind_reviews_then_candidate_blind_all_row_pro_audit_with_exact_source_quotes",
+            "adjudication_version": "u18-gold-v3",
+            "adjudicated_at": datetime.now(UTC).isoformat(),
+        },
+        "rows": sorted(rows, key=lambda row: (row["example_id"], row["brand_id"])),
+    }
+    path = PRIVATE / "gold-v3-audited.json"
+    _write_json(path, document)
+    print(f"wrote {path} sha256={_sha256(path)}")
+
+
 def write_contract_gold(
     cohort: Mapping[str, Any], adjudicated: Mapping[str, Any]
 ) -> None:
@@ -973,11 +1158,14 @@ def main() -> None:
     )
     adjudicate = subparsers.add_parser("adjudicate")
     adjudicate.add_argument("--contract-review", action="store_true")
+    subparsers.add_parser("audit-gold")
     args = parser.parse_args()
     if args.command == "candidate":
         run_candidate(args.taxonomy)
     elif args.command == "reviewer":
         run_reviewer(args.lane)
+    elif args.command == "audit-gold":
+        run_contract_gold_auditor()
     else:
         run_adjudicator(contract_review=args.contract_review)
 
