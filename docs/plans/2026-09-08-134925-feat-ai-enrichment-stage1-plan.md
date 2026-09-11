@@ -1475,6 +1475,18 @@ A pass permits one all-locale development probe; a failure requires an
 owner-visible decision about provider quality, taxonomy ambiguity, or the
 exact-set gate before more classifier transport.
 
+The v22 direct-Haiku attempt made zero successful provider calls: the local
+`ANTHROPIC_API_KEY_AL` credential returned HTTP 401, then the frozen 18-attempt
+cap stopped the production fallback loop. This is an infrastructure failure
+and supplies no quality result. Both existing local Anthropic credential slots
+have the expected secret shape; the replacement v22b lane changes only the
+credential slot to `ANTHROPIC_API_KEY_CO_JP` while preserving the exact cohort,
+prompt, model, pricing, and caps. It is frozen in
+`docs/analysis/2026-09-11-180000-u18-runtime-v22b-haiku-review-pilot-budget.json`.
+If that slot also fails authentication, direct-Haiku evaluation is blocked
+until the owner refreshes a local direct-Anthropic credential; no DeepSeek
+fallback may stand in for the named provider.
+
 U19–U21 and most of U22 already have implementation commits on this branch:
 demand-shaped headlines, normalized translation/synthesis artifacts, Japanese
 locale support, PostgreSQL synthesis demand, the isolated worker, authenticated

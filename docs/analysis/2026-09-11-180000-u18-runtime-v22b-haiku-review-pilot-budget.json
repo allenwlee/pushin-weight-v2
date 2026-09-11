@@ -1,0 +1,54 @@
+{
+  "cohort": {
+    "bytes": 82097,
+    "cohort_id": "u18-development-v19-en30-batch5-pilot-v1",
+    "development_only": true,
+    "rows": 30,
+    "selection": "the same frozen 30 EN rows used by v19 through v21; no row or label selection changed after scoring",
+    "sha256": "5386093a5c156accbe817d1c49778eeb8f9a84bf9da2f450acd784e0571dc74b"
+  },
+  "credential_env": "ANTHROPIC_API_KEY_CO_JP",
+  "decision_rule": "Continue this provider architecture only if all 30 rows validate, EN exact post-type sets are at least 0.70, exact product-label sets are at least 0.85, outcome accuracy is at least 0.90, and every supported post/product label meets its unchanged floor. A pass permits one all-locale development probe; it does not approve release. A failure blocks further classifier transport and requires an owner-visible reconsideration of provider quality, taxonomy ambiguity, or the exact-set gate.",
+  "frozen_at": "2026-09-11T09:00:00Z",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum standard-list price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, provider, model, prompt, or lane.",
+  "lane": "runtime_v22b_haiku_review_pilot",
+  "lanes": {
+    "runtime_v22b_haiku_review_pilot": {
+      "allowed_system_sha256": [
+        "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326"
+      ],
+      "batch_size": 10,
+      "expected_cost_usd": "0.08",
+      "expected_logical_requests_before_fallback": 3,
+      "input_usd_per_million": "1.00",
+      "max_concurrent_transport_calls": 3,
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.61",
+      "maximum_examples": 30,
+      "maximum_input_tokens": 240000,
+      "maximum_output_tokens": 73728,
+      "maximum_requests": 12,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 18,
+      "model": "claude-haiku-4-5-20251001",
+      "output_usd_per_million": "5.00",
+      "pricing_source": "https://www.anthropic.com/claude/haiku",
+      "pricing_version": "anthropic-standard-2026-09-11",
+      "provider": "anthropic-direct",
+      "temperature": 0,
+      "thinking": "omitted at direct provider transport",
+      "twitterapi_credits": 0
+    }
+  },
+  "prompt": {
+    "bytes": 9403,
+    "fallback_repair_sha256": "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "sha256": "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+    "version": "stage1-prompt-v18-review-v1"
+  },
+  "reason": "The v22 direct-Haiku lane made zero successful provider calls because the local ANTHROPIC_API_KEY_AL credential returned HTTP 401. This replacement lane changes only the pre-existing local credential slot to ANTHROPIC_API_KEY_CO_JP; cohort, prompt, provider, model, prices, caps, and decision rule remain byte-for-byte semantic equivalents. It cannot approve release.",
+  "schema_version": "u18-runtime-development-budget/v10"
+}
