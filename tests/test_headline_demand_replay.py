@@ -166,3 +166,25 @@ def test_replay_compacts_unchanged_brands_without_losing_last_good() -> None:
     assert report["output"]["historical_last_good_coverage"] == 1.0
     assert report["output"]["replayed_last_good_coverage"] == 1.0
     assert report["decision"]["passed"] is True
+
+
+def test_replay_upper_bound_prices_batches_missing_a_completed_saved_call() -> None:
+    run = _run(index=0, snapshot=_snapshot())
+    run.provider_calls.filter(batch_key="1d:002").delete()
+
+    report = build_headline_demand_replay(
+        start=NOW,
+        end=NOW + timedelta(hours=1),
+        windows=[1],
+        source_identity="fixture",
+        candidate_revision="test-revision",
+        config=_config(),
+    )
+
+    assert report["selection"]["replayed_editor_batches"] == 2
+    assert report["workloads"]["new_policy_upper_bound"]["calls_by_stage"] == {
+        "critic": 2,
+        "editor": 2,
+        "rank": 1,
+    }
+    assert report["excluded_noncompleted_calls"] == {}

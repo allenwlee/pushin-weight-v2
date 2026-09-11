@@ -53,6 +53,30 @@ def build_headline_demand_replay(
     if not runs:
         raise ValueError("replay source contains no trend narrative runs")
 
+    completed_source_calls = [
+        call
+        for run in runs
+        for call in run.provider_calls.all()
+        if call.state == "completed"
+    ]
+    fallback_calls = {
+        stage: _most_expensive_call(
+            [call for call in completed_source_calls if call.stage == stage],
+            config=replay_config,
+        )
+        for stage in ("rank", "editor", "critic")
+    }
+    saved_editor_calls = [
+        call for call in completed_source_calls if call.stage == "editor"
+    ]
+    saved_risk_rate = _ratio_decimal(
+        sum(
+            _saved_editor_requires_critic(call, config=replay_config)
+            for call in saved_editor_calls
+        ),
+        len(saved_editor_calls),
+    )
+
     prior_good = set(
         BrandTrendNarrative.objects.filter(
             status=BrandTrendNarrative.Status.APPROVED,
@@ -129,37 +153,53 @@ def build_headline_demand_replay(
         )
         observed_risk_batches += risk_batches
 
-        if batches and rank_calls:
-            most_expensive_rank = max(
-                rank_calls, key=lambda call: _call_cost_units(call, replay_config)
+        if batches:
+            rank_costs = _stage_cost_calls(
+                rank_calls,
+                count=1,
+                fallback=fallback_calls["rank"],
+                stage="rank",
+                config=replay_config,
             )
-            _add_call(upper_work, most_expensive_rank)
-            _add_call(routed_work, most_expensive_rank)
+            _add_calls(upper_work, rank_costs)
+            _add_calls(routed_work, rank_costs)
 
-        editor_count = min(len(editor_calls), len(batches))
-        for call in _most_expensive_calls(
-            editor_calls, count=editor_count, config=replay_config
-        ):
-            _add_call(upper_work, call)
-            _add_call(routed_work, call)
-
-        upper_critic_count = min(len(critic_calls), editor_count)
-        routed_critic_count = (
-            min(
-                upper_critic_count,
-                math.ceil(editor_count * risk_batches / len(editor_calls)),
+        editor_count = len(batches)
+        if editor_count:
+            editor_costs = _stage_cost_calls(
+                editor_calls,
+                count=editor_count,
+                fallback=fallback_calls["editor"],
+                stage="editor",
+                config=replay_config,
             )
+            _add_calls(upper_work, editor_costs)
+            _add_calls(routed_work, editor_costs)
+
+        upper_critic_count = editor_count
+        run_risk_rate = (
+            _ratio_decimal(risk_batches, len(editor_calls))
             if editor_calls
-            else 0
+            else saved_risk_rate
         )
-        for call in _most_expensive_calls(
-            critic_calls, count=upper_critic_count, config=replay_config
-        ):
-            _add_call(upper_work, call)
-        for call in _most_expensive_calls(
-            critic_calls, count=routed_critic_count, config=replay_config
-        ):
-            _add_call(routed_work, call)
+        routed_critic_count = math.ceil(editor_count * run_risk_rate)
+        if upper_critic_count:
+            critic_costs = _stage_cost_calls(
+                critic_calls,
+                count=upper_critic_count,
+                fallback=fallback_calls["critic"],
+                stage="critic",
+                config=replay_config,
+            )
+            routed_critic_costs = _stage_cost_calls(
+                critic_calls,
+                count=routed_critic_count,
+                fallback=fallback_calls["critic"],
+                stage="critic",
+                config=replay_config,
+            )
+            _add_calls(upper_work, critic_costs)
+            _add_calls(routed_work, routed_critic_costs)
 
         narratives = {
             row.brand_key_snapshot: row for row in run.brand_narratives.all()
@@ -243,7 +283,9 @@ def build_headline_demand_replay(
             "historical_workload": "completed saved provider calls and reported tokens",
             "upper_bound": (
                 "selected dossiers are compacted with production batching; every replayed "
-                "editor batch receives a critic; each retained stage uses the most "+                "expensive saved call from that run"
+                "editor batch receives a critic; retained stages use the most expensive "
+                "applicable saved calls from that run; any missing stage uses the most "
+                "expensive comparable source call"
             ),
             "risk_routed": (
                 "the current deterministic critic policy is applied to saved editor "
@@ -323,14 +365,40 @@ def _add_call(workload: dict[str, Any], call: Any) -> None:
     workload["output_tokens"] += call.output_tokens
 
 
-def _most_expensive_calls(
-    calls: list[Any], *, count: int, config: HeadlineNarrativeConfig
+def _most_expensive_call(
+    calls: list[Any], *, config: HeadlineNarrativeConfig
+) -> Any | None:
+    return max(
+        calls,
+        key=lambda call: (_call_cost_units(call, config), call.pk),
+        default=None,
+    )
+
+
+def _stage_cost_calls(
+    calls: list[Any],
+    *,
+    count: int,
+    fallback: Any | None,
+    stage: str,
+    config: HeadlineNarrativeConfig,
 ) -> list[Any]:
-    return sorted(
+    ranked = sorted(
         calls,
         key=lambda call: (_call_cost_units(call, config), call.pk),
         reverse=True,
-    )[:count]
+    )
+    selected = ranked[:count]
+    template = (ranked[0] if ranked else None) or fallback
+    if template is None:
+        raise ValueError(f"replay source has no completed {stage} call to price")
+    selected.extend([template] * (count - len(selected)))
+    return selected
+
+
+def _add_calls(workload: dict[str, Any], calls: list[Any]) -> None:
+    for call in calls:
+        _add_call(workload, call)
 
 
 def _call_cost_units(call: Any, config: HeadlineNarrativeConfig) -> Decimal:
@@ -383,6 +451,10 @@ def _reductions(new: dict[str, Any], old: dict[str, Any]) -> dict[str, float]:
 
 def _ratio(numerator: int, denominator: int) -> float:
     return round(numerator / denominator, 6) if denominator else 0.0
+
+
+def _ratio_decimal(numerator: int, denominator: int) -> Decimal:
+    return Decimal(numerator) / Decimal(denominator) if denominator else Decimal(0)
 
 
 def _percent(numerator: Any, denominator: Any) -> float:
