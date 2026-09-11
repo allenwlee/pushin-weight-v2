@@ -542,6 +542,40 @@ def _invalid_candidate_row(
     }
 
 
+def _retry_invalid_candidate_rows(
+    *,
+    cohort: Mapping[str, Any],
+    by_id: dict[str, dict[str, Any]],
+    fallback_lane: str | None,
+    fallback_transport: BudgetedTransport | None,
+    system: str,
+    post_types: Sequence[str],
+) -> None:
+    if fallback_lane is None or fallback_transport is None:
+        return
+    maximum_attempts = 1 + fallback_transport.budget["maximum_retries_per_request"]
+    for source in cohort["rows"]:
+        existing = by_id.get(source["example_id"])
+        if existing is None or "classification" in existing:
+            continue
+        request_id = f"{fallback_lane}:{source['example_id']}"
+        if fallback_transport.state["attempts_by_request"].get(request_id, 0) >= maximum_attempts:
+            continue
+        response: Mapping[str, Any] = {}
+        try:
+            response = fallback_transport.call(
+                request_id,
+                system=system,
+                user=json.dumps([source["input"]], ensure_ascii=False, sort_keys=True),
+            )
+            parsed = _parse_candidate(response, [source], post_types)
+            by_id[source["example_id"]] = parsed[0]
+        except (RuntimeError, TypeError, ValueError) as exc:
+            by_id[source["example_id"]] = _invalid_candidate_row(
+                source, response, exc
+            )
+
+
 def run_candidate(taxonomy_name: str) -> None:
     taxonomy = TAXONOMIES[taxonomy_name]
     cohort = _read_cohort()
@@ -565,6 +599,15 @@ def run_candidate(taxonomy_name: str) -> None:
     )
     by_id = {row["example_id"]: row for row in completed}
     system = taxonomy["prompt_path"].read_text(encoding="utf-8")
+    _retry_invalid_candidate_rows(
+        cohort=cohort,
+        by_id=by_id,
+        fallback_lane=fallback_lane,
+        fallback_transport=fallback_transport,
+        system=system,
+        post_types=taxonomy["post_types"],
+    )
+    _write_json(progress_path, {"rows": list(by_id.values())})
     for index, batch in enumerate(
         _batches(cohort["rows"], taxonomy.get("batch_size", BATCH_SIZE))
     ):

@@ -196,6 +196,66 @@ def test_invalid_candidate_row_preserves_coverage_and_raw_response_identity():
     assert len(row["invalid_response_sha256"]) == 64
 
 
+def test_invalid_candidate_retry_uses_remaining_frozen_fallback_attempt():
+    source = {
+        "example_id": "post-1",
+        "brand_id": "llama",
+        "source_language": "en",
+        "context_provenance": [],
+        "input_context_fingerprint": "a" * 64,
+        "stratum": "prevalence",
+        "source_role": "third_party",
+        "source_hint": None,
+        "input": {
+            "tweet_id": "post-1",
+            "text": "Source text",
+            "brand_ids": ["llama"],
+            "context": [],
+        },
+    }
+    classification = {
+        "outcome": "classified",
+        "post_types": ["other"],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": "none",
+        "us_nationalism": "none",
+        "brand_id": "llama",
+    }
+
+    class _RetryTransport:
+        def __init__(self):
+            self.budget = {"maximum_retries_per_request": 1}
+            self.state = {"attempts_by_request": {"fallback:post-1": 1}}
+
+        def call(self, request_id, **_kwargs):
+            assert request_id == "fallback:post-1"
+            return {
+                "results": [
+                    {
+                        "tweet_id": "post-1",
+                        "classifications": [classification],
+                    }
+                ]
+            }
+
+    by_id = {
+        "post-1": quality._invalid_candidate_row(
+            source, {"results": []}, ValueError("invalid")
+        )
+    }
+    quality._retry_invalid_candidate_rows(
+        cohort={"rows": [source]},
+        by_id=by_id,
+        fallback_lane="fallback",
+        fallback_transport=_RetryTransport(),
+        system="prompt",
+        post_types=quality.CANONICAL_POST_TYPE_KEYS,
+    )
+
+    assert by_id["post-1"]["classification"]["post_types"] == ["other"]
+
+
 def test_blinded_review_packet_excludes_selection_and_role_hints():
     source = {
         "example_id": "post-1",
