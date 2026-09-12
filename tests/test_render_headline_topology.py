@@ -17,6 +17,7 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         "pushinweight-headlines",
         "pushinweight-synthesis",
         "pushinweight-harvest",
+        "pushinweight-jobs",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         "pushinweight-db-shadow"
@@ -64,11 +65,7 @@ def test_synthesis_worker_is_database_only_and_provider_scoped():
     blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
     services = {service["name"]: service for service in blueprint["services"]}
     worker = services["pushinweight-synthesis"]
-    environment = {
-        entry["key"]: entry
-        for entry in worker["envVars"]
-        if "key" in entry
-    }
+    environment = {entry["key"]: entry for entry in worker["envVars"] if "key" in entry}
 
     assert worker["type"] == "worker"
     assert worker["startCommand"] == "python manage.py run_synthesis_worker"
@@ -89,22 +86,29 @@ def test_synthesis_worker_is_database_only_and_provider_scoped():
     assert not any("fromGroup" in entry for entry in worker["envVars"])
 
 
-def test_render_cron_is_the_only_declared_scheduler():
+def test_render_crons_keep_harvest_as_the_only_cycle_scheduler():
     blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
     cron_services = [
         service for service in blueprint["services"] if service["type"] == "cron"
     ]
 
-    assert [
-        (service["name"], service["schedule"], service["startCommand"])
+    assert {
+        service["name"]: (service["schedule"], service["startCommand"])
         for service in cron_services
-    ] == [
-        (
-            "pushinweight-harvest",
+    } == {
+        "pushinweight-harvest": (
             "*/15 * * * *",
             "python manage.py run_cycle --scheduled",
-        )
+        ),
+        "pushinweight-jobs": (
+            "17 */6 * * *",
+            "python manage.py sync_job_sources",
+        ),
+    }
+    cycle_schedulers = [
+        service for service in cron_services if "run_cycle" in service["startCommand"]
     ]
+    assert [service["name"] for service in cycle_schedulers] == ["pushinweight-harvest"]
     assert all(
         "beat" not in service.get("startCommand", "")
         for service in blueprint["services"]

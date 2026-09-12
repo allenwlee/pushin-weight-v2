@@ -5636,8 +5636,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertLessEqual(
             len(full_queries),
-            35,
-            "52 enriched rows must use bounded bulk metadata and artifact queries, not per-row lookups",
+            36,
+            "52 mixed-source rows may add one bounded official-jobs query, never per-row lookups",
         )
 
     def test_feed_eligibility_query_keeps_request_latency_and_roundtrips_bounded(

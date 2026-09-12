@@ -221,6 +221,8 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "job_discovery_runs",
         "job_listing_evidence",
         "job_listings",
+        "job_source_states",
+        "job_source_sync_runs",
         "opportunities",
         "people",
         "people_accounts",

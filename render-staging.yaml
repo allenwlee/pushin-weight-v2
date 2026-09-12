@@ -218,6 +218,33 @@ services:
       - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
         value: "False"
 
+  # Official recruiting sites are a separate source family. This staging
+  # cron is manual-only and cannot invoke X harvesting or any LLM worker.
+  - type: cron
+    name: pushinweight-staging-jobs
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    schedule: "0 0 31 2 *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py sync_job_sources
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+
 databases:
   - name: pushinweight-staging-db
     databaseName: pushinweight_staging

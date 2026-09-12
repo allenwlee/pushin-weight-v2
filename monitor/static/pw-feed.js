@@ -295,10 +295,14 @@
     var tint = row.tint_class || 'tint-neutral';
     div.className = 'feed-row';
     div.setAttribute('data-pw-feed-row', '');
+    div.setAttribute('data-source-kind', row.source_kind || 'x_post');
+    div.setAttribute('data-source-url', row.source_url || '');
     div.setAttribute('data-tweet-id', row.tweet_id || '');
     div.setAttribute(
       'data-x-url',
-      row.tweet_id ? 'https://x.com/i/web/status/' + encodeURIComponent(row.tweet_id) : ''
+      row.source_kind === 'official_job'
+        ? ''
+        : (row.tweet_id ? 'https://x.com/i/web/status/' + encodeURIComponent(row.tweet_id) : '')
     );
     div.setAttribute('data-created-at-iso', row.created_at_iso || '');
     div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
@@ -487,7 +491,49 @@
 
   // Render the production two-column grid. paintSignals() fills the reserved
   // signal column after the row enters the DOM.
+  function officialJobActionLabel() {
+    var locale = currentLocale();
+    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
+      ? '查看官方职位' : (locale === 'ja' || locale === 'ja-JP')
+        ? '公式求人を見る' : 'View official job';
+  }
+
+  function renderOfficialJobRowHtml(row) {
+    var actionLabel = officialJobActionLabel();
+    var sourceUrl = row.source_url || row.application_url || '';
+    var applicationUrl = row.application_url || sourceUrl;
+    return (
+      '<div class="feed-row-shell ' + escapeHtml(row.tint_class || 'tint-neutral') + '">' +
+        '<div class="feed-main"><div class="body official-job-body">' +
+          '<div class="head"><span class="handle">' +
+            '<a class="feed-handle-link official-job-source" href="' + escapeHtml(sourceUrl) +
+              '" target="_blank" rel="noopener noreferrer">' +
+              escapeHtml(row.source_name || '') + '</a></span>' +
+            '<span class="meta">· ' +
+              escapeHtml(row.job_meta_text || row.location_text || '') +
+              ' <span class="ts-abs">' + escapeHtml(row.ts_abs_text || '') + '</span></span></div>' +
+          '<div class="text official-job-text"><strong class="official-job-title">' +
+            escapeHtml(row.title || '') + '</strong>' +
+            (row.text_original ? '<span class="official-job-description">' +
+              escapeHtml(row.text_original) + '</span>' : '') + '</div>' +
+          '<div class="engagement official-job-actions"><a class="official-job-link" href="' +
+            escapeHtml(applicationUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(actionLabel) + '</a></div>' +
+        '</div></div>' +
+        '<div class="feed-signals">' +
+          '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
+          '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
+          '<div class="sig-row sig-product" data-sig-product></div>' +
+          '<div class="sig-row sig-classification-status" data-sig-classification-status></div>' +
+          '<div class="sig-row sig-nat" data-sig-nat></div>' +
+          '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   function renderRowHtml(row) {
+    if (row.source_kind === 'official_job') return renderOfficialJobRowHtml(row);
     var handleRaw = (row.account && row.account.handle) || '';
     var handleLabel = (row.account && row.account.display_name) || handleRaw || '@unknown';
     var handleHtml = handleRaw
@@ -579,6 +625,48 @@
         '</div>' +
       '</div>'
     );
+  }
+
+  function renderOfficialJobTableRowHtml(row) {
+    var actionLabel = officialJobActionLabel();
+    var sourceUrl = row.source_url || row.application_url || '';
+    var applicationUrl = row.application_url || sourceUrl;
+    var brand = (row.brands || [])[0] || {};
+    return (
+      '<td class="muted-cell"><a class="feed-date-link" href="' +
+        escapeHtml(sourceUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(row.created_at || '') + '</a></td>' +
+      '<td><span class="pill">' +
+        escapeHtml(brand.display_name || brand.display_name_en || brand.nickname || '') +
+        '</span></td>' +
+      '<td><strong class="official-job-table-title">' + escapeHtml(row.title || '') +
+        '</strong>' + (row.text_original
+          ? '<div class="cell-truncated official-job-table-description" ' +
+              'data-pw-cell-truncated>' + escapeHtml(row.text_original) + '</div>'
+          : '') + '</td>' +
+      '<td class="official-job-table-meta">' +
+        escapeHtml(row.job_meta_text || row.location_text || '') + '</td>' +
+      '<td><span class="pill" data-key="job_listings">' +
+        escapeHtml(row.job_listing_label || 'job listings') + '</span></td>' +
+      '<td><div class="official-job-table-source">' +
+        escapeHtml(row.source_name || '') + '</div>' +
+        '<a class="official-job-table-link" href="' + escapeHtml(applicationUrl) +
+        '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(actionLabel) + '</a></td>'
+    );
+  }
+
+  function renderOfficialJobTableRow(row) {
+    var element = document.createElement('tr');
+    element.className = 'official-job-table-row';
+    element.setAttribute('data-pw-feed-row', '');
+    element.setAttribute('data-source-kind', 'official_job');
+    element.setAttribute('data-source-url', row.source_url || '');
+    element.setAttribute('data-tweet-id', '');
+    element.setAttribute('data-created-at-iso', row.created_at_iso || '');
+    element.setAttribute('data-post-types', 'job_listings');
+    element.innerHTML = renderOfficialJobTableRowHtml(row);
+    return element;
   }
 
   // Paint Cyber-Quan symbols and existing semantic tints in the right column.
@@ -953,7 +1041,12 @@
   }
 
   function appendRows(body, rows) {
-    var inserted = rows.map(renderRow);
+    var inserted = rows.map(function (row) {
+      if (body.tagName === 'TBODY' && row.source_kind === 'official_job') {
+        return renderOfficialJobTableRow(row);
+      }
+      return renderRow(row);
+    });
     inserted.forEach(function (row) { body.appendChild(row); });
     hydrateRows(inserted);
     return inserted;
@@ -1460,6 +1553,7 @@
       replaceRows: replaceRows,
       isFeedPayload: isFeedPayload,
       renderRowHtml: renderRowHtml,
+      renderOfficialJobTableRowHtml: renderOfficialJobTableRowHtml,
       hoverFreezeFilters: hoverFreezeFilters,
     };
     return;

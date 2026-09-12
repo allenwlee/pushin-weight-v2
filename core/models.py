@@ -4289,6 +4289,9 @@ class JobListing(models.Model):
         null=True,
     )
     hiring_organization = models.TextField()
+    # Null means the listing was extracted from an X post. A non-null key
+    # makes the official-site reconciler the authority for this row.
+    source_key = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     source_name = models.TextField(blank=True, null=True)
     source_listing_id = models.TextField(blank=True, null=True)
     canonical_url = models.URLField(max_length=2048, blank=True, null=True)
@@ -4334,6 +4337,8 @@ class JobListing(models.Model):
         choices=LISTING_STATUSES,
         default="unknown",
     )
+    consecutive_missing_snapshots = models.PositiveSmallIntegerField(default=0)
+    last_complete_source_sync_at = models.DateTimeField(blank=True, null=True)
     campaign_openings = models.PositiveIntegerField(blank=True, null=True)
     role_openings = models.PositiveIntegerField(blank=True, null=True)
     skills = models.JSONField(default=list)
@@ -4359,6 +4364,9 @@ class JobListing(models.Model):
         ordering = ["-first_seen_at", "id"]
         indexes = [
             models.Index(fields=["brand", "status"], name="idx_jobs_brand_status"),
+            models.Index(
+                fields=["source_key", "status"], name="idx_jobs_source_status"
+            ),
             models.Index(
                 fields=["status", "expires_at"], name="idx_jobs_status_expiry"
             ),
@@ -4443,6 +4451,89 @@ class JobListing(models.Model):
                 name="ck_jobs_extraction_conf",
             ),
         ]
+
+
+class JobSourceSyncRun(models.Model):
+    RUN_STATUSES = (
+        ("running", "Running"),
+        ("succeeded", "Succeeded"),
+        ("partial", "Partial"),
+        ("failed", "Failed"),
+        ("skipped", "Skipped"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    source_key = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=RUN_STATUSES, default="running")
+    started_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    snapshot_complete = models.BooleanField(default=False)
+    declared_total = models.PositiveIntegerField(blank=True, null=True)
+    observed_total = models.PositiveIntegerField(blank=True, null=True)
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    unchanged_count = models.PositiveIntegerField(default=0)
+    reopened_count = models.PositiveIntegerField(default=0)
+    closed_count = models.PositiveIntegerField(default=0)
+    error_summary = models.TextField(blank=True, default="")
+    metadata = models.JSONField(default=dict)
+
+    class Meta:
+        db_table = "job_source_sync_runs"
+        ordering = ["-started_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["source_key", "started_at"],
+                name="idx_job_sync_source_started",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=["running", "succeeded", "partial", "failed", "skipped"]
+                ),
+                name="ck_job_sync_run_status",
+            ),
+        ]
+
+
+class JobSourceState(models.Model):
+    source_key = models.CharField(max_length=64, primary_key=True)
+    lease_token = models.CharField(max_length=64, blank=True, null=True)
+    lease_expires_at = models.DateTimeField(blank=True, null=True)
+    active_run = models.ForeignKey(
+        JobSourceSyncRun,
+        on_delete=models.SET_NULL,
+        related_name="active_source_states",
+        blank=True,
+        null=True,
+    )
+    last_successful_at = models.DateTimeField(blank=True, null=True)
+    last_snapshot_count = models.PositiveIntegerField(blank=True, null=True)
+    last_error = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "job_source_states"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(lease_token__isnull=True, lease_expires_at__isnull=True)
+                    | models.Q(
+                        lease_token__isnull=False, lease_expires_at__isnull=False
+                    )
+                ),
+                name="ck_job_source_lease_complete",
+            )
+        ]
+
+    def lease_is_active(self, *, now=None) -> bool:
+        current = now or timezone.now()
+        return bool(
+            self.lease_token
+            and self.lease_expires_at
+            and self.lease_expires_at > current
+        )
 
 
 class JobListingEvidence(models.Model):

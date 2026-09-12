@@ -31,11 +31,13 @@ from django.db import transaction
 from django.db.models import (
     Count,
     Exists,
+    IntegerField,
     OuterRef,
     Prefetch,
     Q,
     QuerySet,
     Subquery,
+    Value,
 )
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -58,11 +60,13 @@ from core.classification_contract import (
 )
 from core.classification_labels import CLASSIFICATION_LABELS
 from core.classification_readers import read_brand_scalars_many
+from core.job_sources.registry import SOURCES as JOB_SOURCES
 from core.models import (
     Brand,
     BrandAccount,
     Country,
     CountryLabel,
+    JobListing,
     NationalismLabel,
     Post,
     PostBrand,
@@ -2572,6 +2576,40 @@ def _build_home_chart_payload(
                 series[brand][idx] += count
                 totals[brand] += count
 
+    if _direct_jobs_enabled(normalized_filters):
+        job_rows = _direct_jobs_queryset(
+            window_days=window_days,
+            normalized=normalized_filters,
+            now=now,
+        )
+        if window_days == 1:
+            job_aggregates = (
+                job_rows.annotate(bucket=TruncMinute("_feed_created_at"))
+                .values("brand_id", "bucket")
+                .annotate(count=Count("pk"))
+            )
+            for row in job_aggregates:
+                bucket = row["bucket"]
+                if bucket is None:
+                    continue
+                index = max(0, int((bucket - cutoff).total_seconds() // 300))
+                brand = row["brand_id"]
+                if brand in series and 0 <= index < bucket_count:
+                    series[brand][index] += row["count"]
+                    totals[brand] += row["count"]
+        else:
+            job_aggregates = (
+                job_rows.annotate(day=TruncDate("_feed_created_at"))
+                .values("brand_id", "day")
+                .annotate(count=Count("pk"))
+            )
+            for row in job_aggregates:
+                brand = row["brand_id"]
+                day_str = row["day"].isoformat() if row["day"] else None
+                if brand in series and day_str in day_index:
+                    series[brand][day_index[day_str]] += row["count"]
+                    totals[brand] += row["count"]
+
     computed_at = pulse["computed_at"]
     from monitor.trend_narrative_projection import project_trend_narrative
 
@@ -3226,7 +3264,34 @@ def _serialize_feed_row(
 # ============================================================================
 
 
-_FEED_CURSOR_VERSION = 2
+_FEED_CURSOR_VERSION = 3
+
+
+def _feed_row_key(kind: str, identifier: str | int) -> str:
+    if kind == "official_job":
+        return f"j:{int(identifier):020d}"
+    return f"p:{identifier}"
+
+
+def _encode_feed_cursor_values(
+    value: str | int,
+    row_key: str,
+    *,
+    sort: str,
+    order: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "v": _FEED_CURSOR_VERSION,
+            "sort": sort,
+            "order": order,
+            "value": value,
+            "row_key": row_key,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
 
 def _encode_feed_cursor(post: Post, *, sort: str, order: str) -> str:
@@ -3235,18 +3300,9 @@ def _encode_feed_cursor(post: Post, *, sort: str, order: str) -> str:
         value: str | int = int(post.like_count or 0)
     else:
         value = post.created_at.isoformat() if post.created_at else ""
-    payload = json.dumps(
-        {
-            "v": _FEED_CURSOR_VERSION,
-            "sort": sort,
-            "order": order,
-            "value": value,
-            "tweet_id": post.tweet_id,
-        },
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+    return _encode_feed_cursor_values(
+        value, _feed_row_key("x_post", post.tweet_id), sort=sort, order=order
+    )
 
 
 def _decode_feed_cursor(
@@ -3270,10 +3326,31 @@ def _decode_feed_cursor(
         binascii.Error,
     ):
         payload = None
-    if isinstance(payload, dict):
+    if isinstance(payload, dict) and payload.get("v") == _FEED_CURSOR_VERSION:
         if (
-            payload.get("v") != _FEED_CURSOR_VERSION
-            or payload.get("sort") != sort
+            payload.get("sort") != sort
+            or payload.get("order") != order
+            or not isinstance(payload.get("row_key"), str)
+            or not re.fullmatch(r"(?:p:.+|j:\d{20})", payload["row_key"])
+        ):
+            return None
+        raw_value = payload.get("value")
+        if sort == "like_count":
+            if isinstance(raw_value, bool) or not isinstance(raw_value, int):
+                return None
+            return raw_value, payload["row_key"]
+        if not isinstance(raw_value, str):
+            return None
+        parsed = parse_datetime(raw_value)
+        if parsed is None or not django_timezone.is_aware(parsed):
+            return None
+        return parsed, payload["row_key"]
+
+    # V2 cursors were post-only; retaining them makes in-flight browsers safe
+    # across a deploy while moving the tie-breaker into the shared namespace.
+    if isinstance(payload, dict) and payload.get("v") == 2:
+        if (
+            payload.get("sort") != sort
             or payload.get("order") != order
             or not isinstance(payload.get("tweet_id"), str)
             or not payload["tweet_id"]
@@ -3283,13 +3360,13 @@ def _decode_feed_cursor(
         if sort == "like_count":
             if isinstance(raw_value, bool) or not isinstance(raw_value, int):
                 return None
-            return raw_value, payload["tweet_id"]
+            return raw_value, _feed_row_key("x_post", payload["tweet_id"])
         if not isinstance(raw_value, str):
             return None
         parsed = parse_datetime(raw_value)
         if parsed is None or not django_timezone.is_aware(parsed):
             return None
-        return parsed, payload["tweet_id"]
+        return parsed, _feed_row_key("x_post", payload["tweet_id"])
 
     if sort != "created_at":
         return None
@@ -3299,7 +3376,31 @@ def _decode_feed_cursor(
     parsed = parse_datetime(legacy[0])
     if parsed is None or not django_timezone.is_aware(parsed):
         return None
-    return parsed, legacy[1]
+    return parsed, _feed_row_key("x_post", legacy[1])
+
+
+def _cursor_tie_condition(
+    *,
+    prefix: str,
+    row_field: str,
+    cursor_row_key: str,
+    comparison: str,
+) -> Q:
+    current_prefix = f"{prefix}:"
+    if cursor_row_key.startswith(current_prefix):
+        identifier = cursor_row_key[len(current_prefix) :]
+        if prefix == "j":
+            try:
+                identifier = str(int(identifier))
+            except ValueError:
+                return Q(pk__isnull=True)
+        return Q(**{f"{row_field}__{comparison}": identifier})
+    prefix_matches = (
+        current_prefix < cursor_row_key
+        if comparison == "lt"
+        else current_prefix > cursor_row_key
+    )
+    return Q() if prefix_matches else Q(pk__isnull=True)
 
 
 def _feed_page_posts(
@@ -3336,11 +3437,19 @@ def _feed_page_posts(
 
     decoded = _decode_feed_cursor(cursor, sort=sort, order=order)
     if decoded is not None:
-        value, tweet_id = decoded
+        value, row_key = decoded
         comparison = "lt" if order == "desc" else "gt"
         queryset = queryset.filter(
             Q(**{f"{sort_field}__{comparison}": value})
-            | Q(**{sort_field: value, f"tweet_id__{comparison}": tweet_id})
+            | (
+                Q(**{sort_field: value})
+                & _cursor_tie_condition(
+                    prefix="p",
+                    row_field="tweet_id",
+                    cursor_row_key=row_key,
+                    comparison=comparison,
+                )
+            )
         )
 
     prefix = "-" if order == "desc" else ""
@@ -3362,6 +3471,174 @@ def _feed_page_posts(
     return page, next_cursor, has_more, normalized
 
 
+def _direct_jobs_enabled(normalized: dict[str, Any]) -> bool:
+    post_types = normalized.get("post_types")
+    if post_types not in (None, "__all__") and "job_listings" not in post_types:
+        return False
+    if normalized.get("unsanctioned", "off") == "only":
+        return False
+    roles = normalized.get("role")
+    if roles not in (None, "__all__") and "official" not in roles:
+        return False
+    languages = normalized.get("lang")
+    if languages not in (None, "__all__") and "zh-hans" not in languages:
+        return False
+    for axis in (
+        "product_labels",
+        "sentiment",
+        "cn_nationalism",
+        "us_nationalism",
+        "country",
+        "region",
+    ):
+        if normalized.get(axis) not in (None, "__all__"):
+            return False
+    return True
+
+
+def _direct_jobs_queryset(
+    *,
+    window_days: int,
+    normalized: dict[str, Any],
+    now: datetime,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
+) -> QuerySet:
+    registered_sources = Q(pk__isnull=True)
+    for source in JOB_SOURCES.values():
+        registered_sources |= Q(source_key=source.key, brand_id=source.brand_nickname)
+    queryset = (
+        JobListing.objects.filter(
+            source_key__isnull=False, status="open", brand__isnull=False
+        )
+        .filter(registered_sources)
+        .annotate(
+            _feed_created_at=Coalesce("posted_at", "updated_source_at", "first_seen_at")
+        )
+    )
+    start = created_at_start or now - timedelta(days=window_days)
+    end = created_at_end or now
+    queryset = queryset.filter(_feed_created_at__gte=start, _feed_created_at__lt=end)
+    brands = normalized.get("brands")
+    if brands not in (None, "__all__"):
+        queryset = queryset.filter(brand_id__in=brands)
+    return queryset
+
+
+def _serialize_direct_job(job: JobListing, locale: str) -> dict[str, Any]:
+    created_at = job._feed_created_at
+    created_at_iso = created_at.isoformat() if created_at else None
+    brand = _brand_projection_fields(job.brand, locale)
+    label = (
+        _localize_classification_value("post_type", "job_listings", locale, {})
+        or "job listings"
+    )
+    classifications = {
+        job.brand_id: {
+            "product_labels": [],
+            "post_types": [{"key": "job_listings", "label": label}],
+            "sentiments": [],
+            "cn_nationalism": None,
+            "us_nationalism": None,
+            "role_label": "official",
+            "classification_status": "classified",
+            "classification_status_label": "",
+            "scalar_source": "official_site",
+            "conflicts": [],
+        }
+    }
+    account = {
+        "handle": "",
+        "display_name": job.source_name or job.hiring_organization,
+        "role": "official",
+        "role_label": _display_role_label("official", locale, {}),
+        "followers_count": 0,
+        "followers_pretty": "",
+    }
+    display_fields = _v22_feed_display_fields(
+        classifications,
+        locale=locale,
+        active_brand_scope=[job.brand_id],
+        created_at=created_at,
+        account=account,
+    )
+    signal_inspections = _feed_signal_inspections(
+        classifications, [brand], locale, unsanctioned=False
+    )
+    location_text = " · ".join(job.locations or [])
+    job_meta_text = " · ".join(
+        value
+        for value in (
+            location_text,
+            job.department,
+            job.job_function,
+            job.employment_type,
+        )
+        if value
+    )
+    source = JOB_SOURCES[job.source_key]
+    source_url = job.application_url or job.canonical_url
+    if not source_url or not url_has_allowed_host_and_scheme(
+        source_url,
+        allowed_hosts=source.allowed_hosts,
+        require_https=True,
+    ):
+        source_url = source.careers_url
+    description = job.description_text or ""
+    if len(description) > 800:
+        description = f"{description[:799].rstrip()}…"
+    return {
+        "row_key": _feed_row_key("official_job", job.pk),
+        "source_kind": "official_job",
+        "source_url": source_url,
+        "application_url": source_url,
+        "source_name": job.source_name or job.hiring_organization,
+        "tweet_id": "",
+        "title": job.title,
+        "created_at": created_at_iso,
+        "created_at_iso": created_at_iso,
+        "lang_detected": "zh-Hans",
+        "language_display": _compact_language_display("zh-Hans", locale),
+        "text": description or job.title,
+        "text_original": description or job.title,
+        "text_translated": None,
+        "is_translated": False,
+        "text_en": None,
+        "text_zh_cn": description,
+        "text_ja": None,
+        "commentary_en": None,
+        "commentary_zh_cn": None,
+        "commentary_ja": None,
+        "literal_source": "official_site",
+        "synthesis_source": "not_applicable",
+        "synthesis_status": "ready",
+        "synthesis_status_label": "",
+        "like_count": 0,
+        "retweet_count": 0,
+        "reply_count": 0,
+        "brands": [brand],
+        "brand_nicknames": [job.brand_id],
+        "classifications": classifications,
+        "signal_inspections": signal_inspections,
+        "signal_inspections_json": json.dumps(
+            signal_inspections,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        "unsanctioned": False,
+        "enrichment_status": PostEnrichmentState.Status.SUCCEEDED,
+        "enrichment_status_label": "",
+        "account": account,
+        "location_text": location_text,
+        "job_meta_text": job_meta_text,
+        "department": job.department,
+        "job_function": job.job_function,
+        "employment_type": job.employment_type,
+        "job_listing_label": label,
+        **display_fields,
+    }
+
+
 def _feed_page_wire(
     *,
     locale: str,
@@ -3376,31 +3653,105 @@ def _feed_page_wire(
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, bool, dict[str, Any]]:
-    posts, next_cursor, has_more, normalized = _feed_page_posts(
+    bounded = max(1, min(int(limit), FEED_REQUEST_MAX))
+    current = django_timezone.now()
+    posts, _post_cursor, post_has_more, normalized = _feed_page_posts(
         window_days=window_days,
         filters=filters,
         sort=sort,
         order=order,
         cursor=cursor,
-        limit=limit,
+        limit=bounded + 1,
         brand_nickname=brand_nickname,
         created_at_start=created_at_start,
         created_at_end=created_at_end,
+        now=current,
     )
     enriched = _enrich_posts_with_classifications(
         posts,
         brand_nickname=brand_nickname,
         include_geography=include_geography,
     )
-    rows = [
-        _serialize_feed_row(
-            post,
+    rows: list[dict[str, Any]] = []
+    for post, enriched_post in zip(posts, enriched, strict=True):
+        row = _serialize_feed_row(
+            enriched_post,
             locale,
             active_brand_scope=normalized.get("brands", "__all__"),
             include_geography=include_geography,
         )
-        for post in enriched
-    ]
+        row["row_key"] = _feed_row_key("x_post", post.tweet_id)
+        row["source_kind"] = "x_post"
+        row["source_url"] = f"https://x.com/i/web/status/{post.tweet_id}"
+        row["_sort_value"] = (
+            int(post.like_count or 0) if sort == "like_count" else post.created_at
+        )
+        rows.append(row)
+
+    if _direct_jobs_enabled(normalized):
+        job_queryset = _direct_jobs_queryset(
+            window_days=window_days,
+            normalized=normalized,
+            now=current,
+            created_at_start=created_at_start,
+            created_at_end=created_at_end,
+        )
+        if sort == "like_count":
+            job_queryset = job_queryset.annotate(
+                _feed_sort_value=Value(0, output_field=IntegerField())
+            )
+            sort_field = "_feed_sort_value"
+        else:
+            sort_field = "_feed_created_at"
+        decoded = _decode_feed_cursor(cursor, sort=sort, order=order)
+        if decoded is not None:
+            value, row_key = decoded
+            comparison = "lt" if order == "desc" else "gt"
+            job_queryset = job_queryset.filter(
+                Q(**{f"{sort_field}__{comparison}": value})
+                | (
+                    Q(**{sort_field: value})
+                    & _cursor_tie_condition(
+                        prefix="j",
+                        row_field="pk",
+                        cursor_row_key=row_key,
+                        comparison=comparison,
+                    )
+                )
+            )
+        prefix = "-" if order == "desc" else ""
+        jobs = list(
+            job_queryset.select_related("brand").order_by(
+                f"{prefix}{sort_field}", f"{prefix}pk"
+            )[: bounded + 1]
+        )
+        for job in jobs:
+            row = _serialize_direct_job(job, locale)
+            row["_sort_value"] = 0 if sort == "like_count" else job._feed_created_at
+            rows.append(row)
+
+    rows.sort(
+        key=lambda row: (row["_sort_value"], row["row_key"]),
+        reverse=order == "desc",
+    )
+    has_more = len(rows) > bounded or post_has_more
+    rows = rows[:bounded]
+    next_cursor = None
+    if rows and has_more:
+        last = rows[-1]
+        cursor_value: str | int = (
+            int(last["_sort_value"])
+            if sort == "like_count"
+            else last["_sort_value"].isoformat()
+        )
+        next_cursor = _encode_feed_cursor_values(
+            cursor_value,
+            last["row_key"],
+            sort=sort,
+            order=order,
+        )
+    for row in rows:
+        row.pop("_sort_value", None)
     return rows, next_cursor, has_more, normalized
 
 
@@ -3757,6 +4108,30 @@ def _build_brand_chart_payload(
                 series = tab_datasets[tab_name].get(key)
                 if series is not None:
                     series[idx] += 1
+
+    normalized_filters = _normalize_home_filters(filters)
+    normalized_filters["brands"] = [brand_nickname]
+    if _direct_jobs_enabled(normalized_filters):
+        direct_jobs = _direct_jobs_queryset(
+            window_days=window_days,
+            normalized=normalized_filters,
+            now=now,
+        )
+        for job in direct_jobs:
+            dt = job._feed_created_at
+            if window_days == 1:
+                minutes_ago = int((now - dt).total_seconds() // 60)
+                if minutes_ago < 0 or minutes_ago >= 1440:
+                    continue
+                idx = bucket_count - 1 - (minutes_ago // 5)
+            else:
+                days_ago = (now.date() - dt.date()).days
+                if days_ago < 0 or days_ago >= window_days:
+                    continue
+                idx = window_days - 1 - days_ago
+            tab_datasets["post_type"]["job_listings"][idx] += 1
+            tab_datasets["account_roles"]["official"][idx] += 1
+            tab_datasets["unsanctioned"]["unflagged"][idx] += 1
 
     brand_obj = (
         brand_obj

@@ -344,3 +344,56 @@ database resource and must not plan creation of `pushinweight-db`. After a
 sync, verify the database host/resource identity on `pushinweight-web`,
 `pushinweight-harvest`, and `pushinweight-headlines`; a successful deploy alone
 does not prove that an existing service refreshed its environment.
+
+## Official AI-lab jobs sync
+
+`sync_job_sources` pulls public listings from the official recruiting sites
+for Qwen, DeepSeek, MiniMax, Z.ai/Zhipu, and Kimi/Moonshot. It is deliberately
+separate from `run_cycle`: it uses no TwitterAPI key, broker, Celery worker, or
+language-model credential.
+
+Inspect every live contract without writing the database:
+
+```bash
+python manage.py sync_job_sources --dry-run --json
+```
+
+Limit a diagnostic run to one or more sources by repeating `--source`:
+
+```bash
+python manage.py sync_job_sources --source qwen --source deepseek --dry-run
+```
+
+For the first controlled write, apply migrations and suppress closure. This
+creates or refreshes observed listings while leaving absent listings open:
+
+```bash
+python manage.py migrate --noinput
+python manage.py sync_job_sources --no-close --json
+```
+
+After reviewing `job_source_sync_runs` and `job_source_states`, a normal run
+may advance the two-complete-miss closure rule:
+
+```bash
+python manage.py sync_job_sources --json
+```
+
+A source failure is isolated: successful sources commit, the failed source's
+listings and miss counters do not change, and the command exits non-zero.
+Inspect the run row's `error_summary`, then use a source-specific dry run. Do
+not disable HTTPS/host checks or bypass a login/challenge. If an upstream
+contract intentionally changed, replace its sanitized test fixture and parser
+together. An active source lease expires after 30 minutes; an expired lease is
+reclaimed and its abandoned run is marked failed.
+
+Production schedules `pushinweight-jobs` every six hours. The staging
+`pushinweight-staging-jobs` schedule can never occur and must be triggered
+manually for acceptance. Neither cron may contain `run_cycle`, Celery beat, or
+TwitterAPI/LLM credentials.
+
+The jobs cron is a new Blueprint resource, so pushing its branch does not
+create the service by itself. For staging acceptance, sync/apply only
+`render-staging.yaml` in the Render Dashboard before triggering
+`pushinweight-staging-jobs`. Do not apply `render.yaml` during a staging-only
+release; that file defines the production cron.

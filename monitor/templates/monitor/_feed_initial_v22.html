@@ -10,8 +10,10 @@
   {# #}
   <div class="feed-row"
        data-pw-feed-row
+       data-source-kind="{{ row.source_kind|default:'x_post' }}"
+       data-source-url="{{ row.source_url|default:'' }}"
        data-tweet-id="{{ row.tweet_id }}"
-       data-x-url="https://x.com/i/web/status/{{ row.tweet_id }}"
+       data-x-url="{% if row.source_kind == 'x_post' or not row.source_kind %}https://x.com/i/web/status/{{ row.tweet_id }}{% endif %}"
        data-created-at-iso="{{ row.created_at_iso|default:'' }}"
        data-sentiments="{{ row.sentiment_keys|join:',' }}"
        data-post-types="{{ row.post_type_keys|join:',' }}"
@@ -27,6 +29,21 @@
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
+        {% if row.source_kind == 'official_job' %}
+        <div class="body official-job-body">
+          <div class="head">
+            <span class="handle"><a class="feed-handle-link official-job-source" href="{{ row.source_url }}" target="_blank" rel="noopener noreferrer">{{ row.source_name }}</a></span>
+            <span class="meta">· {{ row.job_meta_text|default:row.location_text }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span></span>
+          </div>
+          <div class="text official-job-text">
+            <strong class="official-job-title">{{ row.title }}</strong>
+            {% if row.text_original %}<span class="official-job-description">{{ row.text_original }}</span>{% endif %}
+          </div>
+          <div class="engagement official-job-actions">
+            <a class="official-job-link" href="{{ row.application_url }}" target="_blank" rel="noopener noreferrer">{% if is_zh_chrome %}查看官方职位{% elif active_locale == 'ja' %}公式求人を見る{% else %}View official job{% endif %}</a>
+          </div>
+        </div>
+        {% else %}
         <div class="follower-lead follower-bin-{{ row.follower_bin }}{% if row.account.role or row.account.geography %} has-account-metadata{% endif %}">
           <button type="button" class="follower-magnitude pw-inspection-trigger" data-pw-inspection="{{ row.followers_label }}" aria-label="{{ row.followers_label }}" aria-expanded="false">
             <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
@@ -105,6 +122,7 @@
             <a class="feed-x-link" href="https://x.com/i/web/status/{{ row.tweet_id }}" target="_blank" rel="noopener noreferrer" aria-label="{% if is_zh_chrome %}在 X 查看原帖{% elif is_ja_chrome %}Xで元の投稿を表示{% else %}Open original post on X{% endif %}"><svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg></a>
           </div>
         </div>
+        {% endif %}
       </div>
       <div class="feed-signals">
         <div class="sig-row sig-sentiment" data-sig-sentiment></div>

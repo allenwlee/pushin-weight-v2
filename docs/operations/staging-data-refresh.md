@@ -88,7 +88,8 @@ GRANT MAINTAIN ON
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
   brand_trend_narrative_texts, call_state, django_session,
-  harvest_backlog_windows, post_enrichment_states,
+  harvest_backlog_windows, job_source_states, job_source_sync_runs,
+  post_enrichment_states,
   post_synthesis_daily_budgets, post_synthesis_demands,
   post_synthesis_rate_limit_buckets,
   socialaccount_socialaccount, socialaccount_socialapp,
@@ -107,7 +108,8 @@ GRANT SELECT ON
   brand_trend_narrative_texts_id_seq,
   django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
   events_id_seq, harvest_backlog_windows_id_seq, job_discovery_runs_id_seq,
-  job_listing_evidence_id_seq, job_listings_id_seq, opportunities_id_seq,
+  job_listing_evidence_id_seq, job_listings_id_seq,
+  job_source_sync_runs_id_seq, opportunities_id_seq,
   post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
   post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
   post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
@@ -134,7 +136,10 @@ Policy version 3 marks every relation and sequence introduced after the
 production migration boundary at `0027` as optional on the source. This covers
 the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
-`0028`–`0039`. It allows the staging-first release to refresh from the prior
+`0028`–`0040`. The official-job sync run and lease tables are excluded and
+truncated because their active lease and diagnostic history belong to one
+environment; the job listings themselves remain in the copied set. This allows
+the staging-first release to refresh from the prior
 production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count

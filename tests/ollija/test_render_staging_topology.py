@@ -37,6 +37,7 @@ def test_staging_blueprint_declares_one_resource_for_each_owned_role() -> None:
         "pushinweight-staging-headlines": "worker",
         "pushinweight-staging-synthesis": "worker",
         "pushinweight-staging-harvest": "cron",
+        "pushinweight-staging-jobs": "cron",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         STAGING_DATABASE
@@ -56,11 +57,22 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     assert "XMONITOR_DRY_RUN" not in environment
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
     assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "True"
-    assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
-    assert environment["X_MONITOR_HEADLINE_PUBLICATION_SOURCE"]["value"] == "prefer_per_brand"
-    assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"] == HEADLINE_CONTROL_REVISION
+    assert (
+        environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
+    )
+    assert (
+        environment["X_MONITOR_HEADLINE_PUBLICATION_SOURCE"]["value"]
+        == "prefer_per_brand"
+    )
+    assert (
+        environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"]
+        == HEADLINE_CONTROL_REVISION
+    )
     assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED" not in environment
     assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
@@ -95,7 +107,10 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )
@@ -124,7 +139,10 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
     assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )

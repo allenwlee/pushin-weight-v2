@@ -611,6 +611,27 @@ body {
   color: var(--link);
   border-bottom-color: var(--link);
 }
+.feed .official-job-table-title,
+.feed .official-job-table-source {
+  display: block;
+  color: var(--fg);
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.feed .official-job-table-description,
+.feed .official-job-table-meta {
+  color: var(--muted);
+}
+.feed .official-job-table-link {
+  color: var(--link);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.feed .official-job-table-link:hover,
+.feed .official-job-table-link:focus-visible {
+  border-bottom-color: currentColor;
+}
 .feed .cls-block {
   display: block;
   margin-bottom: 6px;
