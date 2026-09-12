@@ -1892,3 +1892,18 @@ and a distinct human adjudicator before any new model budget or transport.
 Finalization requires a private per-language attestation of proficiency,
 independence, no model assistance, and three distinct human references; a
 failed reliability gate emits only a non-gold diagnostic artifact.
+
+The owner then supplied a candidate-blind Grok 4.6 audit of all 45 cases. Its
+private artifact SHA-256 is
+`0618cf78e44773ae5c58dda9ec35cbc262f37443f06bfec36fa5acf536a0ead0`;
+all 45 expected IDs and closed-schema invariants passed. Grok agreed with the
+model-generated reference on only 31.1% of exact outcome-plus-post-type sets,
+including 40.0% of the 15 prior agreement controls. Its post-type micro F1
+against that reference was 73.2%, showing substantial individual-label overlap
+despite different complete sets. Grok reported 14 taxonomy issues, led by six
+brand-attribution cases. Within the 15 stable model-versus-reference
+disagreements, it matched the old candidate consensus three times, the
+reference twice, and neither ten times. This is useful independent model
+evidence but cannot satisfy R81–R82, select a ground truth, or authorize more
+transport. The durable aggregate is in
+`docs/analysis/2026-09-12-125824-u18-grok-independent-model-audit.md`.
