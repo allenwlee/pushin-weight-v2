@@ -287,7 +287,7 @@ def test_runtime_trace_provenance_pins_current_prompts_and_selector():
     }
 
 
-def test_default_v26_budget_pins_transport_caps_and_current_selector():
+def test_default_v27_budget_pins_current_prompts_and_blocks_transport():
     budget = json.loads(DEFAULT_BUDGET.read_text(encoding="utf-8"))
     lane = budget["lanes"][budget["lane"]]
     provenance = _runtime_trace_provenance()
@@ -300,7 +300,7 @@ def test_default_v26_budget_pins_transport_caps_and_current_selector():
         "rows": 120,
         "selection": (
             "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development "
-            "cohort; unchanged from v18, v23, and v25"
+            "cohort; unchanged from v18, v23, v25, and v26"
         ),
         "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
     }
@@ -313,11 +313,14 @@ def test_default_v26_budget_pins_transport_caps_and_current_selector():
     assert budget["prompt"]["selector_version"] == (
         _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
     )
-    assert budget["lane"] == "runtime_v26_exhaustive_verdict_review_pilot"
+    assert budget["lane"] == "runtime_v27_owner_calibrated_blocked"
     assert "replay" not in budget
-    assert lane["maximum_requests"] == 38
-    assert lane["maximum_transport_attempts"] == 58
-    assert lane["maximum_output_tokens"] == 237568
+    assert budget["execution_gate"]["status"] == "blocked"
+    assert lane["maximum_requests"] == 0
+    assert lane["maximum_transport_attempts"] == 0
+    assert lane["maximum_input_tokens"] == 0
+    assert lane["maximum_output_tokens"] == 0
+    assert lane["maximum_cost_usd"] == "0"
     assert budget["production_shape"]["expected_logical_requests_before_fallback"] == 18
 
 

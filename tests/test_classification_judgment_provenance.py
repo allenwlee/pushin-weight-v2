@@ -37,9 +37,9 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
     metadata = {
         "contract_version": "stage1-v1",
         "taxonomy_version": "stage1-taxonomy-v3",
-        "prompt_version": "stage1-prompt-v22",
+        "prompt_version": "stage1-prompt-v23",
         "provider_role": "scheduled_classifier",
-        "selector_version": "stage1-selector-v26-review-authoritative-verdict-audit-v1",
+        "selector_version": "stage1-selector-v27-owner-calibrated-review-authoritative-v1",
         "validation_state": "validated",
     }
     return {
@@ -66,7 +66,7 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
                     "product_label_verdicts": _valid_verdict_map(
                         CANONICAL_PRODUCT_LABEL_KEYS, None
                     ),
-                    "prompt_version": "stage1-prompt-v26-completeness-review-repair-v1",
+                    "prompt_version": "stage1-prompt-v27-completeness-review-repair-v1",
                 }
             },
         },
@@ -154,7 +154,7 @@ def test_judgment_history_links_lineage_and_reruns_idempotently():
     assert rows[1].changes_json["metadata_normalized"] is True
     assert "prompt" not in rows[1].changes_json
     assert "source" not in rows[1].changes_json
-    assert rows[1].prompt_version == "stage1-prompt-v26-completeness-review-repair-v1"
+    assert rows[1].prompt_version == "stage1-prompt-v27-completeness-review-repair-v1"
     state = PostBrandClassificationState.objects.get(post=post, brand=brand)
     assert state.selected_final_judgment_id == rows[2].pk
     assert PostBrandClassificationJudgment.objects.filter(post=post).count() == 3

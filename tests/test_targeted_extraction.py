@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.db.models.deletion import ProtectedError
 
 from core.models import (
     Account,
@@ -10,6 +11,7 @@ from core.models import (
     Brand,
     BrandDiscoveryCandidate,
     Event,
+    EventEvidence,
     JobListing,
     JobListingEvidence,
     Opportunity,
@@ -846,6 +848,416 @@ def test_event_and_opportunity_multi_label_routes_once_each():
     assert event.attendance_mode == "online_live"
     assert opportunity.action_type == "submit an essay"
     assert opportunity.related_event == event
+
+
+def test_event_mentions_resolve_to_occurrence_and_keep_distinct_windows():
+    first = _post(
+        "hackathon-first",
+        text="Qwen Cloud Hackathon starts September 20",
+        source_urls=("https://qwen.example/hackathon",),
+    )
+    second = _post(
+        "hackathon-second",
+        text="Qwen Cloud Hackathon recap",
+        source_urls=("https://qwen.example/hackathon",),
+        author_handle="qwen_hackathon_second",
+    )
+    later = _post(
+        "hackathon-later",
+        text="Qwen Cloud Hackathon next edition",
+        source_urls=("https://qwen.example/hackathon",),
+        author_handle="qwen_hackathon_later",
+    )
+
+    def response(start):
+        return {
+            "records": [
+                {
+                    "brand_id": "anthropic",
+                    "organization_name": "Qwen",
+                    "title": "Qwen Cloud Hackathon",
+                    "source_url": "https://qwen.example/hackathon",
+                    "start_value": start,
+                    "start_precision": "day",
+                    "source_status": "scheduled",
+                    "attendance_mode": "online_live",
+                }
+            ]
+        }
+
+    run_targeted_extractions(
+        post=first,
+        post_types={"events"},
+        config=_config(),
+        calls={"event_extraction": lambda *_args: response("2026-09-20")},
+        max_calls=20,
+    )
+    run_targeted_extractions(
+        post=second,
+        post_types={"events"},
+        config=_config(),
+        calls={"event_extraction": lambda *_args: response("2026-09-20")},
+        max_calls=20,
+    )
+    run_targeted_extractions(
+        post=later,
+        post_types={"events"},
+        config=_config(),
+        calls={"event_extraction": lambda *_args: response("2026-10-20")},
+        max_calls=20,
+    )
+
+    assert Event.objects.count() == 2
+    assert EventEvidence.objects.count() == 3
+    assert Event.objects.filter(start_value="2026-09-20").get().evidence.count() == 2
+
+
+def test_undated_event_observations_are_source_scoped_but_reruns_converge():
+    first = _post("undated-first", text="Qwen Cloud Hackathon")
+    second = _post(
+        "undated-second",
+        text="Qwen Cloud Hackathon",
+        author_handle="qwen_undated_second",
+    )
+    response = {
+        "records": [
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Qwen",
+                "title": "Qwen Cloud Hackathon",
+                "attendance_mode": "online_live",
+            }
+        ]
+    }
+
+    def call(*_args):
+        return response
+
+    for post in (first, second, first):
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={"event_extraction": call},
+            max_calls=20,
+        )
+    assert Event.objects.count() == 2
+    assert EventEvidence.objects.count() == 2
+
+
+def test_undated_canonical_url_does_not_absorb_a_later_dated_edition():
+    canonical_url = "https://qwen.example/cloud-hackathon"
+    undated = _post(
+        "canonical-undated",
+        text="Qwen Cloud Hackathon",
+        source_urls=(canonical_url,),
+    )
+    dated = _post(
+        "canonical-dated",
+        text="Qwen Cloud Hackathon begins October 20",
+        source_urls=(canonical_url,),
+        author_handle="qwen_canonical_dated",
+    )
+
+    def response(start_value=None):
+        return {
+            "records": [
+                {
+                    "brand_id": "anthropic",
+                    "organization_name": "Qwen",
+                    "title": "Qwen Cloud Hackathon",
+                    "canonical_url": canonical_url,
+                    "attendance_mode": "online_live",
+                    "start_value": start_value,
+                    "start_precision": "day" if start_value else "unknown",
+                }
+            ]
+        }
+
+    for post, start_value in ((undated, None), (dated, "2026-10-20")):
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={
+                "event_extraction": lambda *_args, start=start_value: response(start)
+            },
+            max_calls=20,
+        )
+
+    assert Event.objects.count() == 2
+    assert Event.objects.filter(start_value__isnull=True).count() == 1
+    assert Event.objects.filter(start_value="2026-10-20").count() == 1
+
+
+def test_external_event_identity_requires_namespace_and_rejects_date_conflicts():
+    posts = [
+        _post("external-devpost-sep", author_handle="event_external_a"),
+        _post("external-luma-sep", author_handle="event_external_b"),
+        _post("external-devpost-oct", author_handle="event_external_c"),
+    ]
+    records = [
+        ("devpost", "2026-09-20"),
+        ("luma", "2026-09-20"),
+        ("devpost", "2026-10-20"),
+    ]
+    for post, (source, start) in zip(posts, records, strict=True):
+        response = {
+            "records": [
+                {
+                    "brand_id": "anthropic",
+                    "organization_name": "Qwen",
+                    "title": "Qwen Cloud Hackathon",
+                    "external_event_source": source,
+                    "external_event_id": "42",
+                    "attendance_mode": "online_live",
+                    "start_value": start,
+                    "start_precision": "day",
+                }
+            ]
+        }
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={"event_extraction": lambda *_args, value=response: value},
+            max_calls=20,
+        )
+
+    assert Event.objects.count() == 3
+    assert Event.objects.filter(external_event_source="devpost").count() == 2
+    assert Event.objects.filter(external_event_source="luma").count() == 1
+
+
+def test_external_event_identity_promotes_a_later_explicit_date():
+    first = _post("external-undated", author_handle="event_external_undated")
+    second = _post("external-dated", author_handle="event_external_dated")
+
+    def response(start_value=None):
+        return {
+            "records": [
+                {
+                    "brand_id": "anthropic",
+                    "organization_name": "Qwen",
+                    "title": "Qwen Cloud Hackathon",
+                    "external_event_source": "devpost",
+                    "external_event_id": "qwen-2026",
+                    "attendance_mode": "online_live",
+                    "start_value": start_value,
+                    "start_precision": "day" if start_value else "unknown",
+                }
+            ]
+        }
+
+    for post, start in ((first, None), (second, "2026-09-20")):
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={"event_extraction": lambda *_args, value=start: response(value)},
+            max_calls=20,
+        )
+
+    event = Event.objects.get()
+    assert event.start_value == "2026-09-20"
+    assert event.start_precision == "day"
+    assert event.evidence.count() == 2
+
+
+def test_conflicting_external_ids_do_not_merge_through_one_canonical_url():
+    canonical_url = "https://events.qwen.example/cloud-hackathon"
+    first = _post(
+        "strong-conflict-first",
+        source_urls=(canonical_url,),
+        author_handle="strong_conflict_first",
+    )
+    second = _post(
+        "strong-conflict-second",
+        source_urls=(canonical_url,),
+        author_handle="strong_conflict_second",
+    )
+
+    for post, source, external_id in (
+        (first, "devpost", "42"),
+        (second, "luma", "99"),
+    ):
+        response = {
+            "records": [
+                {
+                    "brand_id": "anthropic",
+                    "organization_name": "Qwen",
+                    "title": "Qwen Cloud Hackathon",
+                    "external_event_source": source,
+                    "external_event_id": external_id,
+                    "canonical_url": canonical_url,
+                    "attendance_mode": "online_live",
+                    "start_value": "2026-09-20",
+                    "start_precision": "day",
+                }
+            ]
+        }
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={"event_extraction": lambda *_args, value=response: value},
+            max_calls=20,
+        )
+
+    assert Event.objects.count() == 2
+
+
+def test_external_event_identity_combines_nonconflicting_partial_windows():
+    first = _post("partial-window-start", author_handle="partial_window_start")
+    second = _post("partial-window-end", author_handle="partial_window_end")
+    records = [
+        {
+            "brand_id": "anthropic",
+            "organization_name": "Qwen",
+            "title": "Qwen Cloud Hackathon",
+            "external_event_source": "devpost",
+            "external_event_id": "partial-2026",
+            "attendance_mode": "online_live",
+            "start_value": "2026-09-20",
+            "start_precision": "day",
+        },
+        {
+            "brand_id": "anthropic",
+            "organization_name": "Qwen",
+            "title": "Qwen Cloud Hackathon",
+            "external_event_source": "devpost",
+            "external_event_id": "partial-2026",
+            "attendance_mode": "online_live",
+            "end_value": "2026-09-22",
+            "end_precision": "day",
+        },
+    ]
+
+    for post, record in zip((first, second), records, strict=True):
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={
+                "event_extraction": lambda *_args, value=record: {"records": [value]}
+            },
+            max_calls=20,
+        )
+
+    event = Event.objects.get()
+    assert event.start_value == "2026-09-20"
+    assert event.end_value == "2026-09-22"
+    assert event.evidence.count() == 2
+
+
+def test_resolved_event_tracks_the_earliest_observation_during_backfill():
+    later = _post("seen-later", author_handle="seen_later")
+    earlier = _post("seen-earlier", author_handle="seen_earlier")
+    earlier.fetched_at = later.fetched_at.replace(year=later.fetched_at.year - 1)
+    earlier.save(update_fields=["fetched_at"])
+    response = {
+        "records": [
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Qwen",
+                "title": "Qwen Cloud Hackathon",
+                "attendance_mode": "online_live",
+                "start_value": "2026-09-20",
+                "start_precision": "day",
+            }
+        ]
+    }
+
+    for post in (later, earlier):
+        run_targeted_extractions(
+            post=post,
+            post_types={"events"},
+            config=_config(),
+            calls={"event_extraction": lambda *_args: response},
+            max_calls=20,
+        )
+
+    event = Event.objects.get()
+    assert event.first_seen_at == earlier.fetched_at
+    assert event.last_seen_at == later.fetched_at
+
+
+def test_opportunity_links_to_event_resolved_from_another_post():
+    first = _post("linked-event-first", author_handle="linked_event_first")
+    second = _post("linked-event-second", author_handle="linked_event_second")
+
+    event_response = {
+        "records": [
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Qwen",
+                "title": "Qwen Cloud Hackathon",
+                "attendance_mode": "online_live",
+                "start_value": "2026-09-20",
+                "start_precision": "day",
+            }
+        ]
+    }
+    opportunity_response = {
+        "records": [
+            {
+                "brand_id": "anthropic",
+                "organization_name": "Qwen",
+                "related_event_title": "Qwen Cloud Hackathon",
+                "opportunity_type": "contest",
+                "action_type": "submit a project",
+                "benefit_type": "prize",
+                "open_value": "2026-09-20",
+                "open_precision": "day",
+            }
+        ]
+    }
+    run_targeted_extractions(
+        post=first,
+        post_types={"events"},
+        config=_config(),
+        calls={"event_extraction": lambda *_args: event_response},
+        max_calls=20,
+    )
+    run_targeted_extractions(
+        post=second,
+        post_types={"events", "opportunities"},
+        config=_config(),
+        calls={
+            "event_extraction": lambda *_args: event_response,
+            "opportunity_extraction": lambda *_args: opportunity_response,
+        },
+        max_calls=20,
+    )
+
+    event = Event.objects.get()
+    assert event.evidence.count() == 2
+    assert Opportunity.objects.get().related_event == event
+
+
+def test_event_source_post_is_protected_as_provenance():
+    post = _post("protected-event-source", author_handle="protected_event_source")
+    run_targeted_extractions(
+        post=post,
+        post_types={"events"},
+        config=_config(),
+        calls={
+            "event_extraction": lambda *_args: {
+                "records": [
+                    {
+                        "brand_id": "anthropic",
+                        "organization_name": "Anthropic",
+                        "title": "Research livestream",
+                        "attendance_mode": "online_live",
+                    }
+                ]
+            }
+        },
+        max_calls=20,
+    )
+
+    with pytest.raises(ProtectedError):
+        post.delete()
 
 
 def test_invalid_url_fails_atomically_and_records_sanitized_attempt():

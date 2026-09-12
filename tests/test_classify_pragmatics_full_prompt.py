@@ -73,8 +73,14 @@ def test_prompt_contains_taxonomy_boundaries_from_settled_contract():
         "personnel change needs a named person",
         "effective dates may be unknown",
         "Mentioning a benchmark",
+        "Do not infer a result from a linked page, video, image, or URL",
+        "better based on vibes",
         "Rhetorical headings are not questions_requests",
-        "parent companies",
+        "company, business, or investor perspective",
+        "electricity-cost",
+        "comment alone is not business_finance",
+        "winning track",
+        "retrospective post after it has ended",
     ):
         assert boundary in prompt
 
@@ -91,8 +97,19 @@ def test_prompt_requires_an_independent_type_pass_and_separate_namespaces():
 def test_prompt_requires_an_independent_product_label_pass():
     prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
     assert "decide yes or no separately for bug" in prompt
-    assert "Explicit praise or endorsement supports testimonial" in prompt
-    assert "questions_requests in post_types and ideas_requests in product_labels" in prompt
+    assert "Explicit praise, endorsement" in prompt
+    assert "Advertising and testimonial are independent" in prompt
+    assert "strictly for the current attributed brand_id" in prompt
+    assert "event participant" in prompt
+    assert (
+        "praise of Corpus for winning a Qwen event is not a Qwen testimonial" in prompt
+    )
+    assert "unavailable linked video, image, page, or URL" in prompt
+    assert "omit testimonial and use neutral sentiment" in prompt
+    assert (
+        "questions_requests in post_types and ideas_requests in product_labels"
+        in prompt
+    )
     assert "ideas_requests never appears in post_types" in prompt
 
 
@@ -133,24 +150,24 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v22"
+    assert PROMPT_VERSION == "stage1-prompt-v23"
 
 
-def test_superseded_v18_three_pass_and_audit_prompt_bytes_remain_frozen():
+def test_v27_three_pass_and_audit_prompt_bytes_are_frozen():
     from x_monitor import attribution
 
     expected = {
         "_PRAGMATICS_BASE_SYSTEM_PROMPT": (
-            "stage1-prompt-v18-base-v1",
-            "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+            "stage1-prompt-v27-base-v1",
+            "fed11bcb526403df4ef16758868ccf2612446987d19c19ac101b1f00530e4f7f",
         ),
         "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
-            "stage1-prompt-v18-secondary-v1",
-            "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+            "stage1-prompt-v27-secondary-v1",
+            "5836890d59ccf61b478fc1c9f26669502950d381cf7c2cf4c82efa9c915c1fa4",
         ),
         "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": (
-            "stage1-prompt-v18-review-v1",
-            "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+            "stage1-prompt-v27-review-v1",
+            "3571aa578e789ff90ad1b09c8fc67afcbf3b416a988b1f2072e42a77412a8ad0",
         ),
         "_PRAGMATICS_RARE_SYSTEM_PROMPT": (
             "stage1-prompt-v18-narrow-audit-v1",
@@ -162,7 +179,9 @@ def test_superseded_v18_three_pass_and_audit_prompt_bytes_remain_frozen():
         "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
             attribution._PRAGMATICS_SECONDARY_PROMPT_VERSION
         ),
-        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": attribution._PRAGMATICS_REVIEW_PROMPT_VERSION,
+        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_REVIEW_PROMPT_VERSION
+        ),
         "_PRAGMATICS_RARE_SYSTEM_PROMPT": attribution._PRAGMATICS_RARE_PROMPT_VERSION,
     }
 
@@ -172,21 +191,21 @@ def test_superseded_v18_three_pass_and_audit_prompt_bytes_remain_frozen():
         assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
 
 
-def test_v26_primary_review_and_repair_prompt_bytes_are_frozen():
+def test_v27_primary_review_and_repair_prompt_bytes_are_frozen():
     from x_monitor import attribution
 
     expected = {
         "_PRAGMATICS_PRIMARY_SYSTEM_PROMPT": (
-            "stage1-prompt-v18-full-v1",
-            "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+            "stage1-prompt-v27-full-v1",
+            "0638951c053bd1ecce889ab7bfeda730d24e6ee593bf5184992a456ba812cdf8",
         ),
         "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
-            "stage1-prompt-v26-completeness-review-v1",
-            "64f5e6c05885c4f32e3dd46cf22262cc9894af313ce155903e5790d4fd8088e4",
+            "stage1-prompt-v27-completeness-review-v1",
+            "fa50534968f5a5a27a02e71e0be98ed3ca785a67d69c45c211aa7a25dfa4c893",
         ),
         "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
-            "stage1-prompt-v26-completeness-review-repair-v1",
-            "98a0d3a38653271912bfad7a02545cce64181a3dbbb61648836a14965dcd0ac2",
+            "stage1-prompt-v27-completeness-review-repair-v1",
+            "8272b726712012cf8f66ba92fa54225316b5bcd284654f0411ff4704d25d5f00",
         ),
     }
     versions = {
@@ -208,7 +227,7 @@ def test_v26_primary_review_and_repair_prompt_bytes_are_frozen():
 
     assert (
         attribution._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
-        == "stage1-selector-v26-review-authoritative-verdict-audit-v1"
+        == "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
     )
 
 

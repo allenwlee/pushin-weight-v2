@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from django.db import transaction
-from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
 
 from core.models import (
@@ -25,6 +25,7 @@ from core.models import (
     BrandAccount,
     BrandDiscoveryCandidate,
     Event,
+    EventEvidence,
     JobDiscoveryRun,
     JobListing,
     JobListingEvidence,
@@ -76,7 +77,9 @@ Return one record per attendance-bearing event. An event requires attendance at
 a scheduled in-person, live-online, or hybrid venue/session; an asynchronous
 submission or application alone is not an event. Past, live, future, cancelled,
 and postponed events may qualify. Fields: brand_id, organization_name,
-organization_handle, title, source_url, attendance_mode (in_person,
+organization_handle, title, external_event_source, external_event_id,
+canonical_url, source_url,
+attendance_mode (in_person,
 online_live, hybrid, or unknown), physical_location, virtual_location,
 attendance_url, start_value, start_precision (datetime, day, month, year, or
 unknown), end_value, end_precision, source_timezone, source_schedule_text,
@@ -405,6 +408,182 @@ def _identity_value(value: Any) -> Any:
     if isinstance(value, list):
         return sorted((_identity_value(item) for item in value), key=str)
     return value
+
+
+def _normalized_event_text(value: Any) -> str:
+    """Normalize names for deterministic candidate matching only."""
+
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return " ".join(re.findall(r"[\w]+", text, flags=re.UNICODE))
+
+
+def _normalized_event_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return value
+    path = parsed.path.rstrip("/") or "/"
+    return parsed._replace(
+        scheme=parsed.scheme.casefold(),
+        netloc=parsed.netloc.casefold(),
+        path=path,
+        fragment="",
+    ).geturl()
+
+
+def _event_window_compatible(
+    start_value: str | None,
+    start_precision: str,
+    end_value: str | None,
+    end_precision: str,
+    event: Event,
+) -> bool:
+    """Require explicit windows to agree; unknown windows never fuzzy-merge."""
+
+    if start_value is None and end_value is None:
+        return False
+    if event.start_value is None and event.end_value is None:
+        return False
+    return (
+        start_value == event.start_value
+        and start_precision == event.start_precision
+        and end_value == event.end_value
+        and end_precision == event.end_precision
+    )
+
+
+def _event_window_conflicts(
+    start_value: str | None,
+    start_precision: str,
+    end_value: str | None,
+    end_precision: str,
+    event: Event,
+) -> bool:
+    """Reject only contradictory date fields present in both observations."""
+
+    start_conflict = (
+        start_value is not None
+        and event.start_value is not None
+        and (
+            start_value != event.start_value or start_precision != event.start_precision
+        )
+    )
+    end_conflict = (
+        end_value is not None
+        and event.end_value is not None
+        and (end_value != event.end_value or end_precision != event.end_precision)
+    )
+    return start_conflict or end_conflict
+
+
+def _event_strong_identity_conflicts(
+    event: Event,
+    *,
+    canonical_url: str | None,
+    external_event_source: str | None,
+    external_event_id: str | None,
+) -> bool:
+    incoming_external = (
+        (external_event_source, external_event_id)
+        if external_event_source and external_event_id
+        else None
+    )
+    existing_external = (
+        (event.external_event_source, event.external_event_id)
+        if event.external_event_source and event.external_event_id
+        else None
+    )
+    if (
+        incoming_external is not None
+        and existing_external is not None
+        and incoming_external != existing_external
+    ):
+        return True
+    return bool(
+        canonical_url
+        and event.canonical_url
+        and _normalized_event_url(event.canonical_url) != canonical_url
+    )
+
+
+def _resolve_event_occurrence(
+    *,
+    brand: Brand,
+    title: str,
+    organizer_name: str,
+    canonical_url: str | None,
+    external_event_source: str | None,
+    external_event_id: str | None,
+    start_value: str | None,
+    start_precision: str,
+    end_value: str | None,
+    end_precision: str,
+) -> Event | None:
+    """Resolve only strong or exact, date-compatible occurrence candidates."""
+
+    candidates = Event.objects.filter(brand=brand)
+    if external_event_source and external_event_id:
+        for exact in candidates.filter(
+            external_event_source=external_event_source,
+            external_event_id=external_event_id,
+        ):
+            if not _event_window_conflicts(
+                start_value,
+                start_precision,
+                end_value,
+                end_precision,
+                exact,
+            ) and not _event_strong_identity_conflicts(
+                exact,
+                canonical_url=canonical_url,
+                external_event_source=external_event_source,
+                external_event_id=external_event_id,
+            ):
+                return exact
+    if canonical_url:
+        normalized_url = _normalized_event_url(canonical_url)
+        for exact in candidates.filter(canonical_url=normalized_url):
+            if _event_strong_identity_conflicts(
+                exact,
+                canonical_url=canonical_url,
+                external_event_source=external_event_source,
+                external_event_id=external_event_id,
+            ):
+                continue
+            both_undated = (
+                start_value is None
+                and end_value is None
+                and exact.start_value is None
+                and exact.end_value is None
+            )
+            if both_undated or _event_window_compatible(
+                start_value,
+                start_precision,
+                end_value,
+                end_precision,
+                exact,
+            ):
+                return exact
+    normalized_title = _normalized_event_text(title)
+    normalized_organizer = _normalized_event_text(organizer_name)
+    if not normalized_title or not normalized_organizer:
+        return None
+    for event in candidates.filter(normalized_title=normalized_title):
+        if _normalized_event_text(event.organizer_name) != normalized_organizer:
+            continue
+        if _event_strong_identity_conflicts(
+            event,
+            canonical_url=canonical_url,
+            external_event_source=external_event_source,
+            external_event_id=external_event_id,
+        ):
+            continue
+        if _event_window_compatible(
+            start_value, start_precision, end_value, end_precision, event
+        ):
+            return event
+    return None
 
 
 def _missing_job_value(value: Any) -> bool:
@@ -1011,7 +1190,7 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
 
 
 def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
-    written = candidates = 0
+    written = evidence = candidates = 0
     source_urls = _source_urls(post)
     brand_context = _brand_evidence_context(post)
     for record in records:
@@ -1052,48 +1231,189 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
             )
             candidates += int(created)
             continue
-        identity = _hash({"post": str(post.pk), "record": record, "version": version})
-        _row, created = Event.objects.get_or_create(
-            event_identity=identity,
+        title = _text(record.get("title"), required=True) or ""
+        organizer_name = _text(record.get("organization_name"), required=True) or ""
+        source_url = _source_bound_url(
+            record.get("source_url"), source_urls=source_urls, field="source"
+        )
+        external_event_source = _normalized_event_text(
+            record.get("external_event_source")
+        )
+        external_event_id = _text(record.get("external_event_id"))
+        if not external_event_source or not external_event_id:
+            external_event_source = None
+            external_event_id = None
+        canonical_url = _source_bound_url(
+            record.get("canonical_url"),
+            source_urls=source_urls,
+            field="canonical",
+        )
+        canonical_url = _normalized_event_url(canonical_url)
+        existing = _resolve_event_occurrence(
+            brand=brand,
+            title=title,
+            organizer_name=organizer_name,
+            canonical_url=canonical_url,
+            external_event_source=external_event_source,
+            external_event_id=external_event_id,
+            start_value=start_value,
+            start_precision=start_precision,
+            end_value=end_value,
+            end_precision=end_precision,
+        )
+        identity = (
+            _hash(
+                {
+                    "brand": str(brand.pk),
+                    "external_event_source": external_event_source,
+                    "external_event_id": external_event_id,
+                    "canonical_url": canonical_url,
+                    "start": [start_value, start_precision],
+                    "end": [end_value, end_precision],
+                }
+            )
+            if external_event_source and external_event_id
+            else _hash(
+                {
+                    "brand": str(brand.pk),
+                    "canonical_url": canonical_url,
+                    "start": [start_value, start_precision],
+                    "end": [end_value, end_precision],
+                }
+            )
+            if canonical_url
+            else _hash(
+                {
+                    "brand": str(brand.pk),
+                    "title": _normalized_event_text(title),
+                    "organizer": _normalized_event_text(organizer_name),
+                    "start": [start_value, start_precision],
+                    "end": [end_value, end_precision],
+                    **(
+                        {"post": str(post.pk)}
+                        if start_value is None and end_value is None
+                        else {}
+                    ),
+                }
+            )
+        )
+        if existing is not None:
+            _row, created = existing, False
+        else:
+            _row, created = Event.objects.get_or_create(
+                event_identity=identity,
+                defaults={
+                    "brand": brand,
+                    "source_post": post,
+                    "source_url": source_url,
+                    "canonical_url": canonical_url,
+                    "external_event_source": external_event_source,
+                    "external_event_id": external_event_id,
+                    "normalized_title": _normalized_event_text(title),
+                    "title": title,
+                    "organizer_name": organizer_name,
+                    "organizer_handle": _text(
+                        record.get("organization_handle"), maximum=64
+                    ),
+                    "attendance_mode": attendance_mode,
+                    "physical_location": _text(record.get("physical_location")),
+                    "virtual_location": _text(record.get("virtual_location")),
+                    "attendance_url": _source_bound_url(
+                        record.get("attendance_url"),
+                        source_urls=source_urls,
+                        field="attendance",
+                    ),
+                    "start_value": start_value,
+                    "start_precision": start_precision,
+                    "end_value": end_value,
+                    "end_precision": end_precision,
+                    "source_timezone": _text(record.get("source_timezone"), maximum=64),
+                    "source_schedule_text": _text(record.get("source_schedule_text")),
+                    "source_status": source_status,
+                    "first_seen_at": post.fetched_at,
+                    "last_seen_at": post.fetched_at,
+                    "content_hash": _hash(record),
+                    "extraction_version": version,
+                    "extraction_confidence": _confidence(record.get("confidence")),
+                    "review_status": "pending",
+                    "raw_payload": dict(record),
+                },
+            )
+        evidence_hash = _hash(
+            {"post": str(post.pk), "record": record, "version": version}
+        )
+        _evidence, evidence_created = EventEvidence.objects.get_or_create(
+            event=_row,
+            source_post=post,
+            evidence_hash=evidence_hash,
             defaults={
-                "brand": brand,
-                "source_post": post,
-                "source_url": _source_bound_url(
-                    record.get("source_url"),
-                    source_urls=source_urls,
-                    field="source",
-                ),
-                "title": _text(record.get("title"), required=True),
-                "organizer_name": _text(record.get("organization_name"), required=True),
-                "organizer_handle": _text(
-                    record.get("organization_handle"), maximum=64
-                ),
-                "attendance_mode": attendance_mode,
-                "physical_location": _text(record.get("physical_location")),
-                "virtual_location": _text(record.get("virtual_location")),
-                "attendance_url": _source_bound_url(
-                    record.get("attendance_url"),
-                    source_urls=source_urls,
-                    field="attendance",
-                ),
-                "start_value": start_value,
-                "start_precision": start_precision,
-                "end_value": end_value,
-                "end_precision": end_precision,
-                "source_timezone": _text(record.get("source_timezone"), maximum=64),
-                "source_schedule_text": _text(record.get("source_schedule_text")),
-                "source_status": source_status,
-                "first_seen_at": post.fetched_at,
-                "last_seen_at": post.fetched_at,
-                "content_hash": _hash(record),
+                "source_url": source_url,
+                "observed_title": title,
+                "observed_organizer_name": organizer_name,
+                "observed_start_value": start_value,
+                "observed_start_precision": start_precision,
+                "observed_end_value": end_value,
+                "observed_end_precision": end_precision,
+                "observed_at": post.fetched_at,
                 "extraction_version": version,
                 "extraction_confidence": _confidence(record.get("confidence")),
-                "review_status": "pending",
                 "raw_payload": dict(record),
             },
         )
+        if not created:
+            update_fields = []
+            if post.fetched_at < _row.first_seen_at:
+                _row.first_seen_at = post.fetched_at
+                update_fields.append("first_seen_at")
+            if post.fetched_at > _row.last_seen_at:
+                _row.last_seen_at = post.fetched_at
+                update_fields.append("last_seen_at")
+            if external_event_source and external_event_id:
+                merged_start = _temporal_value(
+                    _row.start_value or start_value,
+                    (
+                        _row.start_precision
+                        if _row.start_value is not None
+                        else start_precision
+                    ),
+                    field="merged event start",
+                    allow_datetime=True,
+                )
+                merged_end = _temporal_value(
+                    _row.end_value or end_value,
+                    (
+                        _row.end_precision
+                        if _row.end_value is not None
+                        else end_precision
+                    ),
+                    field="merged event end",
+                    allow_datetime=True,
+                )
+                _temporal_range(
+                    start=merged_start,
+                    end=merged_end,
+                    field="merged event",
+                )
+                if _row.start_value is None and start_value is not None:
+                    _row.start_value = start_value
+                    _row.start_precision = start_precision
+                    update_fields.extend(["start_value", "start_precision"])
+                if _row.end_value is None and end_value is not None:
+                    _row.end_value = end_value
+                    _row.end_precision = end_precision
+                    update_fields.extend(["end_value", "end_precision"])
+                if _row.external_event_source is None:
+                    _row.external_event_source = external_event_source
+                    _row.external_event_id = external_event_id
+                    update_fields.extend(["external_event_source", "external_event_id"])
+            if _row.canonical_url is None and canonical_url is not None:
+                _row.canonical_url = canonical_url
+                update_fields.append("canonical_url")
+            if update_fields:
+                _row.save(update_fields=update_fields)
         written += int(created)
-    return written, 0, candidates
+        evidence += int(evidence_created)
+    return written, evidence, candidates
 
 
 def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version: str):
@@ -1101,7 +1421,11 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
     source_urls = _source_urls(post)
     brand_context = _brand_evidence_context(post)
     events_by_brand: dict[str, list[Event]] = {}
-    for event in Event.objects.filter(source_post=post).order_by("id"):
+    for event in (
+        Event.objects.filter(Q(source_post=post) | Q(evidence__source_post=post))
+        .distinct()
+        .order_by("id")
+    ):
         events_by_brand.setdefault(str(event.brand_id), []).append(event)
     for record in records:
         opportunity_type = _choice(
@@ -1149,7 +1473,14 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
                 (
                     event
                     for event in possible_events
-                    if event.title.casefold() == related_event_title.casefold()
+                    if _normalized_event_text(event.title)
+                    == _normalized_event_text(related_event_title)
+                    and (
+                        event.source_post_id == post.pk
+                        or _event_window_compatible(
+                            opens[0], opens[1], closes[0], closes[1], event
+                        )
+                    )
                 ),
                 None,
             )

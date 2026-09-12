@@ -149,7 +149,7 @@ def test_primary_then_candidate_aware_review_selects_canonical_final_and_trace()
     assert trace["review"]["metadata_by_brand"]["deepseek"]["decision"] == "accept"
     assert (
         trace["final"]["selector_version"]
-        == "stage1-selector-v26-review-authoritative-verdict-audit-v1"
+        == "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
     )
     assert trace["final"]["model"] == "deepseek-v4-flash"
 
@@ -283,7 +283,7 @@ def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_
     assert metadata["decision"] == "replace"
     assert len(metadata["evidence"]) == 2
     assert (
-        metadata["prompt_version"] == "stage1-prompt-v26-completeness-review-repair-v1"
+        metadata["prompt_version"] == "stage1-prompt-v27-completeness-review-repair-v1"
     )
 
 
@@ -691,7 +691,7 @@ def test_order_cardinality_and_transport_concurrency_are_bounded():
     assert all(row["valid"] for row in result)
     assert (
         result[1]["classification_trace"]["primary"]["prompt_version"]
-        == "stage1-prompt-v18-full-v1"
+        == "stage1-prompt-v27-full-v1"
     )
 
 

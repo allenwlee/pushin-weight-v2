@@ -3,7 +3,7 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-11
+amended: 2026-09-12
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -85,6 +85,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 9. On 2026-09-11, after reviewing the staging receipt and remaining production gates, the owner selected production delivery for Stage 1 before Stages 2–4. Complete the taxonomy-v2 baseline, taxonomy-v3 three-stratum assessment, job/personnel discovery assessments, role/affiliation extraction assessments, and incremental cost measurement before promotion. If those gates pass, promote Stage 1 and verify normal production harvest cycles while keeping job discovery, personnel discovery, targeted extraction, profile backfill, and public MCP/API access disabled. This supersedes the production prohibition in exceptions 2, 7, and 8 only after the named gates pass; it does not authorize activating those disabled features or manually mutating production data.
 10. Later on 2026-09-11, the owner superseded exception 9's release sequence: complete the remaining Stage 1 quality gates and Stages 2–4 on this same candidate, refresh staging through the guarded scrubbed-production procedure, activate and debug the integrated feature set on staging, and then promote that exact passing candidate to production. This authorizes bounded paid staging evaluations and feature activation within the explicit caps and stop conditions in U18–U24. It does not authorize a production pause, an ad hoc production provider run, bypassing the single harvester scheduler, publishing the future public MCP/API, or weakening any migration, quality, cost, or exact-SHA gate.
 11. On 2026-09-11 the owner clarified that Anthropic is not an active PushinWeight provider: scheduled translation, classification, relevancy, and signal work use DeepSeek, while MiniMax remains available only to separately configured roles. The v22/v22b direct-Haiku attempts remain historical zero-quality-result evidence and no longer block delivery on a credential. This does not convert the failed DeepSeek semantic score into a pass or weaken the U18 floors. The integrated candidate may deploy to staging with the new paid discovery, extraction, and synthesis lanes disabled so schema, data-refresh, UI, and worker isolation can be debugged while U18 quality remains open; production promotion still requires every named gate.
+12. On 2026-09-12 the owner reviewed the 16 disagreements highlighted by the independent Grok audit and directed a new prompt identity with stricter visible-evidence, target-brand, customer-cost, testimonial-overlap, unavailable-media, and hackathon rules. Because the owner saw the model judgments before commenting, this calibration is consumed development evidence and cannot count as either blinded reviewer or adjudicator under R81–R82. The owner also required cross-post event identity that distinguishes canonical occurrences from their source observations and preserves recurring same-name editions rather than silently merging them.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -101,6 +102,8 @@ Profile affiliation discovery uses evidence rather than treating every brand men
 All schema changes remain additive. Existing taxonomy-v2 `events_opportunities` rows keep their original combined meaning and version; they are never silently rewritten into the two new categories. The remaining roadmap reduces recurring model work: headlines refresh only for hot, materially changed windows; literal translation stays available independently; richer synthesis is generated once per versioned post context when the feed actually needs it; and EN, ZH-CN, and JA become equal product locales.
 
 The full candidate will be tested against two deliberately different data sources. The verified September 10 production dump is the frozen source for reproducible offline cohorts. Near final integration, the guarded staging refresh will create a fresh, scrubbed production-shaped database so migrations, feeds, queues, jobs, personnel changes, events, opportunities, and locale behavior are exercised against current data. The candidate reaches production only after the taxonomy, discovery, extraction, headline, translation, synthesis, cost, browser, rollback, and exact-SHA staging gates pass. Public MCP/API publication remains deferred, but the same internal read and request contracts must be usable by both the UI and agents.
+
+Repeated mentions of an event will attach as evidence to one canonical occurrence when a strong source identifier or compatible organizer, normalized title, and source-stated time window support the match. A recurring hackathon keeps a shared human-readable series name while each dated edition remains a separate occurrence. Unknown dates stay unknown; observation time and a resolver search window never become invented event dates.
 
 ## Goal Capsule
 
@@ -309,6 +312,44 @@ The production classifier asks for six post types, sentiment, discourse, and two
   candidate-aware reviewer pilot against the adjudicated human reference. The
   45 rows remain consumed development evidence and cannot replace the final
   zero-overlap, human-reviewed release cohort.
+- R83. The next classifier prompt identity incorporates the owner's review of
+  the 16 Grok disagreements without treating that review as blinded gold.
+  `results_evaluations` requires source-visible product performance or quality
+  evidence; generic praise, admiration, customer value, or unavailable linked
+  media cannot supply it. `business_finance` is limited to company, business,
+  or investor perspective, so customer affordability, cloud-billing,
+  electricity-cost, subscription-cost, or usage-expense comments alone do not
+  qualify. Testimonial is judged strictly for the current attributed brand,
+  includes clear admiration of that brand's product achievement, and may
+  coexist with advertising, usage, results, or opinion types. Praise for an
+  event participant or another product/organization does not transfer to the
+  attributed brand. When visible text supports a post type but gives no clear
+  valence and linked media is unavailable, the current four-value sentiment
+  contract uses `neutral` and omits testimonial rather than inferring praise.
+  A hackathon with organized participation plus a bounded submission, prize,
+  or winning track is both `events` and `opportunities`, including in a
+  retrospective post, when the attributed brand is its organizer, sponsor,
+  host, or otherwise responsible.
+- R84. Treat an `Event` as a canonical occurrence and retain every source post
+  or URL in separate event-evidence rows. Resolve cross-post mentions by a
+  source-stated external event identifier plus its provider namespace first, a
+  canonical event URL second, then known brand/organizer plus normalized title
+  and compatible explicit start/end values and precision. Conflicting explicit
+  dates or canonical URLs prevent an external-ID match. Normalize Unicode,
+  case, punctuation, and whitespace only for candidate matching; preserve
+  observed titles verbatim.
+  A typo, localized title, or fuzzy match without a strong identifier and
+  compatible occurrence window remains separate or reviewable rather than
+  silently merging. Same-name editions with different source-stated windows
+  are separate occurrences. An undated observation cannot acquire dates from
+  the post timestamp, fetch timestamp, first-seen time, or a resolver search
+  gate. Repeated extraction of one unchanged observation converges, and each
+  event/opportunity link targets the resolved occurrence rather than a title
+  string alone. The migration reconciles legacy rows only when brand,
+  normalized organizer/title, an explicit date window, and the same normalized
+  source URL or source post agree exactly; it retains other historical rows
+  separately. Source posts used as event provenance are protected from
+  deletion.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -1022,17 +1063,17 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 ### U16. Persist rare post signals through targeted extraction
 
 - **Goal:** Turn event, opportunity, job, personnel, and ambiguous-profile candidates into structured, provenance-bearing records while adding model cost only for applicable positives.
-- **Requirements:** R28–R57; KTD15–KTD22.
+- **Requirements:** R28–R57 and R84; KTD15–KTD22.
 - **Dependencies:** U13–U15B.
 - **Files:** targeted extraction contracts/services under `core/`; `monitor/cycle.py`; provider-role configuration; `PostEnrichmentState` integration or a dedicated idempotent targeted-work state; event/opportunity/job/personnel/profile extraction prompts; media/redirect adapters; publisher and call-chain tests.
-- **Approach:** Queue targeted extraction only after a valid applicable v3 type or an ambiguous deterministic profile candidate. Use separate `event_extraction`, `opportunity_extraction`, `job_listing_extraction`, `personnel_change_extraction`, and `profile_affiliation_extraction` roles and version identities. A job extractor emits zero or more role records and evidence links from one source post; an event/opportunity pair remains two linked records. Validate source-bound structured output before one transaction upserts entities and evidence. Preserve partial values, date precision, unknown status, application-route state, raw/truncated evidence, and source text; never promote extractor inference to reviewed truth. Deduplicate concurrent/retried work by source and versioned content identity, and record media/redirect capabilities rather than assuming them.
-- **Test scenarios:** Negative posts cause zero targeted calls; multi-label positives route once to each applicable extractor; one 23-role fixture creates 23 listing rows linked to one source post; retries do not duplicate jobs, people, affiliations, evidence, events, or opportunities; parent/reply and later ATS evidence attach to one listing; third-party “X joined Y” and first-person “worked at X and now at Y” can produce reviewable candidates; explicit current/former status survives with null effective dates; bio mention removal alone cannot mark a departure; null deadlines/locations and unresolved or QR/email application routes survive; invalid identities/dates/URLs fail safely; telemetry has one event per targeted transport attempt without source text or secrets.
+- **Approach:** Queue targeted extraction only after a valid applicable v3 type or an ambiguous deterministic profile candidate. Use separate `event_extraction`, `opportunity_extraction`, `job_listing_extraction`, `personnel_change_extraction`, and `profile_affiliation_extraction` roles and version identities. A job extractor emits zero or more role records and evidence links from one source post; an event/opportunity pair remains two linked records. Persist an event occurrence separately from its many source observations, resolve only through R84's strong or date-compatible identities, and link an opportunity to the resolved occurrence. Validate source-bound structured output before one transaction upserts entities and evidence. Preserve partial values, date precision, unknown status, application-route state, raw/truncated evidence, and source text; never promote extractor inference to reviewed truth. Deduplicate concurrent/retried work by source and versioned content identity, and record media/redirect capabilities rather than assuming them.
+- **Test scenarios:** Negative posts cause zero targeted calls; multi-label positives route once to each applicable extractor; one 23-role fixture creates 23 listing rows linked to one source post; retries do not duplicate jobs, people, affiliations, evidence, events, or opportunities; two strongly matched event mentions retain two evidence rows on one occurrence while an undated ambiguous mention and a later same-name dated edition do not silently merge; parent/reply and later ATS evidence attach to one listing; third-party “X joined Y” and first-person “worked at X and now at Y” can produce reviewable candidates; explicit current/former status survives with null effective dates; bio mention removal alone cannot mark a departure; null deadlines/locations and unresolved or QR/email application routes survive; invalid identities/dates/URLs fail safely; telemetry has one event per targeted transport attempt without source text or secrets.
 - **Verification:** Fake-provider true-caller tests prove routing, validation, atomicity, idempotency, retry/fallback, privacy, and incremental call cardinality. A bounded dry-run report estimates positive rate and cost before any live activation.
 
 ### U17. Publish recruiter-ready read contracts and verify Stage 1C
 
 - **Goal:** Make stored employment, job, event, and opportunity data intelligible to future MCP/API clients, freeze separate discovery/classification/extraction evaluation contracts, and establish provider-free staging evidence.
-- **Requirements:** R30, R33–R57; KTD14–KTD22.
+- **Requirements:** R30, R33–R57 and R84; KTD14–KTD22.
 - **Dependencies:** U16.
 - **Files:** shared employment-history, job-listing, event, and opportunity query/projection modules; deterministic JSON schemas/examples; agent-facing reference; evaluation strata and floor policy; discovery/extraction reports; test manifest; dated Stage 1C staging receipt.
 - **Approach:** Define stable read shapes for person identity and the R32 birth-date/precision, `sexs`, nationality, ethnicity, and primary-language fields; broad affiliations; filtered `employment_history`; staff/community/unknown evidence resolution; business-label and profile-observation provenance; organization review state; `job_listings` using `hiring_organization` terminology; and event/opportunity lifecycle under explicit `as_of`. Keep public MCP/API routing and recruiter write access deferred. Extend the U12 evaluator and freeze provider-free fixtures, schemas, strata, identities, and floor-policy formats for taxonomy v3, job and personnel discovery, listing extraction, and affiliation extraction. U18 owns the authorized real-label runs and blinded adjudication. Reconcile classifier, feed, filter, headline, health, and analysis consumers before exact-SHA staging delivery.
@@ -1042,11 +1083,11 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 ### U18. Complete the real-label quality and cost gates
 
 - **Goal:** Turn the frozen evaluation contracts into measured pass/block decisions before enabling any new live lane.
-- **Requirements:** R16–R17, R40, R48–R59, R79–R80; KTD14, KTD18–KTD22, KTD24, and KTD35–KTD36.
+- **Requirements:** R16–R17, R40, R48–R59, and R79–R84; KTD14, KTD18–KTD22, KTD24, and KTD35–KTD36.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; exact prompt/model/provider-role identities. Execute U12A as this unit's first measured sub-gate.
 - **Files:** versioned floor and budget JSON under `docs/analysis/` or `docs/reference/`; ignored source/context, candidate, reviewer, and adjudication packets; classification/discovery/extraction evaluator modules and commands; dated durable taxonomy-v2, taxonomy-v3, job, personnel, extraction, and cost reports; focused evaluator tests; this plan's execution state.
 - **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the R79 primary-plus-completeness-review path and its durable judgment provenance. After v25 shows that the reviewer usually anchors on the primary, implement R80's exhaustive verdict maps and require them to agree with the reviewer's complete candidate; the maps validate but never generate labels. The fixed selector continues to use the reviewer result in full. Prove this path provider-free, then through a separately preregistered run on the same 120-row consumed-development cohort. Continue to all 500 consumed-development rows only if every continuation floor passes. Neither development result can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
-- **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact cannot load as gold; v2 and v3 results never merge; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost evidence, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
+- **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact and owner-visible audit review cannot load as blinded gold; v2 and v3 results never merge; the R83 boundary cases cover generic praise versus results, target-brand testimonial scope, customer cost versus business/investor perspective, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathon overlap; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost event evidence, unsafe occurrence merges, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
 - **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 report separately covers prevalence, rare positives, and event/opportunity boundaries across EN/ZH-CN/JA and required source roles. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U19 activation or U23.
 
 ### U19. Make headline generation demand-shaped and critics conditional
@@ -1907,3 +1948,14 @@ reference twice, and neither ten times. This is useful independent model
 evidence but cannot satisfy R81–R82, select a ground truth, or authorize more
 transport. The durable aggregate is in
 `docs/analysis/2026-09-12-125824-u18-grok-independent-model-audit.md`.
+
+The owner then reviewed the 16 highlighted Grok disagreements with model
+answers visible. R83 records those decisions as taxonomy and prompt
+calibration, never as blinded human labels. The primary, repair, review, and
+review-repair prompts advance to v27 and the selector advances to the v27
+owner-calibrated identity. The immutable budget at
+`docs/analysis/2026-09-12-220424-u18-runtime-v27-owner-calibrated-blocked-budget.json`
+pins those exact bytes but sets request, transport, token, and dollar caps to
+zero. It preserves R82: no provider call is authorized until the independent
+human review and adjudication gate passes, after which any permitted 30-row
+DeepSeek Pro pilot requires a separate budget.

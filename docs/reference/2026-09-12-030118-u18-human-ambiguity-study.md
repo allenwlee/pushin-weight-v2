@@ -101,6 +101,72 @@ answer, even after choosing the best available classification. Use the closest
 issue code and explain the unresolved boundary briefly. Do not research the
 post, follow links, inspect media, or add missing conversation context.
 
+## Owner calibration after the independent-model audit
+
+The owner reviewed the 16 highlighted differences from the Grok audit after
+seeing both model-generated judgments. This is prompt-calibration evidence,
+not a blinded human review or adjudication, and it cannot populate either
+reviewer CSV or satisfy the gate below.
+
+The review established these rules for the next prompt identity:
+
+- `results_evaluations` needs source-visible product performance or quality
+  evidence. Generic praise, endorsement, admiration, customer value, and the
+  inaccessible contents of a link or media attachment do not qualify.
+- Customer-facing price, affordability, electricity-cost, cloud-billing,
+  subscription-cost, or usage-expense comments are not `business_finance`.
+  That type is limited to the company, business, or investor perspective.
+- `testimonial` includes praise, favorable experience, endorsement, and clear
+  admiration of an achievement by the target brand. It can coexist with
+  `advertising_marketing`, `hands_on_usage`, `results_evaluations`, or
+  `opinions_reactions`.
+- Every product label is strictly target-brand-specific. In case 16, Corpus is
+  the praised company and Qwen is the event host, so the praise is not a Qwen
+  testimonial. Separately, praise for a person alone does not transfer to an
+  employer or product. When brand attribution independently identifies the
+  person's product or work as the current target and the visible source praises
+  that work, the praise may support a testimonial for that target.
+- When the visible source supports a post type but the tone of unavailable
+  media is unclear, omit `testimonial`. The current four-value sentiment
+  contract records the absence of visible positive or negative valence as
+  `neutral`; `null` remains reserved for context that prevents classification.
+- A hackathon with organized participation and a bounded submission, prize,
+  or winning track can be both `events` and `opportunities`, including when a
+  post refers to it after completion.
+
+The affected audit cases are `H7046A8A0689`, `HCC2BC2A1B6B`,
+`H4E3B98376E5`, `H540717FEDF5`, `H87229E54527`, `HAF1D06FBEBA`, and
+`HB4FB5810A09` for the results boundary; `H1E48CCEEB2F`, `HE6730DF39A2`,
+`H3569508600E`, `H540717FEDF5`, `H42DCD9324F4`, `H92A808A114E`, and
+`H7F29D6428BB` for testimonial coverage or target-brand scope; and
+`HCCC266D762E` for unavailable-media sentiment. `HF3B55FD811B` remains a
+known off-topic harvester edge case and does not motivate a classifier rule.
+
+### Case-specific calibration record
+
+These are owner-visible development constraints. They are retained so a later
+candidate can be checked against the intended boundaries, but they are not
+human gold and do not enter the blinded reviewer packets.
+
+| # | Case | Owner constraint |
+| ---: | --- | --- |
+| 1 | `H7046A8A0689` | Exclude `results_evaluations`; the praise may support a testimonial for a separately attributed Meta/Muse target, but it is not a Qwen testimonial. |
+| 2 | `HCC2BC2A1B6B` | Exclude `results_evaluations`; include `testimonial` for DeepSeek. |
+| 3 | `H4E3B98376E5` | Exclude `results_evaluations`. |
+| 4 | `H540717FEDF5` | Exclude `results_evaluations` and `business_finance`; customer cost/value comparisons are outside the investor/company type. |
+| 5 | `HF3B55FD811B` | Treat as an off-topic harvester edge case; make no classifier change for it. |
+| 6 | `H87229E54527` | Exclude `results_evaluations`; the unavailable YouTube video cannot supply evidence absent from the post. |
+| 7 | `HAF1D06FBEBA` | Exclude `results_evaluations`. |
+| 8 | `HB4FB5810A09` | Exclude `results_evaluations`; include `opinions_reactions`. |
+| 9 | `H1E48CCEEB2F` | Include `testimonial` because the author is clearly impressed by the product experience. |
+| 10 | `HE6730DF39A2` | Include `testimonial`. |
+| 11 | `H3569508600E` | Include `testimonial`; the visible wording is positive about the target brand. |
+| 12 | `H540717FEDF5` | Include `testimonial`. |
+| 13 | `H42DCD9324F4` | Include `testimonial` and `advertising_marketing`; they are independent and may coexist. |
+| 14 | `H92A808A114E` | Include `testimonial` because the author is impressed by MiniMax's achievement. |
+| 15 | `HCCC266D762E` | Omit `testimonial`; visible valence is unclear, so map the owner's “unknown” to `neutral` under the current four-value runtime contract. |
+| 16 | `H7F29D6428BB` | Omit Qwen `testimonial`; Corpus praise belongs only to a Corpus target. Classify the Qwen Cloud Hackathon as both `events` and `opportunities`. |
+
 ## Commands
 
 Build the private packets without network or database access:

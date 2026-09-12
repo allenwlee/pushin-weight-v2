@@ -94,7 +94,7 @@ def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
     assert STAGE1_TAXONOMY_V2_VERSION == "stage1-taxonomy-v2"
     assert STAGE1_PROMPT_V3_VERSION == "stage1-prompt-v3"
     assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v3"
-    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v22"
+    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v23"
     assert COMPATIBLE_TAXONOMY_VERSIONS == (
         LEGACY_STAGE1_TAXONOMY_VERSION,
         STAGE1_TAXONOMY_V2_VERSION,

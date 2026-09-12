@@ -4742,12 +4742,16 @@ class Event(models.Model):
     )
     source_post = models.ForeignKey(
         Post,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="extracted_events",
         blank=True,
         null=True,
     )
     source_url = models.URLField(max_length=2048, blank=True, null=True)
+    canonical_url = models.URLField(max_length=2048, blank=True, null=True)
+    external_event_source = models.TextField(blank=True, null=True)
+    external_event_id = models.TextField(blank=True, null=True)
+    normalized_title = models.TextField(blank=True, null=True)
     title = models.TextField()
     organizer_name = models.TextField()
     organizer_handle = models.CharField(max_length=64, blank=True, null=True)
@@ -4859,6 +4863,74 @@ class Event(models.Model):
                     )
                 ),
                 name="ck_events_extraction_conf",
+            ),
+        ]
+
+
+class EventEvidence(models.Model):
+    """One source observation supporting a canonical event occurrence."""
+
+    id = models.BigAutoField(primary_key=True)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="evidence")
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.PROTECT,
+        related_name="event_evidence",
+        blank=True,
+        null=True,
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    observed_title = models.TextField()
+    observed_organizer_name = models.TextField(blank=True, default="")
+    observed_start_value = models.CharField(max_length=64, blank=True, null=True)
+    observed_start_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    observed_end_value = models.CharField(max_length=64, blank=True, null=True)
+    observed_end_precision = models.CharField(
+        max_length=16,
+        choices=TEMPORAL_PRECISION_CHOICES,
+        default="unknown",
+    )
+    observed_at = models.DateTimeField()
+    extraction_version = models.TextField(blank=True, null=True)
+    extraction_confidence = models.FloatField(blank=True, null=True)
+    raw_payload = models.JSONField(blank=True, null=True)
+    evidence_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "event_evidence"
+        ordering = ["event_id", "observed_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event", "source_post", "evidence_hash"],
+                name="uq_event_evidence_observation",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_post__isnull=False)
+                    | (models.Q(source_url__isnull=False) & ~models.Q(source_url=""))
+                ),
+                name="ck_event_evidence_has_source",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "observed_start_value",
+                    "observed_start_precision",
+                    allow_datetime=True,
+                ),
+                name="ck_event_evidence_start_precision",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "observed_end_value",
+                    "observed_end_precision",
+                    allow_datetime=True,
+                ),
+                name="ck_event_evidence_end_precision",
             ),
         ]
 

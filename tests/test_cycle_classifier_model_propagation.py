@@ -218,8 +218,8 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     state = post.classification_states.get(brand_id="deepseek")
     assert state.contract_version == "stage1-v1"
     assert state.taxonomy_version == "stage1-taxonomy-v3"
-    assert state.prompt_version == "stage1-prompt-v22"
+    assert state.prompt_version == "stage1-prompt-v23"
     assert state.selected_final_judgment is not None
     assert state.selected_final_judgment.selector_version == (
-        "stage1-selector-v26-review-authoritative-verdict-audit-v1"
+        "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
     )
