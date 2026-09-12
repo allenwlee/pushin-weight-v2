@@ -4,8 +4,8 @@ Last verified against the Render account and Blueprint: 2026-08-27.
 
 The isolated owner-review stack is defined separately in
 `render-staging.yaml`. It contains a web service, dormant/manual harvester,
-queue-only headline worker, owned broker, and PostgreSQL database on branch
-`staging`. It must never share production resource names, database or broker
+queue-only headline worker, PostgreSQL-only synthesis worker, owned broker,
+and PostgreSQL database on branch `staging`. It must never share production resource names, database or broker
 bindings, secret groups, workers, or cron jobs. Production must remain running
 throughout staging delivery. This runbook owns the Render topology and service
 verification; the Ollija plan guide owns delivery coordination only.
@@ -36,8 +36,9 @@ Production must remain refresh-inert: `render.yaml` declares neither
 | `pushinweight-staging-web` | Owner-only UI and refresh authority; never harvests |
 | `pushinweight-staging-harvest` | Dormant cron; manual Trigger Run only |
 | `pushinweight-staging-headlines` | Queue-only `trend-narratives` worker, concurrency one |
+| `pushinweight-staging-synthesis` | Database-queue worker for demand-triggered trilingual post synthesis |
 | `pushinweight-staging-headlines-broker` | Broker, envelope watermark, and queue state |
-| `pushinweight-staging-db` | Posts, cursors, backlog, enrichment claims, and headline ledgers |
+| `pushinweight-staging-db` | Posts, cursors, backlog, enrichment claims, headline ledgers, synthesis demands, and artifacts |
 
 The harvester schedule is the exact never-occurring expression
 `0 0 31 2 *`. Render Dashboard **Trigger Run** is the only authorized initial
@@ -63,7 +64,7 @@ the same shared provider quota. Database and broker isolation prevent cursor,
 claim, and queue corruption; they do not create quota headroom. Confirm budget
 authorization immediately before every Trigger Run for both the Twitter search
 and the separately dispatched headline-provider work. The checked-in headline
-guardrails are per brand: 25 calls, 500,000 input tokens, 160,000 output
+guardrails are per brand: 25 calls, 500,000 input tokens, 180,000 output
 tokens, and USD 1.00 at the pinned pricing revision, across at most 25 expected
 brands. Verify those effective values with `headline_status --json` and the
 candidate config before authorizing the attempt. A rate/quota refusal is a
@@ -120,6 +121,7 @@ Production harvesting is synchronous and has one scheduler:
 | `pushinweight-db-shadow` | PostgreSQL used by the deployed web/cron services |
 | `pushinweight-headlines-broker` | Available owned Key Value broker for `trend-narratives` |
 | `pushinweight-headlines` | Active queue-only worker for `trend-narratives`, concurrency/prefetch one |
+| `pushinweight-synthesis` | PostgreSQL-only worker for demand-triggered trilingual post synthesis |
 | legacy `pushinweight-worker` | Suspended; old SHA; do not reactivate |
 | legacy `pushinweight-beat` | Suspended; old SHA; do not reactivate |
 
@@ -151,6 +153,22 @@ celery -A project worker -l INFO -Q trend-narratives --concurrency=1 \
   --prefetch-multiplier=1 --without-gossip --without-mingle
 ```
 
+## Post synthesis worker
+
+The synthesis worker polls `post_synthesis_demands` and holds the staging or
+production synthesis coordination lock for its full process lifetime. It has
+no Celery broker, harvest command, scheduler, or TwitterAPI credential. The
+same lock makes a staging refresh fail closed until the worker is suspended,
+and prevents the worker from restarting during the database-name swap.
+
+```text
+python manage.py run_synthesis_worker
+```
+
+The web request creates or polls shared demand; it never calls the model.
+`synthesis_status --json` reports queue, artifact, usage, and cap state from
+PostgreSQL. Keep prewarm disabled until its separate budget has passed.
+
 ## Controls and credentials
 
 These controls are independent and fail closed:
@@ -160,6 +178,13 @@ These controls are independent and fail closed:
 | web | `X_MONITOR_HEADLINE_SERVING_ENABLED` | `True` |
 | harvest cron | `X_MONITOR_HEADLINE_ENQUEUE_ENABLED` | `True` |
 | headline worker | `X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED` | `True` |
+| synthesis worker | `X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED` | `True` |
+
+The synthesis worker also requires
+`X_MONITOR_SYNTHESIS_ACTIVATION_STATE=owner_override` (or `reviewed`) and an
+explicit `X_MONITOR_SYNTHESIS_CONTROL_REVISION`. Staging first deploys the new
+lane with provider calls disabled, then enables it as a service-local override
+only after the refresh and bounded quality/cost gates pass.
 
 TwitterAPI credentials are also purpose-separated and fail closed:
 
@@ -186,13 +211,13 @@ Before changing a control, verify the resolved service environment and record
 the new control revision. Render may preserve an older per-service override;
 the deployed value, rather than the Blueprint text alone, is authoritative.
 
-`DEEPSEEK_API_KEY` must be present on the headline worker. Its value is the
+`DEEPSEEK_API_KEY` must be present on the headline and synthesis workers. Its value is the
 same DeepSeek V4 credential used by translation/classification, but it remains
 a worker-scoped Render secret; do not attach the broad `pushinweight-secrets`
 group to the worker.
 Record `X_MONITOR_HEADLINE_CONTROL_REVISION` with every control change.
 `DATABASE_URL` is declared with `fromDatabase: pushinweight-db-shadow` for web,
-cron, and worker. The existing Render services may retain their prior
+cron, headline worker, and synthesis worker. The existing Render services may retain their prior
 environment value after a Blueprint sync, so the release owner must verify the
 resolved database identity on every service after sync and manually inject the
 same managed credential through Render if a service did not update. Never
@@ -207,7 +232,7 @@ valid until explicitly retired.
 1. Create the new managed credential through Render and leave the old user
    active.
 2. Sync the Blueprint and redeploy every active database consumer.
-3. Inspect the resolved `DATABASE_URL` on web, headlines, and harvest without
+3. Inspect the resolved `DATABASE_URL` on web, headlines, synthesis, and harvest without
    printing it; verify that its username is the new default. A green deploy at
    the expected SHA is necessary but not sufficient.
 4. Verify the login endpoint and relevant worker/cron logs, then query
@@ -224,9 +249,8 @@ deploy status alone as the retirement gate.
 The headline route is pinned to DeepSeek V4 via
 `https://api.deepseek.com/anthropic` + `deepseek-v4-flash`. Translation and
 classification use the same endpoint, credential, and explicit model through
-their separate role configuration. Anthropic is a separate explicit route using
-`https://api.anthropic.com` + `claude-haiku-4-5-20251001`; MiniMax is a
-separate explicit/evaluated route using
+their separate role configuration. Scheduled enrichment does not read a shared
+Anthropic route or credential. MiniMax remains a separately configured route using
 `https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and
 the deprecated endpoint are rejected.
 

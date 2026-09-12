@@ -26,15 +26,16 @@ def test_llm_config_defaults_match_enrichment_role_models():
     cfg = Config.model_validate(_cfg_with_models())
     assert cfg.llm.translator_model == "deepseek-v4-flash"
     assert cfg.llm.classifier_model == "deepseek-v4-flash"
-    assert cfg.llm.signal_model == "claude-haiku-4-5"
-    assert cfg.llm.relevancy_model == "claude-haiku-4-5"
+    assert cfg.llm.signal_model == "deepseek-v4-flash"
+    assert cfg.llm.relevancy_model == "deepseek-v4-flash"
 
 
-def test_llm_config_translator_base_url_default_is_none():
-    """translator_base_url defaults to None; the factory resolves to ANTHROPIC_BASE_URL env."""
+def test_llm_config_enrichment_base_urls_default_to_deepseek():
+    """Routine harvest roles have explicit DeepSeek endpoint defaults."""
     from x_monitor.config import Config
     cfg = Config.model_validate(_cfg_with_models())
-    assert cfg.llm.translator_base_url is None
+    assert cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic"
+    assert cfg.llm.classifier_base_url == "https://api.deepseek.com/anthropic"
 
 
 def test_llm_config_yaml_block_overrides_defaults():
@@ -121,13 +122,10 @@ def test_llm_config_translator_base_url_env_var(monkeypatch, tmp_path):
         "enabled_models:\n  - minimax\ndaily_ceiling: 1\n",
         encoding="utf-8",
     )
-    # Default: env unset, field is None.
+    # Default: env unset, field is the explicit DeepSeek route.
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     cfg = load_config(yaml_path)
-    assert cfg.llm.translator_base_url is None, (
-        "BEFORE: translator_base_url default is None (no override). "
-        "If you intentionally changed the default, update this pin."
-    )
+    assert cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic"
     # Env set: field populated.
     monkeypatch.setenv("X_MONITOR_TRANSLATOR_BASE_URL", "https://api.deepseek.com/anthropic")
     cfg = load_config(yaml_path)
@@ -175,8 +173,10 @@ def test_config_yaml_has_llm_block():
         "config.yaml llm: block must pin the Flash translator default."
     )
     assert raw["llm"]["classifier_model"] == "deepseek-v4-flash"
-    assert raw["llm"]["relevancy_model"] == "claude-haiku-4-5"
-    assert raw["llm"]["signal_model"] == "claude-haiku-4-5"
+    assert raw["llm"]["translator_base_url"] == "https://api.deepseek.com/anthropic"
+    assert raw["llm"]["classifier_base_url"] == "https://api.deepseek.com/anthropic"
+    assert raw["llm"]["relevancy_model"] == "deepseek-v4-flash"
+    assert raw["llm"]["signal_model"] == "deepseek-v4-flash"
 
 
 def test_load_config_unset_env_falls_back_to_defaults(monkeypatch, tmp_path):
@@ -200,5 +200,5 @@ def test_load_config_unset_env_falls_back_to_defaults(monkeypatch, tmp_path):
         "Translator default must be DeepSeek V4 Flash."
     )
     assert cfg.llm.classifier_model == "deepseek-v4-flash"
-    assert cfg.llm.relevancy_model == "claude-haiku-4-5"
-    assert cfg.llm.signal_model == "claude-haiku-4-5"
+    assert cfg.llm.relevancy_model == "deepseek-v4-flash"
+    assert cfg.llm.signal_model == "deepseek-v4-flash"

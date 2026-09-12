@@ -11,7 +11,9 @@ from pydantic import ValidationError
 
 from monitor.trend_narrative_generation import (
     CRITIC_SYSTEM_PROMPT_V1,
+    CRITIC_SYSTEM_PROMPT_V2_JA,
     EDITOR_SYSTEM_PROMPT_V2,
+    EDITOR_SYSTEM_PROMPT_V3_JA,
     PER_BRAND_TEXT_LIMITS,
     HeadlineGenerationError,
     build_per_brand_critic_request,
@@ -60,6 +62,8 @@ def test_editor_and_critic_prompts_pin_publishable_output_contract():
     critic = CRITIC_SYSTEM_PROMPT_V1.casefold()
 
     for key, limit in PER_BRAND_TEXT_LIMITS.items():
+        if key.endswith("_ja"):
+            continue
         field = key.casefold()
         ceiling = f"{field}: at most {limit} characters"
         assert ceiling in editor
@@ -84,6 +88,79 @@ def test_editor_and_critic_prompts_pin_publishable_output_contract():
     assert "enrichment lag alone is not a reason to hold" in critic
     assert "no more than two propositions per approved or repaired brand" in critic
     assert "below 3,500 output tokens" in critic
+
+
+def test_japanese_editor_and_critic_prompts_pin_trilingual_contract():
+    editor = EDITOR_SYSTEM_PROMPT_V3_JA.casefold()
+    critic = CRITIC_SYSTEM_PROMPT_V2_JA.casefold()
+
+    for key, limit in PER_BRAND_TEXT_LIMITS.items():
+        ceiling = f"{key}: at most {limit} characters"
+        assert ceiling in editor
+        assert ceiling in critic
+    assert "trilingual" in editor
+    assert "headline_ja" in editor
+    assert "secondary_ja" in editor
+    assert "claim_ja" in editor
+    assert "label_ja" in editor
+    assert 'critic_response_schema_version":2' in critic
+
+
+def test_japanese_editor_response_requires_every_locale_field():
+    packet = {
+        "packet_schema_version": 3,
+        "batch_key": "7d:ja",
+        "manifest_brand_keys": ["deepseek"],
+        "dossiers": [
+            {
+                "brand_key": "deepseek",
+                "facts": [],
+                "evidence": [{"evidence_id": "ev:deepseek:01"}],
+            }
+        ],
+    }
+    config = HeadlineNarrativeConfig(
+        editor_prompt_version="headline-editor-v7-ja",
+        critic_prompt_version="headline-critic-v7-ja",
+    )
+    envelope, _request = build_per_brand_editor_request(packet, config)
+    narrative = {
+        "brand_key": "deepseek",
+        "headline_en": "DeepSeek users discussed practical use.",
+        "headline_zh_cn": "DeepSeek 用户讨论了实际应用。",
+        "headline_ja": "DeepSeek利用者は実用面を議論しました。",
+        "secondary_en": "The discussion covered setup and performance.",
+        "secondary_zh_cn": "讨论涵盖设置和性能。",
+        "secondary_ja": "議論は設定と性能を扱いました。",
+        "narrative_kind": "content_shift",
+        "confidence": "medium",
+        "headline_proposition_ids": ["deepseek:p1"],
+        "secondary_proposition_ids": ["deepseek:p1"],
+        "propositions": [
+            {
+                "proposition_id": "deepseek:p1",
+                "output_section": "headline",
+                "claim_en": "Users discussed practical use and performance.",
+                "claim_zh_cn": "用户讨论了实际应用和性能。",
+                "claim_ja": "利用者は実用面と性能を議論しました。",
+                "claim_type": "content_summary",
+                "fact_ids": [],
+                "evidence_ids": ["ev:deepseek:01"],
+            }
+        ],
+        "events": [],
+    }
+    response = {
+        "editor_response_schema_version": 2,
+        "packet_hash": envelope["packet_hash"],
+        "batch_key": packet["batch_key"],
+        "brands": [narrative],
+    }
+
+    assert validate_per_brand_editor_response(response, envelope) == response
+    narrative.pop("headline_ja")
+    with pytest.raises(HeadlineGenerationError, match="narrative_incomplete"):
+        validate_per_brand_editor_response(response, envelope)
 
 
 def test_u3_editor_contract_keeps_messages_boundary_and_closed_id_ownership():

@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import inspect
 import os
-from pathlib import Path
 
 import pytest
 
@@ -87,6 +86,7 @@ class _CfgStub:
     class _Llm:
         def __init__(self, translator_model: str | None):
             self.translator_model = translator_model
+            self.translator_base_url = "https://api.deepseek.com/anthropic"
 
     def __init__(self, translator_model: str | None = "deepseek-v4-flash"):
         self.llm = self._Llm(translator_model)
@@ -113,7 +113,7 @@ def test_cfg_threaded_batch_call_sends_flash_and_disables_thinking(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
     monkeypatch.setenv(
         "X_MONITOR_TRANSLATOR_BASE_URL",
-        "https://api.deepseek.com/anthropic",
+        "https://api.anthropic.com",
     )
 
     class FakeClient:

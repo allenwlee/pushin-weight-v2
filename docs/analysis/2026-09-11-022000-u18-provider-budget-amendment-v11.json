@@ -1,0 +1,46 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T02:20:00Z",
+  "reason": "prompt v6 allowed a product label to be repeated in post_types for one long stored post; prompt v7 repeats both closed vocabularies immediately before output, and candidate v3r4 uses the production batch-then-single-fallback behavior without semantic retries or model-based repair",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-020000-u18-provider-budget-amendment-v10.json"
+  ],
+  "lanes": {
+    "candidate_v3r4": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 10,
+      "maximum_examples": 500,
+      "maximum_requests": 50,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 100,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 3500000,
+      "maximum_output_tokens": 409600,
+      "maximum_cost_usd": "0.62",
+      "twitterapi_credits": 0
+    },
+    "candidate_v3r4_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 1000,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 5000000,
+      "maximum_output_tokens": 1200000,
+      "maximum_cost_usd": "1.04",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "Each prompt-v7 candidate lane refuses its next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; unused capacity cannot move between lanes, and invalid fallback output remains an invalid candidate row."
+}

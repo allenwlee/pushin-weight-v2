@@ -9,10 +9,19 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    LEGACY_POST_TYPE_KEYS,
+    LEGACY_PRODUCT_LABEL_KEYS,
+    NATIONALISM_KEYS,
+    SENTIMENT_KEYS,
+)
 from core.classification_labels import (
     DISCOURSE_LABELS,
     NATIONALISM_LABELS,
     POST_TYPE_LABELS,
+    PRODUCT_LABEL_LABELS,
     ROLE_LABELS,
     SENTIMENT_LABELS,
 )
@@ -23,6 +32,8 @@ from core.models import (
     NationalismLabel,
     PostTypeKey,
     PostTypeLabel,
+    ProductLabelKey,
+    ProductLabelLabel,
     Role,
     RoleLabel,
     SentimentKey,
@@ -33,21 +44,13 @@ from core.models import (
 # Canonical taxonomy values (mirrors x_monitor/attribution.py constants)
 # ---------------------------------------------------------------------------
 
-_POST_TYPES: list[str] = [
-    "buzz_releases",
-    "hands_on_usage",
-    "performance_comparisons",
-    "feedback_questions",
-    "advertising_marketing",
-    "event_announcement",
-]
-
-_SENTIMENTS: list[str] = [
-    "positive",
-    "negative",
-    "neutral",
-    "mixed",
-]
+_POST_TYPES = list(dict.fromkeys((*LEGACY_POST_TYPE_KEYS, *CANONICAL_POST_TYPE_KEYS)))
+_PRODUCT_LABELS = list(
+    dict.fromkeys((*LEGACY_PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS))
+)
+_CANONICAL_POST_TYPES = frozenset(CANONICAL_POST_TYPE_KEYS)
+_CANONICAL_PRODUCT_LABELS = frozenset(CANONICAL_PRODUCT_LABEL_KEYS)
+_SENTIMENTS = list(SENTIMENT_KEYS)
 
 _DISCOURSE: list[str] = [
     "genuine_hype",
@@ -62,14 +65,7 @@ _DISCOURSE: list[str] = [
     "advertising-marketing",
 ]
 
-_NATIONALISM: list[str] = [
-    "none",
-    "mild_pro",
-    "pro",
-    "constructive_critical",
-    "anti",
-    "mixed",
-]
+_NATIONALISM = list(NATIONALISM_KEYS)
 
 _ROLES: list[str] = [
     "official",
@@ -77,7 +73,8 @@ _ROLES: list[str] = [
     "community",
 ]
 
-_LOCALES = ["en", "zh-cn"]
+_ACTIVE_LOCALES = ["en", "zh-cn", "ja"]
+_LEGACY_LOCALES = ["en", "zh-cn"]
 
 # ---------------------------------------------------------------------------
 # Command
@@ -113,7 +110,10 @@ class Command(BaseCommand):
 
         # Post types
         for key in _POST_TYPES:
-            for lang in _LOCALES:
+            locales = (
+                _ACTIVE_LOCALES if key in _CANONICAL_POST_TYPES else _LEGACY_LOCALES
+            )
+            for lang in locales:
                 label = POST_TYPE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -128,7 +128,7 @@ class Command(BaseCommand):
 
         # Sentiments
         for key in _SENTIMENTS:
-            for lang in _LOCALES:
+            for lang in _ACTIVE_LOCALES:
                 label = SENTIMENT_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -141,9 +141,28 @@ class Command(BaseCommand):
                     }
                 )
 
+        # Product labels
+        for key in _PRODUCT_LABELS:
+            locales = (
+                _ACTIVE_LOCALES
+                if key in _CANONICAL_PRODUCT_LABELS
+                else _LEGACY_LOCALES
+            )
+            for lang in locales:
+                seeds.append(
+                    {
+                        "family": "product_label",
+                        "key_model": ProductLabelKey,
+                        "label_model": ProductLabelLabel,
+                        "key": key,
+                        "lang": lang,
+                        "label": PRODUCT_LABEL_LABELS.get(key, {}).get(lang, key),
+                    }
+                )
+
         # Discourse
         for key in _DISCOURSE:
-            for lang in _LOCALES:
+            for lang in _LEGACY_LOCALES:
                 label = DISCOURSE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -158,7 +177,7 @@ class Command(BaseCommand):
 
         # Nationalism
         for key in _NATIONALISM:
-            for lang in _LOCALES:
+            for lang in _ACTIVE_LOCALES:
                 label = NATIONALISM_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -173,7 +192,7 @@ class Command(BaseCommand):
 
         # Roles
         for key in _ROLES:
-            for lang in _LOCALES:
+            for lang in _LEGACY_LOCALES:
                 label = ROLE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {

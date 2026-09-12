@@ -1,0 +1,42 @@
+{
+  "schema_version": "u18-development-provider-budget-v10",
+  "frozen_at": "2026-09-11T07:25:00Z",
+  "reason": "Runtime v14 showed that 42 of 120 post-type mistakes occurred when both base reviews agreed, so disagreement-only consensus cannot reach the locked exact-set floor. This consumed-development probe rechecks every row in five-row batches, using the two already-saved v14 base reviews as fallible proposals and requiring source-verifiable quotes. It makes no new base-classification call and cannot approve release.",
+  "cohort": {
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "bytes": 248569,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v15-full-audit-probe-v1",
+    "bytes": 10392,
+    "sha256": "03c11b6037a2c8d5981dc43038e8718977bf842b7c4eee72046c7439fbdfc22c",
+    "source_envelope": "candidate-blind source fields plus two saved v14 base-review proposals; no gold labels, strata, source roles, or source hints"
+  },
+  "lanes": {
+    "candidate_v15_full_audit_dev120": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "batch_size": 5,
+      "maximum_examples": 120,
+      "maximum_requests": 24,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 48,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 900000,
+      "maximum_output_tokens": 196608,
+      "maximum_cost_usd": "0.70",
+      "twitterapi_credits": 0
+    }
+  },
+  "decision_rule": "Strictly validate every audit and every exact source quote. Continue to a production-path implementation and a full consumed-development assessment only if all 120 rows are valid, overall and each-locale exact post-type sets reach at least 0.70, exact product-label sets reach at least 0.85, outcome accuracy reaches at least 0.90, context_missing precision and recall each reach at least 0.50 when supported, and no supported job, event, opportunity, personnel, or Other F1 floor regresses below 0.55. A selected implementation must still pass a newly sampled zero-overlap final cohort under all unchanged floors.",
+  "global_stop": "The transport reserves worst-case input, output, and dollar capacity before every attempt, refuses request 25 or attempt 49, and permits at most one repeat of a malformed five-row audit. Capacity cannot transfer to another lane, prompt, cohort, or provider. Any incomplete or invalid row blocks the probe."
+}

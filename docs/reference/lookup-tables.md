@@ -1,6 +1,6 @@
 # Lookup Tables (v2 Django ORM)
 
-Last updated: 2026-08-05-20:38:42
+Last updated: 2026-09-09
 
 
 
@@ -11,11 +11,14 @@ Each table constrains what the classifier (LLM-side) and the dashboard
 **Source of truth.** `core/models.py` defines the Django models (the schema).
 `monitor/management/commands/load_seed.py` seeds brands, companies, and roles.
 `core/management/commands/seed_i18n_labels.py` seeds the canonical taxonomy
-values with en/zh-cn labels for post types, sentiments, discourse, nationalism,
-and roles.
+values with active en/zh-cn/ja labels for post types, product labels,
+sentiments, and nationalism. Retained discourse and role labels remain
+en/zh-cn compatibility data.
 
-**i18n label pattern.** Every key table has a corresponding `*Label` model
-with a composite primary key of `(key, lang)`. Labels are seeded with:
+**i18n label pattern.** The post type, product-label, sentiment, discourse,
+nationalism, and role key tables have corresponding `*Label` models with a
+composite primary key of `(key, lang)`. `UnsanctionedFlagKey` is the documented
+unlabeled exception. Labels are seeded with:
 
 ```bash
 python manage.py seed_i18n_labels
@@ -31,16 +34,48 @@ python manage.py seed_i18n_labels
 
 **Dashboard constant:** `monitor/views.py:_DASHBOARD_POST_TYPE_KEYS`
 
-6 values:
+13 active values:
 
-| key | en | zh-cn |
-|---|---|---|
-| `buzz_releases` | Buzz & Releases | 热点发布 |
-| `hands_on_usage` | Hands-On Usage | 实际使用 |
-| `performance_comparisons` | Performance Comparisons | 性能对比 |
-| `feedback_questions` | Feedback & Questions | 反馈提问 |
-| `advertising_marketing` | Advertising & Marketing | 广告营销 |
-| `event_announcement` | Event Announcement | 活动公告 |
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `releases_updates` | Releases & Updates | 发布与更新 | リリース・アップデート |
+| `hands_on_usage` | Hands-On Usage | 实际使用 | 使用体験 |
+| `results_evaluations` | Results and Evaluations | 结果与评测 | 結果・評価 |
+| `questions_requests` | Questions & Requests | 问题与请求 | 質問・要望 |
+| `advertising_marketing` | Advertising & Marketing | 广告营销 | 広告・マーケティング |
+| `events` | Events | 活动 | イベント |
+| `opportunities` | Opportunities | 机会 | 機会 |
+| `job_listings` | Job Listings | 招聘信息 | 求人情報 |
+| `personnel_changes` | Personnel Changes | 人事变动 | 人事異動 |
+| `opinions_reactions` | Opinions & Reactions | 观点与反应 | 意見・反応 |
+| `research_explanations` | Research & Explanations | 研究与解释 | 研究・解説 |
+| `business_finance` | Business & Finance | 商业与金融 | ビジネス・金融 |
+| `other` | Other | 其他 | その他 |
+
+The retained v1 aliases and taxonomy-v2 `events_opportunities` key remain
+available for compatible historical reads. Taxonomy-v3 writes and emitted
+output use the active keys above; the combined v2 key cannot be retroactively
+split into `events` or `opportunities` without reclassification.
+
+### 1.1 Product labels -- `ProductLabelKey` + `ProductLabelLabel`
+
+**Model:** `core.models.ProductLabelKey` and
+`core.models.ProductLabelLabel`
+
+**Referenced by:** `PostBrandProductLabel.product_label`
+
+5 active values:
+
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `bug` | Bug | 缺陷 | バグ |
+| `complaint` | Complaint | 投诉 | 苦情 |
+| `testimonial` | Testimonial | 推荐评价 | 推奨の声 |
+| `ideas_requests` | Ideas & requests | 想法与请求 | アイデア・要望 |
+| `misinformation` | Misinformation | 可能误导的信息 | 誤情報の可能性 |
+
+The retained `product_request` key is a v1 compatibility alias for
+`ideas_requests`; it is not an active output key.
 
 ---
 
@@ -48,16 +83,17 @@ python manage.py seed_i18n_labels
 
 **Model:** `core.models.SentimentKey` (table `sentiment_keys`), `core.models.SentimentLabel` (table `sentiment_labels`)
 
-**Referenced by:** `PostBrandSignal.sentiment` (FK to `SentimentKey`)
+**Referenced by:** `PostBrandSignal.sentiment`,
+`PostBrandClassificationState.sentiment` (both FK to `SentimentKey`)
 
 4 values:
 
-| key | en | zh-cn |
-|---|---|---|
-| `positive` | Positive | 正面 |
-| `negative` | Negative | 负面 |
-| `neutral` | Neutral | 中性 |
-| `mixed` | Mixed | 混合 |
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `positive` | Positive | 正面 | ポジティブ |
+| `negative` | Negative | 负面 | ネガティブ |
+| `neutral` | Neutral | 中性 | 中立 |
+| `mixed` | Mixed | 混合 | 賛否混在 |
 
 ---
 
@@ -93,20 +129,23 @@ post types -- underscored). Both were introduced in the same migration (U2a).
 
 **Model:** `core.models.NationalismKey` (table `nationalism_keys`), `core.models.NationalismLabel` (table `nationalism_labels`)
 
-**Referenced by:** `PostBrandDiscourse.china_nationalism`, `PostBrandDiscourse.us_nationalism` (both FK to `NationalismKey`)
+**Referenced by:** `PostBrandDiscourse.china_nationalism`,
+`PostBrandDiscourse.us_nationalism`,
+`PostBrandClassificationState.china_nationalism`, and
+`PostBrandClassificationState.us_nationalism` (all FK to `NationalismKey`)
 
 **Dashboard constant:** `monitor/views.py:_DASHBOARD_NATIONALISM_KEYS`
 
 6 values (shared across both China and US axes):
 
-| key | en | zh-cn |
-|---|---|---|
-| `none` | None | 无 |
-| `mild_pro` | Mild Pro | 温和支持 |
-| `pro` | Pro | 支持 |
-| `constructive_critical` | Constructive Critical | 建设性批评 |
-| `anti` | Anti | 反对 |
-| `mixed` | Mixed | 混合 |
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `none` | None | 无 | なし |
+| `mild_pro` | Mild Pro | 温和支持 | 控えめな支持 |
+| `pro` | Pro | 支持 | 支持 |
+| `constructive_critical` | Constructive Critical | 建设性批评 | 建設的な批判 |
+| `anti` | Anti | 反对 | 反対 |
+| `mixed` | Mixed | 混合 | 賛否混在 |
 
 Nationalism is an axis about which side of the US-China divide the post
 sympathizes with, NOT about generic anti-vendor hostility.
@@ -232,19 +271,20 @@ no flat files to update.
 
 ## i18n label pattern
 
-Each key table (PostTypeKey, SentimentKey, DiscourseKey, NationalismKey, Role)
-has a corresponding `*Label` model. The label table uses a composite primary
-key of `(key, lang)` via `django.db.models.CompositePrimaryKey`.
-
-Supported locales: `en`, `zh-cn`.
+Post type, product-label, sentiment, discourse, nationalism, and role key
+tables have corresponding `*Label` models. `UnsanctionedFlagKey` is the
+unlabeled exception described in §6. Each label table uses a composite primary
+key of `(key, lang)` via `django.db.models.CompositePrimaryKey`. Active post
+type, product label, sentiment, and nationalism rows have `en`, `zh-cn`, and
+`ja`; retained discourse and role rows have `en` and `zh-cn`.
 
 Example Django ORM usage:
 
 ```python
-# Get the English label for a post type key
+# Get the Japanese label for a post type key
 
-label = PostTypeLabel.objects.get(post_type_id="buzz_releases", lang="en")
-print(label.label)  # "Buzz & Releases"
+label = PostTypeLabel.objects.get(post_type_id="releases_updates", lang="ja")
+print(label.label)  # "リリース・アップデート"
 
 # Get all labels for a discourse key
 for lbl in DiscourseKey.objects.get(key="genuine_hype").labels.all():
@@ -262,7 +302,7 @@ produces no net new rows (all inserts use `get_or_create`).
 
 1. **Add the key** to the relevant list in `core/management/commands/seed_i18n_labels.py`
    (e.g. `_POST_TYPES`, `_DISCOURSE`).
-2. **Add en and zh-cn labels** to the matching label dict (e.g.
+2. **Add every active locale label** to the matching label dict (e.g.
    `POST_TYPE_LABELS`, `DISCOURSE_LABELS`).
 3. **Add to the dashboard constant** in `monitor/views.py` if the value should
    appear in the filter control panel (e.g. `_DASHBOARD_DISCOURSE_KEYS`).
@@ -274,7 +314,7 @@ Steps 1-3 and 6 should land in a single commit so they do not drift.
 
 ---
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-09-09
 
 **Substantive corrections this review:** §7.1 was rewritten to reflect the
 **live `brands` table** (queried 2026-08-05 against
@@ -300,21 +340,20 @@ Differences vs the 2026-07-31 review:
 
 Verified against `core/models.py` (Brand PK = `nickname` TEXT, no
 synthetic `id`; `_unattributed` is a sentinel row, not a synthetic
-integer), `x_monitor/attribution.py` (the `_VALID_POST_TYPES`,
-`_VALID_SENTIMENTS`, `_VALID_DISCOURSE`, `_VALID_NATIONALISM`,
-`_VALID_UNSANCTIONED_FLAGS` frozensets now confirmed at lines
-1111-1134; all match the taxonomy tables 1:1), `x_monitor/config.py`
+integer), `core/classification_contract.py` (the active 13 post types,
+5 product labels, 4 sentiments, and 6 nationalism values plus the retained
+v1-to-v2 compatibility crosswalk), `x_monitor/config.py`
 (`KNOWN_MODELS` frozenset order matches §7.1; `VALID_CALL_IDS = ("A",
-"B1", "B2", "B3", "C1", "C2")`; `VALID_REVIEW_REASONS` =
+"B1", "B2", "B3", "C1", "C2", "C3")`; `VALID_REVIEW_REASONS` =
 {`low_engagement`, `off_topic`, `suspicious_actor`, `ambiguous_role`,
 `banned_token`} — note: `banned_token` is in the frozenset but NOT in
 `config.yaml::review_reasons`, so it's a known-unused value),
 `config.yaml::call_b_groups` (3 groups as documented: B1 =
 `minimax, qwen, deepseek, stepfun, hunyuan`; B2 = `doubao, glm,
 sensechat, inclusionai`; B3 = `nemo_megatron, exaone, sakana_ai,
-kuaishou`), and `x_monitor/migrations/027` + `seed_i18n_labels.py`
-(post types 6 / sentiments 4 / discourse 10 / nationalism 6 / roles 3
-all match). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP)
+kuaishou`), and `core/classification_labels.py` plus
+`seed_i18n_labels.py` (28 active classification keys have complete
+en/zh-cn/ja labels). Country breakdown (14 CN / 2 US / 2 KR / 1 FR / 1 JP)
 reconciles.
 
 **Flagged — could not verify:** the `data/queries/` directory
@@ -322,20 +361,12 @@ referenced by the 2026-07-13 call-B plan and the `call_b_groups`
 config comment does not exist on disk (no `No such file or directory`
 returned) — the per-brand → call-group coverage matrix asserted in
 the plan is not enforceable in the current repo state. The B/C
-grouping is now sourced from `config.yaml::x_query_specs` (5 specs:
+grouping is now sourced from `config.yaml::x_query_specs` (6 specs:
 C1, C2, C3, B1, B2, B3) rather than the retired `data/queries/`
-files; this doc references the `config.yaml` source of truth. The
-last review's `_VALID_POST_TYPES` "could not verify" flag is now
-resolved (frozenset confirmed at `x_monitor/attribution.py:1122`,
-6 elements: `buzz_releases`, `hands_on_usage`,
-`performance_comparisons`, `feedback_questions`,
-`advertising_marketing`, `event_announcement`).
+files; this doc references the `config.yaml` source of truth.
 
-**Drift noticed but not fixed:** two `Last updated:` lines (line 3 and
-line 229) — both were bumped to 2026-08-05 in this pass; the
-duplication itself is left for a future pass since the main session
-owns cleanup of header scaffolding. The KTD7 (`advertising-marketing`
-hyphen) label set also has historical drift:
+**Historical label note:** the KTD7 (`advertising-marketing` hyphen) label
+set has historical drift:
 `x_monitor/migrations/027` originally seeded
 `'Advertising / Marketing speak'` / `'广告 / 营销话术'`, but
 `core/management/commands/seed_i18n_labels.py` later settled on
@@ -343,4 +374,3 @@ hyphen) label set also has historical drift:
 seed; this doc follows the seed (canonical). Same pattern for
 `advertising_marketing` post-type zh-cn: migration 027 had
 `'广告与营销'`, the seed settled on `'广告营销'`. Live matches seed.
-

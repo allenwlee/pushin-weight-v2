@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -26,6 +27,11 @@ from monitor.trend_narrative_candidates import (
     build_editor_batches,
     build_trend_analysis_snapshot,
     project_provider_packet,
+)
+from monitor.trend_narrative_demand import (
+    eligible_demand_exists,
+    mark_run_demands_satisfied,
+    select_demanded_snapshot,
 )
 from monitor.trend_narrative_facts import (
     ALLOWED_TREND_WINDOWS,
@@ -137,6 +143,10 @@ def reconcile_per_brand_trend_narratives(
     enqueue = enqueue or _enqueue_per_brand_stage
     scheduled = 0
     for window_days in sorted(ALLOWED_TREND_WINDOWS):
+        if config.demand_shaping_enabled and not eligible_demand_exists(
+            window_days=window_days, now=current
+        ):
+            continue
         scheduled += _coalesce_window_envelope(
             window_days=window_days,
             source_cycle_id=source_cycle_id,
@@ -193,6 +203,8 @@ def initialize_per_brand_snapshot(
         evidence_policy=_evidence_policy(config),
         brand_cap=config.per_brand_expected_max_brands,
     )
+    if config.demand_shaping_enabled:
+        snapshot = select_demanded_snapshot(snapshot, config=config, now=current)
     dossiers = list(snapshot.get("dossiers") or [])
     manifest = [str(row["brand_key"]) for row in dossiers]
     with transaction.atomic():
@@ -625,6 +637,8 @@ def finalize_per_brand_run(run_id: int, *, now: datetime | None = None) -> bool:
                     locked.save(update_fields=["status", "activated_at", "updated_at"])
             completed = True
     if completed:
+        if activated:
+            mark_run_demands_satisfied(run, now=current)
         _complete_work_slot(
             run,
             config=_load_config(),
@@ -716,6 +730,25 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
             continue
         raw = str((editor.response_payload or {}).get("raw_text") or "")
         parse = _parse_editor(raw, editor.request_packet["envelope"])
+        risk_reasons, audit_eligible = _critic_risk_reasons(
+            batch=batch,
+            parsed_editor=parse.get("response"),
+            editor_envelope=editor.request_packet["envelope"],
+            config=config,
+        )
+        if (
+            config.critic_risk_routing_enabled
+            and parse["status"] == "valid"
+            and not risk_reasons
+        ):
+            _apply_editor_bypass(
+                run,
+                batch,
+                parse["response"],
+                now=now,
+                audit_eligible=audit_eligible,
+            )
+            continue
         try:
             critic_envelope, _request = build_per_brand_critic_request(
                 editor.request_packet["envelope"], raw, parse, config
@@ -739,6 +772,10 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
                 packet=critic_envelope,
                 now=now,
                 provider_request=_request,
+                routing_metadata={
+                    "reason_codes": risk_reasons,
+                    "audit_eligible": audit_eligible,
+                },
             )
         except _PerBrandBudgetExceeded as exc:
             _suspend_run(
@@ -875,7 +912,15 @@ def _batches_for_order(
 
 
 def _ensure_call(
-    run, stage: str, batch_key: str, *, config, packet, now, provider_request=None
+    run,
+    stage: str,
+    batch_key: str,
+    *,
+    config,
+    packet,
+    now,
+    provider_request=None,
+    routing_metadata=None,
 ):
     if stage == "rank":
         envelope, request = build_per_brand_rank_request(packet, config)
@@ -906,7 +951,11 @@ def _ensure_call(
             batch_key=batch_key,
             request_identity=identity,
             request_hash=digest,
-            request_packet={"envelope": envelope, "provider_request": request},
+            request_packet={
+                "envelope": envelope,
+                "provider_request": request,
+                **({"routing": routing_metadata} if routing_metadata else {}),
+            },
             now=now,
         )
         return reserved or TrendNarrativeProviderCall.objects.get(
@@ -970,13 +1019,137 @@ def _estimate_request_tokens(request: dict[str, Any]) -> tuple[int, int]:
 
 def _parse_editor(raw: str, envelope: dict[str, Any]) -> dict[str, Any]:
     try:
-        validate_per_brand_editor_response(json.loads(raw), envelope)
+        response = validate_per_brand_editor_response(json.loads(raw), envelope)
     except (TypeError, ValueError, HeadlineGenerationError):
-        return {"status": "invalid", "error_codes": ["editor_json_invalid"]}
-    return {"status": "valid", "error_codes": []}
+        return {
+            "status": "invalid",
+            "error_codes": ["editor_json_invalid"],
+            "response": None,
+        }
+    return {"status": "valid", "error_codes": [], "response": response}
+
+
+_CAUSAL_LANGUAGE = re.compile(
+    r"\b(?:because|caused?|driv(?:e|en|ing)|led to|result(?:ed)? in|due to)\b",
+    re.IGNORECASE,
+)
+_QUOTE_MARKS = re.compile(r"[\"“”‘’「」『』]")
+
+
+def _critic_risk_reasons(
+    *,
+    batch: dict[str, Any],
+    parsed_editor: dict[str, Any] | None,
+    editor_envelope: dict[str, Any],
+    config: HeadlineNarrativeConfig,
+) -> tuple[list[str], bool]:
+    """Return deterministic semantic-risk codes and stable audit eligibility."""
+    packet_hash = str(editor_envelope.get("packet_hash") or "")
+    batch_key = str(batch.get("batch_key") or "")
+    bucket = (
+        int(hashlib.sha256(f"{packet_hash}:{batch_key}".encode()).hexdigest()[:8], 16)
+        % 100
+    )
+    audit_eligible = bucket < config.critic_audit_percent
+    reasons: set[str] = set()
+    if parsed_editor is None:
+        reasons.add("editor_invalid")
+    else:
+        for narrative in parsed_editor.get("brands", []):
+            text = " ".join(
+                str(narrative.get(key) or "")
+                for key in (
+                    "headline_en",
+                    "headline_zh_cn",
+                    "headline_ja",
+                    "secondary_en",
+                    "secondary_zh_cn",
+                    "secondary_ja",
+                )
+            )
+            claim_types = {
+                str(row.get("claim_type") or "")
+                for row in narrative.get("propositions", [])
+            }
+            if _CAUSAL_LANGUAGE.search(text):
+                reasons.add("causal_language")
+            if _QUOTE_MARKS.search(text) or "quote" in claim_types:
+                reasons.add("quotation")
+            if narrative.get("narrative_kind") == "event_led" or narrative.get(
+                "events"
+            ):
+                reasons.add("event_led")
+            if "quantity" in claim_types:
+                reasons.add("fact_alignment")
+        if any(
+            (dossier.get("enrichment_coverage") or {}).get("classification_status")
+            != "complete"
+            for dossier in batch.get("dossiers", [])
+        ):
+            reasons.add("insufficient_coverage")
+    if audit_eligible:
+        reasons.add("audit_sample")
+    return sorted(reasons), audit_eligible
+
+
+def _apply_editor_bypass(
+    run,
+    batch,
+    response,
+    *,
+    now,
+    audit_eligible: bool,
+) -> None:
+    dossier_by_key = {str(d["brand_key"]): d for d in batch["dossiers"]}
+    for narrative in response["brands"]:
+        dossier = dossier_by_key[str(narrative["brand_key"])]
+        prepare_brand_trend_narrative(
+            run=run,
+            brand_key=str(dossier["brand_key"]),
+            brand_name_en=str(dossier.get("display_name_en") or dossier["brand_key"]),
+            brand_name_zh_cn=str(
+                dossier.get("display_name_zh_cn") or dossier["brand_key"]
+            ),
+            status=BrandTrendNarrative.Status.APPROVED,
+            attempted_at=now,
+            verified_at=now,
+            headline_en=narrative["headline_en"],
+            headline_zh_cn=narrative["headline_zh_cn"],
+            secondary_en=narrative["secondary_en"],
+            secondary_zh_cn=narrative["secondary_zh_cn"],
+            headline_ja=narrative.get("headline_ja", ""),
+            secondary_ja=narrative.get("secondary_ja", ""),
+            critic_review_state="bypassed",
+            critic_reason_codes=["mechanically_valid_low_risk"],
+            critic_audit_eligible=audit_eligible,
+            narrative_kind=narrative["narrative_kind"],
+            confidence=narrative["confidence"],
+            propositions=narrative["propositions"],
+            events=narrative["events"],
+            cited_fact_ids=sorted(
+                {
+                    str(fact_id)
+                    for proposition in narrative["propositions"]
+                    for fact_id in proposition.get("fact_ids", [])
+                }
+            ),
+            cited_evidence_ids=sorted(
+                {
+                    str(evidence_id)
+                    for proposition in narrative["propositions"]
+                    for evidence_id in proposition.get("evidence_ids", [])
+                }
+            ),
+            selected_evidence_packet=dossier.get("evidence", []),
+            final_critic_payload={
+                "decision": "bypass",
+                "reason_codes": ["mechanically_valid_low_risk"],
+            },
+        )
 
 
 def _apply_critic(run, batch, call, *, now):
+    routing = (call.request_packet or {}).get("routing") or {}
     try:
         response = json.loads(str((call.response_payload or {}).get("raw_text") or ""))
         valid = validate_per_brand_critic_response(
@@ -1021,7 +1194,12 @@ def _apply_critic(run, batch, call, *, now):
             headline_zh_cn=narrative["headline_zh_cn"],
             secondary_en=narrative["secondary_en"],
             secondary_zh_cn=narrative["secondary_zh_cn"],
+            headline_ja=narrative.get("headline_ja", ""),
+            secondary_ja=narrative.get("secondary_ja", ""),
             critic_decision=decision["decision"],
+            critic_review_state="reviewed",
+            critic_reason_codes=list(routing.get("reason_codes") or ["risk_routed"]),
+            critic_audit_eligible=bool(routing.get("audit_eligible")),
             narrative_kind=narrative["narrative_kind"],
             confidence=narrative["confidence"],
             propositions=narrative["propositions"],

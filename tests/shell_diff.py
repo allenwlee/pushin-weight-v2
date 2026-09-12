@@ -207,6 +207,28 @@ def first_authored_difference(spec: MockupSpec, rendered_html: str, *, locale: s
         """Project the mockup's authored bilingual chrome for this locale."""
         node = deepcopy(node)
         attrs = node.get("attrs", {})
+        if attrs.get("data-i18n-aria") == "locale" and not any(
+            child.get("attrs", {}).get("data-pw-locale-btn") == "ja"
+            for child in node.get("children", [])
+        ):
+            original_index = next(
+                index
+                for index, child in enumerate(node.get("children", []))
+                if child.get("attrs", {}).get("data-pw-locale-btn") == "original"
+            )
+            node["children"].insert(
+                original_index,
+                {
+                    "tag": "button",
+                    "attrs": {
+                        "type": "button",
+                        "data-pw-locale-btn": "ja",
+                        "data-label-en": "ja",
+                        "data-label-zh": "日文",
+                    },
+                    "children": [{"tag": "#text", "text": "ja"}],
+                },
+            )
         if attrs.get("data-i18n") in chrome:
             node["children"] = [{"tag": "#text", "text": chrome[attrs["data-i18n"]]}]
         aria_key = attrs.get("data-i18n-aria")

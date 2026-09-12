@@ -18,8 +18,8 @@ The cycle flow:
   9. Emit run summary in LATEST.json compatible shape
 
 LLM guardrails (U2):
-  - Pause between classifier batches via X_MONITOR_LLM_PAUSE_SECONDS
-  - Hard cap via _max_llm_calls (None = no cap, used by backfill command)
+  - Minimum spacing between classifier requests via X_MONITOR_LLM_PAUSE_SECONDS
+  - Hard transport cap via _max_llm_calls (None = no cap)
 
 Key constraint (KTD2): The legacy x_monitor/run.py and macOS launchd
 agents MUST remain untouched. This is a NEW entry point.
@@ -27,7 +27,10 @@ agents MUST remain untouched. This is a NEW entry point.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -40,6 +43,19 @@ from django.db import DatabaseError, transaction
 from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone as django_timezone
 
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    CONTRACT_VERSION,
+    PROMPT_VERSION,
+    TAXONOMY_VERSION,
+    parse_stage1_classifications,
+)
+from core.discovery import (
+    plan_discovery_calls,
+    record_discovery_run,
+    remaining_discovery_result_capacity,
+)
 from core.models import (
     Account,
     Brand,
@@ -49,11 +65,19 @@ from core.models import (
     HarvestBacklogWindow,
     Post,
     PostBrand,
+    PostBrandClassificationJudgment,
+    PostBrandClassificationState,
     PostBrandMention,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
     PostTypeKey,
     SentimentKey,
+)
+from core.profile_snapshots import (
+    build_account_affiliation_contexts,
+    build_brand_reference_index,
+    capture_post_profile_snapshot,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
 from monitor.harvest_summary import summarize_latency
@@ -64,20 +88,12 @@ from monitor.list_membership import (
 )
 from monitor.post_enrichment import (
     CANONICAL_LANG_CODES as _CANONICAL_LANG_CODES,
-)
-from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
+    commentary_is_distinct as _commentary_is_distinct,
     enrichment_stage_outcome,
+    persisted_output_complete as _legacy_translation_output_complete,
     persisted_output_complete_q,
     post_persisted_output_complete,
-)
-from monitor.post_enrichment import (
-    commentary_is_distinct as _commentary_is_distinct,
-)
-from monitor.post_enrichment import (
-    persisted_output_complete as _translation_output_complete,
-)
-from monitor.post_enrichment import (
     present_text as _present_text,
 )
 
@@ -91,8 +107,10 @@ from x_monitor.apify import (
     TwitterApiServerError,
 )
 from x_monitor.attribution import (
+    LLMCallBudgetExhausted,
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     attribute_to_brands,
     compile_keyword_index,
 )
@@ -103,6 +121,381 @@ from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
+
+
+def _classification_revision_id(
+    *,
+    post_id: str,
+    brand_id: str,
+    run_id: str,
+    input_fingerprint: str,
+    selector_version: str,
+) -> str:
+    """Return the stable identity shared by one traced post-brand decision."""
+
+    payload = {
+        "run_id": str(run_id),
+        "post_id": str(post_id),
+        "brand_id": str(brand_id),
+        "input_context_fingerprint": str(input_fingerprint),
+        "selector_version": str(selector_version),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _trace_stage_payload(trace: dict[str, Any], stage: str) -> dict[str, Any]:
+    payload = trace.get(stage)
+    if not isinstance(payload, dict):
+        raise ValueError(f"classification_trace_{stage}_missing")
+    if isinstance(payload.get("by_brand"), dict):
+        return payload
+    # Permit a compact trace where the stage itself is the by-brand mapping.
+    if payload and all(isinstance(value, dict) for value in payload.values()):
+        return {"by_brand": payload}
+    raise ValueError(f"classification_trace_{stage}_invalid")
+
+
+def _trace_metadata(
+    trace: dict[str, Any],
+    stage_payload: dict[str, Any],
+    *,
+    model: str,
+    fingerprint: str,
+) -> dict[str, Any]:
+    metadata = trace.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    stage_metadata = stage_payload.get("metadata")
+    if isinstance(stage_metadata, dict):
+        metadata = {**metadata, **stage_metadata}
+    for key in (
+        "contract_version",
+        "taxonomy_version",
+        "prompt_version",
+        "model",
+        "provider_role",
+        "input_context_fingerprint",
+        "selector_version",
+        "validation_state",
+    ):
+        if key in trace and key not in metadata:
+            metadata[key] = trace[key]
+    # These are deliberately scalar allowlisted fields.  In particular, do
+    # not copy prompts, source packets, or arbitrary provider response data.
+    return {
+        "contract_version": str(
+            stage_payload.get(
+                "contract_version", metadata.get("contract_version", CONTRACT_VERSION)
+            )
+        )[:64],
+        "taxonomy_version": str(
+            stage_payload.get(
+                "taxonomy_version", metadata.get("taxonomy_version", TAXONOMY_VERSION)
+            )
+        )[:64],
+        "prompt_version": str(
+            stage_payload.get(
+                "prompt_version", metadata.get("prompt_version", PROMPT_VERSION)
+            )
+        )[:64],
+        "model": str(stage_payload.get("model", metadata.get("model", model)))[:256],
+        "provider_role": str(
+            stage_payload.get(
+                "provider_role", metadata.get("provider_role", "classifier")
+            )
+        )[:64],
+        "input_context_fingerprint": str(
+            stage_payload.get(
+                "input_context_fingerprint",
+                metadata.get("input_context_fingerprint", fingerprint),
+            )
+        )[:64],
+        "selector_version": str(
+            stage_payload.get("selector_version", metadata.get("selector_version", ""))
+        )[:64],
+        "validation_state": str(
+            stage_payload.get(
+                "validation_state", metadata.get("validation_state", "validated")
+            )
+        )[:32],
+        "changes_json": {},
+    }
+
+
+def _trace_stage_rows(stage: str, payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Extract canonical rows from a stage, including the old review envelope."""
+
+    rows = payload["by_brand"]
+    if stage != "review":
+        return rows
+    return {
+        brand_id: (
+            value["classification"]
+            if isinstance(value, dict) and isinstance(value.get("classification"), dict)
+            else value
+        )
+        for brand_id, value in rows.items()
+    }
+
+
+def _trace_changes(
+    stage: str,
+    payload: dict[str, Any],
+    brand_id: str,
+    *,
+    selector_version: str | None = None,
+) -> dict[str, Any]:
+    """Keep bounded review metadata while excluding arbitrary trace envelopes."""
+
+    details: Any = {}
+    metadata_by_brand = payload.get("metadata_by_brand")
+    if isinstance(metadata_by_brand, dict):
+        details = metadata_by_brand.get(brand_id, {})
+    row = payload.get("by_brand", {}).get(brand_id)
+    if (
+        isinstance(row, dict)
+        and isinstance(row.get("classification"), dict)
+        and stage == "review"
+    ):
+        details = {
+            "decision": row.get("decision"),
+            "change_reasons": row.get("change_reasons", []),
+            "evidence": row.get("evidence", []),
+            "metadata_normalized": row.get("metadata_normalized", False),
+            "post_type_verdicts": row.get("post_type_verdicts"),
+            "product_label_verdicts": row.get("product_label_verdicts"),
+        }
+    if isinstance(details, dict):
+        details = {
+            key: details[key]
+            for key in (
+                "decision",
+                "change_reasons",
+                "evidence",
+                "metadata_normalized",
+                "post_type_verdicts",
+                "product_label_verdicts",
+            )
+            if key in details
+        }
+        if not isinstance(details.get("metadata_normalized"), bool):
+            details.pop("metadata_normalized", None)
+        if stage == "review":
+            classification = _trace_stage_rows(stage, payload).get(brand_id, {})
+            require_verdict_audit = (
+                (selector_version or payload.get("selector_version"))
+                == _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+            )
+            for key, canonical_keys, classification_key in (
+                (
+                    "post_type_verdicts",
+                    CANONICAL_POST_TYPE_KEYS,
+                    "post_types",
+                ),
+                (
+                    "product_label_verdicts",
+                    CANONICAL_PRODUCT_LABEL_KEYS,
+                    "product_labels",
+                ),
+            ):
+                verdicts = details.get(key)
+                expected_true = (
+                    set(classification.get(classification_key, []))
+                    if classification.get("outcome") == "classified"
+                    else set()
+                )
+                if (
+                    isinstance(verdicts, dict)
+                    and set(verdicts) == set(canonical_keys)
+                    and all(type(value) is bool for value in verdicts.values())
+                    and {
+                        verdict_key
+                        for verdict_key, selected in verdicts.items()
+                        if selected
+                    }
+                    == expected_true
+                ):
+                    details[key] = {
+                        canonical_key: verdicts[canonical_key]
+                        for canonical_key in canonical_keys
+                    }
+                elif require_verdict_audit:
+                    raise ValueError(f"classification_trace_review_{key}_invalid")
+                else:
+                    details.pop(key, None)
+        else:
+            details.pop("post_type_verdicts", None)
+            details.pop("product_label_verdicts", None)
+    return details if isinstance(details, dict) else {}
+
+
+def _trace_brand_prompt_version(payload: dict[str, Any], brand_id: str) -> str | None:
+    """Return the actual per-brand prompt identity for repaired review rows."""
+
+    metadata_by_brand = payload.get("metadata_by_brand")
+    if not isinstance(metadata_by_brand, dict):
+        return None
+    details = metadata_by_brand.get(brand_id)
+    if not isinstance(details, dict):
+        return None
+    prompt_version = details.get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        return None
+    return prompt_version[:64]
+
+
+def _persist_classification_trace(
+    *,
+    post_id: str,
+    brand_ids: set[str],
+    trace: dict[str, Any],
+    final_by_brand: dict[str, dict[str, Any]],
+    model: str,
+    run_id: str,
+    fingerprint: str,
+) -> dict[str, Any]:
+    """Persist primary → review → final history for every attributed brand.
+
+    The caller owns the surrounding transaction.  Validation happens before
+    any writes, and the returned final-row IDs are used to link the current
+    projection.
+    """
+
+    if not isinstance(trace, dict):
+        raise ValueError("classification_trace_invalid")
+    stages = {
+        stage: _trace_stage_payload(trace, stage)
+        for stage in ("primary", "review", "final")
+    }
+    selector_values = [
+        _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)[
+            "selector_version"
+        ]
+        for payload in stages.values()
+    ]
+    if not all(selector_values) or len(set(selector_values)) != 1:
+        raise ValueError("classification_trace_selector_missing_or_conflicting")
+    canonical_by_stage: dict[str, dict[str, dict[str, Any]]] = {}
+    for stage, payload in stages.items():
+        rows = _trace_stage_rows(stage, payload)
+        metadata = _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)
+        if metadata["input_context_fingerprint"] != fingerprint:
+            raise ValueError("classification_trace_input_fingerprint_mismatch")
+        if set(rows) != brand_ids:
+            raise ValueError(f"classification_trace_{stage}_brands_mismatch")
+        parsed = parse_stage1_classifications(
+            [
+                {"brand_id": brand_id, **classification}
+                for brand_id, classification in rows.items()
+            ],
+            brand_ids,
+        )
+        if parsed is None or parsed != rows:
+            raise ValueError(f"classification_trace_{stage}_invalid")
+        canonical_by_stage[stage] = parsed
+    if canonical_by_stage["final"] != final_by_brand:
+        raise ValueError("classification_trace_final_mismatch")
+
+    final_ids: dict[str, Any] = {}
+    for brand_id in sorted(brand_ids):
+        selector_version = _trace_metadata(
+            trace, stages["final"], model=model, fingerprint=fingerprint
+        )["selector_version"]
+        revision_id = _classification_revision_id(
+            post_id=post_id,
+            brand_id=brand_id,
+            run_id=run_id,
+            input_fingerprint=fingerprint,
+            selector_version=selector_version,
+        )
+        parent = None
+        for stage in ("primary", "review", "final"):
+            payload = stages[stage]
+            metadata = _trace_metadata(
+                trace, payload, model=model, fingerprint=fingerprint
+            )
+            brand_prompt_version = _trace_brand_prompt_version(payload, brand_id)
+            if brand_prompt_version is not None:
+                metadata["prompt_version"] = brand_prompt_version
+            metadata["changes_json"] = _trace_changes(
+                stage,
+                payload,
+                brand_id,
+                selector_version=metadata["selector_version"],
+            )
+            row, created = PostBrandClassificationJudgment.objects.get_or_create(
+                post_id=post_id,
+                brand_id=brand_id,
+                revision_id=revision_id,
+                stage=stage,
+                defaults={
+                    "canonical_judgment": canonical_by_stage[stage][brand_id],
+                    **metadata,
+                    "parent_judgment": parent,
+                },
+            )
+            if not created:
+                expected_values = {
+                    "canonical_judgment": canonical_by_stage[stage][brand_id],
+                    **metadata,
+                    "parent_judgment_id": parent.pk if parent is not None else None,
+                }
+                if any(
+                    getattr(row, field) != value
+                    for field, value in expected_values.items()
+                ):
+                    raise ValueError("classification_trace_revision_conflict")
+            parent = row
+            if stage == "final":
+                final_ids[brand_id] = row.pk
+    return final_ids
+
+
+class _BoundedClassifierClient:
+    """Apply a shared request cap and start-rate limit at transport time."""
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        maximum_calls: int | None,
+        pause_seconds: float,
+        monotonic: Any = time.monotonic,
+        sleep: Any = time.sleep,
+    ) -> None:
+        self._delegate = client
+        self._base_url = getattr(client, "_base_url", None)
+        self._maximum_calls = maximum_calls
+        self._pause_seconds = max(0.0, float(pause_seconds))
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._lock = threading.Lock()
+        self._calls = 0
+        self._last_started: float | None = None
+
+    @property
+    def calls(self) -> int:
+        with self._lock:
+            return self._calls
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        with self._lock:
+            if (
+                self._maximum_calls is not None
+                and self._calls >= self._maximum_calls
+            ):
+                raise LLMCallBudgetExhausted("classifier transport cap exhausted")
+            if self._last_started is not None and self._pause_seconds:
+                wait_seconds = (
+                    self._last_started + self._pause_seconds - self._monotonic()
+                )
+                if wait_seconds > 0:
+                    self._sleep(wait_seconds)
+            self._calls += 1
+            self._last_started = self._monotonic()
+        return self._delegate.messages_create(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -139,15 +532,23 @@ def _now_iso() -> str:
 
 
 def _requeue_recent_incomplete_translations(
-    *, cfg: Any, now: datetime | None = None
+    *, cfg: Any, literal_v2_enabled: bool = False, now: datetime | None = None
 ) -> int:
     """Reopen recent false successes without resurrecting historical debt."""
     now = now or django_timezone.now()
     age_cutoff = now - timedelta(hours=cfg.max_age_hours)
-    return PostEnrichmentState.objects.filter(
+    candidates = PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
-    ).exclude(persisted_output_complete_q(prefix="post__")).update(
+    )
+    if literal_v2_enabled:
+        candidates = candidates.exclude(
+            post__translation_artifacts__is_current=True,
+            post__translation_artifacts__state="succeeded",
+        )
+    else:
+        candidates = candidates.exclude(persisted_output_complete_q(prefix="post__"))
+    return candidates.update(
         translation_status=PostEnrichmentState.Status.PENDING,
         translation_next_attempt_at=now,
         translation_error_code="translation_output_incomplete",
@@ -456,6 +857,128 @@ def _finish_enrichment_stage(
     return failed
 
 
+def _publish_stage1_classification(
+    *,
+    post_id: str,
+    result: dict[str, Any],
+    tweet: dict[str, Any],
+    model: str,
+    run_id: str,
+    cfg: Any | None = None,
+) -> Any:
+    """Atomically publish one already-complete, per-brand Stage 1 result."""
+    from monitor.unsanctioned_flags import persist_classifier_flags
+
+    if not isinstance(result, dict) or result.get("valid") is not True:
+        return None
+    by_brand = result.get("by_brand")
+    if not isinstance(by_brand, dict):
+        return None
+    if any(
+        not isinstance(classification, dict)
+        for classification in by_brand.values()
+    ):
+        return None
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {"text": tweet.get("text") or "", "context": tweet.get("context") or []},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    with transaction.atomic():
+        claim = (
+            PostEnrichmentState.objects.select_for_update()
+            .select_related("post")
+            .filter(post_id=post_id)
+            .first()
+        )
+        if claim is None or claim.claim_run_id != str(run_id)[:128]:
+            return None
+        expected = set(
+            PostBrand.objects.filter(post_id=post_id).values_list(
+                "brand_id", flat=True
+            )
+        )
+        if not expected or set(by_brand) != expected:
+            return None
+        canonical = parse_stage1_classifications(
+            [
+                {"brand_id": brand_id, **classification}
+                for brand_id, classification in by_brand.items()
+            ],
+            expected,
+        )
+        if canonical is None or canonical != by_brand:
+            return None
+
+        final_judgment_ids = {}
+        if "classification_trace" in result:
+            final_judgment_ids = _persist_classification_trace(
+                post_id=post_id,
+                brand_ids=expected,
+                trace=result["classification_trace"],
+                final_by_brand=canonical,
+                model=model,
+                run_id=run_id,
+                fingerprint=fingerprint,
+            )
+
+        post = claim.post
+        for brand_id, classification in canonical.items():
+            PostBrandSignal.objects.filter(
+                post_id=post_id, brand_id=brand_id
+            ).delete()
+            PostBrandProductLabel.objects.filter(
+                post_id=post_id, brand_id=brand_id
+            ).delete()
+            PostBrandClassificationState.objects.update_or_create(
+                post_id=post_id,
+                brand_id=brand_id,
+                defaults={
+                    "contract_version": CONTRACT_VERSION,
+                    "taxonomy_version": TAXONOMY_VERSION,
+                    "prompt_version": PROMPT_VERSION,
+                    "model": model,
+                    "source_language": post.lang_detected or post.lang or "",
+                    "input_context_fingerprint": fingerprint,
+                    "outcome": classification["outcome"],
+                    "sentiment_id": classification["sentiment"],
+                    "china_nationalism_id": classification["china_nationalism"],
+                    "us_nationalism_id": classification["us_nationalism"],
+                    "selected_final_judgment_id": final_judgment_ids.get(brand_id),
+                },
+            )
+            if classification["outcome"] == "classified":
+                PostBrandSignal.objects.bulk_create([
+                    PostBrandSignal(
+                        post_id=post_id, brand_id=brand_id, post_type_id=post_type,
+                        sentiment_id=classification["sentiment"],
+                    )
+                    for post_type in classification["post_types"]
+                ])
+                PostBrandProductLabel.objects.bulk_create([
+                    PostBrandProductLabel(
+                        post_id=post_id, brand_id=brand_id, product_label_id=label,
+                    )
+                    for label in classification["product_labels"]
+                ])
+        flag_result = persist_classifier_flags(
+            post_id=post_id, classifier_result=result, run_id=run_id
+        )
+        if flag_result.outcome not in {"persisted", "cleared"}:
+            raise ValueError("classifier_flags_invalid")
+        if cfg is not None:
+            _finish_enrichment_stage(
+                post_ids=[post_id],
+                run_id=run_id,
+                stage="classification",
+                succeeded_ids={post_id},
+                error_code="classification_incomplete",
+                cfg=cfg,
+            )
+        return flag_result
+
+
 # ============================================================================
 # Incremental harvest cursor (plan 2026-07-27-002, U1)
 # ============================================================================
@@ -625,7 +1148,8 @@ def _read_cursor_since(
     the damage to a one-cycle re-fetch, which dedup absorbs.
     """
     cycle_cfg = cfg.cycle if cfg is not None else _DEFAULT_CYCLE_CONFIG
-    floor = now - timedelta(hours=cycle_cfg.max_lookback_hours)
+    max_lookback_hours = call.max_lookback_hours or cycle_cfg.max_lookback_hours
+    floor = now - timedelta(hours=max_lookback_hours)
     ceiling = now - timedelta(seconds=cycle_cfg.cursor_overlap_seconds)
     try:
         row = CallState.objects.filter(**_cursor_key(call)).first()
@@ -1176,6 +1700,8 @@ def _persist_attribution(
     brand_ids: list[str],
     mentions: list[MentionRow],
     classifications: dict[str, tuple[str, str]] | None = None,
+    *,
+    allow_unattributed: bool = False,
 ) -> int:
     """Persist PostBrand, PostBrandMention, and PostBrandSignal rows.
 
@@ -1209,6 +1735,16 @@ def _persist_attribution(
         if bid not in brand_ids:
             brand_ids.append(bid)
         n += 1
+
+    # A global discovery post may be relevant before its organization has a
+    # reviewed Brand row. Persist only the explicit sentinel edge; ordinary
+    # brand edges remain owned by the mention loop above.
+    if allow_unattributed and UNATTRIBUTED_BRAND_ID in brand_ids:
+        PostBrand.objects.get_or_create(
+            post=post,
+            brand_id=UNATTRIBUTED_BRAND_ID,
+            defaults={"weight": 1.0},
+        )
 
     # PostBrandSignal (per brand, per post_type)
     if classifications:
@@ -1285,11 +1821,13 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         brand_nicknames=selected_models,
     )
 
-    return plan_calls(
+    calls = plan_calls(
         list_id,
         x_query_specs,
         primary_keywords=primary_keywords,
     )
+    calls.extend(plan_discovery_calls(cfg, list_id=int(list_id)))
+    return calls
 
 
 class CycleRunner:
@@ -1309,6 +1847,7 @@ class CycleRunner:
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
+        _targeted_extraction_calls: dict[str, Any] | None = None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -1331,6 +1870,7 @@ class CycleRunner:
         # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
         # Production wire-in passes an anthropic_messages_call function.
         self._relevancy_llm_call = _relevancy_llm_call
+        self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
@@ -1357,6 +1897,7 @@ class CycleRunner:
             "translator_unavailable": 0,
             "classifier_unavailable": 0,
             "classifier_flags_invalid": 0,
+            "targeted_extraction_failed": 0,
             "enrichment_quarantined": 0,
         }
 
@@ -1534,6 +2075,8 @@ class CycleRunner:
           "error"               -- the call failed (auth/rate/server/other).
           "length_cap_exceeded" -- the query would exceed the 512-char cap
                                    once the time operators are injected.
+          "daily_credit_ceiling" -- this discovery lane has no remaining
+                                    provider-credit budget for another call.
 
         The distinction matters because an empty list alone cannot tell a
         quiet window from a failure, and only the former may advance the
@@ -1560,6 +2103,19 @@ class CycleRunner:
             if max_per_page_cfg is not None
             else self.cfg.search.max_per_page
         )
+        if call.max_results is not None:
+            max_results_cap = min(max_results_cap, call.max_results)
+        if call.max_pages is not None:
+            max_pages_cap = min(max_pages_cap, call.max_pages)
+        if call.max_per_page is not None:
+            max_per_page_cap = min(max_per_page_cap, call.max_per_page)
+        affordable_results = remaining_discovery_result_capacity(
+            call, now=self._wall_now()
+        )
+        if affordable_results == 0:
+            return [], "daily_credit_ceiling"
+        if affordable_results is not None:
+            max_results_cap = min(max_results_cap, affordable_results)
         if tip_only:
             # Scheduled delivery is breadth-first: admit one fresh page for
             # every logical call before bounded backlog/deep-page work starts.
@@ -1629,7 +2185,7 @@ class CycleRunner:
 
         max_walks = (
             1
-            if tip_only or deadline is not None
+            if call.discovery_lane is not None or tip_only or deadline is not None
             else self.cfg.cycle.max_truncation_walks
         )
         for walk in range(max_walks):
@@ -1908,6 +2464,72 @@ class CycleRunner:
                 kept.extend(accepted)
         return kept, inserted, updated, attributed, failed, drops, degraded
 
+    def _record_discovery_run_safe(
+        self,
+        *,
+        call: PlannedCall,
+        run_id: str,
+        window: tuple[int, int],
+        outcome: str,
+        items: list[dict[str, Any]],
+        accepted_post_count: int,
+        exclusion_reasons: dict[str, int] | None = None,
+    ) -> None:
+        if call.discovery_lane is None:
+            return
+        try:
+            page_count = (
+                0
+                if outcome in {"length_cap_exceeded", "daily_credit_ceiling"}
+                else max(
+                    [int(item.get("_api_page_number") or 1) for item in items]
+                    or [1]
+                )
+            )
+            credit_count = (
+                0
+                if outcome in {"length_cap_exceeded", "daily_credit_ceiling"}
+                else max(
+                    len(items) * int(call.credits_per_result or 15),
+                    int(call.minimum_credits_per_call or 15),
+                )
+            )
+            record_discovery_run(
+                call=call,
+                run_id=run_id,
+                window=window,
+                outcome=outcome,
+                reviewed_post_count=len(items),
+                accepted_post_count=accepted_post_count,
+                excluded_count=max(len(items) - accepted_post_count, 0),
+                exclusion_reasons=exclusion_reasons,
+                provider_call_count=page_count,
+                provider_credit_count=credit_count,
+                observed_at=self._wall_now(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "discovery run ledger failed for call_id=%s: %s",
+                call.call_id,
+                exc,
+            )
+            self._errors.append(f"discovery_ledger.{call.call_id}: {exc}")
+
+    @staticmethod
+    def _mark_discovery_items(
+        call: PlannedCall, items: list[dict[str, Any]]
+    ) -> bool:
+        if call.discovery_lane is None:
+            return False
+        for item in items:
+            item["_discovery_lane"] = call.discovery_lane
+            item["_discovery_query_id"] = call.call_id
+            item["source_query_id"] = call.call_id
+            if item.get("_unattributed"):
+                item["brand_id"] = UNATTRIBUTED_BRAND_ID
+                item["brand_ids"] = [UNATTRIBUTED_BRAND_ID]
+        return True
+
     def _attribute_items(
         self,
         items: list[dict[str, Any]],
@@ -1996,8 +2618,12 @@ class CycleRunner:
         n_updated = 0
         n_attributed = 0
         n_failed = 0
+        profile_brand_references = build_brand_reference_index()
+        profile_account_contexts = build_account_affiliation_contexts(
+            str(it.get("author_id") or it.get("authorId") or "") for it in items
+        )
         for it in items:
-            if it.get("_unattributed"):
+            if it.get("_unattributed") and not it.get("_discovery_lane"):
                 continue
             it.pop("_db_inserted", None)
             it.pop("_persisted_post_id", None)
@@ -2007,6 +2633,14 @@ class CycleRunner:
                     post, created = _upsert_post(it, account=account)
                     if post is None:
                         continue
+                    capture_post_profile_snapshot(
+                        post=post,
+                        raw=it,
+                        references=profile_brand_references,
+                        affiliation_context=profile_account_contexts.get(
+                            str(it.get("author_id") or it.get("authorId") or "")
+                        ),
+                    )
                     if created:
                         n_inserted += 1
                     else:
@@ -2016,7 +2650,11 @@ class CycleRunner:
                     mentions: list[MentionRow] = list(it.get("mentions") or [])
                     classifications: dict = it.get("classifications") or {}
                     n_attr = _persist_attribution(
-                        post, brand_ids, mentions, classifications
+                        post,
+                        brand_ids,
+                        mentions,
+                        classifications,
+                        allow_unattributed=bool(it.get("_discovery_lane")),
                     )
                     n_attributed += n_attr
                 # The timestamp is taken after the atomic block exits: this
@@ -2046,18 +2684,19 @@ class CycleRunner:
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
-        Stage 1 (translate): calls translate_batch_pragmatics to produce
-        text_en / text_zh_cn / bilingual commentary / lang_detected for each
-        post.
+        Stage 1 (translate): the split feature flag calls
+        translate_batch_literal to produce locale-complete literal EN / ZH-CN
+        / JA output independently of rich synthesis; the rollback lane keeps
+        the prior combined translator.
 
-        Stage 2 (classify): calls classify_batch_pragmatics_full to produce
-        PostBrandSignal and PostBrandDiscourse rows for each post.
+        Stage 2 (classify): calls classify_batch_pragmatics_full and atomically
+        publishes the versioned per-brand Stage 1 state, type edges, product
+        labels, scalar judgments, and top-level unsanctioned flags.
 
         Guardrails:
-          - Pause between classifier batches (X_MONITOR_LLM_PAUSE_SECONDS).
-          - Hard cap on LLM batches (self._max_llm_calls).  When reached,
-            classification stops — remaining posts are persisted without
-            labels and will be picked up by the next invocation.
+          - Space classifier request starts (X_MONITOR_LLM_PAUSE_SECONDS).
+          - Enforce the LLM request cap (self._max_llm_calls) immediately
+            before transport. Remaining posts stay pending for a later run.
 
         Lazy imports are used so the module loads without LLM deps.
         """
@@ -2096,7 +2735,10 @@ class CycleRunner:
             return counters
 
         counters["n_translation_requeued"] = (
-            _requeue_recent_incomplete_translations(cfg=enrichment_cfg)
+            _requeue_recent_incomplete_translations(
+                cfg=enrichment_cfg,
+                literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
+            )
         )
 
         claim_batch = _claim_enrichment_states(
@@ -2132,16 +2774,42 @@ class CycleRunner:
         # queue authority so retries survive later cycles and processes.
         translation_tweets: list[dict[str, Any]] = []
         classification_tweets: list[dict[str, Any]] = []
+        local_parent_ids = {
+            str(state.post.in_reply_to_id)
+            for state in claimed_states
+            if state.post.in_reply_to_id
+        }
+        local_parents = {
+            str(parent.pk): parent.text
+            for parent in Post.objects.filter(
+                tweet_id__in=local_parent_ids
+            ).only("tweet_id", "text")
+        }
         for state in claimed_states:
             post = state.post
             tid = str(post.pk)
             text = post.text or ""
             brand_ids = list(post.brands.values_list("brand_id", flat=True))
             if tid and text:
+                context: list[dict[str, str]] = []
+                if post.quoted_text:
+                    context.append(
+                        {
+                            "provenance": "stored_quote",
+                            "text": post.quoted_text,
+                        }
+                    )
+                parent_text = local_parents.get(str(post.in_reply_to_id or ""))
+                if parent_text:
+                    context.append(
+                        {"provenance": "local_parent", "text": parent_text}
+                    )
                 tweet = {
                     "tweet_id": tid,
                     "text": text,
                     "brand_ids": list(brand_ids),
+                    "context": context,
+                    "source_language": post.lang_detected or post.lang or "",
                 }
                 if state.translation_status == PostEnrichmentState.Status.PENDING:
                     translation_tweets.append(tweet)
@@ -2176,6 +2844,14 @@ class CycleRunner:
 
         # Convert Django Brand models to v1 BrandRow shape expected by classifier
         from x_monitor.attribution import BrandRow as _BrandRow
+        brand_rows = BrandModel.objects.filter(is_sentinel=False)
+        if any(
+            UNATTRIBUTED_BRAND_ID in tweet.get("brand_ids", [])
+            for tweet in classification_tweets
+        ):
+            brand_rows = BrandModel.objects.filter(
+                Q(is_sentinel=False) | Q(nickname=UNATTRIBUTED_BRAND_ID)
+            )
         brand_registry = [
             _BrandRow(
                 brand_id=b.nickname,
@@ -2183,18 +2859,23 @@ class CycleRunner:
                 accent_color=b.accent_color or "#9ca3af",
                 is_sentinel=b.is_sentinel,
             )
-            for b in BrandModel.objects.filter(is_sentinel=False)
+            for b in brand_rows
         ]
 
         # ---- Stage 1: translate ----
-        from x_monitor.translator import translate_batch_pragmatics
+        # The feature flag preserves the prior combined translator as the
+        # rollback lane until the split literal contract passes staging.
+        from x_monitor.translator import (
+            translate_batch_literal,
+            translate_batch_pragmatics,
+        )
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
         if translation_tweets and translator_client is None:
             logger.warning(
-                "_run_post_fetch: no translator client (ANTHROPIC_BASE_URL "
-                "+ MINIMAX_API_TOKEN not set) — skipping translate; "
+                "_run_post_fetch: no translator client (configured provider "
+                "credential unavailable) — skipping translate; "
                 "classifier stage will run if its client is available"
             )
             self._error_counts["translator_unavailable"] += 1
@@ -2206,19 +2887,29 @@ class CycleRunner:
                 monotonic=self._monotonic
             )
             try:
-                translation_rows = translate_batch_pragmatics(
-                    translation_tweets,
-                    ["en", "zh_cn"],
-                    translator_client,
-                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
-                        "translator_batch_failed",
-                        self._error_counts["translator_batch_failed"] + 1,
-                    ),
-                    cfg=self.cfg,
-                    deadline=translation_deadline,
-                    max_workers=3,
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
-                )
+                if self.cfg.llm.literal_translation_v2_enabled:
+                    translation_rows = translate_batch_literal(
+                        translation_tweets,
+                        translator_client,
+                        cfg=self.cfg,
+                        deadline=translation_deadline,
+                        max_workers=3,
+                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    )
+                else:
+                    translation_rows = translate_batch_pragmatics(
+                        translation_tweets,
+                        ["en", "zh_cn"],
+                        translator_client,
+                        on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
+                            "translator_batch_failed",
+                            self._error_counts["translator_batch_failed"] + 1,
+                        ),
+                        cfg=self.cfg,
+                        deadline=translation_deadline,
+                        max_workers=3,
+                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    )
             except Exception as exc:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
@@ -2226,27 +2917,18 @@ class CycleRunner:
         else:
             translation_rows = []
 
-        # Persist translations back to Post rows.
-        # Invariant: if lang_detected is canonical Simplified Chinese,
-        # text_zh_cn MUST equal the source text. Same for EN when
-        # lang_detected is "en". Without this, the dashboard's 翻译 column under
-        # zh_CN falls back to text_translated -> text (the English
-        # source) which is wrong for already-Chinese posts.
-        #
-        # Note: translation_rows from translate_batch_pragmatics do NOT
-        # carry the source `text` (the LLM already saw it). We do one
-        # bulk SELECT for the affected tweet_ids to fetch the source
-        # text, then apply the per-row invariant.
+        # Publish immutable normalized artifacts when the split lane is active;
+        # otherwise preserve the existing combined compatibility writer.
         if translation_rows:
-            from core.models import Post as PostModel
-
-            CHINESE_LANG_CODES = {"zh-Hans"}
             tids = [r.get("tweet_id") for r in translation_rows if r.get("tweet_id")]
+            translation_input_text = {
+                str(tweet.get("tweet_id") or tweet.get("id") or ""): tweet.get("text")
+                for tweet in translation_tweets
+            }
             posts_by_tid: dict[str, Any] = {}
             if tids:
                 posts_by_tid = {
-                    str(post.tweet_id): post
-                    for post in PostModel.objects.filter(tweet_id__in=tids)
+                    str(post.tweet_id): post for post in Post.objects.filter(tweet_id__in=tids)
                 }
             for r in translation_rows:
                 tid = r.get("tweet_id")
@@ -2256,20 +2938,55 @@ class CycleRunner:
                 if post is None:
                     continue
                 if r.get("translation_failed"):
+                    if self.cfg.llm.literal_translation_v2_enabled:
+                        from monitor.post_artifacts import (
+                            record_literal_translation_failure,
+                            source_text_fingerprint,
+                        )
+                        from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
+
+                        record_literal_translation_failure(
+                            post=post,
+                            prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
+                            model=self.cfg.llm.translator_model,
+                            expected_source_fingerprint=source_text_fingerprint(
+                                translation_input_text.get(str(tid))
+                            ),
+                            source_language=r.get("lang_detected"),
+                            error_code="translation_incomplete",
+                        )
                     continue
+                if self.cfg.llm.literal_translation_v2_enabled:
+                    from monitor.post_artifacts import (
+                        publish_literal_translation,
+                        source_text_fingerprint,
+                    )
+                    from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
+
+                    artifact = publish_literal_translation(
+                        post=post,
+                        row=r,
+                        prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
+                        model=self.cfg.llm.translator_model,
+                        expected_source_fingerprint=source_text_fingerprint(
+                            translation_input_text.get(str(tid))
+                        ),
+                        input_tokens=int(r.get("input_tokens") or 0),
+                        output_tokens=int(r.get("output_tokens") or 0),
+                        latency_ms=r.get("latency_ms"),
+                    )
+                    if artifact is not None:
+                        translation_succeeded.add(str(tid))
+                    continue
+
                 lang_detected = _present_text(r.get("lang_detected"))
                 if lang_detected not in _CANONICAL_LANG_CODES:
                     lang_detected = None
                 source_text = post.text or ""
-                text_zh_cn = _present_text(
-                    r.get("text_zh_cn") or r.get("literal_zh")
-                )
+                text_zh_cn = _present_text(r.get("text_zh_cn") or r.get("literal_zh"))
                 text_en = _present_text(r.get("text_en"))
-                # Invariant: Chinese-detected posts must have text_zh_cn
-                # populated (use the source text if the LLM didn't emit one).
-                if lang_detected in CHINESE_LANG_CODES and not text_zh_cn:
+                if lang_detected == "zh-Hans" and not text_zh_cn:
                     text_zh_cn = source_text or None
-                # Same for English-detected posts and text_en.
                 if lang_detected == "en" and not text_en:
                     text_en = source_text or None
                 comparison_values = (
@@ -2278,14 +2995,10 @@ class CycleRunner:
                     text_zh_cn or post.text_zh_cn,
                 )
                 commentary_en = _present_text(r.get("en_equivalent"))
-                if not _commentary_is_distinct(
-                    commentary_en, *comparison_values
-                ):
+                if not _commentary_is_distinct(commentary_en, *comparison_values):
                     commentary_en = None
                 commentary_zh_cn = _present_text(r.get("cn_equivalent"))
-                if not _commentary_is_distinct(
-                    commentary_zh_cn, *comparison_values
-                ):
+                if not _commentary_is_distinct(commentary_zh_cn, *comparison_values):
                     commentary_zh_cn = None
                 effective = {
                     "text_en": text_en or post.text_en,
@@ -2300,8 +3013,8 @@ class CycleRunner:
                     if _present_text(value) is not None
                 }
                 if updates:
-                    PostModel.objects.filter(tweet_id=tid).update(**updates)
-                if _translation_output_complete(
+                    Post.objects.filter(tweet_id=tid).update(**updates)
+                if _legacy_translation_output_complete(
                     source_text=source_text,
                     **effective,
                 ):
@@ -2342,11 +3055,22 @@ class CycleRunner:
             classification_deadline = enrichment_cfg.start_attempt_deadline(
                 monotonic=self._monotonic
             )
+            remaining_llm_calls = (
+                None
+                if self._max_llm_calls is None
+                else max(0, self._max_llm_calls - self._llm_call_count)
+            )
+            bounded_classifier_client = _BoundedClassifierClient(
+                classifier_client,
+                maximum_calls=remaining_llm_calls,
+                pause_seconds=pause_sec,
+                monotonic=self._monotonic,
+            )
             try:
                 results = classify_batch_pragmatics_full(
                     classification_tweets,
                     brand_registry,
-                    classifier_client,
+                    bounded_classifier_client,
                     model=self.cfg.llm.classifier_model,
                     on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
                         "classifier_batch_failed",
@@ -2362,138 +3086,81 @@ class CycleRunner:
                 )
                 self._error_counts["classifier_batch_failed"] += 1
                 classification_error_code = "classifier_exception"
-
-        # Persist classifications with guardrails
-        from core.models import (
-            PostBrandDiscourse as PBDiscourse,
-        )
-        from core.models import (
-            PostBrandSignal as PBSignal,
-        )
-
-        _CLASSIFY_BATCH_SIZE = getattr(
-            settings, "X_MONITOR_CLASSIFY_BATCH_SIZE", 20
-        )
-
-        from monitor.unsanctioned_flags import persist_classifier_flags
+            finally:
+                self._llm_call_count += bounded_classifier_client.calls
 
         classification_succeeded: set[str] = set()
+        targeted_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
+        counters["n_targeted_extraction_calls"] = 0
+        counters["n_targeted_records_written"] = 0
+        counters["n_targeted_evidence_written"] = 0
+        counters["n_targeted_organization_candidates"] = 0
+        counters["targeted_failed_roles"] = []
+        counters["targeted_deferred_roles"] = []
         for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
             tid = tweet["tweet_id"]
-            by_brand = (
-                (result.get("by_brand") or {})
-                if isinstance(result, dict)
-                else {}
-            )
-
-            flag_result = persist_classifier_flags(
-                post_id=tid,
-                classifier_result=result,
-                run_id=run_id,
-            )
-            if flag_result.outcome in {"persisted", "cleared"}:
+            try:
+                flag_result = _publish_stage1_classification(
+                    post_id=tid,
+                    result=result if isinstance(result, dict) else {},
+                    tweet=tweet,
+                    model=self.cfg.llm.classifier_model,
+                    run_id=run_id,
+                    cfg=enrichment_cfg,
+                )
+            except (DatabaseError, ValueError, KeyError) as exc:
+                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                flag_result = None
+            if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
                 classification_succeeded.add(tid)
                 counters[
                     "n_unsanctioned_persisted"
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
-            if flag_result.degraded:
+                from core.targeted_extraction import run_targeted_extractions
+
+                post_types = {
+                    post_type
+                    for classification in (result.get("by_brand") or {}).values()
+                    if isinstance(classification, dict)
+                    for post_type in classification.get("post_types", [])
+                }
+                targeted = run_targeted_extractions(
+                    post=Post.objects.get(pk=tid),
+                    post_types=post_types,
+                    config=self.cfg.targeted_extraction,
+                    calls=getattr(self, "_targeted_extraction_calls", {}),
+                    max_calls=targeted_calls_remaining,
+                    deadline=deadline,
+                )
+                targeted_calls_remaining -= targeted.calls_made
+                counters["n_targeted_extraction_calls"] += targeted.calls_made
+                counters["n_targeted_records_written"] += targeted.records_written
+                counters["n_targeted_evidence_written"] += targeted.evidence_written
+                counters["n_targeted_organization_candidates"] += (
+                    targeted.organization_candidates_written
+                )
+                counters["targeted_failed_roles"].extend(targeted.failed_roles)
+                counters["targeted_deferred_roles"].extend(targeted.deferred_roles)
+                if targeted.failed_roles:
+                    self._error_counts["targeted_extraction_failed"] += len(
+                        targeted.failed_roles
+                    )
+                    self._errors.extend(
+                        f"post_fetch.targeted_extraction_failed:{role}"
+                        for role in targeted.failed_roles
+                    )
+            if flag_result is not None and flag_result.degraded:
                 self._error_counts["classifier_flags_invalid"] += 1
                 self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
                 if flag_result.dead_letter is not None:
                     counters["flag_dead_letters"].append(flag_result.dead_letter)
 
-            for brand_id, cls in by_brand.items():
-                post_type = cls.get("post_type")
-                sentiment = cls.get("sentiment")
-                if post_type:
-                    try:
-                        PBSignal.objects.update_or_create(
-                            post_id=tid,
-                            brand_id=brand_id,
-                            post_type_id=post_type,
-                            defaults={"sentiment_id": sentiment or ""},
-                        )
-                        counters["n_discourse"] += 1
-                    except Exception:
-                        logger.debug(
-                            "_run_post_fetch: signal FK violation for %s/%s — skipping",
-                            tid, post_type,
-                        )
-
-                discourse_raw = cls.get("discourse_role")
-                # discourse_role may be a string or a list — normalize
-                if isinstance(discourse_raw, str):
-                    discourse_keys = [discourse_raw] if discourse_raw else []
-                elif isinstance(discourse_raw, list):
-                    discourse_keys = discourse_raw
-                else:
-                    discourse_keys = []
-                cn_nat = cls.get("china_nationalism")
-                us_nat = cls.get("us_nationalism")
-
-                if discourse_keys:
-                    for act_idx, dk in enumerate(discourse_keys):
-                        if not dk:
-                            continue
-                        try:
-                            PBDiscourse.objects.update_or_create(
-                                post_id=tid,
-                                brand_id=brand_id,
-                                discourse_id=dk,
-                                act_id=act_idx,
-                                defaults={
-                                    "china_nationalism_id": cn_nat or None,
-                                    "us_nationalism_id": us_nat or None,
-                                },
-                            )
-                        except Exception:
-                            logger.debug(
-                                "_run_post_fetch: discourse key %r not in FK table — skipping",
-                                dk,
-                            )
-                    counters["n_nationalism"] += 1
-                elif cn_nat or us_nat:
-                    # Nationalism flags present without explicit discourse role —
-                    # store under an empty discourse key.
-                    PBDiscourse.objects.update_or_create(
-                        post_id=tid,
-                        brand_id=brand_id,
-                        discourse_id="",
-                        act_id=0,
-                        defaults={
-                            "china_nationalism_id": cn_nat or None,
-                            "us_nationalism_id": us_nat or None,
-                        },
-                    )
-                    counters["n_nationalism"] += 1
-
-            # Guard: pause / cap at batch boundaries.
-            # classify_batch_pragmatics_full batches 20 posts per LLM call
-            # internally.  We track boundaries in the result loop so the
-            # max_llm_calls cap can stop processing past a boundary.
-            if (
-                (i + 1) % _CLASSIFY_BATCH_SIZE == 0
-                and i + 1 < len(classification_tweets)
-            ):
-                if pause_sec > 0:
-                    import time as _time
-
-                    _time.sleep(pause_sec)
-                self._llm_call_count += 1
-                if (
-                    self._max_llm_calls is not None
-                    and self._llm_call_count >= self._max_llm_calls
-                ):
-                    logger.info(
-                        "_run_post_fetch: max_llm_calls (%d) reached — "
-                        "stopping classification",
-                        self._max_llm_calls,
-                    )
-                    break
-            elif (i + 1) % _CLASSIFY_BATCH_SIZE == 0:
-                self._llm_call_count += 1
+            if flag_result is not None:
+                counters["n_classifications_published"] = (
+                    counters.get("n_classifications_published", 0) + 1
+                )
 
         newly_failed += _finish_enrichment_stage(
             post_ids=claimed_post_ids,
@@ -2614,14 +3281,23 @@ class CycleRunner:
                     reports.append(report)
                     continue
 
+                discovery_window = (
+                    int(claim.remaining_since.timestamp()),
+                    int(claim.remaining_until.timestamp()),
+                )
                 items, outcome = self._fetch_tweets(
                     call,
                     api,
-                    window=(
-                        int(claim.remaining_since.timestamp()),
-                        int(claim.remaining_until.timestamp()),
-                    ),
+                    window=discovery_window,
                     deadline=deadline,
+                )
+                self._record_discovery_run_safe(
+                    call=call,
+                    run_id=run_id,
+                    window=discovery_window,
+                    outcome=outcome,
+                    items=items,
+                    accepted_post_count=0,
                 )
                 replay_finished = self._monotonic()
                 replay_page_receipts, first_page_received_at, first_page_mono = (
@@ -2659,12 +3335,15 @@ class CycleRunner:
                             *role_degraded,
                         ]
                     self._attribute_items(items, index, search_terms)
-                    kept = [
-                        item
-                        for item in items
-                        if not item.get("_unattributed")
-                        or item.get("_call_a_staff_candidate")
-                    ]
+                    if self._mark_discovery_items(call, items):
+                        kept = list(items)
+                    else:
+                        kept = [
+                            item
+                            for item in items
+                            if not item.get("_unattributed")
+                            or item.get("_call_a_staff_candidate")
+                        ]
                     terms = [term.lower() for term in (call.not_include or []) if term]
                     if terms:
                         kept = [
@@ -2710,8 +3389,23 @@ class CycleRunner:
                         relevancy_degraded=relevancy_degraded,
                     )
                     report["n_attributed"] = attributed
+                    self._record_discovery_run_safe(
+                        call=call,
+                        run_id=run_id,
+                        window=discovery_window,
+                        outcome=outcome,
+                        items=items,
+                        accepted_post_count=len(kept),
+                        exclusion_reasons={
+                            "persistence_failed": persist_failed,
+                        },
+                    )
 
-                if outcome in {"error", "length_cap_exceeded"} or persist_failed:
+                if outcome in {
+                    "error",
+                    "length_cap_exceeded",
+                    "daily_credit_ceiling",
+                } or persist_failed:
                     report["status"] = return_claim(
                         claim.pk,
                         reason=(
@@ -2959,6 +3653,16 @@ class CycleRunner:
                 "n_persist_failed": 0,
                 "request_started_at": request_started_at,
             }
+            if call.discovery_lane is not None:
+                call_entry["discovery"] = {
+                    "lane": call.discovery_lane,
+                    "query_family": call.query_family,
+                    "language": call.language,
+                    "query_pack_version": call.query_pack_version,
+                    "max_results": call.max_results,
+                    "max_pages": call.max_pages,
+                    "daily_credit_ceiling": call.daily_credit_ceiling,
+                }
 
             # Resolve this call's time window from its cursor (or the
             # operator-supplied override) BEFORE fetching, so the value we
@@ -2976,6 +3680,15 @@ class CycleRunner:
                 api,
                 window=(since_epoch, until_epoch),
                 tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
+            )
+            discovery_window = (since_epoch, until_epoch)
+            self._record_discovery_run_safe(
+                call=call,
+                run_id=run_id,
+                window=discovery_window,
+                outcome=outcome,
+                items=items,
+                accepted_post_count=0,
             )
             fetch_finished_mono = self._monotonic()
             fetch_finished_wall = self._wall_now()
@@ -3025,7 +3738,11 @@ class CycleRunner:
             # "truncated" is NOT a hard failure -- items were retrieved and
             # must be persisted; only the cursor advance is withheld so the
             # remainder of the window is re-swept next cycle.
-            if outcome in ("error", "length_cap_exceeded"):
+            if outcome in (
+                "error",
+                "length_cap_exceeded",
+                "daily_credit_ceiling",
+            ):
                 logger.warning(
                     "run: call_id=%s outcome=%s -- holding cursor, no persist",
                     call.call_id,
@@ -3103,12 +3820,15 @@ class CycleRunner:
 
             # Staff-only Call A candidates may have no body keyword yet; keep
             # them until the bounded relevance decision can seed author brands.
-            kept = [
-                it
-                for it in items
-                if not it.get("_unattributed")
-                or it.get("_call_a_staff_candidate")
-            ]
+            if self._mark_discovery_items(call, items):
+                kept = list(items)
+            else:
+                kept = [
+                    it
+                    for it in items
+                    if not it.get("_unattributed")
+                    or it.get("_call_a_staff_candidate")
+                ]
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
 
@@ -3163,6 +3883,18 @@ class CycleRunner:
             call_entry["n_updated"] = n_updated
             call_entry["n_persist_failed"] = n_persist_failed
             call_entry["n_attributed"] = _n_attributed
+            self._record_discovery_run_safe(
+                call=call,
+                run_id=run_id,
+                window=discovery_window,
+                outcome=outcome,
+                items=items,
+                accepted_post_count=len(kept),
+                exclusion_reasons={
+                    "not_include": ni_drop_count,
+                    "persistence_failed": n_persist_failed,
+                },
+            )
 
             # Accumulate for post-fetch
             seen_ids: set[str] = {

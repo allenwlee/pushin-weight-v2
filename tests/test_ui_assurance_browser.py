@@ -43,7 +43,7 @@ RUNTIME_FILTER_KEYS = {
     "role": "role",
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
-    "discourse": "discourse",
+    "product_labels": "product_labels",
     "unsanctioned": "unsanctioned",
     "window": "window",
 }

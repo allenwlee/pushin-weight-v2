@@ -282,6 +282,34 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         unavailable = projection(fixture, unavailable_state)
         assert unavailable["network"]["chart_refresh_paused"] is False
         assert unavailable["accessibility"]["locale_selected"] == ["en"]
+    elif invariant_id == "stage1-classification-states-stay-distinct":
+        state = set_control(initial_state(), "window", 365)
+        state = set_control(state, "unsanctioned", "off")
+        observed = projection(fixture, state)["classification_states"]
+        assert observed["p01"]["status"] == "classified"
+        assert observed["p01"]["product_labels"] == ["bug", "complaint"]
+        assert observed["p05"] == {
+            "status": "historical_untyped",
+            "source": "historical",
+            "post_types": [],
+            "product_labels": [],
+            "cn_nationalism": "anti",
+            "us_nationalism": "mixed",
+        }
+        for post_id, expected_status in (
+            ("p02", "context_missing"),
+            ("p03", "failed"),
+            ("p04", "pending"),
+        ):
+            source = next(post for post in fixture["posts"] if post["id"] == post_id)
+            assert source["classification_status"] == expected_status
+            assert source["post_types"] == []
+            assert source["product_labels"] == []
+            assert source["cn_nationalism"] is None
+            assert source["us_nationalism"] is None
+        explicit_other = next(post for post in fixture["posts"] if post["id"] == "p06")
+        assert explicit_other["classification_status"] == "classified"
+        assert explicit_other["post_types"] == ["other"]
     else:
         raise AssertionError(f"unimplemented invariant: {invariant_id}")
 
@@ -395,6 +423,16 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         observed = projection(fixture, state)
         assert observed["network"]["pagination_has_total_ceiling"] is False
         assert observed["network"]["pagination_exhausted"] is True
+    elif seed_id == "stage1-empty-products-and-statuses-remain-visible":
+        _check_invariant(fixture, "stage1-classification-states-stay-distinct")
+        default_feed = projection(fixture, initial_state())["feed"]
+        assert "p03" in default_feed
+        assert "p05" in default_feed
+        with_products = projection(
+            fixture,
+            set_control(initial_state(), "product_labels", "bug"),
+        )["feed"]
+        assert with_products == ["p01", "p09"]
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 

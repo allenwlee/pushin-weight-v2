@@ -116,9 +116,9 @@ EXPECTED_COVERED_BRANDS = {
 TIME_OPERATOR_OVERHEAD = len(" since_time:1784700000 until_time:1784700060")
 EXPECTED_TIME_OPERATOR_OVERHEAD = 44
 
-# B2 is the longest live policy query after the GLM handle removal.
-TIGHTEST_CALL_ID = "B2"
-EXPECTED_TIGHTEST_HEADROOM = 163
+# B1 is the longest query in the current tracked production policy.
+TIGHTEST_CALL_ID = "B1"
+EXPECTED_TIGHTEST_HEADROOM = 86
 
 
 @pytest.fixture(scope="module")

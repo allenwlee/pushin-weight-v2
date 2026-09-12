@@ -1,0 +1,41 @@
+{
+  "schema_version": "u18-development-provider-budget-v11",
+  "frozen_at": "2026-09-11T07:40:00Z",
+  "reason": "The Flash all-row audit improved context rejection but repeated the same exact-set ceiling as the Flash base judgments. A prior Pro classifier from scratch was worse, but the separately measured Pro gold-audit shape re-reads source evidence and corrects a fallible proposal. This small consumed-development probe tests that distinct judge role on the first 30 already-locked rows before considering any production topology or larger spend.",
+  "cohort": {
+    "cohort_id": "u18-development-v16-pro-audit-probe-v1",
+    "rows": 30,
+    "bytes": 63556,
+    "sha256": "195e3a2a48a4decd5403e7c32b6409f05e774bead8b0dd2f632c979435b13b42",
+    "selection": "first 30 rows of the locked 120-row consumed-development probe, frozen before the provider call"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v15-full-audit-probe-v1",
+    "bytes": 10392,
+    "sha256": "03c11b6037a2c8d5981dc43038e8718977bf842b7c4eee72046c7439fbdfc22c",
+    "source_envelope": "candidate-blind source fields plus the saved prompt-v10 candidate repeated as one fallible proposal; no gold labels, strata, source roles, or source hints"
+  },
+  "lanes": {
+    "candidate_v16_pro_audit_dev30": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "batch_size": 5,
+      "maximum_examples": 30,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 12,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 150000,
+      "maximum_output_tokens": 49152,
+      "maximum_cost_usd": "0.42",
+      "twitterapi_credits": 0
+    }
+  },
+  "decision_rule": "Stop after these 30 rows. Continue to a locked 120-row Pro-audit probe only if all rows and retained source quotes validate, exact post-type sets reach at least 0.70, exact product-label sets reach at least 0.85, outcome accuracy reaches at least 0.90, and every supported rare-type F1 remains at least 0.55. This tuned result cannot approve release, and the full consumed-development and new zero-overlap final gates remain mandatory.",
+  "global_stop": "The transport reserves worst-case input, output, and dollar capacity before every attempt, refuses request seven or attempt thirteen, and permits at most one repeat of a malformed five-row audit. Capacity cannot transfer to another lane, prompt, cohort, or provider."
+}

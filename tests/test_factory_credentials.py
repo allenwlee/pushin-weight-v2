@@ -10,7 +10,6 @@ Pins:
   honor `cfg.llm.*` model names.
 """
 import os
-from pathlib import Path
 
 
 def _django_setup():
@@ -26,8 +25,11 @@ def _django_setup():
 def test_factory_builders_accept_optional_cfg():
     """Both factories must accept cfg=None (backward compat) AND cfg=Config(...)."""
     _django_setup()
-    from x_monitor.config import Config, LlmConfig
-    from x_monitor.reattribute import build_translator_client_from_env, build_anthropic_client_from_env
+    from x_monitor.config import Config
+    from x_monitor.reattribute import (
+        build_anthropic_client_from_env,
+        build_translator_client_from_env,
+    )
     cfg = Config.model_validate({"enabled_models": ["minimax"], "daily_ceiling": 1})
     # cfg=None path (v1 callers) — must not raise
     build_translator_client_from_env(cfg=None)
@@ -46,13 +48,16 @@ def test_factory_warns_on_missing_credential(monkeypatch, caplog):
     None clients with no log line).
     """
     _django_setup()
-    from x_monitor.config import Config
+    from x_monitor.config import Config, LlmConfig
     from x_monitor.reattribute import build_translator_client_from_env
-    # Set base URL to minimax proxy, but unset the credential
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    # Set the translator role to MiniMax, but omit its credential.
     monkeypatch.delenv("MINIMAX_API_TOKEN", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    cfg = Config.model_validate({"enabled_models": ["minimax"], "daily_ceiling": 1})
+    cfg = Config(
+        enabled_models=["minimax"],
+        daily_ceiling=1,
+        llm=LlmConfig(translator_base_url="https://api.minimax.io/anthropic"),
+    )
     with caplog.at_level("WARNING"):
         result = build_translator_client_from_env(cfg=cfg)
     assert result is None, (
@@ -72,8 +77,8 @@ def test_factory_warns_on_missing_credential(monkeypatch, caplog):
 def test_resolve_signal_model_honors_cfg(monkeypatch):
     """_resolve_signal_model(cfg) returns cfg.llm.signal_model when provided."""
     _django_setup()
-    from x_monitor.config import Config
     from x_monitor.attribution import _resolve_signal_model
+    from x_monitor.config import Config
     # Unset env so the resolver must fall through to cfg
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
@@ -86,8 +91,8 @@ def test_resolve_signal_model_honors_cfg(monkeypatch):
 def test_resolve_translator_model_honors_cfg(monkeypatch):
     """_resolve_translator_model(cfg) returns cfg.llm.translator_model when provided."""
     _django_setup()
-    from x_monitor.config import Config
     from x_monitor.attribution import _resolve_translator_model
+    from x_monitor.config import Config
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     cfg = Config.model_validate({"enabled_models": ["minimax"], "daily_ceiling": 1})
@@ -114,8 +119,8 @@ def test_resolve_translator_model_falls_back_to_env(monkeypatch):
 def test_resolve_translator_model_cfg_wins_over_env(monkeypatch):
     """When both cfg and env are set, cfg wins (operator's yaml is canonical)."""
     _django_setup()
-    from x_monitor.config import Config
     from x_monitor.attribution import _resolve_translator_model
+    from x_monitor.config import Config
     monkeypatch.setenv("ANTHROPIC_MODEL", "from-env")
     cfg = Config.model_validate({"enabled_models": ["minimax"], "daily_ceiling": 1})
     cfg.llm.translator_model = "from-cfg"

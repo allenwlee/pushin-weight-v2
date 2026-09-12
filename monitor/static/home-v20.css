@@ -347,6 +347,10 @@
     height: 9px;
     margin-left: -1.25px;
   }
+  .filter-pill[data-group="product_labels"] {
+    box-sizing: border-box;
+    min-width: 104.125px;
+  }
   .filter-pill:focus { outline: none; border-color: var(--accent); }
   .filter-pill.is-open { border-color: var(--accent); }
   .filter-pill.is-open .carat { transform: rotate(180deg); }
@@ -795,8 +799,22 @@
   .feed-signals .tone-neutral { color: var(--muted); }
   .feed-signals .tone-negative { color: var(--down); }
   .feed-signals .tone-mixed { color: #fbbf24; }
+  .feed-signals .classification-state-label {
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.15;
+    text-align: right;
+  }
+  .feed-signals .classification-state-failed .classification-state-label {
+    color: var(--down);
+  }
   .feed-signals .sig-row.is-empty {
     visibility: hidden; /* keep vertical space when nationalism blank */
+  }
+  .feed-signals .sig-product.is-empty,
+  .feed-signals .sig-classification-status.is-empty {
+    display: none;
+    min-height: 0;
   }
   .feed-signals .sig-nat-prefix {
     display: inline-flex;
@@ -1574,6 +1592,13 @@ body.desktop-shell .topbar .topbar-title-row h1.app-name .en {
 }
 
 @media (max-width: 899px) {
+  body.desktop-shell .topbar-title-row .locale-toggle button {
+    width: 48px;
+    flex-basis: 48px;
+    height: 22px;
+    padding-inline: 2px;
+    font-size: 10px;
+  }
   body.desktop-shell .topbar-controls .window-toggle:not(.locale-toggle) {
     width: 220px;
     flex: 0 1 220px;
@@ -1600,10 +1625,10 @@ body.desktop-shell .topbar .topbar-title-row h1.app-name .en {
     font-size: 8px;
   }
   body.desktop-shell .topbar-title-row .locale-toggle button {
-    width: 50px;
-    flex-basis: 50px;
+    width: 39px;
+    flex-basis: 39px;
     padding-inline: 0;
-    font-size: 10px;
+    font-size: 9px;
   }
   body.desktop-shell .topbar .window-toggle:not(.locale-toggle) button {
     width: auto;

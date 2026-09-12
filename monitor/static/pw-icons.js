@@ -31,6 +31,13 @@
     'icon-sentiment': true,
     'icon-announce': true,
     'icon-star': true,
+    'a-opportunity': true,
+    'a-jobs': true,
+    'a-personnel': true,
+    'a-opinions': true,
+    'a-research': true,
+    'a-finance': true,
+    'a-other': true,
     'icon-caret': true,
     'icon-sunrise': true,
     'icon-day': true,
@@ -47,18 +54,32 @@
     }),
     post_types: Object.freeze({
       hands_on_usage: 'icon-hands-on-hammer',
-      performance_comparisons: 'icon-compare',
-      buzz_releases: 'icon-announce',
-      feedback_questions: 'icon-question',
+      results_evaluations: 'icon-compare',
+      releases_updates: 'icon-announce',
+      questions_requests: 'icon-question',
       advertising_marketing: 'icon-marketing',
-      event_announcement: 'icon-event'
+      events: 'icon-event',
+      opportunities: 'a-opportunity',
+      job_listings: 'a-jobs',
+      personnel_changes: 'a-personnel',
+      events_opportunities: 'icon-event',
+      opinions_reactions: 'a-opinions',
+      research_explanations: 'a-research',
+      business_finance: 'a-finance',
+      other: 'a-other'
+    }),
+    product_labels: Object.freeze({
+      bug: 'icon-question',
+      complaint: 'icon-sentiment-negative',
+      testimonial: 'icon-star',
+      ideas_requests: 'icon-event',
+      misinformation: 'icon-unsanctioned'
     }),
     role: Object.freeze({
       official: 'icon-role-badge',
       staff: 'icon-role-badge',
       community: 'icon-role-badge'
     }),
-    discourse: Object.freeze({ '*': 'icon-discourse' }),
     nationalism: Object.freeze({ '*': 'icon-nationalism' }),
     unsanctioned: Object.freeze({ only: 'icon-unsanctioned' })
   });

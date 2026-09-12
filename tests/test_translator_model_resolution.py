@@ -14,8 +14,6 @@ but you passed MiniMax-M3.0."
 
 from __future__ import annotations
 
-import pytest
-
 from x_monitor.attribution import _resolve_translator_model
 
 
@@ -58,9 +56,9 @@ def test_anthropic_model_env_var_overrides_inference(monkeypatch):
     assert _resolve_translator_model() == "custom-translator-model"
 
 
-def test_no_base_url_falls_back_to_claude_haiku(monkeypatch):
-    """No base URL configured -> claude-haiku-4-5 (direct Anthropic default)."""
+def test_no_base_url_falls_back_to_deepseek(monkeypatch):
+    """No base URL configured uses the routine DeepSeek default."""
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
-    assert _resolve_translator_model() == "claude-haiku-4-5"
+    assert _resolve_translator_model() == "deepseek-v4-flash"

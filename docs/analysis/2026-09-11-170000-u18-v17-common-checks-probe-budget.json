@@ -1,0 +1,53 @@
+{
+  "schema_version": "u18-development-provider-budget-v12",
+  "frozen_at": "2026-09-11T08:00:00Z",
+  "reason": "The 30-row Pro evidence judge failed the post-type floor and the sole supported event. Saved candidates show that the stable prompt-v10 base already passes rare labels and product-label exactness, while most exact-set variation comes from eight common overlapping post types and ideas_requests. This consumed-development probe asks one short Flash audit to decide only those measured dimensions, leaving the stronger base outcome, scalars, rare types, and other product labels unchanged.",
+  "cohort": {
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "bytes": 248569,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v17-common-checks-probe-v1",
+    "bytes": 3266,
+    "sha256": "180f3941be60f57b8e2ccf7725d574a98c249fae23de3921131416a52d9aa046",
+    "source_envelope": "candidate-blind source fields plus one saved prompt-v10 proposal; no gold labels, strata, source roles, or source hints",
+    "checked_post_types": [
+      "releases_updates",
+      "hands_on_usage",
+      "results_evaluations",
+      "questions_requests",
+      "advertising_marketing",
+      "opinions_reactions",
+      "research_explanations",
+      "business_finance"
+    ],
+    "checked_product_labels": ["ideas_requests"]
+  },
+  "lanes": {
+    "candidate_v17_common_checks_dev120": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "batch_size": 10,
+      "maximum_examples": 120,
+      "maximum_requests": 12,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 24,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 400000,
+      "maximum_output_tokens": 98304,
+      "maximum_cost_usd": "0.35",
+      "twitterapi_credits": 0
+    }
+  },
+  "decision_rule": "Deterministically replace the eight named prompt-v10 post-type decisions and ideas_requests with these checks; retain every other prompt-v10 field. Continue only if all 120 rows validate, overall and each-locale exact post-type sets reach at least 0.70, overall exact product-label sets reach at least 0.85 and each locale reaches at least 0.70, outcome accuracy remains at least 0.90, context_missing precision/recall remain at least 0.50 when supported, and every supported post/product label F1 meets its unchanged floor. No after-the-fact per-language or per-label source selector is allowed for this probe.",
+  "global_stop": "The transport reserves worst-case input, output, and dollar capacity before every attempt, refuses request thirteen or attempt twenty-five, and allows at most one transport repeat per ten-row request. Capacity cannot transfer to another lane, prompt, cohort, or provider; any malformed semantic response stops the probe without a new repair lane."
+}

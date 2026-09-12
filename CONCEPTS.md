@@ -88,17 +88,33 @@ A state where a brand listed in the pipeline's enabled-models set has no primary
 
 The pipeline tolerates gaps so a partial keyword table still produces a run summary; closing a gap requires adding the row, not relaxing the check.
 
-### Classification upsert
+### Stage 1 classification publication
 
-The act of writing one `(post, brand, post_type, sentiment)` triple into the classification store. If the triple already exists, the write becomes an update on the same row.
+The atomic publication of one complete, versioned classification result for
+every attributed brand on a post. Each brand result records either
+`classified` or `context_missing`. A classified result has one or more
+independent post types, zero or more product labels, sentiment, and nullable
+China/US nationalism values. A context-missing result has no type or product
+edges and preserves only independently supported scalar judgments.
 
-The store keeps a run-level counter of upserts attempted (which counts both new inserts and updates). That counter answers "did the classifier run?", not "how many new rows landed in the DB?" — a row updated twice still counts twice.
+Malformed, missing, duplicate, or extra brand results publish nothing. A
+successful publication replaces the current type/product edges for the
+covered brands and records the contract, taxonomy, prompt, model, source
+language, and non-reversible input-context fingerprint. It never writes a
+current discourse judgment.
 
 ### Post-fetch classification
 
-A second classification pass that runs after the initial fetch+classify loop completes, used to re-classify posts against the full brand set once translation and other enrichments are done. The post-fetch pass writes to the same classification store as the inline pass, so a single per-post triple can be written by both passes.
+The durable classification stage that runs after collection and translation.
+It claims a bounded set of persisted posts, classifies every already attributed
+brand from stored source/quote/local-parent context, and publishes through the
+Stage 1 classification boundary. Translation and classification retry states
+remain independent, so a translation failure does not fabricate a
+classification result or prevent a separately valid classification.
 
-Because post-fetch runs after the per-call loop, any run-summary counter that snapshots inside the loop will miss post-fetch writes. The snapshot must happen after post-fetch completes.
+`n_classifications_published` counts successful Stage 1 post publications.
+Legacy SQLite `n_discourse` counters are historical compatibility evidence and
+do not indicate current classifier health.
 
 ### Operator-degraded entry
 
@@ -108,39 +124,49 @@ The pattern matters because operators triaging failures want to grep a stable pr
 
 ## Flagged ambiguities
 
-- "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the v1.7 short-code call ids (`A`, `B1`..`C2`). The v1.7 call id is canonical; `Q`-string references in older docs are historical-only.
+- "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the current short-code call ids (`A`, `B1`..`B3`, `C1`..`C3`). The short-code call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
 
-## Translator env-vs-yaml precedence
+## Enrichment provider routing
 
-The rule that resolves which source wins when both `config.yaml` and process env vars supply a value for the same translator setting.
+The rule that keeps scheduled translation, classification, relevancy, and
+signal work on the intended provider.
 
 ### Rule
 
-**`yaml wins over env for non-null values. A yaml literal `null` is NOT "set" — it is an explicit instruction to use the default fallback path, and the env override takes effect.**
+**A non-null role value in `config.yaml` wins. A null or omitted value may use
+the matching `X_MONITOR_*` role override, followed by the committed DeepSeek
+default. Shared Anthropic environment values do not redirect enrichment.**
 
-The rule encodes the distinction between *an active pin* (yaml sets a value the operator wants enforced) and *an inert placeholder* (yaml keeps the key but signals "use the default"). Reading `config.yaml:99-105` and seeing `translator_base_url: null` with the comment `# uses ANTHROPIC_BASE_URL env when null` is the canonical reference; the `x_monitor/config.py:384-397` env-merge block is the canonical implementation.
+The rule keeps model and endpoint selection in the same role-specific config
+object and prevents a stale process-wide key or URL from silently changing the
+provider.
 
 ### Resolution chain (translator client)
 
 `build_translator_client_from_env` resolves the translator's base URL as:
 
-1. `cfg.llm.translator_base_url` (yaml-loaded, env-merged) if non-null
-2. otherwise `ANTHROPIC_BASE_URL` env var (the process-wide default)
-3. otherwise direct Anthropic
+1. `cfg.llm.translator_base_url` when non-null
+2. otherwise `X_MONITOR_TRANSLATOR_BASE_URL`
+3. otherwise `https://api.deepseek.com/anthropic`
 
 The production model name is `cfg.llm.translator_model`, whose committed yaml
-value is `deepseek-v4-flash`. A non-null yaml value wins over
+value is `deepseek-v4-flash`. A non-null YAML value wins over
 `X_MONITOR_TRANSLATOR_MODEL`; the environment value applies when the yaml field
 is omitted or null, and the Pydantic default is also `deepseek-v4-flash`. The
 model name and base URL are independent — a yaml `null` for one does not block
 the environment fallback for the other. Production classification follows the
-same committed-yaml rule through `cfg.llm.classifier_model`, also pinned to
+same rule through `cfg.llm.classifier_model` and
+`cfg.llm.classifier_base_url`; relevancy and signal roles are also pinned to
 `deepseek-v4-flash`.
 
 ### Translator base URL
 
-The endpoint the translator pipeline calls for the message-translate stage. Set via `X_MONITOR_TRANSLATOR_BASE_URL` env var or `config.yaml llm.translator_base_url`. The classifier has a separate env override (`X_MONITOR_CLASSIFIER_BASE_URL`) and field (`cfg.llm.classifier_base_url`) because the translator and classifier may need different endpoints.
+The endpoint the translator pipeline calls for the message-translate stage.
+Set it through `config.yaml llm.translator_base_url`, or through
+`X_MONITOR_TRANSLATOR_BASE_URL` when the YAML field is omitted/null. The
+classifier has the parallel `classifier_base_url` field and
+`X_MONITOR_CLASSIFIER_BASE_URL` override.
 
 *Avoid:* `translator_endpoint` — the canonical name is base URL, matching the Anthropic SDK's `base_url` parameter.
 

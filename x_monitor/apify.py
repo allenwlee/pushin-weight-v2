@@ -774,6 +774,30 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
     retweet_count, author_handle, in_reply_to_user_id, entities.
     """
     author = item.get("author") or {}
+    author_presence_map = {
+        "userName": {"author_handle"},
+        "screen_name": {"author_handle"},
+        "name": {"author_name"},
+        "description": {"author_description"},
+        "location": {"author_location"},
+        "profilePicture": {"author_profile_picture"},
+        "verified": {"author_verified"},
+        "isBlueVerified": {"author_verified", "author_is_blue_verified"},
+        "verifiedType": {"author_verified_type"},
+        "profile_bio": {"author_profile_bio"},
+        "affiliatesHighlightedLabel": {
+            "author_affiliates_highlighted_label"
+        },
+    }
+    author_present_fields = sorted(
+        normalized
+        for provider_key, normalized_fields in author_presence_map.items()
+        if provider_key in author
+        for normalized in normalized_fields
+    )
+    profile_bio = author.get("profile_bio")
+    if isinstance(profile_bio, dict) and "description" in profile_bio:
+        author_present_fields.append("author_profile_bio_text")
     # TwitterAPI.io signals a quote/retweet via a nested `quoted_tweet` /
     # `retweeted_tweet` object — NOT via the top-level isQuote/isRetweet
     # booleans (which it never sets). Detect from object presence so quote
@@ -892,6 +916,10 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "display_text_range": item.get("displayTextRange"),
         "extended_entities": item.get("extendedEntities"),
         "created_at_epoch": item.get("createdAtEpoch"),
+        # Internal capture metadata.  This retains upstream key presence so
+        # profile history can distinguish an absent field from an explicit
+        # null even though both normalize to Python ``None``.
+        "_author_present_fields": sorted(set(author_present_fields)),
         # U4: `raw` JSONField is dropped from posts. The normalizer no longer
         # leaves a full TwitterAPI.io item in the dict — all fields the harvest
         # reads are now extracted above.

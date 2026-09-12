@@ -53,7 +53,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from ._json_parser import parse_llm_response
-from .provider_telemetry import ProviderResponse, emit_attempt, provider_host_class
+from .provider_telemetry import (
+    ProviderResponse,
+    emit_attempt,
+    normalize_usage,
+    provider_host_class,
+)
 
 if TYPE_CHECKING:
     from .config import Config
@@ -225,6 +230,8 @@ def _call_with_retry(
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
     operation_kind: str = "initial",
+    max_tokens_override: int | None = None,
+    telemetry_role: str = "post_translation_synthesis",
 ) -> dict[str, Any]:
     """Call the LLM with exponential-backoff retry on transient errors.
 
@@ -232,13 +239,10 @@ def _call_with_retry(
     catches and marks the batch as failed.
 
     Pass `cfg` to thread cfg.llm.translator_model + cfg.llm.translator_base_url
-    into the model/thinking resolution. Without cfg, resolution falls back
-    to env inference (ANTHROPIC_BASE_URL / X_MONITOR_TRANSLATOR_BASE_URL
-    substring) which can pick the wrong model when the env-group still
-    points at api.minimax.io/anthropic while the cron override routes
-    through api.deepseek.com/anthropic. This is the missing call-site
-    wire-up for the swap-translator plan 2026-08-04-001; commit a46d2de
-    fixed `_resolve_translator_model` but missed this call site.
+    into the model/thinking resolution. The configured URL is authoritative
+    when present, so a stale shared provider environment value cannot change
+    DeepSeek request semantics. Environment inference remains only for legacy
+    callers that do not pass cfg.
     """
     last_exc: Exception | None = None
     from .attribution import _resolve_thinking_default
@@ -246,11 +250,16 @@ def _call_with_retry(
     # cfg-threaded resolution: cfg.llm.translator_model is canonical
     # when provided; env inference is the fallback.
     model = _resolve_model(cfg)
-    # Plan 2026-08-04-001: thinking kwarg follows the base URL the
-    # call is actually routing to, not the operator's other env config.
-    # The helper reads X_MONITOR_TRANSLATOR_BASE_URL first (per-role
-    # override) when role="translator", else ANTHROPIC_BASE_URL.
-    thinking = _resolve_thinking_default(role="translator")
+    # Thinking follows the URL the client is actually routing to. Scheduled
+    # callers pass cfg, whose explicit DeepSeek URL must win over all ambient
+    # provider variables. The empty legacy path retains env inference.
+    configured_base_url = getattr(
+        getattr(cfg, "llm", None), "translator_base_url", ""
+    )
+    thinking = _resolve_thinking_default(
+        configured_base_url,
+        role="translator",
+    )
     # Plan 2026-08-04-001: per-batch output budget sized by
     # _max_tokens_for_batch_size. The prior 4096 was too tight for
     # 20-tweet M3 batches (proxy-side cap truncated responses
@@ -259,7 +268,7 @@ def _call_with_retry(
     # lifted via max_tokens). DS V4 on the new code path handles
     # 4096 tokens cleanly at batch_size=20 with 50% headroom (per
     # classifier-swap probe data, plan 2026-07-15-002 KTD4).
-    max_tokens = _max_tokens_for_batch_size(n_tweets)
+    max_tokens = max_tokens_override or _max_tokens_for_batch_size(n_tweets)
     event_context = dict(telemetry_context or {})
     event_context.setdefault("batch_size", n_tweets)
     event_context["provider_host_class"] = provider_host_class(client)
@@ -286,10 +295,10 @@ def _call_with_retry(
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
             response = client.messages_create(**kwargs)
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind=attempt_kind)
+            emit_attempt(logger, role=telemetry_role, model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             return response
         except Exception as e:
-            emit_attempt(logger, role="post_translation_synthesis", model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind=attempt_kind)
+            emit_attempt(logger, role=telemetry_role, model=model, attempt=attempt + 1, outcome="error", started=started, error=e, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             last_exc = e
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -541,6 +550,153 @@ def normalize_lang_detected(raw: object) -> str | None:
 def validate_lang_detected(raw: object) -> bool:
     """True when raw normalizes to an allowlisted lang_detected value."""
     return normalize_lang_detected(raw) is not None
+
+
+LITERAL_TRANSLATION_PROMPT_VERSION = "literal-translation-v1"
+
+
+def build_literal_translation_prompt(tweets: list[dict[str, Any]]) -> str:
+    """Build the narrow three-locale literal-translation request."""
+    payload = [
+        {
+            "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
+            "text": tweet.get("text") or "",
+        }
+        for tweet in tweets
+    ]
+    return (
+        "Translate each post literally enough that a reader can understand the "
+        "same meaning in English, Simplified Chinese, and Japanese. Preserve "
+        "names, model names, @mentions, URLs, emojis, numbers, and uncertainty. "
+        "Do not add analysis, commentary, or facts. Detect the source language "
+        "as en, zh-Hans, zh-Hant, ja, ko, or other. Return JSON only with one "
+        "result per input, in input order, using exactly this shape: "
+        '{"results":[{"tweet_id":"...","lang_detected":"...",'
+        '"text_en":"...","text_zh_cn":"...","text_ja":"..."}]}. '
+        "Every translation field is required; copy the source exactly for its "
+        "own locale. Posts: "
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def translate_batch_literal(
+    tweets: list[dict[str, Any]],
+    client: "ClaudeClient",
+    *,
+    cfg: "Config | None" = None,
+    deadline: Any | None = None,
+    max_workers: int = 1,
+    telemetry_context: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return locale-complete literal output without analyst synthesis."""
+    if not tweets:
+        return []
+    if len(tweets) > _TRANSLATION_BATCH_SIZE and max_workers > 1:
+        batches = [
+            tweets[start : start + _TRANSLATION_BATCH_SIZE]
+            for start in range(0, len(tweets), _TRANSLATION_BATCH_SIZE)
+        ]
+        with ThreadPoolExecutor(
+            max_workers=min(max_workers, len(batches)),
+            thread_name_prefix="literal-translation-batch",
+        ) as executor:
+            futures = [
+                executor.submit(
+                    translate_batch_literal,
+                    batch,
+                    client,
+                    cfg=cfg,
+                    deadline=deadline,
+                    max_workers=1,
+                    telemetry_context=telemetry_context,
+                )
+                for batch in batches
+            ]
+            return [row for future in futures for row in future.result()]
+
+    output = []
+    for start in range(0, len(tweets), _TRANSLATION_BATCH_SIZE):
+        batch = tweets[start : start + _TRANSLATION_BATCH_SIZE]
+        prompt = build_literal_translation_prompt(batch)
+        started = time.monotonic()
+        try:
+            response = _call_with_retry(
+                client,
+                prompt,
+                n_tweets=len(batch),
+                cfg=cfg,
+                deadline=deadline,
+                telemetry_context=telemetry_context,
+                max_tokens_override=min(32_768, max(2_048, 650 * len(batch))),
+                telemetry_role="post_literal_translation",
+            )
+            parsed = _parse_pragmatics_response(response, batch)
+        except Exception:
+            logger.warning("literal_translation_batch_failed", exc_info=True)
+            parsed = None
+            response = {}
+        if parsed is None:
+            output.extend(_empty_literal_row(tweet, failed=True) for tweet in batch)
+            continue
+        usage = normalize_usage(getattr(response, "provider_usage", None))
+        latency_ms = max(0, round((time.monotonic() - started) * 1_000))
+        input_allocations = _allocate_batch_tokens(
+            usage["input_tokens"], len(batch)
+        )
+        output_allocations = _allocate_batch_tokens(
+            usage["output_tokens"], len(batch)
+        )
+        for index, (tweet, row) in enumerate(zip(batch, parsed)):
+            normalized = _validate_literal_row(tweet, row)
+            if normalized is None:
+                output.append(_empty_literal_row(tweet, failed=True))
+                continue
+            normalized.update(
+                input_tokens=input_allocations[index],
+                output_tokens=output_allocations[index],
+                latency_ms=latency_ms,
+            )
+            output.append(normalized)
+    return output
+
+
+def _allocate_batch_tokens(total: int | None, count: int) -> list[int]:
+    """Allocate one provider batch total without multiplying it per post."""
+    if total is None or total < 0 or count < 1:
+        return [0] * max(0, count)
+    quotient, remainder = divmod(total, count)
+    return [quotient + (1 if index < remainder else 0) for index in range(count)]
+
+
+def _validate_literal_row(
+    tweet: dict[str, Any], row: object
+) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    expected_id = str(tweet.get("tweet_id") or tweet.get("id") or "")
+    if str(row.get("tweet_id") or "") != expected_id:
+        return None
+    language = normalize_lang_detected(row.get("lang_detected"))
+    values = {
+        key: _usable_output(row.get(key))
+        for key in ("text_en", "text_zh_cn", "text_ja")
+    }
+    if language is None or any(value is None for value in values.values()):
+        return None
+    return {"tweet_id": expected_id, "lang_detected": language, **values}
+
+
+def _empty_literal_row(
+    tweet: dict[str, Any], *, failed: bool = False
+) -> dict[str, Any]:
+    return {
+        "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
+        "lang_detected": None,
+        "text_en": None,
+        "text_zh_cn": None,
+        "text_ja": None,
+        "translation_failed": failed,
+    }
 
 # U3: the fixed-translation dictionary from research §4.5 — these are
 # proper nouns in the Chinese AI circle and don't need annotation when
@@ -1332,12 +1488,12 @@ def translate_registry_rows(
 
 
 class AnthropicClaudeClient:
-    """Production Claude client using the Anthropic SDK.
+    """Anthropic-compatible client used with the configured provider.
 
     Imports `anthropic` lazily (only when an instance is constructed)
     so test environments without the SDK installed can still import
-    this module and use FakeClaudeClient. The fuchitalee gateway's
-    `ANTHROPIC_API_KEY` env var is the credential.
+    this module and use FakeClaudeClient. Scheduled harvest construction
+    supplies the DeepSeek endpoint and `DEEPSEEK_API_KEY` explicitly.
     """
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
@@ -1349,6 +1505,7 @@ class AnthropicClaudeClient:
                 "Install with `pip install anthropic`. Tests can use "
                 "FakeClaudeClient instead."
             ) from e
+        self._base_url = (base_url or "https://api.anthropic.com").rstrip("/")
         kwargs: dict[str, Any] = {}
         if api_key:
             kwargs["api_key"] = api_key
@@ -1377,7 +1534,6 @@ class AnthropicClaudeClient:
         model returns non-JSON (e.g., wrapped in code fences), we
         attempt to strip the fences before parsing.
         """
-        import json as _json
         msg = self._client.messages.create(**kwargs)
         # Concatenate all text blocks (the model may emit multiple).
         text_parts = []

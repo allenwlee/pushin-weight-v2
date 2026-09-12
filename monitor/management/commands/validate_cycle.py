@@ -79,12 +79,14 @@ def _extract_legacy_totals(summary: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_post_fetch_totals(summary: dict[str, Any]) -> dict[str, Any]:
-    """Extract post-fetch counters from a legacy summary."""
+    """Extract post-fetch counters without conflating Stage 1 and discourse."""
     pf = summary.get("post_fetch", {})
     return {
         "n_translated": pf.get("n_translated", 0),
-        "n_discourse": pf.get("n_discourse", 0),
-        "n_nationalism": pf.get("n_nationalism", 0),
+        "n_classifications_published": pf.get("n_classifications_published"),
+        "n_classified_legacy": pf.get("n_classified"),
+        "n_discourse_legacy": pf.get("n_discourse"),
+        "n_nationalism_legacy": pf.get("n_nationalism"),
         "n_failed_translate": pf.get("n_failed_translate", 0),
     }
 

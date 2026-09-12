@@ -16,6 +16,11 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.utils import timezone
 
+from core.classification_contract import (
+    CONTRACT_VERSION,
+    PROMPT_VERSION,
+    TAXONOMY_VERSION,
+)
 from core.models import (
     Account,
     Brand,
@@ -24,10 +29,14 @@ from core.models import (
     NationalismKey,
     Post,
     PostBrand,
+    PostBrandClassificationState,
     PostBrandDiscourse,
+    PostBrandProductLabel,
     PostBrandSignal,
+    PostEnrichmentState,
     PostTypeKey,
     PostUnsanctionedFlag,
+    ProductLabelKey,
     Role,
     SentimentKey,
 )
@@ -50,6 +59,18 @@ V22_CLOSED_FIXTURE_BRANDS = (
 )
 
 
+def _ensure_stage1_product_label_keys() -> None:
+    """Recreate migration seed rows after TransactionTestCase flushes."""
+    for key in (
+        "bug",
+        "complaint",
+        "testimonial",
+        "ideas_requests",
+        "misinformation",
+    ):
+        ProductLabelKey.objects.get_or_create(key=key)
+
+
 def fixture_from_oracle() -> dict:
     """Build the v22 fixture and guard it against authored-oracle drift."""
     fixture = build_fixture()
@@ -61,29 +82,37 @@ def fixture_from_oracle() -> dict:
 
 def seed_real_home_orm(fixture: dict) -> None:
     """Create only deterministic synthetic rows consumed by ``home()``."""
+    _ensure_stage1_product_label_keys()
+    Brand.objects.filter(
+        nickname__in=("anthropic", "google_deepmind")
+    ).delete()
     for nickname, name, color in V22_FIXTURE_BRANDS:
-        Brand.objects.create(
+        Brand.objects.get_or_create(
             nickname=nickname,
-            display_name=name,
-            display_name_en=name,
-            display_name_zh_cn=name,
-            accent_color=color,
+            defaults={
+                "display_name": name,
+                "display_name_en": name,
+                "display_name_zh_cn": name,
+                "accent_color": color,
+            },
         )
     for nickname, name in V22_CLOSED_FIXTURE_BRANDS:
-        Brand.objects.create(
+        Brand.objects.get_or_create(
             nickname=nickname,
-            display_name=name,
-            display_name_en=name,
-            display_name_zh_cn=name,
-            accent_color="#d97706",
+            defaults={
+                "display_name": name,
+                "display_name_en": name,
+                "display_name_zh_cn": name,
+                "accent_color": "#d97706",
+            },
         )
     for key in {key for row in fixture["feed"]["items"] for key in row["post_types"]}:
-        PostTypeKey.objects.create(key=key)
+        PostTypeKey.objects.get_or_create(key=key)
     for key in {key for row in fixture["feed"]["items"] for key in row["sentiments"]}:
-        SentimentKey.objects.create(key=key)
-    DiscourseKey.objects.create(key="genuine_hype")
+        SentimentKey.objects.get_or_create(key=key)
+    DiscourseKey.objects.get_or_create(key="genuine_hype")
     for key in ("none", "mild_pro", "pro"):
-        NationalismKey.objects.create(key=key)
+        NationalismKey.objects.get_or_create(key=key)
     now = timezone.now()
     for index, source in enumerate(fixture["feed"]["items"]):
         account = Account.objects.create(
@@ -124,10 +153,36 @@ def seed_real_home_orm(fixture: dict) -> None:
             china_nationalism_id="pro",
             us_nationalism_id="mild_pro",
         )
+        PostBrandClassificationState.objects.create(
+            post=post,
+            brand=brand,
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version=TAXONOMY_VERSION,
+            prompt_version=PROMPT_VERSION,
+            model="fixture-stage1",
+            source_language="en",
+            input_context_fingerprint=f"{index + 1:064x}",
+            outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+            sentiment_id=source["sentiments"][0],
+            china_nationalism_id="pro",
+            us_nationalism_id="mild_pro",
+        )
+        product_labels = (
+            ("bug", "complaint") if index == 0
+            else ("testimonial",) if index == 1
+            else ()
+        )
+        for product_label in product_labels:
+            PostBrandProductLabel.objects.create(
+                post=post,
+                brand=brand,
+                product_label_id=product_label,
+            )
 
 
 def seed_v22_metadata_regression_orm() -> dict[str, object]:
     """Seed 51 eligible rows plus one flagged row for anonymous V22 feed tests."""
+    _ensure_stage1_product_label_keys()
     brands = {}
     for nickname, name, color in V22_FIXTURE_BRANDS:
         brand, _ = Brand.objects.get_or_create(
@@ -150,7 +205,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
                 "accent_color": "#d97706",
             },
         )
-    for key in ("buzz_releases", "hands_on_usage", "feedback_questions"):
+    for key in ("releases_updates", "hands_on_usage", "questions_requests", "other"):
         PostTypeKey.objects.get_or_create(key=key)
     for key in ("positive", "negative", "mixed", "neutral"):
         SentimentKey.objects.get_or_create(key=key)
@@ -200,7 +255,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
         PostBrand.objects.create(post=post, brand=primary)
         if index == 0:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="buzz_releases", sentiment_id="positive"
+                post=post, brand=primary, post_type_id="releases_updates", sentiment_id="positive"
             )
             secondary = brands["deepseek"]
             PostBrand.objects.create(post=post, brand=secondary)
@@ -218,7 +273,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             )
         elif index == 51:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="negative"
+                post=post, brand=primary, post_type_id="questions_requests", sentiment_id="negative"
             )
             secondary = brands["deepseek"]
             PostBrand.objects.create(post=post, brand=secondary)
@@ -230,7 +285,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             PostBrandSignal.objects.create(
                 post=post,
                 brand=primary,
-                post_type_id="feedback_questions",
+                post_type_id="questions_requests",
                 sentiment_id="negative",
             )
             secondary = brands["minimax"]
@@ -244,7 +299,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             discourse_brand = primary
         else:
             PostBrandSignal.objects.create(
-                post=post, brand=primary, post_type_id="feedback_questions", sentiment_id="positive"
+                post=post, brand=primary, post_type_id="questions_requests", sentiment_id="positive"
             )
             discourse_brand = primary
         PostBrandDiscourse.objects.create(
@@ -255,6 +310,77 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
             china_nationalism_id="pro",
             us_nationalism_id="mild_pro",
         )
+        for post_brand in PostBrand.objects.filter(post=post).select_related("brand"):
+            signal = PostBrandSignal.objects.filter(
+                post=post,
+                brand=post_brand.brand,
+            ).first()
+            classification_state = PostBrandClassificationState.objects.create(
+                post=post,
+                brand=post_brand.brand,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                prompt_version=PROMPT_VERSION,
+                model="fixture-stage1",
+                source_language="en",
+                input_context_fingerprint=f"{index + 1000:064x}",
+                outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+                sentiment_id=signal.sentiment_id if signal else None,
+                china_nationalism_id=(
+                    "pro" if post_brand.brand_id == discourse_brand.nickname else None
+                ),
+                us_nationalism_id=(
+                    "mild_pro" if post_brand.brand_id == discourse_brand.nickname else None
+                ),
+            )
+            if index == 3:
+                classification_state.outcome = (
+                    PostBrandClassificationState.Outcome.CONTEXT_MISSING
+                )
+                classification_state.sentiment_id = None
+                classification_state.china_nationalism_id = None
+                classification_state.us_nationalism_id = None
+                classification_state.save(
+                    update_fields=[
+                        "outcome",
+                        "sentiment",
+                        "china_nationalism",
+                        "us_nationalism",
+                        "classified_at",
+                    ]
+                )
+            elif index in {4, 5, 6}:
+                classification_state.delete()
+                if index in {4, 5}:
+                    PostEnrichmentState.objects.create(
+                        post=post,
+                        translation_status=PostEnrichmentState.Status.SUCCEEDED,
+                        classification_status=(
+                            PostEnrichmentState.Status.PENDING
+                            if index == 4
+                            else PostEnrichmentState.Status.FAILED
+                        ),
+                    )
+            elif index == 7:
+                signal.delete()
+                PostBrandSignal.objects.create(
+                    post=post,
+                    brand=post_brand.brand,
+                    post_type_id="other",
+                    sentiment_id="positive",
+                )
+        if index == 0:
+            PostBrandProductLabel.objects.create(
+                post=post,
+                brand_id="deepseek",
+                product_label_id="bug",
+            )
+        elif index == 2:
+            PostBrandProductLabel.objects.create(
+                post=post,
+                brand_id="minimax",
+                product_label_id="complaint",
+            )
         if index == 1:
             PostUnsanctionedFlag.objects.create(post=post, flags="marketing_spam")
 

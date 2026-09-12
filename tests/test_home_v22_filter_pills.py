@@ -9,9 +9,9 @@ Pins mockup-canon U3 surface on /:
   - .filter-bar-scroller container present (drag-scroll target)
   - pw-filter-pills.js script tag in <head> (the 404'd reference)
 """
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
-from datetime import datetime, timezone
 
 import pytest
 from django.core.management import call_command
@@ -19,7 +19,6 @@ from django.core.management import call_command
 from core.models import SentimentKey
 from monitor.views import _display_role_key, _display_role_label, _post_matches_filter
 from tests.v22_support import PostgreSQLV22TestCase, assert_v22_selector_matches
-
 
 pytestmark = pytest.mark.requires_postgres
 
@@ -42,14 +41,14 @@ FAKE_ROW = {
     "text_en": "Mock en", "text_translated": "Mock en",
     "text_original": "Mock", "text": "Mock",
     "is_translated": True, "like_count": 1200,
-    "sentiment_keys": ["positive"], "post_type_keys": ["buzz_releases"],
+    "sentiment_keys": ["positive"], "post_type_keys": ["releases_updates"],
     "nat_cn": "", "nat_us": "mild_pro",
     "tint_class": "tint-positive", "meta_text": "12m", "ts_abs_text": "(01:51 本地)",
     "avatar_initials": "K", "avatar_color": "#ec4899",
     "engagement_pretty": {"followers": "128.4k", "likes": "1.2k", "retweets": "340", "replies": "89"},
     "brands": [{"nickname": "kimi", "display_name": "Kimi", "display_name_en": "Kimi", "display_name_zh_cn": "Kimi"}],
     "brand_nicknames": ["kimi"],
-    "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "buzz_releases"}], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}, "discourse": []}},
+    "classifications": {"kimi": {"sentiments": [{"key": "positive"}], "post_types": [{"key": "releases_updates"}], "product_labels": [], "cn_nationalism": None, "us_nationalism": {"key": "mild_pro"}}},
     "unsanctioned": False,
     "account": {"handle": "@kimi_moonshot", "role": "official", "role_label": "official", "followers_count": 128400, "followers_pretty": "128.4k"},
 }
@@ -119,17 +118,19 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        SentimentKey.objects.create(key="positive")
-        SentimentKey.objects.create(key="mixed")
+        SentimentKey.objects.get_or_create(key="positive")
+        SentimentKey.objects.get_or_create(key="mixed")
         call_command("seed_i18n_labels", verbosity=0)
 
     def _get_home(self, locale="en"):
         patches = _patches_active()
-        for p in patches: p.start()
+        for item in patches:
+            item.start()
         try:
             return self.client.get(f"/?locale={locale}")
         finally:
-            for p in patches: p.stop()
+            for item in patches:
+                item.stop()
 
     def test_filter_bar_scroller_present(self):
         r = self._get_home()
@@ -188,36 +189,46 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         # The filter-bar nav has aria-label (used by screen readers)
         self.assertIn('aria-label="Filter groups"', body)
 
-    def test_all_eight_filter_pills_present_in_approved_order(self):
+    def test_stage1_filter_pills_replace_discourse_in_preserved_order(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
         groups = (
             "brands", "sentiment", "post_types", "lang", "role",
-            "nationalism", "discourse", "unsanctioned",
+            "nationalism", "product_labels", "unsanctioned",
         )
         for group in groups:
             self.assertIn(f'data-group="{group}"', body,
                           f"filter-pill for {group} missing")
         positions = [body.index(f'data-group="{group}"') for group in groups]
         self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('data-group="discourse"', body)
+        self.assertNotIn('data-pw-filter-group="discourse"', body)
 
-    def test_post_type_and_uncategorized_controls_use_stable_machine_values(self):
+    def test_all_stage1_types_and_product_labels_use_stable_machine_values(self):
         body = self._get_home().content.decode("utf-8")
         post_type = body.split('data-group="post_types"', 1)[1].split(
             'data-group="lang"', 1
         )[0]
         self.assertIn('data-pw-filter-group="post_types"', post_type)
-        self.assertIn('value="hands_on_usage"', post_type)
-        discourse = body.split('data-group="discourse"', 1)[1].split(
+        for key in (
+            "releases_updates", "hands_on_usage", "results_evaluations",
+            "questions_requests", "advertising_marketing", "events", "opportunities",
+            "job_listings", "personnel_changes",
+            "opinions_reactions", "research_explanations", "business_finance", "other",
+        ):
+            self.assertIn(f'value="{key}"', post_type)
+        products = body.split('data-group="product_labels"', 1)[1].split(
             'data-group="unsanctioned"', 1
         )[0]
-        self.assertIn('value="uncategorized"', discourse)
+        for key in ("bug", "complaint", "testimonial", "ideas_requests", "misinformation"):
+            self.assertIn(f'value="{key}"', products)
+        self.assertIn("Potentially misleading; requires review", products)
 
     def test_zh_cn_filter_dropdown_options_are_localized(self):
         body = self._get_home("zh_hans").content.decode("utf-8")
         expected = (
             "正面", "混合", "实际使用", "英语", "未检测", "官方", "其他",
-            "温和支持", "荒诞梗", "未分类", "仅显示标记帖子",
+            "温和支持", "缺陷", "可能误导的信息", "仅显示标记帖子",
         )
         for label in expected:
             self.assertIn(f">{label}</span>", body)
@@ -225,7 +236,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         visible_raw_labels = (
             ">positive</span>", ">hands_on_usage</span>",
             ">official</span>", ">mild_pro</span>",
-            ">absurdist_meme</span>", ">uncategorized</span>",
+            ">bug</span>", ">misinformation</span>",
         )
         for raw in visible_raw_labels:
             self.assertNotIn(raw, body)
@@ -275,8 +286,8 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
     def test_filter_matrix_missing_values_match_only_explicit_buckets(self):
         sample = {
             "brand_nicknames": ["qwen"],
-            "discourse": ["genuine_hype"],
-            "post_types": ["buzz_releases"],
+            "product_labels": [],
+            "post_types": ["releases_updates"],
             "sentiments": ["positive"],
             "role_key": None,
             "lang_detected": "",
@@ -286,31 +297,72 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         }
         self.assertTrue(_post_matches_filter(sample, {"role": ["other"]}))
         self.assertTrue(_post_matches_filter(sample, {"lang": ["undetected"]}))
-        self.assertTrue(_post_matches_filter(sample, {"cn_nationalism": ["none"]}))
-        self.assertTrue(_post_matches_filter(sample, {"us_nationalism": ["none"]}))
+        self.assertFalse(_post_matches_filter(sample, {"cn_nationalism": ["none"]}))
+        self.assertFalse(_post_matches_filter(sample, {"us_nationalism": ["none"]}))
         self.assertFalse(_post_matches_filter(sample, {"lang": ["en"]}))
         self.assertFalse(_post_matches_filter(sample, {"sentiment": []}))
         self.assertTrue(_post_matches_filter({**sample, "unsanctioned": True}, {"unsanctioned": "any"}))
 
-        without_discourse = {**sample, "discourse": []}
-        self.assertTrue(
-            _post_matches_filter(without_discourse, {"discourse": ["uncategorized"]})
-        )
-        self.assertFalse(
-            _post_matches_filter(sample, {"discourse": ["uncategorized"]})
-        )
-        self.assertTrue(
-            _post_matches_filter(
-                sample,
-                {"discourse": ["uncategorized", "genuine_hype"]},
-            )
-        )
+        self.assertFalse(_post_matches_filter(sample, {"product_labels": ["bug"]}))
+        self.assertTrue(_post_matches_filter(sample, {"product_labels": "__all__"}))
+
+    def test_product_label_filter_keeps_brand_provenance(self):
+        sample = {
+            "brand_nicknames": ["brand_a", "brand_b"],
+            "classifications_by_brand": {
+                "brand_a": {
+                    "product_labels": [], "post_types": [], "sentiments": [],
+                    "cn_nationalism": None, "us_nationalism": None,
+                },
+                "brand_b": {
+                    "product_labels": ["bug"], "post_types": ["other"],
+                    "sentiments": ["positive"],
+                    "cn_nationalism": "none", "us_nationalism": "none",
+                },
+            },
+            "product_labels": ["bug"],
+            "post_types": ["other"],
+            "sentiments": ["neutral"],
+            "role_keys": [],
+            "lang_detected": "en",
+            "cn_nationalism": None,
+            "us_nationalism": None,
+            "unsanctioned": False,
+        }
+        self.assertFalse(_post_matches_filter(
+            sample, {"brands": ["brand_a"], "product_labels": ["bug"]}
+        ))
+        self.assertTrue(_post_matches_filter(
+            sample, {"brands": ["brand_b"], "product_labels": ["bug"]}
+        ))
+        sparse = {
+            **sample,
+            "classifications_by_brand": {
+                "brand_b": sample["classifications_by_brand"]["brand_b"]
+            },
+        }
+        self.assertFalse(_post_matches_filter(
+            sparse, {"brands": ["brand_a"], "product_labels": ["bug"]}
+        ))
+        for axis, selected in (
+            ("post_types", ["other"]),
+            ("sentiment", ["positive"]),
+            ("cn_nationalism", ["none"]),
+            ("us_nationalism", ["none"]),
+        ):
+            with self.subTest(axis=axis):
+                self.assertFalse(_post_matches_filter(
+                    sample, {"brands": ["brand_a"], axis: selected}
+                ))
+                self.assertTrue(_post_matches_filter(
+                    sample, {"brands": ["brand_b"], axis: selected}
+                ))
 
     def test_filter_matrix_all_partial_empty_or_within_and_across_axes(self):
         sample = {
             "brand_nicknames": ["qwen", "deepseek"],
-            "discourse": ["genuine_hype"],
-            "post_types": ["buzz_releases"],
+            "product_labels": ["bug"],
+            "post_types": ["releases_updates"],
             "sentiments": ["mixed"],
             "role_key": "official",
             "lang_detected": "en",
@@ -320,7 +372,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         }
         matrix = {
             "brands": ("qwen", "anthropic"),
-            "discourse": ("genuine_hype", "sarcasm"),
+            "product_labels": ("bug", "complaint"),
             "post_types": ("buzz_releases", "hands_on_usage"),
             "sentiment": ("mixed", "positive"),
             "role": ("official", "staff"),

@@ -426,14 +426,11 @@ def _build_client_for_base_url(
 
 
 def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaudeClient | None:
-    """Return an `AnthropicClaudeClient` for the classifier.
+    """Return an Anthropic-compatible client for the classifier.
 
-    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
-    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
-    process-wide default while the classifier routes to DS V4 — set
-    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
-    in the shell to override just the classifier without flipping
-    other LLM callers in the same process.
+    The loaded config is authoritative. Role-specific environment overrides
+    remain available for config files that omit the field; a stale shared
+    `ANTHROPIC_BASE_URL` never redirects the scheduled classifier.
 
     The production caller passes `cfg.llm.classifier_model` explicitly
     (committed default `deepseek-v4-flash`).
@@ -445,20 +442,18 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
       * If the classifier base URL contains "deepseek.com", the operator is
         routing through DeepSeek V4's Anthropic-compatible endpoint.
         The endpoint accepts DEEPSEEK_API_KEY.
-      * Otherwise, talk to api.anthropic.com directly using
-        ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
+      * An explicitly configured Anthropic URL uses ANTHROPIC_API_KEY.
 
     Used by the pipeline's classification stage. Returns None when no
     auth credential is available so classification falls back to no-LLM.
     """
     import os
-    # When cfg is None (v1 callers), this still works — the classifier's
-    # base URL comes from env vars only; the model name resolves at
-    # _call_signal_with_retry time via _resolve_signal_model(cfg) which
-    # also accepts cfg=None.
-    base_url = os.environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL",
-        os.environ.get("ANTHROPIC_BASE_URL"),
+    from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL
+
+    base_url = (
+        getattr(getattr(cfg, "llm", None), "classifier_base_url", None)
+        or os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL")
+        or DEEPSEEK_ANTHROPIC_BASE_URL
     )
     return _build_client_for_base_url(base_url, caller_label="classifier")
 
@@ -466,17 +461,14 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
 def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClaudeClient | None:
     """Return an `AnthropicClaudeClient` for the translation stage.
 
-    Reads the base URL from `cfg.llm.translator_base_url` when set,
-    otherwise falls back to the `ANTHROPIC_BASE_URL` env var. When
-    `ANTHROPIC_BASE_URL` is also unset, defaults to direct Anthropic.
+    Reads the base URL from `cfg.llm.translator_base_url`. When config is not
+    available, the role-specific environment value applies, followed by the
+    explicit DeepSeek default. Shared `ANTHROPIC_BASE_URL` is intentionally
+    ignored so an obsolete provider setting cannot redirect scheduled work.
     The model name comes from `cfg.llm.translator_model` (committed default
     `deepseek-v4-flash`).
 
-    Reads the translator's base URL NOT the classifier's
-    `X_MONITOR_CLASSIFIER_BASE_URL` override — the translator always
-    uses the process-wide default endpoint (typically the MiniMax
-    proxy via `api.minimax.io/anthropic`). The classifier can
-    independently route to DeepSeek.
+    The translator and classifier remain independently configurable.
 
     When `cfg is None`, falls back to `load_config(Path("config.yaml"))`
     — preserves backward compat with v1 callers (xrun.py, xmain.py,
@@ -487,7 +479,13 @@ def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClau
     """
     import os
     if cfg is None:
-        from x_monitor.config import load_config
+        from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL, load_config
         cfg = load_config(Path("config.yaml"))
-    base_url = cfg.llm.translator_base_url or os.environ.get("ANTHROPIC_BASE_URL")
+    else:
+        from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL
+    base_url = (
+        cfg.llm.translator_base_url
+        or os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL")
+        or DEEPSEEK_ANTHROPIC_BASE_URL
+    )
     return _build_client_for_base_url(base_url, caller_label="translator")

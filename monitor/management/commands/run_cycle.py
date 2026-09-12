@@ -240,12 +240,23 @@ class Command(BaseCommand):
             model=cfg.llm.relevancy_model,
             timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
         )
+        targeted_extraction_calls = {}
+        targeted_extraction = getattr(cfg, "targeted_extraction", None)
+        if targeted_extraction is not None and targeted_extraction.enabled:
+            from core.targeted_extraction import build_targeted_extraction_calls
+
+            targeted_extraction_calls = build_targeted_extraction_calls(
+                client=relevancy_client,
+                roles=targeted_extraction.roles,
+                timeout_seconds=targeted_extraction.request_timeout_seconds,
+            )
 
         runner_options = {
             "cfg": cfg,
             "dry_run": options["dry_run"],
             "cycle_kind": "scheduled" if options["scheduled"] else "manual",
             "_relevancy_llm_call": relevancy_llm_call,
+            "_targeted_extraction_calls": targeted_extraction_calls,
         }
         if prepared is not None:
             runner_options["_backfill_call_ids"] = [prepared.profile.selected_call]

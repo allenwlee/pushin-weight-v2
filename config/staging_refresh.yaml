@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 3
 
 service:
   id: srv-d9vb8t49v7es738lf2ng
@@ -33,8 +33,11 @@ production_deny:
 
 relations:
   copied_tables:
+    - account_based_in_mappings
     - account_post_appearances
+    - account_profile_snapshots
     - accounts
+    - brand_discovery_candidates
     - brand_hashtags
     - brand_keywords
     - brand_search_terms
@@ -43,28 +46,53 @@ relations:
     - brands_companies
     - companies
     - companies_accounts
+    - countries
+    - country_codes_region
+    - country_labels
     - discourse_keys
     - discourse_labels
     - django_content_type
     - django_migrations
     - django_site
+    - events
     - hf_orgs
+    - job_discovery_runs
+    - job_listing_evidence
+    - job_listings
     - nationalism_keys
     - nationalism_labels
+    - opportunities
+    - people
+    - people_accounts
+    - people_brand_affiliation_evidence
+    - people_brand_affiliations
+    - personnel_discovery_runs
     - post_type_keys
     - post_type_labels
+    - post_synthesis_artifacts
+    - post_synthesis_texts
+    - post_translation_artifacts
+    - post_translation_texts
     - posts
     - posts_brands
+    - posts_brands_classification_states
     - posts_brands_discourse
     - posts_brands_mentions
+    - posts_brands_product_labels
     - posts_brands_signals
     - posts_unsanctioned_flags
     - products
+    - product_label_keys
+    - product_label_labels
+    - region_labels
+    - regions
     - role_labels
     - roles
     - search_queries
     - sentiment_keys
     - sentiment_labels
+    - targeted_extraction_attempts
+    - targeted_extraction_states
     - trend_narrative_subjects
     - trend_narratives
     - unsanctioned_flag_keys
@@ -79,47 +107,123 @@ relations:
     - auth_user_groups
     - auth_user_user_permissions
     - brand_trend_narratives
+    - brand_trend_narrative_texts
     - call_state
     - django_session
     - harvest_backlog_windows
     - post_enrichment_states
+    - post_synthesis_daily_budgets
+    - post_synthesis_demands
+    - post_synthesis_rate_limit_buckets
     - socialaccount_socialaccount
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
     - trend_narrative_provider_calls
+    - trend_narrative_demands
     - trend_narrative_runs
     - trend_narrative_visible_runs
     - trend_narrative_work_slots
     - twitter_list_memberships
     - twitter_list_sync_state
+  optional_source_tables:
+    - account_profile_snapshots
+    - brand_discovery_candidates
+    - brand_trend_narrative_texts
+    - events
+    - job_discovery_runs
+    - job_listing_evidence
+    - job_listings
+    - opportunities
+    - people
+    - people_accounts
+    - people_brand_affiliation_evidence
+    - people_brand_affiliations
+    - personnel_discovery_runs
+    - posts_brands_classification_states
+    - posts_brands_product_labels
+    - post_synthesis_artifacts
+    - post_synthesis_daily_budgets
+    - post_synthesis_demands
+    - post_synthesis_rate_limit_buckets
+    - post_synthesis_texts
+    - post_translation_artifacts
+    - post_translation_texts
+    - product_label_keys
+    - product_label_labels
+    - targeted_extraction_attempts
+    - targeted_extraction_states
+    - trend_narrative_demands
   views:
     - trend_narrative_versions
   sequences:
     - account_emailaddress_id_seq
     - account_emailconfirmation_id_seq
+    - account_profile_snapshots_id_seq
     - auth_group_id_seq
     - auth_group_permissions_id_seq
     - auth_permission_id_seq
     - auth_user_groups_id_seq
     - auth_user_id_seq
     - auth_user_user_permissions_id_seq
+    - brand_discovery_candidates_id_seq
     - brand_trend_narratives_id_seq
+    - brand_trend_narrative_texts_id_seq
     - django_content_type_id_seq
     - django_migrations_id_seq
     - django_site_id_seq
+    - events_id_seq
     - harvest_backlog_windows_id_seq
+    - job_discovery_runs_id_seq
+    - job_listing_evidence_id_seq
+    - job_listings_id_seq
+    - opportunities_id_seq
+    - post_synthesis_artifacts_id_seq
+    - post_synthesis_daily_budgets_id_seq
+    - post_synthesis_demands_id_seq
+    - post_synthesis_rate_limit_buckets_id_seq
+    - post_synthesis_texts_id_seq
+    - post_translation_artifacts_id_seq
+    - post_translation_texts_id_seq
+    - people_brand_affiliation_evidence_id_seq
+    - people_brand_affiliations_id_seq
+    - personnel_discovery_runs_id_seq
     - products_id_seq
     - search_queries_id_seq
     - socialaccount_socialaccount_id_seq
     - socialaccount_socialapp_id_seq
     - socialaccount_socialapp_sites_id_seq
     - socialaccount_socialtoken_id_seq
+    - targeted_extraction_attempts_id_seq
+    - targeted_extraction_states_id_seq
     - trend_narrative_subjects_id_seq
     - trend_narrative_provider_calls_id_seq
+    - trend_narrative_demands_id_seq
     - trend_narrative_runs_id_seq
     - trend_narrative_versions_id_seq
     - twitter_list_memberships_id_seq
+  optional_source_sequences:
+    - account_profile_snapshots_id_seq
+    - brand_discovery_candidates_id_seq
+    - brand_trend_narrative_texts_id_seq
+    - events_id_seq
+    - job_discovery_runs_id_seq
+    - job_listing_evidence_id_seq
+    - job_listings_id_seq
+    - opportunities_id_seq
+    - people_brand_affiliation_evidence_id_seq
+    - people_brand_affiliations_id_seq
+    - personnel_discovery_runs_id_seq
+    - post_synthesis_artifacts_id_seq
+    - post_synthesis_daily_budgets_id_seq
+    - post_synthesis_demands_id_seq
+    - post_synthesis_rate_limit_buckets_id_seq
+    - post_synthesis_texts_id_seq
+    - post_translation_artifacts_id_seq
+    - post_translation_texts_id_seq
+    - targeted_extraction_attempts_id_seq
+    - targeted_extraction_states_id_seq
+    - trend_narrative_demands_id_seq
 
 scrub:
   truncate_tables:
@@ -133,15 +237,20 @@ scrub:
     - auth_user_groups
     - auth_user_user_permissions
     - brand_trend_narratives
+    - brand_trend_narrative_texts
     - call_state
     - django_session
     - harvest_backlog_windows
     - post_enrichment_states
+    - post_synthesis_daily_budgets
+    - post_synthesis_demands
+    - post_synthesis_rate_limit_buckets
     - socialaccount_socialaccount
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
     - trend_narrative_provider_calls
+    - trend_narrative_demands
     - trend_narrative_runs
     - trend_narrative_visible_runs
     - trend_narrative_work_slots
@@ -157,6 +266,8 @@ validation:
   exact_count_tables:
     - accounts
     - brands
+    - brands_companies
+    - companies
     - posts
     - posts_brands
     - products
@@ -168,6 +279,13 @@ validation:
   latest_timestamp_table: posts
   latest_timestamp_column: created_at
   maximum_latest_timestamp_lag_seconds: 0
+  forward_migration_count_deltas:
+    core.0033_stage1c_frontier_organization_brands:
+      brands: 2
+      brands_companies: 2
+  forward_migration_translation_count_deltas:
+    core.0033_stage1c_frontier_organization_brands:
+      brands.display_name_en: 2
   required_columns:
     accounts:
       - author_id
@@ -218,8 +336,10 @@ validation:
       - display_name_zh_cn
   classification_tables:
     - posts_brands
+    - posts_brands_classification_states
     - posts_brands_discourse
     - posts_brands_mentions
+    - posts_brands_product_labels
     - posts_brands_signals
     - posts_unsanctioned_flags
 

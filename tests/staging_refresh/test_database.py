@@ -25,6 +25,8 @@ from scripts.staging_refresh.database import (
     ScrubReport,
     SnapshotRestoreEngine,
     SourceCensus,
+    _pending_migration_count_deltas,
+    _pending_migration_translation_count_deltas,
     inspect_staging_quiescence,
     scrub_candidate_data,
 )
@@ -59,6 +61,8 @@ class FakeAdapter:
             row_counts={
                 "accounts": 5,
                 "brands": 2,
+                "brands_companies": 2,
+                "companies": 2,
                 "posts": 12,
                 "posts_brands": 10,
                 "products": 3,
@@ -75,6 +79,8 @@ class FakeAdapter:
             },
             terminal_narrative_count=4,
             current_narrative_count=4,
+            pending_migration_count_deltas={},
+            pending_migration_translation_count_deltas={},
         )
         self.candidate_census = CandidateCensus(
             base_tables=policy.relations.classified_tables,
@@ -329,13 +335,19 @@ def test_snapshot_census_and_dump_use_one_exported_snapshot(tmp_path: Path) -> N
     )
     assert "--snapshot=00000003-0000001B-1" in dump_command
     assert "--format=custom" in dump_command
+    assert "--schema=public" in dump_command
     assert all(
         f"--exclude-table-data=public.{table}" in dump_command
         for table in engine.policy.relations.excluded_tables
     )
-    assert {"--exit-on-error", "--no-owner", "--no-privileges", "--jobs=1"} <= set(
-        restore_command
-    )
+    assert {
+        "--clean",
+        "--exit-on-error",
+        "--if-exists",
+        "--no-owner",
+        "--no-privileges",
+        "--jobs=1",
+    } <= set(restore_command)
     assert candidate.name.startswith(engine.policy.lifecycle.shadow_prefix)
     assert artifact.checksum
     assert artifact.path.stat().st_mode & 0o777 == 0o600
@@ -540,6 +552,64 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
     assert events[-2] == f"candidate:validated:{candidate.name}"
     assert result.candidate.marker != candidate.marker
     assert result.scrub.removed_narratives == 3
+
+
+def test_pending_migration_count_deltas_apply_only_until_migration_is_present() -> None:
+    policy = load_policy(POLICY_PATH)
+    migration = "0033_stage1c_frontier_organization_brands"
+
+    assert _pending_migration_count_deltas(policy, [("core", "0032", None)]) == {
+        "brands": 2,
+        "brands_companies": 2,
+    }
+    assert _pending_migration_count_deltas(policy, [("core", migration, None)]) == {}
+    assert _pending_migration_translation_count_deltas(
+        policy, [("core", "0032", None)]
+    ) == {"brands.display_name_en": 2}
+    assert (
+        _pending_migration_translation_count_deltas(policy, [("core", migration, None)])
+        == {}
+    )
+
+
+def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, runner, _events = _engine(tmp_path)
+    deltas = {"brands": 2, "brands_companies": 2}
+    adapter.census = replace(
+        adapter.census,
+        pending_migration_count_deltas=deltas,
+        pending_migration_translation_count_deltas={"brands.display_name_en": 2},
+    )
+    adapter.candidate_census = replace(
+        adapter.candidate_census,
+        row_counts={
+            **adapter.candidate_census.row_counts,
+            "brands": adapter.census.row_counts["brands"] + 2,
+            "brands_companies": adapter.census.row_counts["brands_companies"] + 2,
+        },
+        translation_counts={
+            **adapter.candidate_census.translation_counts,
+            "brands.display_name_en": (
+                adapter.census.translation_counts["brands.display_name_en"] + 2
+            ),
+        },
+    )
+    artifact = engine.export_dump()
+
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        result = CandidateProcessor(
+            policy=engine.policy,
+            target_url=engine.target_url,
+            adapter=adapter,
+            runner=runner,
+            python="/usr/local/bin/python",
+        ).process(candidate)
+
+    assert result.census.row_counts["brands"] == 4
+    assert result.census.row_counts["brands_companies"] == 4
 
 
 @pytest.mark.parametrize(
@@ -1011,6 +1081,40 @@ def test_harvest_coordination_refusal_precedes_snapshot_work(
         runtime.execute(action)
 
     assert events == ["lock:harvest:refused"]
+    assert not list(tmp_path.glob("*.dump"))
+
+
+@pytest.mark.parametrize("action", ["preflight", "refresh"])
+def test_synthesis_coordination_refusal_precedes_snapshot_work(
+    tmp_path: Path, action: str
+) -> None:
+    engine, adapter, runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+
+    @contextmanager
+    def refusing_synthesis_lock(_url: str, **_options: object) -> Iterator[None]:
+        events.append("lock:synthesis:refused")
+        raise DatabaseLockError("synthesis_lock_unavailable")
+        yield
+
+    runtime = PostgresRuntime(
+        engine.policy,
+        source_url=engine.source_url,
+        target_url=engine.target_url,
+        adapter=adapter,
+        engine=engine,
+        runner=runner,
+        now=engine.now,
+        harvest_lock_factory=_available_harvest_lock,
+        synthesis_lock_factory=refusing_synthesis_lock,
+        quiescence_guard=lambda: QuiescenceInspection((), 0, 0),
+    )
+
+    with pytest.raises(DatabaseLockError, match="^synthesis_lock_unavailable$"):
+        runtime.execute(action)
+
+    assert events == ["lock:synthesis:refused"]
     assert not list(tmp_path.glob("*.dump"))
 
 

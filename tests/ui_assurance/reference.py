@@ -15,7 +15,7 @@ MULTI_CONTROLS = {
     "role": "role",
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
-    "discourse": "discourse",
+    "product_labels": "product_labels",
 }
 
 
@@ -36,7 +36,7 @@ def initial_state() -> dict[str, Any]:
             "role": ALL,
             "nationalism_cn": ALL,
             "nationalism_us": ALL,
-            "discourse": ALL,
+            "product_labels": ALL,
             "unsanctioned": "off",
             "window": 1,
         },
@@ -244,6 +244,17 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "pulse_brands": list(state["pulse_brands"]),
         },
         "feed": [post["id"] for post in rows],
+        "classification_states": {
+            post["id"]: {
+                "status": post["classification_status"],
+                "source": post["scalar_source"],
+                "post_types": list(post["post_types"]),
+                "product_labels": list(post["product_labels"]),
+                "cn_nationalism": post["cn_nationalism"],
+                "us_nationalism": post["us_nationalism"],
+            }
+            for post in rows
+        },
         "counts": len(rows),
         "chart": {
             "window": int(state["filters"]["window"]),

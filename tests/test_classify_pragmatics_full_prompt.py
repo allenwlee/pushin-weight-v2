@@ -1,365 +1,264 @@
-"""U3a + U3b: build_pragmatics_full_prompt extended for new taxonomy,
-multi-value arrays, CTA rule, and unsanctioned_flags top-level field.
-
-Plan: docs/plans/2026-07-03-003-feat-post-fetch-taxonomy-and-multi-discourse-plan.md
-Units U3a + U3b.
-
-Verifies:
-- U3a: prompt lists 6 post_types (4 existing + advertising_marketing +
-  event_announcement).
-- U3a: prompt lists 10 discourse_roles (9 existing + advertising-marketing).
-- U3a: prompt instructs array output for post_types and discourse_roles.
-- U3a: prompt says "MAXIMUM 3 of each per brand".
-- U3b: prompt contains the CTA rule with bilingual triggers (限时免费, etc.)
-- U3b: prompt mentions unsanctioned_flags as a top-level field with
-  the four allowed values.
-- U3b: prompt instructs dual-tag for CTA + genuine_hype coexistence.
-"""
+"""Prompt contract for the Stage 1 classifier."""
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
-from x_monitor.attribution import build_pragmatics_full_prompt
+from core.classification_contract import (
+    NATIONALISM_KEYS,
+    POST_TYPE_KEYS,
+    PRODUCT_LABEL_KEYS,
+    PROMPT_VERSION,
+    SENTIMENT_KEYS,
+)
+from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
 
 
-def _prompt() -> str:
-    return build_pragmatics_full_prompt(
-        "GLM 5.2 is amazing", ["glm", "moonshot_kimi"],
+@pytest.mark.parametrize("key", POST_TYPE_KEYS)
+def test_prompt_enumerates_every_post_type(key):
+    assert f"- {key}:" in _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("key", PRODUCT_LABEL_KEYS)
+def test_prompt_enumerates_every_product_label(key):
+    assert f"- {key}:" in _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+
+def test_prompt_enumerates_sentiment_and_nationalism_values():
+    assert (
+        "SENTIMENT (required for classified): " + ", ".join(SENTIMENT_KEYS)
+    ) in _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert ", ".join(NATIONALISM_KEYS) in _PRAGMATICS_FULL_SYSTEM_PROMPT
+    for meaning in (
+        "positive: praise",
+        "negative: criticism",
+        "neutral: informational",
+        "mixed: materially both",
+        "none means the supplied source can be assessed",
+        "Use null only when missing or unusable context",
+        "Nationalism requires explicit US-China",
+    ):
+        assert meaning in _PRAGMATICS_FULL_SYSTEM_PROMPT
+
+
+def test_prompt_preserves_unsanctioned_vocabulary_definitions_and_boundaries():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    for key, evidence in (
+        ("marketing_spam", "promotional CTA"),
+        ("scam", "payment, credentials, or a wallet seed"),
+        ("crypto", "token tickers, airdrops, wallet claims"),
+        ("unauthorized", "third-party giveaway"),
+    ):
+        assert f"- {key}:" in prompt
+        assert evidence in prompt
+    assert "Advertising or CTA-heavy wrapper content" in prompt
+    assert "specific evidence" in prompt
+
+
+def test_prompt_contains_taxonomy_boundaries_from_settled_contract():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    for boundary in (
+        "Future intent",
+        "news roundup is not hands_on_usage",
+        "release date",
+        "not events",
+        "substantive recap",
+        "Attendance means presence",
+        "asynchronous task before a deadline is not events",
+        "action-for-benefit exchange",
+        "Jobs use job_listings rather than opportunities",
+        "job listing needs a concrete role and application route",
+        "personnel change needs a named person",
+        "effective dates may be unknown",
+        "Mentioning a benchmark",
+        "Do not infer a result from a linked page, video, image, or URL",
+        "better based on vibes",
+        "Rhetorical headings are not questions_requests",
+        "company, business, or investor perspective",
+        "electricity-cost",
+        "comment alone is not business_finance",
+        "winning track",
+        "retrospective post after it has ended",
+    ):
+        assert boundary in prompt
+
+
+def test_prompt_requires_an_independent_type_pass_and_separate_namespaces():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "decide yes or no for every allowed post type" in prompt
+    assert "Do not choose a primary type and stop" in prompt
+    assert "both results_evaluations and opinions_reactions" in prompt
+    assert "both hands_on_usage and results_evaluations" in prompt
+    assert "keep it only in product_labels" in prompt
+
+
+def test_prompt_requires_an_independent_product_label_pass():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "decide yes or no separately for bug" in prompt
+    assert "Explicit praise, endorsement" in prompt
+    assert "Advertising and testimonial are independent" in prompt
+    assert "strictly for the current attributed brand_id" in prompt
+    assert "event participant" in prompt
+    assert (
+        "praise of Corpus for winning a Qwen event is not a Qwen testimonial" in prompt
+    )
+    assert "unavailable linked video, image, page, or URL" in prompt
+    assert "omit testimonial and use neutral sentiment" in prompt
+    assert (
+        "questions_requests in post_types and ideas_requests in product_labels"
+        in prompt
+    )
+    assert "ideas_requests never appears in post_types" in prompt
+
+
+def test_prompt_defines_product_labels_as_independent_and_non_adjudicating():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "independent multi-label array" in prompt
+    assert "empty array is valid" in prompt
+    assert "Product-label keys are forbidden in post_types" in prompt
+    assert "ideas and requests stay combined" in prompt
+    assert "never adjudicates the claim false" in prompt
+
+
+def test_prompt_defines_classified_context_missing_and_other_without_defaults():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "classified requires at least one post_type" in prompt
+    assert "context_missing requires empty post_types and product_labels" in prompt
+    assert "use null for an unknown scalar" in prompt
+    assert "other: a confident residual only" in prompt
+    assert "exclusive" in prompt
+    assert "separately for each attributed brand" in prompt
+    assert "bare careers-page pointer without a concrete role" in prompt
+    assert "content about the attributed brand" in prompt
+
+
+def test_prompt_limits_context_to_stored_provenance_and_forbids_fetches():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "already stored context entries" in prompt
+    assert "provenance markers" in prompt
+    assert "do not fetch parents, links, media" in prompt
+
+
+def test_prompt_output_has_no_discourse_or_primary_type_contract():
+    prompt = _PRAGMATICS_FULL_SYSTEM_PROMPT
+    assert "discourse_role" not in prompt
+    assert "primary_type" not in prompt
+    assert '"post_types":[str]' in prompt
+    assert '"product_labels":[str]' in prompt
+
+
+def test_prompt_version_tracks_the_system_user_boundary():
+    assert PROMPT_VERSION == "stage1-prompt-v23"
+
+
+def test_v27_three_pass_and_audit_prompt_bytes_are_frozen():
+    from x_monitor import attribution
+
+    expected = {
+        "_PRAGMATICS_BASE_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-base-v1",
+            "fed11bcb526403df4ef16758868ccf2612446987d19c19ac101b1f00530e4f7f",
+        ),
+        "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-secondary-v1",
+            "5836890d59ccf61b478fc1c9f26669502950d381cf7c2cf4c82efa9c915c1fa4",
+        ),
+        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-review-v1",
+            "3571aa578e789ff90ad1b09c8fc67afcbf3b416a988b1f2072e42a77412a8ad0",
+        ),
+        "_PRAGMATICS_RARE_SYSTEM_PROMPT": (
+            "stage1-prompt-v18-narrow-audit-v1",
+            "9ed47a6339f2f716dfa4471c5641ca98f541e46c97d8fcb3580b65570f846ef0",
+        ),
+    }
+    versions = {
+        "_PRAGMATICS_BASE_SYSTEM_PROMPT": attribution._PRAGMATICS_BASE_PROMPT_VERSION,
+        "_PRAGMATICS_SECONDARY_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_SECONDARY_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_REVIEW_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_REVIEW_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_RARE_SYSTEM_PROMPT": attribution._PRAGMATICS_RARE_PROMPT_VERSION,
+    }
+
+    for constant, (version, digest) in expected.items():
+        assert versions[constant] == version
+        value = getattr(attribution, constant)
+        assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
+
+
+def test_v27_primary_review_and_repair_prompt_bytes_are_frozen():
+    from x_monitor import attribution
+
+    expected = {
+        "_PRAGMATICS_PRIMARY_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-full-v1",
+            "0638951c053bd1ecce889ab7bfeda730d24e6ee593bf5184992a456ba812cdf8",
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-completeness-review-v1",
+            "fa50534968f5a5a27a02e71e0be98ed3ca785a67d69c45c211aa7a25dfa4c893",
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
+            "stage1-prompt-v27-completeness-review-repair-v1",
+            "8272b726712012cf8f66ba92fa54225316b5bcd284654f0411ff4704d25d5f00",
+        ),
+    }
+    versions = {
+        "_PRAGMATICS_PRIMARY_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_PRIMARY_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION
+        ),
+        "_PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_SYSTEM_PROMPT": (
+            attribution._PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION
+        ),
+    }
+
+    for constant, (version, digest) in expected.items():
+        assert versions[constant] == version
+        value = getattr(attribution, constant)
+        assert hashlib.sha256(value.encode("utf-8")).hexdigest() == digest
+
+    assert (
+        attribution._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+        == "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
     )
 
 
-# --- U3a: new post_types --------------------------------------------
+def test_prompt_identity_is_shared_by_batch_and_single_builders():
+    import json
 
+    from x_monitor.attribution import (
+        build_batch_pragmatics_full_prompt,
+        build_pragmatics_full_prompt,
+    )
 
-def test_u3a_prompt_includes_advertising_marketing_post_type():
-    p = _prompt()
-    assert "advertising_marketing" in p
-    assert "event_announcement" in p
+    single = build_pragmatics_full_prompt("text", ["deepseek"])
+    batch = build_batch_pragmatics_full_prompt(
+        [{"tweet_id": "one", "text": "text", "brand_ids": ["deepseek"]}]
+    )
 
-
-def test_u3a_prompt_lists_six_post_types():
-    """Count the post_type lines in the prompt."""
-    p = _prompt()
-    expected_keys = [
-        "buzz_releases",
-        "hands_on_usage",
-        "performance_comparisons",
-        "feedback_questions",
-        "advertising_marketing",
-        "event_announcement",
+    assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in single
+    assert _PRAGMATICS_FULL_SYSTEM_PROMPT not in batch
+    assert json.loads(single) == [
+        {
+            "tweet_id": "_single_",
+            "text": "text",
+            "brand_ids": ["deepseek"],
+            "context": [],
+        }
     ]
-    for k in expected_keys:
-        assert k in p, f"post_type {k} missing from prompt"
-
-
-# --- U3a: new discourse_role -----------------------------------------
-
-
-def test_u3a_prompt_includes_advertising_marketing_discourse():
-    p = _prompt()
-    assert "advertising-marketing" in p  # hyphenated per KTD7
-
-
-def test_u3a_prompt_lists_ten_discourse_roles():
-    """Count the discourse_role lines in the prompt."""
-    p = _prompt()
-    expected_keys = [
-        "genuine_hype",
-        "sarcasm",
-        "dunk_yingyang",
-        "self_deprecation",
-        "cope",
-        "fud",
-        "distillation_accusation",
-        "ai_slop_critique",
-        "absurdist_meme",
-        "advertising-marketing",
+    assert json.loads(batch) == [
+        {
+            "tweet_id": "one",
+            "text": "text",
+            "brand_ids": ["deepseek"],
+            "context": [],
+        }
     ]
-    for k in expected_keys:
-        assert k in p, f"discourse_role {k} missing from prompt"
-
-
-# --- U3a: multi-value arrays ----------------------------------------
-
-
-def test_u3a_prompt_instructs_post_types_array():
-    """The prompt must declare post_types as an array in the JSON shape."""
-    p = _prompt()
-    assert "post_types" in p
-    assert '"post_types": [str]' in p
-    assert "ARRAY, max 3" in p  # the array instruction
-
-
-def test_u3a_prompt_instructs_discourse_roles_array():
-    """The prompt must declare discourse_roles as an array in the JSON shape."""
-    p = _prompt()
-    assert "discourse_roles" in p
-    assert '"discourse_roles": [str]' in p
-
-
-def test_u3a_prompt_states_max_three_per_brand():
-    p = _prompt()
-    assert "MAXIMUM 3 of each per brand" in p
-
-
-def test_u3a_prompt_explains_when_multi_value_is_appropriate():
-    """The prompt gives an example of when to emit multiple values."""
-    p = _prompt()
-    assert "performance_comparisons" in p and "feedback_questions" in p
-    assert "am I running behind" in p  # example anchor
-
-
-# --- U3b: CTA rule ----------------------------------------------------
-
-
-def test_u3b_prompt_contains_cta_rule():
-    """The CTA-precludes-genuine_hype rule is in the prompt."""
-    p = _prompt()
-    assert "call-to-action" in p
-    assert "advertising-marketing" in p
-    assert "genuine_hype" in p
-
-
-def test_u3b_prompt_lists_bilingual_cta_triggers():
-    """The prompt includes Chinese-language CTA triggers."""
-    p = _prompt()
-    for trigger in ["限时免费", "立即体验", "注册", "点击"]:
-        assert trigger in p, f"Chinese CTA trigger {trigger!r} missing"
-
-
-def test_u3b_prompt_lists_english_cta_triggers():
-    """The prompt includes English CTA triggers."""
-    p = _prompt()
-    for trigger in ["try", "sign up", "join", "limited-time", "free access"]:
-        assert trigger in p, f"English CTA trigger {trigger!r} missing"
-
-
-def test_u3b_prompt_lists_wrapper_promo_triggers():
-    p = _prompt()
-    assert "one API key" in p
-    assert "OpenAI-compatible gateway" in p
-    assert "free credit no card" in p
-
-
-def test_u3b_prompt_allows_dual_tag_for_cta_plus_genuine_hype():
-    """When genuine praise AND a CTA coexist, both tags should be allowed."""
-    p = _prompt()
-    assert "emit BOTH" in p
-    assert "discourse_roles values" in p
-
-
-# --- U3b: unsanctioned_flags top-level ------------------------------
-
-
-def test_u3b_prompt_instructs_unsanctioned_flags_top_level():
-    p = _prompt()
-    assert "unsanctioned_flags" in p
-    # Top-level position: outside `classifications`. The batch
-    # prompt (Plan 2026-07-13-001) emits `unsanctioned_flags` next
-    # to `classifications` inside each per-tweet result row, and the
-    # JSON shape spec explicitly shows it at that level.
-    assert "outside `classifications`" in p or "unsanctioned_flags" in p
-    # The schema-spec rule names the allow-list values.
-    for v in ["marketing_spam", "scam", "crypto", "unauthorized"]:
-        assert v in p, f"unsanctioned flag value {v!r} missing from spec"
-
-
-def test_u3b_prompt_lists_all_four_unsanctioned_flag_values():
-    p = _prompt()
-    for v in ["marketing_spam", "scam", "crypto", "unauthorized"]:
-        assert v in p, f"unsanctioned flag value {v!r} missing"
-
-
-def test_u3b_prompt_shows_unsanctioned_flags_in_output_json():
-    """The Output JSON shape includes unsanctioned_flags."""
-    p = _prompt()
-    # The Rules #1 specifies the output JSON shape.
-    assert '"unsanctioned_flags": [str]' in p
-
-
-# --- General prompt sanity -------------------------------------------
-
-
-def test_prompt_includes_brand_list():
-    """The brand_ids passed in appear in the prompt text."""
-    p = build_pragmatics_full_prompt(
-        "test text", ["glm", "moonshot_kimi", "minimax"],
-    )
-    for b in ["glm", "moonshot_kimi", "minimax"]:
-        assert b in p
-
-
-def test_prompt_handles_empty_brand_list():
-    p = build_pragmatics_full_prompt("test", [])
-    assert "(none)" in p
-
-
-def test_prompt_no_code_fences_or_prose():
-    """The prompt itself should not contain code fences."""
-    p = _prompt()
-    # The prompt does NOT enforce a no-fence rule on itself; the OUTPUT
-    # rule (Rule 9) says "No prose, no explanation, no code fences."
-    assert "No prose" in p
-    assert "no code fences" in p
-
-
-# --- U3 (plan 2026-07-04): sentiment calibration rules ------------------
-
-
-def test_u3_prompt_includes_rule_10_launch_announcement_neutral():
-    """Rule 10: launch announcement with no evaluative language → sent=neutral."""
-    p = _prompt()
-    assert "10." in p
-    assert "launch announcement" in p.lower() or "generally available" in p
-
-
-def test_u3_prompt_includes_rule_11_strategically_positive():
-    """Rule 11: long analytical post with 'strategically positive' → sent=positive."""
-    p = _prompt()
-    assert "11." in p
-    assert "strategically positive" in p
-
-
-def test_u3_prompt_includes_rule_12_multi_brand_state_of_market():
-    """Rule 12: multi-brand state-of-market posts → sent=neutral per brand."""
-    p = _prompt()
-    assert "12." in p
-    assert "climbed 20 spots" in p or "state-of-market" in p or "state of market" in p
-
-
-# --- U4 (plan 2026-07-04): post_type disambiguation rules ----------------
-
-
-def test_u4_prompt_includes_rule_13_event_announcement():
-    """Rule 13: one-line launch posts → pt=event_announcement (NOT hands_on_usage)."""
-    p = _prompt()
-    assert "13." in p
-    assert "event_announcement" in p
-    # The 'NOT hands_on_usage' caveat
-    assert "NOT hands_on_usage" in p
-
-
-def test_u4_prompt_includes_rule_14_ttft_performance():
-    """Rule 14: TTFT / benchmark / 'vs' comparison → pt=performance_comparisons."""
-    p = _prompt()
-    assert "14." in p
-    assert "TTFT" in p or "ttft" in p.lower()
-    assert "performance_comparisons" in p
-
-
-def test_u4_prompt_includes_rule_15_analytical_commentary():
-    """Rule 15: pure analytical commentary → perf OR feedback_questions, NOT hands_on_usage."""
-    p = _prompt()
-    assert "15." in p
-    assert "feedback_questions" in p
-
-
-def test_u4_prompt_canonical_example_llm_drag_race():
-    """Rule 14 cites the LLM Drag Race write-up as the canonical example."""
-    p = _prompt()
-    assert "Drag Race" in p or "drag race" in p.lower()
-
-
-# --- Worked example block ----------------------------------------------
-
-
-def test_u3u4_prompt_has_worked_example_block():
-    """The prompt ends with 'Worked examples' listing six reference cases."""
-    p = _prompt()
-    assert "Worked examples" in p
-    # Six example markers expected: A, B, C, D, E, F.
-    for marker in ["A.", "B.", "C.", "D.", "E.", "F."]:
-        assert marker in p, f"worked example {marker} missing"
-
-
-def test_u3u4_prompt_worked_example_a_event_announcement():
-    """Example A: 'Kimi K2.7 Code is generally available' → event_announcement/neutral."""
-    p = _prompt()
-    # The example text appears verbatim
-    assert "Kimi K2.7 Code is generally available" in p
-    # And the expected per-brand output is shown
-    assert "event_announcement" in p
-
-
-def test_u3u4_prompt_worked_example_b_multi_brand_neutral():
-    """Example B: state-of-market (Kimi climbed, Deepseek price drop) → neutral per brand."""
-    p = _prompt()
-    assert "K2.7 Code climbed 20 spots" in p or "climbed 20 spots" in p
-    assert "Deepseek V4" in p or "price dropped" in p
-
-
-def test_u3u4_prompt_worked_example_c_qwen_positive():
-    """Example C: Qwen investment thesis → positive sentiment."""
-    p = _prompt()
-    assert "Alibaba" in p
-    assert "strategically positive" in p
-
-
-def test_u3u4_prompt_token_count_under_2500():
-    """Prompt size guard. len(prompt.split()) * 1.3 is a rough upper bound on tokens."""
-    p = _prompt()
-    approx_tokens = int(len(p.split()) * 1.3)
-    assert approx_tokens < 2500, (
-        f"prompt too big: ~{approx_tokens} tokens "
-        f"({len(p.split())} words)"
-    )
-
-
-# --- U1 (plan 2026-07-06-001): v12 calibration rules 16-19 ---------------
-
-
-def test_u1_prompt_includes_rule_16_nationalism_framing():
-    """Rule 16: nationalism requires explicit US-China relational framing."""
-    p = _prompt()
-    assert "16." in p
-    assert "US-China relational framing" in p
-
-
-def test_u1_prompt_includes_rule_17_trap_language():
-    """Rule 17: trap-language 'gotcha' / '翻车' disambiguated from US-China framing."""
-    p = _prompt()
-    assert "17." in p
-    assert "trap" in p
-    assert "翻车" in p
-
-
-def test_u1_prompt_includes_rule_18_superlative_praise():
-    """Rule 18: 'fastest' superlative is hype, not nationalism."""
-    p = _prompt()
-    assert "18." in p
-    assert "fastest" in p
-    assert "genuine_hype" in p
-
-
-def test_u1_prompt_includes_rule_19_vendor_not_us():
-    """Rule 19: anti-Chinese-vendor critique is not us_nationalism valence."""
-    p = _prompt()
-    assert "19." in p
-    assert "Qwen" in p
-    assert "us_nationalism" in p
-
-
-def test_u1_prompt_canonical_example_g_dunk_no_nationalism():
-    """Worked example G: anti-vendor dunk on DeepSeek → discourse_roles=[dunk_yingyang],
-    cn/us_nationalism=none (rules 16+17)."""
-    p = _prompt()
-    assert "DeepSeek shipping a benchmark trap" in p
-    assert "dunk_yingyang" in p
-    # The post should explicitly mark us_nationalism as none (per rule 16)
-    # in the worked-example explanation.
-    assert "us_nationalism=none" in p
-
-
-def test_u1_prompt_examples_h_i_j_present():
-    """Worked examples H (Qwen superlative), I (GLM anti-vendor fud), J (US-China framing)."""
-    p = _prompt()
-    # H: superlative praise on Qwen
-    assert "Qwen is the fastest" in p
-    # I: anti-vendor dunk on GLM with fud
-    assert "GLM 5.2 fumbled the launch" in p
-    assert "fud" in p
-    # J: explicit US-China framing — nationalism DOES fire here
-    assert "AI race is heating up" in p
-    assert "cn_nationalism=mild_pro" in p
-    assert "us_nationalism=anti" in p

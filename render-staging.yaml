@@ -62,7 +62,13 @@ services:
       - key: X_MONITOR_HEADLINE_PUBLICATION_SOURCE
         value: prefer_per_brand
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: staging-v23-per-brand-activation-20260831
+        value: staging-v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "False"
+      - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
+        value: staging-v1-demand-ja-20260911
 
   - type: worker
     name: pushinweight-staging-headlines
@@ -102,11 +108,47 @@ services:
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
-        value: "True"
+        value: "False"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: staging-v23-per-brand-activation-20260831
+        value: staging-v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "False"
+
+  - type: worker
+    name: pushinweight-staging-synthesis
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: python manage.py run_synthesis_worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED
+        value: "False"
+      - key: X_MONITOR_SYNTHESIS_ACTIVATION_STATE
+        value: pending
+      - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
+        value: staging-v1-demand-ja-20260911
 
   - type: cron
     name: pushinweight-staging-harvest
@@ -157,24 +199,24 @@ services:
         sync: false
       - key: TWITTERAPI_IO_ON_DEMAND_API_KEY
         sync: false
-      # The effective translator/classifier URLs decide which one of these
-      # service-scoped credentials the acceptance preflight requires.
-      - key: ANTHROPIC_BASE_URL
-        sync: false
-      - key: X_MONITOR_CLASSIFIER_BASE_URL
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
+      # Translation and classification are explicitly pinned to DeepSeek in
+      # config.yaml; MiniMax remains available to separately configured roles.
       - key: MINIMAX_API_TOKEN
         sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
-        value: "True"
+        value: "False"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_HEADLINE_CONTROL_REVISION
-        value: staging-v23-per-brand-activation-20260831
+        value: staging-v24-integrated-ja-demand-20260911
+      - key: X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED
+        value: "False"
+      - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
+        value: "False"
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "False"
 
 databases:
   - name: pushinweight-staging-db

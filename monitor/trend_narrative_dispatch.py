@@ -37,6 +37,16 @@ def dispatch_harvest_completion(
         return NarrativeDispatchResult(status="config_error")
     if not config.enqueue_active:
         return NarrativeDispatchResult(status="disabled")
+    if config.demand_shaping_enabled and config.prewarm_brand_keys:
+        from monitor.trend_narrative_demand import record_trend_narrative_demand
+
+        for window_days in config.prewarm_windows:
+            record_trend_narrative_demand(
+                brand_keys=config.prewarm_brand_keys,
+                window_days=window_days,
+                reason="prewarm",
+                config=config,
+            )
     if task is None:
         from monitor.tasks import refresh_trend_narratives
 

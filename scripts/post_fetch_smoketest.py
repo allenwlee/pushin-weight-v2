@@ -6,13 +6,12 @@ Plan: docs/plans/2026-07-02-002-feat-streamlined-post-fetch-pipeline-plan.md
 translate + U4 classify) against either the most recent cycle's
 kept posts OR a fixture file, and prints:
 
-  - counts per stage (n_classified, n_translated, n_discourse,
-    n_nationalism)
+  - counts per stage (classified, context-missing, invalid, translated)
   - per-stage timing in milliseconds
   - 5 sample posts with all annotation fields aligned for
-    eyeball coherence (text + text_en + literal_zh +
-    cn_equivalent + china_nationalism + us_nationalism +
-    per-brand discourse_role)
+    eyeball coherence (text + text_en + literal_zh + cn_equivalent +
+    per-brand outcome, types, product labels, sentiment, and nullable
+    china_nationalism / us_nationalism)
   - error report grouped by stage (LLM failures, parse failures,
     missing brand attribution)
   - exit code: 0 always; --strict-budget exits 1 if cycle-time
@@ -421,20 +420,14 @@ def _render_sample_posts(
           types=<unique post_types across all brands>
           annotation=<translator-emitted annotation>
         brand_mentions:
-          <brand_id>
+          <brand_id> outcome=<classified|context_missing>
             post_types:
               - <value>
+            product_labels:
+              - <value>
             sentiment=<value>
-            cls_discourse=<value|omitted>
             cn=<value>
             us=<value>
-
-    U1-final (plan 2026-07-06-001): discourse_role is classifier-only.
-    The translator's post-level `discourse_role` was REMOVED from the
-    contract — pragmatic register is exclusively the per-brand
-    classifier output, persisted to `posts_brands_discourse`. So
-    `trans_disc:` is no longer rendered; `cls_disc=` is the only
-    discourse field per brand.
 
     U2 (plan 2026-07-04): each post header includes the full X / Twitter
     URL `https://x.com/<handle>/status/<tweet_id>` (or `(no handle)`
@@ -481,8 +474,8 @@ def _render_sample_posts(
         # Hierarchical layout (smoketest skill 2026-07-06).
         # post: block groups post-level tags (types, annotation);
         # brand_mentions: block groups per-brand tags with the brand
-        # name as a bare section header. Multi-value post_types /
-        # discourse_roles render as nested bullets, not flattened.
+        # name as a bare section header. Multi-value Stage 1 arrays render as
+        # nested bullets, not a cartesian product.
         brand_rows = classification_rows.get(tid, [])
         all_post_types: list[str] = []
         for cls in brand_rows:
@@ -509,7 +502,7 @@ def _render_sample_posts(
         lines.append("brand_mentions:")
         for cls in brand_rows:
             brand_id = cls["brand_id"]
-            lines.append(f"  {brand_id}")
+            lines.append(f"  {brand_id} outcome={cls.get('outcome', '(unknown)')}")
             # post_types — bullet list when array, single line for
             # legacy scalar (still keeping the key=`post_types=` name
             # for forward-compat with the array shape).
@@ -522,26 +515,18 @@ def _render_sample_posts(
                 lines.append("    post_types:")
                 for pt in post_types:
                     lines.append(f"      - {pt}")
-            lines.append(f"    sentiment={cls['sentiment']}")
-            # discourse_roles — single `cls_discourse=` line for one
-            # element; nested bullets for many; omit entirely when
-            # both arrays are absent. Prefer the modern `discourse_roles`
-            # array; fall back to legacy scalar `discourse_role`.
-            has_array = "discourse_roles" in cls
-            raw_drs = cls.get("discourse_roles")
-            legacy_dr = cls.get("discourse_role")
-            if has_array and raw_drs:
-                if len(raw_drs) == 1:
-                    lines.append(f"    cls_discourse={raw_drs[0]}")
-                else:
-                    lines.append("    discourse_roles:")
-                    for dr in raw_drs:
-                        lines.append(f"      - {dr}")
-                    # No `cls_discourse=` line in the multi-bullet case.
-            elif legacy_dr:
-                lines.append(f"    cls_discourse={legacy_dr}")
-            lines.append(f"    cn={cls['china_nationalism']}")
-            lines.append(f"    us={cls['us_nationalism']}")
+            product_labels = cls.get("product_labels") or []
+            if product_labels:
+                lines.append("    product_labels:")
+                for label in product_labels:
+                    lines.append(f"      - {label}")
+            else:
+                lines.append("    product_labels=(none)")
+            lines.append(f"    sentiment={cls.get('sentiment') or '(unknown)'}")
+            lines.append(
+                f"    cn={cls.get('china_nationalism') or '(unknown)'}"
+            )
+            lines.append(f"    us={cls.get('us_nationalism') or '(unknown)'}")
     return "\n".join(lines)
 
 
@@ -594,11 +579,6 @@ def main(argv: list[str] | None = None) -> int:
     # are gone.
 
     from x_monitor.store import Store
-    from x_monitor.translator import (
-        AnthropicClaudeClient,
-        translate_batch_pragmatics,
-    )
-    from x_monitor.attribution import classify_pragmatics_full
 
     # Lazy import so the smoke test can run on a workstation
     # without the db schema being initialized (the LaunchAgent
@@ -730,12 +710,12 @@ def _run_pipeline(
     # `x_monitor.translator.AnthropicClaudeClient` see the
     # patched value through the standard `from x_monitor.X import`
     # resolution.
+    from x_monitor.attribution import classify_pragmatics_full
     from x_monitor.translator import (
+        _MAX_RETRIES,
         AnthropicClaudeClient,
         translate_batch_pragmatics,
-        _MAX_RETRIES,
     )
-    from x_monitor.attribution import classify_pragmatics_full
 
     print(f"smoketest: source={args.source} n_posts={len(posts)}")
     if not posts:
@@ -796,6 +776,7 @@ def _run_pipeline(
     t0 = time.monotonic()
     classification_rows: dict[str, list[dict]] = {}
     unsanctioned_flags_by_post: dict[str, list[str]] = {}
+    n_classification_invalid = 0
     for post in posts:
         brand_ids = post.get("brand_ids") or []
         if not brand_ids:
@@ -814,13 +795,18 @@ def _run_pipeline(
                 file=sys.stderr,
             )
             continue
-        # U2a: cls is now {"by_brand": {...}, "unsanctioned_flags": [...]}.
-        by_brand = cls.get("by_brand", {}) if isinstance(cls, dict) else {}
+        if not isinstance(cls, dict) or cls.get("valid") is not True:
+            n_classification_invalid += 1
+            continue
+        by_brand = cls.get("by_brand", {})
+        if not isinstance(by_brand, dict):
+            n_classification_invalid += 1
+            continue
         for brand_id, prongs in by_brand.items():
             classification_rows.setdefault(
                 str(post.get("tweet_id") or post.get("id")), []
             ).append({"brand_id": brand_id, **prongs})
-        flags = cls.get("unsanctioned_flags", []) if isinstance(cls, dict) else []
+        flags = cls.get("unsanctioned_flags", [])
         if flags:
             unsanctioned_flags_by_post[
                 str(post.get("tweet_id") or post.get("id"))
@@ -844,16 +830,13 @@ def _run_pipeline(
     n_failed_translate = sum(
         1 for r in translation_rows if r.get("translation_failed")
     )
-    n_classified_posts = len(classification_rows)
-    n_discourse = sum(
+    n_classified_posts = sum(
         1 for rows in classification_rows.values()
-        for r in rows if r.get("discourse_role") != "uncategorized"
+        if any(row.get("outcome") == "classified" for row in rows)
     )
-    n_nationalism = sum(
+    n_context_missing_posts = sum(
         1 for rows in classification_rows.values()
-        for r in rows
-        if r.get("china_nationalism") != "none"
-        and r.get("us_nationalism") != "none"
+        if rows and all(row.get("outcome") == "context_missing" for row in rows)
     )
     n_unsanctioned = len(unsanctioned_flags_by_post)
 
@@ -870,8 +853,8 @@ def _run_pipeline(
     print(f"n_translated:        {n_translated}")
     print(f"n_failed_translate:  {n_failed_translate}")
     print(f"n_classified:        {n_classified_posts}")
-    print(f"n_discourse:         {n_discourse}")
-    print(f"n_nationalism:       {n_nationalism}")
+    print(f"n_context_missing:   {n_context_missing_posts}")
+    print(f"n_classification_invalid: {n_classification_invalid}")
     print(f"n_unsanctioned:      {n_unsanctioned}")
     print(f"t_translate_ms:      {t_translate_ms}")
     print(f"t_classify_ms:       {t_classify_ms}")

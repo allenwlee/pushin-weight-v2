@@ -63,6 +63,140 @@ call_b_groups:
 # from SC1. At $0.15/1k tweets, a full 333/day is ~$0.05/day = ~$1.50/mo.
 daily_ceiling: 333
 
+# Global discovery lanes share the existing 15-minute CycleRunner, cursors,
+# persistence, and post-fetch classifier. Both lanes stay disabled until a
+# separate owner-approved provider trial establishes quality and cost.
+discovery:
+  jobs:
+    enabled: false
+    query_pack_version: jobs-discovery-v1
+    cadence_minutes: 60
+    max_lookback_hours: 24
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    request_timeout_seconds: 30
+    per_cycle_call_ceiling: 2
+    daily_credit_ceiling: 1800
+    credits_per_result: 15
+    minimum_credits_per_call: 15
+    queries:
+      - query_id: JD_EN_ORG
+        language: en
+        query_family: organization
+        primary_terms: ['"artificial intelligence"', '"AI startup"', '"AI company"']
+        co_occurrence: ['hiring', 'jobs', 'careers', 'opening']
+        not_include: ['football', 'fantasy league']
+      - query_id: JD_EN_ROLE
+        language: en
+        query_family: role
+        primary_terms: ['engineer', 'researcher', 'scientist', 'designer']
+        co_occurrence: ['"we are hiring"', '"job opening"', 'apply', 'careers']
+        not_include: ['football', 'fantasy league']
+      - query_id: JD_ZHCN_ORG
+        language: zh-cn
+        query_family: organization
+        primary_terms: ['人工智能', '大模型', 'AI公司']
+        co_occurrence: ['招聘', '职位', '加入我们', '岗位']
+        not_include: []
+      - query_id: JD_ZHCN_ROLE
+        language: zh-cn
+        query_family: role
+        primary_terms: ['工程师', '研究员', '科学家', '设计师']
+        co_occurrence: ['招聘', '职位', '申请', '岗位']
+        not_include: []
+      - query_id: JD_JA_ORG
+        language: ja
+        query_family: organization
+        primary_terms: ['人工知能', '生成AI', 'AI企業']
+        co_occurrence: ['採用', '求人', '募集中', 'ポジション']
+        not_include: []
+      - query_id: JD_JA_ROLE
+        language: ja
+        query_family: role
+        primary_terms: ['エンジニア', '研究者', '科学者', 'デザイナー']
+        co_occurrence: ['採用', '求人', '応募', '募集中']
+        not_include: []
+  personnel:
+    enabled: false
+    query_pack_version: personnel-discovery-v1
+    cadence_minutes: 60
+    max_lookback_hours: 24
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    request_timeout_seconds: 30
+    per_cycle_call_ceiling: 2
+    daily_credit_ceiling: 1800
+    credits_per_result: 15
+    minimum_credits_per_call: 15
+    queries:
+      - query_id: PD_EN_ORG
+        language: en
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', '"Google DeepMind"', 'xAI', 'MiniMax', 'Cursor', 'Cognition', 'Genspark']
+        co_occurrence: ['joined', 'left', 'departed', 'appointed', '"now at"']
+        not_include: ['job opening', 'we are hiring']
+      - query_id: PD_EN_TRANSITION
+        language: en
+        query_family: transition
+        primary_terms: ['"I joined"', '"has joined"', '"I left"', '"has left"', '"worked at"']
+        co_occurrence: ['AI', 'LLM', 'research lab', 'foundation model']
+        not_include: ['job opening', 'we are hiring']
+      - query_id: PD_ZHCN_ORG
+        language: zh-cn
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', '谷歌DeepMind', 'MiniMax', '阿里通义', '深度求索']
+        co_occurrence: ['加入', '离开', '离职', '任命', '加盟']
+        not_include: ['招聘', '职位']
+      - query_id: PD_ZHCN_TRANSITION
+        language: zh-cn
+        query_family: transition
+        primary_terms: ['我加入了', '正式加入', '已经离开', '宣布离职', '曾任职于']
+        co_occurrence: ['人工智能', '大模型', 'AI实验室', '模型公司']
+        not_include: ['招聘', '职位']
+      - query_id: PD_JA_ORG
+        language: ja
+        query_family: organization
+        primary_terms: ['OpenAI', 'Anthropic', 'Google DeepMind', 'MiniMax', 'Cursor', 'Cognition']
+        co_occurrence: ['入社', '退職', '退社', '就任', '加入']
+        not_include: ['採用', '求人']
+      - query_id: PD_JA_TRANSITION
+        language: ja
+        query_family: transition
+        primary_terms: ['入社しました', '加入しました', '退職しました', '退社しました', '就任しました']
+        co_occurrence: ['人工知能', '生成AI', 'AI研究所', '基盤モデル']
+        not_include: ['採用', '求人']
+
+# Structured extraction runs only after a positive universal classification.
+# Staging keeps transport disabled; fake-provider tests exercise the full
+# router and persistence path without spending tokens.
+targeted_extraction:
+  enabled: false
+  max_calls_per_cycle: 20
+  request_timeout_seconds: 30
+  roles:
+    event_extraction:
+      model: deepseek-v4-flash
+      prompt_version: event-extraction-v1
+      max_tokens: 2000
+    opportunity_extraction:
+      model: deepseek-v4-flash
+      prompt_version: opportunity-extraction-v1
+      max_tokens: 2000
+    job_listing_extraction:
+      model: deepseek-v4-flash
+      prompt_version: job-listing-extraction-v2
+      max_tokens: 4000
+    personnel_change_extraction:
+      model: deepseek-v4-flash
+      prompt_version: personnel-change-extraction-v2
+      max_tokens: 3000
+    profile_affiliation_extraction:
+      model: deepseek-v4-flash
+      prompt_version: profile-affiliation-extraction-v2
+      max_tokens: 2000
+
 # Reply-chain cluster threshold. Tune via PR.
 clustering:
   min_commenters: 3
@@ -133,14 +267,16 @@ metrics_refresh:
 
 # LLM routing (plan 2026-08-01-002 U6). Non-null yaml model values win
 # over role-specific environment values. Environment values apply when
-# the corresponding yaml field is omitted or null. translator_base_url
-# falls back to ANTHROPIC_BASE_URL when null.
+# the corresponding yaml field is omitted or null. Routine harvest enrichment
+# routes explicitly to DeepSeek and does not inherit a shared provider URL.
 llm:
   translator_model: "deepseek-v4-flash"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
-  translator_base_url: null    # uses ANTHROPIC_BASE_URL env when null
+  translator_base_url: "https://api.deepseek.com/anthropic"
   classifier_model: "deepseek-v4-flash"
-  relevancy_model: "claude-haiku-4-5"
-  signal_model: "claude-haiku-4-5"
+  classifier_base_url: "https://api.deepseek.com/anthropic"
+  relevancy_model: "deepseek-v4-flash"
+  signal_model: "deepseek-v4-flash"
+  literal_translation_v2_enabled: null
 
 # Shared V22 trend-narrative generation. This role never inherits the
 # translator/classifier route. Service-specific environment variables request
@@ -150,15 +286,21 @@ headline_narrative:
   base_url: "https://api.deepseek.com/anthropic"
   model: "deepseek-v4-flash"
   rank_prompt_version: "headline-rank-v1"
-  editor_prompt_version: "headline-editor-v6"
-  critic_prompt_version: "headline-critic-v6"
+  editor_prompt_version: "headline-editor-v7-ja"
+  critic_prompt_version: "headline-critic-v7-ja"
   rank_max_tokens: 2400
-  editor_max_tokens: 8000
-  critic_max_tokens: 9000
+  editor_max_tokens: 10000
+  critic_max_tokens: 11000
   timeout_seconds: 60
-  prompt_version: "headline-v10-why-first-quantitative-color"
-  publication_epoch: 10
-  materiality_policy_version: "pending-live-review-v1"
+  prompt_version: "headline-v11-ja-parity"
+  publication_epoch: 11
+  materiality_policy_version: "headline-materiality-v2"
+  demand_shaping_enabled: null
+  demand_hot_minutes: 180
+  prewarm_brand_keys: []
+  prewarm_windows: []
+  critic_risk_routing_enabled: null
+  critic_audit_percent: 5
   cadence_minutes: {1: 60, 7: 1440, 30: 10080, 365: 43200}
   stale_minutes: {1: 120, 7: 2880, 30: 20160, 365: 86400}
   min_posts: 20
@@ -180,7 +322,7 @@ headline_narrative:
   call_cap: 4
   per_brand_call_cap: 25
   per_brand_input_token_cap: 700000
-  per_brand_output_token_cap: 160000
+  per_brand_output_token_cap: 180000
   # Conservative peak, cache-miss rates from DeepSeek's official 2026-09-02
   # pricing page. Off-peak/cache-hit billing can only reduce actual cost.
   per_brand_cost_cap_usd: "1.50"
@@ -203,6 +345,35 @@ headline_narrative:
   publication_source: null
   legacy_fallback_enabled: null
   control_revision: null
+
+synthesis:
+  provider: "deepseek"
+  base_url: "https://api.deepseek.com/anthropic"
+  model: "deepseek-v4-flash"
+  prompt_version: "post-synthesis-v1"
+  output_schema_version: 1
+  activation_state: null
+  provider_calls_enabled: null
+  control_revision: null
+  batch_size: 5
+  poll_seconds: 2
+  lease_seconds: 300
+  timeout_seconds: 60
+  max_attempts: 3
+  max_input_tokens_per_post: 4000
+  max_output_tokens_per_post: 1200
+  daily_request_cap: 200
+  daily_input_token_cap: 800000
+  daily_output_token_cap: 240000
+  input_usd_per_million: "0.44"
+  output_usd_per_million: "1.32"
+  daily_cost_cap_usd: "0.70"
+  pricing_version: "deepseek-v4-flash-peak-2026-09-02"
+  demand_batch_limit: 20
+  visible_expiry_minutes: 120
+  lookahead_expiry_minutes: 15
+  prewarm_enabled: null
+  prewarm_per_cycle: 0
 
 # Query-rot streak threshold (consecutive 0-result days before a query is
 # auto-disabled). Override per-model for known low-volume ones.

@@ -15,6 +15,15 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
+The allowlist below describes the production schema after migration 0028.
+Stage 0 production remained at 0027 during the 2026-09-08 Stage 1
+verification; these expanded grants have not been applied or live-verified.
+Apply them only after the source has migrated through 0028. Refresh preflight
+compares the source's complete table inventory with the tracked policy and
+fails closed with `source_classified_table_missing:<table>` when a required
+relation is absent; the later shadow migration does not bypass that source
+check.
+
 Application credentials remain Render-managed. The refresh reader is a
 separate least-privileged PostgreSQL login because it must see only the
 allowlisted product relations. Open an interactive owner session so the
@@ -52,15 +61,24 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
-  account_post_appearances, accounts, brand_hashtags, brand_keywords,
+  account_based_in_mappings, account_post_appearances,
+  account_profile_snapshots, accounts, brand_discovery_candidates,
+  brand_hashtags, brand_keywords,
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
-  companies_accounts, discourse_keys, discourse_labels, django_content_type,
-  django_migrations, django_site, hf_orgs, nationalism_keys,
-  nationalism_labels, post_type_keys, post_type_labels, posts, posts_brands,
-  posts_brands_discourse, posts_brands_mentions, posts_brands_signals,
-  posts_unsanctioned_flags, products, role_labels, roles, search_queries,
-  sentiment_keys, sentiment_labels, trend_narrative_subjects,
-  trend_narratives, unsanctioned_flag_keys
+  companies_accounts, countries, country_codes_region, country_labels,
+  discourse_keys, discourse_labels, django_content_type, django_migrations,
+  django_site, events, hf_orgs, job_discovery_runs, job_listing_evidence,
+  job_listings, nationalism_keys, nationalism_labels, opportunities, people,
+  people_accounts, people_brand_affiliation_evidence,
+  people_brand_affiliations, personnel_discovery_runs, post_type_keys,
+  post_type_labels, post_synthesis_artifacts, post_synthesis_texts,
+  post_translation_artifacts, post_translation_texts, posts, posts_brands,
+  posts_brands_classification_states, posts_brands_discourse,
+  posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
+  posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
+  region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
+  sentiment_labels, targeted_extraction_attempts, targeted_extraction_states,
+  trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys
 TO staging_refresh_reader;
 
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
@@ -69,25 +87,39 @@ GRANT MAINTAIN ON
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
-  call_state, django_session,
+  brand_trend_narrative_texts, call_state, django_session,
   harvest_backlog_windows, post_enrichment_states,
+  post_synthesis_daily_budgets, post_synthesis_demands,
+  post_synthesis_rate_limit_buckets,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
-  trend_narrative_provider_calls, trend_narrative_runs,
+  trend_narrative_demands, trend_narrative_provider_calls, trend_narrative_runs,
   trend_narrative_visible_runs, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
 
 GRANT SELECT ON
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
+  account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
-  brand_trend_narratives_id_seq, django_content_type_id_seq,
-  django_migrations_id_seq, django_site_id_seq,
-  harvest_backlog_windows_id_seq, products_id_seq, search_queries_id_seq,
+  brand_discovery_candidates_id_seq, brand_trend_narratives_id_seq,
+  brand_trend_narrative_texts_id_seq,
+  django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
+  events_id_seq, harvest_backlog_windows_id_seq, job_discovery_runs_id_seq,
+  job_listing_evidence_id_seq, job_listings_id_seq, opportunities_id_seq,
+  post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
+  post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
+  post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
+  post_translation_texts_id_seq,
+  people_brand_affiliation_evidence_id_seq,
+  people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
+  products_id_seq, search_queries_id_seq,
   socialaccount_socialaccount_id_seq, socialaccount_socialapp_id_seq,
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
-  trend_narrative_provider_calls_id_seq, trend_narrative_runs_id_seq,
+  targeted_extraction_attempts_id_seq, targeted_extraction_states_id_seq,
+  trend_narrative_demands_id_seq, trend_narrative_provider_calls_id_seq,
+  trend_narrative_runs_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
   twitter_list_memberships_id_seq
 TO staging_refresh_reader;
@@ -97,6 +129,25 @@ The sequence `SELECT` grants both preserve copied sequence state and permit
 `pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded
 tables receive `MAINTAIN` only, so the refresh role can lock their schema but
 cannot read their rows.
+
+Policy version 3 marks every relation and sequence introduced after the
+production migration boundary at `0027` as optional on the source. This covers
+the Stage 1 classification state, people/jobs/events/opportunities, targeted
+extraction, headline demand, and split translation/synthesis migrations
+`0028`–`0039`. It allows the staging-first release to refresh from the prior
+production schema and then create those empty relations with Django migrations.
+The source census omits validation counts only for optional relations that are
+absent at that boundary. Candidate and active-database validation still count
+the complete post-migration relation set.
+When migration `core.0033_stage1c_frontier_organization_brands` is pending on
+the source, validation requires exactly two additional `brands` rows and two
+additional `brands_companies` rows after migration. Once the source has that
+migration, the expected delta automatically returns to zero. The same migration
+must add exactly two nonempty `brands.display_name_en` values and no undeclared
+translation-count changes.
+Once those migrations are in production, apply the new grants above before the
+next refresh; preflight then requires each present optional relation to have
+its declared read or maintenance privilege.
 
 Do not add default privileges. A new production table must fail the exhaustive
 preflight until `config/staging_refresh.yaml`, this grant list, and the scrub or
@@ -128,7 +179,10 @@ Before every preflight or refresh:
 2. Suspend `pushinweight-staging-headlines` in the Render Dashboard and wait
    until the service is fully stopped. Do not merely scale it while a task is
    finishing.
-3. From the staging web shell, purge the stage-owned broker. The broker has no
+3. Suspend `pushinweight-staging-synthesis` and wait until it is fully stopped.
+   The worker holds a PostgreSQL coordination lock for its full lifetime, so
+   preflight will refuse an idle worker as well as one processing a demand.
+4. From the staging web shell, purge the stage-owned broker. The broker has no
    production consumers or data, so clearing these exact queue-coordination
    keys cannot affect production:
 
@@ -148,8 +202,9 @@ print({"staging_broker_keys_deleted": deleted})
 PY
 ```
 
-The refresh command independently pings the staging broker, checks that no
-Celery worker responds, and requires the `trend-narratives` queue, `unacked`
+The refresh command independently acquires the synthesis-worker coordination
+lock, pings the staging broker, checks that no Celery worker responds, and
+requires the `trend-narratives` queue, `unacked`
 hash, `unacked_index` sorted set, every additional `trend-narratives*` key, and
 latest-envelope watermark to be empty. Missing broker access or an unavailable
 worker-state probe is a hard refusal. It checks twice: before dump work and
@@ -163,7 +218,8 @@ The administration-database session survives termination and renaming of the
 active staging database. `harvest_lock_unavailable` is a hard refusal; never
 retry it until the active staging harvest or refresh has ended.
 
-Expected refusal codes are `staging_headline_worker_active:<node>`,
+Expected refusal codes are `synthesis_lock_unavailable`,
+`staging_headline_worker_active:<node>`,
 `staging_headline_queue_not_empty`, and
 `staging_headline_envelope_present`. Broker or worker inspection failure is
 also a refusal, never permission to proceed.
@@ -196,6 +252,12 @@ name, and exact rollback confirmation. Copy the JSON receipt to the operation
 record, but never create a tracked receipt file. The dump is removed in the
 command's guaranteed cleanup path.
 
+The dump explicitly includes only the `public` application schema. Operational
+recovery schemas such as `account_user_about_backup` and
+`account_geography_backup` remain production-only and never enter staging.
+Restore uses `--clean --if-exists` against the newly created, non-serving
+candidate so the archive replaces PostgreSQL's default empty `public` schema.
+
 Immediately recover the same receipt from database metadata and rerun the
 active census:
 
@@ -211,6 +273,8 @@ do not substitute estimates from `pg_stat_user_tables`:
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
 SELECT 'accounts' AS relation, count(*) AS rows FROM accounts
 UNION ALL SELECT 'brands', count(*) FROM brands
+UNION ALL SELECT 'brands_companies', count(*) FROM brands_companies
+UNION ALL SELECT 'companies', count(*) FROM companies
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
 UNION ALL SELECT 'products', count(*) FROM products
@@ -227,14 +291,19 @@ UNION ALL SELECT 'auth_user', count(*) FROM auth_user
 UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
 UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
 UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
+UNION ALL SELECT 'brand_trend_narrative_texts', count(*) FROM brand_trend_narrative_texts
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
 UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
+UNION ALL SELECT 'post_synthesis_daily_budgets', count(*) FROM post_synthesis_daily_budgets
+UNION ALL SELECT 'post_synthesis_demands', count(*) FROM post_synthesis_demands
+UNION ALL SELECT 'post_synthesis_rate_limit_buckets', count(*) FROM post_synthesis_rate_limit_buckets
 UNION ALL SELECT 'socialaccount_socialaccount', count(*) FROM socialaccount_socialaccount
 UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialapp
 UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
+UNION ALL SELECT 'trend_narrative_demands', count(*) FROM trend_narrative_demands
 UNION ALL SELECT 'trend_narrative_provider_calls', count(*) FROM trend_narrative_provider_calls
 UNION ALL SELECT 'trend_narrative_runs', count(*) FROM trend_narrative_runs
 UNION ALL SELECT 'trend_narrative_visible_runs', count(*) FROM trend_narrative_visible_runs
@@ -258,22 +327,39 @@ WHERE n.nspname = 'public' AND c.contype = 'f' AND NOT c.convalidated;
 SELECT domain, name FROM django_site WHERE id = 1;
 SQL
 
-psql "$DATABASE_URL" -X -d postgres -v ON_ERROR_STOP=1 -c \
-  "SELECT datname, datallowconn FROM pg_database WHERE datname LIKE 'pushinweight_staging_recovery_%' ORDER BY datname;"
+python - <<'PY'
+import os
 
-find /tmp -maxdepth 1 -type f -name 'staging-refresh-*.dump' -print
+import psycopg
+
+from scripts.database_lock import admin_connection_parameters
+
+parameters = admin_connection_parameters(os.environ["DATABASE_URL"])
+with psycopg.connect(**parameters) as connection, connection.cursor() as cursor:
+    cursor.execute(
+        "SELECT datname, datallowconn FROM pg_database "
+        "WHERE datname LIKE 'pushinweight_staging_recovery_%' ORDER BY datname"
+    )
+    for row in cursor:
+        print(*row)
+PY
+
+find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
+  -name 'staging-refresh-*.dump' -print 2>/dev/null
 ```
 
-Record the exact counts and latest timestamp next to the receipt. Every scrub
-count must be zero; both invariant queries must return no rows; the site must
+Record the exact counts and latest timestamp next to the receipt. All 29 scrub
+counts must be zero; both invariant queries must return no rows; the site must
 be `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must
 be empty. Compare product counts and the latest timestamp to the receipt, not
 to an earlier observation of production.
 
 Only after `verify` and the independent zero-state census both pass may the
-staging headline worker be resumed. The staging harvester remains dormant;
-each later acceptance run is a separate intentional Render Trigger Run.
+staging headline worker be resumed. Resume the synthesis worker only after its
+provider-call flag and lane budget have passed the staged activation gate.
+The staging harvester remains dormant; each later acceptance run is a separate
+intentional Render Trigger Run.
 
 ## Rollback
 

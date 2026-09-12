@@ -1,0 +1,54 @@
+{
+  "baseline": {
+    "first_batch_exact_post_type_sets": 10,
+    "first_batch_rows": 20,
+    "post_type_exact_set_accuracy": 0.5,
+    "source_candidate": "candidate-v3r9.json",
+    "thinking": "disabled"
+  },
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "Stop immediately for a malformed or truncated batch. Continue past batch one only if low-effort thinking returns a valid batch and improves the first 20 exact post-type sets over the locked 10/20 non-thinking baseline. This remains development evidence and cannot approve release.",
+  "frozen_at": "2026-09-11T05:12:00Z",
+  "global_stop": "The transport refuses request seven and reserves worst-case bytes and output tokens before every call. Capacity cannot transfer to another lane, retry, prompt, cohort, or provider.",
+  "high_effort_probe": {
+    "disposition": "stopped after first batch",
+    "observed_input_tokens": 11797,
+    "observed_output_tokens": 16384,
+    "result": "invalid because the visible JSON was truncated after reasoning consumed the output cap",
+    "transport_attempts": 1
+  },
+  "lanes": {
+    "candidate_v10_thinking_low_dev120": {
+      "batch_size": 20,
+      "input_usd_per_million": "0.44",
+      "max_tokens_per_attempt": 16384,
+      "maximum_cost_usd": "0.25",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 250000,
+      "maximum_output_tokens": 98304,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 6,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "reasoning_effort": "low",
+      "thinking": "enabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "prompt": {
+    "sha256": "006dd768eb46bacb2c2cbc81f79b8cf13257adc813a6374eed4fbaefdb524b7f",
+    "version": "stage1-prompt-v10"
+  },
+  "reason": "High-effort thinking exhausted the complete 16,384-token output cap on the first development batch and truncated the final JSON. DeepSeek exposes a distinct low effort for both Flash and Pro. This amendment tests that lower setting without increasing the output cap or touching an unseen cohort.",
+  "schema_version": "u18-development-provider-budget-v2",
+  "supersedes": "2026-09-11-140751-u18-thinking-probe-budget.json"
+}

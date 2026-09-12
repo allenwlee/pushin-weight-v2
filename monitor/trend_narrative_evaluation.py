@@ -74,7 +74,7 @@ HOLD_RUBRIC_FIELD = {
 }
 METADATA_FAMILIES = (
     "post_type",
-    "discourse",
+    "product_label",
     "sentiment",
     "china_nationalism",
     "us_nationalism",

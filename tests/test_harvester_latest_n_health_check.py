@@ -65,8 +65,42 @@ def _post(**overrides):
     return row
 
 
-def _snapshot(*posts, read_only="on"):
-    return {"transaction_read_only": read_only, "posts": list(posts)}
+def _snapshot(*posts, read_only="on", schema_profile=None):
+    snapshot = {"transaction_read_only": read_only, "posts": list(posts)}
+    if schema_profile is not None:
+        snapshot["schema_profile"] = schema_profile
+    return snapshot
+
+
+def _current_state(**overrides):
+    state = {
+        "contract_version": "stage1-v1",
+        "taxonomy_version": "stage1-taxonomy-v1",
+        "prompt_version": "stage1-prompt-v2",
+        "outcome": "classified",
+        "sentiment": "positive",
+        "china_nationalism": "none",
+        "us_nationalism": None,
+    }
+    state.update(overrides)
+    return state
+
+
+def _stage1_brand(**overrides):
+    brand = {
+        "brand_id": "minimax",
+        "signals": [
+            {"post_type": "releases_updates", "sentiment": "positive"}
+        ],
+        "product_labels": [],
+        "classification_state": _current_state(),
+        "legacy_sentiments": ["negative"],
+        "legacy_china_nationalisms": ["anti"],
+        "legacy_us_nationalisms": ["pro"],
+        "discourses": [],
+    }
+    brand.update(overrides)
+    return brand
 
 
 def _detailed_post(**overrides):
@@ -180,11 +214,20 @@ def test_query_is_bounded_before_joins_and_declares_read_only_mode(checker):
     assert "BTRIM(p.lang_detected) IN" in sql
     assert "LOWER(BTRIM(p.commentary_en)) NOT IN ('n/a', 'na')" in sql
     assert "IS DISTINCT FROM LOWER(BTRIM(p.text_zh_cn))" in sql
-    assert sql.index("LIMIT 20") < sql.index("posts_brands")
+    assert sql.index("LIMIT 20") < sql.index("FROM posts_brands")
+    assert "to_regclass('public.' || relation_name)" in sql
+    assert "WHEN stage1_relation_count = 0" in sql
+    assert "WHEN stage1_relation_count = 4" in sql
+    assert "query_to_xml(chosen_query.sql, false, true, '')" in sql
+    assert "COLUMNS snapshot text PATH 'snapshot/text()'" in sql
+    assert "RAISE NOTICE" not in sql
+    assert "posts_brands_classification_states" in sql
+    assert sql.count("BEGIN TRANSACTION READ ONLY") == 1
 
     command = checker.build_command(sql)
     assert command[:3] == ["render", "psql", "pushinweight-db-shadow"]
     assert command.count(sql) == 1
+    assert "--no-psqlrc" in command
     assert "--no-align" in command
     assert "--tuples-only" in command
     assert "ON_ERROR_STOP=1" in " ".join(command)
@@ -217,7 +260,7 @@ def test_detailed_query_adds_report_facts_without_expanding_default_snapshot(che
         assert detailed_fact in detailed_sql
         assert detailed_fact not in default_sql
     assert detailed_sql.count("BEGIN TRANSACTION READ ONLY") == 1
-    assert detailed_sql.index("LIMIT 20") < detailed_sql.index("posts_brands")
+    assert detailed_sql.index("LIMIT 20") < detailed_sql.index("FROM posts_brands")
 
 
 def test_complete_and_fresh_pending_rows_exit_zero_with_distinct_counts(checker):
@@ -343,6 +386,251 @@ def test_succeeded_classification_accepts_empty_discourse_as_uncategorized(check
     assert exit_code == 0
     assert payload["posts"][0]["state"] == "complete"
     assert payload["posts"][0]["reasons"] == []
+
+
+def test_stage1_classified_accepts_empty_products_and_no_discourse(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(
+            _post(brands=[_stage1_brand()]),
+            schema_profile="stage1",
+        ),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    assert payload["schema_profile"] == "stage1"
+    assert payload["posts"][0]["state"] == "complete"
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["state"] == "current"
+    assert classification["outcome"] == "classified"
+    assert classification["product_labels"] == []
+    assert classification["prompt_version"] == "stage1-prompt-v2"
+    assert payload["posts"][0]["reasons"] == []
+
+
+def test_stage1_context_missing_accepts_empty_edges_and_nullable_scalars(checker):
+    brand = _stage1_brand(
+        signals=[],
+        product_labels=[],
+        classification_state=_current_state(
+            outcome="context_missing",
+            sentiment=None,
+            china_nationalism=None,
+            us_nationalism="none",
+        ),
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["outcome"] == "context_missing"
+    assert classification["sentiment"] is None
+    assert classification["us_nationalism"] == "none"
+    assert payload["posts"][0]["reasons"] == []
+
+
+@pytest.mark.parametrize(
+    ("brand", "reason"),
+    [
+        (
+            _stage1_brand(
+                classification_state=_current_state(sentiment="joy"),
+                signals=[{"post_type": "buzz_releases", "sentiment": "joy"}],
+            ),
+            "invalid_sentiment",
+        ),
+        (
+            _stage1_brand(
+                signals=[{"post_type": "announcement", "sentiment": "positive"}]
+            ),
+            "invalid_post_type",
+        ),
+        (
+            _stage1_brand(
+                signals=[
+                    {"post_type": "other", "sentiment": "positive"},
+                    {"post_type": "opinions_reactions", "sentiment": "positive"},
+                ]
+            ),
+            "other_not_exclusive",
+        ),
+        (_stage1_brand(product_labels=["unknown"]), "invalid_product_label"),
+        (
+            _stage1_brand(
+                classification_state=_current_state(china_nationalism="unknown")
+            ),
+            "invalid_china_nationalism",
+        ),
+        (
+            _stage1_brand(
+                classification_state=_current_state(outcome="context_missing"),
+            ),
+            "context_missing_has_edges",
+        ),
+        (
+            _stage1_brand(signals=[]),
+            "missing_post_type",
+        ),
+        (
+            _stage1_brand(
+                signals=[], classification_state=_current_state(sentiment=None)
+            ),
+            "missing_sentiment",
+        ),
+    ],
+)
+def test_stage1_invalid_current_rows_fail_closed(checker, brand, reason):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 1
+    assert payload["status"] == "unhealthy"
+    assert reason in {item["reason"] for item in payload["posts"][0]["reasons"]}
+
+
+def test_stage1_stale_state_is_not_treated_as_current(checker):
+    brand = _stage1_brand(
+        classification_state=_current_state(
+            contract_version="stage0-legacy",
+            sentiment="positive",
+            china_nationalism="pro",
+            us_nationalism="pro",
+        ),
+        legacy_sentiments=["negative"],
+        legacy_china_nationalisms=["anti", "pro"],
+        legacy_us_nationalisms=[],
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 1
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["state"] == "stale"
+    assert classification["contract_version"] == "stage0-legacy"
+    assert classification["taxonomy_version"] == "stage1-taxonomy-v1"
+    assert classification["prompt_version"] == "stage1-prompt-v2"
+    assert classification["stale_outcome"] == "classified"
+    assert classification["outcome"] is None
+    assert classification["post_types"] == []
+    assert classification["product_labels"] == []
+    assert classification["scalar_source"] == "unrecognized"
+    assert classification["sentiment"] is None
+    assert classification["china_nationalism"] is None
+    assert classification["us_nationalism"] is None
+    assert classification["legacy_conflicts"] == []
+    assert payload["posts"][0]["reasons"] == [
+        {
+            "stage": "classification",
+            "reason": "stale_state",
+            "brand_id": "minimax",
+        }
+    ]
+
+
+def test_stage1_canonical_taxonomy_state_is_current_compatible(checker):
+    brand = _stage1_brand(
+        signals=[{"post_type": "releases_updates", "sentiment": "positive"}],
+        classification_state=_current_state(
+            taxonomy_version="stage1-taxonomy-v2",
+            prompt_version="stage1-prompt-v3",
+        ),
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["state"] == "current"
+    assert classification["taxonomy_version_current_compatible"] is True
+    assert classification["active_write_taxonomy_version"] == "stage1-taxonomy-v3"
+    assert classification["latest_taxonomy_version"] == "stage1-taxonomy-v3"
+    assert classification["active_write_prompt_version"] == "stage1-prompt-v23"
+    assert classification["latest_prompt_version"] == "stage1-prompt-v23"
+
+
+def test_stage1_current_null_scalars_suppress_legacy_fallback(checker):
+    brand = _stage1_brand(
+        signals=[],
+        classification_state=_current_state(
+            outcome="context_missing",
+            sentiment=None,
+            china_nationalism=None,
+            us_nationalism=None,
+        ),
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["scalar_source"] == "current"
+    assert classification["sentiment"] is None
+    assert classification["china_nationalism"] is None
+    assert classification["us_nationalism"] is None
+
+
+def test_stage1_absent_current_uses_only_unambiguous_legacy_scalars(checker):
+    brand = _stage1_brand(
+        classification_state=None,
+        legacy_sentiments=["positive", "positive"],
+        legacy_china_nationalisms=["pro", "anti"],
+        legacy_us_nationalisms=[],
+    )
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(brands=[brand]), schema_profile="stage1"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 0
+    classification = payload["posts"][0]["brand_classifications"][0]
+    assert classification["state"] == "historical_untyped"
+    assert classification["post_types"] == []
+    assert classification["product_labels"] == []
+    assert classification["sentiment"] == "positive"
+    assert classification["china_nationalism"] is None
+    assert classification["us_nationalism"] is None
+    assert classification["legacy_conflicts"] == ["china_nationalism"]
+
+
+def test_partial_stage1_schema_is_a_stable_operational_error(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(schema_profile="partial"),
+        latest=1,
+        requested_ids=None,
+        grace_hours=24,
+    )
+
+    assert exit_code == 2
+    assert payload == {
+        "schema_version": 1,
+        "status": "error",
+        "error": {"class": "query", "code": "stage1_schema_partial"},
+    }
 
 
 def test_failed_and_overdue_stages_are_unhealthy(checker):
@@ -559,6 +847,222 @@ def test_render_failure_is_sanitized_and_never_retried(checker):
     combined = stdout.getvalue() + stderr.getvalue()
     for secret in ("password", "secret", "SELECT", "private_schema", "/tmp"):
         assert secret not in combined
+
+
+def test_render_text_table_transport_uses_one_bounded_subprocess(checker):
+    calls = []
+    snapshot = _snapshot(_post(), schema_profile="legacy")
+    snapshot_json = json.dumps(snapshot)
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                "BEGIN\nSET\nSET\nSET\n"
+                " snapshot\n"
+                "----------\n"
+                f" {snapshot_json}\n"
+                "(1 row)\nCOMMIT\n"
+            ),
+            stderr="render update warning",
+        )
+
+    result = checker.execute_query("READ ONLY SQL", runner=runner)
+
+    assert result == snapshot
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command.count("READ ONLY SQL") == 1
+    assert kwargs["timeout"] == checker.QUERY_TIMEOUT_SECONDS
+    assert kwargs["check"] is False
+
+
+def test_successful_notice_only_output_is_rejected(checker):
+    snapshot = _snapshot(_post(), schema_profile="legacy")
+
+    def runner(command, **kwargs):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="BEGIN\nDO\nCOMMIT\n",
+            stderr="NOTICE:  PW_HEALTH_SNAPSHOT:" + json.dumps(snapshot),
+        )
+
+    with pytest.raises(checker.HealthCheckError) as exc_info:
+        checker.execute_query("READ ONLY SQL", runner=runner)
+
+    assert exc_info.value.code == "render_output_invalid"
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    before = [("core", "0027_account_country_foreign_key")]
+    stage1 = [("core", "0028_ai_enrichment_stage1_taxonomy")]
+    renamed_table = "posts_brands_product_labels_health_test"
+
+    def execute_snapshot(sql):
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result_rows = []
+            while True:
+                if cursor.description is not None:
+                    result_rows.extend(cursor.fetchall())
+                if not cursor.nextset():
+                    break
+        rendered = (
+            "BEGIN\nSET\nSET\nSET\n snapshot\n----------\n"
+            + "\n".join(f" {row[0]}" for row in result_rows)
+            + "\n(1 row)\nCOMMIT\n"
+        )
+        return checker.parse_snapshot(rendered)
+
+    executor = MigrationExecutor(connection)
+    try:
+        # Migration 0030 is intentionally irreversible and data-only. Remove
+        # only its recorder row before exercising the older schema profiles.
+        executor.recorder.record_unapplied(
+            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        )
+        executor = MigrationExecutor(connection)
+        executor.migrate(before)
+        legacy_apps = executor.loader.project_state(before).apps
+        Post = legacy_apps.get_model("core", "Post")
+        Post.objects.create(
+            tweet_id="xml-carrier-100",
+            text='XML & <tag> > "quotes" 中文',
+            text_en="English & <translation>",
+            text_zh_cn="中文 & <翻译>",
+            commentary_en='Commentary & <context> "quoted"',
+            commentary_zh_cn="语境 & <说明>",
+            lang_detected="en",
+        )
+
+        legacy_snapshot = execute_snapshot(
+            checker.build_query(latest=1, tweet_ids=None, detailed=True)
+        )
+        assert legacy_snapshot["schema_profile"] == "legacy"
+        assert legacy_snapshot["transaction_read_only"] == "on"
+        assert legacy_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
+        assert legacy_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
+        assert legacy_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(stage1)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE posts_brands_product_labels "
+                f"RENAME TO {renamed_table}"
+            )
+        try:
+            partial_snapshot = execute_snapshot(
+                checker.build_query(latest=1, tweet_ids=None)
+            )
+            assert partial_snapshot == {
+                "transaction_read_only": "on",
+                "schema_profile": "partial",
+                "posts": [],
+            }
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"ALTER TABLE {renamed_table} "
+                    "RENAME TO posts_brands_product_labels"
+                )
+
+        stage1_snapshot = execute_snapshot(
+            checker.build_query(latest=1, tweet_ids=None, detailed=True)
+        )
+        assert stage1_snapshot["schema_profile"] == "stage1"
+        assert stage1_snapshot["transaction_read_only"] == "on"
+        assert stage1_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
+        assert stage1_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
+        assert stage1_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
+
+        stage1_apps = executor.loader.project_state(stage1).apps
+        Brand = stage1_apps.get_model("core", "Brand")
+        Post = stage1_apps.get_model("core", "Post")
+        PostBrand = stage1_apps.get_model("core", "PostBrand")
+        PostTypeKey = stage1_apps.get_model("core", "PostTypeKey")
+        SentimentKey = stage1_apps.get_model("core", "SentimentKey")
+        ProductLabelKey = stage1_apps.get_model("core", "ProductLabelKey")
+        EnrichmentState = stage1_apps.get_model("core", "PostEnrichmentState")
+        Signal = stage1_apps.get_model("core", "PostBrandSignal")
+        ProductEdge = stage1_apps.get_model("core", "PostBrandProductLabel")
+        State = stage1_apps.get_model("core", "PostBrandClassificationState")
+        brand = Brand.objects.create(nickname="health-crosswalk")
+        post = Post.objects.create(
+            tweet_id="101",
+            text="health crosswalk",
+            text_en="health crosswalk en",
+            text_zh_cn="health crosswalk zh",
+            commentary_en="health commentary en",
+            commentary_zh_cn="health commentary zh",
+            lang_detected="en",
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        EnrichmentState.objects.create(
+            post=post,
+            translation_status="succeeded",
+            classification_status="succeeded",
+        )
+        SentimentKey.objects.get_or_create(key="positive")
+        for key in ("buzz_releases", "health_unknown_type"):
+            PostTypeKey.objects.get_or_create(key=key)
+            Signal.objects.create(
+                post=post, brand=brand, post_type_id=key, sentiment_id="positive"
+            )
+        for key in ("product_request", "health_unknown_product"):
+            ProductLabelKey.objects.get_or_create(key=key)
+            ProductEdge.objects.create(post=post, brand=brand, product_label_id=key)
+        State.objects.create(
+            post=post,
+            brand=brand,
+            contract_version="stage1-v1",
+            taxonomy_version="stage1-taxonomy-v1",
+            prompt_version="stage1-prompt-v2",
+            model="test",
+            input_context_fingerprint="b" * 64,
+            outcome="classified",
+            sentiment_id="positive",
+        )
+        crosswalk_snapshot = execute_snapshot(
+            checker.build_query(latest=None, tweet_ids=["101"], detailed=True)
+        )
+        observed = crosswalk_snapshot["posts"][0]["brands"][0]
+        assert observed["signals"] == [
+            {"post_type": "releases_updates", "sentiment": "positive"}
+        ]
+        assert observed["product_labels"] == ["ideas_requests"]
+        assert observed["stored_post_type_keys"] == [
+            "buzz_releases",
+            "health_unknown_type",
+        ]
+        assert observed["stored_product_label_keys"] == [
+            "health_unknown_product",
+            "product_request",
+        ]
+        evaluated, exit_code = checker.evaluate_snapshot(
+            crosswalk_snapshot,
+            latest=None,
+            requested_ids=["101"],
+            grace_hours=24,
+        )
+        assert exit_code == 1
+        reasons = evaluated["posts"][0]["reasons"]
+        assert {reason["reason"] for reason in reasons} >= {
+            "invalid_post_type",
+            "invalid_product_label",
+        }
+    finally:
+        MigrationExecutor(connection).migrate(
+            MigrationExecutor(connection).loader.graph.leaf_nodes()
+        )
 
 
 @pytest.mark.parametrize(

@@ -182,6 +182,7 @@ def test_both_live_harvest_entrypoints_call_the_isolated_dispatch(monkeypatch):
     command = command_module.Command()
     command._handle(
         enqueue=False,
+        scheduled=False,
         dry_run=False,
         brands=None,
         limit_per_call=None,

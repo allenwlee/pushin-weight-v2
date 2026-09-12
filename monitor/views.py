@@ -27,6 +27,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.contrib.auth.decorators import login_required
 from django.core.signing import salted_hmac
+from django.db import transaction
 from django.db.models import (
     Count,
     Exists,
@@ -46,28 +47,40 @@ from django.utils.translation import gettext, override
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    NATIONALISM_KEYS,
+    canonicalize_taxonomy_key,
+    taxonomy_crosswalk_rows,
+)
 from core.classification_labels import CLASSIFICATION_LABELS
+from core.classification_readers import read_brand_scalars_many
 from core.models import (
     Brand,
     BrandAccount,
     Country,
     CountryLabel,
-    DiscourseLabel,
     NationalismLabel,
     Post,
     PostBrand,
+    PostBrandClassificationState,
     PostBrandDiscourse,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
+    PostSynthesisRateLimitBucket,
     PostTypeLabel,
     PostUnsanctionedFlag,
+    ProductLabelLabel,
     RegionLabel,
     RoleLabel,
     SentimentKey,
     SentimentLabel,
 )
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
-from monitor.post_enrichment import persisted_output_complete_q
 
 log = logging.getLogger(__name__)
 
@@ -79,43 +92,35 @@ APP_DISPLAY_NAME_ZH = "走个量"
 APP_DISPLAY_NAME_EN = "Pushin' Weight"
 APP_TITLE_ZH = "走个量Pushin'Weight"  # browser tab only
 
-SUPPORTED_LOCALES: tuple[str, ...] = ("zh_cn", "zh-CN", "zh_hans", "en", "original")
+SUPPORTED_LOCALES: tuple[str, ...] = (
+    "zh_cn",
+    "zh-CN",
+    "zh_hans",
+    "ja",
+    "ja-JP",
+    "en",
+    "original",
+)
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
     "en": "en",
     "zh-CN": "zh_cn",
     "zh_cn": "zh_cn",
     "zh_hans": "zh_cn",
+    "ja": "ja",
+    "ja-JP": "ja",
     "original": "__source__",
 }
 
-# Taxonomy keys — single source of truth for filter control panels
-_DASHBOARD_DISCOURSE_KEYS: tuple[str, ...] = (
-    "genuine_hype", "sarcasm", "dunk_yingyang",
-    "self_deprecation", "cope", "fud",
-    "distillation_accusation", "ai_slop_critique",
-    "absurdist_meme", "advertising-marketing",
-)
-
-_DASHBOARD_DISCOURSE_FILTER_KEYS: tuple[str, ...] = (
-    *_DASHBOARD_DISCOURSE_KEYS,
-    "uncategorized",
-)
-
-_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = (
-    "buzz_releases", "hands_on_usage",
-    "performance_comparisons", "feedback_questions",
-    "advertising_marketing", "event_announcement",
-)
+# Taxonomy keys — imported from the versioned Stage 1 classifier contract.
+_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = CANONICAL_POST_TYPE_KEYS
+_DASHBOARD_PRODUCT_LABEL_KEYS: tuple[str, ...] = CANONICAL_PRODUCT_LABEL_KEYS
 
 _DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
     "official", "staff", "community", "other",
 )
 
-_DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = (
-    "none", "mild_pro", "pro",
-    "constructive_critical", "anti", "mixed",
-)
+_DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = NATIONALISM_KEYS
 
 _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
@@ -324,6 +329,8 @@ def _normalize_locale(locale: str | None) -> str:
         return "original"
     if locale.casefold() == "zh-hans":
         return "zh_hans"
+    if locale.casefold() in {"ja-jp", "ja_jp"}:
+        return "ja"
     for sup in SUPPORTED_LOCALES:
         if locale.casefold() == sup.casefold():
             return sup
@@ -334,6 +341,29 @@ def _normalize_locale(locale: str | None) -> str:
 def _is_zh_locale(locale: str) -> bool:
     """Whether a display-locale alias should render the Chinese v22 chrome."""
     return locale in {"zh_cn", "zh-CN", "zh_hans"}
+
+
+def _is_ja_locale(locale: str) -> bool:
+    return locale in {"ja", "ja-JP"}
+
+
+def _synthesis_status_label(status: str, locale: str) -> str:
+    if status == "ready":
+        return ""
+    if _is_ja_locale(locale):
+        return {
+            "failed": "分析を生成できませんでした",
+            "cancelled": "分析リクエストは期限切れです",
+        }.get(status, "分析を生成中")
+    if _is_zh_locale(locale):
+        return {
+            "failed": "分析生成失败",
+            "cancelled": "分析请求已过期",
+        }.get(status, "正在生成分析")
+    return {
+        "failed": "Analysis failed",
+        "cancelled": "Analysis request expired",
+    }.get(status, "Analysis pending")
 
 
 def _pretty_followers(count: int | None) -> str:
@@ -380,6 +410,8 @@ def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
         return (text, False) if text else (None, False)
     if column == "zh_cn":
         translated = getattr(post, "text_zh_cn", None) if hasattr(post, "text_zh_cn") else post.get("text_zh_cn")
+    elif column == "ja":
+        translated = getattr(post, "text_ja", None) if hasattr(post, "text_ja") else post.get("text_ja")
     else:
         translated = getattr(post, "text_en", None) if hasattr(post, "text_en") else post.get("text_en")
     return (translated, True) if translated else (None, False)
@@ -388,7 +420,7 @@ def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
 # Family -> Django model class for label lookup.
 _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
     "post_type": PostTypeLabel,
-    "discourse": DiscourseLabel,
+    "product_label": ProductLabelLabel,
     "sentiment": SentimentLabel,
     "nationalism": NationalismLabel,
     "role": RoleLabel,
@@ -398,6 +430,7 @@ _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
 # (legacy seed). See KTD9.
 _ZHCN_LANG_CODES: tuple[str, ...] = ("zh-cn", "zh_cn", "zh-hans")
 _EN_LANG_CODES: tuple[str, ...] = ("en",)
+_JA_LANG_CODES: tuple[str, ...] = ("ja",)
 
 def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     """Return the ordered tuple of lang codes to try for a display locale.
@@ -408,6 +441,8 @@ def _locale_to_lang_codes(locale: str) -> tuple[str, ...]:
     """
     if locale in {"zh_cn", "zh-CN", "zh_hans"}:
         return _ZHCN_LANG_CODES
+    if locale in {"ja", "ja-JP"}:
+        return _JA_LANG_CODES
     return _EN_LANG_CODES
 
 
@@ -419,7 +454,7 @@ def _localize_classification_value(
 ) -> "str | None":
     """Look up a localized label for a classification key.
 
-    family: one of `post_type`, `discourse`, `sentiment`, `nationalism`.
+    family: one of `post_type`, `product_label`, `sentiment`, `nationalism`.
     key: the raw DB taxonomy key (e.g. `hands_on_usage`), or None/empty.
     locale: the display locale (`zh_cn`, `en`, `original`).
     label_cache: a `{(family, key, lang)} -> label` dict built by
@@ -441,7 +476,13 @@ def _localize_classification_value(
         cached = label_cache.get((family, key, lang))
         if cached:
             return cached
-    display_locale = "zh-cn" if locale in {"zh_cn", "zh-CN", "zh_hans"} else "en"
+    display_locale = (
+        "zh-cn"
+        if locale in {"zh_cn", "zh-CN", "zh_hans"}
+        else "ja"
+        if locale in {"ja", "ja-JP"}
+        else "en"
+    )
     canonical = CLASSIFICATION_LABELS.get(family, {}).get(key, {})
     if canonical.get(display_locale):
         return canonical[display_locale]
@@ -481,7 +522,7 @@ def _dashboard_filter_entries(
 ) -> dict[str, list[dict[str, str]]]:
     """Project stable filter keys to request-localized display labels."""
     keys_by_family = {
-        "discourse": set(_DASHBOARD_DISCOURSE_KEYS),
+        "product_label": set(_DASHBOARD_PRODUCT_LABEL_KEYS),
         "post_type": set(_DASHBOARD_POST_TYPE_KEYS),
         "role": set(_DASHBOARD_ROLE_FILTER_KEYS[:3]),
         "sentiment": set(sentiment_keys),
@@ -493,9 +534,7 @@ def _dashboard_filter_entries(
     def localized(family: str, keys: tuple[str, ...] | list[str]) -> list[dict[str, str]]:
         entries: list[dict[str, str]] = []
         for key in keys:
-            if family == "discourse" and key == "uncategorized":
-                label = "未分类" if use_zh else "Uncategorized"
-            elif family == "role" and key == "other":
+            if family == "role" and key == "other":
                 label = "其他" if use_zh else "Other"
             else:
                 label = _localize_classification_value(
@@ -510,9 +549,19 @@ def _dashboard_filter_entries(
         else _DASHBOARD_LANG_DISPLAY_NAMES
     )
     return {
-        "discourse_entries": localized(
-            "discourse", _DASHBOARD_DISCOURSE_FILTER_KEYS
-        ),
+        "product_label_entries": [
+            {
+                **entry,
+                "help": (
+                    "可能误导；需要审核"
+                    if use_zh and entry["key"] == "misinformation"
+                    else "Potentially misleading; requires review"
+                    if entry["key"] == "misinformation"
+                    else ""
+                ),
+            }
+            for entry in localized("product_label", _DASHBOARD_PRODUCT_LABEL_KEYS)
+        ],
         "post_type_entries": localized("post_type", _DASHBOARD_POST_TYPE_KEYS),
         "role_entries": localized("role", _DASHBOARD_ROLE_FILTER_KEYS),
         "lang_entries": [
@@ -549,6 +598,8 @@ def _resolve_locale(request: HttpRequest) -> str:
         "zh-CN": "zh-hans",
         "zh_hans": "zh-hans",
         "en": "en",
+        "ja": "ja",
+        "ja-JP": "ja",
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
@@ -644,14 +695,8 @@ def _get_feed_posts(
     if window_days:
         cutoff = django_timezone.now() - timedelta(days=window_days)
 
-    terminal_state = Q(
-        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
-        enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
-    )
     qs = (
-        Post.objects.filter(persisted_output_complete_q())
-        .filter(Q(enrichment_state__isnull=True) | terminal_state)
-        .select_related("author")
+        Post.objects.select_related("author")
         .prefetch_related(
             Prefetch(
                 "brands",
@@ -798,20 +843,21 @@ def _feed_abs_stamp(when, tz_mode: str = "local") -> str:
     return f"({when.strftime('%H:%M')} 本地)"
 
 
-def _feed_signal_keys(classifications: dict[str, dict[str, Any]]) -> tuple[list[str], list[str], str, str]:
+def _feed_signal_keys(
+    classifications: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[str], list[str], str, str]:
     """Flatten per-brand classifications into feed-row signal keys.
 
-    Returns (sentiment_keys, post_type_keys, nat_cn_key, nat_us_key) used by
+    Returns sentiment, post-type, product-label, and nationalism keys used by
     the JS signal-painter to populate the .sig-* rows. Order is stable
     (SENT_ORDER / TYPE_ORDER).
     """
     sent_order = ["positive", "neutral", "negative", "mixed"]
-    type_order = [
-        "buzz_releases", "hands_on_usage", "performance_comparisons",
-        "feedback_questions", "advertising_marketing", "event_announcement",
-    ]
+    type_order = list(_DASHBOARD_POST_TYPE_KEYS)
+    product_order = list(_DASHBOARD_PRODUCT_LABEL_KEYS)
     sents: set[str] = set()
     types: set[str] = set()
+    products: set[str] = set()
     cn_keys: set[str] = set()
     us_keys: set[str] = set()
     for cls in classifications.values():
@@ -822,7 +868,15 @@ def _feed_signal_keys(classifications: dict[str, dict[str, Any]]) -> tuple[list[
         for v in (cls.get("post_types") or []):
             k = (v.get("key") if isinstance(v, dict) else v) if v else None
             if k:
-                types.add(k)
+                canonical = canonicalize_taxonomy_key("post_type", str(k))
+                if canonical is not None:
+                    types.add(canonical)
+        for v in (cls.get("product_labels") or []):
+            k = (v.get("key") if isinstance(v, dict) else v) if v else None
+            if k:
+                canonical = canonicalize_taxonomy_key("product_label", str(k))
+                if canonical is not None:
+                    products.add(canonical)
         cn = cls.get("cn_nationalism")
         if cn:
             k = (cn.get("key") if isinstance(cn, dict) else cn) if cn else None
@@ -841,9 +895,13 @@ def _feed_signal_keys(classifications: dict[str, dict[str, Any]]) -> tuple[list[
     for k in sorted(types):
         if k not in type_list:
             type_list.append(k)
+    product_list = [k for k in product_order if k in products]
+    for k in sorted(products):
+        if k not in product_list:
+            product_list.append(k)
     nat_cn = sorted(cn_keys)[0] if cn_keys else ""
     nat_us = sorted(us_keys)[0] if us_keys else ""
-    return sent_list, type_list, nat_cn, nat_us
+    return sent_list, type_list, product_list, nat_cn, nat_us
 
 
 def _feed_tint_class(sentiment_keys: list[str]) -> str:
@@ -885,10 +943,23 @@ def _enrichment_status(
 def _enrichment_status_label(status: str, locale: str) -> str:
     """Return compact accessible copy without changing the feed layout."""
     if status == PostEnrichmentState.Status.PENDING:
-        return "补充处理中" if locale == "zh_cn" else "enrichment pending"
+        return "补充处理中" if _is_zh_locale(locale) else "enrichment pending"
     if status == PostEnrichmentState.Status.FAILED:
-        return "补充失败" if locale == "zh_cn" else "enrichment failed"
+        return "补充失败" if _is_zh_locale(locale) else "enrichment failed"
     return ""
+
+
+def _classification_status_label(status: str, locale: str) -> str:
+    """Name semantic classification state without turning unknown into Other."""
+    labels = {
+        "classified": ("已分类", "Classified"),
+        "context_missing": ("缺少上下文", "Context missing"),
+        "pending": ("待分类", "Pending"),
+        "failed": ("分类失败", "Failed"),
+        "historical_untyped": ("历史记录", "Historical"),
+    }
+    zh_label, en_label = labels.get(status, (status, status))
+    return zh_label if _is_zh_locale(locale) else en_label
 
 
 _DISPLAY_ROLE_PRECEDENCE = ("official", "staff", "community")
@@ -1198,8 +1269,10 @@ def _feed_signal_inspections(
     family_labels = {
         "sentiment": "情感" if use_zh else "Sentiment",
         "post_type": "帖子类型" if use_zh else "Post Type",
+        "product_label": "产品信号" if use_zh else "Product signal",
         "nat_cn": "中国民族主义" if use_zh else "China Nationalism",
         "nat_us": "美国民族主义" if use_zh else "U.S. Nationalism",
+        "classification_status": "分类状态" if use_zh else "Classification status",
     }
     brand_names: dict[str, str] = {}
     for brand in brands:
@@ -1215,9 +1288,11 @@ def _feed_signal_inspections(
     result: dict[str, dict[str, list[dict[str, str]]]] = {
         "sentiment": {},
         "post_type": {},
+        "product_label": {},
         "nat_cn": {},
         "nat_us": {},
         "unsanctioned": {},
+        "classification_status": {},
     }
 
     def append_entry(family: str, key: str, nickname: str, value: str) -> None:
@@ -1243,6 +1318,18 @@ def _feed_signal_inspections(
                     "post_type", str(item["key"]), nickname,
                     str(item.get("label") or item["key"]),
                 )
+        for item in classification.get("product_labels") or []:
+            if isinstance(item, dict) and item.get("key"):
+                value = str(item.get("label") or item["key"])
+                if item["key"] == "misinformation":
+                    value += (
+                        "（可能误导；需要审核）"
+                        if use_zh
+                        else " (potentially misleading; requires review)"
+                    )
+                append_entry(
+                    "product_label", str(item["key"]), nickname, value
+                )
         for family, field_name in (
             ("nat_cn", "cn_nationalism"),
             ("nat_us", "us_nationalism"),
@@ -1253,6 +1340,16 @@ def _feed_signal_inspections(
                     family, str(item["key"]), nickname,
                     str(item.get("label") or item["key"]),
                 )
+        status = str(
+            classification.get("classification_status") or "historical_untyped"
+        )
+        if status != "classified":
+            append_entry(
+                "classification_status",
+                status,
+                nickname,
+                _classification_status_label(status, locale),
+            )
 
     if unsanctioned:
         text = "非官方发布" if use_zh else "Unsanctioned"
@@ -1275,7 +1372,7 @@ def _v22_feed_display_fields(
     author_handle: str | None = None,
 ) -> dict[str, Any]:
     """Build the V22 display fields shared by SSR and feed-refresh rows."""
-    _, post_type_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
+    _, post_type_keys, product_label_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
     if active_brand_scope in (None, "__all__"):
         sentiment_classifications = classifications
     else:
@@ -1289,7 +1386,14 @@ def _v22_feed_display_fields(
             for nickname, classification in classifications.items()
             if nickname in selected_brands
         }
-    sentiment_keys, _, _, _ = _feed_signal_keys(sentiment_classifications)
+    sentiment_keys, _, _, _, _ = _feed_signal_keys(sentiment_classifications)
+    classification_statuses = list(
+        dict.fromkeys(
+            str(classification.get("classification_status") or "historical_untyped")
+            for classification in classifications.values()
+            if classification.get("classification_status") != "classified"
+        )
+    )
     handle = account.get("handle") or author_handle or ""
     followers_count = account.get("followers_count") or 0
     engagement_pretty = _engagement_pretty(
@@ -1301,6 +1405,12 @@ def _v22_feed_display_fields(
     return {
         "sentiment_keys": sentiment_keys,
         "post_type_keys": post_type_keys,
+        "product_label_keys": product_label_keys,
+        "classification_statuses": classification_statuses,
+        "classification_status_labels": [
+            _classification_status_label(status, locale)
+            for status in classification_statuses
+        ],
         "nat_cn": nat_cn,
         "nat_us": nat_us,
         "tint_class": _feed_tint_class(sentiment_keys),
@@ -1363,11 +1473,12 @@ def _post_to_wire(
         # can render the localized label while preserving the raw DB key
         # for tooling / debug.
         cls = cls_by_brand.get(nick, {})
+        status = cls.get("classification_status", "historical_untyped")
         classifications[nick] = {
-            "discourse": [
+            "product_labels": [
                 v for v in (
-                    _labelize("discourse", k)
-                    for k in (cls.get("discourse") or [])
+                    _labelize("product_label", k)
+                    for k in (cls.get("product_labels") or [])
                 ) if v is not None
             ],
             "post_types": [
@@ -1385,6 +1496,10 @@ def _post_to_wire(
             "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
             "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
             "role_label": cls.get("role_label"),
+            "classification_status": status,
+            "classification_status_label": _classification_status_label(status, locale),
+            "scalar_source": cls.get("scalar_source", "unknown"),
+            "conflicts": list(cls.get("conflicts") or []),
         }
 
     # Account data — from enrichment when available
@@ -1516,35 +1631,48 @@ def _enrich_posts_with_classifications(
 ) -> list[dict[str, Any]]:
     """Enrich a Post QuerySet with per-brand classifications and unsanctioned flags.
 
-    Does bulk queries for PostBrandSignal, PostBrandDiscourse, PostUnsanctionedFlag,
-    and BrandAccount to avoid N+1.
+    Does bounded bulk reads for type edges, product-label edges, current/historical
+    scalars, unsanctioned flags, and account roles to avoid N+1.
 
     Returns a list of dicts with the denormalized shape expected by serializers
     (_post_matches_filter, serialize_feed_page, etc.).
 
     When brand_nickname is provided, classifications are scoped to that brand.
     """
-    # Accept both QuerySets and plain lists
-    if hasattr(posts, "values_list"):
-        tweet_ids = list(posts.values_list("tweet_id", flat=True))
-    else:
-        tweet_ids = [p.tweet_id if hasattr(p, "tweet_id") else p.get("tweet_id") for p in posts]
+    # Materialize once so every bulk reader and serializer shares the same
+    # prefetched page and does not accidentally re-run the feed query.
+    posts = list(posts)
+    tweet_ids = [post.tweet_id for post in posts]
     if not tweet_ids:
         return []
 
+    from monitor.post_artifacts import read_post_content_many
+
+    content_by_tweet = read_post_content_many(posts)
+
     # Bulk fetch classifications
-    signal_qs = PostBrandSignal.objects.filter(post_id__in=tweet_ids)
+    current_classified_pair = PostBrandClassificationState.objects.filter(
+        post_id=OuterRef("post_id"),
+        brand_id=OuterRef("brand_id"),
+        contract_version=CONTRACT_VERSION,
+        taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+        outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+    )
+    signal_qs = PostBrandSignal.objects.filter(
+        post_id__in=tweet_ids
+    ).filter(Exists(current_classified_pair))
     if brand_nickname:
         signal_qs = signal_qs.filter(brand_id=brand_nickname)
-    signals = list(signal_qs.values("post_id", "brand_id", "post_type_id", "sentiment_id"))
+    signals = list(signal_qs.values("post_id", "brand_id", "post_type_id"))
 
-    discourse_qs = PostBrandDiscourse.objects.filter(post_id__in=tweet_ids)
+    product_qs = PostBrandProductLabel.objects.filter(
+        post_id__in=tweet_ids
+    ).filter(Exists(current_classified_pair))
     if brand_nickname:
-        discourse_qs = discourse_qs.filter(brand_id=brand_nickname)
-    discourses = list(discourse_qs.values(
-        "post_id", "brand_id", "discourse_id",
-        "china_nationalism_id", "us_nationalism_id",
-    ))
+        product_qs = product_qs.filter(brand_id=brand_nickname)
+    products = list(
+        product_qs.values("post_id", "brand_id", "product_label_id")
+    )
 
     # Unsanctioned flags
     flag_tweet_ids = set(
@@ -1553,13 +1681,20 @@ def _enrich_posts_with_classifications(
         ).values_list("post_id", flat=True)
     )
 
+    enrichment_rows = list(
+        PostEnrichmentState.objects.filter(post_id__in=tweet_ids).values(
+            "post_id", "translation_status", "classification_status"
+        )
+    )
     enrichment_by_tweet = {
         state["post_id"]: _enrichment_status(
             state["translation_status"], state["classification_status"]
         )
-        for state in PostEnrichmentState.objects.filter(
-            post_id__in=tweet_ids
-        ).values("post_id", "translation_status", "classification_status")
+        for state in enrichment_rows
+    }
+    classification_attempt_by_tweet = {
+        state["post_id"]: state["classification_status"]
+        for state in enrichment_rows
     }
 
     # Account roles for the brands represented by this page.  A public feed
@@ -1571,6 +1706,14 @@ def _enrich_posts_with_classifications(
         for post in posts
         for pb in post.brands.all()
     }
+    scalar_pairs = [
+        (post.tweet_id, pb.brand_id)
+        for post in posts
+        for pb in post.brands.all()
+        if not pb.brand.is_sentinel
+        and (brand_nickname is None or pb.brand_id == brand_nickname)
+    ]
+    scalar_reads = read_brand_scalars_many(scalar_pairs)
     role_map: dict[tuple[str, str], str | None] = {}
     if author_ids and post_brand_ids:
         ba_qs = BrandAccount.objects.filter(
@@ -1587,58 +1730,50 @@ def _enrich_posts_with_classifications(
     )
 
     # Index by tweet_id
-    signals_by_tweet: dict[str, dict[str, dict[str, list[str]]]] = {}
+    signals_by_tweet: dict[str, dict[str, list[str]]] = {}
     for s in signals:
         tid = s["post_id"]
         bid = s["brand_id"]
         if tid not in signals_by_tweet:
             signals_by_tweet[tid] = {}
-        if bid not in signals_by_tweet[tid]:
-            signals_by_tweet[tid][bid] = {"post_types": [], "sentiments": []}
-        signals_by_tweet[tid][bid]["post_types"].append(s["post_type_id"])
-        signals_by_tweet[tid][bid]["sentiments"].append(s["sentiment_id"])
+        canonical = canonicalize_taxonomy_key("post_type", s["post_type_id"])
+        if canonical is not None:
+            signals_by_tweet[tid].setdefault(bid, []).append(canonical)
 
-    discourse_by_tweet: dict[str, dict[str, dict[str, Any]]] = {}
-    for d in discourses:
-        tid = d["post_id"]
-        bid = d["brand_id"]
-        if tid not in discourse_by_tweet:
-            discourse_by_tweet[tid] = {}
-        if bid not in discourse_by_tweet[tid]:
-            discourse_by_tweet[tid][bid] = {
-                "discourse": [],
-                "cn_nationalism": None,
-                "us_nationalism": None,
-            }
-        discourse_by_tweet[tid][bid]["discourse"].append(d["discourse_id"])
-        if d["china_nationalism_id"]:
-            discourse_by_tweet[tid][bid]["cn_nationalism"] = d["china_nationalism_id"]
-        if d["us_nationalism_id"]:
-            discourse_by_tweet[tid][bid]["us_nationalism"] = d["us_nationalism_id"]
+    products_by_tweet: dict[str, dict[str, list[str]]] = {}
+    for item in products:
+        canonical = canonicalize_taxonomy_key(
+            "product_label", item["product_label_id"]
+        )
+        if canonical is not None:
+            products_by_tweet.setdefault(item["post_id"], {}).setdefault(
+                item["brand_id"], []
+            ).append(canonical)
 
     # Collect all classification keys present in this page so we can
     # batch-load the label rows for zh_cn + en in one go per family.
     keys_by_family: dict[str, set[str]] = {
         "post_type": set(),
-        "discourse": set(),
+        "product_label": set(),
         "sentiment": set(),
         "nationalism": set(),
         # Keep the query shape constant even when the current page has no
         # named roles; these are the only displayable badge values.
         "role": set(_DISPLAY_ROLE_PRECEDENCE),
     }
-    for s in signals:
-        if s.get("post_type_id"):
-            keys_by_family["post_type"].add(s["post_type_id"])
-        if s.get("sentiment_id"):
-            keys_by_family["sentiment"].add(s["sentiment_id"])
-    for d in discourses:
-        if d.get("discourse_id"):
-            keys_by_family["discourse"].add(d["discourse_id"])
-        if d.get("china_nationalism_id"):
-            keys_by_family["nationalism"].add(d["china_nationalism_id"])
-        if d.get("us_nationalism_id"):
-            keys_by_family["nationalism"].add(d["us_nationalism_id"])
+    for values in signals_by_tweet.values():
+        for keys in values.values():
+            keys_by_family["post_type"].update(keys)
+    for values in products_by_tweet.values():
+        for keys in values.values():
+            keys_by_family["product_label"].update(keys)
+    for scalar in scalar_reads.values():
+        if scalar.sentiment:
+            keys_by_family["sentiment"].add(scalar.sentiment)
+        if scalar.china_nationalism:
+            keys_by_family["nationalism"].add(scalar.china_nationalism)
+        if scalar.us_nationalism:
+            keys_by_family["nationalism"].add(scalar.us_nationalism)
 
     # Pre-fetch label caches for zh_cn and en up front (1 query per family
     # per lang code = up to 12 queries, vs. N+1 for per-row lookup). The
@@ -1647,12 +1782,14 @@ def _enrich_posts_with_classifications(
     label_cache_by_locale: dict[str, dict[tuple[str, str, str], str]] = {
         "zh_cn": _build_label_cache(keys_by_family, "zh_cn"),
         "en": _build_label_cache(keys_by_family, "en"),
+        "ja": _build_label_cache(keys_by_family, "ja"),
     }
 
     # Build enriched dicts
     result: list[dict[str, Any]] = []
     for post in posts:
         tid = post.tweet_id
+        content = content_by_tweet[str(tid)]
         account_handle = (
             post.author.handle if post.author else post.author_handle
         ) or "@unknown"
@@ -1665,10 +1802,15 @@ def _enrich_posts_with_classifications(
             "tweet_id": tid,
             "created_at": post.created_at.isoformat() if post.created_at else None,
             "text": post.text,
-            "text_en": post.text_en,
-            "text_zh_cn": post.text_zh_cn,
-            "commentary_en": post.commentary_en,
-            "commentary_zh_cn": post.commentary_zh_cn,
+            "text_en": content.literal.get("en"),
+            "text_zh_cn": content.literal.get("zh-cn"),
+            "text_ja": content.literal.get("ja"),
+            "commentary_en": content.synthesis.get("en"),
+            "commentary_zh_cn": content.synthesis.get("zh-cn"),
+            "commentary_ja": content.synthesis.get("ja"),
+            "literal_source": content.literal_source,
+            "synthesis_source": content.synthesis_source,
+            "synthesis_status": content.synthesis_status,
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
@@ -1679,7 +1821,7 @@ def _enrich_posts_with_classifications(
             "headline": post.headline,
             "headline_source": post.headline_source,
             "source_query_id": post.source_query_id,
-            "discourse": [],
+            "product_labels": [],
             "post_types": [],
             "sentiments": [],
             "cn_nationalism": None,
@@ -1717,37 +1859,51 @@ def _enrich_posts_with_classifications(
             if nick not in row["brand_nicknames"]:
                 row["brand_nicknames"].append(nick)
             row["brands"].append(_brand_projection_fields(pb.brand))
+            if brand_nickname is not None and nick != brand_nickname:
+                continue
 
             cls_data: dict[str, Any] = {
-                "discourse": list(row["discourse"]),
-                "post_types": list(row["post_types"]),
-                "sentiments": list(row["sentiments"]),
-                "cn_nationalism": row["cn_nationalism"],
-                "us_nationalism": row["us_nationalism"],
+                "product_labels": [],
+                "post_types": [],
+                "sentiments": [],
+                "cn_nationalism": None,
+                "us_nationalism": None,
             }
-            sig_data = (signals_by_tweet.get(tid, {}).get(nick) or {})
-            disc_data = (discourse_by_tweet.get(tid, {}).get(nick) or {})
-            if sig_data.get("post_types"):
-                cls_data["post_types"] = sig_data["post_types"]
-                for pt in sig_data["post_types"]:
+            signal_keys = signals_by_tweet.get(tid, {}).get(nick, [])
+            product_keys = products_by_tweet.get(tid, {}).get(nick, [])
+            scalar = scalar_reads[(tid, nick)]
+            if signal_keys:
+                cls_data["post_types"] = list(dict.fromkeys(signal_keys))
+                for pt in cls_data["post_types"]:
                     if pt not in row["post_types"]:
                         row["post_types"].append(pt)
-            if sig_data.get("sentiments"):
-                cls_data["sentiments"] = sig_data["sentiments"]
-                for s in sig_data["sentiments"]:
-                    if s not in row["sentiments"]:
-                        row["sentiments"].append(s)
-            if disc_data.get("discourse"):
-                cls_data["discourse"] = disc_data["discourse"]
-                for d in disc_data["discourse"]:
-                    if d not in row["discourse"]:
-                        row["discourse"].append(d)
-            if disc_data.get("cn_nationalism"):
-                cls_data["cn_nationalism"] = disc_data["cn_nationalism"]
-                row["cn_nationalism"] = disc_data["cn_nationalism"]
-            if disc_data.get("us_nationalism"):
-                cls_data["us_nationalism"] = disc_data["us_nationalism"]
-                row["us_nationalism"] = disc_data["us_nationalism"]
+            cls_data["product_labels"] = list(dict.fromkeys(product_keys))
+            for product_label in cls_data["product_labels"]:
+                if product_label not in row["product_labels"]:
+                    row["product_labels"].append(product_label)
+            if scalar.sentiment:
+                cls_data["sentiments"] = [scalar.sentiment]
+                if scalar.sentiment not in row["sentiments"]:
+                    row["sentiments"].append(scalar.sentiment)
+            cls_data["cn_nationalism"] = scalar.china_nationalism
+            cls_data["us_nationalism"] = scalar.us_nationalism
+            cls_data["scalar_source"] = scalar.source
+            cls_data["conflicts"] = list(scalar.conflicts)
+            current_outcome = scalar.outcome
+            if current_outcome:
+                cls_data["classification_status"] = current_outcome
+            elif scalar.source == "unrecognized":
+                cls_data["classification_status"] = "stale"
+            else:
+                attempt = classification_attempt_by_tweet.get(tid)
+                cls_data["classification_status"] = (
+                    attempt
+                    if attempt in {
+                        PostEnrichmentState.Status.PENDING,
+                        PostEnrichmentState.Status.FAILED,
+                    }
+                    else "historical_untyped"
+                )
 
             row["classifications_by_brand"][nick] = cls_data
 
@@ -1756,6 +1912,13 @@ def _enrich_posts_with_classifications(
                 row["role_keys"].append(role_key)
 
         row["role_key"] = next(iter(row["role_keys"]), None)
+        for axis in ("cn_nationalism", "us_nationalism"):
+            distinct = {
+                classification.get(axis)
+                for classification in row["classifications_by_brand"].values()
+                if classification.get(axis)
+            }
+            row[axis] = next(iter(distinct)) if len(distinct) == 1 else None
         row["account"]["role"] = row["role_key"]
         row["account"]["role_key"] = row["role_key"]
         row["account"]["role_label"] = row["role_key"] or ""
@@ -1784,7 +1947,7 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
             log.warning("malformed filters JSON; ignoring")
     out: dict[str, Any] = {}
     for key in (
-        "brands", "discourse", "post_types", "role", "lang", "sentiment",
+        "brands", "product_labels", "post_types", "role", "lang", "sentiment",
         "cn_nationalism", "us_nationalism", "country", "region",
     ):
         v = request.GET.get(key)
@@ -1844,7 +2007,7 @@ def _parse_hover_freeze_range(
 
 
 _HOME_MULTI_VALUE_FILTERS: tuple[str, ...] = (
-    "brands", "discourse", "post_types", "role", "lang", "sentiment",
+    "brands", "product_labels", "post_types", "role", "lang", "sentiment",
     "cn_nationalism", "us_nationalism", "country", "region",
 )
 
@@ -1862,7 +2025,15 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             continue
         if not isinstance(value, (list, tuple, set)):
             value = [value] if value not in (None, "") else []
-        normalized[key] = list(dict.fromkeys(str(item) for item in value if item not in (None, "")))
+        values = [str(item) for item in value if item not in (None, "")]
+        family = {"post_types": "post_type", "product_labels": "product_label"}.get(key)
+        if family is not None:
+            values = [
+                canonical
+                for item in values
+                if (canonical := canonicalize_taxonomy_key(family, item)) is not None
+            ]
+        normalized[key] = list(dict.fromkeys(values))
     mode = source.get("unsanctioned", "off")
     normalized["unsanctioned"] = mode if mode in {"off", "only", "any"} else "off"
     if "window" in source:
@@ -1872,6 +2043,18 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             window = HOME_WINDOW_DEFAULT
         normalized["window"] = window if window in ALLOWED_HOME_WINDOWS else HOME_WINDOW_DEFAULT
     return normalized
+
+
+def _applied_home_filters(
+    source: dict[str, Any], normalized: dict[str, Any]
+) -> dict[str, Any]:
+    """Return canonical response metadata without inventing absent defaults."""
+    ordered_keys = _HOME_MULTI_VALUE_FILTERS + ("unsanctioned", "window")
+    return {
+        key: normalized[key]
+        for key in ordered_keys
+        if key in source and key in normalized
+    }
 
 
 def _home_chart_cache_key(
@@ -1907,15 +2090,29 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
         if not any(b in brands for b in post_brands):
             return False
 
-    # Discourse
-    discourse = filters.get("discourse")
-    if discourse is not None and discourse != "__all__":
-        if not discourse:
+    classifications_by_brand = post.get("classifications_by_brand") or {}
+    scoped_classifications = list(classifications_by_brand.values())
+    if brands not in (None, "__all__") and classifications_by_brand:
+        scoped_classifications = [
+            classification
+            for nickname, classification in classifications_by_brand.items()
+            if nickname in brands
+        ]
+
+    # Independent product labels retain their post-brand provenance. Empty
+    # product sets stay discoverable whenever the product control is at all.
+    product_labels = filters.get("product_labels")
+    if product_labels is not None and product_labels != "__all__":
+        if not product_labels:
             return False
-        post_disc = post.get("discourse") or []
-        matches_uncategorized = "uncategorized" in discourse and not post_disc
-        matches_classified = any(d in discourse for d in post_disc)
-        if not matches_uncategorized and not matches_classified:
+        scoped_products = {
+            value
+            for classification in scoped_classifications
+            for value in classification.get("product_labels", [])
+        }
+        if not classifications_by_brand:
+            scoped_products = set(post.get("product_labels") or [])
+        if not scoped_products.intersection(product_labels):
             return False
 
     # Post types
@@ -1923,7 +2120,13 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     if post_types is not None and post_types != "__all__":
         if not post_types:
             return False
-        post_pts = post.get("post_types") or []
+        post_pts = [
+            value
+            for classification in scoped_classifications
+            for value in classification.get("post_types", [])
+        ]
+        if not classifications_by_brand:
+            post_pts = post.get("post_types") or []
         if not any(p in post_types for p in post_pts):
             return False
 
@@ -1932,7 +2135,15 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     if sentiment is not None and sentiment != "__all__":
         if not sentiment:
             return False
-        post_sentiments = post.get("sentiments") or post.get("sentiment_keys") or []
+        post_sentiments = [
+            value
+            for classification in scoped_classifications
+            for value in classification.get("sentiments", [])
+        ]
+        if not classifications_by_brand:
+            post_sentiments = (
+                post.get("sentiments") or post.get("sentiment_keys") or []
+            )
         if not any(value in sentiment for value in post_sentiments):
             return False
 
@@ -1962,11 +2173,14 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             if not active:
                 return False
             else:
-                post_key = post.get(axis)
-                if not post_key:
-                    if "none" not in active:
-                        return False
-                elif post_key not in active:
+                post_keys = {
+                    classification.get(axis)
+                    for classification in scoped_classifications
+                    if classification.get(axis)
+                }
+                if not classifications_by_brand and post.get(axis):
+                    post_keys = {post.get(axis)}
+                if not post_keys.intersection(active):
                     return False
 
     # Lang
@@ -2024,8 +2238,6 @@ def _filter_home_posts_queryset(
 
     relation_filters = {
         "brands": "brands__brand_id__in",
-        "post_types": "signals__post_type_id__in",
-        "sentiment": "signals__sentiment_id__in",
         "lang": "lang_detected__in",
     }
     for axis, lookup in relation_filters.items():
@@ -2053,6 +2265,54 @@ def _filter_home_posts_queryset(
         else:
             queryset = queryset.filter(**{lookup: active})
 
+    brand_scope = normalized_filters.get("brands")
+
+    active_types = normalized_filters.get("post_types")
+    if active_types is not None and active_types != "__all__":
+        if not active_types:
+            return queryset.none()
+        current_classified_edge = PostBrandClassificationState.objects.filter(
+            post_id=OuterRef("post_id"),
+            brand_id=OuterRef("brand_id"),
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+            outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+        )
+        stored_types = [
+            source
+            for source, canonical in taxonomy_crosswalk_rows("post_type")
+            if canonical in active_types
+        ]
+        matching_types = PostBrandSignal.objects.filter(
+            post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
+        ).filter(Exists(current_classified_edge))
+        if brand_scope not in (None, "__all__"):
+            matching_types = matching_types.filter(brand_id__in=brand_scope)
+        queryset = queryset.filter(Exists(matching_types))
+
+    active_products = normalized_filters.get("product_labels")
+    if active_products is not None and active_products != "__all__":
+        if not active_products:
+            return queryset.none()
+        current_classified_edge = PostBrandClassificationState.objects.filter(
+            post_id=OuterRef("post_id"),
+            brand_id=OuterRef("brand_id"),
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+            outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+        )
+        stored_products = [
+            source
+            for source, canonical in taxonomy_crosswalk_rows("product_label")
+            if canonical in active_products
+        ]
+        matching_products = PostBrandProductLabel.objects.filter(
+            post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
+        ).filter(Exists(current_classified_edge))
+        if brand_scope not in (None, "__all__"):
+            matching_products = matching_products.filter(brand_id__in=brand_scope)
+        queryset = queryset.filter(Exists(matching_products))
+
     active_countries = normalized_filters.get("country")
     if active_countries is not None and active_countries != "__all__":
         if not active_countries:
@@ -2068,34 +2328,62 @@ def _filter_home_posts_queryset(
             | Q(author__country__region_mapping__region_id__in=active_regions)
         )
 
-    active_discourse = normalized_filters.get("discourse")
-    if active_discourse is not None and active_discourse != "__all__":
-        if not active_discourse:
-            return queryset.none()
-        classified_keys = [
-            value for value in active_discourse if value != "uncategorized"
-        ]
-        discourse_condition = Q(
-            discourse_signals__discourse_id__in=classified_keys
-        )
-        if "uncategorized" in active_discourse:
-            discourse_condition |= Q(discourse_signals__isnull=True)
-        queryset = queryset.filter(discourse_condition)
-
-    for axis, field_name in (
-        ("cn_nationalism", "china_nationalism_id"),
-        ("us_nationalism", "us_nationalism_id"),
+    for axis, current_field, legacy_model, legacy_field in (
+        ("sentiment", "sentiment_id", PostBrandSignal, "sentiment_id"),
+        (
+            "cn_nationalism",
+            "china_nationalism_id",
+            PostBrandDiscourse,
+            "china_nationalism_id",
+        ),
+        (
+            "us_nationalism",
+            "us_nationalism_id",
+            PostBrandDiscourse,
+            "us_nationalism_id",
+        ),
     ):
         active = normalized_filters.get(axis)
         if active is None or active == "__all__":
             continue
         if not active:
             return queryset.none()
-        relation_lookup = f"discourse_signals__{field_name}__in"
-        condition = Q(**{relation_lookup: active})
-        if "none" in active:
-            condition |= Q(**{f"discourse_signals__{field_name}__isnull": True})
-        queryset = queryset.filter(condition)
+        current_rows = PostBrandClassificationState.objects.filter(
+            post_id=OuterRef("tweet_id"),
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+            **{f"{current_field}__in": active},
+        )
+        if brand_scope not in (None, "__all__"):
+            current_rows = current_rows.filter(brand_id__in=brand_scope)
+
+        current_pair = PostBrandClassificationState.objects.filter(
+            post_id=OuterRef("post_id"),
+            brand_id=OuterRef("brand_id"),
+        )
+        historical_rows = (
+            legacy_model.objects.filter(post_id=OuterRef("tweet_id"))
+            .exclude(**{f"{legacy_field}__isnull": True})
+            .annotate(_has_current=Exists(current_pair))
+            .filter(_has_current=False)
+        )
+        if brand_scope not in (None, "__all__"):
+            historical_rows = historical_rows.filter(brand_id__in=brand_scope)
+        historical_rows = (
+            historical_rows.values("post_id", "brand_id")
+            .annotate(
+                _distinct_values=Count(legacy_field, distinct=True),
+                _selected_values=Count(
+                    legacy_field,
+                    distinct=True,
+                    filter=Q(**{f"{legacy_field}__in": active}),
+                ),
+            )
+            .filter(_distinct_values=1, _selected_values=1)
+        )
+        queryset = queryset.filter(
+            Q(Exists(current_rows)) | Q(Exists(historical_rows))
+        )
 
     active_roles = normalized_filters.get("role")
     if active_roles is not None and active_roles != "__all__":
@@ -2290,6 +2578,23 @@ def _build_home_chart_payload(
     selected_narrative_brands = normalized_filters.get("brands")
     if selected_narrative_brands in (None, "__all__"):
         selected_narrative_brands = None
+    try:
+        from pathlib import Path
+
+        from monitor.trend_narrative_demand import record_trend_narrative_demand
+        from x_monitor.config import load_config
+
+        headline_config = load_config(Path("config.yaml")).headline_narrative
+        if headline_config.demand_shaping_enabled:
+            record_trend_narrative_demand(
+                brand_keys=selected_narrative_brands or brand_nicknames,
+                window_days=window_days,
+                reason="visible",
+                config=headline_config,
+                now=now,
+            )
+    except Exception:
+        log.exception("unable to record trend narrative demand")
     trend_narrative = project_trend_narrative(
         window_days,
         locale=locale,
@@ -2598,6 +2903,7 @@ def home(request: HttpRequest) -> HttpResponse:
         },
         "active_locale": locale,
         "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -2645,6 +2951,10 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         brand_projection=brands_data,
     )
     initial_chart_payload["applied_filters"] = {}
+    filter_entries = _dashboard_filter_entries(
+        locale,
+        list(SentimentKey.objects.order_by("key").values_list("key", flat=True)),
+    )
 
     context = {
         "brands": brands_data,
@@ -2657,13 +2967,14 @@ def home_internal(request: HttpRequest) -> HttpResponse:
             "has_more": feed_has_more,
         },
         "active_locale": locale,
+        "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
-        "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
-        "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
+        **filter_entries,
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
@@ -2704,6 +3015,10 @@ def brand_home(
         brand, window_days, {}, "post_type", locale=locale
     )
     initial_brand_chart_payload["applied_filters"] = {}
+    filter_entries = _dashboard_filter_entries(
+        locale,
+        list(SentimentKey.objects.order_by("key").values_list("key", flat=True)),
+    )
 
     context = {
         "applied_filters_json": json.dumps({}),
@@ -2719,13 +3034,14 @@ def brand_home(
             "has_more": feed_has_more,
         },
         "active_locale": locale,
+        "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
-        "discourse_keys": _DASHBOARD_DISCOURSE_KEYS,
-        "post_type_keys": _DASHBOARD_POST_TYPE_KEYS,
+        **filter_entries,
         "role_keys": _DASHBOARD_ROLE_FILTER_KEYS,
         "lang_entries": [{"key": k, "label": _DASHBOARD_LANG_DISPLAY_NAMES.get(k, k)} for k in _DASHBOARD_LANG_FILTER_KEYS],
         "nationalism_keys": _DASHBOARD_NATIONALISM_KEYS,
@@ -2786,11 +3102,12 @@ def _serialize_feed_row(
 
     classifications: dict[str, dict[str, Any]] = {}
     for nick, cls in (post.get("classifications_by_brand") or {}).items():
+        status = cls.get("classification_status", "historical_untyped")
         classifications[nick] = {
-            "discourse": [
+            "product_labels": [
                 v for v in (
-                    _labelize("discourse", k)
-                    for k in (cls.get("discourse") or [])
+                    _labelize("product_label", k)
+                    for k in (cls.get("product_labels") or [])
                 ) if v is not None
             ],
             "post_types": [
@@ -2808,6 +3125,10 @@ def _serialize_feed_row(
             "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
             "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
             "role_label": cls.get("role_label"),
+            "classification_status": status,
+            "classification_status_label": _classification_status_label(status, locale),
+            "scalar_source": cls.get("scalar_source", "unknown"),
+            "conflicts": list(cls.get("conflicts") or []),
         }
 
     brands = [
@@ -2867,8 +3188,16 @@ def _serialize_feed_row(
         "is_translated": is_translated,
         "text_en": post.get("text_en"),
         "text_zh_cn": post.get("text_zh_cn"),
+        "text_ja": post.get("text_ja"),
         "commentary_en": post.get("commentary_en"),
         "commentary_zh_cn": post.get("commentary_zh_cn"),
+        "commentary_ja": post.get("commentary_ja"),
+        "literal_source": post.get("literal_source", "legacy"),
+        "synthesis_source": post.get("synthesis_source", "legacy"),
+        "synthesis_status": post.get("synthesis_status", "not_requested"),
+        "synthesis_status_label": _synthesis_status_label(
+            post.get("synthesis_status", "not_requested"), locale
+        ),
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
@@ -2991,18 +3320,11 @@ def _feed_page_posts(
     if brand_nickname:
         normalized["brands"] = [brand_nickname]
     current = now or django_timezone.now()
-    terminal_state = Q(
-        enrichment_state__translation_status=PostEnrichmentState.Status.SUCCEEDED,
-        enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
-    )
-    eligible = Post.objects.filter(persisted_output_complete_q()).filter(
-        Q(enrichment_state__isnull=True) | terminal_state
-    )
     queryset = _filter_home_posts_queryset(
         window_days,
         normalized,
         now=current,
-        queryset=eligible,
+        queryset=Post.objects.all(),
         created_at_start=created_at_start,
         created_at_end=created_at_end,
     )
@@ -3123,7 +3445,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+    rows, next_cursor, has_more, normalized = _feed_page_wire(
         locale=locale,
         window_days=window_days,
         filters=filters,
@@ -3141,7 +3463,7 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
         "rows": rows,
         "next_cursor": next_cursor,
         "has_more": has_more,
-        "applied_filters": filters,
+        "applied_filters": _applied_home_filters(filters, normalized),
         "locale": locale,
     })
 
@@ -3178,7 +3500,7 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
     if order not in ("asc", "desc"):
         order = _FEED_DEFAULT_ORDER
 
-    rows, next_cursor, has_more, _normalized = _feed_page_wire(
+    rows, next_cursor, has_more, normalized = _feed_page_wire(
         locale=locale,
         window_days=window_days,
         filters=filters,
@@ -3193,9 +3515,110 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         "rows": rows,
         "next_cursor": next_cursor,
         "has_more": has_more,
-        "applied_filters": filters,
+        "applied_filters": _applied_home_filters(filters, normalized),
         "locale": locale,
     })
+
+
+@login_required
+@require_POST
+def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
+    """Create/read shared synthesis demand for feed-visible post IDs."""
+    if len(request.body) > 32_768:
+        return JsonResponse({"error": "request too large"}, status=413)
+    try:
+        body = json.loads(request.body or b"{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    post_ids = body.get("post_ids") if isinstance(body, dict) else None
+    reason = body.get("reason", "visible") if isinstance(body, dict) else ""
+    poll_only = body.get("poll_only", False) if isinstance(body, dict) else False
+    if (
+        not isinstance(post_ids, list)
+        or any(not isinstance(post_id, str) or not post_id for post_id in post_ids)
+    ):
+        return JsonResponse({"error": "post_ids must be a string array"}, status=400)
+    if not isinstance(poll_only, bool):
+        return JsonResponse({"error": "poll_only must be a boolean"}, status=400)
+
+    from pathlib import Path
+
+    from monitor.post_artifacts import read_post_content_many
+    from monitor.post_synthesis import request_post_synthesis
+    from x_monitor.config import load_config
+
+    config = load_config(Path("config.yaml")).synthesis
+    unique_ids = list(dict.fromkeys(post_ids))
+    if len(unique_ids) > config.demand_batch_limit:
+        return JsonResponse({"error": "post_ids limit exceeded"}, status=400)
+    if reason not in {"visible", "expanded", "lookahead"}:
+        return JsonResponse({"error": "unsupported reason"}, status=400)
+    # Charge the content-bearing request by row count. Status polls cost one
+    # unit so the browser's bounded backoff can complete without exhausting
+    # the same minute bucket merely by observing already-requested work.
+    rate_cost = 1 if poll_only else max(1, len(unique_ids))
+    if not _accept_synthesis_rate(request, cost=rate_cost):
+        return JsonResponse({"error": "rate limit exceeded"}, status=429)
+
+    # The owner-only feed has one visibility scope today. Keep this query as
+    # the explicit authorization boundary so a future scoped feed cannot
+    # accidentally expose demand or content for an unseen row.
+    posts = list(Post.objects.filter(pk__in=unique_ids).order_by("pk"))
+    allowed = {str(post.pk) for post in posts}
+    if allowed != set(unique_ids):
+        return JsonResponse({"error": "post not visible"}, status=404)
+    if not poll_only:
+        request_post_synthesis(
+            post_ids=unique_ids,
+            reason=reason,
+            config=config,
+        )
+    projections = read_post_content_many(posts)
+    return JsonResponse(
+        {
+            "results": [
+                {
+                    "post_id": post_id,
+                    "status": projections[post_id].synthesis_status,
+                    "synthesis": dict(projections[post_id].synthesis),
+                    "literal": dict(projections[post_id].literal),
+                }
+                for post_id in unique_ids
+            ]
+        }
+    )
+
+
+def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
+    now = django_timezone.now()
+    bucket_start = now.replace(second=0, microsecond=0)
+    address = str(request.META.get("REMOTE_ADDR") or "-")
+    identities = (f"user:{request.user.pk}", f"ip:{address}")
+    scope_hashes = [
+        salted_hmac(
+            "post-synthesis-rate-limit", identity, algorithm="sha256"
+        ).hexdigest()
+        for identity in identities
+    ]
+    limit = 120
+    with transaction.atomic():
+        buckets = []
+        for scope_hash in scope_hashes:
+            bucket, _created = PostSynthesisRateLimitBucket.objects.get_or_create(
+                bucket_start=bucket_start,
+                scope_hash=scope_hash,
+            )
+            buckets.append(
+                PostSynthesisRateLimitBucket.objects.select_for_update().get(
+                    pk=bucket.pk
+                )
+            )
+        if any(bucket.count + cost > limit for bucket in buckets):
+            return False
+        for bucket in buckets:
+            bucket.count += cost
+            bucket.save(update_fields=["count", "updated_at"])
+    return True
 
 
 # ============================================================================
@@ -3210,10 +3633,11 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     Query params: window, filters.
     """
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     locale = _resolve_locale(request)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return JsonResponse(payload)
 
 
@@ -3224,9 +3648,10 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     """
     window_days = _resolve_home_window(request)
     locale = _resolve_locale(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return render(
         request,
         "monitor/_home_chart.html",
@@ -3278,7 +3703,21 @@ def _build_brand_chart_payload(
             for i in range(window_days - 1, -1, -1)
         ]
 
-    series = [0] * bucket_count
+    tab_categories = {
+        "post_type": _DASHBOARD_POST_TYPE_KEYS,
+        "product_labels": _DASHBOARD_PRODUCT_LABEL_KEYS,
+        "account_roles": _DASHBOARD_ROLE_FILTER_KEYS,
+        "us_nationalism": _DASHBOARD_NATIONALISM_KEYS,
+        "cn_nationalism": _DASHBOARD_NATIONALISM_KEYS,
+        "unsanctioned": ("flagged", "unflagged"),
+    }
+    if tab not in tab_categories:
+        tab = "post_type"
+    tab_datasets = {
+        tab_name: {key: [0] * bucket_count for key in categories}
+        for tab_name, categories in tab_categories.items()
+    }
+
     for p in filtered:
         created_at = p.get("created_at")
         if not created_at:
@@ -3298,7 +3737,26 @@ def _build_brand_chart_payload(
             if days_ago < 0 or days_ago >= window_days:
                 continue
             idx = window_days - 1 - days_ago
-        series[idx] += 1
+        # Increment each category at most once per post. Type and product
+        # relations remain independent, so their combinations never fan out
+        # one post into multiple chart observations.
+        observed = {
+            "post_type": set(p.get("post_types") or []),
+            "product_labels": set(p.get("product_labels") or []),
+            "account_roles": set(p.get("role_keys") or []),
+            "us_nationalism": (
+                {p["us_nationalism"]} if p.get("us_nationalism") else set()
+            ),
+            "cn_nationalism": (
+                {p["cn_nationalism"]} if p.get("cn_nationalism") else set()
+            ),
+            "unsanctioned": {"flagged" if p.get("unsanctioned") else "unflagged"},
+        }
+        for tab_name, keys in observed.items():
+            for key in keys:
+                series = tab_datasets[tab_name].get(key)
+                if series is not None:
+                    series[idx] += 1
 
     brand_obj = (
         brand_obj
@@ -3317,9 +3775,7 @@ def _build_brand_chart_payload(
         "days": days,
         "granularity": granularity,
         "tab": tab,
-        "tab_datasets": {
-            "post_type": {"total": series},
-        },
+        "tab_datasets": tab_datasets,
         "window_days": window_days,
         "fetched_at": now.isoformat(),
     }
@@ -3336,12 +3792,13 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         return JsonResponse({"error": "missing brand"}, status=400)
 
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     tab = request.GET.get("tab", "post_type")
     payload = _build_brand_chart_payload(
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return JsonResponse(payload)
 
 
@@ -3357,12 +3814,13 @@ def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
         raise Http404("Brand not found")
 
     window_days = _resolve_home_window(request)
-    filters = _parse_filters_from_request(request)
+    requested_filters = _parse_filters_from_request(request)
+    filters = _normalize_home_filters(requested_filters)
     tab = request.GET.get("tab", "post_type")
     payload = _build_brand_chart_payload(
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
-    payload["applied_filters"] = filters
+    payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     return render(
         request,
         "monitor/_brand_chart.html",
@@ -3420,6 +3878,8 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "zh-CN": "zh-hans",
         "zh_hans": "zh-hans",
         "en": "en",
+        "ja": "ja",
+        "ja-JP": "ja",
         "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)

@@ -16,7 +16,6 @@ class CustomLocaleMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        from django.utils import translation
         # 1. Read our `locale` cookie
         cookie_locale = request.COOKIES.get("locale")
         if cookie_locale:
@@ -26,6 +25,8 @@ class CustomLocaleMiddleware:
                 "zh-CN": "zh-hans",
                 "zh_hans": "zh-hans",
                 "en": "en",
+                "ja": "ja",
+                "ja-JP": "ja",
                 "original": "en",
             }.get(cookie_locale, "zh-hans")
             # 3. Activate translation for {% trans %} resolution

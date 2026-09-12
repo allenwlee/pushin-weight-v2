@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Smoke-test the post-fetch (post_type, sentiment) classifier.
+# ruff: noqa: I001 -- the repository path must precede the local import below.
+"""Retired v1 ``classify_post`` compatibility diagnostic.
 
-Runs ``classify_post(text, brand_ids, brand_registry, anthropic_client)``
-in ``x_monitor.attribution`` against a curated set of post texts that
-exercises all 4 post_types × 4 sentiments. Talks to the real LLM (default
-``MiniMax-M3.0`` via api.minimax.io if ``ANTHROPIC_BASE_URL`` is set,
-otherwise ``claude-haiku-4-5``).
+This provider-backed script grades legacy v1 post-type aliases. It does not
+exercise the active ``classify_batch_pragmatics_full`` taxonomy-v2/prompt-v3
+path, and a successful run is not active classifier acceptance. Use the
+offline pytest command printed by a bare invocation for current acceptance.
 
 Usage:
-    scripts/test_classify_post.py                 # default 9-sample sweep
-    scripts/test_classify_post.py --out FILE.json # also persist results
-    scripts/test_classify_post.py --text my.txt   # read texts one per line
+    scripts/test_classify_post.py  # refuse provider work; print offline tests
+
+The retired diagnostic remains available only behind the explicit
+``--legacy-provider-run`` acknowledgement because it calls a real provider
+and may incur cost.
 """
 from __future__ import annotations
 
@@ -24,14 +26,10 @@ from pathlib import Path
 # Make x_monitor importable when invoked from repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from x_monitor.attribution import (  # noqa: E402
-    AnthropicClaudeClient,
-    BrandRow,
-    classify_post,
-)
+from x_monitor.attribution import AnthropicClaudeClient, BrandRow, classify_post
 
 
-# Curated samples — each (text, brands, expected_post_type, expected_sentiment).
+# Retired v1 samples — each (text, brands, expected_post_type, expected_sentiment).
 # Expected values are what a competent human labeler would pick; the run
 # prints actual vs expected so we can spot drifts.
 DEFAULT_SAMPLES: list[dict] = [
@@ -120,7 +118,17 @@ def make_registry(brands: list[str]) -> list[BrandRow]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Retired v1 provider-backed compatibility diagnostic; not active v2 acceptance."
+    )
+    parser.add_argument(
+        "--legacy-provider-run",
+        action="store_true",
+        help=(
+            "acknowledge provider cost and run the retired v1 diagnostic; "
+            "a match is not active v2 acceptance"
+        ),
+    )
     parser.add_argument(
         "--text", help="file with one tweet text per line (overrides samples)"
     )
@@ -133,6 +141,18 @@ def main() -> int:
         help="comma-separated brands to register (default: union of sample brands)",
     )
     args = parser.parse_args()
+
+    if not args.legacy_provider_run:
+        print("RETIRED: scripts/test_classify_post.py grades legacy v1 aliases.")
+        print("No provider client was created and no provider call was made.")
+        print("Run current taxonomy-v2/prompt-v3 acceptance offline with:")
+        print(
+            "  pytest tests/test_classification_stage1_contract.py "
+            "tests/test_classify_batch_pragmatics_full.py "
+            "tests/test_classify_pragmatics_full_prompt.py "
+            "tests/test_post_fetch_smoketest_renderer.py"
+        )
+        return 2
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -163,7 +183,8 @@ def main() -> int:
     base_url = os.environ.get("ANTHROPIC_BASE_URL") or None
     client = AnthropicClaudeClient(api_key=api_key, base_url=base_url)
 
-    print(f"# classify_post smoke test")
+    print("# RETIRED v1 classify_post compatibility diagnostic")
+    print("# Result is NOT active taxonomy-v2/prompt-v3 acceptance")
     print(f"# model:        {os.environ.get('ANTHROPIC_MODEL', '(auto)')}")
     print(f"# base_url:     {base_url or '(default anthropic)'}")
     print(f"# registry:     {all_brands}")
@@ -201,7 +222,6 @@ def main() -> int:
 
             # Truncate text for display.
             text_preview = s["text"][:65] + ("…" if len(s["text"]) > 65 else "")
-            note = s.get("note", "")
             print(
                 f"  [{i:2d}] {b:<14}  pt={actual_pt:<22}  sent={actual_sent:<8}  "
                 f"dur={elapsed_ms:>5d}ms  "
@@ -231,6 +251,9 @@ def main() -> int:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps({
+            "diagnostic_scope": "retired-v1-classify-post-compatibility",
+            "active_acceptance": False,
+            "taxonomy": "legacy-v1-aliases",
             "model": os.environ.get("ANTHROPIC_MODEL"),
             "base_url": base_url,
             "registry": all_brands,

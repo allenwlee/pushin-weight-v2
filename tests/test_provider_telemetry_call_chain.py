@@ -251,7 +251,15 @@ def test_translator_production_entry_emits_redacted_single_boundary_event(caplog
 @pytest.mark.django_db(transaction=True)
 def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkeypatch):
     """M18: persisted work reaches both real factories and HTTP extraction."""
-    from core.models import Brand, Post, PostBrand, PostEnrichmentState
+    from core.models import (
+        Brand,
+        NationalismKey,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostTypeKey,
+        SentimentKey,
+    )
     from monitor.cycle import CycleRunner
 
     brand = Brand.objects.create(nickname="telemetry-brand", display_name="Telemetry")
@@ -261,6 +269,9 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     ]
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
     PostEnrichmentState.objects.bulk_create([PostEnrichmentState(post=post) for post in posts])
+    SentimentKey.objects.get_or_create(key="neutral")
+    NationalismKey.objects.get_or_create(key="none")
+    PostTypeKey.objects.get_or_create(key="hands_on_usage")
 
     requests: list[dict] = []
 
@@ -291,10 +302,15 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         def getresponse(self):
             prompt = self.body["messages"][0]["content"]
             ids = [post.tweet_id for post in posts if post.tweet_id in prompt]
-            if "unsanctioned_flags" in prompt:
+            if "unsanctioned_flags" in self.body.get("system", ""):
                 payload = {
                     "results": [
-                        {"tweet_id": ident, "classifications": [], "unsanctioned_flags": []}
+                            {"tweet_id": ident, "classifications": [{
+                                "brand_id": "telemetry-brand", "outcome": "classified",
+                                "post_types": ["hands_on_usage"], "product_labels": [],
+                                "sentiment": "neutral", "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }], "unsanctioned_flags": []}
                         for ident in ids
                     ]
                 }
@@ -316,19 +332,33 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
 
     states = list(PostEnrichmentState.objects.order_by("post_id"))
     assert counters["n_enrichment_claimed"] == 21
-    assert len(requests) == 4  # 20 + 1 batches through each real role factory
+    # Two translation calls plus the classifier's two base, three secondary,
+    # and three review calls for a 21-post production-shaped batch.
+    assert len(requests) == 10
     assert {request["host"] for request in requests} == {"api.deepseek.com"}
     assert all(request["headers"]["x-api-key"] == "test-key" for request in requests)
     assert all(state.translation_status == "succeeded" for state in states)
     assert all(state.classification_status == "succeeded" for state in states)
     events = _events(caplog)
-    assert len(events) == 4  # 20 + 1, through max_workers=3 batching
+    assert len(events) == 10
     assert {event["run_id"] for event in events} == {"telemetry-cycle"}
     assert {event["stage"] for event in events} == {"post_fetch"}
-    assert {event["batch_size"] for event in events} == {1, 20}
+    assert {event["batch_size"] for event in events} == {1, 10, 20}
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
     assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
+    classifier_requests = [
+        request["body"]
+        for request in requests
+        if "unsanctioned_flags" in request["body"].get("system", "")
+    ]
+    assert len(classifier_requests) == 8
+    assert all(
+        len(request["messages"]) == 1
+        and request["messages"][0]["role"] == "user"
+        and isinstance(json.loads(request["messages"][0]["content"]), list)
+        for request in classifier_requests
+    )
 
 
 def test_direct_http_wrapper_retains_usage_when_assistant_json_is_malformed(monkeypatch):

@@ -16,6 +16,12 @@ from typing import Any
 
 from django.db import connection, transaction
 
+from core.classification_contract import (
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    taxonomy_crosswalk_rows,
+)
+from core.classification_readers import read_brand_scalars_many
 from monitor.trend_narrative_facts import (
     DEFAULT_TREND_THRESHOLDS,
     TrendFactThresholds,
@@ -47,14 +53,14 @@ FAMILY_ORDER = (
     "volume",
     "engagement",
     "post_type",
-    "discourse",
+    "product_label",
     "sentiment",
     "nationalism",
 )
 EVIDENCE_ROLE_ORDER = (
     "official_or_catalyst",
     "top_engaged_original",
-    "dominant_discourse_representative",
+    "dominant_post_type_representative",
     "contrasting_reaction",
 )
 EVIDENCE_QUERY_RANK_STREAMS = 6
@@ -63,7 +69,7 @@ _CLASSIFIER_DERIVED_FAMILIES = frozenset(
     {
         "post_type",
         "sentiment",
-        "discourse",
+        "product_label",
         "china_nationalism",
         "us_nationalism",
         "unsanctioned_flags",
@@ -349,7 +355,7 @@ def _provider_dossier(dossier: Mapping[str, Any]) -> dict[str, Any]:
                 "author_group_id",
                 "source_cluster_id",
                 "post_type_keys",
-                "discourse_keys",
+                "product_label_keys",
                 "sentiment_keys",
                 "china_nationalism_keys",
                 "us_nationalism_keys",
@@ -651,7 +657,7 @@ def project_provider_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
                         "roles": evidence["roles"],
                         "source_flags": evidence["source_flags"],
                         "post_type_keys": evidence.get("post_type_keys", []),
-                        "discourse_keys": evidence["discourse_keys"],
+                        "product_label_keys": evidence.get("product_label_keys", []),
                         "sentiment_keys": evidence["sentiment_keys"],
                     }
                     for evidence in candidate["evidence"]
@@ -749,7 +755,7 @@ def _quantitative_display_facts(
 
     for family in (
         "post_type",
-        "discourse",
+        "product_label",
         "sentiment",
         "china_nationalism",
         "us_nationalism",
@@ -1187,8 +1193,8 @@ def _compact_family_summaries(family_facts: Mapping[str, Any]) -> dict[str, Any]
     for family in (
         "volume",
         "post_type",
+        "product_label",
         "sentiment",
-        "discourse",
         "china_nationalism",
         "us_nationalism",
     ):
@@ -1377,7 +1383,7 @@ def _compact_citable_facts(
     for family in (
         "post_type",
         "sentiment",
-        "discourse",
+        "product_label",
         "china_nationalism",
         "us_nationalism",
         "language",
@@ -1837,7 +1843,7 @@ def _relevant_family_facts(
             "volume",
             "engagement",
             "post_type",
-            "discourse",
+            "product_label",
             "sentiment",
             "china_nationalism",
             "us_nationalism",
@@ -1934,7 +1940,7 @@ def _compact_metadata_trajectories(
     trajectories = {}
     for family in (
         "post_type",
-        "discourse",
+        "product_label",
         "sentiment",
         "china_nationalism",
         "us_nationalism",
@@ -2401,13 +2407,27 @@ def _fetch_evidence_rows(
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
+    post_type_crosswalk = taxonomy_crosswalk_rows("post_type")
+    product_crosswalk = taxonomy_crosswalk_rows("product_label")
     # Sample each candidate window before ranking evidence roles. The four time
     # buckets keep older catalyst posts eligible without letting any role scan
     # the full brand history. A post gets rank_limit + 1 for streams that did
     # not select it; downstream role eligibility therefore uses a real ordinal
     # only for a bounded selection.
     sql = """
-        WITH requested_bounds AS (
+        WITH compatible_state_versions AS (
+            SELECT %s::text AS contract_version,
+                   unnest(%s::text[]) AS taxonomy_version
+        ),
+        post_type_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        product_crosswalk AS (
+            SELECT * FROM unnest(%s::text[], %s::text[])
+                AS mapping(source_key, canonical_key)
+        ),
+        requested_bounds AS (
             SELECT
                 item.candidate_id,
                 item.brand_key,
@@ -2477,6 +2497,36 @@ def _fetch_evidence_rows(
                 LIMIT bucket.rank_limit
             ) ranked
         ),
+        resolved_sentiments AS (
+            SELECT
+                pool.position,
+                pool.candidate_id,
+                pool.brand_key,
+                pool.tweet_id,
+                CASE
+                    WHEN state_any.post_id IS NOT NULL THEN state.sentiment::text
+                    WHEN count(DISTINCT signal.sentiment) = 1
+                    THEN min(signal.sentiment)::text
+                    ELSE NULL::text
+                END AS sentiment
+            FROM candidate_pool pool
+            LEFT JOIN posts_brands_classification_states state_any
+              ON state_any.post_id = pool.tweet_id
+             AND state_any.brand_id::text = pool.brand_key
+            LEFT JOIN posts_brands_classification_states state
+              ON state.post_id = pool.tweet_id
+             AND state.brand_id::text = pool.brand_key
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
+            LEFT JOIN posts_brands_signals signal
+              ON signal.post_id = pool.tweet_id
+             AND signal.brand_id::text = pool.brand_key
+            GROUP BY
+                pool.position, pool.candidate_id, pool.brand_key, pool.tweet_id,
+                state_any.post_id, state.sentiment
+        ),
         official_accounts AS (
             SELECT ba.brand_id::text AS brand_key, ba.accounts_id,
                    min(ba.role_id::text) AS first_party_role
@@ -2490,13 +2540,13 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_post_type,
                 NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 ranked.stream_rank::bigint AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
-                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS post_type_rank,
                 r.rank_limit + 1 AS contrast_rank
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2532,13 +2582,13 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_post_type,
                 NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 ranked.stream_rank::bigint AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
-                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS post_type_rank,
                 r.rank_limit + 1 AS contrast_rank
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2566,13 +2616,13 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                NULL::text AS dominant_discourse,
+                NULL::text AS dominant_post_type,
                 NULL::text AS dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 ranked.stream_rank::bigint AS original_rank,
-                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS post_type_rank,
                 r.rank_limit + 1 AS contrast_rank
             FROM requested_bounds r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2609,7 +2659,7 @@ def _fetch_evidence_rows(
                 min(official_rank) AS official_rank,
                 min(catalyst_rank) AS catalyst_rank,
                 min(original_rank) AS original_rank,
-                min(discourse_rank) AS discourse_rank,
+                min(post_type_rank) AS post_type_rank,
                 min(contrast_rank) AS contrast_rank
             FROM (
                 SELECT * FROM official_stream
@@ -2623,36 +2673,46 @@ def _fetch_evidence_rows(
         requested AS (
             SELECT
                 r.*,
-                discourse.dominant_discourse,
+                post_type.dominant_post_type,
                 sentiment.dominant_sentiment
             FROM requested_bounds r
             LEFT JOIN LATERAL (
-                SELECT d.discourse_key::text AS dominant_discourse
-                FROM evidence_seed seed
-                JOIN posts_brands_discourse d
-                  ON d.post_id = seed.tweet_id
-                 AND d.brand_id::text = seed.brand_key
-                WHERE seed.position = r.position
-                GROUP BY d.discourse_key::text
-                ORDER BY
-                    count(DISTINCT seed.tweet_id) DESC,
-                    lower(d.discourse_key::text),
-                    d.discourse_key::text
-                LIMIT 1
-            ) discourse ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT s.sentiment::text AS dominant_sentiment
+                SELECT mapping.canonical_key AS dominant_post_type
                 FROM evidence_seed seed
                 JOIN posts_brands_signals s
                   ON s.post_id = seed.tweet_id
                  AND s.brand_id::text = seed.brand_key
+                JOIN posts_brands_classification_states state
+                  ON state.post_id = seed.tweet_id
+                 AND state.brand_id::text = seed.brand_key
+                 AND (state.contract_version, state.taxonomy_version) IN (
+                        SELECT contract_version, taxonomy_version
+                        FROM compatible_state_versions
+                     )
+                 AND state.outcome = 'classified'
+                JOIN post_type_crosswalk mapping
+                  ON mapping.source_key = s.post_type_key::text
                 WHERE seed.position = r.position
-                  AND s.sentiment IS NOT NULL
-                GROUP BY s.sentiment::text
+                GROUP BY mapping.canonical_key
                 ORDER BY
                     count(DISTINCT seed.tweet_id) DESC,
-                    lower(s.sentiment::text),
-                    s.sentiment::text
+                    lower(mapping.canonical_key),
+                    mapping.canonical_key
+                LIMIT 1
+            ) post_type ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT scalar.sentiment AS dominant_sentiment
+                FROM evidence_seed seed
+                JOIN resolved_sentiments scalar
+                  ON scalar.position = seed.position
+                 AND scalar.tweet_id = seed.tweet_id
+                WHERE seed.position = r.position
+                  AND scalar.sentiment IS NOT NULL
+                GROUP BY scalar.sentiment
+                ORDER BY
+                    count(DISTINCT seed.tweet_id) DESC,
+                    lower(scalar.sentiment),
+                    scalar.sentiment
                 LIMIT 1
             ) sentiment ON TRUE
         ),
@@ -2661,29 +2721,29 @@ def _fetch_evidence_rows(
                 seed.position,
                 seed.candidate_id,
                 seed.brand_key,
-                requested.dominant_discourse,
+                requested.dominant_post_type,
                 requested.dominant_sentiment,
                 seed.tweet_id,
                 seed.official_rank,
                 seed.catalyst_rank,
                 seed.original_rank,
-                seed.discourse_rank,
+                seed.post_type_rank,
                 seed.contrast_rank
             FROM evidence_seed seed
             JOIN requested ON requested.position = seed.position
         ),
-        discourse_stream AS (
+        post_type_stream AS (
             SELECT
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
+                r.dominant_post_type,
                 r.dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
-                ranked.stream_rank::bigint AS discourse_rank,
+                ranked.stream_rank::bigint AS post_type_rank,
                 r.rank_limit + 1 AS contrast_rank
             FROM requested r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2693,13 +2753,23 @@ def _fetch_evidence_rows(
                 WHERE pool.position = r.position
                 ORDER BY
                     (
-                        r.dominant_discourse IS NOT NULL
+                        r.dominant_post_type IS NOT NULL
                         AND EXISTS (
                             SELECT 1
-                            FROM posts_brands_discourse d
-                            WHERE d.post_id = p.tweet_id
-                              AND d.brand_id::text = r.brand_key
-                              AND d.discourse_key::text = r.dominant_discourse
+                            FROM posts_brands_signals s
+                            JOIN posts_brands_classification_states state
+                              ON state.post_id = p.tweet_id
+                             AND state.brand_id::text = r.brand_key
+                             AND (state.contract_version, state.taxonomy_version) IN (
+                                    SELECT contract_version, taxonomy_version
+                                    FROM compatible_state_versions
+                                 )
+                             AND state.outcome = 'classified'
+                            JOIN post_type_crosswalk mapping
+                              ON mapping.source_key = s.post_type_key::text
+                            WHERE s.post_id = p.tweet_id
+                              AND s.brand_id::text = r.brand_key
+                              AND mapping.canonical_key = r.dominant_post_type
                         )
                     ) DESC,
                     (
@@ -2725,13 +2795,13 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
+                r.dominant_post_type,
                 r.dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
-                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS post_type_rank,
                 ranked.stream_rank::bigint AS contrast_rank
             FROM requested r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2744,17 +2814,11 @@ def _fetch_evidence_rows(
                         r.dominant_sentiment IS NOT NULL
                         AND EXISTS (
                             SELECT 1
-                            FROM posts_brands_signals s
-                            WHERE s.post_id = p.tweet_id
-                              AND s.brand_id::text = r.brand_key
-                              AND s.sentiment IS NOT NULL
-                        )
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM posts_brands_signals s
-                            WHERE s.post_id = p.tweet_id
-                              AND s.brand_id::text = r.brand_key
-                              AND s.sentiment::text = r.dominant_sentiment
+                            FROM resolved_sentiments scalar
+                            WHERE scalar.position = r.position
+                              AND scalar.tweet_id = p.tweet_id
+                              AND scalar.sentiment IS NOT NULL
+                              AND scalar.sentiment <> r.dominant_sentiment
                         )
                     ) DESC,
                     (
@@ -2780,13 +2844,13 @@ def _fetch_evidence_rows(
                 r.position,
                 r.candidate_id,
                 r.brand_key,
-                r.dominant_discourse,
+                r.dominant_post_type,
                 r.dominant_sentiment,
                 ranked.tweet_id,
                 r.rank_limit + 1 AS official_rank,
                 r.rank_limit + 1 AS catalyst_rank,
                 r.rank_limit + 1 AS original_rank,
-                r.rank_limit + 1 AS discourse_rank,
+                r.rank_limit + 1 AS post_type_rank,
                 r.rank_limit + 1 AS contrast_rank
             FROM requested r
             CROSS JOIN LATERAL unnest(ARRAY(
@@ -2801,7 +2865,7 @@ def _fetch_evidence_rows(
         stream_rows AS (
             SELECT * FROM seed_rows
             UNION ALL
-            SELECT * FROM discourse_stream
+            SELECT * FROM post_type_stream
             UNION ALL
             SELECT * FROM contrast_stream
             UNION ALL
@@ -2812,20 +2876,20 @@ def _fetch_evidence_rows(
                 position,
                 candidate_id,
                 brand_key,
-                dominant_discourse,
+                dominant_post_type,
                 dominant_sentiment,
                 tweet_id,
                 min(official_rank) AS official_rank,
                 min(catalyst_rank) AS catalyst_rank,
                 min(original_rank) AS original_rank,
-                min(discourse_rank) AS discourse_rank,
+                min(post_type_rank) AS post_type_rank,
                 min(contrast_rank) AS contrast_rank
             FROM stream_rows
             GROUP BY
                 position,
                 candidate_id,
                 brand_key,
-                dominant_discourse,
+                dominant_post_type,
                 dominant_sentiment,
                 tweet_id
         ),
@@ -2863,12 +2927,12 @@ def _fetch_evidence_rows(
                 official.accounts_id IS NOT NULL AS is_official,
                 coalesce(official.first_party_role, 'public_opaque')
                     AS first_party_role,
-                bounded.dominant_discourse,
+                bounded.dominant_post_type,
                 bounded.dominant_sentiment,
                 bounded.official_rank,
                 bounded.catalyst_rank,
                 bounded.original_rank,
-                bounded.discourse_rank,
+                bounded.post_type_rank,
                 bounded.contrast_rank
             FROM bounded_ids bounded
             JOIN requested ON requested.position = bounded.position
@@ -2884,40 +2948,48 @@ def _fetch_evidence_rows(
                 base.brand_key,
                 base.tweet_id,
                 array_agg(
-                    DISTINCT s.post_type_key::text ORDER BY s.post_type_key::text
-                ) FILTER (WHERE s.post_type_key IS NOT NULL) AS post_type_keys,
-                array_agg(
-                    DISTINCT s.sentiment::text ORDER BY s.sentiment::text
-                ) FILTER (WHERE s.sentiment IS NOT NULL) AS sentiment_keys
+                    DISTINCT mapping.canonical_key ORDER BY mapping.canonical_key
+                ) FILTER (WHERE s.post_type_key IS NOT NULL) AS post_type_keys
             FROM base_posts base
+            JOIN posts_brands_classification_states state
+              ON state.post_id = base.tweet_id
+             AND state.brand_id::text = base.brand_key
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
+             AND state.outcome = 'classified'
             JOIN posts_brands_signals s
               ON s.post_id = base.tweet_id
              AND s.brand_id::text = base.brand_key
+            JOIN post_type_crosswalk mapping
+              ON mapping.source_key = s.post_type_key::text
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
-        discourse_arrays AS (
+        current_classification_arrays AS (
             SELECT
                 base.candidate_id,
                 base.brand_key,
                 base.tweet_id,
+                max(state.outcome) AS classification_outcome,
                 array_agg(
-                    DISTINCT d.discourse_key::text
-                    ORDER BY d.discourse_key::text
-                ) AS discourse_keys
-                , array_agg(
-                    DISTINCT d.china_nationalism::text
-                    ORDER BY d.china_nationalism::text
-                ) FILTER (WHERE d.china_nationalism IS NOT NULL)
-                    AS china_nationalism_keys
-                , array_agg(
-                    DISTINCT d.us_nationalism::text
-                    ORDER BY d.us_nationalism::text
-                ) FILTER (WHERE d.us_nationalism IS NOT NULL)
-                    AS us_nationalism_keys
+                    DISTINCT mapping.canonical_key
+                    ORDER BY mapping.canonical_key
+                ) FILTER (WHERE mapping.canonical_key IS NOT NULL)
+                    AS product_label_keys
             FROM base_posts base
-            JOIN posts_brands_discourse d
-              ON d.post_id = base.tweet_id
-             AND d.brand_id::text = base.brand_key
+            JOIN posts_brands_classification_states state
+              ON state.post_id = base.tweet_id
+             AND state.brand_id::text = base.brand_key
+             AND (state.contract_version, state.taxonomy_version) IN (
+                    SELECT contract_version, taxonomy_version
+                    FROM compatible_state_versions
+                 )
+            LEFT JOIN posts_brands_product_labels product
+              ON product.post_id = state.post_id
+             AND product.brand_id::text = state.brand_id::text
+            LEFT JOIN product_crosswalk mapping
+              ON mapping.source_key = product.product_label_key::text
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
         unsanctioned_arrays AS (
@@ -2940,14 +3012,9 @@ def _fetch_evidence_rows(
                 END::bigint AS interactions,
                 coalesce(sig.post_type_keys, ARRAY[]::text[])
                     AS post_type_keys,
-                coalesce(sig.sentiment_keys, ARRAY[]::text[])
-                    AS sentiment_keys,
-                coalesce(dis.discourse_keys, ARRAY[]::text[])
-                    AS discourse_keys,
-                coalesce(dis.china_nationalism_keys, ARRAY[]::text[])
-                    AS china_nationalism_keys,
-                coalesce(dis.us_nationalism_keys, ARRAY[]::text[])
-                    AS us_nationalism_keys,
+                current.classification_outcome,
+                coalesce(current.product_label_keys, ARRAY[]::text[])
+                    AS product_label_keys,
                 coalesce(uns.unsanctioned_flag_keys, ARRAY[]::text[])
                     AS unsanctioned_flag_keys
             FROM base_posts base
@@ -2955,10 +3022,10 @@ def _fetch_evidence_rows(
               ON sig.candidate_id = base.candidate_id
              AND sig.brand_key = base.brand_key
              AND sig.tweet_id = base.tweet_id
-            LEFT JOIN discourse_arrays dis
-              ON dis.candidate_id = base.candidate_id
-             AND dis.brand_key = base.brand_key
-             AND dis.tweet_id = base.tweet_id
+            LEFT JOIN current_classification_arrays current
+              ON current.candidate_id = base.candidate_id
+             AND current.brand_key = base.brand_key
+             AND current.tweet_id = base.tweet_id
             LEFT JOIN unsanctioned_arrays uns
               ON uns.candidate_id = base.candidate_id
              AND uns.brand_key = base.brand_key
@@ -2968,10 +3035,16 @@ def _fetch_evidence_rows(
         FROM candidate_posts
         ORDER BY position, least(
                     official_rank, catalyst_rank, original_rank,
-                    discourse_rank, contrast_rank
+                    post_type_rank, contrast_rank
                  ), created_at, tweet_id
     """
     params = [
+        CONTRACT_VERSION,
+        list(COMPATIBLE_TAXONOMY_VERSIONS),
+        [row[0] for row in post_type_crosswalk],
+        [row[1] for row in post_type_crosswalk],
+        [row[0] for row in product_crosswalk],
+        [row[1] for row in product_crosswalk],
         [str(row["candidate_id"]) for row in candidates],
         [str(row["brand_key"]) for row in candidates],
         [_parse_utc(str(row["start_at"])) for row in candidates],
@@ -2982,7 +3055,22 @@ def _fetch_evidence_rows(
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         names = [column.name for column in cursor.description]
-        return [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
+        rows = [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
+    # Current Stage 1 state owns scalar nulls.  The reader provides the sole
+    # historical one-distinct fallback for pre-cutover rows, avoiding joins
+    # across type edges and preventing cross-brand duplication.
+    scalars = read_brand_scalars_many(
+        [(str(row["tweet_id"]), str(row["brand_key"])) for row in rows]
+    )
+    for row in rows:
+        scalar = scalars[(str(row["tweet_id"]), str(row["brand_key"]))]
+        row["scalar_source"] = scalar.source
+        row["sentiment_keys"] = [scalar.sentiment] if scalar.sentiment else []
+        row["china_nationalism_keys"] = (
+            [scalar.china_nationalism] if scalar.china_nationalism else []
+        )
+        row["us_nationalism_keys"] = [scalar.us_nationalism] if scalar.us_nationalism else []
+    return rows
 
 
 def _select_evidence(
@@ -3043,7 +3131,7 @@ def _select_evidence_with_allocation(
             allocation_class = "lead"
             ceiling = policy.lead_ceiling
         elif len(signal_families) > 1 or signal_families.intersection(
-            {"post_type", "discourse", "sentiment", "nationalism"}
+            {"post_type", "product_label", "sentiment", "nationalism"}
         ):
             allocation_class = "comparison"
             ceiling = policy.comparison_ceiling
@@ -3095,15 +3183,15 @@ def _prepare_evidence_pools(
                 else int(row["catalyst_rank"])
             ),
             "top_engaged_original": int(row["original_rank"]),
-            "dominant_discourse_representative": int(row["discourse_rank"]),
+            "dominant_post_type_representative": int(row["post_type_rank"]),
             "contrasting_reaction": int(row["contrast_rank"]),
         }
         evidence["_role_eligible"] = {
             "official_or_catalyst": True,
             "top_engaged_original": not bool(row["is_retweet"]),
-            "dominant_discourse_representative": bool(
-                row["dominant_discourse"]
-                and row["dominant_discourse"] in row["discourse_keys"]
+            "dominant_post_type_representative": bool(
+                row["dominant_post_type"]
+                and row["dominant_post_type"] in row["post_type_keys"]
             ),
             "contrasting_reaction": bool(
                 row["dominant_sentiment"]
@@ -3200,7 +3288,7 @@ def _story_potential_key(
     signal_families = {str(signal.get("family") or "") for signal in signals}
     mix_signal_count = len(
         signal_families.intersection(
-            {"post_type", "discourse", "sentiment", "nationalism"}
+            {"post_type", "product_label", "sentiment", "nationalism"}
         )
     )
     recurring_themes = {
@@ -3210,7 +3298,7 @@ def _story_potential_key(
     }
     label_diversity = sum(
         len({str(key) for evidence in pool for key in evidence.get(field, [])})
-        for field in ("post_type_keys", "discourse_keys", "sentiment_keys")
+        for field in ("post_type_keys", "sentiment_keys")
     )
     independent_authors = len(
         {
@@ -3329,7 +3417,7 @@ def _select_candidate_evidence(
             if add(evidence, role=SUPPORTING_CONTEXT_ROLE):
                 break
 
-    for field in ("post_type_keys", "discourse_keys", "sentiment_keys"):
+    for field in ("post_type_keys", "sentiment_keys"):
         keys = sorted(
             {str(key) for evidence in pool for key in evidence.get(field, [])}
         )
@@ -3352,7 +3440,6 @@ def _select_candidate_evidence(
             str(evidence.get("author_group_id") or "") in selected_authors,
             -int(evidence.get("_theme_support_count") or 0),
             -len(evidence.get("post_type_keys", [])),
-            -len(evidence.get("discourse_keys", [])),
             -len(evidence.get("sentiment_keys", [])),
             -int(evidence.get("_interactions") or 0),
             min(evidence["_ranks"].values()),
@@ -3511,15 +3598,44 @@ def _evidence_candidate(
     )
     translation_status = str(row.get("translation_status") or "pending")
     classification_status = str(row.get("classification_status") or "pending")
-    classifier_status = (
+    unsanctioned_status = (
         "available" if classification_status == "succeeded" else classification_status
     )
+    current_outcome = str(row.get("classification_outcome") or "")
+    type_product_status = (
+        "available"
+        if current_outcome == "classified"
+        else "unavailable"
+    )
+    scalar_source = str(row.get("scalar_source") or "unknown")
 
-    def classified(values: Sequence[Any]) -> dict[str, Any]:
+    def classified(values: Sequence[Any], *, status: str) -> dict[str, Any]:
         return {
-            "status": classifier_status,
-            "values": sorted(str(value) for value in values if value),
+            "status": status,
+            "values": (
+                sorted(str(value) for value in values if value)
+                if status == "available"
+                else []
+            ),
         }
+
+    def scalar(values: Sequence[Any]) -> dict[str, Any]:
+        value_list = sorted(str(value) for value in values if value)
+        result = {
+            "status": (
+                "available"
+                if value_list and scalar_source in {"current", "historical"}
+                else "unavailable"
+            ),
+            "values": (
+                value_list
+                if value_list and scalar_source in {"current", "historical"}
+                else []
+            ),
+        }
+        if "scalar_source" in row:
+            result["provenance"] = scalar_source
+        return result
 
     return {
         "evidence_id": evidence_id,
@@ -3549,16 +3665,22 @@ def _evidence_candidate(
         # family declares status even for a successful empty flag set, so the
         # provider never has to infer whether absence means zero or unknown.
         "taxonomy": {
-            "post_types": classified(row.get("post_type_keys", [])),
-            "discourse_roles": classified(row.get("discourse_keys", [])),
-            "china_nationalism": classified(row.get("china_nationalism_keys", [])),
-            "us_nationalism": classified(row.get("us_nationalism_keys", [])),
-            "unsanctioned_flags": classified(row.get("unsanctioned_flag_keys", [])),
+            "post_types": classified(
+                row.get("post_type_keys", []), status=type_product_status
+            ),
+            "product_labels": classified(
+                row.get("product_label_keys", []), status=type_product_status
+            ),
+            "china_nationalism": scalar(row.get("china_nationalism_keys", [])),
+            "us_nationalism": scalar(row.get("us_nationalism_keys", [])),
+            "unsanctioned_flags": classified(
+                row.get("unsanctioned_flag_keys", []), status=unsanctioned_status
+            ),
             "language": {
                 "status": "available" if row.get("lang") else "unavailable",
                 "values": [str(row.get("lang"))] if row.get("lang") else [],
             },
-            "sentiment": classified(row.get("sentiment_keys", [])),
+            "sentiment": scalar(row.get("sentiment_keys", [])),
             "account_role": {
                 "status": "available",
                 "values": [first_party_role],
@@ -3583,7 +3705,9 @@ def _evidence_candidate(
             "occurrence_source": occurrence_source,
         },
         "post_type_keys": sorted(str(key) for key in row.get("post_type_keys", [])),
-        "discourse_keys": sorted(str(key) for key in row["discourse_keys"]),
+        "product_label_keys": sorted(
+            str(key) for key in row.get("product_label_keys", [])
+        ),
         "sentiment_keys": sorted(str(key) for key in row["sentiment_keys"]),
     }
 

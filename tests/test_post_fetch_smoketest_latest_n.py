@@ -11,9 +11,7 @@ still appear in the smoketest output (not silently dropped).
 from __future__ import annotations
 
 import io
-from contextlib import redirect_stdout, redirect_stderr
-
-import pytest
+from contextlib import redirect_stderr, redirect_stdout
 
 
 class FakeClaudeClient:
@@ -22,6 +20,7 @@ class FakeClaudeClient:
 
     def messages_create(self, **kwargs):
         prompt = kwargs.get("messages", [{}])[0].get("content", "")
+        system = kwargs.get("system", "")
         if "bilingual pragmatic analyst" in prompt:
             import json as _json
             marker = "Tweets (JSON array):"
@@ -38,25 +37,20 @@ class FakeClaudeClient:
                 "literal_zh": f"[zh] {t.get('text', '')[:60]}",
                 "text_zh_cn": f"[zh] {t.get('text', '')[:60]}",
                 "lang_detected": "en",
-                "discourse_role": "genuine_hype",
                 "cn_equivalent": "[zh equivalent]",
                 "annotation": "",
                 "noop_en": True,
                 "noop_zh": False,
             } for t in tweets]}
-        if "across FIVE dimensions" in prompt:
-            import re
-            m = re.search(r"Brands \(in order\): ([^\n]+)", prompt)
-            brand_line = m.group(1).strip() if m else ""
-            brand_ids = (
-                [b.strip() for b in brand_line.split(",")]
-                if brand_line and brand_line != "(none)"
-                else []
-            )
+        if ("You classify stored social posts" in prompt
+                or "You classify stored social posts" in system):
+            import json as _json
+            brand_ids = _json.loads(prompt)[0]["brand_ids"]
             return {"classifications": [{
                 "brand_id": b,
-                "post_type": "hands_on_usage",
-                "sentiment": "neutral", "discourse_role": "genuine_hype",
+                "outcome": "classified",
+                "post_types": ["hands_on_usage"], "product_labels": [],
+                "sentiment": "neutral",
                 "china_nationalism": "none", "us_nationalism": "none",
             } for b in brand_ids]}
         return {"classifications": [], "results": []}
@@ -113,9 +107,9 @@ def _seed_db_with_raw_posts(
 def test_smoketest_latest_n_end_to_end(tmp_path, monkeypatch):
     """--source=latest-n reads posts from the DB and runs them
     through the full pipeline."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -146,9 +140,9 @@ def test_smoketest_latest_n_end_to_end(tmp_path, monkeypatch):
 
 def test_smoketest_latest_n_respects_latest_flag(tmp_path, monkeypatch):
     """--latest N caps the number of posts loaded from the DB."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -169,7 +163,12 @@ def test_smoketest_latest_n_respects_latest_flag(tmp_path, monkeypatch):
     with redirect_stdout(buf):
         rc = sm.main(["--source", "latest-n", "--latest", "3"])
     assert rc == 0
-    assert "n_posts=3" in buf.getvalue()
+    out = buf.getvalue()
+    assert "n_posts=3" in out
+    assert out.index("tweet_id=t08") < out.index("tweet_id=t07")
+    assert out.index("tweet_id=t07") < out.index("tweet_id=t06")
+    assert "tweet_id=t05" not in out
+    assert "tweet_id=t09" not in out
 
 
 def test_smoketest_latest_n_includes_no_brand_posts(tmp_path, monkeypatch):
@@ -179,9 +178,9 @@ def test_smoketest_latest_n_includes_no_brand_posts(tmp_path, monkeypatch):
     text that no monitored brand matches. The latest-n mode must
     include all 3 (no `posts_no_brand_skipped:` line in the report).
     """
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -217,9 +216,9 @@ def test_smoketest_latest_n_renders_url_when_handle_present(
     tmp_path, monkeypatch
 ):
     """Real posts get a real x.com URL in the sample header."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -248,9 +247,9 @@ def test_smoketest_latest_n_renders_no_handle_fallback(
     tmp_path, monkeypatch
 ):
     """Posts with NULL author_handle render with the (no handle) fallback."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()
@@ -316,9 +315,9 @@ def test_smoketest_latest_n_clamps_when_latest_exceeds_limit(
     tmp_path, monkeypatch
 ):
     """If --latest > --limit, clamp and warn (operator-friendly default)."""
-    from scripts import post_fetch_smoketest as sm
-    import x_monitor.translator as tr_mod
     import x_monitor.attribution as attr_mod
+    import x_monitor.translator as tr_mod
+    from scripts import post_fetch_smoketest as sm
 
     db_path = tmp_path / "data" / "x_monitoring.db"
     db_path.parent.mkdir()

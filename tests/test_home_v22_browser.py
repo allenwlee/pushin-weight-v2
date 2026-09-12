@@ -29,7 +29,7 @@ from django.test.utils import CaptureQueriesContext
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 from core.models import Brand, Post, PostBrand
-from monitor.views import _clear_home_pulse_cache
+from monitor.views import _build_brand_chart_payload, _clear_home_pulse_cache
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
 from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
 from tests.v22_support import (
@@ -97,6 +97,7 @@ VIEWPORTS = {
     "mobile": {"width": 390, "height": 844},
 }
 LOCALES = ("zh_cn", "en", "original")
+PRODUCT_LOCALES = ("zh_cn", "en", "ja", "original")
 REGION_SELECTORS = dict(AUTHORED_REGIONS)
 STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 # The threshold is intentionally below a wholly unrelated frame.  It is not a
@@ -713,6 +714,92 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_stage1_taxonomy_filters_round_trip_without_cross_brand_product_matches(self) -> None:
+        """Real root route exposes Stage 1 controls and keeps product labels per brand."""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, product_title in (
+                    ("en", "Products"),
+                    ("zh_hans", "产品"),
+                ):
+                    with self.subTest(locale=locale):
+                        context = browser.new_context(
+                            viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo"
+                        )
+                        _freeze_clock(context)
+                        page = context.new_page()
+                        try:
+                            response = page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            page.wait_for_function("() => window.pwFilter")
+                            self.assertEqual(page.locator('[data-group="discourse"]').count(), 0)
+                            product_pill = page.locator('[data-group="product_labels"]')
+                            self.assertEqual(product_pill.count(), 1)
+                            self.assertEqual(product_pill.get_attribute("aria-expanded"), "false")
+                            box = product_pill.bounding_box()
+                            self.assertIsNotNone(box)
+                            self.assertGreater(box["width"], 0)
+                            self.assertGreater(box["height"], 0)
+                            self.assertEqual(
+                                product_pill.locator(".title").inner_text(), product_title
+                            )
+                            product_pill.click()
+                            self.assertEqual(product_pill.get_attribute("aria-expanded"), "true")
+                            self.assertEqual(
+                                page.locator(
+                                    '[data-pw-filter-group="product_labels"]'
+                                ).count(),
+                                5,
+                            )
+                            self.assertEqual(
+                                page.locator('[data-pw-filter-group="post_types"]').count(),
+                                13,
+                            )
+                            self.assertGreater(
+                                page.locator('[data-group="nationalism"]').count(), 0
+                            )
+
+                            page.evaluate(
+                                """() => {
+                                  window.pwFilter.set('brands', ['moonshot_kimi']);
+                                  window.pwFilter.set('product_labels', ['bug']);
+                                }"""
+                            )
+                            page.wait_for_function(
+                                """() => Boolean(document.querySelector(
+                                  '[data-pw-feed-row][data-tweet-id="u3-post-0"]'
+                                ))"""
+                            )
+                            page.evaluate(
+                                "() => window.pwFilter.set('brands', ['deepseek'])"
+                            )
+                            page.wait_for_function(
+                                """() => !document.querySelector(
+                                  '[data-pw-feed-row][data-tweet-id="u3-post-0"]'
+                                )"""
+                            )
+                            state = page.evaluate("() => window.pwFilter.get()")
+                            self.assertEqual(state["product_labels"], ["bug"])
+                            self.assertNotIn("discourse", state)
+                            page.evaluate(
+                                "() => window.pwFilter.set('brands', ['moonshot_kimi'])"
+                            )
+                            page.wait_for_function(
+                                """() => Boolean(document.querySelector(
+                                  '[data-pw-feed-row][data-tweet-id="u3-post-0"]'
+                                ))"""
+                            )
+                            self.assertEqual(page.locator('[data-sig-product]').count(), 1)
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_mobile_touchend_fallback_opens_brand_dropdown(self) -> None:
         """An iOS touch with no synthetic click still opens Brands."""
         with sync_playwright() as playwright:
@@ -878,6 +965,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_anonymous_chart_is_live_canvas_and_window_refetch_is_atomic(self) -> None:
+        expected_brand_count = len(_live_brand_nicknames())
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -944,7 +1032,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["chart"]["computed_at"], projection["pulseComputedAt"])
                     self.assertEqual(
                         projection["pulseCount"],
-                        len(_live_brand_nicknames()),
+                        expected_brand_count,
                     )
                     refreshed_legend = page.locator("[data-pw-chart-legend]")
                     self.assertEqual(
@@ -1485,6 +1573,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         with (
             patch(
@@ -1502,7 +1594,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 _freeze_clock(context)
                 page = context.new_page()
                 try:
-                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    page.goto(
+                        f"{self.live_server_url}/?locale=en&{unscoped_query}",
+                        wait_until="networkidle",
+                    )
                     headline_body = page.locator("[data-pw-headline] .body")
                     rendered = " ".join(headline_body.inner_text().split())
                     self.assertEqual(rendered.count("MiniMax"), 1)
@@ -1566,7 +1661,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     )
 
                     page.goto(
-                        f"{self.live_server_url}/?locale=zh_hans",
+                        f"{self.live_server_url}/?locale=zh_hans&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     zh_observations = page.locator(
@@ -1627,6 +1722,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         with (
             patch(
@@ -1648,7 +1747,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "No clear conversation story emerged in this window."
                     )
                     page.goto(
-                        f"{self.live_server_url}/?locale=en",
+                        f"{self.live_server_url}/?locale=en&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     headline = page.locator("[data-pw-headline]")
@@ -1692,7 +1791,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(payload["subjects"], [])
 
                     page.goto(
-                        f"{self.live_server_url}/?locale=zh_hans",
+                        f"{self.live_server_url}/?locale=zh_hans&{unscoped_query}",
                         wait_until="networkidle",
                     )
                     expected_zh = "这一时间段内没有出现明确的讨论主题。"
@@ -1807,6 +1906,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         config = HeadlineNarrativeConfig(
             serving_enabled=True,
             activation_state="owner_override",
+            publication_source="legacy_only",
+        )
+        unscoped_query = urlencode(
+            {"filters": json.dumps({"brands": "__all__"})}
         )
         cookies = self._authenticated_cookies("en")
         with (
@@ -1825,7 +1928,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 )
                 page = context.new_page()
                 try:
-                    response = page.goto(self.live_server_url, wait_until="networkidle")
+                    response = page.goto(
+                        f"{self.live_server_url}/?{unscoped_query}",
+                        wait_until="networkidle",
+                    )
                     self.assertIsNotNone(response)
                     self.assertTrue(
                         response.headers.get("content-language", "en").startswith("en")
@@ -1879,6 +1985,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         navigation.value.headers.get("content-language", "").startswith(
                             "zh"
                         )
+                    )
+                    self.assertEqual(normalized(page), release_zh)
+                    zh_window_query = urlencode(
+                        {
+                            "locale": "zh_hans",
+                            "filters": json.dumps(
+                                {"brands": "__all__", "window": 30}
+                            ),
+                        }
+                    )
+                    page.goto(
+                        f"{self.live_server_url}/?{zh_window_query}",
+                        wait_until="networkidle",
                     )
                     self.assertEqual(normalized(page), quiet_zh)
                     self.assertEqual(
@@ -1949,9 +2068,18 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(response.status, 200)
                     state = page.locator("[data-pw-headline-state]")
                     body = page.locator("[data-pw-headline-body]")
+                    fallback = page.locator("[data-pw-headline-empty]")
                     self.assertEqual(state.inner_text(), "DISABLED")
                     self.assertEqual(body.inner_text(), "Trend summary is unavailable.")
-                    for visible in (state, body):
+                    self.assertFalse(body.is_visible())
+                    self.assertEqual(
+                        fallback.inner_text(), "Trend summary is unavailable."
+                    )
+                    self.assertEqual(
+                        page.locator("[data-pw-headline-item-title]:visible").count(),
+                        0,
+                    )
+                    for visible in (state, fallback):
                         shape = visible.bounding_box()
                         self.assertIsNotNone(shape)
                         self.assertGreater(shape["width"], 0)
@@ -2264,7 +2392,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         '[data-tier-grid="open"] input[data-pw-filter-group="brands"]',
                         '[data-tier-grid="closed"] input[data-pw-filter-group="brands"]',
                         '[data-group="post_types"] input[data-pw-filter-group="post_types"]',
-                        '[data-group="discourse"] input[data-pw-filter-group="discourse"]',
+                        '[data-group="product_labels"] input[data-pw-filter-group="product_labels"]',
                         '[data-group="role"] input[data-pw-filter-group="role"]',
                         '[data-group="lang"] input[data-pw-filter-group="lang"]',
                         '[data-group="sentiment"] input[data-pw-filter-group="sentiment"]',
@@ -2392,11 +2520,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
     def test_v24_locale_and_window_controls_keep_geometry_and_copy(self) -> None:
         """V24 control labels change without moving or resizing the controls."""
         cookies_by_locale = {
-            locale: self._anonymous_cookies(locale) for locale in LOCALES
+            locale: self._anonymous_cookies(locale) for locale in PRODUCT_LOCALES
         }
         expected_labels = {
             "en": ["1d", "7d", "30d", "365d"],
             "zh_cn": ["1天", "7天", "30天", "365天"],
+            "ja": ["1日", "7日", "30日", "365日"],
             "original": ["1d", "7d", "30d", "365d"],
         }
         with sync_playwright() as playwright:
@@ -2409,7 +2538,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     "mobile-320": {"width": 320, "height": 844},
                 }.items():
                     baseline = None
-                    for locale in LOCALES:
+                    for locale in PRODUCT_LOCALES:
                         with self.subTest(viewport=viewport_name, locale=locale):
                             context = self._context_with_cookies(
                                 browser, cookies_by_locale[locale], viewport
@@ -3203,9 +3332,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
+                            feed_rows = page.locator(".feed-row")
                             self.assertEqual(
-                                page.locator(".feed-row .enrichment-status").count(),
+                                page.locator(
+                                    ".feed-row .enrichment-status:not(.synthesis-status)"
+                                ).count(),
                                 0,
+                            )
+                            self.assertEqual(
+                                page.locator(".feed-row .synthesis-status").count(),
+                                feed_rows.count(),
                             )
                             initial_feed_stamp = feed_stamp.text_content()
                             initial_time = tz.locator("[data-tz-time]").text_content()
@@ -3228,6 +3364,27 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertGreater(len(local_assets), 0, "anonymous root referenced zero local assets")
                             for asset_url in local_assets:
+                                if asset_url not in local_asset_responses:
+                                    explicit_status = page.evaluate(
+                                        """async url => {
+                                          const response = await fetch(url, {
+                                            credentials: 'same-origin',
+                                            redirect: 'error'
+                                          });
+                                          return response.status;
+                                        }""",
+                                        asset_url,
+                                    )
+                                    self.assertGreaterEqual(
+                                        explicit_status,
+                                        200,
+                                        f"declared local asset fetch failed: url={asset_url}; status={explicit_status}",
+                                    )
+                                    self.assertLess(
+                                        explicit_status,
+                                        300,
+                                        f"declared local asset fetch failed: url={asset_url}; status={explicit_status}",
+                                    )
                                 self.assertIn(asset_url, local_asset_responses, f"local asset emitted no response: {asset_url}")
                                 self.assertLess(
                                     local_asset_responses[asset_url],
@@ -3292,6 +3449,506 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         return response.json()
+
+    def test_old_taxonomy_url_hydrates_canonical_controls_and_visible_icons(
+        self,
+    ) -> None:
+        from django.utils import timezone
+
+        from core.classification_contract import CONTRACT_VERSION
+        from core.models import (
+            PostBrandClassificationState,
+            PostBrandProductLabel,
+            PostBrandSignal,
+            PostTypeKey,
+            ProductLabelKey,
+            SentimentKey,
+        )
+
+        brand = Brand.objects.create(
+            nickname="taxonomy-browser",
+            display_name="Taxonomy Browser",
+            display_name_en="Taxonomy Browser",
+            display_name_zh_cn="分类浏览器",
+        )
+        old_types = (
+            "buzz_releases",
+            "performance_comparisons",
+            "feedback_questions",
+            "event_announcement",
+        )
+        canonical_types = (
+            "releases_updates",
+            "results_evaluations",
+            "questions_requests",
+            "events_opportunities",
+        )
+        for key in old_types + canonical_types:
+            PostTypeKey.objects.get_or_create(key=key)
+        for key in ("product_request", "ideas_requests"):
+            ProductLabelKey.objects.get_or_create(key=key)
+        SentimentKey.objects.get_or_create(key="positive")
+        post = Post.objects.create(
+            tweet_id="taxonomy-browser-row",
+            created_at=timezone.now() - timedelta(minutes=5),
+            text="taxonomy source",
+            text_en="taxonomy translation",
+            text_zh_cn="分类翻译",
+            commentary_en="taxonomy commentary",
+            commentary_zh_cn="分类评论",
+            lang_detected="en",
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        PostBrandClassificationState.objects.create(
+            post=post,
+            brand=brand,
+            contract_version=CONTRACT_VERSION,
+            taxonomy_version="stage1-taxonomy-v1",
+            prompt_version="stage1-prompt-v2",
+            model="browser-test",
+            source_language="en",
+            input_context_fingerprint="b" * 64,
+            outcome="classified",
+            sentiment_id="positive",
+        )
+        PostBrandSignal.objects.bulk_create(
+            [
+                PostBrandSignal(
+                    post=post,
+                    brand=brand,
+                    post_type_id=key,
+                    sentiment_id="positive",
+                )
+                for key in old_types + canonical_types
+            ]
+        )
+        PostBrandProductLabel.objects.bulk_create(
+            [
+                PostBrandProductLabel(
+                    post=post,
+                    brand=brand,
+                    product_label_id=key,
+                )
+                for key in ("product_request", "ideas_requests")
+            ]
+        )
+        old_filters = {
+            "post_types": ["buzz_releases"],
+            "product_labels": ["product_request"],
+            "unsanctioned": "any",
+            "window": 1,
+        }
+        canonical_filters = {
+            "post_types": ["releases_updates"],
+            "product_labels": ["ideas_requests"],
+            "unsanctioned": "any",
+            "window": 1,
+        }
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, labels in (
+                    ("en", ("Releases & Updates", "Ideas & requests")),
+                    ("zh_cn", ("发布与更新", "想法与请求")),
+                ):
+                    with self.subTest(locale=locale):
+                        context = self._anonymous_context(browser)
+                        page = context.new_page()
+                        page_errors: list[str] = []
+                        page.on(
+                            "pageerror",
+                            lambda error, errors=page_errors: errors.append(str(error)),
+                        )
+                        try:
+                            response = page.goto(
+                                f"{self.live_server_url}/?"
+                                + urlencode(
+                                    {
+                                        "locale": locale,
+                                        "filters": json.dumps(old_filters),
+                                    }
+                                ),
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            row = page.locator(
+                                '[data-pw-feed-row][data-tweet-id="taxonomy-browser-row"]'
+                            )
+                            self.assertTrue(row.is_visible())
+                            self.assertEqual(
+                                page.evaluate("window.pwFilter.get().post_types"),
+                                ["releases_updates"],
+                            )
+                            self.assertEqual(
+                                page.evaluate("window.pwFilter.get().product_labels"),
+                                ["ideas_requests"],
+                            )
+                            canonical_type = page.locator(
+                                '[data-pw-filter-group="post_types"]'
+                                '[value="releases_updates"]'
+                            )
+                            canonical_product = page.locator(
+                                '[data-pw-filter-group="product_labels"]'
+                                '[value="ideas_requests"]'
+                            )
+                            self.assertTrue(canonical_type.is_checked())
+                            self.assertTrue(canonical_product.is_checked())
+                            self.assertEqual(
+                                page.locator(
+                                    '[data-pw-filter-group="post_types"]'
+                                    '[value="buzz_releases"]'
+                                ).count(),
+                                0,
+                            )
+                            self.assertEqual(
+                                canonical_type.locator(
+                                    "xpath=following-sibling::*[2]"
+                                ).inner_text(),
+                                labels[0],
+                            )
+                            self.assertEqual(
+                                canonical_product.locator(
+                                    "xpath=following-sibling::*[2]"
+                                ).inner_text(),
+                                labels[1],
+                            )
+                            self.assertEqual(
+                                row.get_attribute("data-post-types"),
+                                ",".join(canonical_types),
+                            )
+                            self.assertEqual(
+                                row.get_attribute("data-product-labels"),
+                                "ideas_requests",
+                            )
+                            type_icons = row.locator("[data-sig-post-type] svg")
+                            product_icons = row.locator("[data-sig-product] svg")
+                            self.assertEqual(
+                                type_icons.locator("use").evaluate_all(
+                                    "nodes => nodes.map(node => node.getAttribute('href'))"
+                                ),
+                                [
+                                    "#icon-announce",
+                                    "#icon-compare",
+                                    "#icon-question",
+                                    "#icon-event",
+                                ],
+                            )
+                            self.assertEqual(
+                                product_icons.locator("use").evaluate_all(
+                                    "nodes => nodes.map(node => node.getAttribute('href'))"
+                                ),
+                                ["#icon-event"],
+                            )
+                            for icon in (type_icons, product_icons):
+                                for index in range(icon.count()):
+                                    box = icon.nth(index).bounding_box()
+                                    self.assertIsNotNone(box)
+                                    self.assertGreater(box["width"], 0)
+                                    self.assertGreater(box["height"], 0)
+                            payloads = page.evaluate(
+                                """async ({oldFilters, canonicalFilters, locale}) => {
+                                  async function get(path, filters) {
+                                    const query = new URLSearchParams({
+                                      locale,
+                                      window: '1',
+                                      filters: JSON.stringify(filters),
+                                    });
+                                    const response = await fetch(path + '?' + query);
+                                    if (!response.ok) throw new Error(path + ' ' + response.status);
+                                    return response.json();
+                                  }
+                                  return {
+                                    oldFeed: await get('/feed/', oldFilters),
+                                    newFeed: await get('/feed/', canonicalFilters),
+                                    oldChart: await get('/chart/', oldFilters),
+                                    newChart: await get('/chart/', canonicalFilters),
+                                  };
+                                }""",
+                                {
+                                    "oldFilters": old_filters,
+                                    "canonicalFilters": canonical_filters,
+                                    "locale": locale,
+                                },
+                            )
+                            self.assertEqual(
+                                payloads["oldFeed"]["applied_filters"],
+                                canonical_filters,
+                            )
+                            self.assertEqual(
+                                payloads["oldChart"]["applied_filters"],
+                                canonical_filters,
+                            )
+                            self.assertEqual(
+                                payloads["oldFeed"]["rows"],
+                                payloads["newFeed"]["rows"],
+                            )
+                            self.assertEqual(
+                                payloads["oldChart"]["totals"],
+                                payloads["newChart"]["totals"],
+                            )
+                            self.assertEqual(page_errors, [])
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
+    def test_multibrand_product_filter_and_brand_page_keep_brand_provenance(self) -> None:
+        filters = {"product_labels": ["bug"], "unsanctioned": "any"}
+        kimi = self._feed_payload(
+            brand="moonshot_kimi", filters=json.dumps(filters), locale="en"
+        )
+        deepseek = self._feed_payload(
+            brand="deepseek", filters=json.dumps(filters), locale="en"
+        )
+
+        self.assertNotIn(
+            "v22-metadata-replacement",
+            [row["tweet_id"] for row in kimi["rows"]],
+        )
+        self.assertIn(
+            "v22-metadata-replacement",
+            [row["tweet_id"] for row in deepseek["rows"]],
+        )
+
+        chart = _build_brand_chart_payload(
+            "deepseek", 1, {"unsanctioned": "any"}, locale="en"
+        )
+        self.assertEqual(
+            set(chart["tab_datasets"]),
+            {
+                "post_type",
+                "product_labels",
+                "account_roles",
+                "us_nationalism",
+                "cn_nationalism",
+                "unsanctioned",
+            },
+        )
+        self.assertEqual(sum(chart["tab_datasets"]["product_labels"]["bug"]), 1)
+        self.assertEqual(
+            sum(chart["tab_datasets"]["post_type"]["hands_on_usage"]), 2
+        )
+
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(
+            username="stage1-brand-page", password="stage1-test-only"
+        )
+        client = Client(HTTP_HOST="localhost")
+        client.force_login(user)
+        response = client.get("/brands/moonshot_kimi/?locale=zh_hans")
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn('data-pw-brand="moonshot_kimi"', body)
+        self.assertIn("产品信号", body)
+        self.assertNotIn('data-pw-tab="discourse"', body)
+
+    def test_classification_states_render_without_fabricated_taxonomy(self) -> None:
+        expected = {
+            "v22-metadata-003": (
+                "context_missing",
+                "Context missing",
+                "缺少上下文",
+            ),
+            "v22-metadata-004": (
+                "pending",
+                "Pending",
+                "待分类",
+            ),
+            "v22-metadata-005": (
+                "failed",
+                "Failed",
+                "分类失败",
+            ),
+            "v22-metadata-006": (
+                "historical_untyped",
+                "Historical",
+                "历史记录",
+            ),
+        }
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, label_index in (("en", 1), ("zh_hans", 2)):
+                    with self.subTest(locale=locale):
+                        context = self._anonymous_context(browser)
+                        page = context.new_page()
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            feed_payload = page.evaluate(
+                                """async locale => {
+                                  const response = await fetch(
+                                    '/feed/?limit=50&locale=' + encodeURIComponent(locale)
+                                  );
+                                  if (!response.ok) throw new Error('feed ' + response.status);
+                                  return response.json();
+                                }""",
+                                locale,
+                            )
+                            feed_rows = {
+                                row["tweet_id"]: row
+                                for row in feed_payload["rows"]
+                            }
+                            for tweet_id, (status, *labels) in expected.items():
+                                row = page.locator(
+                                    f'[data-pw-feed-row][data-tweet-id="{tweet_id}"]'
+                                )
+                                self.assertEqual(row.count(), 1)
+                                self.assertEqual(
+                                    row.get_attribute("data-post-types"), ""
+                                )
+                                self.assertEqual(
+                                    row.get_attribute("data-product-labels"), ""
+                                )
+                                state = row.locator(
+                                    f".classification-state-{status}"
+                                )
+                                self.assertTrue(state.is_visible())
+                                self.assertEqual(
+                                    state.inner_text(), labels[label_index - 1]
+                                )
+                                api_row = feed_rows[tweet_id]
+                                self.assertEqual(api_row["post_type_keys"], [])
+                                self.assertEqual(api_row["product_label_keys"], [])
+                                self.assertEqual(
+                                    api_row["classification_statuses"], [status]
+                                )
+                                self.assertEqual(
+                                    api_row["classification_status_labels"],
+                                    [labels[label_index - 1]],
+                                )
+
+                            classified_other = page.locator(
+                                '[data-pw-feed-row][data-tweet-id="v22-metadata-007"]'
+                            )
+                            self.assertEqual(
+                                classified_other.get_attribute("data-post-types"),
+                                "other",
+                            )
+                            self.assertEqual(
+                                classified_other.get_attribute(
+                                    "data-classification-statuses"
+                                ),
+                                "",
+                            )
+                            self.assertEqual(
+                                classified_other.locator(
+                                    "[data-sig-classification-status] > *"
+                                ).count(),
+                                0,
+                            )
+                            self.assertEqual(
+                                feed_rows["v22-metadata-007"]["post_type_keys"],
+                                ["other"],
+                            )
+                            self.assertEqual(
+                                feed_rows["v22-metadata-007"][
+                                    "classification_statuses"
+                                ],
+                                [],
+                            )
+                            regular = page.locator(
+                                '[data-pw-feed-row][data-tweet-id="v22-metadata-008"]'
+                            )
+                            for row in (regular, classified_other):
+                                self.assertEqual(
+                                    row.locator("[data-sig-product]").evaluate(
+                                        "element => getComputedStyle(element).display"
+                                    ),
+                                    "none",
+                                )
+                                self.assertEqual(
+                                    row.locator(
+                                        "[data-sig-classification-status]"
+                                    ).evaluate(
+                                        "element => getComputedStyle(element).display"
+                                    ),
+                                    "none",
+                                )
+                            height_metrics = page.evaluate(
+                                """() => {
+                                  const measure = tweetId => {
+                                    const row = document.querySelector(
+                                      `[data-pw-feed-row][data-tweet-id="${tweetId}"]`
+                                    );
+                                    const additions = [
+                                      row.querySelector('[data-sig-product]'),
+                                      row.querySelector('[data-sig-classification-status]')
+                                    ];
+                                    const actual = row.getBoundingClientRect().height;
+                                    const prior = additions.map(node => node.style.display);
+                                    additions.forEach(node => { node.style.display = 'none'; });
+                                    const withoutStage1Families =
+                                      row.getBoundingClientRect().height;
+                                    additions.forEach((node, index) => {
+                                      node.style.display = prior[index];
+                                    });
+                                    return {
+                                      actual,
+                                      withoutStage1Families,
+                                      delta: actual - withoutStage1Families
+                                    };
+                                  };
+                                  return {
+                                    regular: measure('v22-metadata-008'),
+                                    status: measure('v22-metadata-003'),
+                                    product: measure('v22-metadata-replacement')
+                                  };
+                                }"""
+                            )
+                            self.assertLessEqual(
+                                height_metrics["regular"]["actual"], 110
+                            )
+                            self.assertEqual(
+                                height_metrics["regular"]["delta"], 0
+                            )
+                            for family in ("status", "product"):
+                                self.assertGreater(
+                                    height_metrics[family]["delta"], 0
+                                )
+                                self.assertLessEqual(
+                                    height_metrics[family]["delta"], 23
+                                )
+                            context_missing = page.locator(
+                                '[data-pw-feed-row][data-tweet-id="v22-metadata-003"]'
+                            )
+                            self.assertEqual(
+                                context_missing.locator(
+                                    "[data-sig-product]"
+                                ).evaluate(
+                                    "element => getComputedStyle(element).display"
+                                ),
+                                "none",
+                            )
+                            self.assertLessEqual(
+                                context_missing.bounding_box()["height"],
+                                height_metrics["status"]["withoutStage1Families"]
+                                + 23,
+                            )
+                            if locale == "zh_hans":
+                                self.assertEqual(
+                                    page.locator(
+                                        '[data-tweet-id="v22-metadata-004"] '
+                                        ".enrichment-status-pending"
+                                    ).inner_text(),
+                                    "补充处理中",
+                                )
+                                self.assertEqual(
+                                    page.locator(
+                                        '[data-tweet-id="v22-metadata-005"] '
+                                        ".enrichment-status-failed"
+                                    ).inner_text(),
+                                    "补充失败",
+                                )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
 
     def _seed_account_geography_fixture(self) -> None:
         from core.models import (
@@ -3419,6 +4076,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "signal_inspections",
             "sentiment_keys",
             "post_type_keys",
+            "product_label_keys",
             "nat_cn",
             "nat_us",
             "unsanctioned",
@@ -3429,10 +4087,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row["account"]["role"], "official")
         self.assertEqual(row["account"]["role_label"], "官方")
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
-        self.assertEqual(row["post_type_keys"], ["buzz_releases", "hands_on_usage"])
+        self.assertEqual(row["post_type_keys"], ["releases_updates", "hands_on_usage"])
+        self.assertEqual(row["product_label_keys"], ["bug"])
         self.assertEqual(row["nat_cn"], "pro")
         self.assertEqual(row["nat_us"], "mild_pro")
-        self.assertIn("genuine_hype", str(row["classifications"]))
+        self.assertNotIn("discourse", str(row["classifications"]))
         self.assertTrue(row["engagement_pretty"]["followers"])
 
     def test_hover_freeze_feed_range_is_half_open_and_keeps_only_brand_filter(
@@ -3857,7 +4516,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         count = lead.locator(".follower-count")
         self.assertEqual(lead.count(), 1)
         self.assertEqual(glyph.count(), 1)
-        self.assertIn("followers", magnitude.get_attribute("aria-label") or "")
+        locale = page.locator("body").get_attribute("data-pw-locale") or "en"
+        follower_label = "关注者" if locale.startswith("zh") else "followers"
+        self.assertIn(
+            follower_label,
+            magnitude.get_attribute("aria-label") or "",
+        )
         self.assertGreater(glyph.bounding_box()["width"], 0)
         self.assertTrue((count.inner_text() or "").strip())
         account_link = row.locator(".feed-handle-link")
@@ -3867,7 +4531,6 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             role = lead.locator(".account-role.role-official")
             self.assertEqual(role.count(), 1)
             self.assertEqual(role.locator("use").get_attribute("href"), "#icon-role-badge")
-            locale = page.locator("body").get_attribute("data-pw-locale") or "en"
             self.assertEqual(
                 role.get_attribute("aria-label"),
                 "官方" if locale.startswith("zh") else "Official",
@@ -4383,6 +5046,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "icon-hands-on-hammer", "icon-compare", "icon-announce", "icon-question",
             "icon-marketing", "icon-event", "icon-discourse", "icon-nationalism",
             "icon-unsanctioned", "icon-caret", "icon-star",
+            "a-opportunity", "a-jobs", "a-personnel", "a-opinions",
+            "a-research", "a-finance", "a-other",
             "icon-sunrise", "icon-day", "icon-dusk", "icon-night",
             "icon-california", "icon-beijing",
         }
@@ -4475,6 +5140,29 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 page.locator('[data-group="lang"] [data-pw-semantic-icon]').count(),
                                 0,
                             )
+                            locked_post_type_symbols = {
+                                "opportunities": "#a-opportunity",
+                                "job_listings": "#a-jobs",
+                                "personnel_changes": "#a-personnel",
+                                "opinions_reactions": "#a-opinions",
+                                "research_explanations": "#a-research",
+                                "business_finance": "#a-finance",
+                                "other": "#a-other",
+                            }
+                            page.locator('[data-group="post_types"]').click()
+                            for post_type, symbol in locked_post_type_symbols.items():
+                                icon = page.locator(
+                                    '[data-pw-semantic-family="post_types"]'
+                                    f'[data-pw-semantic-key="{post_type}"] svg'
+                                )
+                                self.assertEqual(icon.locator("use").get_attribute("href"), symbol)
+                                self.assertEqual(
+                                    icon.evaluate(
+                                        "node => ({ width: getComputedStyle(node).width, "
+                                        "height: getComputedStyle(node).height })"
+                                    ),
+                                    {"width": "15px", "height": "15px"},
+                                )
                             sentiment_pill = page.locator('[data-group="sentiment"]')
                             sentiment_pill.click()
                             visible_sentiment_icons = page.locator(
@@ -4948,8 +5636,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertLessEqual(
             len(full_queries),
-            30,
-            "52 enriched rows must use bounded bulk metadata queries, not per-row lookups",
+            35,
+            "52 enriched rows must use bounded bulk metadata and artifact queries, not per-row lookups",
         )
 
     def test_feed_eligibility_query_keeps_request_latency_and_roundtrips_bounded(
@@ -5377,10 +6065,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_terminal_completion_reveals_the_exact_hidden_row_on_first_page_refresh(self) -> None:
+    def test_terminal_completion_updates_the_visible_pending_row_on_first_page_refresh(self) -> None:
         from core.models import PostEnrichmentState
 
-        ordered_posts = list(Post.objects.order_by("-created_at")[:3])
+        ordered_posts = list(
+            Post.objects.filter(unsanctioned_flags__isnull=True)
+            .order_by("-created_at")[:3]
+        )
         pending_post = ordered_posts[0]
         failed_post = ordered_posts[1]
         expected_fill = ordered_posts[2]
@@ -5417,23 +6108,29 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 page = context.new_page()
                 try:
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    rendered_ids = page.locator(
+                        ".feed-row[data-tweet-id]"
+                    ).evaluate_all("rows => rows.map(row => row.dataset.tweetId)")
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{pending_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
+                        rendered_ids,
                     )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
+                        rendered_ids,
                     )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{expected_fill.tweet_id}']"
                         ).count(),
                         1,
+                        rendered_ids,
                     )
                     first_page = page.evaluate(
                         """async () => {
@@ -5444,7 +6141,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(
                         [row["tweet_id"] for row in first_page["rows"]],
-                        [expected_fill.tweet_id],
+                        [pending_post.tweet_id],
                     )
                     callback_names = page.evaluate(
                         "() => window.__feedEligibilityMinuteCallbacks.map(fn => fn.name)"
@@ -5505,12 +6202,17 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(
                         revealed.get_attribute("data-enrichment-status"), "succeeded"
                     )
-                    self.assertEqual(revealed.locator(".enrichment-status").count(), 0)
+                    self.assertEqual(
+                        revealed.locator(
+                            ".enrichment-status:not(.synthesis-status)"
+                        ).count(),
+                        0,
+                    )
                     self.assertEqual(
                         page.locator(
                             f".feed-row[data-tweet-id='{failed_post.tweet_id}']"
                         ).count(),
-                        0,
+                        1,
                     )
                 finally:
                     context.close()

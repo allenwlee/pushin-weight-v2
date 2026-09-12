@@ -1,0 +1,63 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T00:51:00Z",
+  "reason": "one first-pass schema repair copied a product label into post_types; a separately identified final repair receives the exact validation error and must return a closed v3 annotation",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-004734-u18-provider-budget-amendment-v5.json"
+  ],
+  "lanes": {
+    "reviewer_deepseek_final_repair": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 500,
+      "max_tokens_per_attempt": 800,
+      "maximum_input_tokens": 3000000,
+      "maximum_output_tokens": 400000,
+      "maximum_cost_usd": "0.54",
+      "twitterapi_credits": 0
+    },
+    "reviewer_minimax_final_repair": {
+      "provider": "minimax",
+      "model": "MiniMax-M2.7",
+      "pricing_version": "minimax-m2.7-paygo-2026-09-11",
+      "input_usd_per_million": "0.30",
+      "output_usd_per_million": "1.20",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 500,
+      "max_tokens_per_attempt": 800,
+      "maximum_input_tokens": 3000000,
+      "maximum_output_tokens": 400000,
+      "maximum_cost_usd": "1.38",
+      "twitterapi_credits": 0
+    },
+    "adjudicator_final_repair": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 500,
+      "max_tokens_per_attempt": 800,
+      "maximum_input_tokens": 3500000,
+      "maximum_output_tokens": 400000,
+      "maximum_cost_usd": "0.61",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "Each final-repair lane refuses its next request when any request, token, or dollar cap would be exceeded; it cannot fund another lane and an invalid final repair blocks the assessment."
+}

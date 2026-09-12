@@ -44,12 +44,22 @@ class ProductionDenyPolicy:
 class RelationsPolicy:
     copied_tables: frozenset[str]
     excluded_tables: frozenset[str]
+    optional_source_tables: frozenset[str]
     views: frozenset[str]
     sequences: frozenset[str]
+    optional_source_sequences: frozenset[str]
 
     @property
     def classified_tables(self) -> frozenset[str]:
         return self.copied_tables | self.excluded_tables
+
+    @property
+    def required_source_tables(self) -> frozenset[str]:
+        return self.classified_tables - self.optional_source_tables
+
+    @property
+    def required_source_sequences(self) -> frozenset[str]:
+        return self.sequences - self.optional_source_sequences
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +77,8 @@ class ValidationPolicy:
     latest_timestamp_table: str
     latest_timestamp_column: str
     maximum_latest_timestamp_lag_seconds: int
+    forward_migration_count_deltas: Mapping[str, Mapping[str, int]]
+    forward_migration_translation_count_deltas: Mapping[str, Mapping[str, int]]
     required_columns: Mapping[str, frozenset[str]]
     translation_columns: Mapping[str, tuple[str, ...]]
     classification_tables: tuple[str, ...]
@@ -165,6 +177,7 @@ _TOP_LEVEL = {
     "database_lifecycle",
 }
 _DATABASE_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}\Z")
+_MIGRATION_NAME = re.compile(r"[a-z0-9_]{1,255}\Z")
 _MUTATING_ACTIONS = frozenset({"refresh", "rollback", "prune"})
 
 
@@ -295,6 +308,42 @@ def _identifier_mapping(
     return result
 
 
+def _migration_count_delta_mapping(
+    raw: Mapping[str, Any], key: str, *, field: str, dotted_metrics: bool = False
+) -> dict[str, dict[str, int]]:
+    value = raw.get(key)
+    if not isinstance(value, Mapping) or not value:
+        raise PolicyError(f"policy_field_invalid:{field}.{key}")
+    result: dict[str, dict[str, int]] = {}
+    for migration, deltas in value.items():
+        if not isinstance(migration, str) or migration.count(".") != 1:
+            raise PolicyError(f"policy_field_invalid:{field}.{key}")
+        app, name = migration.split(".", 1)
+        if not _DATABASE_NAME.fullmatch(app) or not _MIGRATION_NAME.fullmatch(name):
+            raise PolicyError(f"policy_field_invalid:{field}.{key}")
+        if not isinstance(deltas, Mapping) or not deltas:
+            raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
+        parsed: dict[str, int] = {}
+        for metric, delta in deltas.items():
+            metric_parts = metric.split(".") if isinstance(metric, str) else []
+            valid_metric = (
+                len(metric_parts) == 2
+                and all(_DATABASE_NAME.fullmatch(part) for part in metric_parts)
+                if dotted_metrics
+                else isinstance(metric, str) and bool(_DATABASE_NAME.fullmatch(metric))
+            )
+            if (
+                not valid_metric
+                or not isinstance(delta, int)
+                or isinstance(delta, bool)
+                or delta <= 0
+            ):
+                raise PolicyError(f"policy_field_invalid:{field}.{key}.{migration}")
+            parsed[metric] = delta
+        result[migration] = parsed
+    return result
+
+
 def load_policy(path: str | Path) -> RefreshPolicy:
     resolved = Path(path).expanduser().resolve()
     try:
@@ -338,7 +387,14 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     relations_raw = _mapping(raw, "relations")
     _strict(
         relations_raw,
-        {"copied_tables", "excluded_tables", "views", "sequences"},
+        {
+            "copied_tables",
+            "excluded_tables",
+            "optional_source_tables",
+            "views",
+            "sequences",
+            "optional_source_sequences",
+        },
         field="relations",
     )
     relations = RelationsPolicy(
@@ -348,11 +404,21 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         excluded_tables=frozenset(
             _strings(relations_raw, "excluded_tables", field="relations")
         ),
+        optional_source_tables=frozenset(
+            _strings(relations_raw, "optional_source_tables", field="relations")
+        ),
         views=frozenset(_strings(relations_raw, "views", field="relations")),
         sequences=frozenset(_strings(relations_raw, "sequences", field="relations")),
+        optional_source_sequences=frozenset(
+            _strings(relations_raw, "optional_source_sequences", field="relations")
+        ),
     )
     if relations.copied_tables & relations.excluded_tables:
         raise PolicyError("policy_relation_classification_overlap")
+    if not relations.optional_source_tables <= relations.classified_tables:
+        raise PolicyError("policy_optional_source_table_unclassified")
+    if not relations.optional_source_sequences <= relations.sequences:
+        raise PolicyError("policy_optional_source_sequence_unclassified")
 
     scrub_raw = _mapping(raw, "scrub")
     _strict(
@@ -380,6 +446,8 @@ def load_policy(path: str | Path) -> RefreshPolicy:
         "latest_timestamp_table",
         "latest_timestamp_column",
         "maximum_latest_timestamp_lag_seconds",
+        "forward_migration_count_deltas",
+        "forward_migration_translation_count_deltas",
         "required_columns",
         "translation_columns",
         "classification_tables",
@@ -403,6 +471,17 @@ def load_policy(path: str | Path) -> RefreshPolicy:
             "maximum_latest_timestamp_lag_seconds",
             field="validation",
         ),
+        forward_migration_count_deltas=_migration_count_delta_mapping(
+            validation_raw,
+            "forward_migration_count_deltas",
+            field="validation",
+        ),
+        forward_migration_translation_count_deltas=_migration_count_delta_mapping(
+            validation_raw,
+            "forward_migration_translation_count_deltas",
+            field="validation",
+            dotted_metrics=True,
+        ),
         required_columns=_identifier_mapping(
             validation_raw, "required_columns", field="validation"
         ),
@@ -423,6 +502,13 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     )
     if not validated_tables <= relations.copied_tables:
         raise PolicyError("policy_validation_table_not_copied")
+    delta_tables = {
+        table
+        for deltas in validation.forward_migration_count_deltas.values()
+        for table in deltas
+    }
+    if not delta_tables <= set(validation.exact_count_tables):
+        raise PolicyError("policy_migration_delta_table_not_exact_counted")
     configured_validation_tables = (
         set(validation.required_columns)
         | set(validation.translation_columns)
@@ -430,6 +516,18 @@ def load_policy(path: str | Path) -> RefreshPolicy:
     )
     if not configured_validation_tables <= relations.copied_tables:
         raise PolicyError("policy_validation_table_not_copied")
+    translation_metrics = {
+        f"{table}.{column}"
+        for table, columns in validation.translation_columns.items()
+        for column in columns
+    }
+    delta_translation_metrics = {
+        metric
+        for deltas in validation.forward_migration_translation_count_deltas.values()
+        for metric in deltas
+    }
+    if not delta_translation_metrics <= translation_metrics:
+        raise PolicyError("policy_migration_delta_translation_not_validated")
 
     storage_raw = _mapping(raw, "storage")
     _strict(
@@ -686,7 +784,7 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     unknown = source.base_tables - policy.relations.classified_tables
     if unknown:
         raise PolicyError(f"source_unclassified_table:{min(unknown)}")
-    missing = policy.relations.classified_tables - source.base_tables
+    missing = policy.relations.required_source_tables - source.base_tables
     if missing:
         raise PolicyError(f"source_classified_table_missing:{min(missing)}")
     unknown_views = source.views - policy.relations.views
@@ -694,13 +792,17 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
         raise PolicyError(f"source_unclassified_view:{min(unknown_views)}")
     if source.views != policy.relations.views:
         raise PolicyError("source_view_policy_mismatch")
-    if source.sequences != policy.relations.sequences:
+    if not source.sequences <= policy.relations.sequences:
+        raise PolicyError("source_sequence_policy_mismatch")
+    if not policy.relations.required_source_sequences <= source.sequences:
         raise PolicyError("source_sequence_policy_mismatch")
 
     excluded_readable = source.readable_tables & policy.relations.excluded_tables
     if excluded_readable:
         raise PolicyError(f"source_excluded_table_readable:{min(excluded_readable)}")
-    unreadable = policy.relations.copied_tables - source.readable_tables
+    unreadable = (
+        policy.relations.copied_tables & source.base_tables
+    ) - source.readable_tables
     if unreadable:
         raise PolicyError(f"source_required_table_unreadable:{min(unreadable)}")
     unexpected_maintenance = (
@@ -710,10 +812,12 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
         raise PolicyError(
             f"source_maintenance_privilege_unexpected:{min(unexpected_maintenance)}"
         )
-    unlockable = policy.relations.excluded_tables - source.maintainable_tables
+    unlockable = (
+        policy.relations.excluded_tables & source.base_tables
+    ) - source.maintainable_tables
     if unlockable:
         raise PolicyError(f"source_excluded_table_unlockable:{min(unlockable)}")
-    if source.readable_sequences != policy.relations.sequences:
+    if source.readable_sequences != source.sequences:
         raise PolicyError("source_sequence_privileges_invalid")
 
 

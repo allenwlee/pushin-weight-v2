@@ -15,11 +15,15 @@
        data-created-at-iso="{{ row.created_at_iso|default:'' }}"
        data-sentiments="{{ row.sentiment_keys|join:',' }}"
        data-post-types="{{ row.post_type_keys|join:',' }}"
+       data-product-labels="{{ row.product_label_keys|join:',' }}"
+       data-classification-statuses="{{ row.classification_statuses|join:',' }}"
+       data-classification-status-labels="{{ row.classification_status_labels|join:',' }}"
        data-nat-cn="{{ row.nat_cn|default:'' }}"
        data-nat-us="{{ row.nat_us|default:'' }}"
        data-signal-inspections="{{ row.signal_inspections_json }}"
        data-unsanctioned="{{ row.unsanctioned|yesno:'1,' }}"
        data-enrichment-status="{{ row.enrichment_status|default:'succeeded' }}"
+       data-synthesis-status="{{ row.synthesis_status|default:'not_requested' }}"
        data-tint="{{ row.tint_class|default:'tint-neutral' }}">
     <div class="feed-row-shell {{ row.tint_class|default:'tint-neutral' }}">
       <div class="feed-main">
@@ -54,14 +58,19 @@
               {% if row.enrichment_status == 'pending' or row.enrichment_status == 'failed' %}
                 <span class="enrichment-status enrichment-status-{{ row.enrichment_status }}" role="status">{{ row.enrichment_status_label }}</span>
               {% endif %}
+              {% if row.synthesis_status != 'ready' %}
+                <span class="enrichment-status synthesis-status synthesis-status-{{ row.synthesis_status }}" role="status" aria-live="polite">{{ row.synthesis_status_label }}</span>
+              {% endif %}
             </span>
           </div>
           <div class="text" data-text-cycle role="button" tabindex="0"
                data-language-display="{{ row.language_display }}"
                data-commentary-zh-cn="{{ row.commentary_zh_cn|default:'' }}"
                data-commentary-en="{{ row.commentary_en|default:'' }}"
+               data-commentary-ja="{{ row.commentary_ja|default:'' }}"
                data-literal-cn="{{ row.text_zh_cn|default:'' }}"
                data-text-en="{{ row.text_en|default:'' }}"
+               data-text-ja="{{ row.text_ja|default:'' }}"
                data-text-source="{{ row.text_original|default:row.text }}">
             {% if is_zh_chrome %}
               {% if row.commentary_zh_cn %}
@@ -70,6 +79,14 @@
                 <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
               {% else %}
                 <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
+              {% endif %}
+            {% elif active_locale == 'ja' %}
+              {% if row.commentary_ja %}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">分析</span>{{ row.commentary_ja }}
+              {% elif row.text_ja %}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">直訳</span>{{ row.text_ja }}
+              {% else %}
+                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">原文</span>{{ row.text_original|default:row.text|default:'NULL' }}
               {% endif %}
             {% elif active_locale == 'original' %}
               <span class="post-language-tag">{{ row.language_display }}</span>{{ row.text_original|default:row.text|default:'NULL' }}
@@ -85,13 +102,15 @@
             <span class="likes"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>{{ row.engagement_pretty.likes }}</span>
             <span class="rts"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-repost"></use></svg>{{ row.engagement_pretty.retweets }}</span>
             <span class="replies"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-reply"></use></svg>{{ row.engagement_pretty.replies }}</span>
-            <a class="feed-x-link" href="https://x.com/i/web/status/{{ row.tweet_id }}" target="_blank" rel="noopener noreferrer" aria-label="{% if is_zh_chrome %}在 X 查看原帖{% else %}Open original post on X{% endif %}"><svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg></a>
+            <a class="feed-x-link" href="https://x.com/i/web/status/{{ row.tweet_id }}" target="_blank" rel="noopener noreferrer" aria-label="{% if is_zh_chrome %}在 X 查看原帖{% elif is_ja_chrome %}Xで元の投稿を表示{% else %}Open original post on X{% endif %}"><svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg></a>
           </div>
         </div>
       </div>
       <div class="feed-signals">
         <div class="sig-row sig-sentiment" data-sig-sentiment></div>
         <div class="sig-row sig-post-type" data-sig-post-type></div>
+        <div class="sig-row sig-product" data-sig-product></div>
+        <div class="sig-row sig-classification-status" data-sig-classification-status></div>
         <div class="sig-row sig-nat" data-sig-nat></div>
         <div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>
       </div>

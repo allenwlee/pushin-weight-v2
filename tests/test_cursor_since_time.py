@@ -35,7 +35,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -89,23 +88,26 @@ def test_walk_search_does_not_write_since_time_as_url_param() -> None:
 
 
 def test_walk_search_does_not_inject_since_time_into_query_string() -> None:
-    """_walk_search delegates query assembly to run_search; it must
-    not re-inject since_time itself."""
-    src = _read("x_monitor/apify.py")
-    walk_section_pattern = re.compile(
-        r"def _walk_search.*?def run_search", re.DOTALL
+    """_walk_search forwards an already bounded query without duplication."""
+    from x_monitor.apify import TwitterApiClient
+
+    api = TwitterApiClient(api_key="test")
+    captured: dict[str, str] = {}
+
+    def fake_pages(query, *_args, **_kwargs):
+        captured["query"] = query
+        return iter(())
+
+    api._iter_search_pages = fake_pages  # type: ignore[method-assign]
+    bounded = api._effective_search_query(
+        "minimax", since=None, since_time=1735689600, until_time=1735689660
     )
-    walk_body = walk_section_pattern.search(src).group(0)
-    bad_patterns = [
-        r"effective_query\s*=.*since_time",
-        r"query\s*\+.*since_time",
-        r"since_time:\{",
-    ]
-    for pat in bad_patterns:
-        assert not re.search(pat, walk_body), (
-            f"_walk_search must not inject since_time into query itself; "
-            f"run_search owns query assembly. Found pattern: {pat}"
-        )
+
+    api._walk_search(bounded, max_results=10, since_time=1735689600)
+
+    assert captured["query"] == bounded
+    assert captured["query"].count("since_time:") == 1
+    assert captured["query"].count("until_time:") == 1
 
 
 def test_run_py_converts_prior_iso_to_unix_epoch() -> None:
@@ -188,28 +190,28 @@ def test_apify_run_search_injects_since_time_into_query_end_to_end() -> None:
     )
 
 
-def test_run_search_injects_until_time_when_since_time_set() -> None:
+def test_run_search_injects_until_time_when_since_time_set(monkeypatch) -> None:
     """When since_time is provided, run_search must ALSO inject the
     matching upper bound `until_time:<now>` per TwitterAPI.io's working
     pattern. Both bounds must be inline operators (URL-param forms are
     silently dropped)."""
-    src = _read("x_monitor/apify.py")
-    # The injection block in run_search must reference until_time.
-    pattern = (
-        r'if "until_time:" not in effective_query:\s*\n'
-        r'\s*effective_query = f"\{effective_query\} until_time:\{int\(time\.time\(\)\)\}"'
+    from x_monitor import apify
+
+    now = 1735689660
+    monkeypatch.setattr(apify.time, "time", lambda: now)
+
+    query = apify.TwitterApiClient._effective_search_query(
+        "minimax", since=None, since_time=1735689600, until_time=None
     )
-    assert re.search(pattern, src), (
-        "run_search must inject `until_time:<int(time.time())>` when "
-        "since_time is provided. TwitterAPI.io's verified-working pattern "
-        "uses both bounds — `since_time:<floor> until_time:<now>`."
-    )
+
+    assert query == f"minimax since_time:1735689600 until_time:{now}"
 
 
 def test_apify_run_search_injects_both_bounds_end_to_end() -> None:
     """End-to-end smoke: when since_time is set, the rendered query
     string contains BOTH `since_time:<n>` and `until_time:<now>`."""
     import time as _time
+
     from x_monitor.apify import TwitterApiClient
 
     captured: dict = {}

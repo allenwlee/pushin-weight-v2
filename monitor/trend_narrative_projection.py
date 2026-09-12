@@ -24,6 +24,7 @@ from monitor.trend_narrative_coverage import selected_coverage
 from x_monitor.config import HeadlineNarrativeConfig, load_config
 
 _ZH_LOCALES = frozenset({"zh_cn", "zh-cn", "zh_hans", "zh-hans"})
+_JA_LOCALES = frozenset({"ja", "ja-jp"})
 
 
 def project_trend_narrative(
@@ -42,6 +43,7 @@ def project_trend_narrative(
     requested_at = now or timezone.now()
     response_timestamp = computed_at or requested_at.isoformat()
     is_zh = str(locale).casefold() in _ZH_LOCALES
+    is_ja = str(locale).casefold() in _JA_LOCALES
     selected = _normalize_selected_brands(selected_brand_keys)
 
     if not active_config.serving_active:
@@ -49,9 +51,19 @@ def project_trend_narrative(
             window_days=window_days,
             computed_at=response_timestamp,
             is_zh=is_zh,
+            is_ja=is_ja,
         )
 
     if active_config.publication_source == "legacy_only":
+        if is_ja:
+            return _empty_v3_projection(
+                window_days=window_days,
+                selected_brand_keys=selected,
+                is_zh=False,
+                is_ja=True,
+                now=requested_at,
+                computed_at=response_timestamp,
+            )
         return _project_legacy_trend_narrative(
             window_days,
             selected_brand_keys=selected,
@@ -69,6 +81,8 @@ def project_trend_narrative(
                 "run__brand_narratives",
                 queryset=BrandTrendNarrative.objects.select_related(
                     "brand", "last_good__brand"
+                ).prefetch_related(
+                    "localized_texts", "last_good__localized_texts"
                 ).defer(
                     "propositions",
                     "events",
@@ -92,12 +106,13 @@ def project_trend_narrative(
             visible,
             selected_brand_keys=selected,
             is_zh=is_zh,
+            is_ja=is_ja,
             now=requested_at,
             computed_at=response_timestamp,
             config=active_config,
         )
 
-    if active_config.legacy_fallback_enabled:
+    if active_config.legacy_fallback_enabled and not is_ja:
         legacy = _project_legacy_trend_narrative(
             window_days,
             selected_brand_keys=selected,
@@ -114,6 +129,7 @@ def project_trend_narrative(
         window_days=window_days,
         selected_brand_keys=selected,
         is_zh=is_zh,
+        is_ja=is_ja,
         now=requested_at,
         computed_at=response_timestamp,
     )
@@ -230,6 +246,7 @@ def _project_visible_run(
     *,
     selected_brand_keys: list[str] | None,
     is_zh: bool,
+    is_ja: bool = False,
     now,
     computed_at: str,
     config: HeadlineNarrativeConfig,
@@ -276,6 +293,7 @@ def _project_visible_run(
             brand_key=key,
             window_days=run.window_days,
             is_zh=is_zh,
+            is_ja=is_ja,
             now=now,
             config=config,
         )
@@ -287,6 +305,7 @@ def _project_visible_run(
         requested_count=requested_count,
         returned_count=len(items),
         is_zh=is_zh,
+        is_ja=is_ja,
     )
     return _v3_projection(
         window_days=run.window_days,
@@ -295,6 +314,7 @@ def _project_visible_run(
         items=items,
         selection=selection,
         is_zh=is_zh,
+        is_ja=is_ja,
     )
 
 
@@ -303,6 +323,7 @@ def _empty_v3_projection(
     window_days: int,
     selected_brand_keys: list[str] | None,
     is_zh: bool,
+    is_ja: bool = False,
     now,
     computed_at: str,
 ) -> dict[str, Any]:
@@ -318,6 +339,7 @@ def _empty_v3_projection(
             brand_key=key,
             window_days=window_days,
             is_zh=is_zh,
+            is_ja=is_ja,
             now=now,
             config=None,
         )
@@ -333,22 +355,24 @@ def _empty_v3_projection(
             requested_count=len(selected),
             returned_count=len(items),
             is_zh=is_zh,
+            is_ja=is_ja,
         ),
         is_zh=is_zh,
+        is_ja=is_ja,
     )
 
 
 def _disabled_projection(
-    *, window_days: int, computed_at: str, is_zh: bool
+    *, window_days: int, computed_at: str, is_zh: bool, is_ja: bool = False
 ) -> dict[str, Any]:
-    body = _fallback_body(is_zh=is_zh, disabled=True)
+    body = _fallback_body(is_zh=is_zh, is_ja=is_ja, disabled=True)
     return {
         "schema_version": 3,
         "window_days": window_days,
         "computed_at": computed_at,
         "facts_as_of": None,
         "state": "disabled",
-        "state_label": _state_label("disabled", is_zh=is_zh),
+        "state_label": _state_label("disabled", is_zh=is_zh, is_ja=is_ja),
         "items": [],
         "selection": {
             "mode": "all",
@@ -369,6 +393,7 @@ def _v3_projection(
     items: list[dict[str, Any]],
     selection: dict[str, Any],
     is_zh: bool,
+    is_ja: bool = False,
 ) -> dict[str, Any]:
     states = {item["state"] for item in items}
     if not items:
@@ -378,7 +403,9 @@ def _v3_projection(
     else:
         state = "mixed"
     body = (
-        items[0]["headline"] if items else _fallback_body(is_zh=is_zh, disabled=False)
+        items[0]["headline"]
+        if items
+        else _fallback_body(is_zh=is_zh, is_ja=is_ja, disabled=False)
     )
     return {
         "schema_version": 3,
@@ -386,7 +413,7 @@ def _v3_projection(
         "computed_at": computed_at,
         "facts_as_of": facts_as_of,
         "state": state,
-        "state_label": _v3_state_label(state, is_zh=is_zh),
+        "state_label": _v3_state_label(state, is_zh=is_zh, is_ja=is_ja),
         "items": items,
         "selection": selection,
         **_v2_compatibility(body=body, items=items),
@@ -431,6 +458,7 @@ def _per_brand_item(
     brand_key: str,
     window_days: int,
     is_zh: bool,
+    is_ja: bool = False,
     now,
     config: HeadlineNarrativeConfig | None,
 ) -> dict[str, Any]:
@@ -482,18 +510,33 @@ def _per_brand_item(
     verified_at = served.verified_at if served is not None else None
     attempted_at = outcome.attempted_at if outcome is not None else None
     if state in {"available", "stale"} and served is not None:
-        headline = served.headline_zh_cn if is_zh else served.headline_en
-        secondary = served.secondary_zh_cn if is_zh else served.secondary_en
+        locale_code = "zh-cn" if is_zh else "ja" if is_ja else "en"
+        localized = {
+            row.locale: row for row in served.localized_texts.all()
+        }
+        locale_row = localized.get(locale_code)
+        if locale_row is not None:
+            headline = locale_row.headline
+            secondary = locale_row.secondary
+        elif is_ja:
+            state = "unavailable"
+            headline, secondary = _terminal_copy(
+                state, display_name=display_name, is_zh=False, is_ja=True
+            )
+        else:
+            headline = served.headline_zh_cn if is_zh else served.headline_en
+            secondary = served.secondary_zh_cn if is_zh else served.secondary_en
         identifier = f"brand-trend:{served.pk}"
     else:
         headline, secondary = _terminal_copy(
-            state, display_name=display_name, is_zh=is_zh
+            state, display_name=display_name, is_zh=is_zh, is_ja=is_ja
         )
         identifier = f"brand-trend:{outcome.pk}" if outcome is not None else None
     freshness = _freshness_projection(
         verified_at=verified_at,
         attempted_at=attempted_at,
         is_zh=is_zh,
+        is_ja=is_ja,
         now=now,
     )
     return {
@@ -504,7 +547,9 @@ def _per_brand_item(
             "url": reverse("brand_home", args=[brand_key]) if brand_exists else None,
         },
         "state": state,
-        "state_label": _item_state_label(state, freshness=freshness, is_zh=is_zh),
+        "state_label": _item_state_label(
+            state, freshness=freshness, is_zh=is_zh, is_ja=is_ja
+        ),
         "headline": headline,
         "secondary": secondary,
         "verified_at": _iso(verified_at),
@@ -513,8 +558,15 @@ def _per_brand_item(
     }
 
 
-def _terminal_copy(state: str, *, display_name: str, is_zh: bool) -> tuple[str, str]:
+def _terminal_copy(
+    state: str, *, display_name: str, is_zh: bool, is_ja: bool = False
+) -> tuple[str, str]:
     if state == "no_content":
+        if is_ja:
+            return (
+                f"{display_name}にはこの期間の投稿がありません。",
+                "この期間のソース収集は完了しています。",
+            )
         return (
             (
                 f"{display_name}在这一时间段内没有帖子。"
@@ -528,6 +580,11 @@ def _terminal_copy(state: str, *, display_name: str, is_zh: bool) -> tuple[str, 
             ),
         )
     if state == "data_quality_unavailable":
+        if is_ja:
+            return (
+                f"{display_name}のトレンド分析は現在利用できません。",
+                "この期間のソースデータが不完全なため、会話量を評価していません。",
+            )
         return (
             (
                 f"{display_name}的趋势摘要暂不可用。"
@@ -539,6 +596,11 @@ def _terminal_copy(state: str, *, display_name: str, is_zh: bool) -> tuple[str, 
                 if is_zh
                 else "Source data for this window is incomplete; no claim about conversation volume was made."
             ),
+        )
+    if is_ja:
+        return (
+            f"{display_name}のトレンド分析は現在利用できません。",
+            "最新の確認では公開可能な分析を生成できませんでした。",
         )
     return (
         (
@@ -555,7 +617,7 @@ def _terminal_copy(state: str, *, display_name: str, is_zh: bool) -> tuple[str, 
 
 
 def _freshness_projection(
-    *, verified_at, attempted_at, is_zh: bool, now
+    *, verified_at, attempted_at, is_zh: bool, is_ja: bool = False, now
 ) -> dict[str, str | None]:
     timestamp = verified_at or attempted_at
     kind = "verified" if verified_at is not None else "attempted"
@@ -566,10 +628,14 @@ def _freshness_projection(
             "absolute": "",
             "absolute_iso": None,
         }
-    relative = _relative_time(timestamp, now=now, is_zh=is_zh)
+    relative = _relative_time(timestamp, now=now, is_zh=is_zh, is_ja=is_ja)
     if is_zh:
         relative_label = (
             f"上次验证于{relative}" if kind == "verified" else f"上次尝试于{relative}"
+        )
+    elif is_ja:
+        relative_label = (
+            f"最終確認 {relative}" if kind == "verified" else f"最終試行 {relative}"
         )
     else:
         relative_label = (
@@ -580,28 +646,28 @@ def _freshness_projection(
     return {
         "kind": kind,
         "relative": relative_label,
-        "absolute": _absolute_time(timestamp, is_zh=is_zh),
+        "absolute": _absolute_time(timestamp, is_zh=is_zh, is_ja=is_ja),
         "absolute_iso": _iso(timestamp),
     }
 
 
-def _relative_time(value, *, now, is_zh: bool) -> str:
+def _relative_time(value, *, now, is_zh: bool, is_ja: bool = False) -> str:
     seconds = max(0, int((now - value).total_seconds()))
     if seconds < 60:
-        return "刚刚" if is_zh else "just now"
+        return "刚刚" if is_zh else "たった今" if is_ja else "just now"
     if seconds < 3600:
         amount = max(1, seconds // 60)
-        return f"{amount}分钟前" if is_zh else f"{amount} min ago"
+        return f"{amount}分钟前" if is_zh else f"{amount}分前" if is_ja else f"{amount} min ago"
     if seconds < 86400:
         amount = max(1, seconds // 3600)
-        return f"{amount}小时前" if is_zh else f"{amount} hr ago"
+        return f"{amount}小时前" if is_zh else f"{amount}時間前" if is_ja else f"{amount} hr ago"
     amount = max(1, seconds // 86400)
-    return f"{amount}天前" if is_zh else f"{amount} days ago"
+    return f"{amount}天前" if is_zh else f"{amount}日前" if is_ja else f"{amount} days ago"
 
 
-def _absolute_time(value, *, is_zh: bool) -> str:
+def _absolute_time(value, *, is_zh: bool, is_ja: bool = False) -> str:
     utc = value.astimezone(UTC)
-    if is_zh:
+    if is_zh or is_ja:
         return f"{utc.year}年{utc.month}月{utc.day}日 {utc:%H:%M} UTC"
     month = (
         "Jan",
@@ -620,21 +686,30 @@ def _absolute_time(value, *, is_zh: bool) -> str:
     return f"{month} {utc.day}, {utc.year}, {utc:%H:%M} UTC"
 
 
-def _item_state_label(state: str, *, freshness: dict[str, Any], is_zh: bool) -> str:
+def _item_state_label(
+    state: str, *, freshness: dict[str, Any], is_zh: bool, is_ja: bool = False
+) -> str:
     relative = str(freshness.get("relative") or "")
     if state == "stale":
-        return f"过期 · {relative}" if is_zh else f"Stale · {relative}"
+        return f"过期 · {relative}" if is_zh else f"期限切れ · {relative}" if is_ja else f"Stale · {relative}"
     labels = {
         "available": ("可用", "Available"),
         "unavailable": ("暂不可用", "Unavailable"),
         "no_content": ("无内容", "No content"),
         "data_quality_unavailable": ("数据不完整", "Data unavailable"),
     }
+    if is_ja:
+        return {
+            "available": "利用可能",
+            "unavailable": "利用不可",
+            "no_content": "投稿なし",
+            "data_quality_unavailable": "データ不足",
+        }[state]
     zh, en = labels[state]
     return zh if is_zh else en
 
 
-def _v3_state_label(state: str, *, is_zh: bool) -> str:
+def _v3_state_label(state: str, *, is_zh: bool, is_ja: bool = False) -> str:
     labels = {
         "available": ("可用", "Available"),
         "stale": ("过期", "Stale"),
@@ -643,6 +718,15 @@ def _v3_state_label(state: str, *, is_zh: bool) -> str:
         "data_quality_unavailable": ("数据不完整", "Data unavailable"),
         "mixed": ("混合状态", "Mixed"),
     }
+    if is_ja:
+        return {
+            "available": "利用可能",
+            "stale": "期限切れ",
+            "unavailable": "利用不可",
+            "no_content": "投稿なし",
+            "data_quality_unavailable": "データ不足",
+            "mixed": "混在",
+        }[state]
     zh, en = labels[state]
     return zh if is_zh else en
 
@@ -653,6 +737,7 @@ def _selection_projection(
     requested_count: int,
     returned_count: int,
     is_zh: bool,
+    is_ja: bool = False,
 ) -> dict[str, Any]:
     truncated = explicit and requested_count > returned_count
     summary = ""
@@ -660,6 +745,8 @@ def _selection_projection(
         summary = (
             f"已选择{requested_count}个，显示{returned_count}个"
             if is_zh
+            else f"{requested_count}件中{returned_count}件を表示"
+            if is_ja
             else f"{returned_count} of {requested_count} selected"
         )
     return {
@@ -776,12 +863,20 @@ def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _fallback_body(*, is_zh: bool, disabled: bool) -> str:
+def _fallback_body(*, is_zh: bool, disabled: bool, is_ja: bool = False) -> str:
     if disabled:
-        return "趋势摘要暂不可用。" if is_zh else "Trend summary is unavailable."
+        return (
+            "趋势摘要暂不可用。"
+            if is_zh
+            else "トレンド分析は現在利用できません。"
+            if is_ja
+            else "Trend summary is unavailable."
+        )
     return (
         "该时段的趋势摘要正在准备中。"
         if is_zh
+        else "この期間のトレンド分析を準備しています。"
+        if is_ja
         else "Trend summary is warming up for this window."
     )
 
@@ -801,13 +896,20 @@ def _coverage_context(current: TrendNarrative, *, is_zh: bool) -> str:
     )
 
 
-def _state_label(state: str, *, is_zh: bool) -> str:
+def _state_label(state: str, *, is_zh: bool, is_ja: bool = False) -> str:
     labels = {
         "available": "Available",
         "stale": "Stale",
         "unavailable": "Warming up",
         "disabled": "Disabled",
     }
+    if is_ja:
+        return {
+            "available": "利用可能",
+            "stale": "期限切れ",
+            "unavailable": "準備中",
+            "disabled": "無効",
+        }[state]
     return _localized(labels[state], is_zh=is_zh)
 
 

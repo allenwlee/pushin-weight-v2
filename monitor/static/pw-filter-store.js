@@ -7,7 +7,7 @@
   var STORAGE_PREFIX = 'pushinweight.home.preferences.v2:';
   var LEGACY_STORAGE_PREFIX = 'pushinweight.home.preferences.v1:';
   var MULTI_VALUE_KEYS = [
-    'brands', 'discourse', 'post_types', 'role', 'lang', 'sentiment',
+    'brands', 'product_labels', 'post_types', 'role', 'lang', 'sentiment',
     'cn_nationalism', 'us_nationalism',
   ];
   var FILTER_QUERY_KEYS = MULTI_VALUE_KEYS.concat(['unsanctioned', 'window']);
@@ -25,7 +25,7 @@
   function defaultFilters() {
     return {
       brands: '__all__',
-      discourse: '__all__',
+      product_labels: '__all__',
       post_types: '__all__',
       role: '__all__',
       lang: '__all__',

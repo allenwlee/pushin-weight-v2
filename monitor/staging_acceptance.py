@@ -508,12 +508,8 @@ def prepare_staging_acceptance(
     if not environ.get(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV):
         raise StagingAcceptanceError("provider_credential_missing:twitter")
 
-    translator_base_url = cfg.llm.translator_base_url or environ.get(
-        "ANTHROPIC_BASE_URL"
-    )
-    classifier_base_url = environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL", environ.get("ANTHROPIC_BASE_URL")
-    )
+    translator_base_url = cfg.llm.translator_base_url
+    classifier_base_url = cfg.llm.classifier_base_url
     _require_provider_credential(
         label="translator",
         base_url=translator_base_url,
