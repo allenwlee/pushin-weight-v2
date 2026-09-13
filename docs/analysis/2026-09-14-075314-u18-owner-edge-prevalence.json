@@ -1,0 +1,190 @@
+{
+  "schema_version": "u18-owner-edge-prevalence/v1",
+  "created_at": "2026-09-14T07:53:14+09:00",
+  "source_review": "docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md",
+  "dataset": {
+    "dump_path": "/Users/fuchitalee/Downloads/pushinweight-dumps/pushinweight-prod-20260910-165134.dump",
+    "dump_sha256": "618f31498b94a42e54940c4e5bf90d7bb09a122b72f1406181b4e029f9b25e06",
+    "dump_bytes": 672072895,
+    "post_span": {
+      "first": "2021-10-03",
+      "last": "2026-09-10T16:45:00+09:00"
+    },
+    "posts": 211245,
+    "distinct_branded_posts": 210587,
+    "post_brand_pairs": 252579
+  },
+  "methods": {
+    "base_relation": "SELECT DISTINCT p.tweet_id AS post_id, pb.brand_id, p.* FROM posts p JOIN posts_brands pb ON pb.post_id = p.tweet_id",
+    "post_denominator": "COUNT(DISTINCT post_id)",
+    "pair_denominator": "COUNT(*) over distinct (post_id, brand_id)",
+    "historical_proxies": {
+      "distillation_accusation": "posts_brands_discourse.discourse_key = 'distillation_accusation'",
+      "release": "posts_brands_signals.post_type_key = 'buzz_releases'",
+      "advertising": "posts_brands_signals.post_type_key = 'advertising_marketing'",
+      "negative_sentiment": "posts_brands_signals.sentiment = 'negative'",
+      "marketing_spam": "posts_unsanctioned_flags.flags LIKE '%marketing_spam%'"
+    },
+    "lexical_predicates": {
+      "broad_distillation": "(distill|蒸馏|蒸餾|蒸溜|套壳|套殼)",
+      "tight_distillation_allegation_second_term": "(claim|accus|alleg|suspect|believ|seem|likely|steal|stole|stolen|theft|extract|copy|copied|clone|fraud|illegal|illicit|misappropriat|ip theft|training data|scrap|without licence|without license|指控|窃取|偷|盗|盗取|抄袭|侵权|违规|非法|提取|造假|虚假|骗局|剽窃|声称|据称|怀疑|可能|不正|違法|コピー|パクリ|疑い|未確認|詐欺|盗用)",
+      "generic_allegation": "(alleg|accus|claim|rumou?r|reportedly|allegedly|unproven|unverified|suspect|fake|false|mislead|steal|stolen|theft|fraud|scam|hoax|指控|据称|据报道|传闻|传言|未经证实|虚假|误导|窃取|盗|骗局|不实|告発|疑い|未確認|偽|詐欺|盗用|不正)",
+      "geopolitical_actor": "(china|chinese|u\\.?s\\.?|america|american|beijing|washington|ccp|government|governments|state|states|national security|export control|sanction|geopolit|industrial policy|sovereign|中国|中国人|美国|美方|政府|国家安全|出口管制|制裁|地缘|主权|国策|米国|安全保障|輸出規制|地政学)",
+      "geopolitical_framework": "(race|races|competition|compete|leadership|dominance|policy|policies|regulation|restrict|ban|control|security|strategy|ecosystem|industry|market|global|supremacy|power|war|battle|geopolitical|追赶|竞争|霸权|战略|政策|监管|限制|出口|安全|产业|生态|主导|国際競争|競争|戦略|覇権|安全保障|規制|輸出)",
+      "narrow_china": "(china|chinese|beijing|ccp|中国|中国人|中国政府|北京)",
+      "narrow_us": "(u\\.?s\\.?|america|american|washington|federal|western|美国|美方|华盛顿|西方)",
+      "news_marker": "(\\m(news|breaking|report|reports|reported|reportedly|according to|sources?|announced|announcement|revealed|disclosed|says|said|warned|warning|just in|press release|daily briefing|update)\\M|新闻|据报道|报道称|消息|据悉|宣布|发布|通报|透露|披露|警告|ニュース|報道|報じ|発表|明らかに|によると|速報|声明)",
+      "limited_access": "(closed[ -]?beta|private[ -]?beta|invite[ -]?only|waitlist|early[ -]?access|封闭测试|封测|内测|邀请码|候补名单|等待名单|早期访问|クローズド[・ ]?ベータ|招待制|先行アクセス|ウェイトリスト|待機リスト)",
+      "limited_access_action": "(apply|join|sign[ -]?up|register|request[ -]?access|get[ -]?access|応募|参加|登録|申し込|申請|加入|报名|報名|注册|註冊|申请|申請|欢迎试用|歡迎試用|try it|try now|available)",
+      "qwen_clip_burst": "(^|[^[:alnum:]_])(youtube[[:space:]]+)?qwen([[:space:]]+zoomed)?[[:space:]]+clip[[:space:]]+[0-9]+ plus one of #ferrari/#carrally/#vlog/#sweetflips/#supercars/#v12/#rally"
+    },
+    "media_proxy": "After removing URLs, visible text length <= 100; extended_entities contains a non-empty media array; no quoted_text, locally stored quoted_status_id post, or locally stored in_reply_to_id post. The URL proxy replaces the media condition with an HTTP URL condition.",
+    "question_review": "All seven v26 questions_requests rows were read from .context/u18/cohort-source.json and manually divided into brand-directed product action versus informational/rhetorical questions.",
+    "sample_policy": "Lexical samples were selected deterministically with ORDER BY md5(post_id) LIMIT 30 (or md5(post_id || brand_id) for pair samples) and reviewed qualitatively; no formal sample precision is claimed.",
+    "unsanctioned_scope_caveat": "Legacy posts_unsanctioned_flags is post-level, while advertising signals and account roles are per (post_id, brand_id). Their overlap cannot prove which attributed brand caused a flag on a multi-brand post.",
+    "snapshot_precedence": "A prior exploratory role/flag audit used the retired 20,322-post April-May SQLite extract. The September PostgreSQL dump is primary for all rates in this artifact; the snapshots must not be compared directly."
+  },
+  "screens": {
+    "questions_and_ideas": {
+      "candidate_v26_rows": 120,
+      "questions_requests_rows": 7,
+      "questions_without_ideas_requests": 4,
+      "questions_without_ideas_requests_rate": 0.571429,
+      "owner_reference_rows": 45,
+      "owner_questions_requests_rows": 4,
+      "owner_questions_without_ideas_requests": 2,
+      "owner_questions_without_ideas_requests_rate": 0.5,
+      "interpretation": "Questions and product requests are independent. The four v26 questions without an idea/request were informational or rhetorical on text review. A request to resolve a brand-specific issue still qualifies as ideas_requests."
+    },
+    "distillation_and_allegations": {
+      "historical_distillation_accusation_posts": 467,
+      "historical_distillation_accusation_post_rate": 0.002211,
+      "historical_distillation_accusation_pairs": 687,
+      "historical_distillation_accusation_pair_rate": 0.00272,
+      "broad_distillation_lexical_posts": 2255,
+      "broad_distillation_lexical_rate": 0.010708,
+      "tight_distillation_allegation_lexical_posts": 961,
+      "tight_distillation_allegation_lexical_rate": 0.004563,
+      "tight_screen_with_historical_negative_sentiment": 209,
+      "tight_screen_negative_coverage": 0.217482,
+      "generic_allegation_lexical_posts": 10856,
+      "generic_allegation_lexical_rate": 0.051551,
+      "interpretation": "The useful distillation-allegation population is approximately 0.22% to 0.46% before a shadow classifier establishes precision. A negative-opinion filter misses 78.25% of the tight lexical screen. Generic allegation language is too noisy for a broad product label."
+    },
+    "news_and_releases": {
+      "third_party_news_marker_posts": 4299,
+      "third_party_news_marker_rate": 0.020414,
+      "news_without_historical_release_posts": 3556,
+      "news_without_historical_release_rate": 0.016886,
+      "news_and_historical_release_posts": 743,
+      "news_and_historical_release_rate": 0.003528,
+      "historical_release_posts": 13298,
+      "historical_release_rate": 0.063147,
+      "release_without_news_marker_posts": 12555,
+      "release_without_news_marker_rate": 0.059619,
+      "interpretation": "General third-party reporting is large enough to warrant news_reporting, while the much larger release-only set should remain separately filterable."
+    },
+    "geopolitical_modes": {
+      "historical_any_non_none_country_stance_posts": 6468,
+      "historical_any_non_none_country_stance_rate": 0.030714,
+      "broad_actor_framework_posts": 10683,
+      "broad_actor_framework_rate": 0.05073,
+      "broad_actor_framework_without_stored_stance": 8543,
+      "broad_without_stance_share": 0.799682,
+      "narrow_china_us_framework_posts": 1913,
+      "narrow_china_us_framework_rate": 0.009084,
+      "narrow_china_us_framework_without_stored_stance": 1308,
+      "narrow_without_stance_share": 0.683743,
+      "interpretation": "Most state-level framework candidates do not carry an existing national stance. This supports shadow-testing one Geopolitical taxonomy with reporting, framework, and nationalistic_stance modes rather than a geopolitical audience topic plus a separate Nationalism taxonomy. Lexical prevalence alone does not authorize live activation; a bounded prompt/cost/error comparison must pass."
+    },
+    "media_dependency": {
+      "posts_with_stored_media": 57055,
+      "posts_with_stored_media_rate": 0.270932,
+      "short_media_no_context_posts": 6691,
+      "short_media_no_context_rate": 0.031773,
+      "short_url_no_context_posts": 9228,
+      "short_url_no_context_rate": 0.04382,
+      "short_definition": "Visible text after removing URLs is at most 100 Unicode characters; no stored quote or locally stored reply parent is available.",
+      "exploratory_review": {
+        "rows": 100,
+        "clearly_media_or_link_dependent": 1,
+        "rate": 0.01,
+        "human_grounded": false,
+        "assessment_kind": "agent_assessed"
+      },
+      "interpretation": "The structural 3.18% to 4.38% screens are upper bounds, while an agent-assessed exploratory sample found one apparent dependency. Keep context_missing and measure a dedicated media lane before paying to enrich every media post."
+    },
+    "bai_repeated_promotion": {
+      "mention_posts": 4116,
+      "mention_post_rate": 0.019545,
+      "authors": 341,
+      "marketing_spam_flagged_posts": 1988,
+      "flagged_share": 0.482993,
+      "interpretation": "This is a material recurring spam source and current flags miss more than half of it. Add deterministic recurrence/promotion handling and default hiding, while retaining the posts as evidence."
+    },
+    "qwen_clip_collision_burst": {
+      "posts": 372,
+      "post_rate": 0.001766,
+      "authors": 8,
+      "first_date": "2026-08-22",
+      "last_date": "2026-08-25",
+      "peak_posts_per_day": 117,
+      "marketing_spam_flagged_posts": 5,
+      "flagged_share": 0.013441,
+      "posts_with_historical_classification_signal": 101,
+      "classified_share": 0.271505,
+      "interpretation": "The screen identifies a concentrated keyword-collision burst: 372 hits collapse to 12 normalized templates after removing clip numbers and URLs, with the top ten covering 92.2%. Handle it in relevance/spam policy rather than adding a classifier taxonomy branch.",
+      "normalized_templates_after_number_and_url_removal": 12,
+      "top_10_template_posts": 343,
+      "top_10_template_share": 0.922043
+    },
+    "official_staff_and_third_party_promotion": {
+      "official_posts": 1204,
+      "official_marketing_spam_posts": 143,
+      "official_marketing_spam_rate": 0.118771,
+      "staff_posts": 1001,
+      "staff_marketing_spam_posts": 66,
+      "staff_marketing_spam_rate": 0.065934,
+      "third_party_advertising_pairs": 15090,
+      "third_party_advertising_marketing_spam_pairs": 10761,
+      "third_party_advertising_marketing_spam_share": 0.713121,
+      "third_party_advertising_unflagged_pairs": 4329,
+      "third_party_advertising_unflagged_share": 0.286879,
+      "interpretation": "Role-aware promotion policy and per-post-brand unsanctioned storage are justified. Current official lab promotion should be allowed by brand policy, while third-party advertising still needs CTA, referral, discount, free-access, repetition, or similar evidence before marketing_spam is applied. The legacy post-level flag remains compatibility data."
+    },
+    "closed_beta_and_limited_access": {
+      "any_limited_access_posts": 643,
+      "any_limited_access_rate": 0.003053,
+      "any_limited_access_with_action_posts": 166,
+      "action_rate": 0.000788,
+      "closed_or_private_beta_posts": 303,
+      "closed_or_private_beta_rate": 0.001439,
+      "closed_or_private_beta_with_action_posts": 75,
+      "closed_or_private_beta_action_rate": 0.000356,
+      "interpretation": "The actionable subset is too small to justify another label. Treat it as an opportunity only when the audience has a route to apply, request, register, or receive access, and leave dates unknown when the post supplies none."
+    },
+    "owner_reference_prompt_quality": {
+      "owner_rows": 45,
+      "testimonial_added": 4,
+      "testimonial_removed": 6,
+      "hands_on_added": 1,
+      "hands_on_removed": 1,
+      "results_evaluations_added": 0,
+      "results_evaluations_removed": 2,
+      "ideas_requests_added": 1,
+      "ideas_requests_removed": 1,
+      "v27_diagnostic_rows": 30,
+      "v27_testimonial_f1": 0.666667,
+      "v27_hands_on_usage_f1": 0.923077,
+      "v27_results_evaluations_f1": 0.666667,
+      "v27_ideas_requests_f1": 0.5,
+      "interpretation": "Testimonial, result/evaluation, and idea/request need prompt calibration. Hands-on usage does not need a taxonomy change. These are owner-conformity diagnostics, not production accuracy estimates."
+    }
+  },
+  "limitations": [
+    "Historical classifier labels are model outputs, not human truth.",
+    "Lexical screens are prevalence bounds with false positives and false negatives; their deterministic samples were qualitative and do not establish precision.",
+    "The owner-reference and v27 figures come from consumed development cohorts and cannot be reported as production accuracy.",
+    "Several patterns are time-concentrated, so frozen-corpus prevalence is not a forward forecast."
+  ]
+}

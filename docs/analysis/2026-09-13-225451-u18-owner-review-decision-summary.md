@@ -4,7 +4,8 @@
 - Owner-review cohort: 45 cases, 15 each in EN, JA, and ZH-CN
 - Case order: frozen `selection-manifest.json` order
 - Human-review policy: the owner's review is the only human review for this 45-case development cohort
-- Verbatim source: `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md`
+- Owner source plus prevalence appendix: `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md`
+- Machine-readable prevalence evidence: `docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json`
 - Earlier owner calibration: `docs/reference/2026-09-12-030118-u18-human-ambiguity-study.md`
 - Review packet: `docs/analysis/2026-09-13-072308-u18-human-review-packet.md`
 
@@ -19,11 +20,12 @@ score, because those measurements require independent reviewers.
 
 The current 13-post-type contract can close after the case corrections below
 are written into the owner reference and the provider-free validation passes.
-The owner also identified three improvements that change the label space:
-Audience Topics, `news_reporting`, and claim metadata to replace the misleading
-`misinformation` product label. Those belong to a new semantic taxonomy
-revision. They should not invalidate or silently alter the completed 45-case
-review.
+The owner also identified four improvements that change the label space:
+Audience Topics, `news_reporting`, claim metadata to replace the misleading
+`misinformation` product label, and one Geopolitical family that distinguishes
+reporting, framework, and nationalistic stance. Those belong to a new semantic
+taxonomy revision. They should not invalidate or silently alter the completed
+45-case review.
 
 ## POV: organize the taxonomy by what each field means
 
@@ -40,15 +42,15 @@ Use these independent dimensions instead:
 | Product label | What product-feedback signal does it contain? | bug, complaint, testimonial, idea/request |
 | Audience topic | What audience-relevant subject does it discuss? | local inference, cost/performance, model distillation |
 | Sentiment | What is the author's valence toward this attributed brand? | positive, negative, neutral, mixed |
-| National stance | Does the author favor or criticize a country? | China stance, U.S. stance |
+| Geopolitical | Is the author reporting, presenting a state-level framework, or taking a nationalistic stance? | reporting, framework, nationalistic stance; China/U.S. direction when applicable |
 | Claim metadata | How is a consequential claim presented and reviewed? | reported allegation, corroborated, inconclusive |
 | Source relationship | Who is speaking in relation to this brand? | official, staff, third party |
 | Unsanctioned flag | Is the post promotional abuse or another caution signal? | marketing spam, scam, crypto promotion |
 
 This separation lets a neutral news report about a U.S. agency's distillation
-allegation be tagged as `news_reporting`, `model_distillation`,
-`geopolitics_state`, and `reported_allegation` without calling the reporter
-anti-China or declaring the allegation false.
+allegation be tagged as `news_reporting`, `model_distillation`, geopolitical
+`reporting`, and `reported_allegation` without calling the reporter anti-China
+or declaring the allegation false.
 
 ## Audience Topics recommendation
 
@@ -64,12 +66,11 @@ The initial `ai_audience_topics/v1` manifest should contain:
 | `openness_license` | Weight/source access, licensing, commercial-use terms, and openness claims. |
 | `agents_tools` | Agent systems, tool use, orchestration, and agent workflows. |
 | `api_developer_surface` | APIs, SDKs, integration interfaces, quotas, and developer experience. |
-| `geopolitics_state` | Governments, state actors, national security, export controls, industrial policy, or international competition. |
 
 `cost_performance` is clearer than `cost_value`: it names the tradeoff that the
 audience wants to study. H3569508600E should receive both `local_inference` and
-`cost_performance`. H638DEDC4101 should receive `geopolitics_state` while its
-China and U.S. stance values remain `none`.
+`cost_performance`. H638DEDC4101 belongs in the separate Geopolitical family as
+a `framework`, while its China and U.S. national-stance values remain `none`.
 
 Store stable topic concepts separately from localized labels and aliases. A
 label-only change keeps the concept key; a material definition change creates
@@ -82,7 +83,7 @@ The concept/label separation is also consistent with the
 [Contentful's taxonomy model](https://www.contentful.com/developers/docs/references/content-management-api/taxonomy/).
 
 Run Audience Topics as a separate versioned classifier pass at first. Adding
-eight more decisions to the fragile primary/reviewer prompt would reopen U18
+seven more decisions to the fragile primary/reviewer prompt would reopen U18
 and obscure whether failures come from the post-type contract or from topics.
 
 ## Journalism and releases
@@ -124,23 +125,42 @@ labels and model it as:
 
 The classifier may identify how a claim is presented. A separate review must
 set truth-oriented status. H2B36BE298C6 should be `model_distillation` +
-`geopolitics_state` + `reported_allegation`, with neutral sentiment and no
-nationalist stance from the reporter.
+geopolitical `reporting` + `reported_allegation`, with neutral sentiment and no
+nationalistic stance from the reporter.
 
 Filtering `opinions_reactions` plus negative sentiment is not an adequate
-substitute. It misses neutral reports of allegations and includes ordinary
-criticism. A historical keyword screen found 357 distillation-related posts
-among 185,895 posts (about 0.19%), with roughly 40 tight accusation candidates
-(about 0.022% of all posts, or 11% of distillation candidates). These are
-screening rates from the frozen corpus, not a forward prevalence forecast. A
-bounded shadow pass is required before setting expectations for the new field.
+substitute. A tight multilingual distillation-plus-allegation screen found 961
+of 210,587 branded posts (0.46%), but only 209 of those candidates (21.75%) had
+historical negative sentiment. The historical `distillation_accusation` proxy
+is smaller at 467 posts (0.22%). These are screening bounds rather than a
+forward prevalence forecast; a bounded shadow pass must establish precision.
 
-## Nationalism and geopolitical discussion
+## Geopolitical discussion and nationalistic stance
 
-Keep `geopolitics_state` separate from nationalism. A post can discuss states,
-national competition, export controls, or government power without favoring
-or attacking either country. This resolves H638DEDC4101 without forcing a
-neutral geopolitical argument into a pro/anti bucket.
+Shadow-test one Geopolitical family instead of placing `geopolitics_state`
+under Audience Topics and keeping a separate Nationalism taxonomy. Its
+multi-label modes are `reporting`, `framework`, and `nationalistic_stance`; no
+mode means the post is not geopolitical. Country-specific direction is
+populated only when the author takes a nationalistic stance.
+
+This distinction is common enough to justify the extra mode set. A narrow
+China/U.S. framework screen found 1,913 posts (0.91%), of which 68.4% had no
+stored country stance. A broad state-actor/framework screen found 10,683 posts
+(5.07%), of which 80.0% had no stored stance. H638DEDC4101 is therefore a
+`framework`, not a neutral nationalistic stance.
+
+`reporting` attributes a geopolitical claim to someone else. `framework`
+explains or predicts state, policy, market, security, or national-system
+relationships. `nationalistic_stance` requires the author to assign broader
+moral, civic, cultural, or systemic superiority or inferiority to a state or
+national group. “China's AI strategy is superior” may be an instrumental
+framework claim; “the U.S. will win AI because capitalism makes America
+inherently superior” is a nationalistic stance. The modes may coexist.
+
+These lexical rates select a design to test; they do not prove classification
+quality. Keep live activation disabled until a bounded shadow comparison shows
+acceptable per-mode support, agreement on selected owner examples, token and
+latency cost, and error rate.
 
 For the present v3 owner reference, use the closest current values and record
 lossy cases:
@@ -149,7 +169,8 @@ lossy cases:
   is **mild anti**, which the current enum cannot represent.
 - H2B36BE298C6: store China and U.S. `none`; the reporter attributes the
   allegation rather than adopting it.
-- H638DEDC4101: store China and U.S. `none`; apply `geopolitics_state` later.
+- H638DEDC4101: store China and U.S. `none`; apply geopolitical `framework`
+  later.
 - H9C7C731F3C3: keep China `pro`. The full stored post, which was missing from
   the truncated review view, says `这不是“国产替代”的叙事，而是“全球统治”的叙事。`
   (“This is not a narrative of domestic substitution, but of global
@@ -205,6 +226,9 @@ Official/staff context should affect interpretation before labels are stored:
 - Make the exemption a brand-level policy, such as
   `official_promotion_policy=allowed|review|unsanctioned`, so future tracked
   intermediaries can use a stricter rule without changing the taxonomy.
+- Persist new unsanctioned decisions per post and attributed brand. The legacy
+  flag is post-level and cannot express that one source is official for one
+  brand but third-party for another; retain it as compatibility data.
 - Keep `scam`, `crypto`, and `unauthorized` evidence independent; official
   status should not blindly erase them.
 
@@ -239,15 +263,18 @@ enrichment task rather than expanding the current classifier now.
 H70A9986C432 should become `context_missing` under the evidence envelope used
 for this study. HE10CACEDD3F passed collection because its text literally
 contains the tracked token `Qwen`; it should remain `context_missing`, and the
-Ferrari/rally “Qwen clip” collision is a deferred relevance-filter issue.
+Ferrari/rally “Qwen clip” collision should enter U18A relevance/recurrence
+handling rather than classifier taxonomy. The frozen-dump screen found 372
+hits across 12 normalized templates from eight accounts in four days.
 HF3B55FD811B remains the previously accepted off-topic harvester edge with no
 classifier change.
 
 Repeated b.ai/`@BAI_AGI` promotion appears in H5024EDC82C6,
 H8FA9071508D, and HDA7D2AEEC6F. Keep the posts as source evidence and exclude
-them from normal views through `marketing_spam`. Add source/domain recurrence
-metrics before creating a harvester ban; a ban would discard evidence and may
-hide new abuse patterns.
+them from normal views through `marketing_spam`. The full dump found 4,116
+posts (1.95%) from 341 accounts and only 48.3% already flagged. Add deterministic
+source/domain recurrence handling; do not create a harvester ban, which would
+discard evidence and may hide new abuse patterns.
 
 ## Closed beta and hands-on boundaries
 
@@ -272,18 +299,18 @@ the current v3 row. The order below is the frozen manifest order.
 
 | # | Case | Current-v3 owner decision | Future/deferred note |
 | ---: | --- | --- | --- |
-| 1 | `H0040D161174` | Set China nationalism to `anti` as the closest current value. | Add `mild_anti` or redesign country stance; topics `local_inference`, `cost_performance`, `geopolitics_state`. |
+| 1 | `H0040D161174` | Set China nationalism to `anti` as the closest current value. | Add `mild_anti` or redesign country stance; topics `local_inference`, `cost_performance`; classify in Geopolitical. |
 | 2 | `H0DEC6F537E0` | Classified; post types `questions_requests`, `events`; product `ideas_requests`; neutral; nationalism none/none. | Clarify brand-directed issue-resolution requests in prompt. |
 | 3 | `H1A3B3731E1C` | Post types `events`, `research_explanations`; no product labels; neutral; nationalism none/none. | Add `news_reporting`. |
 | 4 | `H1E48CCEEB2F` | Accept. | Surface through `product_evidence/v1` and `observed_use_cases/v1`; topics `local_inference`, `agents_tools`. |
-| 5 | `H2B36BE298C6` | Post type `research_explanations`; retain temporary compatibility `misinformation`; neutral; nationalism none/none. | Replace label with `reported_allegation`; topics `model_distillation`, `geopolitics_state`; add `news_reporting`. |
+| 5 | `H2B36BE298C6` | Post type `research_explanations`; retain temporary compatibility `misinformation`; neutral; nationalism none/none. | Replace label with `reported_allegation`; topic `model_distillation`; geopolitical `reporting`; add `news_reporting`. |
 | 6 | `H3569508600E` | Add `testimonial`; set sentiment positive; retain current post types. | Topics `local_inference`, `cost_performance`. |
 | 7 | `H42DCD9324F4` | Post type `advertising_marketing`; no product labels; neutral; add `marketing_spam`. | Preserve strict per-brand stance and third-party-ad rule. |
 | 8 | `H4E3B98376E5` | Post type `research_explanations`; no product labels; neutral; nationalism none/none. | Add `news_reporting`; retain no `results_evaluations`. |
 | 9 | `H4E55D967F4E` | Add `testimonial`; retain `opinions_reactions`, positive, nationalism none/none. | Prompt should include clear favorable anticipation. |
 | 10 | `H5024EDC82C6` | Accept, including `marketing_spam` and `crypto`. | Keep `crypto`; optional neutral `blockchain` topic later. |
 | 11 | `H540717FEDF5` | Retain prior correction: only `opinions_reactions`; add `testimonial`; positive; no `business_finance` or `results_evaluations`. | Topic `cost_performance`. |
-| 12 | `H638DEDC4101` | Keep post types/product/sentiment; set China nationalism to `none`. | Topic `geopolitics_state`; redesign country stance if needed. |
+| 12 | `H638DEDC4101` | Keep post types/product/sentiment; set China nationalism to `none`. | Geopolitical `framework`; redesign country stance under that family. |
 | 13 | `H688781944AC` | Add `opportunities`; retain `questions_requests`, `ideas_requests`, positive, nationalism none/none. | Persist unknown/ambiguous availability rather than inventing a deadline. |
 | 14 | `H696CC3BCE4C` | Accept. | None. |
 | 15 | `H69C877BE195` | Accept classification; remove `marketing_spam` because source is official under current lab policy. | Pass per-brand source relationship and add brand policy. |
@@ -309,7 +336,7 @@ the current v3 row. The order below is the frozen manifest order.
 | 35 | `HCC2BC2A1B6B` | Accept v26. | Topic `local_inference`. |
 | 36 | `HCCC266D762E` | Retain prior correction: remove testimonial and set neutral; keep current post types. | Do not infer media valence. |
 | 37 | `HDA7D2AEEC6F` | Accept `context_missing` and `marketing_spam`. | Fix target attribution/context handling; track b.ai recurrence. |
-| 38 | `HE10CACEDD3F` | Accept `context_missing`. | Deferred Qwen-token/relevance collision. |
+| 38 | `HE10CACEDD3F` | Accept `context_missing`. | Add Qwen-clip recurrence/relevance handling outside classifier taxonomy. |
 | 39 | `HE2CCD66B3DE` | Accept. | Topics `local_inference`, `cost_performance`. |
 | 40 | `HE6730DF39A2` | Retain question/result/opinion; remove `ideas_requests` and `testimonial`; set negative; nationalism none/none. | The author questions the evaluation's credibility rather than requesting a capability. |
 | 41 | `HF3B55FD811B` | Accept the prior no-change/off-topic disposition for this study. | Deferred rare harvester relevance edge. |
@@ -350,6 +377,11 @@ Proceed in this order:
    reference and failed diagnostic, then evaluate a new immutable candidate.
    No further human review is required for this 45-case cohort.
 5. After the current-v3 diagnostic gate passes, implement the separately
-   versioned U18A revision: `news_reporting`, Audience Topics, claim metadata,
-   and per-brand source relationship in classifier envelopes. Do not
-   retroactively score its new fields against this 45-case v3 review.
+   versioned U18A revision: `news_reporting`, seven Audience Topics, claim
+   metadata, the Geopolitical family, and per-brand source relationship in
+   classifier envelopes. Do not retroactively score its new fields against
+   this 45-case v3 review.
+
+The measured prevalence and resulting decisions are recorded beside the owner
+comments in `2026-09-13-203542-u18-owner-human-review-comments.md` and in the
+machine-readable `2026-09-14-075314-u18-owner-edge-prevalence.json` exhibit.

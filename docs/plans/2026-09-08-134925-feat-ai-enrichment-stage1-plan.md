@@ -86,7 +86,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 10. Later on 2026-09-11, the owner superseded exception 9's release sequence: complete the remaining Stage 1 quality gates and Stages 2–4 on this same candidate, refresh staging through the guarded scrubbed-production procedure, activate and debug the integrated feature set on staging, and then promote that exact passing candidate to production. This authorizes bounded paid staging evaluations and feature activation within the explicit caps and stop conditions in U18–U24. It does not authorize a production pause, an ad hoc production provider run, bypassing the single harvester scheduler, publishing the future public MCP/API, or weakening any migration, quality, cost, or exact-SHA gate.
 11. On 2026-09-11 the owner clarified that Anthropic is not an active PushinWeight provider: scheduled translation, classification, relevancy, and signal work use DeepSeek, while MiniMax remains available only to separately configured roles. The v22/v22b direct-Haiku attempts remain historical zero-quality-result evidence and no longer block delivery on a credential. This does not convert the failed DeepSeek semantic score into a pass or weaken the U18 floors. The integrated candidate may deploy to staging with the new paid discovery, extraction, and synthesis lanes disabled so schema, data-refresh, UI, and worker isolation can be debugged while U18 quality remains open; production promotion still requires every named gate.
 12. On 2026-09-12 the owner reviewed the 16 disagreements highlighted by the independent Grok audit and directed a new prompt identity with stricter visible-evidence, target-brand, customer-cost, testimonial-overlap, unavailable-media, and hackathon rules. Because the owner saw the model judgments before commenting, this calibration is consumed development evidence and cannot count as either blinded reviewer or adjudicator under R81–R82. The owner also required cross-post event identity that distinguishes canonical occurrences from their source observations and preserves recurring same-name editions rather than silently merging them.
-13. On 2026-09-13 the owner completed all 45 cases in the U18 ambiguity study, assumed responsibility for the judgments, and directed that this be the only human review for this classifier delivery. Treat the 45 ordered rows as a sole, unblinded owner reference; blank case entries accept the packet proposal and explicit comments plus earlier recorded corrections define the overrides. This supersedes R81–R82 and KTD37 only where they require two independent reviewers, a distinct adjudicator, an inter-reviewer agreement floor, or a later zero-overlap human cohort. Mark the study `complete_by_owner_acceptance` and its human gate `waived_by_owner`; do not describe the reference as blinded human gold, claim inter-reviewer agreement, or turn agreement with it into production accuracy. The exact owner message is retained at `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` (SHA-256 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`), and the consolidated decisions and evidence are at `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` (SHA-256 `a8ad9e43b92be7aa2cd3aefc0699ac5d45f08bb39d60a77ed36a2ee0acf48d5f`). Provider, request, retry, token, cost, extraction, migration, staging, rollback, and exact-SHA production gates remain unchanged.
+13. On 2026-09-13 the owner completed all 45 cases in the U18 ambiguity study, assumed responsibility for the judgments, and directed that this be the only human review for this classifier delivery. Treat the 45 ordered rows as a sole, unblinded owner reference; blank case entries accept the packet proposal and explicit comments plus earlier recorded corrections define the overrides. This supersedes R81–R82 and KTD37 only where they require two independent reviewers, a distinct adjudicator, an inter-reviewer agreement floor, or a later zero-overlap human cohort. Mark the study `complete_by_owner_acceptance` and its human gate `waived_by_owner`; do not describe the reference as blinded human gold, claim inter-reviewer agreement, or turn agreement with it into production accuracy. The original owner message is preserved byte-for-byte as the prefix of `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` (original-prefix SHA-256 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`; amended-file SHA-256 `b0eb3d9c5e1be474e75498fad7e9b15c95cc3a9be5f2707f03e8b1b3fff91b9e`). The consolidated decisions are at `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` (SHA-256 `33341fa0983bae9b6a518f8d11d9ee9a8a13c4665771ce9780ef7c48a4695cd1`), and machine-readable prevalence evidence is at `docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json` (SHA-256 `d0cb2163f79f9baf993f845e265c7d26859897c934033bf36fde1458350954f1`). Provider, request, retry, token, cost, extraction, migration, staging, rollback, and exact-SHA production gates remain unchanged.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -94,13 +94,31 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 Stage 1C will classify new posts into thirteen types. It separates attendance-bearing events from time-bounded opportunities, and adds specific job-listing and personnel-change types. It also stores structured people, affiliations, jobs, events, and opportunities so future analysis and MCP/API clients can use the facts without rereading prompt output.
 
+The completed owner review also defines a separately versioned next taxonomy:
+`news_reporting`, seven changeable Audience Topics, claim-presentation facts,
+and one Geopolitical family that distinguishes reporting, state-level frameworks,
+and author-adopted nationalistic stances. Frozen-corpus prevalence supports each
+of those additions. Repeated b.ai/Qwen-clip promotion and official-account false
+spam flags will be handled through source-aware promotion rules rather than new
+post types.
+
 The Grok job-search research shows that a tracked-brand-only search would miss most of this product: 47 of its 55 listing records came from organizations outside the current catalog, and 18 source posts expanded into 55 distinct roles. The plan therefore adds a disabled-by-default global job-discovery lane inside the existing 15-minute harvest runner, with organization-centric and role-centric EN/ZH-CN/JA query packs. New organizations enter a review queue; one source post may support many job rows; application links, email, QR/media evidence, and later careers-page enrichment retain their provenance.
 
 A separate disabled-by-default personnel-discovery lane finds explicit appointments, departures, and before/after employment statements that ordinary tracked-brand harvesting misses. A first-person statement such as “I worked at Google DeepMind and now at Anthropic” is a personnel change even when it does not state when the move occurred: the post timestamp records when PushinWeight observed the claim, while both employment dates remain unknown. Organization-facing brands such as Anthropic and Google DeepMind remain distinct from product brands such as Gemini.
 
 Profile affiliation discovery uses evidence rather than treating every brand mention alike. Existing `brands_accounts` edges and the owner-curated Call A list are positive evidence; absence from either is unknown rather than community. Explicit employee titles, official organization posts, X business-affiliate badges, ambassador/creator-program wording, bare handles, and conflicting or former-status language remain separately queryable so a review can distinguish staff, community, former, and unresolved relationships without discarding the source facts.
 
-All schema changes remain additive. Existing taxonomy-v2 `events_opportunities` rows keep their original combined meaning and version; they are never silently rewritten into the two new categories. The remaining roadmap reduces recurring model work: headlines refresh only for hot, materially changed windows; literal translation stays available independently; richer synthesis is generated once per versioned post context when the feed actually needs it; and EN, ZH-CN, and JA become equal product locales.
+Schema changes remain additive and preserve all existing data and version
+meaning. U18A adds correctly named national-stance fields and tables while the
+old current-state and discourse nationalism fields remain compatibility data
+during an expand-and-contract window. Existing
+taxonomy-v2 `events_opportunities` rows keep their original combined meaning
+and version; they are never silently rewritten into the two new categories.
+The remaining roadmap reduces recurring model work: headlines refresh only for
+hot, materially changed windows; literal translation stays available
+independently; richer synthesis is generated once per versioned post context
+when the feed actually needs it; and EN, ZH-CN, and JA become equal product
+locales.
 
 The full candidate will be tested against two deliberately different data sources. The verified September 10 production dump is the frozen source for reproducible offline cohorts. Near final integration, the guarded staging refresh will create a fresh, scrubbed production-shaped database so migrations, feeds, queues, jobs, personnel changes, events, opportunities, and locale behavior are exercised against current data. The candidate reaches production only after the taxonomy, discovery, extraction, headline, translation, synthesis, cost, browser, rollback, and exact-SHA staging gates pass. Public MCP/API publication remains deferred, but the same internal read and request contracts must be usable by both the UI and agents.
 
@@ -111,7 +129,7 @@ Repeated mentions of an event will attach as evidence to one canonical occurrenc
 - **Objective:** Readers, operators, and agents can use version-exact classification, structured employment/job/event/opportunity facts, demand-shaped headlines, literal translations, and cached rich synthesis across EN, ZH-CN, and JA without fabricated provenance or repeated model work for unchanged content.
 - **Means:** Preserve the completed Stage 0 and Stage 1 evidence, complete the taxonomy-v2/v3 quality gates, then add hot/material-change headline demand, separate versioned translation and synthesis artifacts, a durable PostgreSQL synthesis queue, full Japanese locale parity, and bounded UI/agent demand contracts (KTD1–KTD33). Validate the integrated system against frozen and fresh production-shaped data before one exact-candidate production promotion.
 - **Authority:** This plan's Product Contract owns the complete Stage 1 product semantics carried from the owner-selected ideation. `docs/plans/2026-09-08-194415-feat-staged-ai-enrichment-roadmap-plan.md` owns the staged roadmap, and `docs/reference/2026-09-08-194415-enrichment-contracts.md` owns Stage 0 telemetry invariants and receives the bounded durable Stage 1 taxonomy excerpt in U1.
-- **Execution profile:** U1–U17 are implemented through provider-denied local proof and the taxonomy-v3 staging receipt. U18 closes the current-v3 owner-reference and cost gates. U18A implements the separately versioned Audience Topics, news-reporting, claim, and source-aware refinement. U19 implements Stage 2 headline demand. U20 implements Stage 3 split translation/synthesis and Japanese parity. U21–U22 implement Stage 4 durable demand and feed behavior. U23 refreshes, activates, and debugs staging. U24 promotes and observes the unchanged passing candidate in production.
+- **Execution profile:** U1–U17 are implemented through provider-denied local proof and the taxonomy-v3 staging receipt. U18 closes the current-v3 owner-reference and cost gates. U18A implements the separately versioned Audience Topics, news-reporting, claim, Geopolitical, and source-aware refinement. U19 implements Stage 2 headline demand. U20 implements Stage 3 split translation/synthesis and Japanese parity. U21–U22 implement Stage 4 durable demand and feed behavior. U23 refreshes, activates, and debugs staging. U24 promotes and observes the unchanged passing candidate in production.
 - **Stop conditions:** Stop if a migration changes original provenance, rewrites v2 combined rows, requires historical model inference, invents dates/application routes/brand authority, bypasses `CycleRunner`, hides relevant pending posts, couples page rendering to a provider response, allows speculative work to grow without a bound, blends approximate and exact populations, or exceeds a preregistered provider/credit/token cap.
 - **Tail ownership:** The parent LFG workflow owns the complete implementation, reviews, commits, exact-SHA staging and production delivery, bounded activation, monitoring, and guarded final worktree cleanup.
 
@@ -374,14 +392,14 @@ The production classifier asks for six post types, sentiment, discourse, and two
   create an accuracy or release-quality claim.
 - R87. Do not revive or repurpose `discourse`. Add a versioned per-post-brand
   Audience Topics facet whose concepts and localized EN/ZH-CN/JA labels are
-  independent of post types, product labels, sentiment, nationalism, claim
+  independent of post types, product labels, sentiment, Geopolitical, claim
   review, and source relationship. The initial `ai_audience_topics/v1` manifest
   contains `local_inference`, `cost_performance`, `model_distillation`,
   `evals_benchmarks`, `openness_license`, `agents_tools`,
-  `api_developer_surface`, and `geopolitics_state`. Store assignment evidence,
-  prompt/model/provider role, scheme revision, and final judgment provenance;
-  adding or retiring a concept changes the manifest and prompt identity rather
-  than database shape.
+  and `api_developer_surface`. Geopolitical content is not an Audience Topic.
+  Store assignment evidence, prompt/model/provider role, scheme revision, and
+  final judgment provenance; adding or retiring a concept changes the manifest
+  and prompt identity rather than database shape.
 - R88. Add `news_reporting` as the fourteenth post type in the next semantic
   taxonomy revision. It primarily relays a current development, sourced report,
   announcement, or news roundup and may coexist with release, business,
@@ -407,7 +425,11 @@ The production classifier asks for six post types, sentiment, discourse, and two
   `unauthorized` solely because the source is official. Third-party advertising
   receives `marketing_spam` only for a promotional call to action, referral,
   free-access/discount wrapper, or comparable promotional evidence; an ordinary
-  comparison or mention does not.
+  comparison or mention does not. Persist new unsanctioned judgments and exact
+  evidence per `(post, brand)` because account relationship and advertising
+  meaning are per brand. Keep the legacy post-level flag as compatibility data
+  and make any global-view aggregation rule explicit rather than allowing one
+  brand's judgment to silently control every attribution of a multi-brand post.
 - R91. Keep cryptic posts `context_missing` when source text and stored
   quote/parent context do not support a brand-specific judgment; never infer
   linked media. Track the measured media-dependency proxy and repeated
@@ -415,6 +437,37 @@ The production classifier asks for six post types, sentiment, discourse, and two
   Retain spam source posts as evidence and hide them through unsanctioned
   filtering. Preserve `crypto` for crypto/token promotion; a neutral blockchain
   subject, if later needed, belongs in Audience Topics.
+- R92. Replace the future-facing Nationalism taxonomy with one versioned
+  **Geopolitical** family. Store per-post-brand `geopolitical_modes` as a
+  multi-label set containing zero or more of `reporting`, `framework`, and
+  `nationalistic_stance`; zero modes means assessed non-geopolitical, while a
+  pre-v4 row has unavailable mode coverage. `reporting` attributes a
+  geopolitical claim or stance without adopting it. `framework` explains or
+  predicts relationships among states, policy, markets, security, or national
+  systems, including instrumental claims that one strategy is more effective.
+  `nationalistic_stance` requires the author to assign broader moral, civic,
+  cultural, or systemic superiority or inferiority to a state or national
+  group. Modes may coexist. Add correctly named
+  `china_national_stance`/`us_national_stance` current-state fields plus
+  `national_stance_keys`/`national_stance_labels`; retain the existing
+  six-value direction/intensity vocabulary. During the compatibility window,
+  copy v3 current-state values exactly and dual-read/write without changing
+  their historical meaning. New v4 judgments populate non-`none` national
+  stance only from author-adopted nationalistic stance. Preserve the old
+  current-state and discourse `china_nationalism`/`us_nationalism` fields and
+  `nationalism_*` tables as compatibility state; never infer a geopolitical
+  mode from them or silently rewrite old discourse rows. Remove those old
+  names only in a later cleanup release after old-binary rollback is no longer
+  required. If countries beyond China and the U.S. become first-class filters,
+  replace the two current axes with actor/stance rows rather than adding more
+  columns. Keep Geopolitical live activation disabled until a bounded shadow
+  comparison demonstrates acceptable per-mode support, owner-reference
+  agreement on selected examples, token/latency cost, and error rate.
+
+#### Current v3 compatibility labels
+
+The following table remains the exact current-v3 vocabulary. Its Nationalism
+name is historical compatibility and does not name the future U18A family.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -452,7 +505,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
 
 - **The final ten post types supersede every earlier taxonomy variant.** Governs R1, R2, R4. (session-settled: user-directed — chosen over earlier variants because the final selection is the desired reader organization.)
 - **Product Ideas and requests remain one independent label.** Governs R3. (session-settled: user-directed — chosen over separate idea/request labels because the distinction does not justify classifier complexity.)
-- **Discourse is removed while sentiment and nationalism remain.** Governs R5, R6, R11, R14. (session-settled: user-directed — chosen over a replacement posture/sincerity taxonomy because no replacement was selected.)
+- **Discourse is removed while sentiment and the v3 nationalism compatibility fields remain; U18A replaces the future-facing taxonomy with Geopolitical modes and national stance.** Governs R5, R6, R11, R14, R92. (session-settled: user-directed — the current-v3 evidence stays readable while the next semantic revision uses the owner-selected name and boundaries.)
 - **Classification and needed translation remain universal.** Governs R9, R12, R15. (session-settled: user-directed — chosen over classifying only synthesized or product-labeled posts because discovery and charts require all posts.)
 - **Stages validate separately and promote together.** Governs R18, R58, R76. (session-settled: user-directed — the owner superseded the earlier separate-production sequence so the full roadmap is debugged as one integrated staging candidate before production.)
 - **Five identifiers change without changing their meanings.** Governs R1, R3, R19, R22, R25. (session-settled: user-directed — chosen to make the machine keys match the approved reader labels without reopening semantic classification.)
@@ -624,9 +677,9 @@ The production classifier asks for six post types, sentiment, discourse, and two
   the proposed membership is already derivable from existing classifications.)
 - KTD39. **Finish the current v3 review before expanding its label space.** Use
   the sole ordered owner reference under R86 for the bounded v27 diagnostic,
-  then implement `news_reporting`, Audience Topics, claim metadata, and source
-  relationships as a separately versioned U18A contract. Never retroactively
-  score new fields against the 45-case v3 review.
+  then implement `news_reporting`, Audience Topics, claim metadata,
+  Geopolitical, and source relationships as a separately versioned U18A
+  contract. Never retroactively score new fields against the 45-case v3 review.
 - KTD40. **Treat audience subjects as stable concepts, not columns or revived
   discourse.** Separate scheme/concept/locale-label/assignment storage, expose
   `current_definition` and revision-separated `historical_inclusive` analysis,
@@ -642,13 +695,27 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - KTD42. **Use per-brand speaker context at classification time.** Resolve
   official/staff/third-party from reviewed account-brand edges, include it in
   primary and review fingerprints, and apply brand-specific official-promotion
-  policy before persisting product and unsanctioned judgments. Do not assign
-  self-testimonials and filter them out after storage.
+  policy before persisting product and unsanctioned judgments. Store new
+  unsanctioned evidence per post-brand and retain the old post-level flag only
+  for compatibility. Do not assign self-testimonials and filter them out after
+  storage.
 - KTD43. **Measure before adding media or source bans.** The 45/120/500 proxy
-  observed 6.7%/8.3%/4.2% short URL-bearing rows without stored context. Retain
-  `context_missing` and unsanctioned evidence now; add a separate bounded media
-  lane or collection exclusion only after exact false-positive and cost evidence
-  justifies it.
+  observed 6.7%/8.3%/4.2% short URL-bearing rows without stored context; the
+  full frozen dump placed the comparable short media/URL upper bounds at
+  3.18%/4.38%. Retain `context_missing` and unsanctioned evidence now; add a
+  separate bounded media lane only after reviewed dependency and cost evidence
+  justifies it. Do not harvest-ban repeated promotions: default-hide qualifying
+  rows while retaining them as evidence. Add explicit recurrence rules for the
+  1.95% `@BAI_AGI` population and the 372-post Qwen-clip collision burst.
+- KTD44. **Use one Geopolitical family with a small multi-label mode set.** The
+  narrow frozen-corpus framework screen found 0.91% of branded posts and 68.4%
+  had no historical country stance; the broad screen found 5.07% and 80.0% had
+  no stance. Store `reporting`, `framework`, and `nationalistic_stance` as
+  independently selectable modes and keep China/U.S. national direction only
+  for an author-adopted stance. This replaces the earlier separate
+  `geopolitics_state` Audience Topic and Nationalism family without fabricating
+  modes for historical rows. Lexical prevalence selects the shadow candidate;
+  only the bounded prompt/cost/error comparison in U18A can activate it.
 
 ### High-Level Technical Design
 
@@ -1189,15 +1256,15 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 - **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact and owner-visible audit review cannot load as blinded gold; v2 and v3 results never merge; the R83 boundary cases cover generic praise versus results, target-brand testimonial scope, customer cost versus business/investor perspective, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathon overlap; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost event evidence, unsafe occurrence merges, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
 - **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 owner reference contains 45 valid rows in exact manifest order and records `complete_by_owner_acceptance`, `waived_by_owner`, `human_grounded=false`, and null agreement. The v27 diagnostic separately reports owner-reference agreement, rare labels, and EN/ZH-CN/JA slices within its immutable budget. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U18A, U19 activation, or U23.
 
-### U18A. Add Audience Topics, news reporting, claim metadata, and source-aware policy
+### U18A. Add Audience Topics, news reporting, Geopolitical, claim metadata, and source-aware policy
 
 - **Goal:** Implement the owner-directed audience taxonomy without reopening or silently rewriting the completed v3 owner review.
-- **Requirements:** R87–R91; KTD39–KTD43.
+- **Requirements:** R87–R92; KTD39–KTD44.
 - **Dependencies:** U18 owner-reference diagnostic and all current-v3 invariant checks pass; the taxonomy-v2/v3 historical analysis contract remains authoritative.
 - **Files:** `core/models.py`; additive `core/migrations/`; the taxonomy manifest and EN/ZH-CN/JA seed labels; `core/classification_contract.py`; `x_monitor/attribution.py`; classifier prompt/version exhibits; canonical analysis/query services; feed/filter/chart readers; health and cost telemetry; focused schema, prompt, writer, reader, analysis, migration, and browser tests; a dated shadow-prevalence report.
-- **Approach:** Add normalized topic scheme/concept/locale-label/assignment tables and versioned claim-presentation/review facts. Advance the post-type taxonomy for `news_reporting` while keeping v2/v3 reads and the `misinformation` compatibility key explicit. Resolve source relationship per attributed brand from reviewed account-brand edges, include it in prompt and input fingerprints, and apply brand-level official-promotion policy before persistence. Run Audience Topics as a separate bounded pass with its own prompt, provider role, ledger, activation flag, and budget; it cannot block publication of the existing v3 classification. Keep media fetch and harvester bans deferred while adding the exact recurrence/context-missing metrics required by R91.
-- **Test scenarios:** Current v3 rows remain byte-for-byte and query-semantically readable; pre-topic rows report unavailable; label-only topic edits preserve concept identity; material definition changes require a revision; the eight initial topics allow multiple assignments per post-brand with exact evidence; `news_reporting` distinguishes third-party reports, product releases, official announcements, and mixed news/release posts; a reported distillation allegation is not adjudicated false; a reviewer cannot set truth status; official self-praise is not a testimonial; official Upstage promotion follows `allowed` while a configured intermediary can use `review` or `unsanctioned`; third-party CTA spam remains flagged; role changes alter the input fingerprint; unavailable media produces `context_missing`; no per-topic database columns, historical date inference, or automatic source ban appears.
-- **Verification:** Fresh and upgrade PostgreSQL tests, exact 14-post-type and 8-topic manifests with EN/ZH-CN/JA labels, v2/v3/v4 analysis-policy tests, provider-denied/fake-client call-chain tests, target-brand/source-role/unsanctioned regressions, and affected browser filters pass. A bounded frozen-corpus shadow report gives per-topic/news/claim support, overlaps, false-positive samples, media proxy, repeated-promoter counts, tokens, calls, and maximum cost before any topic or v4 live activation. Failures return to U18A and do not reopen the completed v3 owner review.
+- **Approach:** Add normalized topic scheme/concept/locale-label/assignment tables and versioned claim-presentation/review facts. Add normalized Geopolitical mode keys/labels/assignments and correctly named China/U.S. national-stance fields/tables; copy current v3 state values exactly, dual-read/write during the expand-and-contract window, and keep old current-state and discourse nationalism fields behind the version-aware compatibility reader. Advance the post-type taxonomy for `news_reporting` while keeping v2/v3 reads and the `misinformation` compatibility key explicit. Resolve source relationship per attributed brand from reviewed account-brand edges, include it in prompt and input fingerprints, apply brand-level official-promotion policy, and persist new unsanctioned decisions/evidence per post-brand while keeping the legacy post-level row readable. Run Audience Topics as a separate bounded pass with its own prompt, provider role, ledger, activation flag, and budget; it cannot block publication of the existing v3 classification. Keep media fetch and harvest-time source bans deferred while adding the exact recurrence/context-missing metrics required by R91.
+- **Test scenarios:** Current v3 rows retain their exact values and query meaning; pre-topic and pre-Geopolitical rows report unavailable for the new dimensions; no v3 `none` value is recast as a framework; label-only topic edits preserve concept identity; material definition changes require a revision; the seven initial topics allow multiple assignments per post-brand with exact evidence; geopolitical reporting, framework, and nationalistic stance can be separated and can coexist; “China's AI strategy is more effective” is a framework unless broader national superiority is adopted, while “the U.S. will win because capitalism makes America inherently superior” is a U.S. nationalistic stance; `news_reporting` distinguishes third-party reports, product releases, official announcements, and mixed news/release posts; a reported distillation allegation is not adjudicated false; a reviewer cannot set truth status; official self-praise is not a testimonial; official Upstage promotion follows `allowed` while a configured intermediary can use `review` or `unsanctioned`; third-party CTA and repeated b.ai/Qwen-clip spam remains flagged and retained per attributed brand; a global view applies its explicit aggregation policy; role changes alter the input fingerprint; unavailable media produces `context_missing`; no per-topic database columns, historical date inference, or automatic harvest ban appears.
+- **Verification:** Fresh and upgrade PostgreSQL tests, exact 14-post-type, 7-topic, and 3-Geopolitical-mode manifests with EN/ZH-CN/JA labels, v2/v3/v4 analysis-policy tests, provider-denied/fake-client call-chain tests, target-brand/source-role/unsanctioned regressions, and affected browser filters pass. A bounded frozen-corpus shadow report gives per-topic/news/claim/Geopolitical support, overlaps, false-positive samples, media proxy, repeated-promoter counts, tokens, calls, and maximum cost before any topic or v4 live activation. Failures return to U18A and do not reopen the completed v3 owner review.
 
 ### U19. Make headline generation demand-shaped and critics conditional
 
@@ -1288,7 +1355,7 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 | Targeted structured extraction | U16 | Fake-provider true-caller tests prove negative posts incur zero targeted calls; positives route once per applicable event/opportunity/job/personnel/profile extractor; one post may produce many role rows; retries remain idempotent; source/media-bound validation, atomic writes, telemetry, privacy, and cost estimates remain explicit. |
 | Stage 1C read and staging gate | U17 | JSON/golden, query-count, classifier/headline/UI/health/harvest regression, migration/backfill replay, provider-free calibration/cost reports, and deterministic evaluation-contract fixtures prove stable employment, community, job, event, opportunity, evidence, lifecycle, and counting contracts before exact-SHA staging delivery. Real-label classification, discovery, and extraction assessments remain preproduction gates. |
 | Owner-reference quality and budgets | U18 | The 45 ordered v3 rows validate under the sole unblinded owner reference with explicit waiver/no-accuracy limitations; the 30-row diagnostic and every discovery/extraction lane have exact-hash request/retry/token/credit/cost caps before transport; reports contain hashes, support, coverage, agreement, invariants, limitations, costs, and pass/block decisions. |
-| Audience taxonomy refinement | U18A | Fresh/upgrade schema, exact 14-type/8-topic three-locale manifests, historical-policy, source-aware prompt, claim-state, unsanctioned, browser, and bounded shadow-prevalence tests pass without rewriting v3 history or treating unavailable old topic values as false. |
+| Audience taxonomy refinement | U18A | Fresh/upgrade schema, exact 14-type/7-topic/3-Geopolitical-mode three-locale manifests, historical-policy, source-aware prompt, claim-state, unsanctioned, browser, and bounded shadow-prevalence tests pass without rewriting v3 history or treating unavailable old dimensions as false. |
 | Demand-shaped headlines | U19 | PostgreSQL concurrency and current narrative suites prove coalesced demand, material-change suppression, last-good serving, deterministic critic risk/audit routing, idempotent queue behavior, and a fixed-replay call/token/cost reduction without lost valid output. |
 | Split enrichment and Japanese parity | U20 | Additive migration, artifact identity, provider call-chain, compatibility-reader, locale catalog, cache, headline, and authenticated browser matrices prove independent translation/synthesis and equal EN/ZH-CN/JA behavior with no provider call on a request thread. |
 | Lazy synthesis backend | U21 | Database concurrency, lease/fence, expiry/retry, authenticated `/api/v2/`, management-command parity, provider failure, health, and Render topology tests prove shared bounded work through an isolated PostgreSQL worker. |
@@ -1381,7 +1448,7 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 - U16: Applicable positive classifications route through source/media-bound event, opportunity, job, personnel, and profile extractors with independent version/telemetry identities, atomic idempotent persistence, one-post-to-many-role support, zero negative-post calls, and a measured incremental cost.
 - U17: Stable affiliation, `employment_history`, evidence, `job_listings`, event, opportunity, and explicit-`as_of` lifecycle projections plus provider-free evaluation contracts, calibration/cost reports, and exact-SHA staging proof pass. Three-stratum classification and separate discovery/extraction real-label assessments remain U18 gates; public MCP/API activation remains deferred.
 - U18: Taxonomy-v2 remains the immutable historical baseline; the 45-case taxonomy-v3 owner reference is complete, ordered, valid, explicitly unblinded/non-gold, and measured only as owner-reference agreement; job/personnel discovery and role/affiliation extraction have reproducible reports, invariant checks, separate units, and enforced provider/credit/token/cost budgets.
-- U18A: The separately versioned refinement adds `news_reporting`, eight Audience Topics, claim presentation/review metadata, and per-brand speaker policy with EN/ZH-CN/JA labels, revision-aware analysis, bounded cost, and no rewrite of completed v3 evidence.
+- U18A: The separately versioned refinement adds `news_reporting`, seven Audience Topics, three Geopolitical modes with China/U.S. national stance, claim presentation/review metadata, and per-brand speaker policy with EN/ZH-CN/JA labels, revision-aware analysis, bounded cost, and no rewrite of completed v3 evidence.
 - U19: Headline demand coalesces per brand/window, refreshes only hot/pinned/prewarmed materially changed inputs, serves last-good output otherwise, routes deterministic risk/audit cases through the critic, and demonstrates a measured provider-call/token/cost reduction on a fixed replay.
 - U20: Literal translation and rich synthesis have independent immutable artifacts, identities, states, telemetry, and compatibility reads; locale-complete synthesis and the entire product UI/headline/cache surface support EN, ZH-CN, and JA equally.
 - U21: A bounded authenticated demand contract, management-command parity, PostgreSQL lease/fence queue, and dedicated Render synthesis workers generate one shared synthesis artifact without blocking web requests or sharing harvest/headline execution infrastructure.
@@ -1398,6 +1465,9 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 - `docs/plans/2026-09-08-194415-feat-staged-ai-enrichment-roadmap-plan.md` — staged sequence, settled decisions, Stage 0 boundaries, and later-stage deferrals.
 - `docs/reference/2026-09-08-194415-enrichment-contracts.md` — Stage 0 telemetry and semantic-state boundary contract.
 - `docs/analysis/2026-09-08-194415-enrichment-stage0-baseline.md` — pre-instrumentation baseline and unknown-spend discipline.
+- `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` — the owner's original 45-case comments preserved byte-for-byte above a dated prevalence appendix that answers every requested corpus-frequency question and records the Geopolitical decision.
+- `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` — consolidated current-v3 owner decisions and the separately versioned next-taxonomy contract.
+- `docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json` — machine-readable frozen-dump counts, rates, cohort diagnostics, interpretations, and limitations for questions versus requests, distillation allegations, news, Geopolitical modes, media dependency, repeated promotion, official/staff policy, Qwen-clip collisions, and limited access.
 - `core/models.py`, `monitor/cycle.py`, `x_monitor/attribution.py`, `monitor/views.py`, and `monitor/trend_narrative_candidates.py` — current schema, writer, parser defaults, active feed, and headline discourse coupling.
 - `core/classification_contract.py`, `core/classification_readers.py`, `core/classification_labels.py`, and `core/management/commands/seed_i18n_labels.py` — current version pins, latest-state precedence, generic locale-key storage, and bilingual seed boundary.
 - `project/settings.py`, `project/locale_cookie.py`, `monitor/static/pw-locale-toggle.js`, and the bilingual fields in `core/models.py` — evidence that Japanese label rows can be additive while selectable/global content parity remains future work.
@@ -2076,9 +2146,14 @@ case corrections and cross-cutting taxonomy decisions, assumed responsibility,
 and directed that no additional human reviewer or adjudicator be used for this
 delivery. Delivery Exception 13 supersedes the earlier human-review gate while
 retaining its history and preventing human-gold, agreement, or accuracy claims.
-The exact owner message and the consolidated decision record have SHA-256
-`bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`
-and `a8ad9e43b92be7aa2cd3aefc0699ac5d45f08bb39d60a77ed36a2ee0acf48d5f`.
+The original owner-message prefix has SHA-256
+`bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`.
+After the requested prevalence appendix, the complete source file has SHA-256
+`b0eb3d9c5e1be474e75498fad7e9b15c95cc3a9be5f2707f03e8b1b3fff91b9e`;
+the consolidated decision record has SHA-256
+`33341fa0983bae9b6a518f8d11d9ee9a8a13c4665771ce9780ef7c48a4695cd1`;
+and the machine-readable prevalence exhibit has SHA-256
+`d0cb2163f79f9baf993f845e265c7d26859897c934033bf36fde1458350954f1`.
 The ignored 45-row owner reference is now `owner_accepted_unblinded` with
 `complete_by_owner_acceptance`, `waived_by_owner`, null agreement, and SHA-256
 `d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80`.
@@ -2088,9 +2163,12 @@ The rebuilt 30-row cohort and immutable budget have SHA-256
 `07690a807fa7d68f75db9ca8b943b875e06fd5ed59c500e11cafa194396c83c1`
 and `b8fd9abcf04c3f92424f0e0ed07eaf0b8af1b7fd58da84d1f1ed0ad778f2c84a`.
 The human-review exercise is closed. The bounded v27 owner-reference diagnostic
-is the next U18 action. R87–R91/KTD39–KTD43 and U18A then add
-`news_reporting`, Audience Topics, claim metadata, and per-brand source policy
-as a new semantic revision without reopening or re-scoring the v3 review.
+described below is complete and failed its post-type and product-label
+agreement floors. Current-v3 prompt correction and a new immutable candidate
+are the next U18 actions. R87–R92/KTD39–KTD44 and U18A then add
+`news_reporting`, seven Audience Topics, claim metadata, Geopolitical modes,
+and per-brand source policy as a new semantic revision without reopening or
+re-scoring the v3 review.
 
 The bounded v27 owner-reference diagnostic then consumed its six authorized
 logical review requests and seven transport attempts. It observed 28,412
@@ -2126,3 +2204,27 @@ cohort is required.
 `docs/reference/classifier-prompts.md` now records the v2 selector identity and
 the exact evidence rule: every replacement needs exact packet-bound evidence,
 and one quote may support more than one changed classification field.
+
+On September 14 the requested prevalence audit ran against the verified frozen
+production dump: 211,245 posts, 210,587 distinct branded posts, and 252,579
+post-brand pairs. It found 1.69% general-news candidates without a historical
+release; a 0.91% narrow geopolitical-framework population whose majority
+(68.4%) had no stored national stance; a 0.22% historical to 0.46% tight-screen
+distillation-allegation range; 1.95% `@BAI_AGI` recurrence; 11.88% of official
+posts carrying legacy marketing-spam flags; a 3.18%/4.38% short media/URL
+no-context upper bound; 0.08% limited-access posts with an action route; and a
+372-post Qwen-clip collision burst concentrated in eight accounts over four
+days. Historical labels and lexical screens remain model-derived bounds, not
+human truth or forward forecasts.
+
+Those results select the U18A shadow scope: add `news_reporting`; keep seven Audience
+Topics including `model_distillation`; add claim-presentation metadata; replace
+the separate `geopolitics_state` topic and Nationalism family with one
+Geopolitical family containing `reporting`, `framework`, and
+`nationalistic_stance`; pass per-brand source relationship and promotion policy;
+add repeat-promoter/relevance handling while retaining source evidence; keep
+media enrichment deferred; and keep limited-access action inside the existing
+`opportunities` boundary. Geopolitical live activation still requires the
+bounded prompt/cost/error comparison in U18A. The owner source plus analysis and machine-readable
+evidence are `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md`
+and `docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json`.
