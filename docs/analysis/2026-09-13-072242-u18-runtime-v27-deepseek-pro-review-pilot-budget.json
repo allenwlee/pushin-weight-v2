@@ -1,0 +1,76 @@
+{
+  "cohort": {
+    "bytes": 74998,
+    "candidate_input_sha256": "b06088b52bef44d9f8ac1bd836c305ad8770ef5f3ba4dc20e29b80b4e109ef2e",
+    "cohort_id": "u18-owner-accepted-v27-pro-review-pilot-v1",
+    "owner_reference_sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "owner_reference_subset_sha256": "82ffc5c8f4ce131e068cdfa08ed3a41c7af9530998225c3c719623372531f93b",
+    "rows": 30,
+    "selection": "30 deterministic hard cases: all stable_model_vs_gold and model_run_conflict rows from the locked 45-row study, 10 per language; agreement controls excluded.",
+    "sha256": "07690a807fa7d68f75db9ca8b943b875e06fd5ed59c500e11cafa194396c83c1",
+    "source_cohort_sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908",
+    "source_manifest_sha256": "50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91"
+  },
+  "decision_rule": "Stop after these 30 rows. Report post-type exact set, product-label exact set, outcome accuracy, rare-label F1, and language slices. The preregistered diagnostic thresholds are post-type exact >= 0.70, product-label exact >= 0.85, and outcome accuracy >= 0.90. Passing measures agreement with the unblinded owner reference; it does not establish human accuracy or by itself authorize release.",
+  "frozen_at": "2026-09-13T23:10:00+09:00",
+  "global_stop": "Caps are immutable and non-transferable: at most 6 logical requests, 12 transport attempts, 150000 reserved input tokens, 49152 reserved output tokens, and 0.42 USD at peak cache-miss pricing. Stop after this owner-reference diagnostic; the budget does not authorize any additional provider work, production activation, or release-quality claim.",
+  "lane": "runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot",
+  "lanes": {
+    "runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot": {
+      "allowed_system_sha256": [
+        "fa50534968f5a5a27a02e71e0be98ed3ca785a67d69c45c211aa7a25dfa4c893"
+      ],
+      "base_url": "https://api.deepseek.com/anthropic",
+      "batch_size": 5,
+      "credential_env": "DEEPSEEK_API_KEY",
+      "input_usd_per_million": "1.32",
+      "max_concurrent_transport_calls": 3,
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.42",
+      "maximum_input_tokens": 150000,
+      "maximum_output_tokens": 49152,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 12,
+      "model": "deepseek-v4-pro",
+      "output_usd_per_million": "3.96",
+      "pass": "v27_completeness_review",
+      "pricing_checked_at": "2026-09-13",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-pro-peak-cache-miss-2026-09-13",
+      "provider": "deepseek",
+      "provider_role": "classifier_completeness_review",
+      "temperature": 0,
+      "thinking": {
+        "type": "disabled"
+      },
+      "twitterapi_credits": 0
+    }
+  },
+  "production_shape": {
+    "batch_size": 5,
+    "expected_requests": 6,
+    "fail_closed_on_invalid_response": true,
+    "max_concurrent_transport_calls": 3,
+    "retry_malformed_or_transport_once": true,
+    "reviewer_only": true,
+    "semantic_repairs": false
+  },
+  "prompt": {
+    "bytes": 13516,
+    "sha256": "fa50534968f5a5a27a02e71e0be98ed3ca785a67d69c45c211aa7a25dfa4c893",
+    "source_envelope": "source text and context plus one saved v26 primary classification; owner reference omitted from provider packets",
+    "version": "stage1-prompt-v27-completeness-review-v1"
+  },
+  "reason": "Immutable budget for one bounded reviewer-only pilot after the owner completed all 45 development cases and directed that this be the only human review. It permits measurement against the unblinded owner reference only and does not authorize a human-accuracy or release-quality claim.",
+  "reference": {
+    "human_gate_passed": false,
+    "human_grounded": false,
+    "owner_approval_required": false,
+    "path": ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json",
+    "sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "status": "owner_accepted_unblinded",
+    "use": "sole_owner_reference_diagnostic_only"
+  },
+  "schema_version": "u18-runtime-development-provider-budget/v1"
+}

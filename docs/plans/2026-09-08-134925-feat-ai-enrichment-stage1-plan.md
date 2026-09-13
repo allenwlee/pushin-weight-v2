@@ -86,6 +86,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 10. Later on 2026-09-11, the owner superseded exception 9's release sequence: complete the remaining Stage 1 quality gates and Stages 2–4 on this same candidate, refresh staging through the guarded scrubbed-production procedure, activate and debug the integrated feature set on staging, and then promote that exact passing candidate to production. This authorizes bounded paid staging evaluations and feature activation within the explicit caps and stop conditions in U18–U24. It does not authorize a production pause, an ad hoc production provider run, bypassing the single harvester scheduler, publishing the future public MCP/API, or weakening any migration, quality, cost, or exact-SHA gate.
 11. On 2026-09-11 the owner clarified that Anthropic is not an active PushinWeight provider: scheduled translation, classification, relevancy, and signal work use DeepSeek, while MiniMax remains available only to separately configured roles. The v22/v22b direct-Haiku attempts remain historical zero-quality-result evidence and no longer block delivery on a credential. This does not convert the failed DeepSeek semantic score into a pass or weaken the U18 floors. The integrated candidate may deploy to staging with the new paid discovery, extraction, and synthesis lanes disabled so schema, data-refresh, UI, and worker isolation can be debugged while U18 quality remains open; production promotion still requires every named gate.
 12. On 2026-09-12 the owner reviewed the 16 disagreements highlighted by the independent Grok audit and directed a new prompt identity with stricter visible-evidence, target-brand, customer-cost, testimonial-overlap, unavailable-media, and hackathon rules. Because the owner saw the model judgments before commenting, this calibration is consumed development evidence and cannot count as either blinded reviewer or adjudicator under R81–R82. The owner also required cross-post event identity that distinguishes canonical occurrences from their source observations and preserves recurring same-name editions rather than silently merging them.
+13. On 2026-09-13 the owner completed all 45 cases in the U18 ambiguity study, assumed responsibility for the judgments, and directed that this be the only human review for this classifier delivery. Treat the 45 ordered rows as a sole, unblinded owner reference; blank case entries accept the packet proposal and explicit comments plus earlier recorded corrections define the overrides. This supersedes R81–R82 and KTD37 only where they require two independent reviewers, a distinct adjudicator, an inter-reviewer agreement floor, or a later zero-overlap human cohort. Mark the study `complete_by_owner_acceptance` and its human gate `waived_by_owner`; do not describe the reference as blinded human gold, claim inter-reviewer agreement, or turn agreement with it into production accuracy. The exact owner message is retained at `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` (SHA-256 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`), and the consolidated decisions and evidence are at `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` (SHA-256 `6d53cc2af39fef6a5972c7bae6bae52a7a022cb2ecfe50b012562dae0b50fe34`). Provider, request, retry, token, cost, extraction, migration, staging, rollback, and exact-SHA production gates remain unchanged.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -110,7 +111,7 @@ Repeated mentions of an event will attach as evidence to one canonical occurrenc
 - **Objective:** Readers, operators, and agents can use version-exact classification, structured employment/job/event/opportunity facts, demand-shaped headlines, literal translations, and cached rich synthesis across EN, ZH-CN, and JA without fabricated provenance or repeated model work for unchanged content.
 - **Means:** Preserve the completed Stage 0 and Stage 1 evidence, complete the taxonomy-v2/v3 quality gates, then add hot/material-change headline demand, separate versioned translation and synthesis artifacts, a durable PostgreSQL synthesis queue, full Japanese locale parity, and bounded UI/agent demand contracts (KTD1–KTD33). Validate the integrated system against frozen and fresh production-shaped data before one exact-candidate production promotion.
 - **Authority:** This plan's Product Contract owns the complete Stage 1 product semantics carried from the owner-selected ideation. `docs/plans/2026-09-08-194415-feat-staged-ai-enrichment-roadmap-plan.md` owns the staged roadmap, and `docs/reference/2026-09-08-194415-enrichment-contracts.md` owns Stage 0 telemetry invariants and receives the bounded durable Stage 1 taxonomy excerpt in U1.
-- **Execution profile:** U1–U17 are implemented through provider-denied local proof and the taxonomy-v3 staging receipt. U18 completes the real-label and cost gates. U19 implements Stage 2 headline demand. U20 implements Stage 3 split translation/synthesis and Japanese parity. U21–U22 implement Stage 4 durable demand and feed behavior. U23 refreshes, activates, and debugs staging. U24 promotes and observes the unchanged passing candidate in production.
+- **Execution profile:** U1–U17 are implemented through provider-denied local proof and the taxonomy-v3 staging receipt. U18 closes the current-v3 owner-reference and cost gates. U18A implements the separately versioned Audience Topics, news-reporting, claim, and source-aware refinement. U19 implements Stage 2 headline demand. U20 implements Stage 3 split translation/synthesis and Japanese parity. U21–U22 implement Stage 4 durable demand and feed behavior. U23 refreshes, activates, and debugs staging. U24 promotes and observes the unchanged passing candidate in production.
 - **Stop conditions:** Stop if a migration changes original provenance, rewrites v2 combined rows, requires historical model inference, invents dates/application routes/brand authority, bypasses `CycleRunner`, hides relevant pending posts, couples page rendering to a provider response, allows speculative work to grow without a bound, blends approximate and exact populations, or exceeds a preregistered provider/credit/token cap.
 - **Tail ownership:** The parent LFG workflow owns the complete implementation, reviews, commits, exact-SHA staging and production delivery, bounded activation, monitoring, and guarded final worktree cleanup.
 
@@ -290,7 +291,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
   tuning and make the next classifier architecture decision between a
   stronger configured model and a fresh human review of taxonomy/gate
   ambiguity before opening the sealed release cohort.
-- R81. Treat every existing U18 taxonomy-v3 reference and score as
+- R81 (superseded by Delivery Exception 13 for this delivery). Treat every existing U18 taxonomy-v3 reference and score as
   model-generated development evidence. The references were candidate-blind,
   but their two annotators were model passes and their adjudicator was another
   model pass; they are not human ground truth and cannot support a human-label
@@ -303,7 +304,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
   adjudicates disagreements without seeing model outputs. Keep source text,
   reviewer packets, identities, answers, and selection details ignored; track
   only the protocol, aggregate result, hashes, and decision.
-- R82. Freeze the human ambiguity gate before opening the packets. Exact
+- R82 (superseded by Delivery Exception 13 for this delivery). Freeze the human ambiguity gate before opening the packets. Exact
   `outcome` plus complete post-type-set agreement between the independent human
   reviews must reach 80% overall and 70% in each language, and no unresolved
   taxonomy boundary code may recur in three or more cases. Failure requires a
@@ -350,6 +351,70 @@ The production classifier asks for six post types, sentiment, discourse, and two
   source URL or source post agree exactly; it retains other historical rows
   separately. Source posts used as event provenance are protected from
   deletion.
+- R85. Do not add or persist a `use_case` product label. Define the versioned
+  derived segment `product_evidence/v1` as a current recognized post-brand
+  classification containing `results_evaluations` and not containing the
+  `ideas_requests` product label. Define its narrower
+  `observed_use_cases/v1` subset by additionally requiring
+  `hands_on_usage`. Compute both through the shared canonical read/query layer;
+  never send them to the classifier, write them to
+  `posts_brands_product_labels`, or infer them from publication dates. Return
+  the segment key, definition version, matched brand, and contributing stored
+  labels so UI, agent, and later MCP/API consumers can explain membership.
+  Benchmarks and other evaluations may belong to `product_evidence/v1`
+  without being called use cases. “High value” is an audience-ranking question,
+  not taxonomy membership; a future relevance score requires its own measured,
+  versioned contract rather than a hidden boolean rule.
+- R86. Close the 45-case U18 human-review exercise through Delivery Exception
+  13. Preserve all rows in manifest order, record the reference as unblinded
+  owner calibration, retain null agreement and `human_grounded=false`, and
+  validate the complete six-field v3 contract provider-free. Rebuild any pilot
+  cohort and immutable budget against the resulting reference hash before
+  transport. A pilot measures agreement with the owner reference and cannot
+  create an accuracy or release-quality claim.
+- R87. Do not revive or repurpose `discourse`. Add a versioned per-post-brand
+  Audience Topics facet whose concepts and localized EN/ZH-CN/JA labels are
+  independent of post types, product labels, sentiment, nationalism, claim
+  review, and source relationship. The initial `ai_audience_topics/v1` manifest
+  contains `local_inference`, `cost_performance`, `model_distillation`,
+  `evals_benchmarks`, `openness_license`, `agents_tools`,
+  `api_developer_surface`, and `geopolitics_state`. Store assignment evidence,
+  prompt/model/provider role, scheme revision, and final judgment provenance;
+  adding or retiring a concept changes the manifest and prompt identity rather
+  than database shape.
+- R88. Add `news_reporting` as the fourteenth post type in the next semantic
+  taxonomy revision. It primarily relays a current development, sourced report,
+  announcement, or news roundup and may coexist with release, business,
+  research, result, or opinion types. A first-party product announcement alone
+  is not third-party reporting. Keep `releases_updates` limited to a concrete
+  release, feature, integration, availability, or pricing change involving the
+  attributed brand so product-specific update filters remain exact.
+- R89. Retire the misleading `misinformation` product-label meaning through a
+  versioned compatibility window and model consequential claims separately.
+  Store claim presentation as `author_assertion`, `reported_allegation`, or
+  `disputed_claim`; store review status independently as `unreviewed`,
+  `corroborated`, `contradicted`, or `inconclusive`. The classifier may set
+  presentation with exact evidence but cannot set a truth-oriented status.
+  Distillation is the independent `model_distillation` topic. Negative opinion
+  plus sentiment is not a substitute because it misses neutral reporting and
+  over-collects ordinary criticism.
+- R90. Supply a per-brand source relationship to every primary and review
+  classifier envelope from reviewed account-brand role evidence. Official
+  self-praise does not become a stored customer testimonial. Add a brand-level
+  official-promotion policy (`allowed`, `review`, or `unsanctioned`) so current
+  official AI-lab promotions avoid `marketing_spam` while future intermediary
+  brands may use stricter behavior. Do not clear `scam`, `crypto`, or
+  `unauthorized` solely because the source is official. Third-party advertising
+  receives `marketing_spam` only for a promotional call to action, referral,
+  free-access/discount wrapper, or comparable promotional evidence; an ordinary
+  comparison or mention does not.
+- R91. Keep cryptic posts `context_missing` when source text and stored
+  quote/parent context do not support a brand-specific judgment; never infer
+  linked media. Track the measured media-dependency proxy and repeated
+  source/domain promotions before adding media enrichment or a harvester ban.
+  Retain spam source posts as evidence and hide them through unsanctioned
+  filtering. Preserve `crypto` for crypto/token promotion; a neutral blockchain
+  subject, if later needed, belongs in Audience Topics.
 
 | Family | Key | Exact Japanese label |
 | --- | --- | --- |
@@ -505,7 +570,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - KTD20. **Keep organization authority and counting units explicit.** Newly observed companies/handles enter `BrandDiscoveryCandidate` review instead of silently mutating `Brand`, while reports separately count source posts, listings/requisitions, and organizations. This implements R36 and R48–R52 and prevents one multi-role post from distorting search yield or deduplication.
 - KTD21. **Resolve affiliation from ranked evidence, not bio membership alone.** Keep `brands_accounts` as reviewed operational truth, Call A drift as a reconciliation source, X business labels and explicit role language as typed evidence, ambassador/creator-program language as community evidence, and bare mentions as unresolved. Status and relationship type remain independent, so former staff never becomes community merely because employment ended. This implements R33A–R35A.
 - KTD22. **Separate personnel discovery, classification, and extraction.** A disabled bounded EN/ZH-CN/JA lane discovers and normally persists candidate posts; the universal classifier decides `personnel_changes`; the targeted extractor creates reviewable person, organization, affiliation, status, and evidence claims without inventing dates. Organization-facing brands remain distinct from product brands. This implements R29, R36–R37, and R54–R57.
-- KTD23. **Use one integrated staging candidate and one production promotion.** Preserve unit-level flags, measurements, and rollback boundaries, but complete U18–U23 and debug all enabled dependencies together before U24 promotes the unchanged SHA. This implements R58 and R76. (session-settled: user-directed — chosen over the earlier Stage-1-first production sequence so cross-stage behavior is proven before users see it.)
+- KTD23. **Use one integrated staging candidate and one production promotion.** Preserve unit-level flags, measurements, and rollback boundaries, but complete U18, U18A, and U19–U23 and debug all enabled dependencies together before U24 promotes the unchanged SHA. This implements R58 and R76. (session-settled: user-directed — chosen over the earlier Stage-1-first production sequence so cross-stage behavior is proven before users see it.)
 - KTD24. **Use two data snapshots for two different proofs.** The verified September 10 dump supplies immutable offline cohorts; the guarded refresh command supplies a newly captured, scrubbed production-shaped staging database and recovery receipt. This implements R59–R60. (session-settled: user-approved — chosen over directly restoring the old dump because reproducibility and current integration need different data ages.)
 - KTD25. **Extend the existing narrative lifecycle with durable demand.** `TrendNarrativeDemand` coalesces hot, pinned, prewarm, and operator requests before the current snapshot/work-slot/task pipeline; the deterministic input fingerprint remains the material-change authority and last-good output remains readable. This implements R61–R64 without adding a second headline queue.
 - KTD26. **Make critic use risk-based and auditable.** Application validation always runs; deterministic risk predicates and a stable hash-based audit sample decide whether to call the critic. Both reviewed and bypassed candidates use the same atomic publication and last-good protection. This implements R63–R64.
@@ -541,7 +606,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
   authoritative and no deterministic label merge is introduced. This is the
   last bounded Flash prompt topology justified before a model/taxonomy
   decision.
-- KTD37. **Establish human taxonomy reliability before changing models.** The
+- KTD37 (superseded by Delivery Exception 13). **Establish human taxonomy reliability before changing models.** The
   earlier candidate-blind reference was still made entirely by models, so its
   exact-set scores cannot distinguish classifier error from reference error.
   Use the frozen, balanced 45-case ambiguity study to measure whether qualified
@@ -550,6 +615,40 @@ The production classifier asks for six post types, sentiment, discourse, and two
   human gate can authorize the small DeepSeek Pro architecture pilot; a failed
   gate sends the work back to taxonomy wording and examples without another
   provider call.
+- KTD38. **Surface product evidence as a derived audience segment.** Reuse the
+  canonical post-brand classifications to expose `product_evidence/v1` and its
+  `observed_use_cases/v1` subset under R85. This avoids duplicate stored labels
+  and makes the audience definition reproducible while keeping any later
+  relevance ranking separate from classifier truth. (session-settled:
+  user-approved — chosen over an automatically applied `use_case` label because
+  the proposed membership is already derivable from existing classifications.)
+- KTD39. **Finish the current v3 review before expanding its label space.** Use
+  the sole ordered owner reference under R86 for the bounded v27 diagnostic,
+  then implement `news_reporting`, Audience Topics, claim metadata, and source
+  relationships as a separately versioned U18A contract. Never retroactively
+  score new fields against the 45-case v3 review.
+- KTD40. **Treat audience subjects as stable concepts, not columns or revived
+  discourse.** Separate scheme/concept/locale-label/assignment storage, expose
+  `current_definition` and revision-separated `historical_inclusive` analysis,
+  and report pre-concept rows as unavailable rather than false. Run topic
+  classification as an independently budgeted pass initially so it does not
+  destabilize the primary post-type reviewer.
+- KTD41. **Separate claim presentation from truth review.** The classifier can
+  recognize an assertion, attributed allegation, or disputed claim from visible
+  evidence. Corroborated, contradicted, and inconclusive states require a
+  separate evidence-review workflow and provenance. Keep the temporary
+  `misinformation` key readable during the version window without presenting it
+  as a finding of falsity.
+- KTD42. **Use per-brand speaker context at classification time.** Resolve
+  official/staff/third-party from reviewed account-brand edges, include it in
+  primary and review fingerprints, and apply brand-specific official-promotion
+  policy before persisting product and unsanctioned judgments. Do not assign
+  self-testimonials and filter them out after storage.
+- KTD43. **Measure before adding media or source bans.** The 45/120/500 proxy
+  observed 6.7%/8.3%/4.2% short URL-bearing rows without stored context. Retain
+  `context_missing` and unsanctioned evidence now; add a separate bounded media
+  lane or collection exclusion only after exact false-positive and cost evidence
+  justifies it.
 
 ### High-Level Technical Design
 
@@ -725,7 +824,7 @@ flowchart LR
 
 U1–U5 and their exact-SHA staging receipt are immutable historical evidence for the first Stage 1 delivery. The follow-up begins at U6. U6 owns the crosswalk, future version constants, and label contract. After U6 commits, U7 owns its migration, seed, reader, view, headline, and health files while U8 may build only its new shared-analysis module, management command, new analysis tests, new reference, and `AGENTS.md` link. U8 completion and all Release A candidate/staging gates depend on U7. Only after Release A passes staging may U9 own activation of taxonomy v2/prompt v3, the edge migration, and the single-owner classifier-prompt exhibit update. U10 updates canonical output consumers. U11 reconciles and verifies the v2 cutover. U12 supplies the evaluator and freezes the exact v2 protocol. U12A owns the paid candidate run, blinded adjudication, floor policy, and durable ten-type assessment. U14 owns additive identity, history, discovery-candidate, job/evidence, personnel-run, event, and opportunity schema. After U14, U15 owns profile history, U15A job discovery, U15B personnel discovery, U16 targeted extraction, and U17 read/evaluation contracts plus the v3 staging proof.
 
-The active continuation begins at U18. U18 must pass before any feature lane is enabled. U19 then owns headline demand and critic policy. U20 owns normalized locale artifacts, split provider roles, compatibility projections, and Japanese parity. U21 owns synthesis demand, its service/command contract, and the isolated database worker. U22 owns feed selection, browser demand, pending/last-good rendering, and agent parity against U20–U21. U23 is the only unit allowed to refresh and activate staging; it uses a new scrubbed snapshot, enables one lane at a time, and returns failures to the owning unit without changing the candidate lineage. U24 alone owns production promotion and observation. Shared-file changes move forward through that order; each unit finishes its focused tests before the next unit reconciles them.
+The active continuation begins at U18. U18 must close the owner-reference diagnostic before U18A expands the taxonomy, and both must pass before any feature lane is enabled. U19 then owns headline demand and critic policy. U20 owns normalized locale artifacts, split provider roles, compatibility projections, and Japanese parity. U21 owns synthesis demand, its service/command contract, and the isolated database worker. U22 owns feed selection, browser demand, pending/last-good rendering, and agent parity against U20–U21. U23 is the only unit allowed to refresh and activate staging; it uses a new scrubbed snapshot, enables one lane at a time, and returns failures to the owning unit without changing the candidate lineage. U24 alone owns production promotion and observation. Shared-file changes move forward through that order; each unit finishes its focused tests before the next unit reconciles them.
 
 ---
 
@@ -1076,25 +1175,35 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 - **Requirements:** R30, R33–R57 and R84; KTD14–KTD22.
 - **Dependencies:** U16.
 - **Files:** shared employment-history, job-listing, event, and opportunity query/projection modules; deterministic JSON schemas/examples; agent-facing reference; evaluation strata and floor policy; discovery/extraction reports; test manifest; dated Stage 1C staging receipt.
-- **Approach:** Define stable read shapes for person identity and the R32 birth-date/precision, `sexs`, nationality, ethnicity, and primary-language fields; broad affiliations; filtered `employment_history`; staff/community/unknown evidence resolution; business-label and profile-observation provenance; organization review state; `job_listings` using `hiring_organization` terminology; and event/opportunity lifecycle under explicit `as_of`. Keep public MCP/API routing and recruiter write access deferred. Extend the U12 evaluator and freeze provider-free fixtures, schemas, strata, identities, and floor-policy formats for taxonomy v3, job and personnel discovery, listing extraction, and affiliation extraction. U18 owns the authorized real-label runs and blinded adjudication. Reconcile classifier, feed, filter, headline, health, and analysis consumers before exact-SHA staging delivery.
+- **Approach:** Define stable read shapes for person identity and the R32 birth-date/precision, `sexs`, nationality, ethnicity, and primary-language fields; broad affiliations; filtered `employment_history`; staff/community/unknown evidence resolution; business-label and profile-observation provenance; organization review state; `job_listings` using `hiring_organization` terminology; and event/opportunity lifecycle under explicit `as_of`. Keep public MCP/API routing and recruiter write access deferred. Extend the U12 evaluator and freeze provider-free fixtures, schemas, strata, identities, and floor-policy formats for taxonomy v3, job and personnel discovery, listing extraction, and affiliation extraction. U18 owns the authorized owner-reference diagnostic and separate discovery/extraction measurements under Delivery Exception 13. Reconcile classifier, feed, filter, headline, health, and analysis consumers before exact-SHA staging delivery.
 - **Test scenarios:** Person projections preserve supplied `sexs`, nationality, ethnicity, and primary-language text and serialize reduced-precision birth dates without inventing components; employment history excludes non-employment affiliations; community subtypes and unknown evidence never appear as employees; observed employer text survives a changed normalization mapping; unknown dates/precision serialize without invented values; jobs expose all evidence and application routes while preserving one-post-to-many-listing structure; personnel claims expose observation time separately from effective dates; event/opportunity temporal state changes only with source facts and `as_of`; v2 combined and v3 exact analyses remain separate. Provider-free fixtures prove that prevalence false positives, targeted per-type precision/recall, job/personnel discovery yield, extraction completeness, and post/listing/affiliation/organization counts are reported independently; missing support produces a blocking preproduction result rather than a false zero or staging failure.
 - **Verification:** JSON-schema/golden tests, query-count and PostgreSQL tests, full affected classifier/headline/UI/health/harvest regressions, migration/backfill replay, data-integrity review, separate provider-free job/personnel calibration and maximum token/call delta reports, deterministic evaluation-contract fixtures, and exact-SHA staging proof pass. The three-stratum adjudicated classification evaluation and real-label post-discovery, role-extraction, and affiliation-extraction evaluations move to U18; taxonomy-v3 and bounded discovery/extraction production activation move to U23–U24 under the owner's integrated-delivery authorization. Public MCP/API activation remains separately deferred.
 
-### U18. Complete the real-label quality and cost gates
+### U18. Complete the owner-reference quality and cost gates
 
 - **Goal:** Turn the frozen evaluation contracts into measured pass/block decisions before enabling any new live lane.
-- **Requirements:** R16–R17, R40, R48–R59, and R79–R84; KTD14, KTD18–KTD22, KTD24, and KTD35–KTD36.
+- **Requirements:** R16–R17, R40, R48–R59, R79–R86; KTD14, KTD18–KTD22, KTD24, KTD35–KTD39.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; exact prompt/model/provider-role identities. Execute U12A as this unit's first measured sub-gate.
 - **Files:** versioned floor and budget JSON under `docs/analysis/` or `docs/reference/`; ignored source/context, candidate, reviewer, and adjudication packets; classification/discovery/extraction evaluator modules and commands; dated durable taxonomy-v2, taxonomy-v3, job, personnel, extraction, and cost reports; focused evaluator tests; this plan's execution state.
-- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Obtain two blinded annotations per example and adjudicate disagreements. Preserve v2 and v3 as separate assessments. After the first unseen taxonomy-v3 candidate is scored, treat that cohort as consumed development evidence. Implement the R79 primary-plus-completeness-review path and its durable judgment provenance. After v25 shows that the reviewer usually anchors on the primary, implement R80's exhaustive verdict maps and require them to agree with the reviewer's complete candidate; the maps validate but never generate labels. The fixed selector continues to use the reviewer result in full. Prove this path provider-free, then through a separately preregistered run on the same 120-row consumed-development cohort. Continue to all 500 consumed-development rows only if every continuation floor passes. Neither development result can approve release; build a new unique-ID, zero-overlap final cohort and freeze new candidate/reviewer budgets before opening it. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate, reviewer/adjudicator, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
+- **Approach:** Freeze cohorts and machine-readable floors before generating candidates. Restore the verified dump only into an access-restricted disposable local PostgreSQL database, extract the minimum source/context fields into ignored packets, never serve that database through the application, and destroy it after packet/hash verification. Use those packets for random prevalence and historical hard-case sampling, then add independently sourced known-positive job/personnel and event/opportunity cases without treating search output as gold. Preserve v2 and v3 as separate assessments. The originally planned independent human study is retained as historical protocol evidence, while Delivery Exception 13 makes the completed ordered owner review the sole human reference and removes the two-reviewer, adjudicator, agreement-floor, and later-human-cohort requirements. Implement the R79 primary-plus-completeness-review path and its durable judgment provenance. After v25 shows that the reviewer usually anchors on the primary, implement R80's exhaustive verdict maps and require them to agree with the reviewer's complete candidate; the maps validate but never generate labels. The fixed selector continues to use the reviewer result in full. Prove this path provider-free, then run only the separately budgeted 30-row v27 DeepSeek Pro diagnostic against the unblinded owner reference. Record agreement and language slices without an accuracy claim. Score job/personnel discovery in source-post units and extraction in listing/affiliation/entity-field units. Treat date non-invention, source provenance, organization review routing, and duplicate convergence as required invariants. Write a separate budget per candidate/reviewer, discovery trial, extraction trial, and media/tool lane from actual packet sizes and configured rates; enforce the maximum at the transport boundary.
 - **Test scenarios:** A changed packet or floor changes the evaluation identity; a missing candidate lowers coverage and blocks; insufficient label/locale/source support blocks; failed precision/recall or prevalence floors cannot be waived by aggregate accuracy; the Grok artifact and owner-visible audit review cannot load as blinded gold; v2 and v3 results never merge; the R83 boundary cases cover generic praise versus results, target-brand testimonial scope, customer cost versus business/investor perspective, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathon overlap; 18 posts/55 listings retain distinct denominators; invented employment/event/job dates, lost event evidence, unsafe occurrence merges, or silent brand creation fail regardless of other scores; a transport stops before request N+1 when request N exhausts a lane cap; reruns of frozen inputs are byte-identical.
-- **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 report separately covers prevalence, rare positives, and event/opportunity boundaries across EN/ZH-CN/JA and required source roles. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U19 activation or U23.
+- **Verification:** The taxonomy-v2 report establishes the immutable before-change baseline. The taxonomy-v3 owner reference contains 45 valid rows in exact manifest order and records `complete_by_owner_acceptance`, `waived_by_owner`, `human_grounded=false`, and null agreement. The v27 diagnostic separately reports owner-reference agreement, rare labels, and EN/ZH-CN/JA slices within its immutable budget. Job/personnel discovery and role/affiliation extraction reports state support, precision, recall or bounded coverage, field completeness, invariant violations, cost, and pass/block status. Every provider/credit/token counter stays within its preregistered lane budget. Any blocked result returns to the owning prompt/query/extractor and repeats with a new candidate identity; it cannot proceed to U18A, U19 activation, or U23.
+
+### U18A. Add Audience Topics, news reporting, claim metadata, and source-aware policy
+
+- **Goal:** Implement the owner-directed audience taxonomy without reopening or silently rewriting the completed v3 owner review.
+- **Requirements:** R87–R91; KTD39–KTD43.
+- **Dependencies:** U18 owner-reference diagnostic and all current-v3 invariant checks pass; the taxonomy-v2/v3 historical analysis contract remains authoritative.
+- **Files:** `core/models.py`; additive `core/migrations/`; the taxonomy manifest and EN/ZH-CN/JA seed labels; `core/classification_contract.py`; `x_monitor/attribution.py`; classifier prompt/version exhibits; canonical analysis/query services; feed/filter/chart readers; health and cost telemetry; focused schema, prompt, writer, reader, analysis, migration, and browser tests; a dated shadow-prevalence report.
+- **Approach:** Add normalized topic scheme/concept/locale-label/assignment tables and versioned claim-presentation/review facts. Advance the post-type taxonomy for `news_reporting` while keeping v2/v3 reads and the `misinformation` compatibility key explicit. Resolve source relationship per attributed brand from reviewed account-brand edges, include it in prompt and input fingerprints, and apply brand-level official-promotion policy before persistence. Run Audience Topics as a separate bounded pass with its own prompt, provider role, ledger, activation flag, and budget; it cannot block publication of the existing v3 classification. Keep media fetch and harvester bans deferred while adding the exact recurrence/context-missing metrics required by R91.
+- **Test scenarios:** Current v3 rows remain byte-for-byte and query-semantically readable; pre-topic rows report unavailable; label-only topic edits preserve concept identity; material definition changes require a revision; the eight initial topics allow multiple assignments per post-brand with exact evidence; `news_reporting` distinguishes third-party reports, product releases, official announcements, and mixed news/release posts; a reported distillation allegation is not adjudicated false; a reviewer cannot set truth status; official self-praise is not a testimonial; official Upstage promotion follows `allowed` while a configured intermediary can use `review` or `unsanctioned`; third-party CTA spam remains flagged; role changes alter the input fingerprint; unavailable media produces `context_missing`; no per-topic database columns, historical date inference, or automatic source ban appears.
+- **Verification:** Fresh and upgrade PostgreSQL tests, exact 14-post-type and 8-topic manifests with EN/ZH-CN/JA labels, v2/v3/v4 analysis-policy tests, provider-denied/fake-client call-chain tests, target-brand/source-role/unsanctioned regressions, and affected browser filters pass. A bounded frozen-corpus shadow report gives per-topic/news/claim support, overlaps, false-positive samples, media proxy, repeated-promoter counts, tokens, calls, and maximum cost before any topic or v4 live activation. Failures return to U18A and do not reopen the completed v3 owner review.
 
 ### U19. Make headline generation demand-shaped and critics conditional
 
 - **Goal:** Stop regenerating cold or unchanged brand/window narratives while preserving valid last-good headlines and review where risk warrants it.
 - **Requirements:** R61–R64; KTD25–KTD26.
-- **Dependencies:** U18 passes the Stage 1 gates; current trend-narrative lifecycle and Stage 0 telemetry stay authoritative.
+- **Dependencies:** U18 and U18A pass their gates; current trend-narrative lifecycle and Stage 0 telemetry stay authoritative.
 - **Files:** `core/models.py`; an additive migration; `monitor/trend_narrative_dispatch.py`; `monitor/trend_narrative_tasks.py`; `monitor/trend_narrative_lifecycle.py`; `monitor/trend_narrative_generation.py`; `monitor/tasks.py`; narrative configuration, health/metrics, fixtures, and focused orchestration/evaluation tests.
 - **Approach:** Add `TrendNarrativeDemand` and one service that records/coalesces demand. Compute demand eligibility before initializing work slots. Reuse the existing material fingerprint, queue, provider transport, ledgers, and last-good publisher. Add deterministic critic-risk codes and stable audit sampling; reserve the critic ledger only when required. Store bypass, escalation, audit, and suppression reasons so replay explains every call or non-call. Keep the current headline worker queue isolated and idempotent.
 - **Test scenarios:** Repeated identical harvest/page events coalesce; cold and unchanged windows make zero model calls and retain last-good output; a changed hot window schedules once; an explicit operator refresh bypasses only the material-change gate and remains budgeted; invalid editor output cannot bypass mechanical validation; causal, quotation, contested, event-led, low-coverage, and disagreement fixtures invoke the critic; low-risk fixtures bypass it; audit sampling is stable across processes; retries and duplicate Celery delivery cannot double-publish or double-count calls; critic failure leaves last-good intact.
@@ -1178,7 +1287,8 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 | Personnel discovery | U15B | Provider-denied and fake-client tests prove disabled-by-default organization/transition query families, mandatory query/window/cursor/cadence/cost bounds, plain-name and handle coverage, normal post ingestion, independent EN/ZH-CN/JA telemetry, no automatic reviewed affiliation or brand creation, no change to existing calls when disabled, and an explicit maximum credit delta. |
 | Targeted structured extraction | U16 | Fake-provider true-caller tests prove negative posts incur zero targeted calls; positives route once per applicable event/opportunity/job/personnel/profile extractor; one post may produce many role rows; retries remain idempotent; source/media-bound validation, atomic writes, telemetry, privacy, and cost estimates remain explicit. |
 | Stage 1C read and staging gate | U17 | JSON/golden, query-count, classifier/headline/UI/health/harvest regression, migration/backfill replay, provider-free calibration/cost reports, and deterministic evaluation-contract fixtures prove stable employment, community, job, event, opportunity, evidence, lifecycle, and counting contracts before exact-SHA staging delivery. Real-label classification, discovery, and extraction assessments remain preproduction gates. |
-| Real-label quality and budgets | U18 | Frozen v2/v3, job/personnel discovery, and role/affiliation extraction packets receive two blinded annotations and adjudication; machine-readable floors and per-lane request/retry/token/credit/cost caps exist before transport; deterministic reports contain hashes, support, coverage, metrics, invariants, limitations, costs, and pass/block decisions. |
+| Owner-reference quality and budgets | U18 | The 45 ordered v3 rows validate under the sole unblinded owner reference with explicit waiver/no-accuracy limitations; the 30-row diagnostic and every discovery/extraction lane have exact-hash request/retry/token/credit/cost caps before transport; reports contain hashes, support, coverage, agreement, invariants, limitations, costs, and pass/block decisions. |
+| Audience taxonomy refinement | U18A | Fresh/upgrade schema, exact 14-type/8-topic three-locale manifests, historical-policy, source-aware prompt, claim-state, unsanctioned, browser, and bounded shadow-prevalence tests pass without rewriting v3 history or treating unavailable old topic values as false. |
 | Demand-shaped headlines | U19 | PostgreSQL concurrency and current narrative suites prove coalesced demand, material-change suppression, last-good serving, deterministic critic risk/audit routing, idempotent queue behavior, and a fixed-replay call/token/cost reduction without lost valid output. |
 | Split enrichment and Japanese parity | U20 | Additive migration, artifact identity, provider call-chain, compatibility-reader, locale catalog, cache, headline, and authenticated browser matrices prove independent translation/synthesis and equal EN/ZH-CN/JA behavior with no provider call on a request thread. |
 | Lazy synthesis backend | U21 | Database concurrency, lease/fence, expiry/retry, authenticated `/api/v2/`, management-command parity, provider failure, health, and Render topology tests prove shared bounded work through an isolated PostgreSQL worker. |
@@ -1270,7 +1380,8 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 - U15B: Disabled-by-default EN/ZH-CN/JA organization-centric and transition-centric personnel queries run only through the bounded existing harvest planner, preserve post/affiliation/organization counts and search provenance, cannot auto-create reviewed brands or affiliations, correctly retain unknown effective dates, and have a verified maximum call/credit delta before any live activation.
 - U16: Applicable positive classifications route through source/media-bound event, opportunity, job, personnel, and profile extractors with independent version/telemetry identities, atomic idempotent persistence, one-post-to-many-role support, zero negative-post calls, and a measured incremental cost.
 - U17: Stable affiliation, `employment_history`, evidence, `job_listings`, event, opportunity, and explicit-`as_of` lifecycle projections plus provider-free evaluation contracts, calibration/cost reports, and exact-SHA staging proof pass. Three-stratum classification and separate discovery/extraction real-label assessments remain U18 gates; public MCP/API activation remains deferred.
-- U18: Taxonomy-v2 and taxonomy-v3 classification, job/personnel discovery, and role/affiliation extraction have reproducible real-label reports with preregistered floors, full required support, two-reviewer adjudication, invariant checks, separate units, and enforced provider/credit/token/cost budgets; every required decision passes.
+- U18: Taxonomy-v2 remains the immutable historical baseline; the 45-case taxonomy-v3 owner reference is complete, ordered, valid, explicitly unblinded/non-gold, and measured only as owner-reference agreement; job/personnel discovery and role/affiliation extraction have reproducible reports, invariant checks, separate units, and enforced provider/credit/token/cost budgets.
+- U18A: The separately versioned refinement adds `news_reporting`, eight Audience Topics, claim presentation/review metadata, and per-brand speaker policy with EN/ZH-CN/JA labels, revision-aware analysis, bounded cost, and no rewrite of completed v3 evidence.
 - U19: Headline demand coalesces per brand/window, refreshes only hot/pinned/prewarmed materially changed inputs, serves last-good output otherwise, routes deterministic risk/audit cases through the critic, and demonstrates a measured provider-call/token/cost reduction on a fixed replay.
 - U20: Literal translation and rich synthesis have independent immutable artifacts, identities, states, telemetry, and compatibility reads; locale-complete synthesis and the entire product UI/headline/cache surface support EN, ZH-CN, and JA equally.
 - U21: A bounded authenticated demand contract, management-command parity, PostgreSQL lease/fence queue, and dedicated Render synthesis workers generate one shared synthesis artifact without blocking web requests or sharing harvest/headline execution infrastructure.
@@ -1959,3 +2070,24 @@ pins those exact bytes but sets request, transport, token, and dollar caps to
 zero. It preserves R82: no provider call is authorized until the independent
 human review and adjudication gate passes, after which any permitted 30-row
 DeepSeek Pro pilot requires a separate budget.
+
+On September 13 the owner reviewed the entire ordered 45-case packet, supplied
+case corrections and cross-cutting taxonomy decisions, assumed responsibility,
+and directed that no additional human reviewer or adjudicator be used for this
+delivery. Delivery Exception 13 supersedes the earlier human-review gate while
+retaining its history and preventing human-gold, agreement, or accuracy claims.
+The exact owner message and the consolidated decision record have SHA-256
+`bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`
+and `6d53cc2af39fef6a5972c7bae6bae52a7a022cb2ecfe50b012562dae0b50fe34`.
+The ignored 45-row owner reference is now `owner_accepted_unblinded` with
+`complete_by_owner_acceptance`, `waived_by_owner`, null agreement, and SHA-256
+`d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80`.
+Its manifest order, 15/15/15 language counts, and every six-field v3 row passed
+provider-free validation; the focused v27 pilot runner suite passed 5 tests.
+The rebuilt 30-row cohort and immutable budget have SHA-256
+`07690a807fa7d68f75db9ca8b943b875e06fd5ed59c500e11cafa194396c83c1`
+and `b8fd9abcf04c3f92424f0e0ed07eaf0b8af1b7fd58da84d1f1ed0ad778f2c84a`.
+The human-review exercise is closed. The bounded v27 owner-reference diagnostic
+is the next U18 action. R87–R91/KTD39–KTD43 and U18A then add
+`news_reporting`, Audience Topics, claim metadata, and per-brand source policy
+as a new semantic revision without reopening or re-scoring the v3 review.

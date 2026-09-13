@@ -1,0 +1,601 @@
+{
+  "adjudicator_answers_created": false,
+  "agreement_metric": null,
+  "audit_note": "The owner completed all 45 cases and explicitly directed that this be the only human review. Blank case entries are accepted as the packet proposal; explicit comments and prior case corrections are consolidated in the linked summary. This waives independent reviewers, adjudication, and a later human cohort without creating human-gold or accuracy claims.",
+  "blinded_agreement_claimed": false,
+  "human_gate_passed": false,
+  "human_gate_status": "waived_by_owner",
+  "human_grounded": false,
+  "human_study_requirement": "satisfied_by_sole_owner_review_for_development_pilot_and_remaining_delivery",
+  "inputs": {
+    "current_classification_artifact": "candidate-v26-exhaustive-verdict-review.json",
+    "current_classification_sha256": "b06088b52bef44d9f8ac1bd836c305ad8770ef5f3ba4dc20e29b80b4e109ef2e",
+    "owner_accepted_reference_path": ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json",
+    "owner_accepted_reference_sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "owner_review_source": "docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md",
+    "owner_review_summary": "docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md",
+    "selection_manifest_sha256": "50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91"
+  },
+  "limitations": [
+    "The owner saw saved model judgments before completing the review.",
+    "No independent reviewer or adjudicator answers were created or inferred.",
+    "No inter-reviewer agreement metric is available.",
+    "The owner reference is not blinded human gold and cannot support a production accuracy claim.",
+    "Audience Topics, news_reporting, and claim metadata are next-revision requirements and were not scored in this v3 review."
+  ],
+  "next_authorized_step": "rebuild the bounded v27 pilot budget against this reference hash, run its provider-free preflight, then execute only that capped pilot",
+  "owner_operations": {
+    "H0040D161174": {
+      "after": {
+        "china_nationalism": "anti",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H0DEC6F537E0": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "questions_requests",
+          "events"
+        ],
+        "product_labels": [
+          "ideas_requests"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": null,
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "us_nationalism": null
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H1A3B3731E1C": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "events",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "events",
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H1E48CCEEB2F": {
+      "add_product_labels": [
+        "testimonial"
+      ]
+    },
+    "H2B36BE298C6": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations"
+        ],
+        "product_labels": [
+          "misinformation"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "anti",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "misinformation"
+        ],
+        "sentiment": "negative",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H3569508600E": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H42DCD9324F4": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "releases_updates",
+          "advertising_marketing"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H4E3B98376E5": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H4E55D967F4E": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H5024EDC82C6": {},
+    "H540717FEDF5": {
+      "confirmed": true,
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H638DEDC4101": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions",
+          "business_finance"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "pro",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions",
+          "business_finance"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H688781944AC": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "questions_requests",
+          "opportunities"
+        ],
+        "product_labels": [
+          "ideas_requests"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "questions_requests"
+        ],
+        "product_labels": [
+          "ideas_requests"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H696CC3BCE4C": {},
+    "H69C877BE195": {},
+    "H7046A8A0689": {
+      "confirmed": true,
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H70A9986C432": {
+      "after": {
+        "china_nationalism": null,
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "us_nationalism": null
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H74C810FB007": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "complaint"
+        ],
+        "sentiment": "mixed",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "complaint"
+        ],
+        "sentiment": "mixed",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H7B628A24F88": {},
+    "H7F29D6428BB": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "questions_requests",
+          "events",
+          "opportunities",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "events",
+          "questions_requests",
+          "opinions_reactions",
+          "opportunities"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H87229E54527": {
+      "confirmed": true,
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H8D074DCC4D3": {},
+    "H8FA9071508D": {},
+    "H92A808A114E": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "H951CA2C2BF9": {},
+    "H9920CC08778": {},
+    "H9C7C731F3C3": {},
+    "HAF1D06FBEBA": {
+      "remove_post_types": [
+        "results_evaluations"
+      ]
+    },
+    "HAF97A8DDDDE": {},
+    "HB4FB5810A09": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "HB94D1A5CA63": {},
+    "HC63FABBF5A3": {},
+    "HC9205DA00E5": {},
+    "HCA162EAEBE0": {},
+    "HCC2BC2A1B6B": {
+      "remove_post_types": [
+        "results_evaluations"
+      ]
+    },
+    "HCCC266D762E": {
+      "confirmed": true,
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "HDA7D2AEEC6F": {},
+    "HE10CACEDD3F": {},
+    "HE2CCD66B3DE": {},
+    "HE6730DF39A2": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "questions_requests",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "negative",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "questions_requests",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "ideas_requests",
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "HF3B55FD811B": {},
+    "HF4987074B1F": {},
+    "HF5D74262E64": {
+      "after": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "before": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "complaint"
+        ],
+        "sentiment": "mixed",
+        "us_nationalism": "none"
+      },
+      "source": "2026-09-13-203542-u18-owner-human-review-comments.md"
+    },
+    "HF7C5DFD8079": {},
+    "HFD61C2DE5BD": {}
+  },
+  "owner_responsibility_assumed": true,
+  "population": {
+    "carried_forward_rows": 30,
+    "languages": {
+      "en": 15,
+      "ja": 15,
+      "zh-cn": 15
+    },
+    "owner_override_case_ids": [
+      "H0040D161174",
+      "H0DEC6F537E0",
+      "H1A3B3731E1C",
+      "H1E48CCEEB2F",
+      "H2B36BE298C6",
+      "H3569508600E",
+      "H42DCD9324F4",
+      "H4E3B98376E5",
+      "H4E55D967F4E",
+      "H540717FEDF5",
+      "H638DEDC4101",
+      "H688781944AC",
+      "H7046A8A0689",
+      "H70A9986C432",
+      "H74C810FB007",
+      "H7F29D6428BB",
+      "H87229E54527",
+      "H92A808A114E",
+      "HAF1D06FBEBA",
+      "HB4FB5810A09",
+      "HCC2BC2A1B6B",
+      "HCCC266D762E",
+      "HE6730DF39A2",
+      "HF5D74262E64"
+    ],
+    "owner_override_count": 24,
+    "owner_override_semantics": "Exact current-v3 decisions from the completed owner review; blank entries retain the packet proposal, explicit comments supersede earlier conflicts, and new-taxonomy requests remain outside these six fields.",
+    "rows": 45
+  },
+  "preserved_gates": [
+    "provider and transport spend requires an exact-hash immutable budget and fail-closed runner",
+    "no claim of blinded human validation, inter-reviewer agreement, or ground truth",
+    "the 45 cases remain consumed development evidence",
+    "extraction, staging, rollback, production, and cost gates remain unchanged"
+  ],
+  "previous_owner_intent": {
+    "human_gate_status": "waived_by_owner",
+    "scope": "next v27 pilot prerequisite only",
+    "study_completion_status": "complete_by_owner_acceptance"
+  },
+  "provider_transport_authorized_by_this_artifact": false,
+  "recorded_at": "2026-09-13T07:09:14+09:00",
+  "release_quality_claim_authorized": false,
+  "reviewer_answers_created": false,
+  "schema_version": 1,
+  "source_free": true,
+  "status": "complete_by_owner_acceptance",
+  "study_completion_status": "complete_by_owner_acceptance",
+  "study_id": "u18-human-ambiguity-study-v1"
+}
