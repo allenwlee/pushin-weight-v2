@@ -15,14 +15,15 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below describes the production schema after migration 0028.
-Stage 0 production remained at 0027 during the 2026-09-08 Stage 1
-verification; these expanded grants have not been applied or live-verified.
-Apply them only after the source has migrated through 0028. Refresh preflight
-compares the source's complete table inventory with the tracked policy and
-fails closed with `source_classified_table_missing:<table>` when a required
-relation is absent; the later shadow migration does not bypass that source
-check.
+The allowlist below describes the production schema through migration 0041.
+Relations introduced after the production migration boundary at 0027 remain
+optional on the source so a staging refresh can accept an older production
+snapshot and create those relations during the shadow migration. Refresh
+preflight compares the source's complete table inventory with the tracked
+policy and fails closed with `source_classified_table_missing:<table>` when a
+required relation is absent; the later shadow migration does not bypass that
+source check. Any optional relation present on the source must have the
+declared grant.
 
 Application credentials remain Render-managed. The refresh reader is a
 separate least-privileged PostgreSQL login because it must see only the
@@ -67,13 +68,15 @@ GRANT SELECT ON
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
-  django_site, events, hf_orgs, job_discovery_runs, job_listing_evidence,
+  django_site, event_evidence, events, hf_orgs, job_discovery_runs,
+  job_listing_evidence,
   job_listings, nationalism_keys, nationalism_labels, opportunities, people,
   people_accounts, people_brand_affiliation_evidence,
   people_brand_affiliations, personnel_discovery_runs, post_type_keys,
   post_type_labels, post_synthesis_artifacts, post_synthesis_texts,
   post_translation_artifacts, post_translation_texts, posts, posts_brands,
-  posts_brands_classification_states, posts_brands_discourse,
+  posts_brands_classification_judgments, posts_brands_classification_states,
+  posts_brands_discourse,
   posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
   posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
   region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
@@ -106,12 +109,14 @@ GRANT SELECT ON
   brand_discovery_candidates_id_seq, brand_trend_narratives_id_seq,
   brand_trend_narrative_texts_id_seq,
   django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
-  events_id_seq, harvest_backlog_windows_id_seq, job_discovery_runs_id_seq,
+  event_evidence_id_seq, events_id_seq, harvest_backlog_windows_id_seq,
+  job_discovery_runs_id_seq,
   job_listing_evidence_id_seq, job_listings_id_seq, opportunities_id_seq,
   post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
   post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
   post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
   post_translation_texts_id_seq,
+  posts_brands_classification_judgments_id_seq,
   people_brand_affiliation_evidence_id_seq,
   people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
   products_id_seq, search_queries_id_seq,
@@ -134,7 +139,8 @@ Policy version 3 marks every relation and sequence introduced after the
 production migration boundary at `0027` as optional on the source. This covers
 the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
-`0028`–`0039`. It allows the staging-first release to refresh from the prior
+`0028`–`0041`, including classification judgment history and event evidence. It
+allows the staging-first release to refresh from the prior
 production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count
@@ -277,6 +283,8 @@ UNION ALL SELECT 'brands_companies', count(*) FROM brands_companies
 UNION ALL SELECT 'companies', count(*) FROM companies
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
+UNION ALL SELECT 'posts_brands_classification_judgments', count(*) FROM posts_brands_classification_judgments
+UNION ALL SELECT 'event_evidence', count(*) FROM event_evidence
 UNION ALL SELECT 'products', count(*) FROM products
 ORDER BY relation;
 
@@ -348,9 +356,11 @@ find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
   -name 'staging-refresh-*.dump' -print 2>/dev/null
 ```
 
-Record the exact counts and latest timestamp next to the receipt. All 29 scrub
-counts must be zero; both invariant queries must return no rows; the site must
-be `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
+Record the exact counts and latest timestamp next to the receipt. The census
+must include the copied classification-judgment and event-evidence tables
+introduced through migration 0041. All 29 scrub counts must be zero; both
+invariant queries must return no rows; the site must be
+`pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must
 be empty. Compare product counts and the latest timestamp to the receipt, not
 to an earlier observation of production.
