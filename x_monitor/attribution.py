@@ -1336,7 +1336,7 @@ _PRAGMATICS_COMPLETENESS_REVIEW_REPAIR_PROMPT_VERSION = (
     "stage1-prompt-v27-completeness-review-repair-v1"
 )
 _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION = (
-    "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
+    "stage1-selector-v27-owner-calibrated-evidence-reuse-v2"
 )
 _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT = f"""You review one proposed, complete taxonomy-v3 classification for each supplied post-brand packet. Return JSON only.
 
@@ -2200,11 +2200,13 @@ def _parse_completeness_review_row(
         if reason in expected_reasons
     ]
     decision = "replace" if derived_reasons else "accept"
-    if decision == "replace" and (
-        len(row["evidence"]) < len(derived_reasons)
-        or not _valid_completeness_review_evidence(
-            row["evidence"], packet, required=True
-        )
+    # Evidence supports the corrected judgment, rather than mapping one-to-one
+    # to derived change reasons. A single exact quote may support a changed
+    # type, product label, and sentiment together. The closed reason list still
+    # records every changed field, while every evidence row remains exact and
+    # source-bound.
+    if decision == "replace" and not _valid_completeness_review_evidence(
+        row["evidence"], packet, required=True
     ):
         return None
     evidence = list(row["evidence"]) if decision == "replace" else []

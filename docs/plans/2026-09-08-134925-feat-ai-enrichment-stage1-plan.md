@@ -86,7 +86,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 10. Later on 2026-09-11, the owner superseded exception 9's release sequence: complete the remaining Stage 1 quality gates and Stages 2–4 on this same candidate, refresh staging through the guarded scrubbed-production procedure, activate and debug the integrated feature set on staging, and then promote that exact passing candidate to production. This authorizes bounded paid staging evaluations and feature activation within the explicit caps and stop conditions in U18–U24. It does not authorize a production pause, an ad hoc production provider run, bypassing the single harvester scheduler, publishing the future public MCP/API, or weakening any migration, quality, cost, or exact-SHA gate.
 11. On 2026-09-11 the owner clarified that Anthropic is not an active PushinWeight provider: scheduled translation, classification, relevancy, and signal work use DeepSeek, while MiniMax remains available only to separately configured roles. The v22/v22b direct-Haiku attempts remain historical zero-quality-result evidence and no longer block delivery on a credential. This does not convert the failed DeepSeek semantic score into a pass or weaken the U18 floors. The integrated candidate may deploy to staging with the new paid discovery, extraction, and synthesis lanes disabled so schema, data-refresh, UI, and worker isolation can be debugged while U18 quality remains open; production promotion still requires every named gate.
 12. On 2026-09-12 the owner reviewed the 16 disagreements highlighted by the independent Grok audit and directed a new prompt identity with stricter visible-evidence, target-brand, customer-cost, testimonial-overlap, unavailable-media, and hackathon rules. Because the owner saw the model judgments before commenting, this calibration is consumed development evidence and cannot count as either blinded reviewer or adjudicator under R81–R82. The owner also required cross-post event identity that distinguishes canonical occurrences from their source observations and preserves recurring same-name editions rather than silently merging them.
-13. On 2026-09-13 the owner completed all 45 cases in the U18 ambiguity study, assumed responsibility for the judgments, and directed that this be the only human review for this classifier delivery. Treat the 45 ordered rows as a sole, unblinded owner reference; blank case entries accept the packet proposal and explicit comments plus earlier recorded corrections define the overrides. This supersedes R81–R82 and KTD37 only where they require two independent reviewers, a distinct adjudicator, an inter-reviewer agreement floor, or a later zero-overlap human cohort. Mark the study `complete_by_owner_acceptance` and its human gate `waived_by_owner`; do not describe the reference as blinded human gold, claim inter-reviewer agreement, or turn agreement with it into production accuracy. The exact owner message is retained at `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` (SHA-256 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`), and the consolidated decisions and evidence are at `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` (SHA-256 `6d53cc2af39fef6a5972c7bae6bae52a7a022cb2ecfe50b012562dae0b50fe34`). Provider, request, retry, token, cost, extraction, migration, staging, rollback, and exact-SHA production gates remain unchanged.
+13. On 2026-09-13 the owner completed all 45 cases in the U18 ambiguity study, assumed responsibility for the judgments, and directed that this be the only human review for this classifier delivery. Treat the 45 ordered rows as a sole, unblinded owner reference; blank case entries accept the packet proposal and explicit comments plus earlier recorded corrections define the overrides. This supersedes R81–R82 and KTD37 only where they require two independent reviewers, a distinct adjudicator, an inter-reviewer agreement floor, or a later zero-overlap human cohort. Mark the study `complete_by_owner_acceptance` and its human gate `waived_by_owner`; do not describe the reference as blinded human gold, claim inter-reviewer agreement, or turn agreement with it into production accuracy. The exact owner message is retained at `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md` (SHA-256 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`), and the consolidated decisions and evidence are at `docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md` (SHA-256 `a8ad9e43b92be7aa2cd3aefc0699ac5d45f08bb39d60a77ed36a2ee0acf48d5f`). Provider, request, retry, token, cost, extraction, migration, staging, rollback, and exact-SHA production gates remain unchanged.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -2078,7 +2078,7 @@ delivery. Delivery Exception 13 supersedes the earlier human-review gate while
 retaining its history and preventing human-gold, agreement, or accuracy claims.
 The exact owner message and the consolidated decision record have SHA-256
 `bb1dca6b9f4d2b931ef93e9d79946ca41c2cbc8efacd2618ac12b8c550cd49ab`
-and `6d53cc2af39fef6a5972c7bae6bae52a7a022cb2ecfe50b012562dae0b50fe34`.
+and `a8ad9e43b92be7aa2cd3aefc0699ac5d45f08bb39d60a77ed36a2ee0acf48d5f`.
 The ignored 45-row owner reference is now `owner_accepted_unblinded` with
 `complete_by_owner_acceptance`, `waived_by_owner`, null agreement, and SHA-256
 `d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80`.
@@ -2091,3 +2091,38 @@ The human-review exercise is closed. The bounded v27 owner-reference diagnostic
 is the next U18 action. R87–R91/KTD39–KTD43 and U18A then add
 `news_reporting`, Audience Topics, claim metadata, and per-brand source policy
 as a new semantic revision without reopening or re-scoring the v3 review.
+
+The bounded v27 owner-reference diagnostic then consumed its six authorized
+logical review requests and seven transport attempts. It observed 28,412
+input and 11,243 output tokens at approximately $0.082 under the frozen rates.
+Candidate assembly initially failed because two otherwise valid replacements
+used two exact source quotes to support three changed classification
+dimensions, while the parser incorrectly required one evidence row per
+derived change reason. One exact source-bound quote can support several
+changed fields, so selector
+`stage1-selector-v27-owner-calibrated-evidence-reuse-v2` removes that false
+cardinality rule while retaining the requirement for at least one exact,
+packet-bound quote on every replacement. The provider prompt bytes are
+unchanged.
+
+The immutable zero-transport replay budget and failure report are
+`docs/analysis/2026-09-13-232000-u18-runtime-v27-evidence-reuse-replay-budget.json`
+(SHA-256
+`cb78dda9dad7de581a261d6242d63858c5f7ca35af02f1e4880c180250c7b132`)
+and
+`docs/analysis/2026-09-13-232100-u18-v27-evidence-reuse-failure-replay.md`
+(SHA-256
+`db009ca156b1fa4b91ab1f511598053397e9408d607d9c4cd92f22e55fbdf29b`).
+The replay verified every cohort, reference, usage, and response hash, never
+constructed the provider transport, and parsed 30/30 saved rows. Post-type
+exact-set agreement was 19/30 (63.33%) against the 70% floor, product-label
+exact-set agreement was 23/30 (76.67%) against the 85% floor, and outcome
+accuracy was 29/30 (96.67%) against the 90% floor. EN/JA/ZH-CN post-type exact
+agreement was 30%/80%/70%. The owner review remains closed, but the current-v3
+model diagnostic is blocked. Its disagreements return to U18 prompt work under
+R86 before U18A or live activation; no additional human review of this 45-case
+cohort is required.
+
+`docs/reference/classifier-prompts.md` now records the v2 selector identity and
+the exact evidence rule: every replacement needs exact packet-bound evidence,
+and one quote may support more than one changed classification field.

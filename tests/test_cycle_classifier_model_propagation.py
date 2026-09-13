@@ -221,5 +221,5 @@ def test_cycle_post_fetch_sends_configured_flash_with_thinking_disabled(monkeypa
     assert state.prompt_version == "stage1-prompt-v23"
     assert state.selected_final_judgment is not None
     assert state.selected_final_judgment.selector_version == (
-        "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
+        "stage1-selector-v27-owner-calibrated-evidence-reuse-v2"
     )

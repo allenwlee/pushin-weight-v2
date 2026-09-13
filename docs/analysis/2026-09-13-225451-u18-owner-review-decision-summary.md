@@ -335,17 +335,21 @@ record must state:
 
 Proceed in this order:
 
-1. Write the 45 current-v3 decisions above into the owner reference, preserve
-   manifest order, validate all enum and completeness invariants, and mark the
-   owner review closed.
-2. Rebuild the bounded v27 DeepSeek Pro pilot budget against the new reference
-   hash. Run the already authorized pilot only after its byte/hash guard passes.
-3. Record the pilot result as agreement with the owner reference, not human
-   accuracy.
-4. Amend the plan with the next taxonomy revision: `news_reporting`, Audience
-   Topics, claim metadata, and per-brand source relationship in classifier
-   envelopes.
-5. Implement and test that revision as a separate unit before the remaining
-   staging stages. Do not retroactively score its new fields against this
-   45-case v3 review.
-
+1. **Complete:** write the 45 current-v3 decisions above into the owner
+   reference, preserve manifest order, validate all enum and completeness
+   invariants, and mark the owner review closed.
+2. **Complete:** run the bounded v27 DeepSeek Pro diagnostic against that
+   exact owner reference and preserve its responses, usage, and budget.
+3. **Complete:** replay the saved responses after correcting the evidence
+   cardinality invariant. The provider-free replay parsed 30/30 rows with zero
+   new transport, but missed the preregistered post-type and product-label
+   agreement floors: 63.33% versus 70% and 76.67% versus 85%. Outcome accuracy
+   passed at 96.67%. These are owner-reference agreement measures, not human
+   accuracy. See `2026-09-13-232100-u18-v27-evidence-reuse-failure-replay.md`.
+4. **Next:** apply the current-v3 prompt corrections exposed by the owner
+   reference and failed diagnostic, then evaluate a new immutable candidate.
+   No further human review is required for this 45-case cohort.
+5. After the current-v3 diagnostic gate passes, implement the separately
+   versioned U18A revision: `news_reporting`, Audience Topics, claim metadata,
+   and per-brand source relationship in classifier envelopes. Do not
+   retroactively score its new fields against this 45-case v3 review.

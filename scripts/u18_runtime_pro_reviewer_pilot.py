@@ -35,6 +35,7 @@ from core.classification_contract import (
 from x_monitor.attribution import (
     _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
     _PRAGMATICS_COMPLETENESS_REVIEW_SYSTEM_PROMPT,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _partition_completeness_review_response,
 )
 from x_monitor.provider_telemetry import normalize_usage
@@ -51,6 +52,13 @@ DEFAULT_COHORT = DEFAULT_RUN_DIR / "cohort.json"
 DEFAULT_REFERENCE_SUBSET = DEFAULT_RUN_DIR / "owner-reference.json"
 DEFAULT_CANDIDATE_OUTPUT = DEFAULT_RUN_DIR / "candidate.json"
 DEFAULT_DIAGNOSTIC = DEFAULT_RUN_DIR / "evaluation.json"
+DEFAULT_REPLAY_BUDGET = (
+    ROOT
+    / "docs/analysis/2026-09-13-232000-u18-runtime-v27-evidence-reuse-replay-budget.json"
+)
+DEFAULT_REPLAY_DIR = ROOT / ".context/u18/u18-v27-evidence-reuse-replay-v1"
+DEFAULT_REPLAY_OUTPUT = DEFAULT_REPLAY_DIR / "candidate.json"
+DEFAULT_REPLAY_DIAGNOSTIC = DEFAULT_REPLAY_DIR / "evaluation.json"
 
 PILOT_ID = "u18-owner-accepted-v27-pro-review-pilot-v1"
 PILOT_LANE = "runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot"
@@ -673,6 +681,192 @@ def run_pilot(
     return diagnostic
 
 
+def _replay_source_path(path: str) -> Path:
+    candidate = (ROOT / path).resolve()
+    try:
+        candidate.relative_to(ROOT)
+    except ValueError as exc:
+        raise PilotInputError("replay response path escapes repository root") from exc
+    return candidate
+
+
+def replay_saved_responses(
+    *,
+    replay_budget_path: Path = DEFAULT_REPLAY_BUDGET,
+    cohort_path: Path = DEFAULT_COHORT,
+    reference_path: Path = DEFAULT_REFERENCE_SUBSET,
+    output_path: Path = DEFAULT_REPLAY_OUTPUT,
+    diagnostic_path: Path = DEFAULT_REPLAY_DIAGNOSTIC,
+) -> dict[str, Any]:
+    """Reparse a frozen pilot response set without constructing transport."""
+    replay_budget = _read_json(replay_budget_path)
+    if replay_budget.get("schema_version") != "u18-saved-response-replay/v1":
+        raise PilotInputError("replay budget schema is not recognized")
+    if replay_budget.get("selector_version") != _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION:
+        raise PilotInputError("replay budget selector differs from runtime selector")
+    if replay_budget.get("prompt_sha256") != PROMPT_SHA256:
+        raise PilotInputError("replay budget prompt differs from frozen prompt")
+    frozen_at = replay_budget.get("frozen_at")
+    if not isinstance(frozen_at, str) or not frozen_at:
+        raise PilotInputError("replay budget lacks a frozen timestamp")
+    transport = replay_budget.get("transport")
+    if transport != {
+        "maximum_cost_usd": "0",
+        "maximum_input_tokens": 0,
+        "maximum_output_tokens": 0,
+        "maximum_requests": 0,
+        "maximum_transport_attempts": 0,
+    }:
+        raise PilotInputError("saved-response replay must retain zero transport caps")
+    inputs = replay_budget.get("inputs")
+    if not isinstance(inputs, Mapping):
+        raise PilotInputError("replay budget lacks input provenance")
+    for path, expected_sha, label in (
+        (cohort_path, inputs.get("cohort_sha256"), "cohort"),
+        (reference_path, inputs.get("owner_reference_subset_sha256"), "reference"),
+    ):
+        if not isinstance(expected_sha, str) or _sha256_file(path) != expected_sha:
+            raise PilotInputError(f"replay {label} differs from frozen input")
+    usage_path = _replay_source_path(str(inputs.get("original_usage_path", "")))
+    if (
+        not isinstance(inputs.get("original_usage_sha256"), str)
+        or _sha256_file(usage_path) != inputs["original_usage_sha256"]
+    ):
+        raise PilotInputError("original usage record differs from frozen input")
+
+    cohort = _read_json(cohort_path)
+    rows = cohort.get("rows")
+    if (
+        cohort.get("cohort_id") != PILOT_ID
+        or not isinstance(rows, list)
+        or len(rows) != 30
+    ):
+        raise PilotInputError("replay cohort must contain exactly 30 rows")
+    reference = _read_json(reference_path)
+    if (
+        reference.get("status") != "owner_accepted_unblinded"
+        or reference.get("human_grounded") is not False
+    ):
+        raise PilotInputError("replay reference must remain owner accepted")
+
+    response_specs = replay_budget.get("responses")
+    if not isinstance(response_specs, list):
+        raise PilotInputError("replay budget response list is invalid")
+    by_request: dict[str, Mapping[str, Any]] = {}
+    for spec in response_specs:
+        if (
+            not isinstance(spec, Mapping)
+            or not isinstance(spec.get("request_id"), str)
+            or not isinstance(spec.get("path"), str)
+            or not isinstance(spec.get("sha256"), str)
+            or spec["request_id"] in by_request
+        ):
+            raise PilotInputError("replay budget contains an invalid response spec")
+        by_request[spec["request_id"]] = spec
+
+    batches = [
+        rows[index : index + PILOT_BATCH_SIZE]
+        for index in range(0, len(rows), PILOT_BATCH_SIZE)
+    ]
+    expected_request_ids = {
+        f"review-{batch[0]['example_id']}-{batch[-1]['example_id']}"
+        for batch in batches
+    }
+    if set(by_request) != expected_request_ids:
+        raise PilotInputError("replay responses do not cover the frozen batches")
+
+    reviewed_rows: list[dict[str, Any]] = []
+    for batch in batches:
+        packets = _packets(batch)
+        request_id = f"review-{batch[0]['example_id']}-{batch[-1]['example_id']}"
+        spec = by_request[request_id]
+        response_path = _replay_source_path(spec["path"])
+        if _sha256_file(response_path) != spec["sha256"]:
+            raise PilotInputError(f"saved response differs for {request_id}")
+        parsed, invalid, error = _partition_completeness_review_response(
+            _read_json(response_path), packets
+        )
+        if error is not None or invalid or len(parsed) != len(packets):
+            raise PilotInputError(
+                f"saved response fails closed for {request_id}: "
+                f"{error or 'invalid or missing review rows'}"
+            )
+        for packet in packets:
+            reviewed = parsed[(packet["example_id"], packet["brand_id"])]
+            reviewed_rows.append(
+                {
+                    "example_id": packet["example_id"],
+                    "brand_id": packet["brand_id"],
+                    "classification": reviewed["classification"],
+                    "review": {
+                        key: reviewed[key]
+                        for key in (
+                            "decision",
+                            "change_reasons",
+                            "evidence",
+                            "post_type_verdicts",
+                            "product_label_verdicts",
+                        )
+                    },
+                }
+            )
+
+    replay_sha = _sha256_file(replay_budget_path)
+    output = {
+        "schema_version": 1,
+        "provenance": {
+            "kind": "candidate_output",
+            "gold": False,
+            "human_grounded": False,
+            "owner_reference": True,
+            "cohort_id": cohort["cohort_id"],
+            "contract_version": CONTRACT_VERSION,
+            "taxonomy_version": CANONICAL_TAXONOMY_VERSION,
+            "prompt_version": _PRAGMATICS_COMPLETENESS_REVIEW_PROMPT_VERSION,
+            "selector_version": _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+            "provider": "deepseek",
+            "provider_role": "saved_response_replay",
+            "source_revision": "saved-response-replay",
+            "generated_at": frozen_at,
+            "replay_budget_sha256": replay_sha,
+            "original_usage_sha256": inputs["original_usage_sha256"],
+            "transport_attempts": 0,
+            "production_call_path": "v27_saved_response_replay_only",
+        },
+        "rows": sorted(
+            reviewed_rows, key=lambda row: (row["example_id"], row["brand_id"])
+        ),
+    }
+    _write_json(output_path, output)
+    diagnostic = evaluate_owner_reference(
+        output,
+        reference,
+        budget=replay_budget,
+        budget_sha256=replay_sha,
+    )
+    diagnostic["summary"]["transport_attempts"] = 0
+    diagnostic["provenance"]["replay_selector_version"] = (
+        _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
+    )
+    diagnostic["provenance"]["original_usage_sha256"] = inputs[
+        "original_usage_sha256"
+    ]
+    _write_json(diagnostic_path, diagnostic)
+    print(
+        json.dumps(
+            {
+                "candidate": str(output_path),
+                "evaluation": str(diagnostic_path),
+                "replay_budget_sha256": replay_sha,
+                "transport_attempts": 0,
+                **diagnostic["summary"],
+            },
+            sort_keys=True,
+        )
+    )
+    return diagnostic
+
+
 def _binary_metrics(
     gold_sets: Sequence[set[str]],
     predicted_sets: Sequence[set[str]],
@@ -851,6 +1045,12 @@ def main() -> None:
     run.add_argument("--output", type=Path, default=DEFAULT_CANDIDATE_OUTPUT)
     run.add_argument("--evaluation", type=Path, default=DEFAULT_DIAGNOSTIC)
     run.add_argument("--private-dir", type=Path, default=DEFAULT_RUN_DIR)
+    replay = subparsers.add_parser("replay-saved")
+    replay.add_argument("--budget", type=Path, default=DEFAULT_REPLAY_BUDGET)
+    replay.add_argument("--cohort", type=Path, default=DEFAULT_COHORT)
+    replay.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE_SUBSET)
+    replay.add_argument("--output", type=Path, default=DEFAULT_REPLAY_OUTPUT)
+    replay.add_argument("--evaluation", type=Path, default=DEFAULT_REPLAY_DIAGNOSTIC)
     args = parser.parse_args()
     if args.command == "build":
         build_inputs(
@@ -861,7 +1061,7 @@ def main() -> None:
             cohort_path=args.cohort,
             reference_subset_path=args.reference_subset,
         )
-    else:
+    elif args.command == "run":
         run_pilot(
             budget_path=args.budget.resolve(),
             cohort_path=args.cohort.resolve(),
@@ -869,6 +1069,14 @@ def main() -> None:
             output_path=args.output.resolve(),
             diagnostic_path=args.evaluation.resolve(),
             private_dir=args.private_dir.resolve(),
+        )
+    else:
+        replay_saved_responses(
+            replay_budget_path=args.budget.resolve(),
+            cohort_path=args.cohort.resolve(),
+            reference_path=args.reference.resolve(),
+            output_path=args.output.resolve(),
+            diagnostic_path=args.evaluation.resolve(),
         )
 
 

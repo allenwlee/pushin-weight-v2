@@ -149,7 +149,7 @@ def test_primary_then_candidate_aware_review_selects_canonical_final_and_trace()
     assert trace["review"]["metadata_by_brand"]["deepseek"]["decision"] == "accept"
     assert (
         trace["final"]["selector_version"]
-        == "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
+        == "stage1-selector-v27-owner-calibrated-evidence-reuse-v2"
     )
     assert trace["final"]["model"] == "deepseek-v4-flash"
 
@@ -285,6 +285,55 @@ def test_replace_requires_exact_source_or_context_evidence_and_repairs_only_bad_
     assert (
         metadata["prompt_version"] == "stage1-prompt-v27-completeness-review-repair-v1"
     )
+
+
+def test_one_exact_quote_can_support_multiple_derived_change_reasons():
+    """Regression: evidence supports a corrected judgment, not one field each."""
+    from x_monitor import attribution
+
+    primary_system, review_system, _repair_system = _system_names()
+
+    def handler(kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        if kwargs["system"] == primary_system:
+            return _primary_response(payload)
+        assert kwargs["system"] == review_system
+        packet = payload[0]
+        replacement = _classification(
+            post_types=["job_listings"], product_labels=[], sentiment="neutral"
+        )
+        return {
+            "results": [
+                {
+                    "example_id": packet["example_id"],
+                    "brand_id": packet["brand_id"],
+                    "decision": "replace",
+                    "classification": replacement,
+                    **_verdicts(replacement),
+                    "change_reasons": [
+                        "missing_post_type",
+                        "unsupported_post_type",
+                    ],
+                    "evidence": [
+                        {
+                            "source": "source",
+                            "context_index": None,
+                            "quote": "DeepSeek",
+                        }
+                    ],
+                }
+            ]
+        }
+
+    client = FakeClient(handler)
+    result = attribution.classify_batch_pragmatics_full(_tweets(1), [], client)
+
+    assert result[0]["valid"] is True
+    assert result[0]["by_brand"]["deepseek"]["post_types"] == ["job_listings"]
+    assert [call["system"] for call in client.calls] == [
+        primary_system,
+        review_system,
+    ]
 
 
 def test_identical_reviewer_classification_normalizes_replacement_metadata_without_repair():

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 
 import pytest
 
+from core.classification_contract import CANONICAL_POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
 from scripts.u18_runtime_pro_reviewer_pilot import (
     EXPECTED_CLASSIFICATION_FIELDS,
     PILOT_ID,
@@ -14,6 +16,7 @@ from scripts.u18_runtime_pro_reviewer_pilot import (
     _packets,
     _review_batch,
     evaluate_owner_reference,
+    replay_saved_responses,
 )
 
 VALID_CLASSIFICATION = {
@@ -210,3 +213,127 @@ def test_owner_reference_evaluation_is_explicitly_diagnostic_and_nonhuman():
     assert report["summary"]["rows"] == 30
     assert report["summary"]["post_type_exact"] == 1
     assert report["summary"]["product_label_exact"] == 1
+
+
+def test_saved_response_replay_reuses_one_quote_for_multiple_changes_without_transport(
+    tmp_path, monkeypatch
+):
+    """The recovery path never constructs a client or changes saved responses."""
+    import scripts.u18_runtime_pro_reviewer_pilot as pilot
+
+    source, manifest, candidate, reference = _synthetic_inputs(tmp_path)
+    cohort, reference_subset = _build_rows(
+        source_path=source,
+        manifest_path=manifest,
+        candidate_path=candidate,
+        reference_path=reference,
+    )
+    cohort_path = tmp_path / "cohort.json"
+    reference_subset_path = tmp_path / "reference-subset.json"
+    cohort_path.write_text(json.dumps(cohort), encoding="utf-8")
+    reference_subset_path.write_text(json.dumps(reference_subset), encoding="utf-8")
+    responses_dir = tmp_path / "responses"
+    responses_dir.mkdir()
+    response_specs = []
+    for start in range(0, len(cohort["rows"]), 5):
+        batch = cohort["rows"][start : start + 5]
+        request_id = f"review-{batch[0]['example_id']}-{batch[-1]['example_id']}"
+        results = []
+        for row in batch:
+            classification = copy.deepcopy(row["primary"])
+            decision = "accept"
+            change_reasons = []
+            evidence = []
+            if row["example_id"] == "example-00":
+                classification["post_types"] = ["job_listings"]
+                decision = "replace"
+                change_reasons = [
+                    "missing_post_type",
+                    "unsupported_post_type",
+                ]
+                evidence = [
+                    {"source": "source", "context_index": None, "quote": "post 0"}
+                ]
+            results.append(
+                {
+                    "example_id": row["example_id"],
+                    "brand_id": row["brand_id"],
+                    "decision": decision,
+                    "classification": classification,
+                    "post_type_verdicts": {
+                        key: key in classification["post_types"]
+                        for key in CANONICAL_POST_TYPE_KEYS
+                    },
+                    "product_label_verdicts": {
+                        key: key in classification["product_labels"]
+                        for key in PRODUCT_LABEL_KEYS
+                    },
+                    "change_reasons": change_reasons,
+                    "evidence": evidence,
+                }
+            )
+        response_path = responses_dir / f"{request_id}.json"
+        response_path.write_text(json.dumps({"results": results}), encoding="utf-8")
+        response_specs.append(
+            {
+                "request_id": request_id,
+                "path": str(response_path.relative_to(tmp_path)),
+                "sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+            }
+        )
+    usage_path = tmp_path / "usage.json"
+    usage_path.write_text(json.dumps({"transport_attempts": 7}), encoding="utf-8")
+    budget_path = tmp_path / "replay-budget.json"
+    budget_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "u18-saved-response-replay/v1",
+                "frozen_at": "2026-09-13T23:20:00+09:00",
+                "selector_version": pilot._PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+                "prompt_sha256": pilot.PROMPT_SHA256,
+                "transport": {
+                    "maximum_cost_usd": "0",
+                    "maximum_input_tokens": 0,
+                    "maximum_output_tokens": 0,
+                    "maximum_requests": 0,
+                    "maximum_transport_attempts": 0,
+                },
+                "inputs": {
+                    "cohort_sha256": hashlib.sha256(cohort_path.read_bytes()).hexdigest(),
+                    "owner_reference_subset_sha256": hashlib.sha256(
+                        reference_subset_path.read_bytes()
+                    ).hexdigest(),
+                    "original_usage_path": "usage.json",
+                    "original_usage_sha256": hashlib.sha256(usage_path.read_bytes()).hexdigest(),
+                },
+                "responses": response_specs,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(pilot, "ROOT", tmp_path)
+
+    class NoTransport:
+        def __init__(self, **_kwargs):
+            raise AssertionError("saved-response replay must not construct transport")
+
+    monkeypatch.setattr(pilot, "BudgetedPilotClient", NoTransport)
+    output_path = tmp_path / "candidate.json"
+    evaluation_path = tmp_path / "evaluation.json"
+    report = replay_saved_responses(
+        replay_budget_path=budget_path,
+        cohort_path=cohort_path,
+        reference_path=reference_subset_path,
+        output_path=output_path,
+        diagnostic_path=evaluation_path,
+    )
+
+    output = json.loads(output_path.read_text(encoding="utf-8"))
+    assert report["summary"]["transport_attempts"] == 0
+    assert output["provenance"]["transport_attempts"] == 0
+    assert output["provenance"]["generated_at"] == "2026-09-13T23:20:00+09:00"
+    assert output["rows"][0]["review"]["change_reasons"] == [
+        "missing_post_type",
+        "unsupported_post_type",
+    ]
+    assert len(output["rows"][0]["review"]["evidence"]) == 1

@@ -39,7 +39,7 @@ def _trace(brand_id: str, *, final: dict | None = None) -> dict:
         "taxonomy_version": "stage1-taxonomy-v3",
         "prompt_version": "stage1-prompt-v23",
         "provider_role": "scheduled_classifier",
-        "selector_version": "stage1-selector-v27-owner-calibrated-review-authoritative-v1",
+        "selector_version": "stage1-selector-v27-owner-calibrated-evidence-reuse-v2",
         "validation_state": "validated",
     }
     return {

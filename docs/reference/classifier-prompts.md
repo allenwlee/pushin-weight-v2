@@ -1,6 +1,6 @@
 # Stage 1 classifier prompts — current R83/v27 reference
 
-Last reviewed: 2026-09-12
+Last reviewed: 2026-09-13
 
 This exhibit describes the current R83/KTD36 runtime in
 `x_monitor.attribution.classify_batch_pragmatics_full`. Every publishable
@@ -22,7 +22,7 @@ primary_prompt_version: stage1-prompt-v27-full-v1
 review_prompt_version: stage1-prompt-v27-completeness-review-v1
 primary_repair_prompt_version: stage1-prompt-v27-fallback-repair-v1
 review_repair_prompt_version: stage1-prompt-v27-completeness-review-repair-v1
-selector_version: stage1-selector-v27-owner-calibrated-review-authoritative-v1
+selector_version: stage1-selector-v27-owner-calibrated-evidence-reuse-v2
 provider_role: classifier
 scheduled_provider: DeepSeek via its Anthropic-compatible Messages API
 ```
@@ -190,10 +190,9 @@ reviewer's judgment. It derives `decision` and the ordered `change_reasons`
 from the actual primary-versus-review diff. An unchanged classification becomes
 `accept` with empty reasons and evidence even when the reviewer supplied
 contradictory closed metadata. A changed classification becomes `replace` and
-its evidence array must contain at least as many exact rows as there are derived
-change categories. The wire schema does not map an individual evidence row to a
-reason, so this count is a structural guard rather than proof of a one-to-one
-association. The trace and durable review judgment record
+must include at least one exact, source- or context-bound evidence row. One
+quote may support several changed fields; the wire schema does not map an
+individual evidence row to one reason. The trace and durable review judgment record
 `metadata_normalized: true` when the derived metadata differs from the reviewer
 response. Unknown reason values still invalidate the row.
 
