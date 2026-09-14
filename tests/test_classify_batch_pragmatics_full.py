@@ -10,6 +10,18 @@ from typing import Any
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _use_retired_reviewer_topology(monkeypatch):
+    """Keep historical reviewer behavior covered without testing its old public seam."""
+    from x_monitor import attribution
+
+    monkeypatch.setattr(
+        attribution,
+        "classify_batch_pragmatics_full",
+        attribution._classify_batch_pragmatics_reviewer_legacy,
+    )
+
+
 def _classification(
     *,
     post_types: list[str] | None = None,

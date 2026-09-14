@@ -274,6 +274,17 @@ llm:
   translator_base_url: "https://api.deepseek.com/anthropic"
   classifier_model: "deepseek-v4-flash"
   classifier_base_url: "https://api.deepseek.com/anthropic"
+  classifier_provider: "anthropic"
+  classifier_openrouter_provider: null
+  classifier_openrouter_response_provider: null
+  classifier_openrouter_response_model: null
+  classifier_openrouter_zdr: false
+  classifier_openrouter_endpoint_tag: null
+  classifier_openrouter_reasoning_enabled: null
+  classifier_openrouter_quantizations: null
+  classifier_openrouter_data_collection: "deny"
+  classifier_openrouter_max_input_price: null
+  classifier_openrouter_max_output_price: null
   relevancy_model: "deepseek-v4-flash"
   signal_model: "deepseek-v4-flash"
   literal_translation_v2_enabled: null

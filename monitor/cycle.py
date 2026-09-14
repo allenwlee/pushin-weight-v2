@@ -33,6 +33,7 @@ import logging
 import threading
 import time
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -59,6 +60,7 @@ from core.discovery import (
 from core.models import (
     Account,
     Brand,
+    BrandAccount,
     BrandKeyword,
     BrandSearchTerm,
     CallState,
@@ -108,6 +110,10 @@ from x_monitor.apify import (
 )
 from x_monitor.attribution import (
     LLMCallBudgetExhausted,
+    _MAX_RETRIES,
+    _TWO_ROLE_BRAND_REVISION,
+    _TWO_ROLE_CONTENT_REVISION,
+    _TWO_ROLE_MERGE_REVISION,
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
     _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
@@ -179,6 +185,7 @@ def _trace_metadata(
         "input_context_fingerprint",
         "selector_version",
         "validation_state",
+        "provider_request_identity",
     ):
         if key in trace and key not in metadata:
             metadata[key] = trace[key]
@@ -220,7 +227,12 @@ def _trace_metadata(
                 "validation_state", metadata.get("validation_state", "validated")
             )
         )[:32],
-        "changes_json": {},
+        "changes_json": (
+            {"provider_request_identity": str(stage_payload["provider_request_identity"])[:128]}
+            if isinstance(stage_payload.get("provider_request_identity"), str)
+            and stage_payload["provider_request_identity"]
+            else {}
+        ),
     }
 
 
@@ -365,6 +377,16 @@ def _persist_classification_trace(
 
     if not isinstance(trace, dict):
         raise ValueError("classification_trace_invalid")
+    if {"content", "brand_interpretation", "final"}.issubset(trace):
+        return _persist_two_role_classification_trace(
+            post_id=post_id,
+            brand_ids=brand_ids,
+            trace=trace,
+            final_by_brand=final_by_brand,
+            model=model,
+            run_id=run_id,
+            fingerprint=fingerprint,
+        )
     stages = {
         stage: _trace_stage_payload(trace, stage)
         for stage in ("primary", "review", "final")
@@ -453,6 +475,127 @@ def _persist_classification_trace(
     return final_ids
 
 
+def _persist_two_role_classification_trace(
+    *,
+    post_id: str,
+    brand_ids: set[str],
+    trace: dict[str, Any],
+    final_by_brand: dict[str, dict[str, Any]],
+    model: str,
+    run_id: str,
+    fingerprint: str,
+) -> dict[str, Any]:
+    """Persist a matching content + brand-interpretation pair and final atomically."""
+    stages = {stage: _trace_stage_payload(trace, stage) for stage in (
+        "content", "brand_interpretation", "final"
+    )}
+    expected_roles = {"content": "content", "brand_interpretation": "brand_interpretation"}
+    expected_revisions = {
+        "content": _TWO_ROLE_CONTENT_REVISION,
+        "brand_interpretation": _TWO_ROLE_BRAND_REVISION,
+        "final": _TWO_ROLE_MERGE_REVISION,
+    }
+    metadata = {
+        stage: _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)
+        for stage, payload in stages.items()
+    }
+    selector_values = {item["selector_version"] for item in metadata.values()}
+    if not selector_values or "" in selector_values or len(selector_values) != 1:
+        raise ValueError("classification_trace_selector_missing_or_conflicting")
+    for stage, payload in stages.items():
+        if metadata[stage]["input_context_fingerprint"] != fingerprint:
+            raise ValueError("classification_trace_input_fingerprint_mismatch")
+        expected_role = expected_roles.get(stage, "classifier")
+        if payload.get("provider_role") != expected_role or metadata[stage]["provider_role"] != expected_role:
+            raise ValueError("classification_trace_role_mismatch")
+        if not isinstance(payload.get("role_revision"), str) or not payload["role_revision"]:
+            raise ValueError("classification_trace_role_revision_missing")
+        if (
+            payload["role_revision"] != expected_revisions[stage]
+            or metadata[stage]["prompt_version"] != expected_revisions[stage]
+            or payload["role_revision"] != metadata[stage]["prompt_version"]
+            or metadata[stage]["contract_version"] != CONTRACT_VERSION
+            or metadata[stage]["taxonomy_version"] != TAXONOMY_VERSION
+            or metadata[stage]["model"] != model
+            or metadata[stage]["selector_version"] != _TWO_ROLE_MERGE_REVISION
+            or metadata[stage]["validation_state"] != "validated"
+        ):
+            raise ValueError("classification_trace_role_revision_mismatch")
+        rows = _trace_stage_rows(stage, payload)
+        if set(rows) != brand_ids:
+            raise ValueError(f"classification_trace_{stage}_brands_mismatch")
+    content_rows = _trace_stage_rows("content", stages["content"])
+    brand_rows = _trace_stage_rows("brand_interpretation", stages["brand_interpretation"])
+    final_rows = _trace_stage_rows("final", stages["final"])
+    for brand_id in brand_ids:
+        content = content_rows[brand_id]
+        brand = brand_rows[brand_id]
+        if set(content) != {"outcome", "post_types"}:
+            raise ValueError("classification_trace_content_invalid")
+        if set(brand) != {"product_labels", "sentiment", "china_nationalism", "us_nationalism"}:
+            raise ValueError("classification_trace_brand_interpretation_invalid")
+        merged = {**content, **brand}
+        parsed = parse_stage1_classifications([{"brand_id": brand_id, **merged}], [brand_id])
+        if parsed is None or parsed[brand_id] != final_rows[brand_id]:
+            raise ValueError("classification_trace_final_mismatch")
+    parsed_final = parse_stage1_classifications(
+        [{"brand_id": brand_id, **row} for brand_id, row in final_rows.items()], brand_ids
+    )
+    if parsed_final is None or parsed_final != final_by_brand:
+        raise ValueError("classification_trace_final_mismatch")
+
+    final_ids: dict[str, Any] = {}
+    selector_version = metadata["final"]["selector_version"]
+    for brand_id in sorted(brand_ids):
+        revision_id = _classification_revision_id(
+            post_id=post_id, brand_id=brand_id, run_id=run_id,
+            input_fingerprint=fingerprint, selector_version=selector_version,
+        )
+        rows = {}
+        for stage, judgment in (("content", content_rows[brand_id]), ("brand_interpretation", brand_rows[brand_id])):
+            row, created = PostBrandClassificationJudgment.objects.get_or_create(
+                post_id=post_id, brand_id=brand_id, revision_id=revision_id, stage=stage,
+                defaults={"canonical_judgment": judgment, **metadata[stage], "parent_judgment": None},
+            )
+            expected_values = {
+                "post_id": post_id, "brand_id": brand_id, "revision_id": revision_id,
+                "stage": stage, "canonical_judgment": judgment, **metadata[stage],
+                "parent_judgment_id": None, "content_judgment_id": None,
+                "brand_interpretation_judgment_id": None,
+            }
+            if not created and any(getattr(row, field) != value for field, value in expected_values.items()):
+                raise ValueError("classification_trace_revision_conflict")
+            rows[stage] = row
+        final, created = PostBrandClassificationJudgment.objects.get_or_create(
+            post_id=post_id, brand_id=brand_id, revision_id=revision_id, stage="final",
+            defaults={
+                "canonical_judgment": final_rows[brand_id], **metadata["final"],
+                "parent_judgment": None,
+                "content_judgment": rows["content"],
+                "brand_interpretation_judgment": rows["brand_interpretation"],
+            },
+        )
+        expected_final = {
+            "post_id": post_id, "brand_id": brand_id, "revision_id": revision_id,
+            "stage": "final", "canonical_judgment": final_rows[brand_id], **metadata["final"],
+            "parent_judgment_id": None, "content_judgment_id": rows["content"].pk,
+            "brand_interpretation_judgment_id": rows["brand_interpretation"].pk,
+        }
+        if not created and any(getattr(final, field) != value for field, value in expected_final.items()):
+            raise ValueError("classification_trace_revision_conflict")
+        # Foreign-key constraints cannot express "same post/brand/revision".
+        # Reject any malformed pre-existing linkage before a state can select it.
+        for sibling, expected_stage in ((final.content_judgment, "content"), (final.brand_interpretation_judgment, "brand_interpretation")):
+            if (
+                sibling is None or sibling.stage != expected_stage
+                or sibling.post_id != post_id or sibling.brand_id != brand_id
+                or sibling.revision_id != revision_id
+            ):
+                raise ValueError("classification_trace_cross_identity_fk")
+        final_ids[brand_id] = final.pk
+    return final_ids
+
+
 class _BoundedClassifierClient:
     """Apply a shared request cap and start-rate limit at transport time."""
 
@@ -473,6 +616,9 @@ class _BoundedClassifierClient:
         self._sleep = sleep
         self._lock = threading.Lock()
         self._calls = 0
+        self._reserved_calls = 0
+        self._reservations: dict[str, int] = {}
+        self._reservation_sequence = 0
         self._last_started: float | None = None
 
     @property
@@ -480,12 +626,62 @@ class _BoundedClassifierClient:
         with self._lock:
             return self._calls
 
-    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+    @property
+    def request_identity(self) -> str | None:
+        """Preserve the delegate's redacted provider-route identity."""
+        value = getattr(self._delegate, "request_identity", None)
+        return value if isinstance(value, str) and value else None
+
+    @property
+    def remaining_calls(self) -> int | None:
+        """Capacity visible before a two-role batch reserves both siblings."""
+        if self._maximum_calls is None:
+            return None
         with self._lock:
-            if (
-                self._maximum_calls is not None
-                and self._calls >= self._maximum_calls
-            ):
+            return max(0, self._maximum_calls - self._calls - self._reserved_calls)
+
+    def reserve_pair(self, *, attempts_per_role: int) -> tuple[str | None, str | None] | None:
+        """Reserve both role retry envelopes before either role can start.
+
+        A transport retry repeats the same request up to ``attempts_per_role``
+        times.  Reserving the complete two-role envelope prevents a fast
+        sibling from consuming the other sibling's retry allowance.
+        """
+        if attempts_per_role <= 0:
+            raise ValueError("attempts_per_role must be positive")
+        if self._maximum_calls is None:
+            return (None, None)
+        with self._lock:
+            required = attempts_per_role * 2
+            if self._calls + self._reserved_calls + required > self._maximum_calls:
+                return None
+            self._reservation_sequence += 1
+            content = f"pair-{self._reservation_sequence}:content"
+            brand = f"pair-{self._reservation_sequence}:brand"
+            self._reservations[content] = attempts_per_role
+            self._reservations[brand] = attempts_per_role
+            self._reserved_calls += required
+            return content, brand
+
+    def release_reservations(self, *tokens: str | None) -> None:
+        """Return unused reserved attempts after both sibling tasks settle."""
+        with self._lock:
+            for token in tokens:
+                if token is None:
+                    continue
+                remaining = self._reservations.pop(token, 0)
+                self._reserved_calls -= remaining
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        reservation = kwargs.pop("_classifier_reservation", None)
+        with self._lock:
+            if reservation is not None:
+                remaining = self._reservations.get(str(reservation), 0)
+                if remaining <= 0:
+                    raise LLMCallBudgetExhausted("classifier reservation exhausted")
+                self._reservations[str(reservation)] = remaining - 1
+                self._reserved_calls -= 1
+            elif self._maximum_calls is not None and self._calls + self._reserved_calls >= self._maximum_calls:
                 raise LLMCallBudgetExhausted("classifier transport cap exhausted")
             if self._last_started is not None and self._pause_seconds:
                 wait_seconds = (
@@ -879,12 +1075,6 @@ def _publish_stage1_classification(
         for classification in by_brand.values()
     ):
         return None
-    fingerprint = hashlib.sha256(
-        json.dumps(
-            {"text": tweet.get("text") or "", "context": tweet.get("context") or []},
-            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
     with transaction.atomic():
         claim = (
             PostEnrichmentState.objects.select_for_update()
@@ -901,6 +1091,31 @@ def _publish_stage1_classification(
         )
         if not expected or set(by_brand) != expected:
             return None
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or post_id),
+                    "text": tweet.get("text") or "",
+                    "context": tweet.get("context") or [],
+                    "brand_ids": sorted(str(brand_id) for brand_id in expected),
+                    "source_language": str(tweet.get("source_language") or ""),
+                    "reviewed_affiliations": [
+                        {"brand_id": brand_id, "role": role, "reviewed": True}
+                        for brand_id, role in sorted({
+                            (str(item["brand_id"]), str(item["role"]))
+                            for item in (tweet.get("affiliations") or [])
+                            if isinstance(item, dict)
+                            and item.get("reviewed") is True
+                            and isinstance(item.get("brand_id"), str)
+                            and item["brand_id"]
+                            and isinstance(item.get("role"), str)
+                            and item["role"]
+                        })
+                    ],
+                },
+                ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         canonical = parse_stage1_classifications(
             [
                 {"brand_id": brand_id, **classification}
@@ -2785,6 +3000,16 @@ class CycleRunner:
                 tweet_id__in=local_parent_ids
             ).only("tweet_id", "text")
         }
+        author_ids = {str(state.post.author_id) for state in claimed_states if state.post.author_id}
+        affiliations_by_author: dict[str, list[dict[str, str | bool]]] = defaultdict(list)
+        for account_id, brand_id, role_id in BrandAccount.objects.filter(
+            account_id__in=author_ids
+        ).values_list("account_id", "brand_id", "role_id"):
+            affiliations_by_author[str(account_id)].append(
+                {"brand_id": str(brand_id), "role": str(role_id), "reviewed": True}
+            )
+        for affiliations in affiliations_by_author.values():
+            affiliations.sort(key=lambda value: (str(value["brand_id"]), str(value["role"])))
         for state in claimed_states:
             post = state.post
             tid = str(post.pk)
@@ -2810,6 +3035,11 @@ class CycleRunner:
                     "brand_ids": list(brand_ids),
                     "context": context,
                     "source_language": post.lang_detected or post.lang or "",
+                    "affiliations": [
+                        affiliation
+                        for affiliation in affiliations_by_author.get(str(post.author_id), [])
+                        if affiliation["brand_id"] in brand_ids
+                    ],
                 }
                 if state.translation_status == PostEnrichmentState.Status.PENDING:
                     translation_tweets.append(tweet)
@@ -2824,7 +3054,7 @@ class CycleRunner:
         # Build only the clients required by pending stages. The translator and
         # classifier use distinct role-specific routes in production.
         from x_monitor.reattribute import (
-            build_anthropic_client_from_env,
+            build_classifier_client_from_env,
             build_translator_client_from_env,
         )
 
@@ -2834,7 +3064,7 @@ class CycleRunner:
             else None
         )
         classifier_client = (
-            build_anthropic_client_from_env(self.cfg)
+            build_classifier_client_from_env(self.cfg)
             if classification_tweets
             else None
         )

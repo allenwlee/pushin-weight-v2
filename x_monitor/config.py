@@ -464,6 +464,17 @@ class LlmConfig(BaseModel):
         default=DEEPSEEK_ANTHROPIC_BASE_URL,
         description="Explicit classifier/relevancy base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
     )
+    classifier_provider: Literal["anthropic", "openrouter"] = "anthropic"
+    classifier_openrouter_provider: str | None = None
+    classifier_openrouter_response_provider: str | None = None
+    classifier_openrouter_response_model: str | None = None
+    classifier_openrouter_zdr: bool = False
+    classifier_openrouter_endpoint_tag: str | None = None
+    classifier_openrouter_reasoning_enabled: bool | None = None
+    classifier_openrouter_quantizations: list[str] | None = None
+    classifier_openrouter_data_collection: Literal["allow", "deny"] = "deny"
+    classifier_openrouter_max_input_price: Decimal | None = None
+    classifier_openrouter_max_output_price: Decimal | None = None
     relevancy_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the relevancy gate. Default matches x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.",

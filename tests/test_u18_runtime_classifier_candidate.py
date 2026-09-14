@@ -287,7 +287,7 @@ def test_runtime_trace_provenance_pins_current_prompts_and_selector():
     }
 
 
-def test_default_v27_budget_pins_current_prompts_and_blocks_transport():
+def test_default_v27_budget_preserves_its_frozen_selector_and_blocks_transport():
     budget = json.loads(DEFAULT_BUDGET.read_text(encoding="utf-8"))
     lane = budget["lanes"][budget["lane"]]
     provenance = _runtime_trace_provenance()
@@ -310,7 +310,13 @@ def test_default_v27_budget_pins_current_prompts_and_blocks_transport():
         provenance["review_prompt_sha256"],
         provenance["review_repair_prompt_sha256"],
     } == set(lane["allowed_system_sha256"])
+    # This is an immutable historical v27 receipt, not an active classifier
+    # configuration.  Its selector deliberately differs from the inactive
+    # legacy selector currently retained for replay compatibility.
     assert budget["prompt"]["selector_version"] == (
+        "stage1-selector-v27-owner-calibrated-review-authoritative-v1"
+    )
+    assert budget["prompt"]["selector_version"] != (
         _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION
     )
     assert budget["lane"] == "runtime_v27_owner_calibrated_blocked"

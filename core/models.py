@@ -2063,6 +2063,8 @@ class PostBrandClassificationJudgment(models.Model):
     class Stage(models.TextChoices):
         PRIMARY = "primary", "Primary"
         REVIEW = "review", "Review"
+        CONTENT = "content", "Content"
+        BRAND_INTERPRETATION = "brand_interpretation", "Brand interpretation"
         FINAL = "final", "Final"
 
     post = models.ForeignKey(
@@ -2080,7 +2082,7 @@ class PostBrandClassificationJudgment(models.Model):
         to_field="nickname",
     )
     revision_id = models.CharField(max_length=64)
-    stage = models.CharField(max_length=16, choices=Stage.choices)
+    stage = models.CharField(max_length=32, choices=Stage.choices)
     canonical_judgment = models.JSONField()
     contract_version = models.CharField(max_length=64)
     taxonomy_version = models.CharField(max_length=64)
@@ -2098,6 +2100,20 @@ class PostBrandClassificationJudgment(models.Model):
         blank=True,
         null=True,
     )
+    content_judgment = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="content_finals",
+        blank=True,
+        null=True,
+    )
+    brand_interpretation_judgment = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="brand_interpretation_finals",
+        blank=True,
+        null=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2110,9 +2126,32 @@ class PostBrandClassificationJudgment(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    models.Q(stage="primary", parent_judgment__isnull=True)
-                    | models.Q(stage="review", parent_judgment__isnull=False)
-                    | models.Q(stage="final", parent_judgment__isnull=False)
+                    models.Q(
+                        stage="primary", parent_judgment__isnull=True,
+                        content_judgment__isnull=True,
+                        brand_interpretation_judgment__isnull=True,
+                    )
+                    | models.Q(
+                        stage="review", parent_judgment__isnull=False,
+                        content_judgment__isnull=True,
+                        brand_interpretation_judgment__isnull=True,
+                    )
+                    | models.Q(
+                        stage__in=["content", "brand_interpretation"],
+                        parent_judgment__isnull=True,
+                        content_judgment__isnull=True,
+                        brand_interpretation_judgment__isnull=True,
+                    )
+                    | models.Q(
+                        stage="final", parent_judgment__isnull=False,
+                        content_judgment__isnull=True,
+                        brand_interpretation_judgment__isnull=True,
+                    )
+                    | models.Q(
+                        stage="final", parent_judgment__isnull=True,
+                        content_judgment__isnull=False,
+                        brand_interpretation_judgment__isnull=False,
+                    )
                 ),
                 name="ck_pb_cls_judgment_parent",
             ),

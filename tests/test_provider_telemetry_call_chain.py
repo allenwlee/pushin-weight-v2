@@ -22,6 +22,8 @@ USAGE_KEYS = {
     "cache_creation_input_tokens",
     "reasoning_tokens",
     "total_tokens",
+    "cost_usd",
+    "provider_request_id",
 }
 EVENT_KEYS = {
     "event_id",
@@ -100,6 +102,7 @@ def test_usage_normalizer_rejects_non_count_values_and_event_context_is_safe(cap
     assert normalize_usage({"input_tokens": True, "output_tokens": -1, "total_tokens": 1.5}) == {
         "input_tokens": None, "output_tokens": None, "cache_read_input_tokens": None,
         "cache_creation_input_tokens": None, "reasoning_tokens": None, "total_tokens": None,
+        "cost_usd": None, "provider_request_id": None,
     }
     caplog.set_level("INFO")
     emit_attempt(
@@ -302,18 +305,27 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         def getresponse(self):
             prompt = self.body["messages"][0]["content"]
             ids = [post.tweet_id for post in posts if post.tweet_id in prompt]
-            if "unsanctioned_flags" in self.body.get("system", ""):
+            system = self.body.get("system", "")
+            if "Content owns only" in system:
+                batch = json.loads(prompt)
                 payload = {
                     "results": [
-                            {"tweet_id": ident, "classifications": [{
-                                "brand_id": "telemetry-brand", "outcome": "classified",
-                                "post_types": ["hands_on_usage"], "product_labels": [],
-                                "sentiment": "neutral", "china_nationalism": "none",
-                                "us_nationalism": "none",
-                            }], "unsanctioned_flags": []}
-                        for ident in ids
+                        {"tweet_id": row["tweet_id"], "input_context_fingerprint": row["input_context_fingerprint"], "role_revision": row["role_revision"], "classifications": [{
+                            "brand_id": "telemetry-brand", "outcome": "classified",
+                            "post_types": ["hands_on_usage"],
+                        }], "unsanctioned_flags": []}
+                        for row in batch
                     ]
                 }
+                usage = {"input_tokens": 7, "output_tokens": 5, "total_tokens": 12}
+            elif "Brand interpretation owns only" in system:
+                batch = json.loads(prompt)
+                payload = {"results": [
+                    {"tweet_id": row["tweet_id"], "input_context_fingerprint": row["input_context_fingerprint"], "role_revision": row["role_revision"], "classifications": [{
+                        "brand_id": "telemetry-brand", "product_labels": [], "sentiment": "neutral",
+                        "china_nationalism": "none", "us_nationalism": "none",
+                    }]} for row in batch
+                ]}
                 usage = {"input_tokens": 7, "output_tokens": 5, "total_tokens": 12}
             else:
                 payload = _translation_response([{"tweet_id": ident, "text": ""} for ident in ids])
@@ -332,27 +344,26 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
 
     states = list(PostEnrichmentState.objects.order_by("post_id"))
     assert counters["n_enrichment_claimed"] == 21
-    # Two translation calls plus the classifier's two base, three secondary,
-    # and three review calls for a 21-post production-shaped batch.
-    assert len(requests) == 10
+    # Two translation calls plus exactly two role calls per 20/1 classifier batch.
+    assert len(requests) == 6
     assert {request["host"] for request in requests} == {"api.deepseek.com"}
     assert all(request["headers"]["x-api-key"] == "test-key" for request in requests)
     assert all(state.translation_status == "succeeded" for state in states)
     assert all(state.classification_status == "succeeded" for state in states)
     events = _events(caplog)
-    assert len(events) == 10
+    assert len(events) == 6
     assert {event["run_id"] for event in events} == {"telemetry-cycle"}
-    assert {event["stage"] for event in events} == {"post_fetch"}
-    assert {event["batch_size"] for event in events} == {1, 10, 20}
+    assert {event["stage"] for event in events} == {"post_fetch", "classification.content", "classification.brand_interpretation"}
+    assert {event["batch_size"] for event in events} == {1, 20}
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
     assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
     classifier_requests = [
         request["body"]
         for request in requests
-        if "unsanctioned_flags" in request["body"].get("system", "")
+        if "Content owns only" in request["body"].get("system", "") or "Brand interpretation owns only" in request["body"].get("system", "")
     ]
-    assert len(classifier_requests) == 8
+    assert len(classifier_requests) == 4
     assert all(
         len(request["messages"]) == 1
         and request["messages"][0]["role"] == "user"

@@ -458,6 +458,45 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
     return _build_client_for_base_url(base_url, caller_label="classifier")
 
 
+def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
+    """Build only the classifier's configured transport.
+
+    The generic Anthropic-compatible factory remains for legacy, relevancy, and
+    extraction callers. OpenRouter is deliberately opt-in at this classifier
+    seam and never falls back to another provider or credential.
+    """
+    if getattr(getattr(cfg, "llm", None), "classifier_provider", "anthropic") == "openrouter":
+        from x_monitor.openrouter import OpenRouterChatCompletionsClient
+
+        provider = getattr(cfg.llm, "classifier_openrouter_provider", None)
+        if not provider:
+            logger.warning("OpenRouter classifier has no pinned provider; skipping")
+            return None
+        # OPENROUTER_API_KEY is intentionally the only credential considered
+        # here.  Missing key, route mismatch, or policy rejection stays
+        # unavailable; it never falls through to Anthropic/DeepSeek.
+        return OpenRouterChatCompletionsClient.from_config(
+            model=cfg.llm.classifier_model,
+            provider=provider,
+            data_collection=cfg.llm.classifier_openrouter_data_collection,
+            max_input_price=(
+                float(cfg.llm.classifier_openrouter_max_input_price)
+                if cfg.llm.classifier_openrouter_max_input_price is not None else None
+            ),
+            max_output_price=(
+                float(cfg.llm.classifier_openrouter_max_output_price)
+                if cfg.llm.classifier_openrouter_max_output_price is not None else None
+            ),
+            response_provider=getattr(cfg.llm, "classifier_openrouter_response_provider", None),
+            response_model=getattr(cfg.llm, "classifier_openrouter_response_model", None),
+            zdr=bool(getattr(cfg.llm, "classifier_openrouter_zdr", False)),
+            endpoint_tag=getattr(cfg.llm, "classifier_openrouter_endpoint_tag", None),
+            reasoning_enabled=getattr(cfg.llm, "classifier_openrouter_reasoning_enabled", None),
+            quantizations=getattr(cfg.llm, "classifier_openrouter_quantizations", None),
+        )
+    return build_anthropic_client_from_env(cfg)
+
+
 def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClaudeClient | None:
     """Return an `AnthropicClaudeClient` for the translation stage.
 

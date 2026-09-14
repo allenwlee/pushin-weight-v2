@@ -38,6 +38,8 @@ def provider_host_class(client_or_url: Any) -> str:
         "api.deepseek.com": "deepseek",
         "api.minimax.io": "minimax",
         "api.anthropic.com": "anthropic",
+        "openrouter.ai": "openrouter",
+        "api.openrouter.ai": "openrouter",
     }.get(hostname, "unknown")
 
 
@@ -59,10 +61,28 @@ def _read(value: Any, *names: str) -> int | None:
     return None
 
 
-def normalize_usage(value: Any) -> dict[str, int | None]:
+def _read_cost(value: Any) -> float | None:
+    item = value.get("cost_usd") if isinstance(value, Mapping) else getattr(value, "cost_usd", None)
+    if isinstance(item, bool) or item is None:
+        return None
+    try:
+        cost = float(item)
+    except (TypeError, ValueError):
+        return None
+    return cost if cost >= 0 else None
+
+
+def _read_request_id(value: Any) -> str | None:
+    item = value.get("provider_request_id") if isinstance(value, Mapping) else getattr(value, "provider_request_id", None)
+    if not isinstance(item, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", item):
+        return None
+    return item
+
+
+def normalize_usage(value: Any) -> dict[str, int | float | str | None]:
     """Normalize reported usage; never infer totals from overlapping fields."""
     if value is None:
-        return {key: None for key in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "reasoning_tokens", "total_tokens")}
+        return {key: None for key in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "reasoning_tokens", "total_tokens", "cost_usd", "provider_request_id")}
     return {
         "input_tokens": _read(value, "input_tokens", "input"),
         "output_tokens": _read(value, "output_tokens", "output"),
@@ -70,6 +90,8 @@ def normalize_usage(value: Any) -> dict[str, int | None]:
         "cache_creation_input_tokens": _read(value, "cache_creation_input_tokens", "cache_creation_tokens", "cache_creation"),
         "reasoning_tokens": _read(value, "reasoning_tokens", "reasoning"),
         "total_tokens": _read(value, "total_tokens", "total"),
+        "cost_usd": _read_cost(value),
+        "provider_request_id": _read_request_id(value),
     }
 
 
