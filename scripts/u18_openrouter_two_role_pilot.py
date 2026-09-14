@@ -2,7 +2,7 @@
 
 This module is intentionally an evaluator, rather than a production caller.  It
 builds a public-X-only packet from the owner study, runs the two disjoint role
-requests for each 20/20/5 batch, and writes secret-free measurements.  Raw
+requests for each frozen batch schedule, and writes secret-free measurements.  Raw
 requests and responses, when explicitly requested, live only below
 ``.context/u18/openrouter-two-role-pilot-v1``.
 
@@ -53,6 +53,7 @@ DEFAULT_MANIFEST = ROOT / ".context/u18/human-ambiguity-study-v1/selection-manif
 DEFAULT_REFERENCE = ROOT / ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json"
 DEFAULT_PRIVATE_DIR = ROOT / ".context/u18/openrouter-two-role-pilot-v1"
 DEFAULT_R98_PRIVATE_DIR = ROOT / ".context/u18/openrouter-two-role-pilot-r98-control-fallback-v1"
+DEFAULT_R99_PRIVATE_DIR = ROOT / ".context/u18/openrouter-two-role-pilot-r99-deepseek-batch-size-v1"
 DEFAULT_BUDGET: Path | None = None
 
 PILOT_ID = "u18-openrouter-two-role-pilot-v1"
@@ -207,12 +208,34 @@ def build_public_packets(manifest: Mapping[str, Any]) -> tuple[list[dict[str, An
     return packets, local
 
 
-def batches(packets: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+def _batch_sizes_from_budget(document: Mapping[str, Any]) -> tuple[int, ...]:
+    schedule = document.get("request_schedule")
+    raw = document.get("batch_sizes")
+    if raw is None and isinstance(schedule, Mapping):
+        raw = schedule.get("ordered_batch_sizes") or schedule.get("batch_sizes")
+    if raw is None:
+        return BATCH_SIZES
+    if not isinstance(raw, list) or not raw or any(not isinstance(value, int) or value <= 0 for value in raw):
+        raise PilotInputError("budget batch sizes must be positive integers")
+    sizes = tuple(raw)
+    if sum(sizes) != 45:
+        raise PilotInputError("budget batch sizes must cover exactly 45 packets")
+    return sizes
+
+
+def batches(packets: Sequence[dict[str, Any]], batch_sizes: Sequence[int] = BATCH_SIZES) -> list[list[dict[str, Any]]]:
     if len(packets) != 45:
         raise PilotInputError("pilot requires exactly 45 packets")
-    result = [list(packets[index:index + BATCH_SIZE]) for index in range(0, len(packets), BATCH_SIZE)]
-    if tuple(map(len, result)) != BATCH_SIZES:
-        raise PilotInputError("pilot batches must be 20/20/5")
+    sizes = tuple(batch_sizes)
+    if sum(sizes) != 45 or any(size <= 0 for size in sizes):
+        raise PilotInputError("pilot batch sizes must be positive and cover 45 packets")
+    result = []
+    offset = 0
+    for size in sizes:
+        result.append(list(packets[offset:offset + size]))
+        offset += size
+    if tuple(map(len, result)) != sizes:
+        raise PilotInputError(f"pilot batches must match frozen sizes {sizes}")
     return result
 
 
@@ -233,6 +256,7 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
     document = _read_json(path)
     raw_caps = document.get("caps") or document.get("global_caps")
     raw_candidates = document.get("candidates")
+    batch_sizes = _batch_sizes_from_budget(document)
     tokens = document.get("token_budget", {})
     if raw_caps is None and isinstance(document.get("request_schedule"), Mapping):
         tokens = document.get("token_budget", {})
@@ -244,10 +268,11 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
         total_raw = spend.get("total_trial_hard_cap_usd", "0")
         total_cap = total_raw.get("current_offers", "0") if isinstance(total_raw, Mapping) else total_raw
         n_candidates = len(raw_candidates) if isinstance(raw_candidates, list) else 0
-        raw_caps = {"maximum_logical_requests": n_candidates * 6, "maximum_transport_attempts": n_candidates * 12, "maximum_input_tokens": max_input or 1, "maximum_output_tokens": max_output or 1, "maximum_reasoning_tokens": 0, "maximum_spend_usd": total_cap, "maximum_cost_per_1000_posts_usd": max((Decimal(str(value)) for value in spend.get("per_1000_source_posts_projection_usd", {}).values() if isinstance(value, Mapping) for value in value.values() if value not in {"0", "unavailable_for_free_endpoint"}), default=Decimal(0)), "maximum_transport_attempts_per_role": 2}
-        raw_caps["per_model"] = {str(item.get("model_id")): {"maximum_logical_requests": 6, "maximum_transport_attempts": 12, "maximum_input_tokens": int(reserved.get(item.get("candidate_key"), max_input)), "maximum_output_tokens": int(tokens.get("per_candidate_reserved_output_tokens", 0)), "maximum_reasoning_tokens": 0, "maximum_spend_usd": str(hard_caps.get(item.get("candidate_key"), total_cap))} for item in raw_candidates if isinstance(item, Mapping) and item.get("model_id")}
-    if not isinstance(raw_caps, Mapping) or not isinstance(raw_candidates, list) or not 3 <= len(raw_candidates) <= 5:
-        raise PilotInputError("budget must define caps and 3..5 candidates")
+        logical_per_candidate = len(batch_sizes) * len(ROLE_NAMES)
+        raw_caps = {"maximum_logical_requests": n_candidates * logical_per_candidate, "maximum_transport_attempts": n_candidates * logical_per_candidate * 2, "maximum_input_tokens": max_input or 1, "maximum_output_tokens": max_output or 1, "maximum_reasoning_tokens": 0, "maximum_spend_usd": total_cap, "maximum_cost_per_1000_posts_usd": max((Decimal(str(value)) for value in spend.get("per_1000_source_posts_projection_usd", {}).values() if isinstance(value, Mapping) for value in value.values() if value not in {"0", "unavailable_for_free_endpoint"}), default=Decimal(0)), "maximum_transport_attempts_per_role": 2}
+        raw_caps["per_model"] = {str(item.get("model_id")): {"maximum_logical_requests": logical_per_candidate, "maximum_transport_attempts": logical_per_candidate * 2, "maximum_input_tokens": int(reserved.get(item.get("candidate_key"), max_input)), "maximum_output_tokens": int(tokens.get("per_candidate_reserved_output_tokens", 0)), "maximum_reasoning_tokens": 0, "maximum_spend_usd": str(hard_caps.get(item.get("candidate_key"), total_cap))} for item in raw_candidates if isinstance(item, Mapping) and item.get("model_id")}
+    if not isinstance(raw_caps, Mapping) or not isinstance(raw_candidates, list) or not 1 <= len(raw_candidates) <= 5:
+        raise PilotInputError("budget must define caps and 1..5 candidates")
     caps = FrozenCaps(
         maximum_logical_requests=int(raw_caps["maximum_logical_requests"]),
         maximum_transport_attempts=int(raw_caps.get("maximum_transport_attempts", 36)),
@@ -280,7 +305,7 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
                 "allow_fallbacks": False,
             }
             # The frozen candidate entry carries the measured/conservative
-            # *combined* input bound for each 20/20/5 batch.  Do not infer
+            # *combined* input bound for each frozen batch.  Do not infer
             # tokens from UTF-8 bytes here: Qwen uses its chat tokenizer and
             # Gemma's byte fallback is deliberately already framed (+32 for
             # the two role requests) in the durable artifact.
@@ -310,8 +335,12 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
             ) if isinstance(alias, str) and alias
         ))
         input_bounds = candidate.get("input_tokens_by_batch")
-        if not isinstance(input_bounds, list) or len(input_bounds) != 3 or any(not isinstance(value, int) or value <= 0 for value in input_bounds):
-            raise PilotInputError("budget candidate lacks three frozen combined input bounds")
+        if not isinstance(input_bounds, list) or len(input_bounds) != len(batch_sizes) or any(not isinstance(value, int) or value <= 0 for value in input_bounds):
+            raise PilotInputError("budget candidate lacks frozen combined input bounds for every batch")
+        candidate["batch_sizes"] = batch_sizes
+        candidate["max_tokens"] = int(candidate.get("max_tokens", (document.get("request_schedule", {}) or {}).get("max_tokens_per_attempt", 4096)))
+        if candidate["max_tokens"] < 1 or candidate["max_tokens"] > 8192:
+            raise PilotInputError("budget candidate max_tokens must be 1..8192")
         model_cap = caps.per_model.get(str(candidate["model"]))
         if not isinstance(model_cap, Mapping) or sum(input_bounds) * 2 != int(model_cap.get("maximum_input_tokens", -1)):
             raise PilotInputError("candidate input bounds do not equal its retry-envelope input cap")
@@ -536,6 +565,7 @@ class TwoRolePilot:
     max_concurrent_transports: int = MAX_CONCURRENT_TRANSPORTS
     endpoint_aliases: Sequence[str] | None = None
     ledger: BudgetLedger | None = None
+    batch_sizes: Sequence[int] = BATCH_SIZES
     measurements: list[dict[str, Any]] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
@@ -650,7 +680,7 @@ class TwoRolePilot:
 
     def run_candidate(self, packets: Sequence[dict[str, Any]], client_factory: Callable[[Mapping[str, Any]], Any] | None = None, *, replay: bool = False) -> dict[str, Any]:
         assert self.ledger is not None
-        all_batches = batches(packets)
+        all_batches = batches(packets, self.batch_sizes)
         ledger_start = self.ledger.snapshot()
         responses: list[dict[str, Any]] = []
         complete_latencies: list[int] = []
@@ -915,6 +945,7 @@ def catalog_preflight(
                 "route": route == expected_route,
                 "thinking_disabled": candidate.get("reasoning_enabled") is False,
                 "service_tier_omitted": candidate.get("service_tier") is None,
+                "completion_limit": int(candidate.get("endpoint_max_completion_tokens") or 0) >= int(candidate.get("max_tokens", 4096)),
             }
             if not all(checks.values()):
                 failed = ",".join(key for key, passed in checks.items() if not passed)
@@ -965,7 +996,7 @@ def catalog_preflight(
             "prompt_price": prompt_per_million == Decimal(str(candidate["input_usd_per_million"])),
             "completion_price": completion_per_million == Decimal(str(candidate["output_usd_per_million"])),
             "parameters": required_parameters <= supported_parameters,
-            "completion_limit": int(endpoint.get("max_completion_tokens") or 0) >= 4096,
+            "completion_limit": int(endpoint.get("max_completion_tokens") or 0) >= int(candidate.get("max_tokens", 4096)),
             "context_limit": int(endpoint.get("context_length") or 0) >= max(candidate["input_tokens_by_batch"]) + 4096,
             "available": endpoint.get("status") == 0,
         }
@@ -1008,7 +1039,8 @@ def preflight(manifest_path: Path = DEFAULT_MANIFEST, reference_path: Path = DEF
             raise PilotInputError("adaptive ladder orders do not exactly match frozen candidates")
         if not execution or execution[0] != adaptive.get("control_candidate_id"):
             raise PilotInputError("adaptive ladder must execute the frozen control first")
-    expected_logical = len(candidates) * len(BATCH_SIZES) * len(ROLE_NAMES)
+    batch_sizes = _batch_sizes_from_budget(budget_document)
+    expected_logical = len(candidates) * len(batch_sizes) * len(ROLE_NAMES)
     expected_attempts = expected_logical * max_attempts
     if caps.maximum_logical_requests != expected_logical or caps.maximum_transport_attempts != expected_attempts or max_attempts != PILOT_MAX_TRANSPORT_ATTEMPTS:
         raise PilotInputError("budget does not preserve its frozen candidate retry envelope")
@@ -1020,7 +1052,7 @@ def preflight(manifest_path: Path = DEFAULT_MANIFEST, reference_path: Path = DEF
         raise PilotInputError("selected manifest does not match frozen receipt")
     if expected_reference and actual_reference != expected_reference:
         raise PilotInputError("owner reference does not match frozen receipt")
-    return {"pilot_id": _pilot_id(budget_document), "rows": len(packets), "source_posts": 45, "post_brand_rows": 45, "batches": list(BATCH_SIZES), "initial_logical_requests": expected_logical, "max_transport_attempts_per_role": max_attempts, "candidates": [{key: value for key, value in candidate.items() if key not in {"input_usd_per_million", "output_usd_per_million"}} for candidate in candidates], "manifest_sha256": actual_manifest, "reference_sha256": actual_reference, "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "packet_sha256": _sha(packets), "local_rows": len(local), "verified_source_receipts": verified_receipts}
+    return {"pilot_id": _pilot_id(budget_document), "rows": len(packets), "source_posts": 45, "post_brand_rows": 45, "batches": list(batch_sizes), "initial_logical_requests": expected_logical, "max_transport_attempts_per_role": max_attempts, "candidates": [{key: value for key, value in candidate.items() if key not in {"input_usd_per_million", "output_usd_per_million"}} for candidate in candidates], "manifest_sha256": actual_manifest, "reference_sha256": actual_reference, "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "packet_sha256": _sha(packets), "local_rows": len(local), "verified_source_receipts": verified_receipts}
 
 
 def _result_path(private_dir: Path, candidate_id: str) -> Path:
@@ -1127,7 +1159,9 @@ def _durable_report(result: Mapping[str, Any], score: Mapping[str, Any], candida
     quality_gates = _quality_release_gates(score, budget)
     candidate_cost_cap = hard_cap * Decimal(1000) / Decimal(45) if hard_cap.is_finite() else Decimal("Infinity")
     budget_document = _read_json(budget_path)
-    report_schema = "u18-r98-direct-control-fallback-report-v1" if str(budget_document.get("schema_version", "")).startswith("u18-r98-") else "u18-openrouter-two-role-report-v1"
+    report_schema = budget_document.get("report_schema_version")
+    if not isinstance(report_schema, str) or not report_schema:
+        report_schema = "u18-r98-direct-control-fallback-report-v1" if str(budget_document.get("schema_version", "")).startswith("u18-r98-") else "u18-openrouter-two-role-report-v1"
     return {"schema_version": report_schema, "pilot_id": _pilot_id(budget_document), "candidate_id": candidate["candidate_id"], "model": candidate["model"], "request_provider": candidate["provider"], "response_provider": candidate.get("response_provider"), "endpoint_tag": candidate.get("endpoint_tag"), "service_tier": candidate.get("service_tier"), "transport_kind": candidate.get("transport_kind", "openrouter"), "endpoint_aliases": candidate.get("endpoint_aliases", []), "quantization": candidate.get("quantization"), "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "source_posts": 45, "post_brand_rows": 45, "initial_logical_requests": int(ledger.get("logical_requests", 0)), "failure_code": result.get("failure_code"), "measurements": result.get("measurements", []), "ledger": ledger, "cost_per_1000_source_posts_usd": str(cost_per_1000), "regular_rate_cost_usd": str(regular_cost), "regular_rate_available": regular_input_value is not None and regular_output_value is not None, "complete_result_latency_p95_ms": p95, "gates": {"coverage_100_percent": score.get("coverage") == 1.0, "cost_within_candidate_cap": Decimal(str(ledger.get("spend_usd", "0"))) <= hard_cap, "cost_per_1000_within_candidate_cap": cost_per_1000 <= candidate_cost_cap, "complete_result_latency_p95_within_180s": p95 is not None and p95 <= latency_limit_ms, "quality_floors": score.get("floor_gate", {}), **quality_gates}, "score": score, "raw_outputs_persisted_under": "private responses directory only"}
 
 
@@ -1270,7 +1304,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         candidates_to_run = candidates
     budget_document = _read_json(args.budget)
-    private_dir = args.private_dir or (DEFAULT_R98_PRIVATE_DIR if str(budget_document.get("schema_version", "")).startswith("u18-r98-") else DEFAULT_PRIVATE_DIR)
+    schema_version = str(budget_document.get("schema_version", ""))
+    private_dir = args.private_dir or (
+        DEFAULT_R99_PRIVATE_DIR if schema_version.startswith("u18-r99-")
+        else DEFAULT_R98_PRIVATE_DIR if schema_version.startswith("u18-r98-")
+        else DEFAULT_PRIVATE_DIR
+    )
     if args.mode == "frozen-run" and isinstance(budget_document.get("adaptive_execution"), Mapping):
         parser.error("R98 adaptive budget requires adaptive-ladder mode")
     floor_values = budget_document.get("floors") or (budget_document.get("quality_floors", {}) or {}).get("floors", {})
@@ -1313,7 +1352,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "failure_code": "catalog_preflight_blocked",
                 }
             else:
-                pilot = TwoRolePilot(candidate, private_dir=private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
+                pilot = TwoRolePilot(candidate, private_dir=private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), max_tokens=int(candidate.get("max_tokens", 4096)), endpoint_aliases=candidate.get("endpoint_aliases"), batch_sizes=candidate.get("batch_sizes", BATCH_SIZES))
                 try:
                     result = pilot.run_candidate(packets, _client_factory if args.mode in {"frozen-run", "adaptive-ladder"} else None, replay=args.mode == "replay")
                 except (OpenRouterPermanentError, AnthropicCompatiblePermanentError, PilotInputError) as exc:

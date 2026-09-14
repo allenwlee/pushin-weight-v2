@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from scripts.u18_openrouter_two_role_pilot import (
     _adaptive_candidates,
     _adaptive_catalog_preflight,
     _adaptive_decision,
+    _batch_sizes_from_budget,
     _client_factory,
     _floor_report,
     _quality_release_gates,
@@ -148,6 +150,71 @@ def test_exact_batches_and_production_role_payloads():
     assert "Exact envelope" in CONTENT_SYSTEM_PROMPT
     assert "Exact envelope" in BRAND_SYSTEM_PROMPT
     assert _two_role_payload(packets[:1], "content")[0]["role_revision"] == _TWO_ROLE_CONTENT_REVISION
+
+
+def test_r99_frozen_batch_sizes_and_budget_caps():
+    root = Path(__file__).resolve().parents[1]
+    budget_path = root / "docs/analysis/2026-09-15-071753-u18-r99-deepseek-batch-size-pilot-contract.json"
+    budget = json.loads(budget_path.read_text())
+    assert _batch_sizes_from_budget(budget) == (40, 5)
+    packets, _ = build_public_packets(_manifest())
+    assert [len(batch) for batch in batches(packets, _batch_sizes_from_budget(budget))] == [40, 5]
+    caps, candidates, attempts = load_budget(budget_path)
+    assert attempts == 2
+    assert len(candidates) == 1
+    assert candidates[0]["max_tokens"] == 8000
+    assert candidates[0]["batch_sizes"] == (40, 5)
+    assert caps.maximum_logical_requests == 4
+    assert caps.maximum_transport_attempts == 8
+    assert caps.maximum_input_tokens == 322602
+    assert caps.maximum_output_tokens == 64000
+    assert caps.maximum_spend_usd == Decimal("0.22642488")
+    checked = preflight(budget_path=budget_path)
+    assert checked["batches"] == [40, 5]
+    assert checked["initial_logical_requests"] == 4
+
+
+def test_direct_catalog_preflight_uses_frozen_max_tokens():
+    candidate = {
+        **VALID_CANDIDATE,
+        "candidate_id": "deepseek-control",
+        "model": "deepseek-v4-flash",
+        "provider": "deepseek",
+        "response_provider": "deepseek",
+        "transport_kind": "direct_deepseek_anthropic",
+        "route": "https://api.deepseek.com/anthropic/v1/messages",
+        "reasoning_enabled": False,
+        "service_tier": None,
+        "endpoint_max_completion_tokens": 4096,
+        "max_tokens": 8000,
+    }
+    with pytest.raises(PilotInputError, match="completion_limit"):
+        catalog_preflight([candidate])
+
+
+def test_two_role_pilot_uses_dynamic_batches_and_budget_max_tokens(tmp_path):
+    packets, _ = build_public_packets(_manifest())
+
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def messages_create(self, **kwargs):
+            payload = json.loads(kwargs["messages"][0]["content"])
+            role = "content" if kwargs["system"] == CONTENT_SYSTEM_PROMPT else "brand_interpretation"
+            self.calls.append((role, len(payload), kwargs["max_tokens"]))
+            return _response(payload, role)
+
+    client = Client()
+    candidate = {**VALID_CANDIDATE, "input_tokens_by_batch": [122533, 38768]}
+    pilot = TwoRolePilot(candidate, private_dir=tmp_path, max_tokens=8000, batch_sizes=(40, 5))
+    result = pilot.run_candidate(packets, lambda _candidate: client)
+    assert result["candidate_id"] == "fixture"
+    assert sorted((role, size) for role, size, _tokens in client.calls) == sorted([
+        ("content", 40), ("brand_interpretation", 40),
+        ("content", 5), ("brand_interpretation", 5),
+    ])
+    assert {tokens for _role, _size, tokens in client.calls} == {8000}
 
 
 def test_pair_cap_is_checked_before_any_transport():
