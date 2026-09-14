@@ -33,13 +33,13 @@ section "Unit 1: New x_monitor/attribution.py module" (R1-R8).
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import logging
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -4124,11 +4124,26 @@ class AnthropicClaudeClient:
         # Trailing-prose-tolerant parser (plan 2026-08-04-001).
         # Replaces the inline json.loads + except fallback with the shared
         # helper. Same warning shape and same fallback dict as before.
+        raw_usage = body.get("usage")
+        usage = dict(raw_usage) if isinstance(raw_usage, Mapping) else None
+        # Existing callers historically received the provider's usage object
+        # unchanged when an endpoint omitted an ID. Add attestation metadata
+        # only on responses that carry the safe request ID required by R98.
+        if isinstance(body.get("id"), str) and body["id"]:
+            if usage is None:
+                usage = {}
+            usage.update({
+                "provider": "deepseek" if "deepseek.com" in self._base_url else "anthropic",
+                "model": body.get("model") or kwargs.get("model"),
+                "provider_request_id": body["id"],
+                "selected_endpoint": "deepseek" if "deepseek.com" in self._base_url else "anthropic",
+                "service_tier": body.get("service_tier"),
+            })
         return ProviderResponse(parse_llm_response(
             raw,
             logger_name="x_monitor.attribution",
             fallback={"verdict": "uncertain", "reason": "llm_non_json_response"},
-        ), usage=body.get("usage"))
+        ), usage=usage)
 
 
 # --- Public re-exports for compat shim (Unit 6) -------------------------

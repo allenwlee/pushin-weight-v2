@@ -12,6 +12,8 @@ from scripts.u18_openrouter_two_role_pilot import (
     PilotCapExceeded,
     PilotInputError,
     TwoRolePilot,
+    _adaptive_candidates,
+    _adaptive_decision,
     _client_factory,
     _floor_report,
     _quality_release_gates,
@@ -20,6 +22,7 @@ from scripts.u18_openrouter_two_role_pilot import (
     build_public_packets,
     catalog_preflight,
     load_budget,
+    main,
     merge_role_rows,
     preflight,
     request_signature,
@@ -202,6 +205,26 @@ def test_permanent_semantic_failure_is_counted_once_without_retry():
     assert pilot.ledger.input_tokens == 10
     assert pilot.ledger.output_tokens == 5
     assert pilot.measurements[0]["failure_code"] == "openrouter_response_content_invalid"
+
+
+def test_completed_response_attestation_failure_records_one_transport_cost():
+    packets, _ = build_public_packets(_manifest())
+
+    class Client:
+        def messages_create(self, **kwargs):
+            return ProviderResponse({}, usage={
+                "provider": "Other Provider", "model": VALID_CANDIDATE["model"],
+                "provider_request_id": "req-untrusted", "input_tokens": 10,
+                "output_tokens": 5, "cost_usd": 0.000002,
+            })
+
+    pilot = TwoRolePilot(VALID_CANDIDATE)
+    with pytest.raises(PilotInputError, match="attestation"):
+        pilot._call(role="content", packets=packets[:1], client=Client())
+    assert pilot.ledger.transport_attempts == 1
+    assert pilot.ledger.input_tokens == 10
+    assert pilot.ledger.output_tokens == 5
+    assert str(pilot.ledger.spend_usd) == "0.000002"
 
 
 def test_runner_makes_exactly_two_role_calls_per_ordered_batch(tmp_path: Path):
@@ -400,3 +423,171 @@ def test_replay_reads_signed_artifacts_without_transport(tmp_path: Path):
     )
     assert [len(batch["merged"]) for batch in result["batches"]] == [20, 20, 5]
     assert all(item["replay"] is True for item in result["measurements"])
+
+
+def test_r98_budget_has_dynamic_five_candidate_envelope_and_direct_control():
+    root = Path(__file__).resolve().parents[1]
+    budget_path = root / "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json"
+    caps, candidates, attempts = load_budget(budget_path)
+    assert len(candidates) == 5
+    assert attempts == 2
+    assert caps.maximum_logical_requests == 30
+    assert caps.maximum_transport_attempts == 60
+    assert candidates[0]["transport_kind"] == "direct_deepseek_anthropic"
+    assert candidates[0]["reasoning_enabled"] is False
+    assert candidates[0]["route"].endswith("api.deepseek.com/anthropic/v1/messages")
+    assert candidates[3]["service_tier"] == "flex"
+    assert candidates[3]["provider"] == "openai/flex"
+
+
+def test_direct_control_factory_and_request_pin_thinking_disabled(monkeypatch):
+    from x_monitor import reattribute
+
+    class FakeClient:
+        _base_url = "https://api.deepseek.com/anthropic"
+
+    monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda: FakeClient())
+    candidate = {
+        "transport_kind": "direct_deepseek_anthropic", "provider": "deepseek",
+        "model": "deepseek-v4-flash", "candidate_id": "control",
+        "response_provider": "deepseek", "response_model": "deepseek-v4-flash",
+        "endpoint_aliases": ["deepseek"], "reasoning_enabled": False,
+        "allow_fallbacks": False, "data_collection": "direct_public_only", "zdr": False,
+        "quantization": "provider_native", "input_usd_per_million": "0.44",
+        "output_usd_per_million": "1.32", "max_input_price": "0.44", "max_output_price": "1.32",
+    }
+    assert _client_factory(candidate) is not None
+    packets, _ = build_public_packets(_manifest())
+    captured = {}
+
+    class Transport:
+        def messages_create(self, **kwargs):
+            captured.update(kwargs)
+            return ProviderResponse({}, usage={"provider": "deepseek", "model": "deepseek-v4-flash", "provider_request_id": "req-direct", "selected_endpoint": "deepseek", "input_tokens": 1, "output_tokens": 1})
+
+    # The fake response above is only used to capture the transport kwargs;
+    # route construction itself is the assertion under test.
+    pilot = TwoRolePilot(candidate, max_transport_attempts_per_role=1)
+    pilot._call(role="content", packets=packets[:1], client=Transport())
+    assert captured["thinking"] == {"type": "disabled"}
+    assert "provider" not in captured
+    assert "reasoning" not in captured
+
+
+def test_direct_http_response_attaches_safe_deepseek_attestation(monkeypatch):
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    class Response:
+        status = 200
+        def read(self):
+            return json.dumps({
+                "id": "msg_direct_1", "model": "deepseek-v4-flash",
+                "content": [{"type": "text", "text": "{}"}],
+                "usage": {"input_tokens": 4, "output_tokens": 2},
+            }).encode()
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs): pass
+        def request(self, *_args, **_kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fixture-key")
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic")
+    monkeypatch.setattr("http.client.HTTPSConnection", Connection)
+    client = build_anthropic_client_from_env()
+    response = client.messages_create(model="deepseek-v4-flash", max_tokens=8, messages=[])
+    assert response.provider_usage["provider"] == "deepseek"
+    assert response.provider_usage["model"] == "deepseek-v4-flash"
+    assert response.provider_usage["provider_request_id"] == "msg_direct_1"
+    assert response.provider_usage["selected_endpoint"] == "deepseek"
+
+
+def test_direct_http_response_preserves_missing_usage_semantics(monkeypatch):
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    class Response:
+        status = 200
+
+        def read(self):
+            return json.dumps({
+                "content": [{"type": "text", "text": "{}"}],
+            }).encode()
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs): pass
+        def request(self, *_args, **_kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fixture-key")
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic")
+    monkeypatch.setattr("http.client.HTTPSConnection", Connection)
+    client = build_anthropic_client_from_env()
+    response = client.messages_create(model="deepseek-v4-flash", max_tokens=8, messages=[])
+    assert response.provider_usage is None
+
+
+def test_flex_service_tier_is_sent_and_attested(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fixture-key")
+    candidate = {**VALID_CANDIDATE, "provider": "openai/flex", "response_provider": "OpenAI", "service_tier": "flex", "endpoint_tag": "openai/flex", "endpoint_aliases": ["OpenAI", "openai/flex"]}
+    client = _client_factory(candidate)
+    request = client.build_request(max_tokens=4096, messages=[])
+    assert request["provider"]["only"] == ["openai/flex"]
+    assert request["service_tier"] == "flex"
+    response = ProviderResponse({}, usage={"provider": "OpenAI", "model": "fixture/model", "provider_request_id": "req-flex", "selected_endpoint": "openai/flex", "service_tier": "flex"})
+    assert attest_provider(response, candidate)["service_tier"] == "flex"
+    bad = ProviderResponse({}, usage={"provider": "OpenAI", "model": "fixture/model", "provider_request_id": "req-flex", "selected_endpoint": "openai/flex", "service_tier": "default"})
+    with pytest.raises(PilotInputError, match="service tier"):
+        attest_provider(bad, candidate)
+
+
+def test_adaptive_ladder_uses_frozen_execution_order_and_r98_signature_is_new():
+    root = Path(__file__).resolve().parents[1]
+    budget = json.loads((root / "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json").read_text())
+    _caps, candidates, _attempts = load_budget(root / "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json")
+    ordered = _adaptive_candidates(candidates, budget)
+    assert [item["candidate_id"] for item in ordered] == budget["adaptive_execution"]["execution_order"]
+    packets, _ = build_public_packets(_manifest())
+    r98_signature = request_signature(candidate=ordered[0], role="content", packets=_two_role_payload(packets[:1], "content"), max_tokens=4096)
+    r97 = load_budget(root / "docs/analysis/2026-09-14-190649-u18-r97-two-role-pilot-contract.json")[1][0]
+    r97_signature = request_signature(candidate=r97, role="content", packets=_two_role_payload(packets[:1], "content"), max_tokens=4096)
+    assert r98_signature != r97_signature
+
+
+def test_r98_frozen_run_cannot_bypass_adaptive_stop():
+    root = Path(__file__).resolve().parents[1]
+    with pytest.raises(SystemExit) as exc:
+        from scripts.u18_openrouter_two_role_pilot import main
+        main(["frozen-run", "--budget", str(root / "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json")])
+    assert exc.value.code == 2
+
+
+def test_r98_adaptive_ladder_rejects_candidate_subset():
+    root = Path(__file__).resolve().parents[1]
+    with pytest.raises(SystemExit) as exc:
+        main([
+            "adaptive-ladder", "--candidate-id", "qwen3_30b_streamlake",
+            "--budget", str(root / "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json"),
+        ])
+    assert exc.value.code == 2
+
+
+def test_adaptive_decision_skips_gemini_after_passing_direct_control():
+    def report(passed):
+        gates = {name: passed for name in (
+            "coverage_100_percent", "cost_within_candidate_cap",
+            "cost_per_1000_within_candidate_cap", "complete_result_latency_p95_within_180s",
+            "quality_floors", "improvement_composite", "axis_regression", "per_label_regression",
+        )}
+        return {"gates": gates}
+
+    order = ["qwen", "mistral", "gpt", "deepseek", "gemini"]
+    decision = _adaptive_decision(
+        {"deepseek": report(True), "qwen": report(False), "mistral": report(False), "gpt": report(False)},
+        order,
+        ["deepseek", "qwen", "mistral", "gpt"],
+    )
+    assert decision["selected_candidate_id"] == "deepseek"
+    assert decision["skipped_candidate_ids"] == ["gemini"]
+    assert decision["skipped_reason"] == "more_expensive_than_selected"

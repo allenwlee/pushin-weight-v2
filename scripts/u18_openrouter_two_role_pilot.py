@@ -39,6 +39,8 @@ from core.classification_contract import (
 from x_monitor.attribution import (
     _TWO_ROLE_BRAND_SYSTEM_PROMPT,
     _TWO_ROLE_CONTENT_SYSTEM_PROMPT,
+    AnthropicCompatiblePermanentError,
+    AnthropicCompatibleRetryableError,
     _two_role_fingerprint,
     _two_role_parse,
     _two_role_payload,
@@ -50,6 +52,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / ".context/u18/human-ambiguity-study-v1/selection-manifest.json"
 DEFAULT_REFERENCE = ROOT / ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json"
 DEFAULT_PRIVATE_DIR = ROOT / ".context/u18/openrouter-two-role-pilot-v1"
+DEFAULT_R98_PRIVATE_DIR = ROOT / ".context/u18/openrouter-two-role-pilot-r98-control-fallback-v1"
 DEFAULT_BUDGET: Path | None = None
 
 PILOT_ID = "u18-openrouter-two-role-pilot-v1"
@@ -74,6 +77,14 @@ MAX_LOGICAL_REQUESTS = 18
 # from the frozen budget artifact.  Keeping this empty prevents a convenient
 # fallback to a stale model or data policy.
 CANDIDATES: tuple[dict[str, Any], ...] = ()
+
+
+def _pilot_id(document: Mapping[str, Any]) -> str:
+    value = document.get("pilot_id")
+    if isinstance(value, str) and value:
+        return value
+    schema = str(document.get("schema_version", ""))
+    return "u18-r98-direct-control-fallback-pilot-v1" if schema.startswith("u18-r98-") else PILOT_ID
 
 # Compact, shared-prefix prompts are part of the candidate identity.  They
 # contain no study IDs, examples, owner answers, or account metadata.
@@ -230,11 +241,13 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
         max_input = sum(int(value) for value in reserved.values())
         max_output = sum(int(tokens.get("per_candidate_reserved_output_tokens", 0)) for _ in (raw_candidates or []))
         hard_caps = spend.get("per_candidate_hard_cap_usd_with_one_retry_each", {})
-        total_cap = spend.get("total_trial_hard_cap_usd", {}).get("current_offers", "0")
-        raw_caps = {"maximum_logical_requests": 18, "maximum_transport_attempts": 36, "maximum_input_tokens": max_input or 1, "maximum_output_tokens": max_output or 1, "maximum_reasoning_tokens": 0, "maximum_spend_usd": total_cap, "maximum_cost_per_1000_posts_usd": max((Decimal(str(value)) for value in spend.get("per_1000_source_posts_projection_usd", {}).values() if isinstance(value, Mapping) for value in value.values() if value not in {"0", "unavailable_for_free_endpoint"}), default=Decimal(0)), "maximum_transport_attempts_per_role": 2}
+        total_raw = spend.get("total_trial_hard_cap_usd", "0")
+        total_cap = total_raw.get("current_offers", "0") if isinstance(total_raw, Mapping) else total_raw
+        n_candidates = len(raw_candidates) if isinstance(raw_candidates, list) else 0
+        raw_caps = {"maximum_logical_requests": n_candidates * 6, "maximum_transport_attempts": n_candidates * 12, "maximum_input_tokens": max_input or 1, "maximum_output_tokens": max_output or 1, "maximum_reasoning_tokens": 0, "maximum_spend_usd": total_cap, "maximum_cost_per_1000_posts_usd": max((Decimal(str(value)) for value in spend.get("per_1000_source_posts_projection_usd", {}).values() if isinstance(value, Mapping) for value in value.values() if value not in {"0", "unavailable_for_free_endpoint"}), default=Decimal(0)), "maximum_transport_attempts_per_role": 2}
         raw_caps["per_model"] = {str(item.get("model_id")): {"maximum_logical_requests": 6, "maximum_transport_attempts": 12, "maximum_input_tokens": int(reserved.get(item.get("candidate_key"), max_input)), "maximum_output_tokens": int(tokens.get("per_candidate_reserved_output_tokens", 0)), "maximum_reasoning_tokens": 0, "maximum_spend_usd": str(hard_caps.get(item.get("candidate_key"), total_cap))} for item in raw_candidates if isinstance(item, Mapping) and item.get("model_id")}
-    if not isinstance(raw_caps, Mapping) or not isinstance(raw_candidates, list) or len(raw_candidates) != 3:
-        raise PilotInputError("budget must define caps and exactly three candidates")
+    if not isinstance(raw_caps, Mapping) or not isinstance(raw_candidates, list) or not 3 <= len(raw_candidates) <= 5:
+        raise PilotInputError("budget must define caps and 3..5 candidates")
     caps = FrozenCaps(
         maximum_logical_requests=int(raw_caps["maximum_logical_requests"]),
         maximum_transport_attempts=int(raw_caps.get("maximum_transport_attempts", 36)),
@@ -273,6 +286,11 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
             # the two role requests) in the durable artifact.
             candidate["input_tokens_by_batch"] = candidate.get("combined_input_tokens_by_batch")
         candidate.setdefault("allow_fallbacks", False)
+        # R98 adds an explicit transport kind.  Leave it absent for R97
+        # candidates so their previously signed request identities replay
+        # byte-for-byte; callers use openrouter as the compatibility default.
+        if "transport_kind" in item:
+            candidate["transport_kind"] = item["transport_kind"]
         if isinstance(document.get("spend_budget"), Mapping):
             hard_caps = document["spend_budget"].get("per_candidate_hard_cap_usd_with_one_retry_each", {})
             if isinstance(hard_caps, Mapping) and candidate.get("candidate_id") in hard_caps:
@@ -282,11 +300,13 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
                 raise PilotInputError(f"budget candidate lacks {key}")
         if not isinstance(candidate.get("endpoint_aliases"), list) or not candidate["endpoint_aliases"]:
             raise PilotInputError("budget candidate lacks endpoint aliases")
+        aliases_to_add = (candidate.get("endpoint_tag"), candidate.get("provider")) if "transport_kind" in item else ()
         candidate["endpoint_aliases"] = list(dict.fromkeys(
             alias for alias in (
                 *candidate["endpoint_aliases"],
                 candidate.get("response_provider"),
                 candidate.get("response_model"),
+                *aliases_to_add,
             ) if isinstance(alias, str) and alias
         ))
         input_bounds = candidate.get("input_tokens_by_batch")
@@ -296,7 +316,23 @@ def load_budget(path: Path) -> tuple[FrozenCaps, tuple[dict[str, Any], ...], int
         if not isinstance(model_cap, Mapping) or sum(input_bounds) * 2 != int(model_cap.get("maximum_input_tokens", -1)):
             raise PilotInputError("candidate input bounds do not equal its retry-envelope input cap")
         candidate["maximum_spend_usd"] = str(model_cap["maximum_spend_usd"])
+        if candidate.get("transport_kind") == "direct_deepseek_anthropic":
+            if candidate.get("provider") != "deepseek" or candidate.get("model") != "deepseek-v4-flash":
+                raise PilotInputError("direct DeepSeek candidate identity is not frozen")
+            if candidate.get("endpoint_tag") is not None or candidate.get("service_tier") is not None:
+                raise PilotInputError("direct DeepSeek candidate cannot use router endpoint or service tier")
+        elif candidate.get("transport_kind", "openrouter") != "openrouter":
+            raise PilotInputError("unknown candidate transport kind")
+        if candidate.get("service_tier") not in {None, "flex"}:
+            raise PilotInputError("unsupported service tier")
+        if candidate.get("service_tier") == "flex" and not candidate.get("endpoint_tag"):
+            raise PilotInputError("Flex candidate lacks endpoint tag")
         candidates.append(candidate)
+    model_caps = [caps.per_model.get(str(candidate["model"])) for candidate in candidates]
+    if any(not isinstance(item, Mapping) for item in model_caps):
+        raise PilotInputError("every candidate must have a per-model cap")
+    if sum(int(item["maximum_logical_requests"]) for item in model_caps) != caps.maximum_logical_requests or sum(int(item["maximum_transport_attempts"]) for item in model_caps) != caps.maximum_transport_attempts or sum(int(item["maximum_input_tokens"]) for item in model_caps) != caps.maximum_input_tokens or sum(int(item["maximum_output_tokens"]) for item in model_caps) != caps.maximum_output_tokens or sum(Decimal(str(item["maximum_spend_usd"])) for item in model_caps) != caps.maximum_spend_usd:
+        raise PilotInputError("global caps do not equal the sum of frozen candidate caps")
     return caps, tuple(candidates), max_attempts
 
 
@@ -469,12 +505,25 @@ def attest_provider(response: Any, candidate: Mapping[str, Any], endpoint_aliase
     aliases = tuple(endpoint_aliases or candidate.get("endpoint_aliases") or (candidate["provider"],))
     if endpoint not in aliases and provider not in aliases:
         raise PilotInputError("selected endpoint is outside the frozen aliases")
-    return {"provider": provider, "model": model, "provider_request_id": request_id, "selected_endpoint": endpoint, "usage": usage}
+    expected_tier = candidate.get("service_tier")
+    observed_tier = raw.get("service_tier")
+    if expected_tier is not None and observed_tier != expected_tier:
+        raise PilotInputError("service tier attestation mismatch")
+    if expected_tier is None and observed_tier not in {None, ""}:
+        # A paid Flex marker on a regular candidate would make its price
+        # projection and route identity false.
+        raise PilotInputError("unexpected service tier attestation")
+    return {"provider": provider, "model": model, "provider_request_id": request_id, "selected_endpoint": endpoint, "service_tier": observed_tier, "usage": usage}
 
 
 def request_signature(*, candidate: Mapping[str, Any], role: str, packets: Sequence[Mapping[str, Any]], max_tokens: int) -> str:
+    # Keep the old R97 identity exactly intact. New route fields are included
+    # only for R98 candidates, so old response artifacts remain replayable.
     identity_keys = ("candidate_id", "model", "provider", "response_provider", "response_model", "endpoint_aliases", "quantization", "data_collection", "zdr", "reasoning_enabled", "allow_fallbacks", "max_input_price", "max_output_price")
-    return _sha({"candidate": {key: candidate.get(key) for key in identity_keys}, "role": role, "prompt": ROLE_PROMPTS[role], "packets": list(packets), "max_tokens": max_tokens})
+    identity = {key: candidate.get(key) for key in identity_keys}
+    if "transport_kind" in candidate:
+        identity.update({key: candidate.get(key) for key in ("transport_kind", "route", "endpoint_tag", "service_tier")})
+    return _sha({"candidate": identity, "role": role, "prompt": ROLE_PROMPTS[role], "packets": list(packets), "max_tokens": max_tokens})
 
 
 @dataclass
@@ -512,8 +561,17 @@ class TwoRolePilot:
             attestation = attest_provider(response, self.candidate, self.endpoint_aliases)
             self.measurements.append({"role": role, "signature": signature, "attempt": 0, "retry": False, "replay": True, "latency_ms": 0, "attestation": {key: value for key, value in attestation.items() if key != "usage"}, "usage": attestation["usage"]})
             return response
-        kwargs = {"model": self.candidate["model"], "max_tokens": self.max_tokens, "temperature": 0, "timeout": 90, "system": ROLE_PROMPTS[role], "messages": [{"role": "user", "content": _json(payload)}], "provider": self.candidate["provider"]}
-        if self.candidate.get("reasoning_enabled") is not None:
+        direct = self.candidate.get("transport_kind") == "direct_deepseek_anthropic"
+        kwargs = {"model": self.candidate["model"], "max_tokens": self.max_tokens, "temperature": 0, "timeout": 90, "system": ROLE_PROMPTS[role], "messages": [{"role": "user", "content": _json(payload)}]}
+        if not direct:
+            kwargs["provider"] = self.candidate["provider"]
+            if self.candidate.get("service_tier") is not None:
+                kwargs["service_tier"] = self.candidate["service_tier"]
+        elif self.candidate.get("reasoning_enabled") is False:
+            # DeepSeek V4 enables thinking by default on its Anthropic route;
+            # the control contract pins it off for the measured two-role shape.
+            kwargs["thinking"] = {"type": "disabled"}
+        if not direct and self.candidate.get("reasoning_enabled") is not None:
             kwargs["reasoning"] = {"enabled": self.candidate["reasoning_enabled"]}
         last_error: Exception | None = None
         if client is None:
@@ -523,7 +581,30 @@ class TwoRolePilot:
             started = time.monotonic()
             try:
                 response = client.messages_create(**kwargs)
-                attestation = attest_provider(response, self.candidate, self.endpoint_aliases)
+                try:
+                    attestation = attest_provider(response, self.candidate, self.endpoint_aliases)
+                except PilotInputError:
+                    # A completed response is a billable transport even when
+                    # its route identity is unsafe. Record it before failing
+                    # closed, using provider usage where available and the
+                    # frozen input bound as the conservative fallback.
+                    raw_usage = getattr(response, "provider_usage", None)
+                    observed = normalize_usage(raw_usage)
+                    observed_input = int(observed.get("input_tokens") or estimated_input)
+                    observed_output = int(observed.get("output_tokens") or 0)
+                    observed_cost = Decimal(str(observed.get("cost_usd") or _price(self.candidate, observed_input, observed_output)))
+                    assert self.ledger is not None
+                    self.ledger.record_attempt(raw_usage or {"input_tokens": observed_input}, cost=observed_cost, model_id=self.candidate["model"])
+                    self.measurements.append({
+                        "role": role,
+                        "signature": signature,
+                        "attempt": attempt,
+                        "retry": attempt > 1,
+                        "latency_ms": round((time.monotonic() - started) * 1000),
+                        "failure_code": "provider_attestation_failed",
+                        "usage": normalize_usage(raw_usage or {"input_tokens": observed_input}),
+                    })
+                    raise
                 usage = attestation["usage"]
                 cost = Decimal(str(usage.get("cost_usd") or _price(self.candidate, int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0))))
                 assert self.ledger is not None
@@ -536,13 +617,13 @@ class TwoRolePilot:
                 _write_json(response_path, {"response": decoded, "attestation": {key: value for key, value in attestation.items() if key != "usage"}, "usage": persisted_usage, "signature": signature})
                 self.measurements.append({"role": role, "signature": signature, "attempt": attempt, "retry": attempt > 1, "latency_ms": round((time.monotonic() - started) * 1000), "attestation": {key: value for key, value in attestation.items() if key != "usage"}, "usage": usage})
                 return decoded
-            except (OpenRouterRetryableError, TimeoutError, OSError) as exc:
+            except (OpenRouterRetryableError, AnthropicCompatibleRetryableError, TimeoutError, OSError) as exc:
                 last_error = exc
                 self.ledger.record_attempt({"input_tokens": estimated_input}, cost=_price(self.candidate, estimated_input, 0), model_id=self.candidate["model"])
                 if attempt == self.max_transport_attempts_per_role:
                     break
-            except OpenRouterPermanentError as exc:
-                usage = exc.provider_usage or {"input_tokens": estimated_input}
+            except (OpenRouterPermanentError, AnthropicCompatiblePermanentError) as exc:
+                usage = getattr(exc, "provider_usage", None) or {"input_tokens": estimated_input}
                 cost = Decimal(str(
                     usage.get("cost_usd")
                     or _price(
@@ -824,6 +905,29 @@ def catalog_preflight(
     loader = fetch or fetch_json
     results = []
     for candidate in candidates:
+        if candidate.get("transport_kind", "openrouter") == "direct_deepseek_anthropic":
+            route = str(candidate.get("route", ""))
+            expected_route = "https://api.deepseek.com/anthropic/v1/messages"
+            checks = {
+                "transport": True,
+                "provider": candidate.get("provider") == "deepseek",
+                "model": candidate.get("model") == "deepseek-v4-flash",
+                "route": route == expected_route,
+                "thinking_disabled": candidate.get("reasoning_enabled") is False,
+                "service_tier_omitted": candidate.get("service_tier") is None,
+            }
+            if not all(checks.values()):
+                failed = ",".join(key for key, passed in checks.items() if not passed)
+                raise PilotInputError(f"direct DeepSeek preflight failed:{failed}")
+            results.append({
+                "candidate_id": candidate["candidate_id"],
+                "provider": candidate["response_provider"],
+                "endpoint_tag": None,
+                "endpoint_name": "direct DeepSeek Anthropic-compatible endpoint",
+                "catalog_sha256": None,
+                "checks": checks,
+            })
+            continue
         url = candidate.get("endpoint_receipt")
         if not isinstance(url, str) or not url.startswith("https://openrouter.ai/"):
             raise PilotInputError("candidate endpoint receipt is not a frozen OpenRouter URL")
@@ -832,10 +936,16 @@ def catalog_preflight(
         if not isinstance(data, Mapping) or data.get("id") != candidate["model"]:
             raise PilotInputError("endpoint catalog model mismatch")
         endpoints = data.get("endpoints")
-        matches = [
-            item for item in endpoints or []
-            if isinstance(item, Mapping) and item.get("provider_name") == candidate["response_provider"]
-        ]
+        matches = [item for item in endpoints or [] if isinstance(item, Mapping) and (
+            item.get("provider_name") == candidate["response_provider"]
+            or item.get("provider_slug") == candidate["provider"]
+        )]
+        if candidate.get("endpoint_tag") is not None:
+            matches = [item for item in matches if (
+                item.get("tag") == candidate["endpoint_tag"]
+                or item.get("endpoint_tag") == candidate["endpoint_tag"]
+                or item.get("provider_slug") == candidate["endpoint_tag"]
+            )]
         if len(matches) != 1:
             raise PilotInputError("endpoint catalog provider route is not unique")
         endpoint = matches[0]
@@ -847,10 +957,11 @@ def catalog_preflight(
             required_parameters.add("reasoning")
         supported_parameters = set(endpoint.get("supported_parameters") or [])
         response_model = candidate.get("response_model")
+        observed_tag = endpoint.get("tag") or endpoint.get("endpoint_tag") or endpoint.get("provider_slug")
         checks = {
             "model": endpoint.get("model_id") == candidate["model"],
             "model_alias": isinstance(response_model, str) and response_model in str(endpoint.get("name", "")),
-            "quantization": endpoint.get("quantization") == candidate.get("quantization"),
+            "quantization": candidate.get("quantization") in {None, "unknown"} or endpoint.get("quantization") == candidate.get("quantization"),
             "prompt_price": prompt_per_million == Decimal(str(candidate["input_usd_per_million"])),
             "completion_price": completion_per_million == Decimal(str(candidate["output_usd_per_million"])),
             "parameters": required_parameters <= supported_parameters,
@@ -858,12 +969,17 @@ def catalog_preflight(
             "context_limit": int(endpoint.get("context_length") or 0) >= max(candidate["input_tokens_by_batch"]) + 4096,
             "available": endpoint.get("status") == 0,
         }
+        if candidate.get("endpoint_tag") is not None:
+            checks["endpoint_tag"] = observed_tag == candidate["endpoint_tag"]
+        if candidate.get("service_tier") is not None:
+            checks["service_tier"] = endpoint.get("service_tier") == candidate["service_tier"] or observed_tag == candidate.get("endpoint_tag")
         if not all(checks.values()):
             failed = ",".join(key for key, passed in checks.items() if not passed)
             raise PilotInputError(f"endpoint catalog preflight failed: {candidate['candidate_id']}:{failed}")
         results.append({
             "candidate_id": candidate["candidate_id"],
             "provider": candidate["response_provider"],
+            "endpoint_tag": observed_tag,
             "endpoint_name": endpoint.get("name"),
             "catalog_sha256": _sha(document),
             "checks": checks,
@@ -883,8 +999,19 @@ def preflight(manifest_path: Path = DEFAULT_MANIFEST, reference_path: Path = DEF
     budget_document = _read_json(budget_path)
     verified_receipts = _verify_source_receipts(budget_document)
     caps, candidates, max_attempts = load_budget(budget_path)
-    if caps.maximum_logical_requests != 18 or caps.maximum_transport_attempts != 36 or max_attempts != PILOT_MAX_TRANSPORT_ATTEMPTS:
-        raise PilotInputError("budget does not preserve the frozen 18-request/36-attempt pilot envelope")
+    adaptive = budget_document.get("adaptive_execution")
+    if isinstance(adaptive, Mapping):
+        execution = adaptive.get("execution_order")
+        selection = adaptive.get("selection_order")
+        candidate_ids = {str(candidate["candidate_id"]) for candidate in candidates}
+        if not isinstance(execution, list) or not isinstance(selection, list) or set(execution) != candidate_ids or set(selection) != candidate_ids:
+            raise PilotInputError("adaptive ladder orders do not exactly match frozen candidates")
+        if not execution or execution[0] != adaptive.get("control_candidate_id"):
+            raise PilotInputError("adaptive ladder must execute the frozen control first")
+    expected_logical = len(candidates) * len(BATCH_SIZES) * len(ROLE_NAMES)
+    expected_attempts = expected_logical * max_attempts
+    if caps.maximum_logical_requests != expected_logical or caps.maximum_transport_attempts != expected_attempts or max_attempts != PILOT_MAX_TRANSPORT_ATTEMPTS:
+        raise PilotInputError("budget does not preserve its frozen candidate retry envelope")
     expected_manifest = budget_document.get("source_receipts", {}).get("selection_manifest", {}).get("sha256")
     expected_reference = budget_document.get("source_receipts", {}).get("owner_reference", {}).get("sha256")
     actual_manifest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
@@ -893,7 +1020,7 @@ def preflight(manifest_path: Path = DEFAULT_MANIFEST, reference_path: Path = DEF
         raise PilotInputError("selected manifest does not match frozen receipt")
     if expected_reference and actual_reference != expected_reference:
         raise PilotInputError("owner reference does not match frozen receipt")
-    return {"pilot_id": PILOT_ID, "rows": len(packets), "source_posts": 45, "post_brand_rows": 45, "batches": list(BATCH_SIZES), "initial_logical_requests": len(BATCH_SIZES) * len(ROLE_NAMES) * len(candidates), "max_transport_attempts_per_role": max_attempts, "candidates": [{key: value for key, value in candidate.items() if key not in {"input_usd_per_million", "output_usd_per_million"}} for candidate in candidates], "manifest_sha256": actual_manifest, "reference_sha256": actual_reference, "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "packet_sha256": _sha(packets), "local_rows": len(local), "verified_source_receipts": verified_receipts}
+    return {"pilot_id": _pilot_id(budget_document), "rows": len(packets), "source_posts": 45, "post_brand_rows": 45, "batches": list(BATCH_SIZES), "initial_logical_requests": expected_logical, "max_transport_attempts_per_role": max_attempts, "candidates": [{key: value for key, value in candidate.items() if key not in {"input_usd_per_million", "output_usd_per_million"}} for candidate in candidates], "manifest_sha256": actual_manifest, "reference_sha256": actual_reference, "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "packet_sha256": _sha(packets), "local_rows": len(local), "verified_source_receipts": verified_receipts}
 
 
 def _result_path(private_dir: Path, candidate_id: str) -> Path:
@@ -999,10 +1126,31 @@ def _durable_report(result: Mapping[str, Any], score: Mapping[str, Any], candida
     budget = _read_json(budget_path)
     quality_gates = _quality_release_gates(score, budget)
     candidate_cost_cap = hard_cap * Decimal(1000) / Decimal(45) if hard_cap.is_finite() else Decimal("Infinity")
-    return {"schema_version": "u18-openrouter-two-role-report-v1", "pilot_id": PILOT_ID, "candidate_id": candidate["candidate_id"], "model": candidate["model"], "request_provider": candidate["provider"], "response_provider": candidate.get("response_provider"), "endpoint_aliases": candidate.get("endpoint_aliases", []), "quantization": candidate.get("quantization"), "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "source_posts": 45, "post_brand_rows": 45, "initial_logical_requests": int(ledger.get("logical_requests", 0)), "failure_code": result.get("failure_code"), "measurements": result.get("measurements", []), "ledger": ledger, "cost_per_1000_source_posts_usd": str(cost_per_1000), "regular_rate_cost_usd": str(regular_cost), "regular_rate_available": regular_input_value is not None and regular_output_value is not None, "complete_result_latency_p95_ms": p95, "gates": {"coverage_100_percent": score.get("coverage") == 1.0, "cost_within_candidate_cap": Decimal(str(ledger.get("spend_usd", "0"))) <= hard_cap, "cost_per_1000_within_candidate_cap": cost_per_1000 <= candidate_cost_cap, "complete_result_latency_p95_within_180s": p95 is not None and p95 <= latency_limit_ms, "quality_floors": score.get("floor_gate", {}), **quality_gates}, "score": score, "raw_outputs_persisted_under": "private responses directory only"}
+    budget_document = _read_json(budget_path)
+    report_schema = "u18-r98-direct-control-fallback-report-v1" if str(budget_document.get("schema_version", "")).startswith("u18-r98-") else "u18-openrouter-two-role-report-v1"
+    return {"schema_version": report_schema, "pilot_id": _pilot_id(budget_document), "candidate_id": candidate["candidate_id"], "model": candidate["model"], "request_provider": candidate["provider"], "response_provider": candidate.get("response_provider"), "endpoint_tag": candidate.get("endpoint_tag"), "service_tier": candidate.get("service_tier"), "transport_kind": candidate.get("transport_kind", "openrouter"), "endpoint_aliases": candidate.get("endpoint_aliases", []), "quantization": candidate.get("quantization"), "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "source_posts": 45, "post_brand_rows": 45, "initial_logical_requests": int(ledger.get("logical_requests", 0)), "failure_code": result.get("failure_code"), "measurements": result.get("measurements", []), "ledger": ledger, "cost_per_1000_source_posts_usd": str(cost_per_1000), "regular_rate_cost_usd": str(regular_cost), "regular_rate_available": regular_input_value is not None and regular_output_value is not None, "complete_result_latency_p95_ms": p95, "gates": {"coverage_100_percent": score.get("coverage") == 1.0, "cost_within_candidate_cap": Decimal(str(ledger.get("spend_usd", "0"))) <= hard_cap, "cost_per_1000_within_candidate_cap": cost_per_1000 <= candidate_cost_cap, "complete_result_latency_p95_within_180s": p95 is not None and p95 <= latency_limit_ms, "quality_floors": score.get("floor_gate", {}), **quality_gates}, "score": score, "raw_outputs_persisted_under": "private responses directory only"}
+
+
+def direct_deepseek_anthropic_client_factory(candidate: Mapping[str, Any] | None = None) -> Any:
+    """Build the production direct DeepSeek Anthropic-compatible client."""
+    if candidate is not None and candidate.get("route") not in {None, "https://api.deepseek.com/anthropic/v1/messages"}:
+        raise PilotInputError("direct DeepSeek candidate route mismatch")
+    from x_monitor.reattribute import build_anthropic_client_from_env
+
+    client = build_anthropic_client_from_env()
+    if client is None:
+        raise PilotInputError("direct DeepSeek client unavailable")
+    expected_base = "https://api.deepseek.com/anthropic"
+    if str(getattr(client, "_base_url", "")).rstrip("/") != expected_base:
+        raise PilotInputError("direct DeepSeek client route mismatch")
+    return client
 
 
 def _client_factory(candidate: Mapping[str, Any]) -> Any:
+    if candidate.get("transport_kind") == "direct_deepseek_anthropic":
+        # This branch is never reached by dry-run, preflight,
+        # catalog-preflight, score, or replay.
+        return direct_deepseek_anthropic_client_factory(candidate)
     from x_monitor.openrouter import OpenRouterChatCompletionsClient
     request_quantizations = candidate.get("request_quantizations")
     if request_quantizations is None and candidate.get("quantization") not in {None, "unknown", "undisclosed"}:
@@ -1014,17 +1162,69 @@ def _client_factory(candidate: Mapping[str, Any]) -> Any:
         reasoning_enabled=candidate.get("reasoning_enabled"),
         quantizations=request_quantizations,
         endpoint_tag=candidate.get("endpoint_tag"),
+        service_tier=candidate.get("service_tier"),
         max_input_price=float(candidate["max_input_price"]) if candidate.get("max_input_price") is not None else None,
         max_output_price=float(candidate["max_output_price"]) if candidate.get("max_output_price") is not None else None,
     )
 
 
+def _report_passes(report: Mapping[str, Any]) -> bool:
+    gates = report.get("gates")
+    if not isinstance(gates, Mapping):
+        return False
+    required = (
+        "coverage_100_percent", "cost_within_candidate_cap",
+        "cost_per_1000_within_candidate_cap", "complete_result_latency_p95_within_180s",
+        "quality_floors", "improvement_composite", "axis_regression", "per_label_regression",
+    )
+    for name in required:
+        value = gates.get(name)
+        if isinstance(value, Mapping):
+            value = value.get("passed")
+        if value is not True:
+            return False
+    return True
+
+
+def _adaptive_candidates(candidates: Sequence[Mapping[str, Any]], budget: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    plan = budget.get("adaptive_execution")
+    if not isinstance(plan, Mapping):
+        return tuple(dict(candidate) for candidate in candidates)
+    by_id = {str(candidate["candidate_id"]): dict(candidate) for candidate in candidates}
+    execution = plan.get("execution_order")
+    selection = plan.get("selection_order")
+    if not isinstance(execution, list) or not isinstance(selection, list):
+        raise PilotInputError("adaptive ladder lacks frozen execution and selection order")
+    if not set(by_id) <= set(execution) or not set(by_id) <= set(selection):
+        raise PilotInputError("adaptive ladder order does not match candidates")
+    return tuple(by_id[candidate_id] for candidate_id in execution if candidate_id in by_id)
+
+
+def _adaptive_decision(reports: Mapping[str, Mapping[str, Any]], selection_order: Sequence[str], attempted: Sequence[str]) -> dict[str, Any]:
+    """Return the frozen ladder decision from terminal candidate reports."""
+    selected: str | None = None
+    for candidate_id in selection_order:
+        if candidate_id in reports and _report_passes(reports[candidate_id]):
+            rank = selection_order.index(candidate_id)
+            if all(item in reports for item in selection_order[:rank]):
+                selected = candidate_id
+                break
+    skipped = [candidate_id for candidate_id in selection_order if candidate_id not in reports]
+    return {
+        "selected_candidate_id": selected,
+        "attempted_candidate_ids": list(attempted),
+        "skipped_candidate_ids": skipped if selected is not None else [],
+        "skipped_reason": "more_expensive_than_selected" if selected is not None and skipped else None,
+        "status": "selected" if selected is not None else "no-selection",
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("dry-run", "preflight", "catalog-preflight", "frozen-run", "replay", "score", "report"))
+    parser.add_argument("mode", choices=("dry-run", "preflight", "catalog-preflight", "frozen-run", "adaptive-ladder", "replay", "score", "report"))
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--private-dir", type=Path, default=DEFAULT_PRIVATE_DIR)
+    parser.add_argument("--private-dir", type=Path, default=None)
     parser.add_argument("--budget", type=Path, required=True)
     parser.add_argument("--max-transport-attempts-per-role", type=int, default=PILOT_MAX_TRANSPORT_ATTEMPTS)
     parser.add_argument("--candidate-id", action="append", help="Run only this frozen candidate; repeat for a subset resume")
@@ -1037,6 +1237,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     caps, candidates, max_attempts = load_budget(args.budget)
     if args.candidate_id:
+        if args.mode == "adaptive-ladder":
+            parser.error("adaptive-ladder requires the complete frozen candidate set")
         selected_ids = set(args.candidate_id)
         known_ids = {candidate["candidate_id"] for candidate in candidates}
         unknown_ids = selected_ids - known_ids
@@ -1046,6 +1248,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         candidates_to_run = candidates
     budget_document = _read_json(args.budget)
+    private_dir = args.private_dir or (DEFAULT_R98_PRIVATE_DIR if str(budget_document.get("schema_version", "")).startswith("u18-r98-") else DEFAULT_PRIVATE_DIR)
+    if args.mode == "frozen-run" and isinstance(budget_document.get("adaptive_execution"), Mapping):
+        parser.error("R98 adaptive budget requires adaptive-ladder mode")
     floor_values = budget_document.get("floors") or (budget_document.get("quality_floors", {}) or {}).get("floors", {})
     unsupported_floor_paths = (budget_document.get("baseline_metrics", {}).get("per_label_support_and_f1", {}).get("unsupported", []))
     manifest = _read_json(args.manifest)
@@ -1054,20 +1259,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode == "catalog-preflight":
         print(json.dumps({"endpoints": catalog_preflight(candidates)}, ensure_ascii=False, sort_keys=True))
         return 0
-    if args.mode == "frozen-run" and not os.environ.get("OPENROUTER_API_KEY"):
-        parser.error("frozen-run requires OPENROUTER_API_KEY; use replay for provider-free execution")
-    if args.mode in {"frozen-run", "replay"}:
+    if args.mode in {"frozen-run", "adaptive-ladder"} and any(candidate.get("transport_kind", "openrouter") == "openrouter" for candidate in candidates_to_run) and not os.environ.get("OPENROUTER_API_KEY"):
+        parser.error(f"{args.mode} requires OPENROUTER_API_KEY; use replay for provider-free execution")
+    if args.mode in {"frozen-run", "adaptive-ladder", "replay"}:
         all_reports = []
         global_ledger = BudgetLedger(caps)
-        if args.mode == "frozen-run":
+        if args.mode in {"frozen-run", "adaptive-ladder"}:
             endpoint_receipt = catalog_preflight(candidates)
-            _write_json(args.private_dir / "catalog-preflight.json", {"endpoints": endpoint_receipt})
-        for candidate in candidates_to_run:
-            pilot = TwoRolePilot(candidate, private_dir=args.private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
+            _write_json(private_dir / "catalog-preflight.json", {"endpoints": endpoint_receipt})
+        run_candidates = _adaptive_candidates(candidates_to_run, budget_document) if args.mode == "adaptive-ladder" else tuple(candidates_to_run)
+        selected_set = {str(candidate["candidate_id"]) for candidate in candidates_to_run}
+        selection_order = [str(value) for value in (budget_document.get("adaptive_execution", {}) or {}).get("selection_order", []) if str(value) in selected_set] if args.mode == "adaptive-ladder" else []
+        reports_by_id: dict[str, dict[str, Any]] = {}
+        for candidate in run_candidates:
+            pilot = TwoRolePilot(candidate, private_dir=private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
             ledger_start = global_ledger.snapshot()
             try:
-                result = pilot.run_candidate(packets, _client_factory if args.mode == "frozen-run" else None, replay=args.mode == "replay")
-            except (OpenRouterPermanentError, PilotInputError) as exc:
+                result = pilot.run_candidate(packets, _client_factory if args.mode in {"frozen-run", "adaptive-ladder"} else None, replay=args.mode == "replay")
+            except (OpenRouterPermanentError, AnthropicCompatiblePermanentError, PilotInputError) as exc:
                 result = {
                     "candidate_id": candidate["candidate_id"],
                     "batches": [],
@@ -1078,21 +1287,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             score = score_candidate(result, reference, local, floor_values, unsupported_floor_paths)
             report = _durable_report(result, score, candidate, args.budget)
-            _write_json(_result_path(args.private_dir, candidate["candidate_id"]), result)
-            _write_json(_report_path(args.private_dir, candidate["candidate_id"]), report)
+            _write_json(_result_path(private_dir, candidate["candidate_id"]), result)
+            _write_json(_report_path(private_dir, candidate["candidate_id"]), report)
             all_reports.append(report)
-        print(json.dumps({"reports": all_reports}, ensure_ascii=False, sort_keys=True))
+            reports_by_id[candidate["candidate_id"]] = report
+            if args.mode == "adaptive-ladder":
+                attempted = [str(item["candidate_id"]) for item in run_candidates if item["candidate_id"] in reports_by_id]
+                decision = _adaptive_decision(reports_by_id, selection_order, attempted)
+                if decision["selected_candidate_id"] is not None:
+                    break
+        output: dict[str, Any] = {"reports": all_reports}
+        if args.mode == "adaptive-ladder":
+            attempted = [str(candidate["candidate_id"]) for candidate in run_candidates if candidate["candidate_id"] in reports_by_id]
+            output["adaptive_decision"] = _adaptive_decision(reports_by_id, selection_order, attempted)
+        print(json.dumps(output, ensure_ascii=False, sort_keys=True))
         return 0
     if args.mode == "score":
         reports = []
         for candidate in candidates_to_run:
-            result = _read_json(_result_path(args.private_dir, candidate["candidate_id"]))
+            result = _read_json(_result_path(private_dir, candidate["candidate_id"]))
             score = score_candidate(result, reference, local, floor_values, unsupported_floor_paths)
             reports.append(_durable_report(result, score, candidate, args.budget))
         print(json.dumps({"reports": reports}, ensure_ascii=False, sort_keys=True))
         return 0
     if args.mode == "report":
-        reports = [_read_json(_report_path(args.private_dir, candidate["candidate_id"])) for candidate in candidates_to_run]
+        reports = [_read_json(_report_path(private_dir, candidate["candidate_id"])) for candidate in candidates_to_run]
         print(json.dumps({"reports": reports}, ensure_ascii=False, sort_keys=True))
         return 0
     # Transport construction is deliberately left to an operator integration;

@@ -43,6 +43,7 @@ class OpenRouterChatCompletionsClient:
     endpoint_tag: str | None = None
     reasoning_enabled: bool | None = None
     quantizations: list[str] | None = None
+    service_tier: str | None = None
     base_url: str = "https://openrouter.ai/api/v1"
 
     @property
@@ -53,7 +54,7 @@ class OpenRouterChatCompletionsClient:
     @property
     def request_identity(self) -> str:
         """Non-secret identity of the pinned route and data policy."""
-        value = f"{self.model}|{self.provider}|{self.data_collection}|{self.max_input_price}|{self.max_output_price}|{self.response_provider}|{self.response_model}|{self.zdr}|{self.endpoint_tag}|{self.reasoning_enabled}|{tuple(self.quantizations or ())}"
+        value = f"{self.model}|{self.provider}|{self.data_collection}|{self.max_input_price}|{self.max_output_price}|{self.response_provider}|{self.response_model}|{self.zdr}|{self.endpoint_tag}|{self.reasoning_enabled}|{tuple(self.quantizations or ())}|{self.service_tier}"
         return "openrouter:" + hashlib.sha256(value.encode()).hexdigest()[:16]
 
     @classmethod
@@ -105,6 +106,10 @@ class OpenRouterChatCompletionsClient:
             request["temperature"] = temperature
         if self.reasoning_enabled is not None:
             request["reasoning"] = {"enabled": self.reasoning_enabled}
+        if self.service_tier is not None:
+            if self.service_tier != "flex":
+                raise OpenRouterPermanentError("openrouter_service_tier_invalid")
+            request["service_tier"] = self.service_tier
         return request
 
     def messages_create(self, **kwargs: Any) -> ProviderResponse:
@@ -185,9 +190,11 @@ class OpenRouterChatCompletionsClient:
             "provider_request_id": decoded.get("id"),
             "provider": actual_provider,
             "model": actual_model or self.model,
+            "selected_endpoint": (selected[0].get("tag") or selected[0].get("endpoint_tag") or actual_provider) if len(selected) == 1 else None,
             "request_provider": actual_provider or self.provider,
             "request_identity": self.request_identity,
             "data_collection": self.data_collection,
+            "service_tier": decoded.get("service_tier") or routing.get("service_tier"),
         }
         allowed_models = {self.model, *(value for value in (self.response_model,) if value)}
         allowed_providers = {self.provider, *(value for value in (self.response_provider,) if value)}

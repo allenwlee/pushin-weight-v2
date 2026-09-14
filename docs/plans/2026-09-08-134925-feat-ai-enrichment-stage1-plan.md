@@ -93,6 +93,23 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 16. The owner then requested an OpenRouter comparison of three models at different sizes, including one free model, selected using current prices and special offers. R97 and the U18 shortlist define this bounded comparison. OpenRouter is an explicit evaluation-provider exception to exception 11's current production provider configuration. Each of the three candidates serves both R95 roles in its own run; this does not add three models to each live classification, an ensemble, a judge, or automatic provider switching. Keep production credentials and defaults unchanged while selecting the cheapest tested candidate that meets all quality, coverage, latency, and operating-capacity gates. Public catalog research and this plan amendment do not constitute an inference run or a deployment.
 
+17. After the frozen R97 comparison failed, the owner authorized a separately
+    frozen follow-up using the existing direct `deepseek-v4-flash` classifier
+    as the control and preapproved additional candidates. R98 governs this
+    experiment. Preserve every R97 request and result as immutable failure
+    evidence; do not replay it or describe this consumed 45-case owner
+    reference as unseen validation. Keep the same two prompts, 20/20/5 packet
+    order, output ceiling, retry rule, parser, merge, quality floors, and
+    latency gate. Run the direct control first, then use the frozen cost order
+    to call only enough candidates to identify the cheapest passing result.
+    The maximum five-candidate envelope, exact routes, and $0.5629859322 hard
+    cap are frozen in
+    `docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json`.
+    A catalog, price, provider, service-tier, secret, or policy mismatch blocks
+    that candidate before transport. This exception authorizes only the bounded
+    public-X evaluation; it does not activate a classifier, change production
+    defaults, weaken a gate, add semantic repair, or deploy.
+
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
 ## Plain-English Summary
@@ -124,13 +141,15 @@ retain the last good result. Prior single-call and reviewer runs remain
 historical evidence. Replacing a proven portion with a small dedicated
 classifier is deferred so training and new model hosting do not block delivery.
 
-The OpenRouter comparison will test a small Qwen3.5-9B, a free Gemma 4 31B,
-and a larger Qwen3-235B at its observed promotional price. Each receives the
-same 45 reviewed posts and the same two focused tasks. Compare actual spending
-and complete-result time, with separate English, Japanese, and Chinese scores.
-Record regular prices alongside discounts and check whether a free service's
-capacity can support the application. SetFit remains a specific later option
-for replacing a proven task with a trained small classifier.
+The first OpenRouter comparison tested a small Qwen, a free Gemma, and a large
+Qwen; all three failed complete-pair coverage, so none was selected. The
+separately frozen follow-up runs the existing direct DeepSeek classifier as a
+control and preapproves four OpenRouter alternatives. It executes them
+adaptively, stopping once the cheapest passing candidate is known. Each uses
+the same 45 reviewed posts and two focused tasks. Actual spending and
+complete-result time remain measured with separate English, Japanese, and
+Chinese scores. SetFit remains a later option for replacing a proven task with
+a trained small classifier.
 
 Every classifier dimension remains strict to the attributed brand. A
 multi-brand post may therefore have different post types, product labels,
@@ -678,6 +697,30 @@ The production classifier asks for six post types, sentiment, discourse, and two
   or unavailable service. State the result as cheapest among the tested passing,
   production-capable configurations. Preserve the
   current production route until the remaining staging and production gates pass.
+- R98. Treat the completed R97 comparison as a terminal failed experiment and
+  run a separately frozen direct-control/fallback comparison under Delivery
+  Exception 17. The control is the existing production-configured
+  `deepseek-v4-flash` Anthropic-compatible route with thinking disabled. The
+  preapproved OpenRouter alternatives, in increasing hard-cap cost order, are
+  Qwen3 30B A3B Instruct on StreamLake, Mistral Small 3.2 24B on Parasail BF16,
+  GPT-5.6 Luna on OpenAI Flex, and Gemini 3.8 Flash on Google AI Studio Flex.
+  Pin the full provider slug and, for Flex candidates, send and attest the
+  `flex` service tier. Preserve the public-X-only data boundary and each
+  provider's frozen `data_collection`/ZDR decision.
+  Execute direct DeepSeek first as the diagnostic control, then evaluate the
+  alternatives in cost order. Stop when all candidates cheaper than the
+  cheapest passing result have terminal reports; never call a more expensive
+  candidate merely to complete the table. Thus a passing Qwen stops the
+  ladder, while a passing DeepSeek skips Gemini after all three cheaper routes
+  fail. If no lower-cost route and no control passes, Gemini is the final
+  fallback. A candidate passes only with 45/45 complete pairs, all frozen
+  quality and regression checks, measured spend within its cap, and p95
+  complete-result latency no greater than 180 seconds. Do not replay R97,
+  change prompt or batch shape, retry a semantic failure, repair an output,
+  substitute a route, or transfer unused allowance. Preserve raw outputs only
+  in the private `.context` directory and publish a secret-free terminal report
+  for every attempted candidate. Selection remains agreement with the consumed
+  owner reference, not an unseen-accuracy claim.
 
 #### Current v3 compatibility labels
 
@@ -792,6 +835,15 @@ name is historical compatibility and does not name the future U18A family.
 - AE46. Covers R95. If content returns valid rows but brand interpretation times out, returns a different input fingerprint, supplies another role's field, or omits an expected brand, the affected post keeps its last good published state and remains pending. No default-negative fields, partial current-state replacement, judge, or semantic repair is generated. A later matching attempt can reuse the valid sibling; changed source or affiliation invalidates that reuse.
 - AE47. Covers R95–R96. Twenty posts produce two initial logical classifier requests and 21 posts produce four, regardless of brand count per post. Transport failures are separately counted within frozen retry caps. Concurrent batches never exceed the shared transport limit, and a pair whose full reserved cost would exceed its budget is not started. A quality or cost failure leaves the candidate disabled and does not trigger extra model calls.
 - AE48. Covers R97. The fake-provider comparison runs three distinct configured models over the same ordered 45 posts and makes exactly 18 initial logical requests. Missing OpenRouter credentials, an unsupported required parameter, a free route becoming paid, or an exceeded price/request cap fails before the affected request. Provider/model mismatches cannot enter another candidate's result or reuse its role cache. An invalid response remains a scored failure without a semantic repair call.
+- AE49. Covers R98. Provider-free tests run the direct control first, preserve
+  its exact DeepSeek route and thinking-disabled request, then prove the frozen
+  cost-order stop rule without replaying an R97 request. The five-candidate
+  maximum permits at most 30 logical requests and 60 transport attempts, while
+  the adaptive path stops before every unnecessary higher-cost request. Tests
+  reject a wrong provider/model, OpenRouter endpoint tag, Flex service tier,
+  price, data policy, source hash, or cap before the affected transport. Direct
+  DeepSeek responses retain safe request/model/usage attestation; no secret or
+  raw post appears in the durable report.
 
 ### Scope Boundaries
 
@@ -994,12 +1046,23 @@ name is historical compatibility and does not name the future U18A family.
   provider-enforced schema support is recorded separately from semantic quality.
 - KTD50. **Freeze the two-role topology for this delivery.** The superseded
   single-call, primary/reviewer, exhaustive-verdict, and selector experiments
-  remain historical evidence only. R95–R97 are the sole active classifier
-  architecture through U24. No further topology, role count, model-voting, or
-  semantic-repair change may enter this candidate after the transport budget is
-  frozen; later changes require a separate plan grounded in production usage,
-  omission, cost, or latency telemetry. A failed trial disables the classifier
-  lane rather than generating another exception inside this release.
+  remain historical evidence only. R95–R98 define the only classifier
+  architecture allowed through U24: R97 is immutable failed evidence and R98
+  is the active control-and-fallback trial. No further topology, role count,
+  model-voting, or semantic-repair change may enter this candidate after the
+  transport budget is frozen; later changes require a separate plan grounded
+  in production usage, omission, cost, or latency telemetry. A failed R98 trial
+  disables the classifier lane rather than generating another exception inside
+  this release.
+- KTD51. **Use direct DeepSeek as the control and stop the fallback ladder as
+  soon as selection is decided.** The first comparison lacked a live run of the
+  already-configured classifier and therefore could not show whether the new
+  two-role contract worked on the current transport. R98 corrects that gap
+  without changing the role topology or erasing R97. Running the control first
+  gives the fastest production-shaped diagnosis; retaining a separate
+  hard-cap cost order prevents that execution order from biasing selection.
+  Preapproval removes another owner check-in while the adaptive stop rule avoids
+  paying for a candidate that cannot be selected over a cheaper passing result.
 
 ### High-Level Technical Design
 
@@ -1532,21 +1595,54 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U18. Complete the owner-reference quality and cost gates
 
-- **Goal:** Trial the R95 division of classification work across the three R97 OpenRouter candidates and select the cheapest configuration that passes the quality, coverage, cost, and latency gates before enabling a new live lane.
-- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R97; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD50.
-- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–16 define the next bounded architecture/model experiment.
+- **Goal:** Preserve the failed R97 comparison, then trial the same R95 division
+  with the R98 direct DeepSeek control and adaptive preapproved fallback ladder;
+  select the cheapest configuration that passes the quality, coverage, cost,
+  and latency gates before enabling a new live lane.
+- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R98; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD51.
+- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–17 define the bounded architecture/model experiments; R97 remains failed evidence and R98 is the only active follow-up.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
   1. Preserve the completed taxonomy-v2 baseline, historical v18–v27 reviewer experiments, and any captured single-call results under their original identities. Under Delivery Exception 13 the ordered 45-case owner reference is the sole completed human review. No independent reviewer, new adjudicator, agreement study, or later human cohort is required.
   2. Reuse the frozen source/context packets and keep current-v3 evaluation distinct from new U18A semantics. The verified dump may be read through an access-restricted disposable local PostgreSQL database for existing discovery/prevalence needs; never serve it through the application. Retain hash/provenance controls and source-post versus extracted-role denominators.
   3. Implement content and brand-interpretation envelopes with one explicit owner per field and one common input/brand/affiliation fingerprint. Use current v3 vocabularies for this trial, concise role-specific definitions, and the explicit KTD49 OpenRouter adapter. Within each of the three candidate runs use the same model for both roles. Neither role consumes the other's predictions. R83 visible-evidence and target-brand rules remain mandatory.
   4. Run the roles concurrently through the shared limiter, then assemble their disjoint fields by stable IDs and validate the full current contract. Preserve role artifacts and composite prompt/model/merge provenance. Extend `PostBrandClassificationJudgment` with distinct `content` and `brand_interpretation` stages and give each new assembled `final` row explicit self-FK links to exactly one matching judgment from each role. Historical primary/review/final lineage remains readable. Database nullability/shape checks plus publisher validation enforce matching post, brand, source fingerprint, role revision, and merge revision; a final row cannot point to a role from another classification identity. Publish complete matching pairs atomically; retain last-good state and normal pending handling for incomplete or invalid pairs. Replace the existing uncommitted single-call migration with this role-aware shape; do not ship both call topologies as active competing defaults.
-  5. Complete the provider-free regression net and tokenize the exact frozen packets before freezing transport. Use that dry-run size distribution, each endpoint's public prices and output ceiling, and the existing production throughput baseline to calculate feasible cap ranges; make no provider request during this calibration. Then freeze one machine-readable pilot budget with R96's numeric total-spend, request/retry/token, per-1,000-post cost, and complete-result p95 latency limits; all three R97 model/provider/price/precision identities; exact input and ownership hashes; baseline identity; and applicable quality floors and improvement/regression criteria. The caps become immutable before the first provider request and cannot be raised after seeing candidate output. The initial comparison allowance is 18 logical requests across all three models. Reserve both calls before dispatch and account for free-tier request limits. Record a dated review of OpenRouter's and each pinned provider's current retention, training, and downstream-processing terms in the secret-free candidate receipt; terms that do not permit the frozen public-X packet block that candidate before transport. Missing limits, identities, or an acceptable recorded data-use decision block provider execution, not plan completion.
-  6. Execute only the frozen pilot during later authorized implementation, giving each model all 45 owner cases in their original order. Compare each complete assembled result with a valid baseline scored on the same input/reference/taxonomy; budget any necessary baseline replay explicitly. Report overall and per-language/per-label agreement, false additions, missed labels, cross-brand errors, source gaps, rare-label support, missing pairs, calls, cache use, all measured tokens, total/normalized cost, and complete-result latency. Include regular-price and promotional projections and distinguish the free candidate's quality result from its available production capacity. Do not claim population accuracy or score new U18A fields as existing human gold.
+  5. Preserve the frozen R97 budget and terminal report. For R98, complete the
+     provider-free adaptive-runner regression net and use the same conservative
+     exact-packet size distribution. Freeze one new machine-readable budget
+     containing the direct control plus four fallback model/provider/price/
+     precision identities, exact input and ownership hashes, baseline identity,
+     quality floors, total and per-candidate spend/request/retry/token caps,
+     per-1,000-post cost, and complete-result p95 limit. The maximum allowance
+     is 30 logical requests across five candidates, but the adaptive stop rule
+     can only reduce it. Reserve both role calls before dispatch. Record a dated
+     policy decision for the public-X packet; any missing or changed identity,
+     price, service tier, policy, or limit blocks that route before transport.
+  6. Execute only R98's frozen adaptive pilot, giving each attempted model all
+     45 owner cases in their original order. Run the direct control first, then
+     stop as soon as the cheapest passing result is decided. Compare each
+     complete assembled result with the same baseline/reference/taxonomy and
+     report overall and per-language/per-label agreement, false additions,
+     missed labels, cross-brand errors, source gaps, rare-label support, missing
+     pairs, calls, cache use, all measured tokens, total/normalized cost, and
+     complete-result latency. Include regular-price and promotional projections.
+     Do not claim population accuracy or score new U18A fields as human gold.
   7. Select the cheapest tested pair only if all preregistered quality, coverage, cost, latency, capacity, and invariant gates pass. Both roles use that candidate model in this first comparison; report per-role strengths without silently constructing mixed-model candidates. Failure produces a retained report and an architecture decision; do not automatically add another role, judge, repair, fourth model, or larger budget. Keep SetFit and other dedicated classifiers and training/hosting work deferred under KTD48. Discovery and targeted extraction retain their separately frozen caps and invariants.
 - **Regression net:** Drive the actual cycle-to-classifier caller with fake transports and PostgreSQL publication where applicable. Prove two initial logical calls for 20 posts and four for 21, all attributed brands present, no call for an empty batch, real parallel execution when capacity permits, a shared maximum of three concurrent transports across batches/retries, and zero reviewer/topic-only/consensus/semantic-repair/per-post-fallback calls. Reject wrong-role fields, missing/duplicate IDs, mismatched source or role revisions, and incompatible `context_missing` combinations. Exercise sibling failure, exact-identity later reuse, source/affiliation invalidation, race/stale-writer fencing, all-or-nothing publication per post, last-good preservation, role telemetry, and pair-budget refusal before the first call.
 - **Semantic test scenarios:** Preserve the R83 boundaries for generic praise versus results, customer cost versus investor-oriented business/finance, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathons. Both roles receive the reviewed DeepSeek account's relationship in the DeepSeek/MiniMax advertising-foil fixture. A favorable endorsement can retain both content labels and an independently supported testimonial. Job/personnel discovery support, 18-post/55-listing denominators, unknown dates, source provenance, safe event occurrence matching, and no silent brand creation remain required. Missing candidate rows remain coverage failures and cannot be removed from the denominator.
-- **Verification:** Retain the immutable taxonomy-v2 baseline and the valid, ordered, explicitly unblinded 45-row owner reference with `complete_by_owner_acceptance`, `waived_by_owner`, `human_grounded=false`, and null inter-reviewer agreement. Record the exact commands and passing counts for the focused real-caller/parser/publication/evaluator/adapter suites including AE48, the frozen budget and output hashes, and a durable three-model, two-role pass/fail report. Report the latency sample size: three batches per candidate give a pilot observation, not a reliable production tail estimate. A failed quality/economics/capacity gate prevents classifier activation and promotion. U18A implements the next semantic version only after the current-v3 gate passes; U19/U23 live activation and U24 production still require their existing independent gates.
+- **Verification:** Retain the immutable taxonomy-v2 baseline and the valid,
+  ordered, explicitly unblinded 45-row owner reference with
+  `complete_by_owner_acceptance`, `waived_by_owner`, `human_grounded=false`,
+  and null inter-reviewer agreement. Retain R97's frozen budget and durable
+  three-model failed report. Record the exact commands and passing counts for
+  the focused real-caller/parser/publication/evaluator/adapter suites including
+  AE48–AE49, R98's frozen budget and output hashes, the direct control result,
+  each attempted fallback result, skipped-candidate reasons, and final
+  selection or no-selection decision. Three batches per attempted candidate
+  provide only a pilot latency observation. A failed quality/economics/capacity
+  gate prevents classifier activation and promotion. U18A begins only after the
+  current-v3 gate passes; U19/U23 activation and U24 production retain their
+  independent gates.
 
 #### U18 OpenRouter shortlist — researched September 14, 2026
 
@@ -2760,3 +2856,23 @@ and no staging activation or production promotion is authorized by this
 failed gate. A changed prompt, output contract, batch shape, model set, or
 budget is a separately frozen experiment and cannot turn this consumed owner
 cohort into unseen validation evidence.
+
+### September 14 — Direct control and fallback ladder frozen
+
+The owner identified the missing live DeepSeek control and authorized it plus
+preapproved alternatives. Delivery Exception 17 and R98 open one separate
+bounded experiment without altering the terminal R97 failure. The provider and
+data-use receipt is
+`docs/research/2026-09-14-213123-u18-r98-control-fallback-receipt.md`. The
+machine-readable contract is
+`docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json`
+(SHA-256 `b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c`).
+
+The maximum envelope is five candidates, 30 logical requests, 60 transport
+attempts, 1,672,220 conservatively bounded input tokens, 245,760 output tokens,
+zero reasoning tokens, and $0.5629859322. Actual execution is adaptive and can
+only use less: direct DeepSeek runs first, then Qwen3 30B, Mistral Small 3.2,
+GPT-5.6 Luna, and Gemini 3.8 Flash are considered in frozen cost order until the
+cheapest passing result is known. All source, prompt, parser, merge, quality,
+latency, and no-repair conditions remain the same as R97. This amendment made
+no inference request and changed no staging or production setting.
