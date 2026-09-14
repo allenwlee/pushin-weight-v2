@@ -541,7 +541,29 @@ class TwoRolePilot:
                 self.ledger.record_attempt({"input_tokens": estimated_input}, cost=_price(self.candidate, estimated_input, 0), model_id=self.candidate["model"])
                 if attempt == self.max_transport_attempts_per_role:
                     break
-            except (OpenRouterPermanentError, PilotInputError):
+            except OpenRouterPermanentError as exc:
+                usage = exc.provider_usage or {"input_tokens": estimated_input}
+                cost = Decimal(str(
+                    usage.get("cost_usd")
+                    or _price(
+                        self.candidate,
+                        int(usage.get("input_tokens") or estimated_input),
+                        int(usage.get("output_tokens") or 0),
+                    )
+                ))
+                self.ledger.record_attempt(usage, cost=cost, model_id=self.candidate["model"])
+                normalized = normalize_usage(usage)
+                self.measurements.append({
+                    "role": role,
+                    "signature": signature,
+                    "attempt": attempt,
+                    "retry": attempt > 1,
+                    "latency_ms": round((time.monotonic() - started) * 1000),
+                    "failure_code": str(exc),
+                    "usage": normalized,
+                })
+                raise
+            except PilotInputError:
                 raise
         raise PilotInputError(f"transport failed after {self.max_transport_attempts_per_role} attempts") from last_error
 
@@ -977,7 +999,7 @@ def _durable_report(result: Mapping[str, Any], score: Mapping[str, Any], candida
     budget = _read_json(budget_path)
     quality_gates = _quality_release_gates(score, budget)
     candidate_cost_cap = hard_cap * Decimal(1000) / Decimal(45) if hard_cap.is_finite() else Decimal("Infinity")
-    return {"schema_version": "u18-openrouter-two-role-report-v1", "pilot_id": PILOT_ID, "candidate_id": candidate["candidate_id"], "model": candidate["model"], "request_provider": candidate["provider"], "response_provider": candidate.get("response_provider"), "endpoint_aliases": candidate.get("endpoint_aliases", []), "quantization": candidate.get("quantization"), "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "source_posts": 45, "post_brand_rows": 45, "initial_logical_requests": 6, "measurements": result.get("measurements", []), "ledger": ledger, "cost_per_1000_source_posts_usd": str(cost_per_1000), "regular_rate_cost_usd": str(regular_cost), "regular_rate_available": regular_input_value is not None and regular_output_value is not None, "complete_result_latency_p95_ms": p95, "gates": {"coverage_100_percent": score.get("coverage") == 1.0, "cost_within_candidate_cap": Decimal(str(ledger.get("spend_usd", "0"))) <= hard_cap, "cost_per_1000_within_candidate_cap": cost_per_1000 <= candidate_cost_cap, "complete_result_latency_p95_within_180s": p95 is not None and p95 <= latency_limit_ms, "quality_floors": score.get("floor_gate", {}), **quality_gates}, "score": score, "raw_outputs_persisted_under": "private responses directory only"}
+    return {"schema_version": "u18-openrouter-two-role-report-v1", "pilot_id": PILOT_ID, "candidate_id": candidate["candidate_id"], "model": candidate["model"], "request_provider": candidate["provider"], "response_provider": candidate.get("response_provider"), "endpoint_aliases": candidate.get("endpoint_aliases", []), "quantization": candidate.get("quantization"), "budget_sha256": hashlib.sha256(budget_path.read_bytes()).hexdigest(), "source_posts": 45, "post_brand_rows": 45, "initial_logical_requests": int(ledger.get("logical_requests", 0)), "failure_code": result.get("failure_code"), "measurements": result.get("measurements", []), "ledger": ledger, "cost_per_1000_source_posts_usd": str(cost_per_1000), "regular_rate_cost_usd": str(regular_cost), "regular_rate_available": regular_input_value is not None and regular_output_value is not None, "complete_result_latency_p95_ms": p95, "gates": {"coverage_100_percent": score.get("coverage") == 1.0, "cost_within_candidate_cap": Decimal(str(ledger.get("spend_usd", "0"))) <= hard_cap, "cost_per_1000_within_candidate_cap": cost_per_1000 <= candidate_cost_cap, "complete_result_latency_p95_within_180s": p95 is not None and p95 <= latency_limit_ms, "quality_floors": score.get("floor_gate", {}), **quality_gates}, "score": score, "raw_outputs_persisted_under": "private responses directory only"}
 
 
 def _client_factory(candidate: Mapping[str, Any]) -> Any:
@@ -1005,6 +1027,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--private-dir", type=Path, default=DEFAULT_PRIVATE_DIR)
     parser.add_argument("--budget", type=Path, required=True)
     parser.add_argument("--max-transport-attempts-per-role", type=int, default=PILOT_MAX_TRANSPORT_ATTEMPTS)
+    parser.add_argument("--candidate-id", action="append", help="Run only this frozen candidate; repeat for a subset resume")
     args = parser.parse_args(argv)
     if args.mode in {"dry-run", "preflight"}:
         result = preflight(args.manifest, args.reference, args.budget)
@@ -1013,6 +1036,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     caps, candidates, max_attempts = load_budget(args.budget)
+    if args.candidate_id:
+        selected_ids = set(args.candidate_id)
+        known_ids = {candidate["candidate_id"] for candidate in candidates}
+        unknown_ids = selected_ids - known_ids
+        if unknown_ids:
+            parser.error(f"unknown frozen candidate: {','.join(sorted(unknown_ids))}")
+        candidates_to_run = tuple(candidate for candidate in candidates if candidate["candidate_id"] in selected_ids)
+    else:
+        candidates_to_run = candidates
     budget_document = _read_json(args.budget)
     floor_values = budget_document.get("floors") or (budget_document.get("quality_floors", {}) or {}).get("floors", {})
     unsupported_floor_paths = (budget_document.get("baseline_metrics", {}).get("per_label_support_and_f1", {}).get("unsupported", []))
@@ -1030,9 +1062,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.mode == "frozen-run":
             endpoint_receipt = catalog_preflight(candidates)
             _write_json(args.private_dir / "catalog-preflight.json", {"endpoints": endpoint_receipt})
-        for candidate in candidates:
+        for candidate in candidates_to_run:
             pilot = TwoRolePilot(candidate, private_dir=args.private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
-            result = pilot.run_candidate(packets, _client_factory if args.mode == "frozen-run" else None, replay=args.mode == "replay")
+            ledger_start = global_ledger.snapshot()
+            try:
+                result = pilot.run_candidate(packets, _client_factory if args.mode == "frozen-run" else None, replay=args.mode == "replay")
+            except (OpenRouterPermanentError, PilotInputError) as exc:
+                result = {
+                    "candidate_id": candidate["candidate_id"],
+                    "batches": [],
+                    "measurements": list(pilot.measurements),
+                    "complete_result_latencies_ms": [],
+                    "ledger": global_ledger.delta(ledger_start),
+                    "failure_code": str(exc),
+                }
             score = score_candidate(result, reference, local, floor_values, unsupported_floor_paths)
             report = _durable_report(result, score, candidate, args.budget)
             _write_json(_result_path(args.private_dir, candidate["candidate_id"]), result)
@@ -1042,14 +1085,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.mode == "score":
         reports = []
-        for candidate in candidates:
+        for candidate in candidates_to_run:
             result = _read_json(_result_path(args.private_dir, candidate["candidate_id"]))
             score = score_candidate(result, reference, local, floor_values, unsupported_floor_paths)
             reports.append(_durable_report(result, score, candidate, args.budget))
         print(json.dumps({"reports": reports}, ensure_ascii=False, sort_keys=True))
         return 0
     if args.mode == "report":
-        reports = [_read_json(_report_path(args.private_dir, candidate["candidate_id"])) for candidate in candidates]
+        reports = [_read_json(_report_path(args.private_dir, candidate["candidate_id"])) for candidate in candidates_to_run]
         print(json.dumps({"reports": reports}, ensure_ascii=False, sort_keys=True))
         return 0
     # Transport construction is deliberately left to an operator integration;

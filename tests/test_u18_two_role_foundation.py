@@ -263,7 +263,7 @@ def test_openrouter_missing_key_does_not_fall_back_to_a_stale_deepseek_route(mon
 
 
 def test_openrouter_rejects_mismatched_route_and_never_echoes_source_or_secret(monkeypatch):
-    import x_monitor.openrouter as openrouter
+    from x_monitor import openrouter
     from x_monitor.provider_telemetry import provider_host_class
 
     client = openrouter.OpenRouterChatCompletionsClient(
@@ -311,7 +311,7 @@ def test_openrouter_permanent_response_failure_is_not_transport_retried(monkeypa
 
 
 def test_openrouter_response_requires_pinned_identity_and_exposes_safe_usage(monkeypatch):
-    import x_monitor.openrouter as openrouter
+    from x_monitor import openrouter
     from x_monitor.provider_telemetry import normalize_usage
 
     client = openrouter.OpenRouterChatCompletionsClient(
@@ -358,6 +358,43 @@ def test_openrouter_response_requires_pinned_identity_and_exposes_safe_usage(mon
         "cost_usd": 0.001, "provider_request_id": "req_safe-1",
     }
     assert client.build_request(model="vendor/model", max_tokens=1, messages=[])["provider"]["quantizations"] == ["fp8"]
+
+
+def test_openrouter_malformed_semantic_content_preserves_billable_usage(monkeypatch):
+    from x_monitor import openrouter
+
+    client = openrouter.OpenRouterChatCompletionsClient(
+        api_key="test-key", model="vendor/model", provider="provider-a",
+        response_model="vendor/model-alias", response_provider="Provider A",
+    )
+
+    class Response:
+        status = 200
+
+        def read(self):
+            return json.dumps({
+                "id": "req-malformed-1",
+                "model": "vendor/model-alias",
+                "openrouter_metadata": {"endpoints": {"available": [{
+                    "model": "vendor/model-alias", "provider": "Provider A", "selected": True,
+                }]}},
+                "choices": [{"message": {"content": '{"broken":'}}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 3, "total_tokens": 23, "cost": 0.002},
+            }).encode()
+
+    class Connection:
+        def __init__(self, *args, **kwargs): pass
+        def request(self, *args, **kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+
+    monkeypatch.setattr(openrouter.http.client, "HTTPSConnection", Connection)
+    with pytest.raises(openrouter.OpenRouterPermanentError, match="content_invalid") as exc:
+        client.messages_create(model="vendor/model", max_tokens=1, messages=[])
+    assert exc.value.provider_usage["input_tokens"] == 20
+    assert exc.value.provider_usage["output_tokens"] == 3
+    assert exc.value.provider_usage["cost_usd"] == 0.002
+    assert exc.value.provider_usage["provider_request_id"] == "req-malformed-1"
 
 
 @pytest.mark.requires_postgres
@@ -427,7 +464,19 @@ def test_two_role_publisher_keeps_exact_lineage_idempotence_and_last_good_on_rej
 @pytest.mark.django_db(transaction=True)
 def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(monkeypatch):
     """Production-shaped queue claim → public classifier → publisher path."""
-    from core.models import Account, Brand, BrandAccount, Post, PostBrand, PostBrandClassificationState, PostEnrichmentState, PostTypeKey, ProductLabelKey, Role, SentimentKey
+    from core.models import (
+        Account,
+        Brand,
+        BrandAccount,
+        Post,
+        PostBrand,
+        PostBrandClassificationState,
+        PostEnrichmentState,
+        PostTypeKey,
+        ProductLabelKey,
+        Role,
+        SentimentKey,
+    )
     from monitor.cycle import CycleRunner
     from x_monitor import reattribute
     from x_monitor.config import Config

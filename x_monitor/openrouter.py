@@ -6,8 +6,8 @@ and data handling policy are part of every request identity.
 
 from __future__ import annotations
 
-import http.client
 import hashlib
+import http.client
 import json
 import os
 from dataclasses import dataclass
@@ -23,6 +23,10 @@ class OpenRouterRetryableError(RuntimeError):
 
 class OpenRouterPermanentError(RuntimeError):
     """A policy, route, or response failure that must not trigger repair."""
+
+    def __init__(self, code: str, *, provider_usage: dict[str, Any] | None = None):
+        super().__init__(code)
+        self.provider_usage = provider_usage
 
 
 @dataclass(frozen=True)
@@ -154,6 +158,37 @@ class OpenRouterChatCompletionsClient:
         ]
         actual_provider = selected[0].get("provider") if len(selected) == 1 else None
         routed_model = selected[0].get("model") if len(selected) == 1 else None
+        raw_usage = decoded.get("usage") if isinstance(decoded.get("usage"), dict) else {}
+        prompt_details = (
+            raw_usage.get("prompt_tokens_details")
+            if isinstance(raw_usage.get("prompt_tokens_details"), dict)
+            else {}
+        )
+        completion_details = (
+            raw_usage.get("completion_tokens_details")
+            if isinstance(raw_usage.get("completion_tokens_details"), dict)
+            else {}
+        )
+        # Construct usage before parsing model content. A malformed semantic
+        # response is still a billable transport and must remain measurable.
+        usage = {
+            "input_tokens": raw_usage.get("prompt_tokens", raw_usage.get("input_tokens")),
+            "output_tokens": raw_usage.get("completion_tokens", raw_usage.get("output_tokens")),
+            "cache_read_input_tokens": prompt_details.get(
+                "cached_tokens", raw_usage.get("cached_tokens", raw_usage.get("cache_read_tokens"))
+            ),
+            "reasoning_tokens": completion_details.get(
+                "reasoning_tokens", raw_usage.get("reasoning_tokens")
+            ),
+            "total_tokens": raw_usage.get("total_tokens"),
+            "cost_usd": raw_usage.get("cost"),
+            "provider_request_id": decoded.get("id"),
+            "provider": actual_provider,
+            "model": actual_model or self.model,
+            "request_provider": actual_provider or self.provider,
+            "request_identity": self.request_identity,
+            "data_collection": self.data_collection,
+        }
         allowed_models = {self.model, *(value for value in (self.response_model,) if value)}
         allowed_providers = {self.provider, *(value for value in (self.response_provider,) if value)}
         # Provider-only routing is a pinned evaluation route, so a missing
@@ -167,41 +202,16 @@ class OpenRouterChatCompletionsClient:
         choices = decoded.get("choices") or []
         content = choices[0].get("message", {}).get("content", "") if choices else ""
         if not isinstance(content, str):
-            raise OpenRouterPermanentError("openrouter_response_content_missing")
+            raise OpenRouterPermanentError("openrouter_response_content_missing", provider_usage=usage)
         try:
             parsed_content = json.loads(content)
         except (TypeError, ValueError) as exc:
-            raise OpenRouterPermanentError("openrouter_response_content_invalid") from exc
+            raise OpenRouterPermanentError(
+                "openrouter_response_content_invalid", provider_usage=usage
+            ) from exc
         if not isinstance(parsed_content, dict):
-            raise OpenRouterPermanentError("openrouter_response_content_shape_invalid")
-        usage = decoded.get("usage") if isinstance(decoded.get("usage"), dict) else {}
-        prompt_details = (
-            usage.get("prompt_tokens_details")
-            if isinstance(usage.get("prompt_tokens_details"), dict)
-            else {}
-        )
-        completion_details = (
-            usage.get("completion_tokens_details")
-            if isinstance(usage.get("completion_tokens_details"), dict)
-            else {}
-        )
+            raise OpenRouterPermanentError(
+                "openrouter_response_content_shape_invalid", provider_usage=usage
+            )
         # Keep normalized provider/request identity alongside usage for existing telemetry.
-        usage = {
-            "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
-            "output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
-            "cache_read_input_tokens": prompt_details.get(
-                "cached_tokens", usage.get("cached_tokens", usage.get("cache_read_tokens"))
-            ),
-            "reasoning_tokens": completion_details.get(
-                "reasoning_tokens", usage.get("reasoning_tokens")
-            ),
-            "total_tokens": usage.get("total_tokens"),
-            "cost_usd": usage.get("cost"),
-            "provider_request_id": decoded.get("id"),
-            "provider": actual_provider,
-            "model": actual_model or self.model,
-            "request_provider": actual_provider or self.provider,
-            "request_identity": self.request_identity,
-            "data_collection": self.data_collection,
-        }
         return ProviderResponse(parsed_content, usage=usage)

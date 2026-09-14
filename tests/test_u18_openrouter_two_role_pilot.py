@@ -172,6 +172,38 @@ def test_retry_envelope_allows_two_attempts_but_no_third():
     assert client.calls == 2
 
 
+def test_permanent_semantic_failure_is_counted_once_without_retry():
+    from x_monitor.openrouter import OpenRouterPermanentError
+
+    packets, _ = build_public_packets(_manifest())
+
+    class Client:
+        calls = 0
+
+        def messages_create(self, **kwargs):
+            self.calls += 1
+            raise OpenRouterPermanentError(
+                "openrouter_response_content_invalid",
+                provider_usage={
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "reasoning_tokens": 0,
+                    "cost_usd": 0.000002,
+                    "provider_request_id": "failed-1",
+                },
+            )
+
+    pilot = TwoRolePilot(VALID_CANDIDATE)
+    client = Client()
+    with pytest.raises(OpenRouterPermanentError, match="content_invalid"):
+        pilot._call(role="content", packets=packets[:1], client=client)
+    assert client.calls == 1
+    assert pilot.ledger.transport_attempts == 1
+    assert pilot.ledger.input_tokens == 10
+    assert pilot.ledger.output_tokens == 5
+    assert pilot.measurements[0]["failure_code"] == "openrouter_response_content_invalid"
+
+
 def test_runner_makes_exactly_two_role_calls_per_ordered_batch(tmp_path: Path):
     packets, _local = build_public_packets(_manifest())
     calls = []
