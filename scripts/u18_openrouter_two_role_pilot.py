@@ -1219,6 +1219,28 @@ def _adaptive_decision(reports: Mapping[str, Mapping[str, Any]], selection_order
     }
 
 
+def _adaptive_catalog_preflight(candidates: Sequence[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], set[str]]:
+    """Attest routes independently so one catalog mismatch blocks one rung."""
+    evidence: list[dict[str, Any]] = []
+    blocked: set[str] = set()
+    for candidate in candidates:
+        candidate_id = str(candidate["candidate_id"])
+        try:
+            rows = catalog_preflight([candidate])
+            evidence.extend(dict(row, status="passed") for row in rows)
+        except PilotInputError as exc:
+            blocked.add(candidate_id)
+            evidence.append({
+                "candidate_id": candidate_id,
+                "provider": candidate.get("response_provider"),
+                "endpoint_tag": candidate.get("endpoint_tag"),
+                "status": "blocked",
+                "failure_code": str(exc)[:200],
+                "checks": {},
+            })
+    return evidence, blocked
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("dry-run", "preflight", "catalog-preflight", "frozen-run", "adaptive-ladder", "replay", "score", "report"))
@@ -1264,27 +1286,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode in {"frozen-run", "adaptive-ladder", "replay"}:
         all_reports = []
         global_ledger = BudgetLedger(caps)
-        if args.mode in {"frozen-run", "adaptive-ladder"}:
+        run_candidates = _adaptive_candidates(candidates_to_run, budget_document) if args.mode == "adaptive-ladder" else tuple(candidates_to_run)
+        catalog_blocked: set[str] = set()
+        if args.mode == "frozen-run":
             endpoint_receipt = catalog_preflight(candidates)
             _write_json(private_dir / "catalog-preflight.json", {"endpoints": endpoint_receipt})
-        run_candidates = _adaptive_candidates(candidates_to_run, budget_document) if args.mode == "adaptive-ladder" else tuple(candidates_to_run)
+        elif args.mode == "adaptive-ladder":
+            endpoint_receipt, catalog_blocked = _adaptive_catalog_preflight(run_candidates)
+            _write_json(private_dir / "catalog-preflight.json", {
+                "pilot_id": _pilot_id(budget_document),
+                "endpoints": endpoint_receipt,
+                "blocked_candidate_ids": sorted(catalog_blocked),
+            })
         selected_set = {str(candidate["candidate_id"]) for candidate in candidates_to_run}
         selection_order = [str(value) for value in (budget_document.get("adaptive_execution", {}) or {}).get("selection_order", []) if str(value) in selected_set] if args.mode == "adaptive-ladder" else []
         reports_by_id: dict[str, dict[str, Any]] = {}
         for candidate in run_candidates:
-            pilot = TwoRolePilot(candidate, private_dir=private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
             ledger_start = global_ledger.snapshot()
-            try:
-                result = pilot.run_candidate(packets, _client_factory if args.mode in {"frozen-run", "adaptive-ladder"} else None, replay=args.mode == "replay")
-            except (OpenRouterPermanentError, AnthropicCompatiblePermanentError, PilotInputError) as exc:
+            if candidate["candidate_id"] in catalog_blocked:
                 result = {
                     "candidate_id": candidate["candidate_id"],
                     "batches": [],
-                    "measurements": list(pilot.measurements),
+                    "measurements": [],
                     "complete_result_latencies_ms": [],
                     "ledger": global_ledger.delta(ledger_start),
-                    "failure_code": str(exc),
+                    "failure_code": "catalog_preflight_blocked",
                 }
+            else:
+                pilot = TwoRolePilot(candidate, private_dir=private_dir, caps=caps, ledger=global_ledger, max_transport_attempts_per_role=min(args.max_transport_attempts_per_role, max_attempts), endpoint_aliases=candidate.get("endpoint_aliases"))
+                try:
+                    result = pilot.run_candidate(packets, _client_factory if args.mode in {"frozen-run", "adaptive-ladder"} else None, replay=args.mode == "replay")
+                except (OpenRouterPermanentError, AnthropicCompatiblePermanentError, PilotInputError) as exc:
+                    result = {
+                        "candidate_id": candidate["candidate_id"],
+                        "batches": [],
+                        "measurements": list(pilot.measurements),
+                        "complete_result_latencies_ms": [],
+                        "ledger": global_ledger.delta(ledger_start),
+                        "failure_code": str(exc),
+                    }
             score = score_candidate(result, reference, local, floor_values, unsupported_floor_paths)
             report = _durable_report(result, score, candidate, args.budget)
             _write_json(_result_path(private_dir, candidate["candidate_id"]), result)

@@ -13,6 +13,7 @@ from scripts.u18_openrouter_two_role_pilot import (
     PilotInputError,
     TwoRolePilot,
     _adaptive_candidates,
+    _adaptive_catalog_preflight,
     _adaptive_decision,
     _client_factory,
     _floor_report,
@@ -591,3 +592,37 @@ def test_adaptive_decision_skips_gemini_after_passing_direct_control():
     assert decision["selected_candidate_id"] == "deepseek"
     assert decision["skipped_candidate_ids"] == ["gemini"]
     assert decision["skipped_reason"] == "more_expensive_than_selected"
+
+
+def test_adaptive_catalog_block_is_zero_transport_terminal(monkeypatch):
+    from scripts import u18_openrouter_two_role_pilot as pilot_module
+
+    def fake_catalog(candidates):
+        candidate_id = candidates[0]["candidate_id"]
+        if candidate_id == "gpt":
+            raise PilotInputError("endpoint catalog preflight failed:gpt:parameters")
+        return [{"candidate_id": candidate_id, "checks": {"parameters": True}}]
+
+    monkeypatch.setattr(pilot_module, "catalog_preflight", fake_catalog)
+    evidence, blocked = _adaptive_catalog_preflight([
+        {"candidate_id": "qwen", "response_provider": "StreamLake", "endpoint_tag": "streamlake"},
+        {"candidate_id": "gpt", "response_provider": "OpenAI", "endpoint_tag": "openai/flex"},
+    ])
+    assert blocked == {"gpt"}
+    assert [row["status"] for row in evidence] == ["passed", "blocked"]
+    assert evidence[1]["failure_code"].endswith("parameters")
+    report = {name: True for name in (
+        "coverage_100_percent", "cost_within_candidate_cap",
+        "cost_per_1000_within_candidate_cap", "complete_result_latency_p95_within_180s",
+        "quality_floors", "improvement_composite", "axis_regression", "per_label_regression",
+    )}
+    decision = _adaptive_decision(
+        {"qwen": {"gates": {key: False for key in report}},
+         "mistral": {"gates": {key: False for key in report}},
+         "gpt": {"gates": {key: False for key in report}},
+         "deepseek": {"gates": {key: value for key, value in report.items()} }},
+        ["qwen", "mistral", "gpt", "deepseek", "gemini"],
+        ["qwen", "mistral", "gpt", "deepseek"],
+    )
+    assert decision["selected_candidate_id"] == "deepseek"
+    assert decision["skipped_candidate_ids"] == ["gemini"]
