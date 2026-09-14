@@ -2732,3 +2732,31 @@ amendment. The API secret belongs in `/Users/fuchitalee/.env.secrets` as
 `OPENROUTER_API_KEY`; the explicit adapter remains implementation work. Existing
 DeepSeek/MiniMax configuration, closed human-review status, and staging-first
 production delivery gates remain in place.
+
+### September 14 — Frozen OpenRouter comparison completed and blocked
+
+The R95–R97 comparison ran under the frozen budget at
+`docs/analysis/2026-09-14-190649-u18-r97-two-role-pilot-contract.json`. The
+provider-free runner and source-receipt checkpoint is commit `ee7ab3a`; commit
+`1aa9257` retains billable usage when future semantic content is malformed.
+Neither commit changes the frozen prompts, candidates, floors, or transport
+caps.
+
+No candidate passed the mandatory complete-pair gate. Qwen3.5 9B returned
+malformed JSON on its first pair and received no semantic retry. Free Gemma 4
+31B exhausted the one allowed identical transport retry for both roles. Qwen3
+235B completed all six calls, used 47,873 input and 7,803 output tokens at
+$0.0068668775 with a 79.277-second complete-batch p95, but its content batches
+returned 19/20, 20/20, and 5/5 rows while brand interpretation returned only
+1/20, 1/20, and 1/5. Deterministic assembly therefore published zero partial
+pairs. Total evaluation-key usage immediately after the bounded experiment was
+$0.009550375, below the $0.042190175 cap.
+
+The durable report is
+`docs/analysis/2026-09-14-194529-u18-openrouter-two-role-pilot-results.md` with
+its machine-readable JSON companion. R97 now requires the two-role classifier
+to stay disabled. No OpenRouter candidate is selected, U18A remains blocked,
+and no staging activation or production promotion is authorized by this
+failed gate. A changed prompt, output contract, batch shape, model set, or
+budget is a separately frozen experiment and cannot turn this consumed owner
+cohort into unseen validation evidence.
