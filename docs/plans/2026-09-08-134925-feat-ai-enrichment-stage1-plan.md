@@ -3,7 +3,7 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-14
+amended: 2026-09-15
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -141,8 +141,8 @@ post types.
 
 The classifier experiment splits the work into two focused calls that run
 in parallel on the same configured batch. R98 measured 20/20/5 batches; the
-current R99 diagnostic measures 40/5 batches with the output budget scaled to
-8,000 tokens for the 40-row requests. One call classifies content:
+completed R99 diagnostic measured 40/5 batches with the output budget scaled
+to 8,000 tokens for the 40-row requests. One call classifies content:
 post types, Audience Topics, and Untracked Brand Promotions. The other judges
 product labels, sentiment, and Geopolitical or national stance for each brand.
 Each field has one owner, and code combines the two valid responses without a
@@ -1078,7 +1078,8 @@ name is historical compatibility and does not name the future U18A family.
   single-call, primary/reviewer, exhaustive-verdict, and selector experiments
   remain historical evidence only. R95–R99 define the only classifier
   architecture evaluated for this delivery: R97 and R98 are immutable failed
-  evidence, and R99 is the active batch-size diagnostic. No further topology, role count,
+  evidence. R99 is also immutable failed evidence, and no classifier trial
+  remains active. No further topology, role count,
   model-voting, or semantic-repair change may enter this candidate after the
   transport budget is frozen; later changes require a separate plan grounded
   in production usage, omission, cost, or latency telemetry. A failed R99 trial
@@ -1634,12 +1635,12 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U18. Complete the owner-reference quality and cost gates
 
-- **Goal:** Preserve the failed R97/R98 comparisons, then measure the same
-  direct DeepSeek two-role classifier with R99's production-scaled 40/5 batch
-  shape; select it only if the unchanged quality, coverage, cost, and latency
-  gates pass before enabling a new live lane.
+- **Goal:** Preserve the failed R97/R98 comparisons and R99's completed
+  production-scaled 40/5 DeepSeek result. No classifier is selected because
+  the unchanged quality and regression gates failed; keep the new live lane
+  disabled.
 - **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R99; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD52.
-- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–18 define the bounded architecture/model experiments; R97 and R98 are terminal failed evidence and R99 is the only active current-v3 diagnostic.
+- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–18 define the bounded architecture/model experiments; R97, R98, and R99 are terminal failed evidence and no current-v3 classifier trial remains active.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
   1. Preserve the completed taxonomy-v2 baseline, historical v18–v27 reviewer experiments, and any captured single-call results under their original identities. Under Delivery Exception 13 the ordered 45-case owner reference is the sole completed human review. No independent reviewer, new adjudicator, agreement study, or later human cohort is required.
@@ -1667,12 +1668,11 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
      complete-result latency. Include regular-price and promotional projections.
      Do not claim population accuracy or score new U18A fields as human gold.
   7. Select the cheapest tested pair only if all preregistered quality, coverage, cost, latency, capacity, and invariant gates pass. Both roles use that candidate model in this first comparison; report per-role strengths without silently constructing mixed-model candidates. Failure produces a retained report and an architecture decision; do not automatically add another role, judge, repair, fourth model, or larger budget. Keep SetFit and other dedicated classifiers and training/hosting work deferred under KTD48. Discovery and targeted extraction retain their separately frozen caps and invariants.
-  8. Preserve R98's terminal result, then execute only R99's frozen direct
-     DeepSeek run with 40/5 batches and 8,000 output tokens per role call. Report
-     complete pairs, truncation or omission, per-axis agreement, latency, all
-     tokens, calls, retries, and cost beside the R98 20/20/5 control. Do not
-     replay prior responses or interpret a batch-shape effect as unseen model
-     validation.
+  8. Preserve R99's terminal direct-DeepSeek result with 40/5 batches and 8,000
+     output tokens per role call. It records complete pairs, truncation or
+     omission, per-axis agreement, latency, all tokens, calls, retries, and cost
+     beside the R98 20/20/5 control. Do not replay prior responses or interpret
+     a batch-shape effect as unseen model validation.
 - **Regression net:** Drive the actual cycle-to-classifier caller with fake transports and PostgreSQL publication where applicable. Prove two initial logical calls for 20 posts and four for 21, all attributed brands present, no call for an empty batch, real parallel execution when capacity permits, a shared maximum of three concurrent transports across batches/retries, and zero reviewer/topic-only/consensus/semantic-repair/per-post-fallback calls. Reject wrong-role fields, missing/duplicate IDs, mismatched source or role revisions, and incompatible `context_missing` combinations. Exercise sibling failure, exact-identity later reuse, source/affiliation invalidation, race/stale-writer fencing, all-or-nothing publication per post, last-good preservation, role telemetry, and pair-budget refusal before the first call.
 - **Semantic test scenarios:** Preserve the R83 boundaries for generic praise versus results, customer cost versus investor-oriented business/finance, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathons. Both roles receive the reviewed DeepSeek account's relationship in the DeepSeek/MiniMax advertising-foil fixture. A favorable endorsement can retain both content labels and an independently supported testimonial. Job/personnel discovery support, 18-post/55-listing denominators, unknown dates, source provenance, safe event occurrence matching, and no silent brand creation remain required. Missing candidate rows remain coverage failures and cannot be removed from the denominator.
 - **Verification:** Retain the immutable taxonomy-v2 baseline and the valid,
@@ -2976,5 +2976,33 @@ The machine-readable contract is
 (SHA-256 `8d2525901e6a8508e44cec2cc1d97785a4ee2a9bda81f581063c231eff048d0a`).
 Its maximum is four logical requests, eight transport attempts, 322,602
 conservatively bounded input tokens, 64,000 output tokens, zero reasoning
-tokens, and $0.22642488. No R99 inference, classifier activation, staging
-change, or production change occurred while freezing this contract.
+tokens, and $0.22642488.
+
+R99 then completed all 45 rows with four logical requests and four transports,
+no retries, 21,415 reported non-cache input tokens, 22,144 cache-read input
+tokens, 12,215 output tokens, zero reasoning tokens, and a 14.427-second p95.
+The 40-row responses used 5,462 and 5,355 output tokens, confirming that the
+old 4,096 floor would have been too small for this batch. The runner ledger
+estimated $0.02554640; pricing every reported cache-read token at the full
+frozen input rate gives a conservative $0.03528976 comparison estimate.
+
+The larger batch improved every top-level classification score over R98, but
+it still failed every semantic release-gate family. Post-type exact-set
+accuracy was 0.311, product-label exact-set accuracy was 0.844, sentiment
+accuracy was 0.667, China-nationalism accuracy was 0.178, U.S.-nationalism
+accuracy was 0.222, and the improvement composite was 0.522 against the
+required 0.864. No candidate was selected. U18A, classifier activation,
+staging activation, and production promotion remain blocked.
+
+The durable machine result is
+`docs/analysis/2026-09-15-073517-u18-r99-deepseek-batch-size-pilot-results.json`
+(SHA-256 `ed8d2bbed14680063a601321fd24842b5a9054d069bfa3801ac822ee614a839a`).
+The readable report is
+`docs/analysis/2026-09-15-073517-u18-r99-deepseek-batch-size-pilot-results.md`
+(SHA-256 `a97cbe87285afc0fd44df4d6195bf28c80b05c69a2377773960026d4dae5cb98`).
+An independent agent reconciled the contract, all four request signatures,
+route attestations, caps, score, gate result, private evidence shape, and R98
+comparison with no findings. Raw outputs remain ignored under
+`.context/u18/openrouter-two-role-pilot-r99-deepseek-batch-size-v1`. This is
+agreement with a consumed owner reference, not unseen validation. No staging
+or production change occurred.
