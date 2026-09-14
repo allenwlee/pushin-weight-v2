@@ -1,0 +1,700 @@
+{
+  "created_at": "2026-09-14T08:23:56.863454+00:00",
+  "plan": "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md",
+  "status": "researched_not_run",
+  "inference_requests_made": 0,
+  "catalog_source": "https://openrouter.ai/api/v1/models",
+  "catalog_observed_at": "2026-09-14T08:15:15.837607+00:00",
+  "catalog_response_sha256": "25de112d39a3a9025da214c668069e0b4245164f45acdca7b0d78db8991bea89",
+  "catalog_model_count": 445,
+  "price_units": "Raw endpoint pricing strings are USD per token; multiply prompt/completion by 1000000 for the plan table. Prices are already discounted when discount is nonzero.",
+  "selection": [
+    {
+      "source": "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints",
+      "observed_at": "2026-09-14T08:16:00.914974+00:00",
+      "response_sha256": "e962dcc6f8459a329fa2543ccfce4e92b7892a330116b7377efe4f510976972b",
+      "model_id": "qwen/qwen3.5-9b",
+      "endpoint": {
+        "name": "DeepInfra | qwen/qwen3.5-9b-20260310",
+        "model_id": "qwen/qwen3.5-9b",
+        "model_name": "Qwen: Qwen3.5-9B",
+        "context_length": 262144,
+        "pricing": {
+          "prompt": "0.0000001",
+          "completion": "0.00000015",
+          "discount": 0
+        },
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/bf16",
+        "quantization": "bf16",
+        "max_completion_tokens": 81920,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "response_format",
+          "logit_bias",
+          "structured_outputs",
+          "tools",
+          "tool_choice"
+        ],
+        "supports_tool_choice": {
+          "none": false,
+          "auto": true,
+          "required": false,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 97.0381917381138,
+        "uptime_last_5m": 96.90721649484536,
+        "uptime_last_1d": 96.43567428805167,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      },
+      "tier": "small_paid",
+      "total_parameters_billions": 9,
+      "active_parameters_billions": 9,
+      "model_card": "https://huggingface.co/Qwen/Qwen3.5-9B",
+      "catalog_pricing": {
+        "prompt": "0.0000001",
+        "completion": "0.00000015"
+      },
+      "catalog_supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "reasoning",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p"
+      ]
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/google/gemma-4-31b-it:free/endpoints",
+      "observed_at": "2026-09-14T08:18:31.305529+00:00",
+      "response_sha256": "6869ef6bf7188e2c18f48848b26bc6562aa0ade293a5d896e65cfbab60407e9d",
+      "model_id": "google/gemma-4-31b-it:free",
+      "endpoint": {
+        "name": "Google AI Studio | google/gemma-4-31b-it-20260402:free",
+        "model_id": "google/gemma-4-31b-it:free",
+        "model_name": "Google: Gemma 4 31B",
+        "context_length": 262144,
+        "pricing": {
+          "prompt": "0",
+          "completion": "0",
+          "discount": 0
+        },
+        "provider_name": "Google AI Studio",
+        "tag": "google-ai-studio",
+        "quantization": "unknown",
+        "max_completion_tokens": 32768,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "response_format",
+          "tools",
+          "tool_choice"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 99.75308641975309,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.70784641068448,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      },
+      "tier": "medium_free",
+      "total_parameters_billions": 30.7,
+      "active_parameters_billions": 30.7,
+      "model_card": "https://huggingface.co/google/gemma-4-31B-it",
+      "catalog_pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "catalog_supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ]
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/qwen/qwen3-235b-a22b-2507/endpoints",
+      "observed_at": "2026-09-14T08:16:00.889968+00:00",
+      "response_sha256": "cff9a0d60e8eee86306d879a5a547c852b92ab18d3b52dd1b7b1972b2d7198bd",
+      "model_id": "qwen/qwen3-235b-a22b-2507",
+      "endpoint": {
+        "name": "GMICloud | qwen/qwen3-235b-a22b-07-25",
+        "model_id": "qwen/qwen3-235b-a22b-2507",
+        "model_name": "Qwen: Qwen3 235B A22B Instruct 2507",
+        "context_length": 262144,
+        "pricing": {
+          "prompt": "0.0000000875",
+          "completion": "0.00000035",
+          "input_cache_read": "0.0000000175",
+          "discount": 0.75
+        },
+        "provider_name": "GMICloud",
+        "tag": "gmicloud/fp8",
+        "quantization": "fp8",
+        "max_completion_tokens": 235929,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "logprobs",
+          "top_logprobs"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 98.1198738170347,
+        "uptime_last_5m": 97.48843357567746,
+        "uptime_last_1d": 97.311264142048,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      },
+      "tier": "large_discounted",
+      "total_parameters_billions": 235,
+      "active_parameters_billions": 22,
+      "model_card": "https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "catalog_pricing": {
+        "prompt": "0.0000000875",
+        "completion": "0.00000035",
+        "input_cache_read": "0.0000000175"
+      },
+      "catalog_supported_parameters": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p"
+      ]
+    }
+  ],
+  "screened_alternatives": [
+    {
+      "source": "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints",
+      "observed_at": "2026-09-14T08:16:00.914974+00:00",
+      "response_sha256": "e962dcc6f8459a329fa2543ccfce4e92b7892a330116b7377efe4f510976972b",
+      "model_id": "qwen/qwen3.5-9b",
+      "endpoint": {
+        "name": "Darkbloom | qwen/qwen3.5-9b-20260310",
+        "model_id": "qwen/qwen3.5-9b",
+        "model_name": "Qwen: Qwen3.5-9B",
+        "context_length": 262144,
+        "pricing": {
+          "prompt": "0.00000008",
+          "completion": "0.00000013",
+          "discount": 0
+        },
+        "provider_name": "Darkbloom",
+        "tag": "darkbloom/fp4",
+        "quantization": "fp4",
+        "max_completion_tokens": 65536,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "temperature",
+          "top_p",
+          "top_k",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "stop",
+          "seed",
+          "max_tokens",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": false,
+          "function": false
+        },
+        "status": 0,
+        "uptime_last_30m": 100,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.9720406056435,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/qwen/qwen3-30b-a3b-instruct-2507/endpoints",
+      "observed_at": "2026-09-14T08:16:00.890044+00:00",
+      "response_sha256": "2c325273c0dd37c47afef2e149835219d61c3df924403be2caaec7d7e86f925d",
+      "model_id": "qwen/qwen3-30b-a3b-instruct-2507",
+      "endpoint": {
+        "name": "StreamLake | qwen/qwen3-30b-a3b-instruct-2507",
+        "model_id": "qwen/qwen3-30b-a3b-instruct-2507",
+        "model_name": "Qwen: Qwen3 30B A3B Instruct 2507",
+        "context_length": 128000,
+        "pricing": {
+          "prompt": "0.00000004815",
+          "completion": "0.00000019305",
+          "discount": 0.55
+        },
+        "provider_name": "StreamLake",
+        "tag": "streamlake",
+        "quantization": "unknown",
+        "max_completion_tokens": 32000,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "tools",
+          "tool_choice",
+          "response_format",
+          "structured_outputs",
+          "logprobs",
+          "top_logprobs",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "presence_penalty"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 97.76415043143214,
+        "uptime_last_5m": 96.9971056439942,
+        "uptime_last_1d": 98.48021076035147,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/qwen/qwen3-32b/endpoints",
+      "observed_at": "2026-09-14T08:16:00.902417+00:00",
+      "response_sha256": "4045bf4465d7ce35cf68a2e28b76c3efdd9a353b59c05fcc939e9ea2b1967908",
+      "model_id": "qwen/qwen3-32b",
+      "endpoint": {
+        "name": "DeepInfra | qwen/qwen3-32b-04-28",
+        "model_id": "qwen/qwen3-32b",
+        "model_name": "Qwen: Qwen3 32B",
+        "context_length": 40960,
+        "pricing": {
+          "prompt": "0.00000008",
+          "completion": "0.00000028",
+          "discount": 0
+        },
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "quantization": "fp8",
+        "max_completion_tokens": 16384,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "response_format",
+          "tools",
+          "tool_choice",
+          "structured_outputs",
+          "logit_bias"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": false,
+          "function": false
+        },
+        "status": 0,
+        "uptime_last_30m": 99.69127140050519,
+        "uptime_last_5m": 99.95442114858706,
+        "uptime_last_1d": 99.58337118538655,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/inclusionai/ling-3.0-flash/endpoints",
+      "observed_at": "2026-09-14T08:16:41.255363+00:00",
+      "response_sha256": "79660d918de472ff34ba0d896b1b7e97d7df769670390f72f577403877279646",
+      "model_id": "inclusionai/ling-3.0-flash",
+      "endpoint": {
+        "name": "Novita | inclusionai/ling-3.0-flash-20260723",
+        "model_id": "inclusionai/ling-3.0-flash",
+        "model_name": "inclusionAI: Ling 3.0 Flash",
+        "context_length": 262144,
+        "pricing": {
+          "prompt": "0.000000021",
+          "completion": "0.000000063",
+          "input_cache_read": "0.0000000042",
+          "discount": 0.65
+        },
+        "provider_name": "Novita",
+        "tag": "novita",
+        "quantization": "unknown",
+        "max_completion_tokens": 32768,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "seed",
+          "top_k",
+          "repetition_penalty",
+          "tools",
+          "tool_choice",
+          "logprobs",
+          "top_logprobs"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 99.98085758039817,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.97669730848688,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/inception/mercury-2.5/endpoints",
+      "observed_at": "2026-09-14T08:16:41.261266+00:00",
+      "response_sha256": "83291c4c32d78ea56f71e956777d94c0e37d44dae1bc0aef821de09266bae996",
+      "model_id": "inception/mercury-2.5",
+      "endpoint": {
+        "name": "Inception | inception/mercury-2.5-20260908",
+        "model_id": "inception/mercury-2.5",
+        "model_name": "Inception: Mercury 2.5",
+        "context_length": 260000,
+        "pricing": {
+          "prompt": "0.00000004",
+          "completion": "0.00000015",
+          "input_cache_read": "0.000000004",
+          "discount": 0.8
+        },
+        "provider_name": "Inception",
+        "tag": "inception",
+        "quantization": "unknown",
+        "max_completion_tokens": 65536,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "stop",
+          "temperature",
+          "tools",
+          "tool_choice",
+          "response_format",
+          "structured_outputs",
+          "reasoning_effort"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 99.97017774066563,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.99435642154127,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v4-flash-0731/endpoints",
+      "observed_at": "2026-09-14T08:16:41.279954+00:00",
+      "response_sha256": "2cce565b7a224661dc54654d1b01ded98457f32d0f60919a8c46a8b1e4eca0ad",
+      "model_id": "deepseek/deepseek-v4-flash-0731",
+      "endpoint": {
+        "name": "Baidu | deepseek/deepseek-v4-flash-20260731",
+        "model_id": "deepseek/deepseek-v4-flash-0731",
+        "model_name": "DeepSeek: DeepSeek V4 Flash 0731",
+        "context_length": 1048576,
+        "pricing": {
+          "prompt": "0.0000000352",
+          "completion": "0.0000001056",
+          "input_cache_read": "0.00000000112",
+          "discount": 0.92
+        },
+        "provider_name": "Baidu",
+        "tag": "baidu/fp8",
+        "quantization": "fp8",
+        "max_completion_tokens": 131072,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "temperature",
+          "top_p",
+          "max_tokens",
+          "stop",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 99.95519713261649,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.95341802922788,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v4-flash-0731/endpoints",
+      "observed_at": "2026-09-14T08:16:41.279954+00:00",
+      "response_sha256": "2cce565b7a224661dc54654d1b01ded98457f32d0f60919a8c46a8b1e4eca0ad",
+      "model_id": "deepseek/deepseek-v4-flash-0731",
+      "endpoint": {
+        "name": "OpenInference | deepseek/deepseek-v4-flash-20260731",
+        "model_id": "deepseek/deepseek-v4-flash-0731",
+        "model_name": "DeepSeek: DeepSeek V4 Flash 0731",
+        "context_length": 1048576,
+        "pricing": {
+          "prompt": "0.00000004",
+          "completion": "0.00000007",
+          "input_cache_read": "0.000000007",
+          "discount": 0
+        },
+        "provider_name": "OpenInference",
+        "tag": "open-inference/fp8",
+        "quantization": "fp8",
+        "max_completion_tokens": 393216,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "temperature",
+          "max_tokens",
+          "stop",
+          "seed",
+          "response_format",
+          "tools",
+          "tool_choice",
+          "top_p",
+          "frequency_penalty",
+          "presence_penalty",
+          "top_k",
+          "min_p",
+          "logit_bias",
+          "repetition_penalty",
+          "structured_outputs",
+          "reasoning_effort"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": true,
+          "function": true
+        },
+        "status": 0,
+        "uptime_last_30m": 99.99955814970771,
+        "uptime_last_5m": 100,
+        "uptime_last_1d": 99.97186034081503,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models/mistralai/mistral-nemo/endpoints",
+      "observed_at": "2026-09-14T08:16:00.929568+00:00",
+      "response_sha256": "fcbae4ee5359e8cafbfae78244e212be3ed54e1e64efbb2f87a9c0e44c816491",
+      "model_id": "mistralai/mistral-nemo",
+      "endpoint": {
+        "name": "DeepInfra | mistralai/mistral-nemo",
+        "model_id": "mistralai/mistral-nemo",
+        "model_name": "Mistral: Mistral Nemo",
+        "context_length": 131072,
+        "pricing": {
+          "prompt": "0.000000019",
+          "completion": "0.00000003",
+          "discount": 0
+        },
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "quantization": "fp8",
+        "max_completion_tokens": 16384,
+        "max_prompt_tokens": null,
+        "supported_parameters": [
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "response_format",
+          "logit_bias",
+          "structured_outputs",
+          "tools",
+          "tool_choice"
+        ],
+        "supports_tool_choice": {
+          "none": true,
+          "auto": true,
+          "required": false,
+          "function": false
+        },
+        "status": 0,
+        "uptime_last_30m": 99.96135192070066,
+        "uptime_last_5m": 99.96085799279787,
+        "uptime_last_1d": 99.95192997921953,
+        "supports_implicit_caching": false,
+        "supports_voice_cloning": false,
+        "latency_last_30m": null,
+        "throughput_last_30m": null
+      }
+    }
+  ],
+  "other_free_reserve": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "source": "https://openrouter.ai/nvidia/nemotron-3-super-120b-a12b:free",
+    "reason": "Strict JSON Schema support; reserve because Gemma occupies the dense approximately35B test slot. Free NVIDIA request logging/training terms must be considered."
+  },
+  "comparison": {
+    "source_posts": 45,
+    "human_review": "sole unblinded owner reference; closed; preserve order",
+    "roles_per_model": 2,
+    "batch_sizes": [
+      20,
+      20,
+      5
+    ],
+    "candidate_models": 3,
+    "initial_logical_requests_per_model": 6,
+    "initial_logical_requests_total": 18,
+    "shared_max_concurrent_transports": 3,
+    "response_format": {
+      "type": "json_object"
+    },
+    "reasoning_policy": "disabled for Qwen9/Gemma31; Qwen235 Instruct2507 non-thinking",
+    "selection": "cheapest tested passing same-model pair, subject to quality, coverage, latency, cost and operating capacity",
+    "execution_prerequisites": "R96 numeric total-spend/token/latency/floor manifest and adapter regression proof remain required before any inference; key placement alone does not run the benchmark"
+  },
+  "offer_caveats": {
+    "expiry": "not disclosed in inspected endpoint price records",
+    "free_limits_source": "https://openrouter.ai/docs/api_reference/limits",
+    "fees_source": "https://openrouter.ai/docs/faq",
+    "routing_source": "https://openrouter.ai/docs/guides/routing/provider-selection",
+    "regular_qwen235_input_output_usd_per_million": [
+      "0.35",
+      "1.40"
+    ],
+    "regular_price_method": "observed promotional rate divided by (1-discount); model page independently displayed the same original price",
+    "ranking": "rank actual cost using token/cache mix; catalog headline price and discount percentage alone do not determine the cheapest endpoint"
+  },
+  "setfit": "Explicit deferred multilingual trained classifier experiment under KTD48; not an OpenRouter model and not a fourth inference candidate."
+}
