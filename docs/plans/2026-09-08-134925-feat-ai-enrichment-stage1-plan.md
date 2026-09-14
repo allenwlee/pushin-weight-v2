@@ -143,13 +143,11 @@ classifier is deferred so training and new model hosting do not block delivery.
 
 The first OpenRouter comparison tested a small Qwen, a free Gemma, and a large
 Qwen; all three failed complete-pair coverage, so none was selected. The
-separately frozen follow-up runs the existing direct DeepSeek classifier as a
-control and preapproves four OpenRouter alternatives. It executes them
-adaptively, stopping once the cheapest passing candidate is known. Each uses
-the same 45 reviewed posts and two focused tasks. Actual spending and
-complete-result time remain measured with separate English, Japanese, and
-Chinese scores. SetFit remains a later option for replacing a proven task with
-a trained small classifier.
+separately frozen follow-up then ran the existing direct DeepSeek classifier as
+a control plus four preapproved OpenRouter alternatives. DeepSeek completed all
+45 rows but failed the unchanged semantic gates, while none of the alternatives
+produced a passing complete result. No classifier was selected. SetFit remains
+a later option for replacing a proven task with a trained small classifier.
 
 Every classifier dimension remains strict to the attributed brand. A
 multi-brand post may therefore have different post types, product labels,
@@ -1047,8 +1045,8 @@ name is historical compatibility and does not name the future U18A family.
 - KTD50. **Freeze the two-role topology for this delivery.** The superseded
   single-call, primary/reviewer, exhaustive-verdict, and selector experiments
   remain historical evidence only. R95–R98 define the only classifier
-  architecture allowed through U24: R97 is immutable failed evidence and R98
-  is the active control-and-fallback trial. No further topology, role count,
+  architecture evaluated for this delivery: R97 and R98 are immutable failed
+  evidence, and no classifier trial remains active. No further topology, role count,
   model-voting, or semantic-repair change may enter this candidate after the
   transport budget is frozen; later changes require a separate plan grounded
   in production usage, omission, cost, or latency telemetry. A failed R98 trial
@@ -1600,7 +1598,7 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   select the cheapest configuration that passes the quality, coverage, cost,
   and latency gates before enabling a new live lane.
 - **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R98; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD51.
-- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–17 define the bounded architecture/model experiments; R97 remains failed evidence and R98 is the only active follow-up.
+- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–17 define the bounded architecture/model experiments; R97 and R98 are now terminal failed evidence, with no active current-v3 classifier trial remaining.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
   1. Preserve the completed taxonomy-v2 baseline, historical v18–v27 reviewer experiments, and any captured single-call results under their original identities. Under Delivery Exception 13 the ordered 45-case owner reference is the sole completed human review. No independent reviewer, new adjudicator, agreement study, or later human cohort is required.
@@ -1969,7 +1967,7 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 - U15B: Disabled-by-default EN/ZH-CN/JA organization-centric and transition-centric personnel queries run only through the bounded existing harvest planner, preserve post/affiliation/organization counts and search provenance, cannot auto-create reviewed brands or affiliations, correctly retain unknown effective dates, and have a verified maximum call/credit delta before any live activation.
 - U16: Applicable positive classifications route through source/media-bound event, opportunity, job, personnel, and profile extractors with independent version/telemetry identities, atomic idempotent persistence, one-post-to-many-role support, zero negative-post calls, and a measured incremental cost.
 - U17: Stable affiliation, `employment_history`, evidence, `job_listings`, event, opportunity, and explicit-`as_of` lifecycle projections plus provider-free evaluation contracts, calibration/cost reports, and exact-SHA staging proof pass. U18 retains owner-reference, discovery/extraction evidence, cost, and invariant gates under Delivery Exception 13; public MCP/API activation remains deferred.
-- U18: Taxonomy-v2 remains the immutable historical baseline; the 45-case taxonomy-v3 owner reference remains complete, ordered, valid, explicitly unblinded/non-gold, and measured only as owner-reference agreement. The R95–R97 two-role, three-model trial records a reproducible price/precision/provider comparison and selects only a candidate passing frozen quality, per-label/locale regression, total-spend, per-1,000-post-cost, complete-result latency, capacity, and real-caller/publication gates. Free or promotional pilot economics do not establish production viability. Job/personnel discovery and role/affiliation extraction retain reproducible reports, invariant checks, separate units, and provider/credit/token/cost budgets.
+- U18: Taxonomy-v2 remains the immutable historical baseline; the 45-case taxonomy-v3 owner reference remains complete, ordered, valid, explicitly unblinded/non-gold, and measured only as owner-reference agreement. The R95–R98 two-role trials record reproducible price/precision/provider comparisons; both ended without a candidate passing the frozen quality, per-label/locale regression, total-spend, per-1,000-post-cost, complete-result latency, capacity, and real-caller/publication gates. Free or promotional pilot economics do not establish production viability. Job/personnel discovery and role/affiliation extraction retain reproducible reports, invariant checks, separate units, and provider/credit/token/cost budgets.
 - U18A: The separately versioned refinement adds `news_reporting`, seven Audience Topics, three Geopolitical modes with China/U.S. national stance, `investigate_claim`, and per-brand speaker policy with EN/ZH-CN/JA labels through the two disjoint classifier roles and one code-only merge, with revision-aware analysis, bounded cost/latency, and no rewrite of completed v3 evidence.
 - U19: Headline demand coalesces per brand/window, refreshes only hot/pinned/prewarmed materially changed inputs, serves last-good output otherwise, routes deterministic risk/audit cases through the critic, and demonstrates a measured provider-call/token/cost reduction on a fixed replay.
 - U20: Literal translation and rich synthesis have independent immutable artifacts, identities, states, telemetry, and compatibility reads; locale-complete synthesis and the entire product UI/headline/cache surface support EN, ZH-CN, and JA equally.
@@ -2876,3 +2874,40 @@ GPT-5.6 Luna, and Gemini 3.8 Flash are considered in frozen cost order until the
 cheapest passing result is known. All source, prompt, parser, merge, quality,
 latency, and no-repair conditions remain the same as R97. This amendment made
 no inference request and changed no staging or production setting.
+
+### September 14 — Direct control and fallback ladder completed and blocked
+
+The R98 adaptive pilot ran from `2026-09-14T13:07:27Z` through
+`2026-09-14T13:08:14Z` using the exact frozen contract. Commit `46ca9cd`
+froze the control, candidates, and caps; commit `7898981` made a live catalog
+mismatch terminal for only that candidate, as required by R98, without sending
+it a request. The durable results are
+`docs/analysis/2026-09-14-221023-u18-r98-control-fallback-pilot-results.json`
+(SHA-256 `be736ee1d1144cd917288009ab3f57aae6fc4577356797646a6efad437aba8c4`)
+and its readable Markdown companion
+`docs/analysis/2026-09-14-221023-u18-r98-control-fallback-pilot-results.md`
+(SHA-256 `9f35252fbfa055393f7d108bea16a87dfe561085edade4c4bd22d598df92b196`).
+
+Direct DeepSeek completed all 45 post-brand pairs with six requests, no retry,
+zero reasoning tokens, an 8.793-second complete-result p95, and an estimated
+$0.03512344 cost. It failed the unchanged semantic gates: post-type exact-set
+accuracy was 0.244, product-label exact-set accuracy was 0.822, sentiment
+accuracy was 0.622, China and U.S. nationalism accuracy were each 0.156, and
+the improvement composite was 0.485 against the required 0.864. The model used
+`null` for most assessable no-nationalism rows instead of `none`, and it also
+missed substantial event, opportunity, research-explanation, and
+results/evaluation coverage.
+
+Qwen3 30B returned invalid content, Mistral Small 3.2 exhausted both allowed
+transport attempts, GPT-5.6 Luna was blocked with zero requests because its
+live Flex endpoint did not support the frozen temperature parameter, and
+Gemini 3.8 Flash returned HTTP 400. The run used 12 logical requests and 14
+transport attempts overall. The conservative ledger was $0.04334947570;
+settled OpenRouter billing was $0.001552160, producing a combined direct
+estimate plus router billing of $0.036675600 under the $0.5629859322 cap.
+
+No candidate was selected. U18 is terminally blocked under the frozen gate,
+U18A and all classifier-dependent activation remain blocked, and neither
+staging activation nor production promotion is authorized. R97 and R98 remain
+immutable consumed-owner-reference evidence; another model, prompt, repair,
+retry, or lower floor would require a new explicitly frozen experiment.
