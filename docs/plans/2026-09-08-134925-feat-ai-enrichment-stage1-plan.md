@@ -1698,8 +1698,8 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U18. Complete the owner-reference quality and cost gates
 
-- **Goal:** Preserve the failed R97–R99 comparisons and execute R100's
-  owner-authorized conditional specialist trial. No classifier is selected
+- **Goal:** Preserve the completed R97–R100 comparisons, including R100's
+  six recovered rare labels and one false addition. No classifier is selected
   while the unchanged full quality and regression gates fail; keep the new
   live lane disabled.
 - **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R100; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD54.
@@ -3110,3 +3110,42 @@ Verification before inference:
 passed 82 tests with zero skips or errors. The paid run is authorized only
 under the frozen three-request, zero-retry, $0.05247396 envelope. No new
 classifier activation, database writes, or deployment is part of R100.
+
+### September 15 — R100 complete; recall improved, opportunity boundary still fails
+
+R100 executed at frozen implementation commit
+`73339fc6f876dd95faf183b842655ccc9a5e4a53`, from 10:43:24 through 10:43:35 JST.
+All three requests returned valid results for all 23 selected rows, with zero
+retries. It recovered six of seven missing rare labels: events rose from 0/3
+to 3/3, opportunities from 1/5 to 4/5, and jobs remained 1/1. There were no
+personnel positives to assess. It incorrectly added one opportunity to an
+ongoing free-access promotion and still missed Hunyuan's opportunity in a
+multi-model b.ai promotion. Every reference rare-positive passed the screen;
+the remaining miss is inside the specialist. The frozen zero-false-addition
+diagnostic gate failed. Do not alter the owner reference to make it pass.
+
+The trial used 14,521 non-cache input, 768 cache-read input, and 2,635 output
+tokens. Estimated marginal spend is $0.007522908 at the current published peak
+rates, or $0.01020536 under the older conservative frozen rates, safely within
+the $0.05247396 reserved ceiling. On a consistent conservative-rate basis,
+the add-on increases the measured R98 cohort cost by 28.5%. Individual extra
+requests took 4.268, 4.121, and 2.492 seconds. This does not measure the full
+end-to-end pipeline because the base responses were saved. Retain the model
+alias caveat: the provider now documents V4.1 behind the legacy Flash name.
+
+All-post-type exact agreement rose from 11/45 to 14/45 and micro F1 from 0.654
+to 0.700, but the full quality gates still fail. Other axes, original labels,
+and 45-row order were verified unchanged. The original human review remains
+complete; classifier activation, U18A execution, and production promotion stay
+blocked by machine quality gates, not by another requested human review.
+
+The durable report is
+`docs/analysis/2026-09-15-104335-u18-r100-conditional-rare-type-results.md`;
+the machine result is
+`docs/analysis/2026-09-15-104335-u18-r100-conditional-rare-type-results.json`
+(SHA-256 `47d3896a42e5976edd12de5dfa6eb300568c19fb640c4dd2d111ff2dccf711e3`).
+The contract hash is
+`f98180427034e695ec43520751e579e9ad9a80ae9b3109e166a5306aa153e49a`.
+Raw requests and responses remain ignored under
+`.context/u18/conditional-rare-type-pilot-r100-v1/`. R100 is terminal evidence;
+its run marker prevents another spend. No staging/production change occurred.
