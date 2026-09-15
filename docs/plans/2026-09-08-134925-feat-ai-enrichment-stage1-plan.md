@@ -124,6 +124,27 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     retain another terminal failure. This exception authorizes no classifier
     activation or staging/production deployment.
 
+19. On September 15 the owner explicitly requested “let's try the 3rd
+    conditional call.” R100 supersedes the no-third-call/no-further-trial
+    restrictions in Exception 15 and KTD50 only for this bounded diagnostic.
+    Reuse the saved R98 20/20/5 DeepSeek answers without buying the first two
+    roles again; preserve R97–R99 as immutable evidence. A deterministic
+    multilingual source/context screen and prior content labels select rows
+    for one additional four-predicate specialist request per nonempty original
+    batch. Freeze 23 selected rows in 12/8/3 batches, three requests/transports,
+    no retries, concurrency one, 65,259 conservative input tokens, 18,000
+    output tokens, zero reasoning tokens, and a $0.05247396 reserved ceiling
+    before inference. The outer refusal ceiling is $0.15. Use the pinned
+    direct DeepSeek route and legacy Flash request name; record the provider's
+    September 15 notice that this alias now serves V4.1 Flash. Thus this tests
+    a practical add-on to fixed old answers, not an isolated same-model
+    architecture comparison. Add only supported missing job listings,
+    personnel changes, events, and opportunities; preserve other axes and
+    original labels. Record false additions, screen misses, specialist misses,
+    costs, and latency against the sole completed owner reference. This
+    authorizes the trial, its artifact checkpoint, and feature-branch evidence;
+    it does not activate a classifier or waive any staging/production gate.
+
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
 ## Plain-English Summary
@@ -145,9 +166,12 @@ completed R99 diagnostic measured 40/5 batches with the output budget scaled
 to 8,000 tokens for the 40-row requests. One call classifies content:
 post types, Audience Topics, and Untracked Brand Promotions. The other judges
 product labels, sentiment, and Geopolitical or national stance for each brand.
-Each field has one owner, and code combines the two valid responses without a
-third model or reviewer. This changes the earlier one-call constraint; it does
-not assume that splitting the work guarantees better labels or doubles cost.
+Each field has one owner, and code combines the two valid responses. The
+owner-authorized R100 diagnostic now tests an optional third call on broadly
+screened posts to recover missing jobs, personnel changes, events, and
+opportunities. It reuses R98's saved answers and measures the additional cost
+and false additions. It does not assume that splitting the work guarantees
+better labels or doubles cost.
 
 The trial must improve agreement with the completed owner review and satisfy
 fixed spending and processing-time limits before becoming the delivery
@@ -752,6 +776,29 @@ The production classifier asks for six post types, sentiment, discourse, and two
   owner reference as unseen validation. Select DeepSeek only if every existing
   gate passes; otherwise keep the classifier disabled and stop.
 
+- R100. Execute only the conditional rare-type diagnostic in Exception 19.
+  Freeze the runner, prompt, routing, input fingerprints, base answers, owner
+  reference, existing scoring floors, and numeric caps in
+  `docs/analysis/2026-09-15-103348-u18-r100-conditional-rare-type-contract.json`.
+  Route from visible source/context cues or prior relevant labels, never owner
+  answers or a gold-positive list. Ask all four independent Boolean predicates
+  on each routed row and require an exact evidence substring for each positive.
+  Include retrospective occurrences; preserve unknown dates; retain strict
+  target-brand and affiliation semantics. Merge additions only on already
+  classified rows, preserving all other fields; remove `other` only when a
+  supported addition makes it nonexclusive. A malformed response, bad identity,
+  missing predicate, or unsupported span preserves the original batch and
+  counts as a conditional failure; no retry or repair. Stop after any failed
+  request. Report correct and incorrect added labels, each type's support,
+  precision/recall, screen versus specialist misses, selected fraction, added
+  requests/tokens/cost/latency, and all unchanged full quality gates. At least
+  one recovered label, zero false additions, complete conditional responses,
+  and respected caps constitute diagnostic success only; classifier activation
+  still requires every existing gate. No personnel-positive quality claim is
+  possible with zero positives in this cohort. Preserve original R98 cost and
+  timing from `adaptive-result.json`; its replayed candidate file contains
+  unchanged labels but zeroed replay cost/latency and must not price the base.
+
 #### Current v3 compatibility labels
 
 The following table remains the exact current-v3 vocabulary. Its Nationalism
@@ -1074,17 +1121,16 @@ name is historical compatibility and does not name the future U18A family.
   the three model configurations and evaluation artifacts from live defaults.
   Use the common JSON-object mode described in U18 and deterministic validation;
   provider-enforced schema support is recorded separately from semantic quality.
-- KTD50. **Freeze the two-role topology for this delivery.** The superseded
+- KTD50. **Preserve completed topology experiments; R100 is the explicit
+  owner-authorized exception.** The superseded
   single-call, primary/reviewer, exhaustive-verdict, and selector experiments
-  remain historical evidence only. R95–R99 define the only classifier
+  remain historical evidence only. R95–R99 defined the two-role classifier
   architecture evaluated for this delivery: R97 and R98 are immutable failed
-  evidence. R99 is also immutable failed evidence, and no classifier trial
-  remains active. No further topology, role count,
-  model-voting, or semantic-repair change may enter this candidate after the
-  transport budget is frozen; later changes require a separate plan grounded
-  in production usage, omission, cost, or latency telemetry. A failed R99 trial
-  disables the classifier lane rather than generating another exception inside
-  this release.
+  evidence. R99 is also immutable failed evidence. The subsequent owner
+  instruction authorizes R100's separately frozen third conditional call in
+  this same shared plan. Do not expand R100 into voting, another model ladder,
+  repeated tuning runs, or a fourth call. The new classifier lane remains
+  disabled until every full activation gate passes.
 - KTD51. **Use direct DeepSeek as the control and stop the fallback ladder as
   soon as selection is decided.** The first comparison lacked a live run of the
   already-configured classifier and therefore could not show whether the new
@@ -1112,6 +1158,14 @@ name is historical compatibility and does not name the future U18A family.
   separate gate, reconsider a token-budgeted maximum of 40 that closes a batch
   earlier for long source/context packets and keeps 20 as a rollback setting.
   Do not reactively split and resend a completed semantic failure.
+- KTD54. **Measure the conditional specialist as an incremental intervention.**
+  R100's broad screen intentionally favors recall and may select many posts;
+  a rare final label does not imply a rare extra request. Preserve original
+  batch boundaries and report the actual 12/8/3 additional calls against the
+  six saved R98 base calls. The add-only merge can recover omissions but cannot
+  repair wrong base labels, context outcomes, sentiment, or nationalism. The
+  model-alias change is an explicit confounder; a positive result cannot prove
+  that sequence alone caused the improvement or establish production accuracy.
 
 ### High-Level Technical Design
 
@@ -1644,12 +1698,12 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U18. Complete the owner-reference quality and cost gates
 
-- **Goal:** Preserve the failed R97/R98 comparisons and R99's completed
-  production-scaled 40/5 DeepSeek result. No classifier is selected because
-  the unchanged quality and regression gates failed; keep the new live lane
-  disabled.
-- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R99; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD53.
-- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–18 define the bounded architecture/model experiments; R97, R98, and R99 are terminal failed evidence and no current-v3 classifier trial remains active.
+- **Goal:** Preserve the failed R97–R99 comparisons and execute R100's
+  owner-authorized conditional specialist trial. No classifier is selected
+  while the unchanged full quality and regression gates fail; keep the new
+  live lane disabled.
+- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R100; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD54.
+- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–19 define the bounded architecture/model experiments; R97, R98, and R99 remain terminal failed evidence. R100 purchases only the conditional third calls using saved R98 base answers.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
   1. Preserve the completed taxonomy-v2 baseline, historical v18–v27 reviewer experiments, and any captured single-call results under their original identities. Under Delivery Exception 13 the ordered 45-case owner reference is the sole completed human review. No independent reviewer, new adjudicator, agreement study, or later human cohort is required.
@@ -1682,6 +1736,17 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
      omission, per-axis agreement, latency, all tokens, calls, retries, and cost
      beside the R98 20/20/5 control. Do not replay prior responses or interpret
      a batch-shape effect as unseen model validation.
+  9. Run R100 from its frozen contract and saved R98 answers. Its standalone
+     evaluator adds three conditional requests only and never invokes either
+     base role, the harvest pipeline, or database publication. Freeze the
+     prompt/screen/caps before transport and retain its own terminal evidence.
+- **R100 regression net:** Exercise the actual specialist caller with a fake
+  provider: only selected rows cross the boundary, all four predicates are
+  explicit, multiple positives survive, other axes and unrouted rows remain
+  unchanged, malformed/duplicate/missing/foreign-brand responses fail closed,
+  failed transports never retry, changed frozen inputs refuse transport, and
+  an existing run marker prevents repeat spend. The focused suite includes
+  17 new tests, the existing 29 two-role pilot tests, and 36 Ollija checks.
 - **Regression net:** Drive the actual cycle-to-classifier caller with fake transports and PostgreSQL publication where applicable. Prove two initial logical calls for 20 posts and four for 21, all attributed brands present, no call for an empty batch, real parallel execution when capacity permits, a shared maximum of three concurrent transports across batches/retries, and zero reviewer/topic-only/consensus/semantic-repair/per-post-fallback calls. Reject wrong-role fields, missing/duplicate IDs, mismatched source or role revisions, and incompatible `context_missing` combinations. Exercise sibling failure, exact-identity later reuse, source/affiliation invalidation, race/stale-writer fencing, all-or-nothing publication per post, last-good preservation, role telemetry, and pair-budget refusal before the first call.
 - **Semantic test scenarios:** Preserve the R83 boundaries for generic praise versus results, customer cost versus investor-oriented business/finance, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathons. Both roles receive the reviewed DeepSeek account's relationship in the DeepSeek/MiniMax advertising-foil fixture. A favorable endorsement can retain both content labels and an independently supported testimonial. Job/personnel discovery support, 18-post/55-listing denominators, unknown dates, source provenance, safe event occurrence matching, and no silent brand creation remain required. Missing candidate rows remain coverage failures and cannot be removed from the denominator.
 - **Verification:** Retain the immutable taxonomy-v2 baseline and the valid,
@@ -3028,3 +3093,20 @@ semantic rather than truncation, row coverage, structural target-brand ID, or
 late-batch position failures. The same analysis distinguishes observed,
 settled, ledger, same-token, and worst-case model costs instead of presenting
 failed partial runs as production prices.
+
+### September 15 — R100 conditional specialist trial frozen
+
+The owner requested a third conditional call. The versioned contract is
+`docs/analysis/2026-09-15-103348-u18-r100-conditional-rare-type-contract.json`;
+the experiment receipt is
+`docs/research/2026-09-15-103348-u18-r100-conditional-rare-type-receipt.md`.
+The screen selects 23/45 rows (10 English, 5 Japanese, 8 Simplified Chinese),
+preserving original batch boundaries as 12/8/3. No owner labels enter the
+provider packet. Current provider documentation says the retained Flash alias
+now serves V4.1; preserve that limitation in every causal interpretation.
+
+Verification before inference:
+`python -m pytest tests/test_u18_conditional_rare_type_pilot.py tests/test_u18_openrouter_two_role_pilot.py tests/ollija -q`
+passed 82 tests with zero skips or errors. The paid run is authorized only
+under the frozen three-request, zero-retry, $0.05247396 envelope. No new
+classifier activation, database writes, or deployment is part of R100.
