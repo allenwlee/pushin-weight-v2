@@ -1103,6 +1103,15 @@ name is historical compatibility and does not name the future U18A family.
   semantic inputs and gates remain fixed. R99 measures whether two fewer
   initial calls improve cost or latency without causing truncation, omission,
   cross-row interference, or quality regression.
+- KTD53. **Retain the 20-row runtime default while semantic quality is
+  blocked.** R99 proves that 40/5 batches with the scaled 8,000-token allowance
+  can complete all 45 rows and reduce calls, but it does not establish a
+  shippable classifier. The larger batch increases individual-request latency
+  and the number of rows affected by one failed role response. Make no runtime
+  or configuration change from R99. If a later semantic design passes its
+  separate gate, reconsider a token-budgeted maximum of 40 that closes a batch
+  earlier for long source/context packets and keeps 20 as a rollback setting.
+  Do not reactively split and resend a completed semantic failure.
 
 ### High-Level Technical Design
 
@@ -1639,7 +1648,7 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   production-scaled 40/5 DeepSeek result. No classifier is selected because
   the unchanged quality and regression gates failed; keep the new live lane
   disabled.
-- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R99; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD52.
+- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R99; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD53.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–18 define the bounded architecture/model experiments; R97, R98, and R99 are terminal failed evidence and no current-v3 classifier trial remains active.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
@@ -2999,10 +3008,23 @@ The durable machine result is
 (SHA-256 `ed8d2bbed14680063a601321fd24842b5a9054d069bfa3801ac822ee614a839a`).
 The readable report is
 `docs/analysis/2026-09-15-073517-u18-r99-deepseek-batch-size-pilot-results.md`
-(SHA-256 `a97cbe87285afc0fd44df4d6195bf28c80b05c69a2377773960026d4dae5cb98`).
+(SHA-256 `6e59a6887b3d9c3ccb74fee6e206900eab968b363677d8f0b90b6ef972f9af86`).
 An independent agent reconciled the contract, all four request signatures,
 route attestations, caps, score, gate result, private evidence shape, and R98
 comparison with no findings. Raw outputs remain ignored under
 `.context/u18/openrouter-two-role-pilot-r99-deepseek-batch-size-v1`. This is
 agreement with a consumed owner reference, not unseen validation. No staging
 or production change occurred.
+
+After reviewing the 20-versus-40 tradeoff, the owner retained the 20-row
+runtime default under KTD53. The semantic failure analysis and all tested-model
+cost estimates are recorded in
+`docs/analysis/2026-09-15-094428-u18-deepseek-semantic-failure-and-model-costs.md`
+(SHA-256 `164a9b08bc80eb2ec74436966e91daed8c5bb58749ada3cb833c3f047a990af7`).
+DeepSeek's dominant defect was multi-label post-type recall: it emitted 66
+labels against 95 in the owner reference, with 57 true positives, 38 misses,
+and nine extras. A second independent analysis confirmed that the failures are
+semantic rather than truncation, row coverage, structural target-brand ID, or
+late-batch position failures. The same analysis distinguishes observed,
+settled, ledger, same-token, and worst-case model costs instead of presenting
+failed partial runs as production prices.

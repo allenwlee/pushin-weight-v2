@@ -56,3 +56,7 @@ This is agreement with the already consumed, sole owner reference. It is not uns
 ## Independent audit
 
 A separate agent reconciled the frozen contract, all four request signatures, provider attestations, token and spending caps, recomputed score, gate result, private artifact shape, and the R98 comparison. It passed the audit with no findings and made no provider calls.
+
+## Batch-size decision after review
+
+Keep the runtime default at 20 rows for now. The 40-row run remains evidence that a token-scaled larger batch is feasible, but it does not justify a runtime/configuration change while semantic quality remains blocked. If the semantic design later passes, reconsider a token-budgeted maximum of 40 with 20 retained as a rollback setting. The detailed semantic and cost analysis is in `docs/analysis/2026-09-15-094428-u18-deepseek-semantic-failure-and-model-costs.md`.
