@@ -1,0 +1,73 @@
+{
+  "caps": {
+    "concurrency": 1,
+    "conditional_logical_requests_max": 3,
+    "conditional_max_tokens": 6000,
+    "hard_cap_usd": "0.20",
+    "input_tokens": 193000,
+    "output_tokens": 36000,
+    "primary_logical_requests": 3,
+    "primary_max_tokens": 6000,
+    "reasoning_tokens": 0,
+    "reserved_usd": "0.13244",
+    "retries": 0,
+    "timeout_seconds": 90,
+    "transport_attempts_max": 6
+  },
+  "conditional_envelope_batches": [
+    20,
+    20,
+    5
+  ],
+  "conditional_prompt_sha256": "74504b2ce9c7c9f804d2a4e70a40c089e7649a4629cdf2bc3f91bda15fb299d5",
+  "evaluation": "Compare the completed merged output with R98+R100 and the owner reference: all-axis scores, rare support/TP/FP/FN, screen misses, incremental cost, and latency. Selection requires all existing gates plus zero conditional false additions; this trial does not waive activation gates.",
+  "frozen_at": "2026-09-15T02:09:32.592698+00:00",
+  "merge": "Primary owns all six current-v3 axes. Conditional can add only supported rare post types to primary classified rows and never removes/overwrites any primary result. A failed primary stops before conditional; a failed conditional preserves that primary batch. No retry or semantic repair.",
+  "model": {
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+    "response_model": "deepseek-flash",
+    "route": "https://api.deepseek.com/anthropic/v1/messages",
+    "service_tier": null
+  },
+  "primary_batches": [
+    20,
+    20,
+    5
+  ],
+  "primary_prompt_sha256": "0638951c053bd1ecce889ab7bfeda730d24e6ee593bf5184992a456ba812cdf8",
+  "routing": "After each valid primary response, route only classified rows where visible EN/CJK rare cues or a relevant primary type is present. Primary raw text alone remains sufficient; no owner labels or reference data influence routing.",
+  "schema_version": "u18-r101-single-primary-conditional/v1",
+  "scope": "One full production-shaped primary classifier call per 20/20/5 batch followed only by source/primary-screened rare-type checks. Owner calibration stays local. No runtime, database, or deployment changes.",
+  "sources": {
+    "budget": {
+      "path": "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json",
+      "sha256": "b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c"
+    },
+    "conditional_prompt_source": {
+      "path": "scripts/u18_conditional_rare_type_pilot.py",
+      "sha256": "3f8ce43b19b678425e0a740bb7553ac12891a9e539366406478fc15ab265ecf7"
+    },
+    "floors": {
+      "path": "docs/analysis/2026-09-11-002632-classification-quality-floors-v3.json",
+      "sha256": "881a2e297bad803851a42d629b5519b5e0a200f38d055dd5951c194aefaf79ba"
+    },
+    "manifest": {
+      "path": ".context/u18/human-ambiguity-study-v1/selection-manifest.json",
+      "sha256": "50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91"
+    },
+    "owner_reference": {
+      "path": ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json",
+      "sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80"
+    },
+    "primary_prompt_source": {
+      "path": "x_monitor/attribution.py",
+      "sha256": "7e024a8f892cec9496f1910864ec820911949fd1e79f49074abac3bbecf3188a"
+    },
+    "runner": {
+      "path": "scripts/u18_single_primary_conditional_pilot.py",
+      "sha256": "ec1076ebc44d574a951b89b198b8769d86f2ef2726e14e1bd177e105af9ee71d"
+    }
+  },
+  "status": "frozen_before_inference"
+}

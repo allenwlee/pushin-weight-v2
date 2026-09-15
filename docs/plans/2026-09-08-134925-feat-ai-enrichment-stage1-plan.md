@@ -144,6 +144,20 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     costs, and latency against the sole completed owner reference. This
     authorizes the trial, its artifact checkpoint, and feature-branch evidence;
     it does not activate a classifier or waive any staging/production gate.
+20. The owner then authorized the simpler R101 architecture: one full primary
+    call plus one conditional rare-type follow-up. R101 supersedes the
+    two-parallel-primary requirement only for this bounded comparison. The
+    primary uses the existing full production prompt and owns every current-v3
+    field. A sequential specialist may add only jobs, personnel changes,
+    events, and opportunities to a classified primary row. Freeze 20/20/5
+    primary batches; reserve up to three matching conditional batches because
+    their source/primary screen cannot be known before transport; set six
+    maximum serial calls, zero retries, zero reasoning tokens, 6,000 output
+    tokens per call, and a $0.13244000 conservative cap under the separate
+    R101 contract. Compare all axes, rare-label errors, actual routing and
+    costs against R98+R100. This authorizes only the private evaluation and
+    feature-branch artifacts; runtime activation, database publication, and
+    staging/production deployment remain prohibited.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
