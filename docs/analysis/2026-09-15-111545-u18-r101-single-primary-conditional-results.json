@@ -1,0 +1,1632 @@
+{
+  "contract_sha256": "feafe97fe105b5ae4b8ffad1a062abf2f3a15cc5bab4df10a328c7f139ad771c",
+  "cost": {
+    "conservative_usd": "0.02705736",
+    "current_off_peak_estimate_usd": "0.009397116",
+    "per_1000_current_off_peak_usd": "0.208824800"
+  },
+  "full_quality_gates": {
+    "axis_regression": {
+      "checks": {
+        "all.china_nationalism.accuracy": {
+          "baseline": 0.888889,
+          "minimum": 0.8666667777777778,
+          "observed": 0.8444444444444444,
+          "passed": false
+        },
+        "all.outcome.accuracy": {
+          "baseline": 0.955556,
+          "minimum": 0.9333337777777777,
+          "observed": 0.9333333333333333,
+          "passed": false
+        },
+        "all.post_types.exact_set_accuracy.value": {
+          "baseline": 0.755556,
+          "minimum": 0.7333337777777778,
+          "observed": 0.4888888888888889,
+          "passed": false
+        },
+        "all.product_labels.exact_set_accuracy.value": {
+          "baseline": 0.733333,
+          "minimum": 0.7111107777777778,
+          "observed": 0.7555555555555555,
+          "passed": true
+        },
+        "all.sentiment.accuracy": {
+          "baseline": 0.777778,
+          "minimum": 0.7555557777777777,
+          "observed": 0.6666666666666666,
+          "passed": false
+        },
+        "all.us_nationalism.accuracy": {
+          "baseline": 0.955556,
+          "minimum": 0.9333337777777777,
+          "observed": 0.9111111111111111,
+          "passed": false
+        }
+      },
+      "passed": false
+    },
+    "improvement_composite": {
+      "baseline": 0.844444,
+      "minimum": 0.864444,
+      "observed": 0.7666666666666666,
+      "passed": false
+    },
+    "per_label_regression": {
+      "checks": {
+        "all.post_types.labels.advertising_marketing.f1": {
+          "baseline": 1.0,
+          "minimum": 0.9,
+          "observed": 0.8888888888888888,
+          "passed": false,
+          "support": 5
+        },
+        "all.post_types.labels.business_finance.f1": {
+          "baseline": 1.0,
+          "minimum": 0.9,
+          "observed": 0.75,
+          "passed": false,
+          "support": 4
+        },
+        "all.post_types.labels.events.f1": {
+          "baseline": 0.8,
+          "minimum": 0.7000000000000001,
+          "observed": 1.0,
+          "passed": true,
+          "support": 3
+        },
+        "all.post_types.labels.hands_on_usage.f1": {
+          "baseline": 0.888889,
+          "minimum": 0.7888890000000001,
+          "observed": 0.75,
+          "passed": false,
+          "support": 9
+        },
+        "all.post_types.labels.job_listings.f1": {
+          "baseline": 1.0,
+          "observed": 1.0,
+          "passed": true,
+          "status": "support_one_floor",
+          "support": 1
+        },
+        "all.post_types.labels.opinions_reactions.f1": {
+          "baseline": 0.928571,
+          "minimum": 0.8285710000000001,
+          "observed": 0.8363636363636363,
+          "passed": true,
+          "support": 26
+        },
+        "all.post_types.labels.opportunities.f1": {
+          "baseline": 0.75,
+          "minimum": 0.65,
+          "observed": 0.7272727272727273,
+          "passed": true,
+          "support": 5
+        },
+        "all.post_types.labels.other.f1": {
+          "passed": true,
+          "status": "unmeasured",
+          "support": 0
+        },
+        "all.post_types.labels.personnel_changes.f1": {
+          "passed": true,
+          "status": "unmeasured",
+          "support": 0
+        },
+        "all.post_types.labels.questions_requests.f1": {
+          "baseline": 0.857143,
+          "minimum": 0.757143,
+          "observed": 1.0,
+          "passed": true,
+          "support": 4
+        },
+        "all.post_types.labels.releases_updates.f1": {
+          "baseline": 0.941176,
+          "minimum": 0.841176,
+          "observed": 0.8,
+          "passed": false,
+          "support": 8
+        },
+        "all.post_types.labels.research_explanations.f1": {
+          "baseline": 1.0,
+          "minimum": 0.9,
+          "observed": 0.8,
+          "passed": false,
+          "support": 14
+        },
+        "all.post_types.labels.results_evaluations.f1": {
+          "baseline": 0.941176,
+          "minimum": 0.841176,
+          "observed": 0.6923076923076923,
+          "passed": false,
+          "support": 16
+        },
+        "all.product_labels.labels.bug.f1": {
+          "passed": true,
+          "status": "unmeasured",
+          "support": 0
+        },
+        "all.product_labels.labels.complaint.f1": {
+          "baseline": 0.666667,
+          "observed": 1.0,
+          "passed": true,
+          "status": "support_one_floor",
+          "support": 1
+        },
+        "all.product_labels.labels.ideas_requests.f1": {
+          "baseline": 0.5,
+          "minimum": 0.4,
+          "observed": 0.5,
+          "passed": true,
+          "support": 2
+        },
+        "all.product_labels.labels.misinformation.f1": {
+          "baseline": 1.0,
+          "observed": 1.0,
+          "passed": true,
+          "status": "support_one_floor",
+          "support": 1
+        },
+        "all.product_labels.labels.testimonial.f1": {
+          "baseline": 0.642857,
+          "minimum": 0.542857,
+          "observed": 0.6086956521739131,
+          "passed": true,
+          "support": 13
+        }
+      },
+      "passed": false
+    }
+  },
+  "measurements": [
+    {
+      "batch_index": 0,
+      "latency_ms": 6644,
+      "rows": 20,
+      "stage": "primary",
+      "started_at": "2026-09-15T02:10:22.107649+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": null,
+        "input_tokens": 7710,
+        "output_tokens": 2167,
+        "provider_request_id": "88e82a17-1d6a-4652-b21b-f147351c1806",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    },
+    {
+      "batch_index": 0,
+      "latency_ms": 4221,
+      "rows": 12,
+      "stage": "conditional",
+      "started_at": "2026-09-15T02:10:28.765104+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 384,
+        "cost_usd": null,
+        "input_tokens": 3784,
+        "output_tokens": 1368,
+        "provider_request_id": "dee50040-ef9c-458c-80bb-814f93446b19",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    },
+    {
+      "batch_index": 1,
+      "latency_ms": 6236,
+      "rows": 20,
+      "stage": "primary",
+      "started_at": "2026-09-15T02:10:32.998325+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 2560,
+        "cost_usd": null,
+        "input_tokens": 9136,
+        "output_tokens": 2111,
+        "provider_request_id": "4693ce35-b38b-455c-a332-0b757f28bff8",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    },
+    {
+      "batch_index": 1,
+      "latency_ms": 2970,
+      "rows": 6,
+      "stage": "conditional",
+      "started_at": "2026-09-15T02:10:39.245657+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 384,
+        "cost_usd": null,
+        "input_tokens": 5214,
+        "output_tokens": 741,
+        "provider_request_id": "2c93c709-3a89-4efb-ae27-7b13f6296672",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    },
+    {
+      "batch_index": 2,
+      "latency_ms": 2489,
+      "rows": 5,
+      "stage": "primary",
+      "started_at": "2026-09-15T02:10:42.228289+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 2560,
+        "cost_usd": null,
+        "input_tokens": 3775,
+        "output_tokens": 546,
+        "provider_request_id": "61bc30ee-ad78-4ea4-bbd3-bdddd55f39c6",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    },
+    {
+      "batch_index": 2,
+      "latency_ms": 1845,
+      "rows": 3,
+      "stage": "conditional",
+      "started_at": "2026-09-15T02:10:44.724567+00:00",
+      "status": "valid",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 384,
+        "cost_usd": null,
+        "input_tokens": 3703,
+        "output_tokens": 367,
+        "provider_request_id": "055da6c9-5e21-4a3d-9bf2-5b4919c409d4",
+        "reasoning_tokens": null,
+        "total_tokens": null
+      }
+    }
+  ],
+  "merged_score": {
+    "agreement": 0.2222222222222222,
+    "assessment": "owner_reference_agreement_only",
+    "by_context": {
+      "local_parent": {
+        "china_nationalism": {
+          "accuracy": 1.0
+        },
+        "coverage_failures": 0,
+        "exact_rows": 0,
+        "outcome": {
+          "accuracy": 1.0
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 1.0
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 1.0
+          }
+        },
+        "rows": 2,
+        "sentiment": {
+          "accuracy": 1.0
+        },
+        "us_nationalism": {
+          "accuracy": 1.0
+        }
+      },
+      "none": {
+        "china_nationalism": {
+          "accuracy": 0.8064516129032258
+        },
+        "coverage_failures": 0,
+        "exact_rows": 8,
+        "outcome": {
+          "accuracy": 0.9354838709677419
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.5806451612903226
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.7741935483870968
+          }
+        },
+        "rows": 31,
+        "sentiment": {
+          "accuracy": 0.7419354838709677
+        },
+        "us_nationalism": {
+          "accuracy": 0.9032258064516129
+        }
+      },
+      "stored_quote": {
+        "china_nationalism": {
+          "accuracy": 0.9166666666666666
+        },
+        "coverage_failures": 0,
+        "exact_rows": 2,
+        "outcome": {
+          "accuracy": 0.9166666666666666
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.16666666666666666
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.6666666666666666
+          }
+        },
+        "rows": 12,
+        "sentiment": {
+          "accuracy": 0.4166666666666667
+        },
+        "us_nationalism": {
+          "accuracy": 0.9166666666666666
+        }
+      }
+    },
+    "by_language": {
+      "en": {
+        "coverage_failures": 0,
+        "exact_rows": 2,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.5333333333333333
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.7333333333333333
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.6666666666666666
+        }
+      },
+      "ja": {
+        "coverage_failures": 0,
+        "exact_rows": 5,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.4666666666666667
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.8666666666666667
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.8
+        }
+      },
+      "zh-cn": {
+        "coverage_failures": 0,
+        "exact_rows": 3,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.4666666666666667
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.6666666666666666
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.5333333333333333
+        }
+      }
+    },
+    "complete_rows": 45,
+    "coverage": 1.0,
+    "coverage_failures": 0,
+    "dimension_matches": {
+      "china_nationalism": 38,
+      "outcome": 42,
+      "post_types": 17,
+      "product_labels": 34,
+      "sentiment": 30,
+      "us_nationalism": 41
+    },
+    "exact_rows": 10,
+    "floor_gate": {
+      "checks": {
+        "all.china_nationalism.accuracy": {
+          "minimum": 0.75,
+          "observed": 0.8444444444444444,
+          "passed": true
+        },
+        "all.china_nationalism.classes.none.recall": {
+          "minimum": 0.5,
+          "observed": 0.9210526315789473,
+          "passed": true
+        },
+        "all.china_nationalism.classes.unknown.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "all.outcome.classes.classified.recall": {
+          "minimum": 0.5,
+          "observed": 0.975,
+          "passed": true
+        },
+        "all.outcome.classes.context_missing.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4888888888888889,
+          "passed": false
+        },
+        "all.post_types.labels.advertising_marketing.f1": {
+          "minimum": 0.55,
+          "observed": 0.8888888888888888,
+          "passed": true
+        },
+        "all.post_types.labels.business_finance.f1": {
+          "minimum": 0.55,
+          "observed": 0.75,
+          "passed": true
+        },
+        "all.post_types.labels.events.f1": {
+          "minimum": 0.55,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.post_types.labels.hands_on_usage.f1": {
+          "minimum": 0.55,
+          "observed": 0.75,
+          "passed": true
+        },
+        "all.post_types.labels.job_listings.f1": {
+          "minimum": 0.55,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.post_types.labels.opinions_reactions.f1": {
+          "minimum": 0.55,
+          "observed": 0.8363636363636363,
+          "passed": true
+        },
+        "all.post_types.labels.opportunities.f1": {
+          "minimum": 0.55,
+          "observed": 0.7272727272727273,
+          "passed": true
+        },
+        "all.post_types.labels.other.f1": {
+          "minimum": 0.55,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.post_types.labels.personnel_changes.f1": {
+          "minimum": 0.55,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.post_types.labels.questions_requests.f1": {
+          "minimum": 0.55,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.post_types.labels.releases_updates.f1": {
+          "minimum": 0.55,
+          "observed": 0.8,
+          "passed": true
+        },
+        "all.post_types.labels.research_explanations.f1": {
+          "minimum": 0.55,
+          "observed": 0.8,
+          "passed": true
+        },
+        "all.post_types.labels.results_evaluations.f1": {
+          "minimum": 0.55,
+          "observed": 0.6923076923076923,
+          "passed": true
+        },
+        "all.post_types.micro.f1": {
+          "minimum": 0.7,
+          "observed": 0.8066298342541437,
+          "passed": true
+        },
+        "all.product_labels.empty_set_accuracy.value": {
+          "minimum": 0.65,
+          "observed": 0.7555555555555555,
+          "passed": true
+        },
+        "all.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.7555555555555555,
+          "passed": true
+        },
+        "all.product_labels.labels.bug.f1": {
+          "minimum": 0.5,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.product_labels.labels.complaint.f1": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.product_labels.labels.ideas_requests.f1": {
+          "minimum": 0.5,
+          "observed": 0.5,
+          "passed": true
+        },
+        "all.product_labels.labels.misinformation.f1": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.product_labels.labels.testimonial.f1": {
+          "minimum": 0.5,
+          "observed": 0.6086956521739131,
+          "passed": true
+        },
+        "all.product_labels.micro.f1": {
+          "minimum": 0.7,
+          "observed": 0.6451612903225806,
+          "passed": false
+        },
+        "all.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "all.sentiment.classes.mixed.recall": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.sentiment.classes.negative.recall": {
+          "minimum": 0.5,
+          "observed": 0.0,
+          "passed": false
+        },
+        "all.sentiment.classes.neutral.recall": {
+          "minimum": 0.5,
+          "observed": 0.7777777777777778,
+          "passed": true
+        },
+        "all.sentiment.classes.positive.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.us_nationalism.accuracy": {
+          "minimum": 0.75,
+          "observed": 0.9111111111111111,
+          "passed": true
+        },
+        "all.us_nationalism.classes.none.recall": {
+          "minimum": 0.5,
+          "observed": 0.95,
+          "passed": true
+        },
+        "all.us_nationalism.classes.unknown.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "by_context.local_parent.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.none.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.9354838709677419,
+          "passed": true
+        },
+        "by_context.none.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.5806451612903226,
+          "passed": true
+        },
+        "by_context.none.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.7741935483870968,
+          "passed": true
+        },
+        "by_context.none.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.7419354838709677,
+          "passed": true
+        },
+        "by_context.stored_quote.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.9166666666666666,
+          "passed": true
+        },
+        "by_context.stored_quote.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.16666666666666666,
+          "passed": false
+        },
+        "by_context.stored_quote.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "by_context.stored_quote.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.4166666666666667,
+          "passed": false
+        },
+        "by_language.en.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.en.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.5333333333333333,
+          "passed": false
+        },
+        "by_language.en.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.7333333333333333,
+          "passed": true
+        },
+        "by_language.en.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "by_language.ja.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.ja.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4666666666666667,
+          "passed": false
+        },
+        "by_language.ja.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.8666666666666667,
+          "passed": true
+        },
+        "by_language.ja.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.8,
+          "passed": true
+        },
+        "by_language.zh-cn.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.zh-cn.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4666666666666667,
+          "passed": false
+        },
+        "by_language.zh-cn.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.6666666666666666,
+          "passed": false
+        },
+        "by_language.zh-cn.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.5333333333333333,
+          "passed": false
+        }
+      },
+      "passed": false
+    },
+    "human_gold": false,
+    "micro_f1": 0.8066298342541437,
+    "post_brand_rows": 45,
+    "quality": {
+      "china_nationalism": {
+        "accuracy": 0.8444444444444444,
+        "classes": {
+          "anti": {
+            "recall": 0.0
+          },
+          "constructive_critical": {
+            "recall": null
+          },
+          "mild_pro": {
+            "recall": null
+          },
+          "mixed": {
+            "recall": null
+          },
+          "none": {
+            "recall": 0.9210526315789473
+          },
+          "pro": {
+            "recall": 0.0
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      },
+      "outcome": {
+        "accuracy": 0.9333333333333333,
+        "classes": {
+          "classified": {
+            "recall": 0.975
+          },
+          "context_missing": {
+            "recall": 0.6
+          },
+          "unknown": {
+            "recall": null
+          }
+        }
+      },
+      "post_types": {
+        "exact_set_accuracy": {
+          "value": 0.4888888888888889
+        },
+        "labels": {
+          "advertising_marketing": {
+            "f1": 0.8888888888888888
+          },
+          "business_finance": {
+            "f1": 0.75
+          },
+          "events": {
+            "f1": 1.0
+          },
+          "hands_on_usage": {
+            "f1": 0.75
+          },
+          "job_listings": {
+            "f1": 1.0
+          },
+          "opinions_reactions": {
+            "f1": 0.8363636363636363
+          },
+          "opportunities": {
+            "f1": 0.7272727272727273
+          },
+          "other": {
+            "f1": null
+          },
+          "personnel_changes": {
+            "f1": null
+          },
+          "questions_requests": {
+            "f1": 1.0
+          },
+          "releases_updates": {
+            "f1": 0.8
+          },
+          "research_explanations": {
+            "f1": 0.8
+          },
+          "results_evaluations": {
+            "f1": 0.6923076923076923
+          }
+        },
+        "micro": {
+          "f1": 0.8066298342541437
+        }
+      },
+      "product_labels": {
+        "empty_set_accuracy": {
+          "value": 0.7555555555555555
+        },
+        "exact_set_accuracy": {
+          "value": 0.7555555555555555
+        },
+        "labels": {
+          "bug": {
+            "f1": null
+          },
+          "complaint": {
+            "f1": 1.0
+          },
+          "ideas_requests": {
+            "f1": 0.5
+          },
+          "misinformation": {
+            "f1": 1.0
+          },
+          "testimonial": {
+            "f1": 0.6086956521739131
+          }
+        },
+        "micro": {
+          "f1": 0.6451612903225806
+        }
+      },
+      "sentiment": {
+        "accuracy": 0.6666666666666666,
+        "classes": {
+          "mixed": {
+            "recall": 1.0
+          },
+          "negative": {
+            "recall": 0.0
+          },
+          "neutral": {
+            "recall": 0.7777777777777778
+          },
+          "positive": {
+            "recall": 0.6
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      },
+      "us_nationalism": {
+        "accuracy": 0.9111111111111111,
+        "classes": {
+          "anti": {
+            "recall": null
+          },
+          "constructive_critical": {
+            "recall": null
+          },
+          "mild_pro": {
+            "recall": null
+          },
+          "mixed": {
+            "recall": null
+          },
+          "none": {
+            "recall": 0.95
+          },
+          "pro": {
+            "recall": null
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      }
+    },
+    "rows": 45,
+    "source_posts": 45
+  },
+  "primary_score": {
+    "agreement": 0.24444444444444444,
+    "assessment": "owner_reference_agreement_only",
+    "by_context": {
+      "local_parent": {
+        "china_nationalism": {
+          "accuracy": 1.0
+        },
+        "coverage_failures": 0,
+        "exact_rows": 1,
+        "outcome": {
+          "accuracy": 1.0
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 1.0
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 1.0
+          }
+        },
+        "rows": 2,
+        "sentiment": {
+          "accuracy": 1.0
+        },
+        "us_nationalism": {
+          "accuracy": 1.0
+        }
+      },
+      "none": {
+        "china_nationalism": {
+          "accuracy": 0.8064516129032258
+        },
+        "coverage_failures": 0,
+        "exact_rows": 8,
+        "outcome": {
+          "accuracy": 0.9354838709677419
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.5161290322580645
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.7741935483870968
+          }
+        },
+        "rows": 31,
+        "sentiment": {
+          "accuracy": 0.7419354838709677
+        },
+        "us_nationalism": {
+          "accuracy": 0.9032258064516129
+        }
+      },
+      "stored_quote": {
+        "china_nationalism": {
+          "accuracy": 0.9166666666666666
+        },
+        "coverage_failures": 0,
+        "exact_rows": 2,
+        "outcome": {
+          "accuracy": 0.9166666666666666
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.16666666666666666
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.6666666666666666
+          }
+        },
+        "rows": 12,
+        "sentiment": {
+          "accuracy": 0.4166666666666667
+        },
+        "us_nationalism": {
+          "accuracy": 0.9166666666666666
+        }
+      }
+    },
+    "by_language": {
+      "en": {
+        "coverage_failures": 0,
+        "exact_rows": 2,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.4666666666666667
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.7333333333333333
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.6666666666666666
+        }
+      },
+      "ja": {
+        "coverage_failures": 0,
+        "exact_rows": 6,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.4666666666666667
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.8666666666666667
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.8
+        }
+      },
+      "zh-cn": {
+        "coverage_failures": 0,
+        "exact_rows": 3,
+        "outcome": {
+          "accuracy": 0.9333333333333333
+        },
+        "post_types": {
+          "exact_set_accuracy": {
+            "value": 0.4
+          }
+        },
+        "product_labels": {
+          "exact_set_accuracy": {
+            "value": 0.6666666666666666
+          }
+        },
+        "rows": 15,
+        "sentiment": {
+          "accuracy": 0.5333333333333333
+        }
+      }
+    },
+    "complete_rows": 45,
+    "coverage": 1.0,
+    "coverage_failures": 0,
+    "dimension_matches": {
+      "china_nationalism": 38,
+      "outcome": 42,
+      "post_types": 18,
+      "product_labels": 34,
+      "sentiment": 30,
+      "us_nationalism": 41
+    },
+    "exact_rows": 11,
+    "floor_gate": {
+      "checks": {
+        "all.china_nationalism.accuracy": {
+          "minimum": 0.75,
+          "observed": 0.8444444444444444,
+          "passed": true
+        },
+        "all.china_nationalism.classes.none.recall": {
+          "minimum": 0.5,
+          "observed": 0.9210526315789473,
+          "passed": true
+        },
+        "all.china_nationalism.classes.unknown.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "all.outcome.classes.classified.recall": {
+          "minimum": 0.5,
+          "observed": 0.975,
+          "passed": true
+        },
+        "all.outcome.classes.context_missing.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4444444444444444,
+          "passed": false
+        },
+        "all.post_types.labels.advertising_marketing.f1": {
+          "minimum": 0.55,
+          "observed": 0.8888888888888888,
+          "passed": true
+        },
+        "all.post_types.labels.business_finance.f1": {
+          "minimum": 0.55,
+          "observed": 0.75,
+          "passed": true
+        },
+        "all.post_types.labels.events.f1": {
+          "minimum": 0.55,
+          "observed": 0.5,
+          "passed": false
+        },
+        "all.post_types.labels.hands_on_usage.f1": {
+          "minimum": 0.55,
+          "observed": 0.75,
+          "passed": true
+        },
+        "all.post_types.labels.job_listings.f1": {
+          "minimum": 0.55,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.post_types.labels.opinions_reactions.f1": {
+          "minimum": 0.55,
+          "observed": 0.8363636363636363,
+          "passed": true
+        },
+        "all.post_types.labels.opportunities.f1": {
+          "minimum": 0.55,
+          "observed": 0.5714285714285714,
+          "passed": true
+        },
+        "all.post_types.labels.other.f1": {
+          "minimum": 0.55,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.post_types.labels.personnel_changes.f1": {
+          "minimum": 0.55,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.post_types.labels.questions_requests.f1": {
+          "minimum": 0.55,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.post_types.labels.releases_updates.f1": {
+          "minimum": 0.55,
+          "observed": 0.8,
+          "passed": true
+        },
+        "all.post_types.labels.research_explanations.f1": {
+          "minimum": 0.55,
+          "observed": 0.8,
+          "passed": true
+        },
+        "all.post_types.labels.results_evaluations.f1": {
+          "minimum": 0.55,
+          "observed": 0.6923076923076923,
+          "passed": true
+        },
+        "all.post_types.micro.f1": {
+          "minimum": 0.7,
+          "observed": 0.7885714285714286,
+          "passed": true
+        },
+        "all.product_labels.empty_set_accuracy.value": {
+          "minimum": 0.65,
+          "observed": 0.7555555555555555,
+          "passed": true
+        },
+        "all.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.7555555555555555,
+          "passed": true
+        },
+        "all.product_labels.labels.bug.f1": {
+          "minimum": 0.5,
+          "observed": null,
+          "passed": true,
+          "status": "unmeasured"
+        },
+        "all.product_labels.labels.complaint.f1": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.product_labels.labels.ideas_requests.f1": {
+          "minimum": 0.5,
+          "observed": 0.5,
+          "passed": true
+        },
+        "all.product_labels.labels.misinformation.f1": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.product_labels.labels.testimonial.f1": {
+          "minimum": 0.5,
+          "observed": 0.6086956521739131,
+          "passed": true
+        },
+        "all.product_labels.micro.f1": {
+          "minimum": 0.7,
+          "observed": 0.6451612903225806,
+          "passed": false
+        },
+        "all.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "all.sentiment.classes.mixed.recall": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "all.sentiment.classes.negative.recall": {
+          "minimum": 0.5,
+          "observed": 0.0,
+          "passed": false
+        },
+        "all.sentiment.classes.neutral.recall": {
+          "minimum": 0.5,
+          "observed": 0.7777777777777778,
+          "passed": true
+        },
+        "all.sentiment.classes.positive.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "all.us_nationalism.accuracy": {
+          "minimum": 0.75,
+          "observed": 0.9111111111111111,
+          "passed": true
+        },
+        "all.us_nationalism.classes.none.recall": {
+          "minimum": 0.5,
+          "observed": 0.95,
+          "passed": true
+        },
+        "all.us_nationalism.classes.unknown.recall": {
+          "minimum": 0.5,
+          "observed": 0.6,
+          "passed": true
+        },
+        "by_context.local_parent.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.local_parent.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 1.0,
+          "passed": true
+        },
+        "by_context.none.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.9354838709677419,
+          "passed": true
+        },
+        "by_context.none.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.5161290322580645,
+          "passed": true
+        },
+        "by_context.none.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.7741935483870968,
+          "passed": true
+        },
+        "by_context.none.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.7419354838709677,
+          "passed": true
+        },
+        "by_context.stored_quote.outcome.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.9166666666666666,
+          "passed": true
+        },
+        "by_context.stored_quote.post_types.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.16666666666666666,
+          "passed": false
+        },
+        "by_context.stored_quote.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.5,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "by_context.stored_quote.sentiment.accuracy": {
+          "minimum": 0.5,
+          "observed": 0.4166666666666667,
+          "passed": false
+        },
+        "by_language.en.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.en.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4666666666666667,
+          "passed": false
+        },
+        "by_language.en.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.7333333333333333,
+          "passed": true
+        },
+        "by_language.en.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.6666666666666666,
+          "passed": true
+        },
+        "by_language.ja.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.ja.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4666666666666667,
+          "passed": false
+        },
+        "by_language.ja.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.8666666666666667,
+          "passed": true
+        },
+        "by_language.ja.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.8,
+          "passed": true
+        },
+        "by_language.zh-cn.outcome.accuracy": {
+          "minimum": 0.9,
+          "observed": 0.9333333333333333,
+          "passed": true
+        },
+        "by_language.zh-cn.post_types.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.4,
+          "passed": false
+        },
+        "by_language.zh-cn.product_labels.exact_set_accuracy.value": {
+          "minimum": 0.7,
+          "observed": 0.6666666666666666,
+          "passed": false
+        },
+        "by_language.zh-cn.sentiment.accuracy": {
+          "minimum": 0.65,
+          "observed": 0.5333333333333333,
+          "passed": false
+        }
+      },
+      "passed": false
+    },
+    "human_gold": false,
+    "micro_f1": 0.7885714285714286,
+    "post_brand_rows": 45,
+    "quality": {
+      "china_nationalism": {
+        "accuracy": 0.8444444444444444,
+        "classes": {
+          "anti": {
+            "recall": 0.0
+          },
+          "constructive_critical": {
+            "recall": null
+          },
+          "mild_pro": {
+            "recall": null
+          },
+          "mixed": {
+            "recall": null
+          },
+          "none": {
+            "recall": 0.9210526315789473
+          },
+          "pro": {
+            "recall": 0.0
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      },
+      "outcome": {
+        "accuracy": 0.9333333333333333,
+        "classes": {
+          "classified": {
+            "recall": 0.975
+          },
+          "context_missing": {
+            "recall": 0.6
+          },
+          "unknown": {
+            "recall": null
+          }
+        }
+      },
+      "post_types": {
+        "exact_set_accuracy": {
+          "value": 0.4444444444444444
+        },
+        "labels": {
+          "advertising_marketing": {
+            "f1": 0.8888888888888888
+          },
+          "business_finance": {
+            "f1": 0.75
+          },
+          "events": {
+            "f1": 0.5
+          },
+          "hands_on_usage": {
+            "f1": 0.75
+          },
+          "job_listings": {
+            "f1": 1.0
+          },
+          "opinions_reactions": {
+            "f1": 0.8363636363636363
+          },
+          "opportunities": {
+            "f1": 0.5714285714285714
+          },
+          "other": {
+            "f1": null
+          },
+          "personnel_changes": {
+            "f1": null
+          },
+          "questions_requests": {
+            "f1": 1.0
+          },
+          "releases_updates": {
+            "f1": 0.8
+          },
+          "research_explanations": {
+            "f1": 0.8
+          },
+          "results_evaluations": {
+            "f1": 0.6923076923076923
+          }
+        },
+        "micro": {
+          "f1": 0.7885714285714286
+        }
+      },
+      "product_labels": {
+        "empty_set_accuracy": {
+          "value": 0.7555555555555555
+        },
+        "exact_set_accuracy": {
+          "value": 0.7555555555555555
+        },
+        "labels": {
+          "bug": {
+            "f1": null
+          },
+          "complaint": {
+            "f1": 1.0
+          },
+          "ideas_requests": {
+            "f1": 0.5
+          },
+          "misinformation": {
+            "f1": 1.0
+          },
+          "testimonial": {
+            "f1": 0.6086956521739131
+          }
+        },
+        "micro": {
+          "f1": 0.6451612903225806
+        }
+      },
+      "sentiment": {
+        "accuracy": 0.6666666666666666,
+        "classes": {
+          "mixed": {
+            "recall": 1.0
+          },
+          "negative": {
+            "recall": 0.0
+          },
+          "neutral": {
+            "recall": 0.7777777777777778
+          },
+          "positive": {
+            "recall": 0.6
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      },
+      "us_nationalism": {
+        "accuracy": 0.9111111111111111,
+        "classes": {
+          "anti": {
+            "recall": null
+          },
+          "constructive_critical": {
+            "recall": null
+          },
+          "mild_pro": {
+            "recall": null
+          },
+          "mixed": {
+            "recall": null
+          },
+          "none": {
+            "recall": 0.95
+          },
+          "pro": {
+            "recall": null
+          },
+          "unknown": {
+            "recall": 0.6
+          }
+        }
+      }
+    },
+    "rows": 45,
+    "source_posts": 45
+  },
+  "private_result_sha256": "62bd20671bdbf32cef673bddd7658f83f2f65308f52cf99f0c7a6e4158180d9b",
+  "production_changed": false,
+  "rare_counts": {
+    "events": {
+      "merged_fn": 0,
+      "merged_fp": 0,
+      "merged_tp": 3,
+      "primary_tp": 1,
+      "screen_misses": 0,
+      "support": 3
+    },
+    "job_listings": {
+      "merged_fn": 0,
+      "merged_fp": 0,
+      "merged_tp": 1,
+      "primary_tp": 1,
+      "screen_misses": 0,
+      "support": 1
+    },
+    "opportunities": {
+      "merged_fn": 1,
+      "merged_fp": 2,
+      "merged_tp": 4,
+      "primary_tp": 2,
+      "screen_misses": 1,
+      "support": 5
+    },
+    "personnel_changes": {
+      "merged_fn": 0,
+      "merged_fp": 0,
+      "merged_tp": 0,
+      "primary_tp": 0,
+      "screen_misses": 0,
+      "support": 0
+    }
+  },
+  "routing": {
+    "selected_rows": 21,
+    "total_rows": 45
+  },
+  "schema_version": "u18-r101-results/v1",
+  "usage": {
+    "cache_read_input_tokens": 6272,
+    "input_tokens": 33322,
+    "output_tokens": 7300
+  }
+}

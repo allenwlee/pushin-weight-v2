@@ -1716,7 +1716,7 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   six recovered rare labels and one false addition. No classifier is selected
   while the unchanged full quality and regression gates fail; keep the new
   live lane disabled.
-- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R100; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD54.
+- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R101; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD54.
 - **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–19 define the bounded architecture/model experiments; R97, R98, and R99 remain terminal failed evidence. R100 purchases only the conditional third calls using saved R98 base answers.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
@@ -3163,3 +3163,23 @@ The contract hash is
 Raw requests and responses remain ignored under
 `.context/u18/conditional-rare-type-pilot-r100-v1/`. R100 is terminal evidence;
 its run marker prevents another spend. No staging/production change occurred.
+
+### September 15 — R101 complete; choose one primary plus one follow-up
+
+R101 tested the owner-authorized alternative to two parallel primary calls:
+one full primary request and one conditional rare-type specialist per original
+20/20/5 batch. All six serial requests were valid, with 45 primary and 21
+conditional rows; there were zero retries. It improved post-type exact-set
+agreement from R98+R100's 31.1% to 48.9% and micro F1 from 0.700 to 0.807,
+while lowering consistent conservative token cost from $0.04600464 to
+$0.02705736. Product-label exactness fell from 82.2% to 75.6%, while sentiment
+and both nationalism axes improved. The conditional pass recovered two events
+and two opportunities, but added two unsupported opportunities and left one
+Hunyuan opportunity un-routed because its primary outcome was
+`context_missing`. R101 therefore fails its own zero-false-addition condition
+and all existing full activation gates. It nevertheless establishes the
+preferred next topology: one primary plus one bounded follow-up. The durable
+report is `docs/analysis/2026-09-15-111545-u18-r101-single-primary-conditional-results.md`;
+the machine result hash is
+`4ad0fe6267a74c560a5870b29e50bf9bd20eaa42976a27694e7f7aecb343e5ab`.
+No staging or production mutation occurred.
