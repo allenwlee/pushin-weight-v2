@@ -493,6 +493,7 @@ def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
             endpoint_tag=getattr(cfg.llm, "classifier_openrouter_endpoint_tag", None),
             reasoning_enabled=getattr(cfg.llm, "classifier_openrouter_reasoning_enabled", None),
             quantizations=getattr(cfg.llm, "classifier_openrouter_quantizations", None),
+            request_profile=getattr(cfg.llm, "classifier_openrouter_request_profile", None),
         )
     return build_anthropic_client_from_env(cfg)
 

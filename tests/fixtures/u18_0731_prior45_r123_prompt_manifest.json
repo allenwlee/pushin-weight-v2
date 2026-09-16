@@ -1,0 +1,12 @@
+{
+  "source": ".context/u18/prior45-v4-0731-r123-v1/requests.json",
+  "extraction": "content[0].messages[role=system].content and brand[0].messages[role=system].content, without an added trailing newline",
+  "content": {
+    "utf8_bytes": 4794,
+    "sha256": "bdf13193e9e94913d2cc8ecc532c04b3c8c61c0cc6b6c7a171dda8a52d4790ae"
+  },
+  "brand": {
+    "utf8_bytes": 3137,
+    "sha256": "a2878f50d8a1a67463517d8cd541c75871fd1ae42ba80db579147e327ec5eb65"
+  }
+}

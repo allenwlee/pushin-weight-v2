@@ -7,6 +7,7 @@ import logging
 import re
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -19,6 +20,14 @@ class ProviderResponse(dict):
     def __init__(self, value: Mapping[str, Any], *, usage: Any = None):
         super().__init__(value)
         self.provider_usage = usage
+
+
+@dataclass(frozen=True)
+class ProviderTextResponse:
+    """Literal provider text with the same usage attachment as JSON responses."""
+
+    text: str
+    provider_usage: Any = None
 
 
 def provider_host_class(client_or_url: Any) -> str:
@@ -125,8 +134,15 @@ def emit_attempt(logger: logging.Logger, *, role: str, model: str | None, attemp
             "attempt_kind": attempt_kind,
             "outcome": outcome, "elapsed_ms": max(0, round((time.monotonic() - started) * 1000)),
             "error_type": type(error).__name__ if error else None,
-            "usage": normalize_usage(getattr(response, "provider_usage", None)),
-            "usage_source": "provider" if getattr(response, "provider_usage", None) is not None else "missing",
+            "usage": normalize_usage(
+                getattr(response, "provider_usage", None)
+                if getattr(response, "provider_usage", None) is not None
+                else getattr(error, "provider_usage", None)
+            ),
+            "usage_source": "provider" if (
+                getattr(response, "provider_usage", None) is not None
+                or getattr(error, "provider_usage", None) is not None
+            ) else "missing",
             **safe_context,
         }
         logger.info(

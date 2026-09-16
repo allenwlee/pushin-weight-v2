@@ -64,7 +64,12 @@ from core.classification_contract import (
 )
 
 from ._json_parser import parse_llm_response
-from .provider_telemetry import ProviderResponse, emit_attempt, provider_host_class
+from .provider_telemetry import (
+    ProviderResponse,
+    ProviderTextResponse,
+    emit_attempt,
+    provider_host_class,
+)
 
 if TYPE_CHECKING:
     from .config import Config
@@ -815,9 +820,17 @@ class LLMCallBudgetExhausted(RuntimeError):
 class AnthropicCompatibleRetryableError(RuntimeError):
     """Timeout, rate-limit, or 5xx failure safe for an identical retry."""
 
+    def __init__(self, code: str, *, provider_usage: dict[str, Any] | None = None):
+        super().__init__(code)
+        self.provider_usage = provider_usage
+
 
 class AnthropicCompatiblePermanentError(RuntimeError):
     """A non-retryable Anthropic-compatible provider response failure."""
+
+    def __init__(self, code: str, *, provider_usage: dict[str, Any] | None = None):
+        super().__init__(code)
+        self.provider_usage = provider_usage
 
 
 def _resolve_signal_model(cfg: "Config | None" = None) -> str:
@@ -1051,6 +1064,8 @@ def _call_signal_with_retry(
     model: str | None = None,
     max_tokens: int = 4096,
     temperature: float | None = None,
+    top_p: float | None = None,
+    seed: int | None = None,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
@@ -1082,6 +1097,10 @@ def _call_signal_with_retry(
         create_kwargs["system"] = system
     if temperature is not None:
         create_kwargs["temperature"] = temperature
+    if top_p is not None:
+        create_kwargs["top_p"] = top_p
+    if seed is not None:
+        create_kwargs["seed"] = seed
     if thinking is not None:
         create_kwargs["thinking"] = thinking
     telemetry_prompt = (
@@ -3463,6 +3482,21 @@ def _merge_stage1_selector_passes(
 _TWO_ROLE_CONTENT_REVISION = "stage1-content-v2"
 _TWO_ROLE_BRAND_REVISION = "stage1-brand-interpretation-v2"
 _TWO_ROLE_MERGE_REVISION = "stage1-two-role-merge-v2"
+_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v4"
+_TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v4"
+_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v4"
+_TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
+    (
+        _TWO_ROLE_CONTENT_REVISION,
+        _TWO_ROLE_BRAND_REVISION,
+        _TWO_ROLE_MERGE_REVISION,
+    ),
+    (
+        _TWO_ROLE_SELECTED_CONTENT_REVISION,
+        _TWO_ROLE_SELECTED_BRAND_REVISION,
+        _TWO_ROLE_SELECTED_MERGE_REVISION,
+    ),
+})
 
 # Source, stored context, and affiliations are untrusted visible evidence.  The
 # active two-role path deliberately has no persisted partial-result reuse: the
@@ -3514,12 +3548,25 @@ def _two_role_fingerprint(tweet: dict[str, Any]) -> str:
     ).hexdigest()
 
 
-def _two_role_payload(batch: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
-    revision = (
-        _TWO_ROLE_CONTENT_REVISION
-        if role == "content"
-        else _TWO_ROLE_BRAND_REVISION
+def _two_role_revisions(request_profile: str | None = None) -> tuple[str, str, str]:
+    if request_profile == "deepseek_0731":
+        return (
+            _TWO_ROLE_SELECTED_CONTENT_REVISION,
+            _TWO_ROLE_SELECTED_BRAND_REVISION,
+            _TWO_ROLE_SELECTED_MERGE_REVISION,
+        )
+    return (
+        _TWO_ROLE_CONTENT_REVISION,
+        _TWO_ROLE_BRAND_REVISION,
+        _TWO_ROLE_MERGE_REVISION,
     )
+
+
+def _two_role_payload(
+    batch: list[dict[str, Any]], role: str, *, request_profile: str | None = None,
+) -> list[dict[str, Any]]:
+    content_revision, brand_revision, _ = _two_role_revisions(request_profile)
+    revision = content_revision if role == "content" else brand_revision
     return [
         {
             "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
@@ -3535,8 +3582,126 @@ def _two_role_payload(batch: list[dict[str, Any]], role: str) -> list[dict[str, 
     ]
 
 
+def _two_role_selected_system_prompt(role: str) -> str:
+    """Return the frozen successful r123 prompt for the selected slot route."""
+    from .classifier_0731_prompts import (
+        BRAND_PROMPT,
+        CONTENT_PROMPT,
+        SHARED_RELEVANCE_RULE,
+    )
+
+    if role == "content":
+        return CONTENT_PROMPT + SHARED_RELEVANCE_RULE
+    if role == "brand_interpretation":
+        return BRAND_PROMPT + SHARED_RELEVANCE_RULE
+    raise ValueError("unknown two-role classifier role")
+
+
+def _two_role_fixed_slot_payload(
+    batch: list[dict[str, Any]], role: str, *, request_profile: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]], dict[str, str], dict[str, Any]] | None:
+    """Make the selected model's positional transport without exposing IDs."""
+    payload = _two_role_payload(batch, role, request_profile=request_profile)
+    if not payload or len(payload) > _CLASSIFY_BASE_BATCH_SIZE:
+        return None
+    cases: dict[str, Any] = {}
+    decision_slots: dict[str, tuple[str, str]] = {}
+    post_slots: dict[str, str] = {}
+    for post_number, item in enumerate(payload, 1):
+        tweet_id = item["tweet_id"]
+        brand_ids = item["brand_ids"]
+        if tweet_id in post_slots.values() or not isinstance(brand_ids, list) or not brand_ids:
+            return None
+        post_slot = f"P{post_number:02d}"
+        decisions: dict[str, str] = {}
+        for brand_id in brand_ids:
+            if not isinstance(brand_id, str) or not brand_id:
+                return None
+            decision_slot = f"D{len(decision_slots) + 1:02d}"
+            if len(decision_slots) >= 99:
+                return None
+            decisions[decision_slot] = brand_id
+            decision_slots[decision_slot] = (tweet_id, brand_id)
+        cases[post_slot] = {
+            "brand_decision_slots": decisions,
+            "evidence": {
+                "source_language": item["source_language"],
+                "text": item["text"],
+                "context": item["context"],
+                "affiliations": item["affiliations"],
+            },
+        }
+        post_slots[post_slot] = tweet_id
+    if len(post_slots) != len(payload):
+        return None
+    return payload, decision_slots, post_slots, {"cases": cases}
+
+
+def _two_role_parse_fixed_slots(
+    response: Any,
+    contract: tuple[list[dict[str, Any]], dict[str, tuple[str, str]], dict[str, str], dict[str, Any]],
+    role: str, *, request_profile: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Reject all positional-shape drift before rebuilding the v3 envelope."""
+    payload, decision_slots, post_slots, _ = contract
+    expected_root = {"decisions", "post_flags"} if role == "content" else {"decisions"}
+    if (
+        role not in {"content", "brand_interpretation"}
+        or not isinstance(response, dict)
+        or set(response) != expected_root
+        or not isinstance(response.get("decisions"), dict)
+        or set(response["decisions"]) != set(decision_slots)
+    ):
+        return {}
+    if role == "content" and (
+        not isinstance(response.get("post_flags"), dict)
+        or set(response["post_flags"]) != set(post_slots)
+    ):
+        return {}
+    classification_fields = (
+        {"outcome", "post_types"}
+        if role == "content"
+        else {"product_labels", "sentiment", "china_nationalism", "us_nationalism"}
+    )
+    if any(
+        not isinstance(value, dict) or set(value) != classification_fields
+        for value in response["decisions"].values()
+    ):
+        return {}
+    source_by_id = {item["tweet_id"]: item for item in payload}
+    results: list[dict[str, Any]] = []
+    for post_slot, tweet_id in post_slots.items():
+        source = source_by_id.get(tweet_id)
+        if source is None:
+            return {}
+        classifications = []
+        for decision_slot, (mapped_tweet_id, brand_id) in decision_slots.items():
+            if mapped_tweet_id == tweet_id:
+                classifications.append({"brand_id": brand_id, **response["decisions"][decision_slot]})
+        item: dict[str, Any] = {
+            "tweet_id": tweet_id,
+            "input_context_fingerprint": source["input_context_fingerprint"],
+            "role_revision": source["role_revision"],
+            "classifications": classifications,
+        }
+        if role == "content":
+            item["unsanctioned_flags"] = response["post_flags"][post_slot]
+        results.append(item)
+    # The full slot/key envelope has been checked above. Validate values at
+    # post granularity so one invalid brand answer cannot discard its twenty-
+    # post batch. All brands within an affected post still fail together.
+    parsed: dict[str, dict[str, Any]] = {}
+    for item in results:
+        parsed.update(_two_role_parse(
+            {"results": [item]}, [source_by_id[item["tweet_id"]]], role,
+            request_profile=request_profile,
+        ))
+    return parsed
+
+
 def _two_role_parse(
-    response: Any, payload: list[dict[str, Any]], role: str
+    response: Any, payload: list[dict[str, Any]], role: str,
+    *, request_profile: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Parse one role strictly; malformed siblings are pending, never repaired."""
     if role not in {"content", "brand_interpretation"}:
@@ -3566,11 +3731,8 @@ def _two_role_parse(
         if role == "content"
         else {"brand_id", "product_labels", "sentiment", "china_nationalism", "us_nationalism"}
     )
-    expected_revision = (
-        _TWO_ROLE_CONTENT_REVISION
-        if role == "content"
-        else _TWO_ROLE_BRAND_REVISION
-    )
+    content_revision, brand_revision, _ = _two_role_revisions(request_profile)
+    expected_revision = content_revision if role == "content" else brand_revision
     expected_item_fields = (
         {"tweet_id", "input_context_fingerprint", "role_revision", "classifications", "unsanctioned_flags"}
         if role == "content"
@@ -3636,37 +3798,41 @@ def _two_role_parse(
 def _two_role_trace(
     *, content: dict[str, Any], brand: dict[str, Any], final: dict[str, Any],
     fingerprint: str, model: str | None, request_identity: str | None = None,
+    request_profile: str | None = None,
 ) -> dict[str, Any]:
+    content_revision, brand_revision, merge_revision = _two_role_revisions(
+        request_profile
+    )
     common = {
         "contract_version": _STAGE1_CONTRACT_VERSION,
         "taxonomy_version": _STAGE1_TAXONOMY_VERSION,
         "model": model or _SIGNAL_MODEL,
         "input_context_fingerprint": fingerprint,
-        "selector_version": _TWO_ROLE_MERGE_REVISION,
+        "selector_version": merge_revision,
         "validation_state": "validated",
         "provider_request_identity": (
             str(request_identity)[:128] if isinstance(request_identity, str) else ""
         ),
     }
     return {
-        "selector_version": _TWO_ROLE_MERGE_REVISION,
+        "selector_version": merge_revision,
         "content": {
             "by_brand": content["by_brand"], **common,
-            "prompt_version": _TWO_ROLE_CONTENT_REVISION,
+            "prompt_version": content_revision,
             "provider_role": "content",
-            "role_revision": _TWO_ROLE_CONTENT_REVISION,
+            "role_revision": content_revision,
         },
         "brand_interpretation": {
             "by_brand": brand["by_brand"], **common,
-            "prompt_version": _TWO_ROLE_BRAND_REVISION,
+            "prompt_version": brand_revision,
             "provider_role": "brand_interpretation",
-            "role_revision": _TWO_ROLE_BRAND_REVISION,
+            "role_revision": brand_revision,
         },
         "final": {
             "by_brand": final, **common,
-            "prompt_version": _TWO_ROLE_MERGE_REVISION,
+            "prompt_version": merge_revision,
             "provider_role": "classifier",
-            "role_revision": _TWO_ROLE_MERGE_REVISION,
+            "role_revision": merge_revision,
         },
     }
 
@@ -3694,12 +3860,22 @@ def classify_batch_pragmatics_full(
     empty = [_stage1_empty() for _ in tweets]
     if anthropic_client is None:
         return empty
+    selected_0731 = getattr(anthropic_client, "request_profile", None) == "deepseek_0731"
+    if selected_0731 and model is None:
+        # The direct caller historically omits `model`; this selected transport
+        # is pinned and therefore must use the client model rather than the
+        # legacy signal default.
+        model = getattr(anthropic_client, "model", None)
     if thinking is None:
         import os as _os
         thinking = _resolve_thinking_default(
             getattr(anthropic_client, "_base_url", "")
             or _os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL", _os.environ.get("ANTHROPIC_BASE_URL", ""))
         )
+    if selected_0731:
+        # This route was selected with reasoning disabled.  Keep the direct
+        # client path compatible while fixing that request setting here.
+        thinking = {"type": "disabled"}
     registry_ids = {brand.brand_id for brand in brand_registry} if brand_registry else None
     indexed_batches: list[tuple[list[int], list[dict[str, Any]]]] = []
     for start in range(0, len(tweets), _CLASSIFY_BASE_BATCH_SIZE):
@@ -3714,19 +3890,33 @@ def classify_batch_pragmatics_full(
             indexed_batches.append((indexes, kept))
 
     def call_role(batch: list[dict[str, Any]], role: str, reservation: str | None = None) -> tuple[list[dict[str, Any]], str, dict[str, dict[str, Any]]]:
-        payload = _two_role_payload(batch, role)
+        fixed_contract = (
+            _two_role_fixed_slot_payload(
+                batch, role, request_profile="deepseek_0731"
+            ) if selected_0731 else None
+        )
+        if selected_0731 and fixed_contract is None:
+            return batch, role, {}
+        payload = fixed_contract[0] if fixed_contract is not None else _two_role_payload(batch, role)
         try:
             response = _call_signal_with_retry(
                 anthropic_client,
-                json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+                json.dumps(
+                    fixed_contract[3] if fixed_contract is not None else payload,
+                    ensure_ascii=False, separators=(",", ":"), sort_keys=not selected_0731,
+                ),
                 system=(
-                    _TWO_ROLE_CONTENT_SYSTEM_PROMPT
-                    if role == "content"
-                    else _TWO_ROLE_BRAND_SYSTEM_PROMPT
+                    _two_role_selected_system_prompt(role)
+                    if selected_0731 else (
+                        _TWO_ROLE_CONTENT_SYSTEM_PROMPT
+                        if role == "content" else _TWO_ROLE_BRAND_SYSTEM_PROMPT
+                    )
                 ),
                 model=model,
                 max_tokens=max_tokens,
-                temperature=0,
+                temperature=1.0 if selected_0731 else 0,
+                top_p=1.0 if selected_0731 else None,
+                seed=42 if selected_0731 else None,
                 thinking=thinking,
                 deadline=deadline,
                 telemetry_context={
@@ -3739,7 +3929,13 @@ def classify_batch_pragmatics_full(
                 operation_kind="initial",
                 transport_reservation=reservation,
             )
-            return batch, role, _two_role_parse(response, payload, role)
+            return batch, role, (
+                _two_role_parse_fixed_slots(
+                    response, fixed_contract, role,
+                    request_profile="deepseek_0731",
+                )
+                if fixed_contract is not None else _two_role_parse(response, payload, role)
+            )
         except Exception as exc:
             if on_batch_error is not None:
                 on_batch_error(batch, exc)
@@ -3808,6 +4004,7 @@ def classify_batch_pragmatics_full(
                 content=content, brand=brand, final=canonical,
                 fingerprint=_two_role_fingerprint(tweet), model=model,
                 request_identity=getattr(anthropic_client, "request_identity", None),
+                request_profile="deepseek_0731" if selected_0731 else None,
             ),
         }
     return empty
@@ -4045,8 +4242,17 @@ class AnthropicClaudeClient:
         self._api_key = api_key
         self._base_url = (base_url or "https://api.anthropic.com").rstrip("/")
 
-    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+    def messages_create(self, **kwargs: Any) -> ProviderResponse:
         """Send a messages.create request and return the parsed JSON."""
+        return self._messages_create(_plain_text=False, **kwargs)
+
+    def messages_create_text(self, **kwargs: Any) -> ProviderTextResponse:
+        """Send a messages.create request and return unparsed literal text."""
+        return self._messages_create(_plain_text=True, **kwargs)
+
+    def _messages_create(
+        self, *, _plain_text: bool, **kwargs: Any
+    ) -> ProviderResponse | ProviderTextResponse:
 
         # Resolve the thinking default when not explicitly passed by the
         # caller. DeepSeek V4 defaults to thinking and emits
@@ -4117,13 +4323,18 @@ class AnthropicClaudeClient:
         # Extract text from content blocks (Anthropic response format).
         # Skip ThinkingBlocks (DeepSeek without thinking=disabled).
         text_parts: list[str] = []
+        invalid_text_block = False
         for block in body.get("content") or []:
-            if block.get("type") == "text":
+            if _plain_text:
+                if not isinstance(block, Mapping) or block.get("type") != "text":
+                    continue
+                text = block.get("text")
+                if isinstance(text, str):
+                    text_parts.append(text)
+                else:
+                    invalid_text_block = True
+            elif block.get("type") == "text":
                 text_parts.append(block.get("text", ""))
-        raw = "\n".join(text_parts).strip()
-        # Trailing-prose-tolerant parser (plan 2026-08-04-001).
-        # Replaces the inline json.loads + except fallback with the shared
-        # helper. Same warning shape and same fallback dict as before.
         raw_usage = body.get("usage")
         usage = dict(raw_usage) if isinstance(raw_usage, Mapping) else None
         # Existing callers historically received the provider's usage object
@@ -4139,6 +4350,28 @@ class AnthropicClaudeClient:
                 "selected_endpoint": "deepseek" if "deepseek.com" in self._base_url else "anthropic",
                 "service_tier": body.get("service_tier"),
             })
+        if _plain_text:
+            if body.get("stop_reason") == "max_tokens":
+                raise AnthropicCompatiblePermanentError(
+                    "anthropic_compatible_response_incomplete",
+                    provider_usage=usage,
+                )
+            if not text_parts or invalid_text_block:
+                raise AnthropicCompatiblePermanentError(
+                    "anthropic_compatible_response_content_missing",
+                    provider_usage=usage,
+                )
+            raw_text = "".join(text_parts)
+            if raw_text == "":
+                raise AnthropicCompatiblePermanentError(
+                    "anthropic_compatible_response_content_missing",
+                    provider_usage=usage,
+                )
+            return ProviderTextResponse(text=raw_text, provider_usage=usage)
+        raw = "\n".join(text_parts).strip()
+        # Trailing-prose-tolerant parser (plan 2026-08-04-001).
+        # Replaces the inline json.loads + except fallback with the shared
+        # helper. Same warning shape and same fallback dict as before.
         return ProviderResponse(parse_llm_response(
             raw,
             logger_name="x_monitor.attribution",

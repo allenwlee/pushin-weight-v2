@@ -111,9 +111,7 @@ from x_monitor.apify import (
 from x_monitor.attribution import (
     LLMCallBudgetExhausted,
     _MAX_RETRIES,
-    _TWO_ROLE_BRAND_REVISION,
-    _TWO_ROLE_CONTENT_REVISION,
-    _TWO_ROLE_MERGE_REVISION,
+    _TWO_ROLE_ALLOWED_REVISION_TRIPLETS,
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
     _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
@@ -490,11 +488,6 @@ def _persist_two_role_classification_trace(
         "content", "brand_interpretation", "final"
     )}
     expected_roles = {"content": "content", "brand_interpretation": "brand_interpretation"}
-    expected_revisions = {
-        "content": _TWO_ROLE_CONTENT_REVISION,
-        "brand_interpretation": _TWO_ROLE_BRAND_REVISION,
-        "final": _TWO_ROLE_MERGE_REVISION,
-    }
     metadata = {
         stage: _trace_metadata(trace, payload, model=model, fingerprint=fingerprint)
         for stage, payload in stages.items()
@@ -502,6 +495,17 @@ def _persist_two_role_classification_trace(
     selector_values = {item["selector_version"] for item in metadata.values()}
     if not selector_values or "" in selector_values or len(selector_values) != 1:
         raise ValueError("classification_trace_selector_missing_or_conflicting")
+    observed_revisions = tuple(
+        stages[stage].get("role_revision")
+        for stage in ("content", "brand_interpretation", "final")
+    )
+    if observed_revisions not in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS:
+        raise ValueError("classification_trace_role_revision_mismatch")
+    expected_revisions = dict(zip(
+        ("content", "brand_interpretation", "final"), observed_revisions,
+        strict=True,
+    ))
+    expected_merge_revision = expected_revisions["final"]
     for stage, payload in stages.items():
         if metadata[stage]["input_context_fingerprint"] != fingerprint:
             raise ValueError("classification_trace_input_fingerprint_mismatch")
@@ -517,7 +521,7 @@ def _persist_two_role_classification_trace(
             or metadata[stage]["contract_version"] != CONTRACT_VERSION
             or metadata[stage]["taxonomy_version"] != TAXONOMY_VERSION
             or metadata[stage]["model"] != model
-            or metadata[stage]["selector_version"] != _TWO_ROLE_MERGE_REVISION
+            or metadata[stage]["selector_version"] != expected_merge_revision
             or metadata[stage]["validation_state"] != "validated"
         ):
             raise ValueError("classification_trace_role_revision_mismatch")
@@ -630,6 +634,12 @@ class _BoundedClassifierClient:
     def request_identity(self) -> str | None:
         """Preserve the delegate's redacted provider-route identity."""
         value = getattr(self._delegate, "request_identity", None)
+        return value if isinstance(value, str) and value else None
+
+    @property
+    def request_profile(self) -> str | None:
+        """Keep the selected request format through the shared budget guard."""
+        value = getattr(self._delegate, "request_profile", None)
         return value if isinstance(value, str) and value else None
 
     @property
@@ -2900,7 +2910,7 @@ class CycleRunner:
         """Drain a bounded durable translation/classification claim batch.
 
         Stage 1 (translate): the split feature flag calls
-        translate_batch_literal to produce locale-complete literal EN / ZH-CN
+        translate_batch_literal_plaintext to produce locale-complete literal EN / ZH-CN
         / JA output independently of rich synthesis; the rollback lane keeps
         the prior combined translator.
 
@@ -3095,10 +3105,11 @@ class CycleRunner:
         # ---- Stage 1: translate ----
         # The feature flag preserves the prior combined translator as the
         # rollback lane until the split literal contract passes staging.
-        from x_monitor.translator import (
-            translate_batch_literal,
-            translate_batch_pragmatics,
+        from x_monitor.literal_translation import (
+            LITERAL_TRANSLATION_PROMPT_VERSION,
+            translate_batch_literal_plaintext,
         )
+        from x_monitor.translator import translate_batch_pragmatics
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
@@ -3118,7 +3129,7 @@ class CycleRunner:
             )
             try:
                 if self.cfg.llm.literal_translation_v2_enabled:
-                    translation_rows = translate_batch_literal(
+                    translation_rows = translate_batch_literal_plaintext(
                         translation_tweets,
                         translator_client,
                         cfg=self.cfg,
@@ -3173,7 +3184,6 @@ class CycleRunner:
                             record_literal_translation_failure,
                             source_text_fingerprint,
                         )
-                        from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
 
                         record_literal_translation_failure(
                             post=post,
@@ -3184,6 +3194,9 @@ class CycleRunner:
                             ),
                             source_language=r.get("lang_detected"),
                             error_code="translation_incomplete",
+                            input_tokens=int(r.get("input_tokens") or 0),
+                            output_tokens=int(r.get("output_tokens") or 0),
+                            latency_ms=r.get("latency_ms"),
                         )
                     continue
                 if self.cfg.llm.literal_translation_v2_enabled:
@@ -3191,7 +3204,6 @@ class CycleRunner:
                         publish_literal_translation,
                         source_text_fingerprint,
                     )
-                    from x_monitor.translator import LITERAL_TRANSLATION_PROMPT_VERSION
 
                     artifact = publish_literal_translation(
                         post=post,

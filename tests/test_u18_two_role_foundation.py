@@ -67,6 +67,34 @@ class TwoRoleTransport:
         return {"results": results}
 
 
+class FixedSlotTwoRoleTransport(TwoRoleTransport):
+    """Provider-free selected-route fake that exercises the slot adapter."""
+
+    request_profile = "deepseek_0731"
+
+    def messages_create(self, **kwargs):
+        payload = json.loads(kwargs["messages"][0]["content"])
+        role = "content" if "POST-LEVEL LEGACY UNSANCTIONED FLAGS" in kwargs["system"] else "brand_interpretation"
+        with self.lock:
+            self.calls.append({"role": role, "payload": payload})
+        decisions = {}
+        for packet in payload["cases"].values():
+            for decision_slot in packet["brand_decision_slots"]:
+                decisions[decision_slot] = (
+                    {"outcome": "classified", "post_types": ["hands_on_usage"]}
+                    if role == "content" else {
+                        "product_labels": [], "sentiment": "neutral",
+                        "china_nationalism": None, "us_nationalism": None,
+                    }
+                )
+        response = {"decisions": decisions}
+        if role == "content":
+            response["post_flags"] = {
+                slot: [] for slot in payload["cases"]
+            }
+        return response
+
+
 def test_two_concurrent_roles_have_exact_batch_cardinality_and_no_repair_calls():
     from x_monitor.attribution import classify_batch_pragmatics_full
 
@@ -112,7 +140,13 @@ def test_mismatched_sibling_identity_leaves_the_post_invalid_without_a_fallback(
     (0, 0, 0), (1, 0, 0), (2, 2, 20), (3, 2, 20), (4, 4, 21),
 ])
 def test_reserved_pair_budget_never_starts_an_orphan_role(remaining, expected_calls, expected_valid):
-    from x_monitor.attribution import classify_batch_pragmatics_full
+    from x_monitor.attribution import (
+        _TWO_ROLE_BRAND_REVISION,
+        _TWO_ROLE_CONTENT_REVISION,
+        _TWO_ROLE_MERGE_REVISION,
+        _TWO_ROLE_SELECTED_BRAND_REVISION,
+        classify_batch_pragmatics_full,
+    )
 
     class LimitedTransport(TwoRoleTransport):
         @property
@@ -415,7 +449,13 @@ def test_two_role_publisher_keeps_exact_lineage_idempotence_and_last_good_on_rej
         SentimentKey,
     )
     from monitor.cycle import _publish_stage1_classification
-    from x_monitor.attribution import classify_batch_pragmatics_full
+    from x_monitor.attribution import (
+        _TWO_ROLE_BRAND_REVISION,
+        _TWO_ROLE_CONTENT_REVISION,
+        _TWO_ROLE_MERGE_REVISION,
+        _TWO_ROLE_SELECTED_BRAND_REVISION,
+        classify_batch_pragmatics_full,
+    )
 
     for key in ("hands_on_usage", "other"):
         PostTypeKey.objects.get_or_create(key=key)
@@ -435,6 +475,13 @@ def test_two_role_publisher_keeps_exact_lineage_idempotence_and_last_good_on_rej
         [tweet], [], TwoRoleTransport(), model="u18-model"
     )[0]
     assert result["valid"] is True
+    assert [result["classification_trace"][stage]["role_revision"] for stage in (
+        "content", "brand_interpretation", "final"
+    )] == [
+        _TWO_ROLE_CONTENT_REVISION,
+        _TWO_ROLE_BRAND_REVISION,
+        _TWO_ROLE_MERGE_REVISION,
+    ]
     assert _publish_stage1_classification(
         post_id=post.pk, result=result, tweet=tweet, model="u18-model", run_id="u18-run"
     ).outcome == "cleared"
@@ -456,13 +503,21 @@ def test_two_role_publisher_keeps_exact_lineage_idempotence_and_last_good_on_rej
         _publish_stage1_classification(
             post_id=post.pk, result=rejected, tweet=tweet, model="u18-model", run_id="u18-run"
         )
+    mixed = deepcopy(result)
+    mixed["classification_trace"]["content"]["role_revision"] = _TWO_ROLE_SELECTED_BRAND_REVISION
+    mixed["classification_trace"]["content"]["prompt_version"] = _TWO_ROLE_SELECTED_BRAND_REVISION
+    with pytest.raises(ValueError, match="role_revision_mismatch"):
+        _publish_stage1_classification(
+            post_id=post.pk, result=mixed, tweet=tweet, model="u18-model", run_id="u18-run"
+        )
     assert PostBrandClassificationState.objects.filter(post=post).count() == 2
     assert PostBrandClassificationJudgment.objects.filter(post=post).count() == 6
 
 
+@pytest.mark.parametrize("selected_fixed_slots", [False, True])
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(monkeypatch):
+def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(monkeypatch, selected_fixed_slots):
     """Production-shaped queue claim → public classifier → publisher path."""
     from core.models import (
         Account,
@@ -470,6 +525,7 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
         BrandAccount,
         Post,
         PostBrand,
+        PostBrandClassificationJudgment,
         PostBrandClassificationState,
         PostEnrichmentState,
         PostTypeKey,
@@ -480,6 +536,11 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
     from monitor.cycle import CycleRunner
     from x_monitor import reattribute
     from x_monitor.config import Config
+    from x_monitor.attribution import (
+        _TWO_ROLE_SELECTED_BRAND_REVISION,
+        _TWO_ROLE_SELECTED_CONTENT_REVISION,
+        _TWO_ROLE_SELECTED_MERGE_REVISION,
+    )
 
     for key in ("hands_on_usage", "other"):
         PostTypeKey.objects.get_or_create(key=key)
@@ -498,7 +559,7 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
     state = PostEnrichmentState.objects.create(post=post)
     state.translation_status = PostEnrichmentState.Status.SUCCEEDED
     state.save(update_fields=["translation_status", "updated_at"])
-    transport = TwoRoleTransport()
+    transport = FixedSlotTwoRoleTransport() if selected_fixed_slots else TwoRoleTransport()
     monkeypatch.setattr(reattribute, "build_classifier_client_from_env", lambda cfg: transport)
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: None)
 
@@ -506,10 +567,37 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
         [], run_id="u18-cycle-run"
     )
     assert len(transport.calls) == 2
-    assert all(call["payload"][0]["affiliations"] == [
-        {"brand_id": brand.pk, "role": "official", "reviewed": True}
-        for brand in brands
-    ] for call in transport.calls)
+    if selected_fixed_slots:
+        assert all(call["payload"]["cases"]["P01"]["evidence"]["affiliations"] == [
+            {"brand_id": brand.pk, "role": "official", "reviewed": True}
+            for brand in brands
+        ] for call in transport.calls)
+        assert all(call["payload"]["cases"]["P01"]["brand_decision_slots"] == {
+            "D01": brands[0].pk, "D02": brands[1].pk,
+        } for call in transport.calls)
+    else:
+        assert all(call["payload"][0]["affiliations"] == [
+            {"brand_id": brand.pk, "role": "official", "reviewed": True}
+            for brand in brands
+        ] for call in transport.calls)
     state.refresh_from_db()
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
     assert PostBrandClassificationState.objects.filter(post=post).count() == 2
+    prompt_versions = set(
+        PostBrandClassificationJudgment.objects.filter(post=post).values_list(
+            "stage", "prompt_version"
+        )
+    )
+    expected = (
+        {
+            ("content", _TWO_ROLE_SELECTED_CONTENT_REVISION),
+            ("brand_interpretation", _TWO_ROLE_SELECTED_BRAND_REVISION),
+            ("final", _TWO_ROLE_SELECTED_MERGE_REVISION),
+        }
+        if selected_fixed_slots else {
+            ("content", "stage1-content-v2"),
+            ("brand_interpretation", "stage1-brand-interpretation-v2"),
+            ("final", "stage1-two-role-merge-v2"),
+        }
+    )
+    assert prompt_versions == expected

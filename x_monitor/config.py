@@ -472,6 +472,9 @@ class LlmConfig(BaseModel):
     classifier_openrouter_endpoint_tag: str | None = None
     classifier_openrouter_reasoning_enabled: bool | None = None
     classifier_openrouter_quantizations: list[str] | None = None
+    # Opt-in model-specific transport contract.  The committed configuration
+    # leaves this unset until the selected U18 route is explicitly activated.
+    classifier_openrouter_request_profile: Literal["deepseek_0731"] | None = None
     classifier_openrouter_data_collection: Literal["allow", "deny"] = "deny"
     classifier_openrouter_max_input_price: Decimal | None = None
     classifier_openrouter_max_output_price: Decimal | None = None

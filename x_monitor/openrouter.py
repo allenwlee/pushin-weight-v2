@@ -10,11 +10,12 @@ import hashlib
 import http.client
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from .provider_telemetry import ProviderResponse
+from .provider_telemetry import ProviderResponse, ProviderTextResponse
 
 
 class OpenRouterRetryableError(RuntimeError):
@@ -27,6 +28,33 @@ class OpenRouterPermanentError(RuntimeError):
     def __init__(self, code: str, *, provider_usage: dict[str, Any] | None = None):
         super().__init__(code)
         self.provider_usage = provider_usage
+
+
+_DEEPSEEK_0731_PROFILE = "deepseek_0731"
+_DEEPSEEK_0731_MODEL = "deepseek/deepseek-v4-flash-0731"
+_DEEPSEEK_0731_PROVIDER = "DeepInfra"
+_DEEPSEEK_0731_ENDPOINT = "deepinfra/fp8"
+
+
+def _normalise_optional_json_fence(content: str) -> str:
+    """Remove one whole JSON markdown fence, and nothing semantic."""
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return content
+    match = re.fullmatch(r"```json[ \t]*\r?\n(.*?)\r?\n```", stripped, re.DOTALL)
+    if match is None:
+        raise ValueError("openrouter_response_content_fence_invalid")
+    return match.group(1)
+
+
+def _no_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Keep duplicate slot keys from being silently overwritten by json.loads."""
+    parsed: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in parsed:
+            raise ValueError("openrouter_response_content_duplicate_key")
+        parsed[key] = value
+    return parsed
 
 
 @dataclass(frozen=True)
@@ -44,6 +72,7 @@ class OpenRouterChatCompletionsClient:
     reasoning_enabled: bool | None = None
     quantizations: list[str] | None = None
     service_tier: str | None = None
+    request_profile: str | None = None
     base_url: str = "https://openrouter.ai/api/v1"
 
     @property
@@ -54,8 +83,15 @@ class OpenRouterChatCompletionsClient:
     @property
     def request_identity(self) -> str:
         """Non-secret identity of the pinned route and data policy."""
-        value = f"{self.model}|{self.provider}|{self.data_collection}|{self.max_input_price}|{self.max_output_price}|{self.response_provider}|{self.response_model}|{self.zdr}|{self.endpoint_tag}|{self.reasoning_enabled}|{tuple(self.quantizations or ())}|{self.service_tier}"
-        return "openrouter:" + hashlib.sha256(value.encode()).hexdigest()[:16]
+        selected_settings = (
+            "representation=cases-post_flags-v2|temperature=1.0|top_p=1.0|seed=42|"
+            "reasoning=disabled|response_format=omitted"
+            if self.request_profile == _DEEPSEEK_0731_PROFILE else ""
+        )
+        value = f"{self.model}|{self.provider}|{self.data_collection}|{self.max_input_price}|{self.max_output_price}|{self.response_provider}|{self.response_model}|{self.zdr}|{self.endpoint_tag}|{self.reasoning_enabled}|{tuple(self.quantizations or ())}|{self.service_tier}|{self.request_profile}|{selected_settings}"
+        digest = hashlib.sha256(value.encode()).hexdigest()[:16]
+        prefix = self.request_profile or "default"
+        return f"openrouter:{prefix}:{digest}"
 
     @classmethod
     def from_config(cls, **kwargs: Any) -> OpenRouterChatCompletionsClient | None:
@@ -66,7 +102,8 @@ class OpenRouterChatCompletionsClient:
 
     def build_request(self, *, model: str | None = None, max_tokens: int,
                       messages: list[dict[str, Any]], system: str | None = None,
-                      temperature: float | None = None, **_ignored: Any) -> dict[str, Any]:
+                      temperature: float | None = None, top_p: float | None = None,
+                      seed: int | None = None, **_ignored: Any) -> dict[str, Any]:
         if self.data_collection not in {"allow", "deny"}:
             raise OpenRouterPermanentError("openrouter_data_collection_invalid")
         if model is not None and model != self.model:
@@ -76,7 +113,11 @@ class OpenRouterChatCompletionsClient:
             request_messages.append({"role": "system", "content": system})
         request_messages.extend(messages)
         provider: dict[str, Any] = {
-            "only": [self.provider],
+            "only": [
+                _DEEPSEEK_0731_ENDPOINT
+                if self.request_profile == _DEEPSEEK_0731_PROFILE
+                else self.provider
+            ],
             "allow_fallbacks": False,
             "require_parameters": True,
             "data_collection": self.data_collection,
@@ -95,28 +136,50 @@ class OpenRouterChatCompletionsClient:
             if not self.quantizations or any(not isinstance(value, str) or not value for value in self.quantizations):
                 raise OpenRouterPermanentError("openrouter_quantizations_invalid")
             provider["quantizations"] = list(self.quantizations)
+        if self.request_profile not in {None, _DEEPSEEK_0731_PROFILE}:
+            raise OpenRouterPermanentError("openrouter_request_profile_invalid")
+        selected_profile = self.request_profile == _DEEPSEEK_0731_PROFILE
+        if selected_profile and (
+            self.model != _DEEPSEEK_0731_MODEL
+            or self.provider != _DEEPSEEK_0731_PROVIDER
+            or self.endpoint_tag != _DEEPSEEK_0731_ENDPOINT
+            or self.quantizations != ["fp8"]
+            or self.reasoning_enabled is not False
+            or model not in {None, _DEEPSEEK_0731_MODEL}
+            or temperature != 1.0
+            or top_p != 1.0
+            or seed != 42
+        ):
+            raise OpenRouterPermanentError("openrouter_deepseek_0731_contract_mismatch")
         request: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens,
             "messages": request_messages,
-            "response_format": {"type": "json_object"},
             "provider": provider,
         }
+        if not selected_profile:
+            request["response_format"] = {"type": "json_object"}
         if temperature is not None:
             request["temperature"] = temperature
+        if top_p is not None:
+            request["top_p"] = top_p
+        if seed is not None:
+            request["seed"] = seed
         if self.reasoning_enabled is not None:
-            request["reasoning"] = {"enabled": self.reasoning_enabled}
+            request["reasoning"] = (
+                {"enabled": False, "exclude": True}
+                if selected_profile else {"enabled": self.reasoning_enabled}
+            )
         if self.service_tier is not None:
             if self.service_tier != "flex":
                 raise OpenRouterPermanentError("openrouter_service_tier_invalid")
             request["service_tier"] = self.service_tier
         return request
 
-    def messages_create(self, **kwargs: Any) -> ProviderResponse:
-        request = self.build_request(**kwargs)
+    def _send_request(self, request: dict[str, Any], *, timeout: Any) -> dict[str, Any]:
         parsed = urlparse(self.base_url.rstrip("/") + "/chat/completions")
         conn = http.client.HTTPSConnection(parsed.hostname, parsed.port or 443,
-                                           timeout=kwargs.get("timeout", 60))
+                                           timeout=timeout)
         try:
             try:
                 conn.request(
@@ -145,6 +208,9 @@ class OpenRouterChatCompletionsClient:
             raise OpenRouterPermanentError("openrouter_response_json_invalid") from exc
         if not isinstance(decoded, dict):
             raise OpenRouterPermanentError("openrouter_response_shape_invalid")
+        return decoded
+
+    def _validated_response(self, decoded: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         actual_model = decoded.get("model")
         routing = (
             decoded.get("openrouter_metadata")
@@ -201,17 +267,52 @@ class OpenRouterChatCompletionsClient:
         # Provider-only routing is a pinned evaluation route, so a missing
         # response identity cannot silently masquerade as the requested model.
         if not isinstance(actual_model, str) or actual_model not in allowed_models:
-            raise OpenRouterPermanentError("openrouter_response_model_mismatch")
+            raise OpenRouterPermanentError("openrouter_response_model_mismatch", provider_usage=usage)
         if not isinstance(actual_provider, str) or actual_provider not in allowed_providers:
-            raise OpenRouterPermanentError("openrouter_response_provider_mismatch")
+            raise OpenRouterPermanentError("openrouter_response_provider_mismatch", provider_usage=usage)
         if routed_model is not None and routed_model not in allowed_models:
-            raise OpenRouterPermanentError("openrouter_response_model_mismatch")
+            raise OpenRouterPermanentError("openrouter_response_model_mismatch", provider_usage=usage)
+        if self.request_profile == _DEEPSEEK_0731_PROFILE and (
+            len(selected) != 1
+            or (
+                (selected[0].get("tag") or selected[0].get("endpoint_tag")) is not None
+                and (selected[0].get("tag") or selected[0].get("endpoint_tag")) != self.endpoint_tag
+            )
+        ):
+            raise OpenRouterPermanentError("openrouter_response_endpoint_mismatch", provider_usage=usage)
         choices = decoded.get("choices") or []
-        content = choices[0].get("message", {}).get("content", "") if choices else ""
+        choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+        if self.request_profile == _DEEPSEEK_0731_PROFILE and choice.get("finish_reason") != "stop":
+            raise OpenRouterPermanentError("openrouter_response_incomplete", provider_usage=usage)
+        return usage, choice
+
+    @staticmethod
+    def _choice_content(choice: dict[str, Any], usage: dict[str, Any]) -> str:
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise OpenRouterPermanentError("openrouter_response_content_missing", provider_usage=usage)
+        content = message.get("content")
         if not isinstance(content, str):
             raise OpenRouterPermanentError("openrouter_response_content_missing", provider_usage=usage)
+        return content
+
+    def messages_create(self, **kwargs: Any) -> ProviderResponse:
+        """Return the historic, strictly decoded JSON response."""
+        decoded = self._send_request(
+            self.build_request(**kwargs), timeout=kwargs.get("timeout", 60)
+        )
+        usage, choice = self._validated_response(decoded)
+        content = self._choice_content(choice, usage)
         try:
-            parsed_content = json.loads(content)
+            if self.request_profile == _DEEPSEEK_0731_PROFILE:
+                content = _normalise_optional_json_fence(content)
+            parsed_content = json.loads(
+                content,
+                object_pairs_hook=(
+                    _no_duplicate_json_keys
+                    if self.request_profile == _DEEPSEEK_0731_PROFILE else None
+                ),
+            )
         except (TypeError, ValueError) as exc:
             raise OpenRouterPermanentError(
                 "openrouter_response_content_invalid", provider_usage=usage
@@ -222,3 +323,19 @@ class OpenRouterChatCompletionsClient:
             )
         # Keep normalized provider/request identity alongside usage for existing telemetry.
         return ProviderResponse(parsed_content, usage=usage)
+
+    def messages_create_text(self, **kwargs: Any) -> ProviderTextResponse:
+        """Return one complete literal text response without JSON decoding it."""
+        request = self.build_request(**kwargs)
+        request.pop("response_format", None)
+        decoded = self._send_request(
+            request,
+            timeout=kwargs.get("timeout", 60),
+        )
+        usage, choice = self._validated_response(decoded)
+        if choice.get("finish_reason") != "stop":
+            raise OpenRouterPermanentError("openrouter_response_incomplete", provider_usage=usage)
+        content = self._choice_content(choice, usage)
+        if content == "":
+            raise OpenRouterPermanentError("openrouter_response_content_missing", provider_usage=usage)
+        return ProviderTextResponse(text=content, provider_usage=usage)

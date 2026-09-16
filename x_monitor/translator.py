@@ -69,6 +69,22 @@ logger = logging.getLogger(__name__)
 # Maximum tweets per LLM call. The plan's Decision 6 specifies 20.
 _TRANSLATION_BATCH_SIZE = 20
 
+# Literal translation returns a full English, Simplified Chinese, and Japanese
+# field for every post. Scale its output allowance to the documented 32,768
+# token full-batch ceiling; the old 650 tokens/post cap truncated 20-post U20
+# batches at exactly 13,000 output tokens before valid JSON could finish.
+_LITERAL_TRANSLATION_MAX_TOKENS = 32_768
+
+
+def _literal_translation_max_tokens(batch_size: int) -> int:
+    """Return the proportional literal-translation allowance for one batch."""
+    if batch_size < 1:
+        return 2_048
+    return min(
+        _LITERAL_TRANSLATION_MAX_TOKENS,
+        max(2_048, (_LITERAL_TRANSLATION_MAX_TOKENS * batch_size + _TRANSLATION_BATCH_SIZE - 1) // _TRANSLATION_BATCH_SIZE),
+    )
+
 # Retry policy: 3 attempts with exponential backoff (1s, 2s, 4s).
 _MAX_RETRIES = 3
 
@@ -627,7 +643,7 @@ def translate_batch_literal(
                 cfg=cfg,
                 deadline=deadline,
                 telemetry_context=telemetry_context,
-                max_tokens_override=min(32_768, max(2_048, 650 * len(batch))),
+                max_tokens_override=_literal_translation_max_tokens(len(batch)),
                 telemetry_role="post_literal_translation",
             )
             parsed = _parse_pragmatics_response(response, batch)

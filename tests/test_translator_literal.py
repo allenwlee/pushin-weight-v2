@@ -65,7 +65,29 @@ def test_literal_translation_validates_identity_and_allocates_usage_once():
     assert [row["output_tokens"] for row in rows] == [2, 1]
     assert sum(row["input_tokens"] for row in rows) == 5
     assert sum(row["output_tokens"] for row in rows) == 3
-    assert client.calls[0]["max_tokens"] == 2048
+    # Literal translation returns all three locale fields. Its allowance must
+    # scale to the 32,768-token 20-post ceiling instead of the old 650/post
+    # cap that truncated two U20 20-post batches at exactly 13,000 tokens.
+    assert client.calls[0]["max_tokens"] == 3277
+
+
+def test_literal_translation_true_caller_uses_full_allowance_at_twenty_posts():
+    tweets = [{"tweet_id": str(index), "text": f"source {index}"} for index in range(20)]
+    client = _Client(
+        {"results": [
+            {
+                "tweet_id": tweet["tweet_id"], "lang_detected": "en",
+                "text_en": tweet["text"], "text_zh_cn": f"中文 {index}",
+                "text_ja": f"日本語 {index}",
+            }
+            for index, tweet in enumerate(tweets)
+        ]}
+    )
+
+    rows = translate_batch_literal(tweets, client)
+
+    assert len(rows) == 20
+    assert client.calls[0]["max_tokens"] == 32_768
 
 
 def test_literal_translation_rejects_wrong_identity_or_missing_japanese():

@@ -53,6 +53,11 @@ def synthesis_context_fingerprint(post: Post, *, parent_text: str = "") -> str:
     )
 
 
+def _literal_text(value: object) -> str | None:
+    """Validate presence without changing stored translation formatting."""
+    return value if isinstance(value, str) and value.strip() else None
+
+
 def publish_literal_translation(
     *,
     post: Post,
@@ -70,15 +75,15 @@ def publish_literal_translation(
     language = normalize_lang_detected(row.get("lang_detected"))
     if language is None:
         return None
-    source = present_text(post.text)
+    source = _literal_text(post.text)
     values = {
-        "en": source if language == "en" else present_text(row.get("text_en")),
+        "en": source if language == "en" else _literal_text(row.get("text_en")),
         "zh-cn": (
             source
             if language == "zh-Hans"
-            else present_text(row.get("text_zh_cn") or row.get("literal_zh"))
+            else _literal_text(row.get("text_zh_cn") or row.get("literal_zh"))
         ),
-        "ja": source if language == "ja" else present_text(row.get("text_ja")),
+        "ja": source if language == "ja" else _literal_text(row.get("text_ja")),
     }
     if source is None or any(value is None for value in values.values()):
         return None
@@ -149,6 +154,9 @@ def record_literal_translation_failure(
     error_code: str,
     source_language: object = None,
     provider_role: str = "literal_translation",
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    latency_ms: int | None = None,
     now=None,
 ) -> PostTranslationArtifact | None:
     """Persist one safe failed attempt without replacing last-good output."""
@@ -183,6 +191,9 @@ def record_literal_translation_failure(
             return artifact
         if not created:
             artifact.attempts += 1
+        artifact.input_tokens = max(0, input_tokens)
+        artifact.output_tokens = max(0, output_tokens)
+        artifact.latency_ms = latency_ms
         artifact.state = PostTranslationArtifact.State.FAILED
         artifact.error_code = str(error_code or "translation_failed")[:128]
         artifact.completed_at = current
