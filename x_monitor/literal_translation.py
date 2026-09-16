@@ -397,9 +397,18 @@ def _parse_paragraph_response(
     usage: dict[str, int | float | str | None],
     latency_ms: int,
 ) -> tuple[str | None, dict[str, int | float | str | None], int]:
-    if not isinstance(text, str) or not text:
+    if not isinstance(text, str) or not text or len(markers) < 2:
         return None, usage, latency_ms
     terminal = markers[-1]
+    # The provider adapter already requires a complete response. The numbered
+    # blocks carry completeness; END is framing, not translated content. Accept
+    # the two observed cosmetic variants before applying the same strict block
+    # checks below. Partial/unknown markers and trailing garbage still fail.
+    double_colon_terminal = terminal.replace(":END]]", "::END]]")
+    if text.endswith("\n" + double_colon_terminal):
+        text = text[:-len(double_colon_terminal)] + terminal
+    elif terminal not in text:
+        text = text.rstrip("\r\n") + "\n" + terminal
     marker_prefix = markers[0].split(":", 1)[0] + ":"
     cursor = 0
     paragraphs: list[str] = []

@@ -4334,3 +4334,42 @@ Freeze/execute the 0731-only full45 at
 output tokens, maximum 4,621 per request, conservative reservation $0.49167668
 below $0.50. Native fields remain code copies; paragraph mode remains opt-in.
 No incumbent rerun, provider activation, or deployment is part of this probe.
+
+
+### September 16 — Full45 invariant retest and parser-only recovery complete
+
+Implementation checkpoint `28ac3f0` protects supported token quantities, rejects
+unchanged foreign-language source copies and normalizes paragraph framing.
+The paid v6/v7 full45 run completed 90/90 responses in 858.251 seconds, using
+57,494 input / 35,500 output tokens and $0.00960924 reported. No transport
+errors occurred. The original strict parser rejected five posts for missing
+or malformed terminal markers; preserve that 40/45 result unchanged.
+
+After the run finished, a tested parser-only adjustment accepted complete
+numbered blocks with an omitted END or the observed exact final ::END variant.
+It still rejects missing, duplicate or reordered numbered blocks, empty
+content, unknown markers and terminal garbage. An offline replay verified
+all 90 request fingerprints unchanged and all previously accepted text
+byte-identical. It recovered all five locales: 45/45 complete posts, 90/90
+translated outputs, 45 exact native copies, no added calls/cost. All source
+URL occurrences survive. Two English outputs still merge an internal source
+newline; do not claim universal line-count parity.
+
+Source-visible automated review screened all 90 non-native outputs with model
+identity withheld. Fidelity screening passes: EN 26/30, ZH-CN 27/30, JA 27/30;
+readability: 30/30, 29/30, 30/30; zero critical inversions flagged. These are
+screening results, not human gold or population accuracy. Parent confirmed
+remaining pronunciation-example and model/character-role defects. Therefore
+U20's exact semantic invariants and English fidelity floor remain unmet;
+translator activation stays off and no deployment occurred. Do not add a new
+owner review gate or treat source-copy/marker acceptance as semantic quality.
+
+Final verification: 82 focused tests passed, including 16 required PostgreSQL
+checks with no skips; Ruff/diff checks and independent review passed. The
+required 45-tab browser layout passed Chromium and is open on the MacBook,
+served from fuchitalee. Commentary shown there is explicitly unchanged.
+Detailed exhibit and next quality concerns:
+`docs/analysis/2026-09-16-213715-u20-translation-invariant-retest.md` (JSON sibling).
+Total three new paid runs: $0.01311114. Compared with the previous plaintext
+run, the final full45 cost increased about 33% and serial duration about 13%;
+this does not establish a tenfold reduction or production throughput.

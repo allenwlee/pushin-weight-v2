@@ -498,3 +498,37 @@ def test_caller_restores_localized_token_quantity_without_model_arithmetic():
     assert row["text_ja"] == "使用10.9兆トークン以上。\n\n次の1兆トークン。"
     assert not row["translation_failed"]
     assert len(client.calls) == 2
+
+
+@pytest.mark.parametrize("suffix", ["", "[[PW0::END]]"])
+def test_complete_paragraphs_accept_observed_terminal_variants_without_repair_call(suffix):
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    class TerminalClient(PlaintextClient):
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            response = _marked_reply(kwargs, ["第一", "第二"])
+            return TextResponse(response.removesuffix("[[PW0:END]]") + suffix)
+
+    client = TerminalClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "terminal", "text": "first\n\nsecond", "lang": "en"}], client,
+        paragraph_tracking=True,
+    )[0]
+    assert not row["translation_failed"]
+    assert row["text_zh_cn"] == "第一\n\n第二"
+    assert len(client.calls) == 2
+
+
+@pytest.mark.parametrize("reply", [
+    "[[PW0:001]]\nfirst\n[[PW0:END]]",  # missing numbered block
+    "[[PW0:001]]\nfirst\n[[PW0:002]]\n",  # empty final content
+    "[[PW0:001]]\nfirst\n[[PW0:002]]\nsecond\n[[PW0:999",  # partial garbage
+    "[[PW0:001]]\nfirst\n[[PW0:002]]\nsecond\n[[PW0:END]]\ngarbage",
+    "[[PW0:001]]\nfirst\n[[PW0:002]]\nsecond\n[[PW0::END]]\ngarbage",
+])
+def test_terminal_normalization_does_not_relax_content_or_marker_integrity(reply):
+    from x_monitor.literal_translation import _parse_paragraph_response
+
+    text, usage, elapsed = _parse_paragraph_response(reply, ["[[PW0:001]]", "[[PW0:002]]", "[[PW0:END]]"], ["", "\n\n", ""], {"input_tokens": 9}, 7)
+    assert text is None and usage["input_tokens"] == 9 and elapsed == 7

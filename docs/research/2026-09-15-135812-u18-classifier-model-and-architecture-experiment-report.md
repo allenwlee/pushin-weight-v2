@@ -579,3 +579,51 @@ checkpoints and remaining gates are recorded in the
 [plaintext translation exhibit](../analysis/2026-09-16-195300-u20-plaintext-translation-comparison.md)
 and its JSON sibling. No classifier score changed and no production or
 staging provider/feature activation occurred.
+
+
+## September 16, 21:37 JST — Translation invariants, protected quantities and full45 replay
+
+This is a translation-role experiment; classifier architecture and scores are
+unchanged. See [the complete evidence](../analysis/2026-09-16-213715-u20-translation-invariant-retest.md)
+and its JSON sibling for source/code/rubric hashes, review flags and limitations.
+
+A compact source instruction plus deterministic token-value validation still
+allowed 0731 to generate 109兆 for a 10.9-trillion source; the validator rejected
+it. That eight-call probe returned three complete posts out of four, took
+126.166 seconds and cost $0.00175404. It was not repaired or replayed against
+the provider. A new source-placeholder protocol delegates only the surrounding
+language to the model: Decimal code restores exact localized token quantities
+and requires every per-occurrence marker once. Its separate eight-call probe
+passed four posts, took 144.360 seconds and cost $0.00174786.
+
+The subsequent same-source full45 run made 90 serial calls (native locales
+copied), with no transport errors/retries: 57,494 input and 35,500 output tokens,
+858.251 seconds, $0.00960924 reported. Strict parsing initially rejected five
+posts solely for absent or doubled-colon ending markers. After the run, a
+narrow code-only terminal normalization recovered all five from saved responses,
+while asserting identical requests and byte-identical previously accepted text.
+Final availability is 45/45 posts, 90/90 translated outputs and 45 exact native
+copies. No new inference was used for recovery. All source URL occurrences
+survive; two English outputs merge one internal source newline.
+
+Compared with the earlier plain-text 45-post run ($0.00723006; 759.533 seconds),
+this adds about 33% cost and 13% serial elapsed time through extra instructions
+and markers, not additional calls. It is not a tenfold saving or a measured
+production concurrency result. Combined cost of these three experiments is
+$0.01311114; review-agent work and wallet fees are excluded.
+
+Four model-anonymous source-visible automated reviewers screened all 90
+non-native translations, with separate rereviews for recovered unavailable
+outputs. Fidelity screening passes: EN 26/30, ZH-CN 27/30, JA 27/30; readability
+30/30, 29/30, 30/30. They flagged no critical inversions. These are not human
+gold or population accuracy. Parent verified that the pronunciation guide
+still loses spelling/reading distinctions and one MiniMax H3 translation
+mistakes the model for an excluded character. Some other flags concern
+ambiguous currency or romanization and must not be overstated.
+
+U20 quality remains open; no translator activation or deployment occurred.
+Final local regression: 82 passed including 16 required PostgreSQL checks,
+zero skips. Source-copy, retained failed usage, real persistence rejection,
+marker integrity, unit arithmetic and literal browser layout are covered.
+The full45 review is open on Allen's MacBook, served from fuchitalee; its
+commentary is explicitly unchanged from the earlier separate experiment.

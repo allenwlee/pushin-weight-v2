@@ -1,0 +1,2433 @@
+{
+  "implementation_commit": "28ac3f0",
+  "schema": "u20-translation-invariant-retest/v1",
+  "status": "completed_quality_gate_open",
+  "validation": {
+    "focused_passed": 82,
+    "required_postgresql_executed": 16,
+    "skipped": 0,
+    "code_review": "no blocking findings",
+    "browser": {
+      "case_tabs": 45,
+      "visible_post_panels": 1,
+      "visible_locales": 3,
+      "independent_scroll": true,
+      "no_horizontal_overflow": true,
+      "browser_errors": [],
+      "checked_post_numbers": [
+        1,
+        3,
+        30,
+        44,
+        45
+      ]
+    }
+  },
+  "probe_history": [
+    {
+      "path": ".context/u20/invariant-probe-20260916-211100",
+      "summary": {
+        "elapsed_ms": 126166,
+        "input_tokens": 8735,
+        "output_tokens": 6833,
+        "reported_cost_usd": "0.00175404",
+        "reported_cost_complete": true,
+        "planning_reserved_cost_usd": "0.0622402",
+        "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+        "provider_errors": 0,
+        "failures": 1
+      },
+      "requests": {
+        "frozen": 8,
+        "consumed": 8,
+        "received": 8,
+        "errors": 0
+      },
+      "contract_sha256": "3564e38431458af6e7b7dc7d3245bb80b4ecabf6640d4067360080dc8d887c02",
+      "result_sha256": "a1aa26b409624243b0efabbd1f7b0a47caa77b5bdf9539c71eb385179b0bd6e6"
+    },
+    {
+      "path": ".context/u20/quantity-probe-20260916-212100",
+      "summary": {
+        "elapsed_ms": 144360,
+        "input_tokens": 8887,
+        "output_tokens": 6748,
+        "reported_cost_usd": "0.00174786",
+        "reported_cost_complete": true,
+        "planning_reserved_cost_usd": "0.06355228",
+        "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+        "provider_errors": 0,
+        "failures": 0
+      },
+      "requests": {
+        "frozen": 8,
+        "consumed": 8,
+        "received": 8,
+        "errors": 0
+      },
+      "contract_sha256": "bc1409fe1b06f05fd6d46a4eeda1632cb31899961601cf449568d3cbdb780155",
+      "result_sha256": "6db16ae230a1cd512b1beded17795c59824f95d32fb3acff0400103da1aa6b12"
+    }
+  ],
+  "activation": "unchanged; no deployment",
+  "limitations": [
+    "Quantity protection covers supported explicit token-unit magnitudes, not all numbers or meanings.",
+    "Whole-source-copy detection is a narrow cross-script check, not general language identification.",
+    "Paragraph presence and URL equality do not prove semantic fidelity."
+  ],
+  "paid_full45_summary": {
+    "elapsed_ms": 858251,
+    "input_tokens": 57494,
+    "output_tokens": 35500,
+    "reported_cost_usd": "0.00960924",
+    "reported_cost_complete": true,
+    "planning_reserved_cost_usd": "0.49167668",
+    "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+    "provider_errors": 0,
+    "failures": 5
+  },
+  "paid_requests": {
+    "frozen": 90,
+    "consumed": 90,
+    "received": 90,
+    "errors": 0
+  },
+  "normalization_replay": {
+    "provider_calls": 0,
+    "saved_responses_replayed": 90,
+    "frozen_requests_unchanged": true,
+    "previously_accepted_text_unchanged": true,
+    "recovered_locales": [
+      {
+        "post_id": "2097328541016743997",
+        "field": "text_zh_cn"
+      },
+      {
+        "post_id": "2076668835428782503",
+        "field": "text_en"
+      },
+      {
+        "post_id": "2084902736437641385",
+        "field": "text_ja"
+      },
+      {
+        "post_id": "2081316109522014283",
+        "field": "text_zh_cn"
+      },
+      {
+        "post_id": "2093747347859865794",
+        "field": "text_en"
+      }
+    ],
+    "implementation_sha256": {
+      "scripts/u20_plaintext_translation_compare.py": "a35f0b748bbcfaecec09551222188693116c302a8343bcc775a4312a28860443",
+      "scripts/u20_translation_synthesis_execute.py": "e5c21ef3ffed06016e4fb96da38f37e7d60b6d7fa45e95ce1846e467bebd7af8",
+      "x_monitor/literal_translation.py": "5f966b562f3ce0f0895d08032b49e9dbd5ce14fc1875a6e6e587126345676ddd",
+      "x_monitor/translation_invariants.py": "cdd6f64ca7ad43c2f6ce621674a23036c7c4a56ede6390a221f49da3bed0ceae",
+      "x_monitor/translator.py": "8d4d4a770bd8987bc518175108d6df5ffbf30742dbf8dd52b9b36340f1658931",
+      "x_monitor/attribution.py": "67b16247772df9002099b0e68f991dd85ee4343aa22bb4708e0665bfa7c92f44",
+      "x_monitor/openrouter.py": "8d978a3c3879540b7e700491eeaab58fb0a1bb96a88a014e4da7ac57aba8345e",
+      "x_monitor/provider_telemetry.py": "32f9407bf094205c00419ffe4f3fc1cf7982c561bd1f97c157296a1ab8ea9966"
+    },
+    "original_result_sha256": "58e621000e23143763d91f220cdfdc1c49e3ba454829dc43b80ea39c86259545",
+    "remaining_failed_posts": 0
+  },
+  "mechanical_audit": {
+    "summary": {
+      "elapsed_ms": 858251,
+      "input_tokens": 57494,
+      "output_tokens": 35500,
+      "reported_cost_usd": "0.00960924",
+      "reported_cost_complete": true,
+      "planning_reserved_cost_usd": "0.49167668",
+      "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+      "provider_errors": 0,
+      "failures": 0,
+      "measurement_basis": "Original paid execution tokens/cost/time; coverage after offline parser-only replay"
+    },
+    "requests": {
+      "frozen": 90,
+      "consumed": 90,
+      "received": 90,
+      "errors": 0
+    },
+    "source_copies_exact": 45,
+    "non_native_available": 90,
+    "non_native_total": 90,
+    "url_flags": [],
+    "line_count_differences": [
+      {
+        "post_id": "2066503919505977649",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 45,
+        "output_lines": 44,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093747347859865794",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      }
+    ],
+    "rows": [
+      {
+        "post_id": "2064770455920357428",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2064770455920357428",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2064770455920357428",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079575705646465078",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079575705646465078",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079575705646465078",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079629240996155513",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 47,
+        "output_lines": 47,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079629240996155513",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 47,
+        "output_lines": 47,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2079629240996155513",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 47,
+        "output_lines": 47,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083248120725701001",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083248120725701001",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083248120725701001",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090301544642294209",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090301544642294209",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090301544642294209",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091583113914618174",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 13,
+        "output_lines": 13,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091583113914618174",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 13,
+        "output_lines": 13,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091583113914618174",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 13,
+        "output_lines": 13,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092074924420534315",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 73,
+        "output_lines": 73,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092074924420534315",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 73,
+        "output_lines": 73,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092074924420534315",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 73,
+        "output_lines": 73,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092276068790989096",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092276068790989096",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2092276068790989096",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095063639875272927",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095063639875272927",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095063639875272927",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095560256164098125",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095560256164098125",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095560256164098125",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095571537730363728",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095571537730363728",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095571537730363728",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 7,
+        "output_lines": 7,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095737515894313379",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095737515894313379",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095737515894313379",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096245214495027238",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096245214495027238",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096245214495027238",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097328541016743997",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097328541016743997",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097328541016743997",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097550594831470859",
+        "locale": "en",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097550594831470859",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097550594831470859",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2066503919505977649",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 45,
+        "output_lines": 44,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2066503919505977649",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 45,
+        "output_lines": 45,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2066503919505977649",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 45,
+        "output_lines": 45,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2076668835428782503",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 21,
+        "output_lines": 21,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2076668835428782503",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 21,
+        "output_lines": 21,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2076668835428782503",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 21,
+        "output_lines": 21,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083434397106327981",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 10,
+        "output_lines": 10,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083434397106327981",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 10,
+        "output_lines": 10,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083434397106327981",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 10,
+        "output_lines": 10,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083788672714031434",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 2,
+        "output_lines": 2,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083788672714031434",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 2,
+        "output_lines": 2,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083788672714031434",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 2,
+        "output_lines": 2,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084902736437641385",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084902736437641385",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084902736437641385",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084917644399198335",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084917644399198335",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084917644399198335",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085370157292249583",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 133,
+        "output_lines": 133,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085370157292249583",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 133,
+        "output_lines": 133,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085370157292249583",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 133,
+        "output_lines": 133,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2087578679018934514",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2087578679018934514",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2087578679018934514",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2088151823609741560",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 17,
+        "output_lines": 17,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2088151823609741560",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 17,
+        "output_lines": 17,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2088151823609741560",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 17,
+        "output_lines": 17,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090734926677328013",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090734926677328013",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2090734926677328013",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091055380835217448",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091055380835217448",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2091055380835217448",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093247508449476746",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093247508449476746",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093247508449476746",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 27,
+        "output_lines": 27,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095496798068777157",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 11,
+        "output_lines": 11,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095496798068777157",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 11,
+        "output_lines": 11,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095496798068777157",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 11,
+        "output_lines": 11,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095594885848174829",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 60,
+        "output_lines": 60,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095594885848174829",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 60,
+        "output_lines": 60,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2095594885848174829",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 60,
+        "output_lines": 60,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096881764480561562",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096881764480561562",
+        "locale": "zh-cn",
+        "native": true,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2096881764480561562",
+        "locale": "ja",
+        "native": false,
+        "available": true,
+        "source_lines": 87,
+        "output_lines": 87,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2072636451452530811",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2072636451452530811",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2072636451452530811",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 35,
+        "output_lines": 35,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2081316109522014283",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2081316109522014283",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2081316109522014283",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083451919134343546",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083451919134343546",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2083451919134343546",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084489786157621733",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084489786157621733",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2084489786157621733",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085572616203698466",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085572616203698466",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2085572616203698466",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2089638284536496616",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 4,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2089638284536496616",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 4,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2089638284536496616",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 4,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093192147700977838",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093192147700977838",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093192147700977838",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 36,
+        "output_lines": 36,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093541597870956922",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093541597870956922",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093541597870956922",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093747347859865794",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093747347859865794",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 4,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2093747347859865794",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 4,
+        "output_lines": 4,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2094817863098126837",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2094817863098126837",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2094817863098126837",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 3,
+        "output_lines": 3,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097252215765582073",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097252215765582073",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097252215765582073",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 5,
+        "output_lines": 5,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097286324990382584",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 6,
+        "output_lines": 6,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097286324990382584",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 6,
+        "output_lines": 6,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097286324990382584",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 6,
+        "output_lines": 6,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097670216989946117",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097670216989946117",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097670216989946117",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 1,
+        "output_lines": 1,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097798902875599143",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 33,
+        "output_lines": 33,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097798902875599143",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 33,
+        "output_lines": 33,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097798902875599143",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 33,
+        "output_lines": 33,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097826037027811581",
+        "locale": "en",
+        "native": false,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097826037027811581",
+        "locale": "zh-cn",
+        "native": false,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      },
+      {
+        "post_id": "2097826037027811581",
+        "locale": "ja",
+        "native": true,
+        "available": true,
+        "source_lines": 9,
+        "output_lines": 9,
+        "missing_urls": {},
+        "extra_urls": {}
+      }
+    ],
+    "contract_sha256": "fb22cfbf07540e291de8a08bfeb6ce0b607c1b56875f588f16074a7a3f344fb8",
+    "result_sha256": "634993c5b095eaaf4121c3851623b348bf204bfad40add7ae606c0537ae49ecd",
+    "semantic_accuracy_claim": false
+  },
+  "blinded_review": {
+    "per_locale": {
+      "en": {
+        "reviewed": 30,
+        "fidelity_passes": 26,
+        "readability_passes": 30,
+        "critical_inversions": 0
+      },
+      "zh-cn": {
+        "reviewed": 30,
+        "fidelity_passes": 27,
+        "readability_passes": 29,
+        "critical_inversions": 0
+      },
+      "ja": {
+        "reviewed": 30,
+        "fidelity_passes": 27,
+        "readability_passes": 30,
+        "critical_inversions": 0
+      }
+    },
+    "flags": [
+      {
+        "case_id": "T001",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CHANGED_DEATH_OUTCOME"
+        ],
+        "notes": "Source says \"Charlie & the DOGE-style audit died\" after \"they were going to kill him... Which 'they' did\"; output changes this to \"当查理和那场DOGE式审计失败时\" (when Charlie and the audit failed), losing Charlie's death."
+      },
+      {
+        "case_id": "T002",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CHANGED_DEATH_OUTCOME"
+        ],
+        "notes": "Source says \"Charlie & the DOGE-style audit died\" after \"they were going to kill him... Which 'they' did\"; output says \"チャーリーとDOGE式監査が頓挫した\" (Charlie and the audit were derailed), losing Charlie's death."
+      },
+      {
+        "case_id": "T015",
+        "fidelity_pass": false,
+        "readability_pass": false,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "OMITTED_IDENTITY_SLUR"
+        ],
+        "notes": "Source says \"your bloated goyslop\"; output reduces this to \"你那臃肿的垃圾货\" (your bloated garbage), omitting the identity-directed \"goy\" element. The retained \"聊天\" in \"没有别的能超越deepseek，聊天\" also produces an incomplete/unidiomatic sentence."
+      },
+      {
+        "case_id": "T016",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "OMITTED_IDENTITY_SLUR"
+        ],
+        "notes": "Source says \"your bloated goyslop\"; output reduces this to \"あなたの肥大化したゴミアプリ\" (your bloated garbage app), omitting the identity-directed \"goy\" element."
+      },
+      {
+        "case_id": "T051",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CURRENCY_CHANGED"
+        ],
+        "notes": "Source says ‘每百万Token的价格是6分钱’ (six Chinese fen per million tokens); output says ‘6 cents per million tokens,’ changing the stated currency unit."
+      },
+      {
+        "case_id": "T059",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "NAME_DISTINCTION_LOST"
+        ],
+        "notes": "The source distinguishes ‘审查员（根本典子）’ from the included Japanese original’s ‘審査官（根本徳子）’; output renders both as ‘Noriko Nemoto,’ losing that explicit spelling/name distinction."
+      },
+      {
+        "case_id": "T060",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "SENTIMENT_OMITTED"
+        ],
+        "notes": "The Chinese text twice says ‘该・的AI’ (an obfuscated ‘damn AI’); the corresponding output twice says ‘その・AI’ (‘that AI’), omitting the hostile epithet."
+      },
+      {
+        "case_id": "T073",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "pronunciation_guide_lost",
+          "entity_changed"
+        ],
+        "notes": "The source is a Japanese pronunciation guide, e.g. \"Claude → クロード\" and \"Canva → キャンバ\"; output gives \"Claude → Claude\", which loses the spelling/pronunciation distinction, and changes \"Canva → Canvas\"."
+      },
+      {
+        "case_id": "T074",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "pronunciation_guide_lost"
+        ],
+        "notes": "The source's list gives Japanese pronunciations, e.g. \"Copilot → コパイロット\" and \"Cursor → カーソル\". Output substitutes meanings, \"Copilot → 副驾驶\" and \"Cursor → 光标\", losing the requested spelling/pronunciation distinction."
+      },
+      {
+        "case_id": "T077",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "entity_role_changed"
+        ],
+        "notes": "Source says use MiniMax H3 with characters other than \"PhoebeとCarlotta\"; output says \"characters other than MiniMax H3, Phoebe, and Carlotta\", incorrectly treating MiniMax H3 as one of the excluded characters."
+      }
+    ],
+    "judgments": [
+      {
+        "case_id": "T001",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CHANGED_DEATH_OUTCOME"
+        ],
+        "notes": "Source says \"Charlie & the DOGE-style audit died\" after \"they were going to kill him... Which 'they' did\"; output changes this to \"当查理和那场DOGE式审计失败时\" (when Charlie and the audit failed), losing Charlie's death."
+      },
+      {
+        "case_id": "T002",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CHANGED_DEATH_OUTCOME"
+        ],
+        "notes": "Source says \"Charlie & the DOGE-style audit died\" after \"they were going to kill him... Which 'they' did\"; output says \"チャーリーとDOGE式監査が頓挫した\" (Charlie and the audit were derailed), losing Charlie's death."
+      },
+      {
+        "case_id": "T003",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T004",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T005",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T006",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T007",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T008",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T009",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T010",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T011",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T012",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T013",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T014",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T015",
+        "fidelity_pass": false,
+        "readability_pass": false,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "OMITTED_IDENTITY_SLUR"
+        ],
+        "notes": "Source says \"your bloated goyslop\"; output reduces this to \"你那臃肿的垃圾货\" (your bloated garbage), omitting the identity-directed \"goy\" element. The retained \"聊天\" in \"没有别的能超越deepseek，聊天\" also produces an incomplete/unidiomatic sentence."
+      },
+      {
+        "case_id": "T016",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "OMITTED_IDENTITY_SLUR"
+        ],
+        "notes": "Source says \"your bloated goyslop\"; output reduces this to \"あなたの肥大化したゴミアプリ\" (your bloated garbage app), omitting the identity-directed \"goy\" element."
+      },
+      {
+        "case_id": "T017",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T018",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T019",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": "Source wording \"in 11 days\" is syntactically ambiguous; output's \"11天内\" is a plausible rendering and is not counted as a confirmed failure."
+      },
+      {
+        "case_id": "T020",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": "Source wording \"in 11 days\" is syntactically ambiguous; output's \"11日以内\" is a plausible rendering and is not counted as a confirmed failure."
+      },
+      {
+        "case_id": "T021",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T022",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T023",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T024",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T025",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T026",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T027",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T028",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T029",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T030",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T031",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T032",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T033",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T034",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T035",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T036",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T037",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T038",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T039",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T040",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T041",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T042",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T043",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T044",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T045",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T046",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T047",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T048",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T049",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T050",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T051",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "CURRENCY_CHANGED"
+        ],
+        "notes": "Source says ‘每百万Token的价格是6分钱’ (six Chinese fen per million tokens); output says ‘6 cents per million tokens,’ changing the stated currency unit."
+      },
+      {
+        "case_id": "T052",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T053",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T054",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T055",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T056",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T057",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T058",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T059",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "NAME_DISTINCTION_LOST"
+        ],
+        "notes": "The source distinguishes ‘审查员（根本典子）’ from the included Japanese original’s ‘審査官（根本徳子）’; output renders both as ‘Noriko Nemoto,’ losing that explicit spelling/name distinction."
+      },
+      {
+        "case_id": "T060",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "SENTIMENT_OMITTED"
+        ],
+        "notes": "The Chinese text twice says ‘该・的AI’ (an obfuscated ‘damn AI’); the corresponding output twice says ‘その・AI’ (‘that AI’), omitting the hostile epithet."
+      },
+      {
+        "case_id": "T061",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T062",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T063",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T064",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T065",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T066",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T067",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T068",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T069",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T070",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T071",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T072",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T073",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "pronunciation_guide_lost",
+          "entity_changed"
+        ],
+        "notes": "The source is a Japanese pronunciation guide, e.g. \"Claude → クロード\" and \"Canva → キャンバ\"; output gives \"Claude → Claude\", which loses the spelling/pronunciation distinction, and changes \"Canva → Canvas\"."
+      },
+      {
+        "case_id": "T074",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "pronunciation_guide_lost"
+        ],
+        "notes": "The source's list gives Japanese pronunciations, e.g. \"Copilot → コパイロット\" and \"Cursor → カーソル\". Output substitutes meanings, \"Copilot → 副驾驶\" and \"Cursor → 光标\", losing the requested spelling/pronunciation distinction."
+      },
+      {
+        "case_id": "T075",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T076",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T077",
+        "fidelity_pass": false,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [
+          "entity_role_changed"
+        ],
+        "notes": "Source says use MiniMax H3 with characters other than \"PhoebeとCarlotta\"; output says \"characters other than MiniMax H3, Phoebe, and Carlotta\", incorrectly treating MiniMax H3 as one of the excluded characters."
+      },
+      {
+        "case_id": "T078",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T079",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T080",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T081",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T082",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T083",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T084",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T085",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T086",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T087",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T088",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T089",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      },
+      {
+        "case_id": "T090",
+        "fidelity_pass": true,
+        "readability_pass": true,
+        "critical_inversion": false,
+        "invariant_flags": [],
+        "notes": ""
+      }
+    ],
+    "rubric_sha256": "943c2432912d0b34b601420e6806114e8fc34ff93bc69f6de9c07e913ece183b",
+    "automated_screening_not_gold": true,
+    "recovered_cases_reassessed_separately": [
+      "T027",
+      "T033",
+      "T040"
+    ]
+  },
+  "quality_gate": "not passed; no translator activation",
+  "parent_confirmed_examples": [
+    {
+      "case_id": "T073",
+      "issue": "Japanese pronunciation examples lose their spelling-versus-reading distinction in English."
+    },
+    {
+      "case_id": "T074",
+      "issue": "Japanese pronunciation examples become word meanings in Chinese (Copilot → 副驾驶; Cursor → 光标)."
+    },
+    {
+      "case_id": "T077",
+      "issue": "MiniMax H3 is recast as one of the excluded characters rather than the model used."
+    }
+  ],
+  "parent_cautions": [
+    "Automated flags are not human gold or population accuracy.",
+    "T001/T002 soften a later death clause to failed/derailed but preserve the earlier killing statement; do not claim the entire death assertion disappeared.",
+    "T051 says cents without naming yuan; the output does not explicitly say USD. Treat as currency ambiguity.",
+    "T059 loses distinct source spellings in romanization; identical romanization alone does not prove a different person."
+  ],
+  "browser_url": "http://100.102.74.50:18766/plaintext-translation-review.html"
+}
