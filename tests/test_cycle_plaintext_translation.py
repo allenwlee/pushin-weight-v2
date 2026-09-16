@@ -45,7 +45,7 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
     assert all(call["model"] == cfg.llm.translator_model for call in calls)
     assert all(call["timeout"] > 0 for call in calls)
     artifact = PostTranslationArtifact.objects.get(post=post)
-    assert artifact.prompt_version == "literal-translation-plaintext-v6"
+    assert artifact.prompt_version == "literal-translation-plaintext-v12"
     if fail_ja:
         assert artifact.state == PostTranslationArtifact.State.FAILED
         assert not artifact.texts.exists()
@@ -62,14 +62,16 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
         assert post.text_en == source
 
 
-@pytest.mark.parametrize("failure", ["quantity", "language"])
+@pytest.mark.parametrize("failure", ["quantity", "language", "pronunciation"])
 def test_semantic_rejection_cannot_publish_from_real_post_fetch(monkeypatch, failure):
     source = (
         "The model was trained on 10.9 trillion tokens."
         if failure == "quantity" else
         "日本語の発音について説明します。こちらの例を読んでください。発音と意味の違いを確認しましょう。"
     )
-    post = Post.objects.create(tweet_id="invariant-" + failure, text=source, lang="en" if failure == "quantity" else "ja")
+    if failure == "pronunciation":
+        source = "Pronunciation guide\nWidget → ウィジェット"
+    post = Post.objects.create(tweet_id="invariant-" + failure, text=source, lang="ja" if failure == "language" else "en")
     PostEnrichmentState.objects.create(post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED)
     calls = []
 
@@ -81,6 +83,9 @@ def test_semantic_rejection_cannot_publish_from_real_post_fetch(monkeypatch, fai
             prompt = kwargs["messages"][0]["content"]
             if failure == "quantity":
                 text = "109万亿个token" if "Simplified Chinese" in prompt else "10.9兆トークン"
+            elif failure == "pronunciation":
+                assert "[[PQ0:001]]" in prompt
+                text = "Widget → Widget"
             else:
                 text = source if "English (en)" in prompt else "请阅读日语发音说明。"
             return ProviderTextResponse(text, {"input_tokens": 7, "output_tokens": 9})

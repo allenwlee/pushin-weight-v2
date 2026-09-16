@@ -121,6 +121,37 @@ def protect_token_quantities(source: str, target_language: str) -> tuple[str, di
     return masked, replacements
 
 
+def protect_translation_spans(source: str, target_language: str) -> tuple[str, dict[str, str]]:
+    """Protect quantities and explicit Latin-spelling → katakana-reading examples.
+
+    Ordinary Japanese prose remains translatable. Only an anchored mapping and
+    quoted katakana alternatives on that same line are copied, not explanations.
+    This deliberately does not attempt universal pronunciation detection.
+    """
+    masked, replacements = protect_token_quantities(source, target_language)
+    spans: list[tuple[int, int]] = []
+    for line in re.finditer(r"[^\r\n]+", masked):
+        pair = re.match(r"[ \t]*[A-Za-z][A-Za-z0-9 .·+/_-]*[ \t]*→[ \t]*[ァ-ヺー・]+", line.group())
+        if pair is None:
+            continue
+        spans.append((line.start(), line.start() + pair.end()))
+        for alternative in re.finditer(r'[「『“"]([ァ-ヺー・]+)[」』”"]', line.group()[pair.end():]):
+            offset = line.start() + pair.end()
+            spans.append((offset + alternative.start(1), offset + alternative.end(1)))
+    if not spans:
+        return masked, replacements
+    namespace = 0
+    while f"[[PQ{namespace}:" in source:
+        namespace += 1
+    start_index = len(replacements)
+    for index in range(len(spans) - 1, -1, -1):
+        start, end = spans[index]
+        marker = f"[[PQ{namespace}:{start_index + index + 1:03d}]]"
+        replacements[marker] = masked[start:end]
+        masked = masked[:start] + marker + masked[end:]
+    return masked, replacements
+
+
 def restore_token_quantities(text: str, replacements: dict[str, str]) -> str | None:
     """Restore placeholders only when every expected marker survived exactly once."""
     if not replacements:

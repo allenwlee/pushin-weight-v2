@@ -627,3 +627,22 @@ zero skips. Source-copy, retained failed usage, real persistence rejection,
 marker integrity, unit arithmetic and literal browser layout are covered.
 The full45 review is open on Allen's MacBook, served from fuchitalee; its
 commentary is explicitly unchanged from the earlier separate experiment.
+
+### September 17 — U20 semantic-fidelity corrections, 0731 only
+
+Three separately frozen translation experiments followed the full45 invariant
+run: compact shared instructions (16/16 responses, $0.00231120, 294.963s),
+concrete pronunciation/entity/currency cues (11/12 responses, $0.00112596
+known reported cost, 134.321s, one HTTP 429), and protected pronunciation
+spans with reused line markers (5/8 responses, $0.00061890 known reported
+cost, 52.890s, three HTTP 429). No retry, incumbent run, additional production
+call or activation occurred. Currency/role prompting improved individual
+outputs but was inconsistent; deterministic protection restored all 34 guide
+spans and source line counts in returned final outputs. English entity roles
+and a Chinese untranslated heading remain material failures. These results
+support exact-copy code guards but do not qualify 0731 for translation or
+prove a model-exclusive defect. The final shape has not had a full45 quality,
+cost or throughput comparison. 90 focused tests passed, including 17 required
+PostgreSQL tests and zero skips. Full source/output evidence, costs, limits
+and independent-review cautions are in
+`docs/analysis/2026-09-17-075000-u20-compact-fidelity-fixes.md` and its JSON sibling.

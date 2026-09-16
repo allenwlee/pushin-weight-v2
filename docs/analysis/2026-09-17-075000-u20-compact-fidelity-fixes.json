@@ -1,0 +1,779 @@
+[
+  {
+    "directory": ".context/u20/semantic-probe-20260917-073100",
+    "prompt_version": "literal-translation-paragraphs-v9",
+    "contract_sha256": "2f194ed667df2fbe1dfc89747601eb9b8a8de952b71c0b9c2837727cf0782849",
+    "summary": {
+      "elapsed_ms": 294963,
+      "input_tokens": 12051,
+      "output_tokens": 8823,
+      "reported_cost_usd": "0.00231120",
+      "reported_cost_complete": true,
+      "planning_reserved_cost_usd": "0.0916762",
+      "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+      "provider_errors": 0,
+      "failures": 0
+    },
+    "requests": {
+      "frozen": 16,
+      "consumed": 16,
+      "received": 16,
+      "errors": 0
+    },
+    "comparisons": [
+      {
+        "post_id": "2064770455920357428",
+        "source_language": "en",
+        "target_language": "zh-cn",
+        "source": "@AndrewKolvet Listen to this scumbag... @AndrewKolvet was the ring-leader of Charlie's opposition inside TP. Kolvet knew Charlie was about to throw away millions by challenging AIPAC influence & condemning Israeli behavior, so he orchestrated a 'combative' Zionist intervention, from which Charlie walked away thinking 'they' were going to kill him... Which 'they' did.  Then TP leadership wasted no time & literally went to war against the very people Charlie was bringing in to counter propaganda from the hawkish zionist lobby. You can bet your bottom dollar Kolvet was relieved when Charlie & the DOGE-style audit died. What a fake, shitty human being this liar is. I don't see how everyone can't see right through him & his buddy Blake. Scumbags using Christianity as a PSYOP.",
+        "previous_translation": "@AndrewKolvet 听听这个渣滓……@AndrewKolvet 是查理在TP内部反对派的头目。科尔维特知道查理即将通过挑战AIPAC影响力、谴责以色列行为而扔掉数百万，于是他策划了一场“好斗的”犹太复国主义干预，查理从中走开后以为“他们”要杀了他……而“他们”确实这么做了。随后TP领导层毫不耽搁，直接对查理引入来对抗鹰派犹太复国主义游说团体宣传的那些人开战。你可以拿全部家当打赌，当查理和那场DOGE式审计失败时，科尔维特松了一口气。这个骗子真是个虚伪、卑劣的人。我不明白为什么大家看不穿他和他的哥们布莱克。这些渣滓把基督教当心理战工具来用。",
+        "translation": "@AndrewKolvet 听听这个渣滓……@AndrewKolvet 是TP内部查理反对派的头目。科尔维特知道查理即将挑战AIPAC的影响力并谴责以色列的行为，这会让他丢掉数百万，于是他策划了一场“好斗的”犹太复国主义干预，查理从中脱身后以为“他们”要杀了他……而“他们”确实这么做了。然后TP领导层毫不拖延，直接对查理为反击鹰派犹太复国主义游说团体的宣传而引入的那些人开战。你可以打赌，当查理和那场DOGE式的审计失败时，科尔维特松了一口气。这个骗子真是个虚伪、烂透的人渣。我不明白为什么大家都看不穿他和他的 buddy 布莱克。用基督教当心理战的渣滓。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2064770455920357428",
+        "source_language": "en",
+        "target_language": "ja",
+        "source": "@AndrewKolvet Listen to this scumbag... @AndrewKolvet was the ring-leader of Charlie's opposition inside TP. Kolvet knew Charlie was about to throw away millions by challenging AIPAC influence & condemning Israeli behavior, so he orchestrated a 'combative' Zionist intervention, from which Charlie walked away thinking 'they' were going to kill him... Which 'they' did.  Then TP leadership wasted no time & literally went to war against the very people Charlie was bringing in to counter propaganda from the hawkish zionist lobby. You can bet your bottom dollar Kolvet was relieved when Charlie & the DOGE-style audit died. What a fake, shitty human being this liar is. I don't see how everyone can't see right through him & his buddy Blake. Scumbags using Christianity as a PSYOP.",
+        "previous_translation": "@AndrewKolvet このクズ野郎を聞いてくれ... @AndrewKolvet はTP内部でチャーリーに反対する一派の首謀者だった。コルベットは、チャーリーがAIPACの影響力に挑戦し、イスラエルの行為を非難することで何百万ドルも無駄にしようとしているのを知っていた。そこで彼は『好戦的な』シオニスト介入を仕組んだ。チャーリーはその場を去り、『彼ら』が自分を殺そうとしていると思い込んだ... そして『彼ら』は実際に殺した。その後、TPの指導部はためらうことなく、文字通り、好戦的なシオニスト・ロビーのプロパガンダに対抗するためにチャーリーが引き込んでいたまさにその人々と戦争状態に入った。コルベットがチャーリーとDOGE式監査が頓挫した時に安心したのは間違いない。この嘘つきはなんて偽善的でクソな人間なんだ。みんなが彼と彼の相棒ブレイクを見抜けないなんて信じられない。キリスト教を心理作戦に使うクズ野郎どもだ。",
+        "translation": "@AndrewKolvet このクズ野郎の話を聞け... @AndrewKolvet はTP内部でのチャーリー反対派の首謀者だった。コルベットは、チャーリーがAIPACの影響力に異議を唱え、イスラエルの行動を非難することで数百万ドルを捨てようとしていることを知っていたので、彼は「敵対的な」シオニスト介入を仕組んだ。チャーリーはその介入から、『彼ら』が自分を殺そうとしていると思い込んで立ち去った... そして『彼ら』は実際に殺した。その後、TPの指導部は時間を無駄にせず、文字通り、タカ派のシオニスト・ロビーのプロパガンダに対抗するためにチャーリーが引き込んでいた人々そのものに対して戦争を仕掛けた。コルベットが、チャーリーとDOGE式監査が潰れたときに安心したことは間違いない。この嘘つきは、なんて偽善的でクソみたいな人間なんだ。どうしてみんなが彼と彼の相棒ブレイクを見抜けないのか分からない。キリスト教を心理作戦として利用するクズどもめ。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2092276068790989096",
+        "source_language": "en",
+        "target_language": "zh-cn",
+        "source": "@deepseek_ai belongs on my devices. It's the best app hands down. Nothing else will ever surpass deepseek, chat. Delete your bloated goyslop and use deepseek like a grown professional",
+        "previous_translation": "@deepseek_ai就该装在我的设备上。它绝对是最好的应用。没有别的能超越deepseek，聊天。删掉你那臃肿的垃圾货，像个成熟的专业人士一样用deepseek。",
+        "translation": "@deepseek_ai 就该装在我的设备上。它毫无疑问是最好的应用。其他任何东西都永远无法超越deepseek，聊天。删掉你那臃肿的goyslop，像个成熟的专业人士一样用deepseek吧。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2092276068790989096",
+        "source_language": "en",
+        "target_language": "ja",
+        "source": "@deepseek_ai belongs on my devices. It's the best app hands down. Nothing else will ever surpass deepseek, chat. Delete your bloated goyslop and use deepseek like a grown professional",
+        "previous_translation": "@deepseek_aiは私のデバイスに搭載されるべきだ。間違いなく最高のアプリだ。deepseekに勝るものは今後も何もないだろう、チャットよ。あなたの肥大化したゴミアプリは消して、大人のプロのようにdeepseekを使いなさい。",
+        "translation": "@deepseek_ai は私のデバイスに搭載されるべきだ。間違いなく最高のアプリだ。他は決してdeepseekを超えられない、チャット。膨張したgoyslopは削除して、大人のプロのようにdeepseekを使え。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2095737515894313379",
+        "source_language": "en",
+        "target_language": "zh-cn",
+        "source": "10.9 Trillion Tokens Later, the Real Story Is What Developers Are Building\n\nhttps://t.co/YcX7JoZKZv has now processed more than 10.9 trillion tokens since launching its free campaign.\n\nBehind that number are more than 89.56 million API calls and over 239,000 new users, including 235,000+ new API users.\n\nBut the most important part of this milestone isn't the number itself.\n\nIt's what happens when developers can access powerful AI models without high costs becoming the first barrier to experimentation.\n\nA developer can test an idea without worrying about every API call.\n\nAn AI team can compare multiple models before committing to a production stack.\n\nAgent builders can run longer and more demanding workflows.\n\nStartups can prototype faster before investing heavily in infrastructure.\n\nEnterprise teams can experiment with high-volume workloads while keeping inference economics in mind.\n\nThis is why affordable AI infrastructure matters. The lower the cost of experimentation, the more room builders have to test, fail, improve, and ultimately ship.\n\nhttps://t.co/YcX7JoZKZv is pushing that accessibility further with a growing selection of frontier models, including free access to GLM-5.3-Flash (Ox Alpha), Qwen3.8-Flash, Tencent Hy3, and Xiaomi MiMo-V2.5, alongside major discounts on DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp.\n\n10.9 trillion tokens is a milestone.\n\nThe bigger opportunity is the next trillion tokens — and what developers will create with them.\n\nBuild the experiment. Run the agent. Test the model. Ship the product.\n\nhttps://t.co/YcX7JoZKZv is here to help make the cost of building less of a limitation.\n\nStart building: https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "previous_translation": "10.9万亿个Token 后来，真正的故事是开发者在构建什么\n\nhttps://t.co/YcX7JoZKZv 自推出免费活动以来，已处理超过 10.9万亿个Token。\n\n在这一数字背后，是超过 8956 万次 API 调用和超过 239,000 名新用户，其中包括 235,000 多名新 API 用户。\n\n但这个里程碑最重要的部分不是数字本身。\n\n重要的是，当开发者能够使用强大的 AI 模型，而不让高昂的成本成为实验的第一道障碍时，会发生什么。\n\n开发者可以测试一个想法，而不必担心每次 API 调用。\n\nAI 团队可以在投入生产架构之前比较多种模型。\n\n智能体构建者可以运行更长时间、要求更高的工作流。\n\n初创公司可以在大量投资基础设施之前更快地构建原型。\n\n企业团队可以在考虑推理成本的前提下，试验高负载工作负载。\n\n这就是为什么负担得起的 AI 基础设施很重要。实验成本越低，构建者就有越多的空间去测试、失败、改进，并最终上线。\n\nhttps://t.co/YcX7JoZKZv 正通过不断扩大的前沿模型选择来进一步推动这种可及性，包括免费访问 GLM-5.3-Flash（Ox Alpha）、Qwen3.8-Flash、腾讯混元 Hy3 和小米 MiMo-V2.5，同时 DeepSeek-V4-Flash 和 DeepSeek-V4-Flash-Vision-Exp 也享有大幅折扣。\n\n10.9万亿个Token 是一个里程碑。\n\n更大的机会在于下一个 1万亿个Token——以及开发者将用它们创造什么。\n\n构建实验。运行智能体。测试模型。上线产品。\n\nhttps://t.co/YcX7JoZKZv 致力于帮助降低构建成本带来的限制。\n\n开始构建：https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "translation": "10.9万亿个Token 后来，真正的故事是开发者在构建什么\n\nhttps://t.co/YcX7JoZKZv 自推出免费活动以来，已处理超过 10.9万亿个Token。\n\n在这一数字背后，是超过8956万次API调用和超过239,000名新用户，其中包括235,000多名新API用户。\n\n但这一里程碑最重要的部分不是数字本身。\n\n关键在于，当开发者能够访问强大的AI模型，而不必让高昂成本成为实验的第一道障碍时，会发生什么。\n\n开发者可以测试一个想法，而不必担心每次API调用的成本。\n\nAI团队可以在投入生产栈之前比较多个模型。\n\n智能体构建者可以运行更长、要求更高的工作流。\n\n初创公司可以在大量投资基础设施之前更快地构建原型。\n\n企业团队可以在考虑推理经济学的同时，试验高吞吐量工作负载。\n\n这就是为什么可负担的AI基础设施很重要。实验成本越低，构建者就有越多的空间去测试、失败、改进，并最终发布产品。\n\nhttps://t.co/YcX7JoZKZv 正在通过不断扩大的前沿模型选择来进一步推动这一可及性，包括免费访问 GLM-5.3-Flash（Ox Alpha）、Qwen3.8-Flash、腾讯混元Hy3 和小米 MiMo-V2.5，同时提供 DeepSeek-V4-Flash 和 DeepSeek-V4-Flash-Vision-Exp 的大幅折扣。\n\n10.9万亿个Token 是一个里程碑。\n\n更大的机会在于下一个 1万亿个Token ——以及开发者将用它们创造出什么。\n\n构建实验。运行智能体。测试模型。发布产品。\n\nhttps://t.co/YcX7JoZKZv 在此帮助你降低构建成本所带来的限制。\n\n开始构建：https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "source_lines": 35,
+        "previous_lines": 35,
+        "new_lines": 35,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/o6XRS0MXcc"
+        ],
+        "translated_urls": [
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/o6XRS0MXcc"
+        ]
+      },
+      {
+        "post_id": "2095737515894313379",
+        "source_language": "en",
+        "target_language": "ja",
+        "source": "10.9 Trillion Tokens Later, the Real Story Is What Developers Are Building\n\nhttps://t.co/YcX7JoZKZv has now processed more than 10.9 trillion tokens since launching its free campaign.\n\nBehind that number are more than 89.56 million API calls and over 239,000 new users, including 235,000+ new API users.\n\nBut the most important part of this milestone isn't the number itself.\n\nIt's what happens when developers can access powerful AI models without high costs becoming the first barrier to experimentation.\n\nA developer can test an idea without worrying about every API call.\n\nAn AI team can compare multiple models before committing to a production stack.\n\nAgent builders can run longer and more demanding workflows.\n\nStartups can prototype faster before investing heavily in infrastructure.\n\nEnterprise teams can experiment with high-volume workloads while keeping inference economics in mind.\n\nThis is why affordable AI infrastructure matters. The lower the cost of experimentation, the more room builders have to test, fail, improve, and ultimately ship.\n\nhttps://t.co/YcX7JoZKZv is pushing that accessibility further with a growing selection of frontier models, including free access to GLM-5.3-Flash (Ox Alpha), Qwen3.8-Flash, Tencent Hy3, and Xiaomi MiMo-V2.5, alongside major discounts on DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp.\n\n10.9 trillion tokens is a milestone.\n\nThe bigger opportunity is the next trillion tokens — and what developers will create with them.\n\nBuild the experiment. Run the agent. Test the model. Ship the product.\n\nhttps://t.co/YcX7JoZKZv is here to help make the cost of building less of a limitation.\n\nStart building: https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "previous_translation": "10.9兆トークン 後になって、本当のストーリーは開発者が何を作っているかだ\n\nhttps://t.co/YcX7JoZKZv は無料キャンペーン開始以来、10.9兆トークン 以上を処理してきた。\n\nその数字の背後には、8,956万件以上のAPIコールと、23万5,000人以上の新規APIユーザーを含む23万9,000人以上の新規ユーザーがいる。\n\nしかし、このマイルストーンの最も重要な部分は、数字そのものではない。\n\n重要なのは、開発者が高額なコストが実験の最初の障壁になることなく、強力なAIモデルにアクセスできるようになったときに何が起こるかだ。\n\n開発者は、すべてのAPIコールを気にすることなく、アイデアをテストできる。\n\nAIチームは、本番スタックを決定する前に、複数のモデルを比較できる。\n\nエージェントビルダーは、より長く、より要求の厳しいワークフローを実行できる。\n\nスタートアップは、インフラに多額の投資をする前に、より速くプロトタイプを作成できる。\n\nエンタープライズチームは、推論の経済性を考慮しながら、高ボリュームのワークロードを試すことができる。\n\nこれこそが、手頃なAIインフラが重要な理由だ。実験コストが低ければ低いほど、ビルダーはテスト、失敗、改善、そして最終的なリリースにより多くの余地を得られる。\n\nhttps://t.co/YcX7JoZKZv は、GLM-5.3-Flash（Ox Alpha）、Qwen3.8-Flash、Tencent Hy3、Xiaomi MiMo-V2.5への無料アクセスを含む、拡大するフロンティアモデルのセレクションと、DeepSeek-V4-FlashおよびDeepSeek-V4-Flash-Vision-Expの大幅な割引により、そのアクセシビリティをさらに推し進めている。\n\n10.9兆トークン はマイルストーンだ。\n\nより大きな機会は、次の 1兆トークン — そして開発者がそれらを使って何を生み出すかにある。\n\n実験を作ろう。エージェントを実行しよう。モデルをテストしよう。製品をリリースしよう。\n\nhttps://t.co/YcX7JoZKZv は、構築のコストを限界にしにくくするためにここにある。\n\n構築を始める： https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "translation": "10.9兆トークン 後で、本当のストーリーは開発者が何を構築しているかだ\n\nhttps://t.co/YcX7JoZKZv は無料キャンペーン開始以来、10.9兆トークン 以上を処理してきました。\n\nその数字の背景には、8,956万回以上のAPIコールと、23万5,000人以上の新規APIユーザーを含む23万9,000人以上の新規ユーザーがいます。\n\nしかし、このマイルストーンの最も重要な部分は数字そのものではありません。\n\n重要なのは、開発者が高額なコストが実験の最初の障壁になることなく、強力なAIモデルにアクセスできるようになったときに何が起こるかです。\n\n開発者は、すべてのAPIコールを心配することなくアイデアをテストできます。\n\nAIチームは、本番スタックにコミットする前に複数のモデルを比較できます。\n\nエージェントビルダーは、より長く、より要求の厳しいワークフローを実行できます。\n\nスタートアップは、インフラに多額の投資をする前に、より速くプロトタイプを作成できます。\n\nエンタープライズチームは、推論の経済性を考慮しながら、高ボリュームのワークロードを実験できます。\n\nこれが、手頃なAIインフラが重要である理由です。実験のコストが低ければ低いほど、ビルダーがテスト、失敗、改善、そして最終的にリリースするための余地が広がります。\n\nhttps://t.co/YcX7JoZKZv は、フロンティアモデルの選択肢を拡大し、GLM-5.3-Flash (Ox Alpha)、Qwen3.8-Flash、Tencent Hy3、Xiaomi MiMo-V2.5への無料アクセスに加え、DeepSeek-V4-FlashおよびDeepSeek-V4-Flash-Vision-Expの大幅な割引を提供することで、そのアクセスしやすさをさらに推進しています。\n\n10.9兆トークン はマイルストーンです。\n\nより大きな機会は、次の 1兆トークン と、開発者がそれらを使って何を生み出すかです。\n\n実験を構築してください。エージェントを実行してください。モデルをテストしてください。製品をリリースしてください。\n\nhttps://t.co/YcX7JoZKZv は、構築のコストを制限にしにくくするためにここにあります。\n\n構築を開始: https://t.co/o6XRS0MXcc\n\n@BAI_AGI @justinsuntron #TRONEcoStar",
+        "source_lines": 35,
+        "previous_lines": 35,
+        "new_lines": 35,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/o6XRS0MXcc"
+        ],
+        "translated_urls": [
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/YcX7JoZKZv",
+          "https://t.co/o6XRS0MXcc"
+        ]
+      },
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "The APAC hackathon for 0G has finally come to a successful conclusion!\n\nTo be honest, the explosion of on-chain AI this time completely exceeded expectations.\n\nForget the empty platitudes, let's get straight to the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 real-world projects ultimately submitted\n\nFirst, a round of applause for the top three teams @Ghast_AI (1st place), @NeoSoulAI (2nd place), and @anima_0g (3rd place)! Also, shout-out to Alsphere, Hash PayLink, Beam, and all the other teams who took home Excellence Awards and Community Awards. You all are truly amazing.\n\nWhat excites me most about this hackathon isn't how great the numbers look, but that everyone truly understood and utilized 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT pitch, but these teams actually built and deployed real-world scenarios on 0G, like AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies. These people have proven with real action: 0G's modular architecture's freedom of composition and real-world capability are tailor-made for on-chain AI.\n\nNew friends might be asking, what exactly is 0G?\n\nIn one sentence: 0G is a decentralized operating system built specifically for AI Agents. They combine massive storage, GPU-level verifiable compute, and a modular chain into one cohesive force, making every inference and decision by AI public, transparent, and immutable. This completely liberates AI from the \"black box\" of centralized giants.\n\nBig News: MiniMax M3 is officially on-chain and totally free starting today!\n\nBesides the hackathon, there's another explosive piece of news today: Following Qwen, the world's top open-source large model MiniMax M3 is now officially integrated into the 0G ecosystem! Those following the open-source community will know that M3 is currently a top player on the OpenRouter trending list and the Artificial Analysis open-source leaderboard, with incredibly strong coding capabilities, support for million-token ultra-long context, and native multimodality.\n\nThrough 0G's compute and privacy computers, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capability, paired with zero trust and absolute privacy. Hardware proves everything; even the service provider can't peek at your data.\n\n🎁 Limited-time four-day offer\n\nSince the top model is on-chain, freebies are a must. Starting today at 12:00 UTC, MiniMax covers all backend costs, and the M3 experience is 100% free!\n\nTime: June 15th - 18th\n\nRequirement: Extremely simple. Just have 1 $0G in your wallet to verify your real identity. No complicated application forms needed!\n\nDirect access: https://t.co/zm340Bk8Ob (You can go register right now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon's explosive success proves that real use cases are popping up everywhere, and MiniMax's integration proves that top-tier large models can run perfectly on-chain. The future of AI shouldn't be a black box monopolized by big corporations but public infrastructure that everyone can verify and has privacy control over.\n\nOn 0G, persistent memory for AI Agents, verifiable execution, and on-chain settlement are already solved in a one-stop manner.\n\nDevelopers, creators, and veteran players, stop just watching. Go get yourself 1 $0G now, register for the privacy computer, and try out M3 for free. Join us and build on 0G. The era of decentralized on-chain AI awaits us at the top!\n@0G_labs @0g_CN",
+        "translation": "The 0G APAC hackathon has finally come to a successful conclusion!\n\nTo be honest, the explosion of on-chain AI this time completely exceeded expectations.\n\nNo empty platitudes, let's just look at the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 ultimately submitted practical projects\n\nFirst, a shout-out to the teams that swept the top three spots: @Ghast_AI (first prize), @NeoSoulAI (second prize), @anima_0g (third prize)! Also, Alsphere, Hash PayLink, Beam, and the other folks who received Excellence Awards and Community Awards—you are all truly amazing.\n\nWhat excites me most about this hackathon isn't how good the numbers look, but that everyone truly understood and utilized 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT, but these teams actually implemented real-world scenarios like AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies on 0G. These people have proven with action: the combinatorial freedom and practical capability of 0G's modular architecture are tailor-made for on-chain AI.\n\nNew friends might ask, what exactly is 0G?\n\nIn one simple sentence: 0G is a decentralized operating system built specifically for AI Agents. They combine massive storage, GPU-level verifiable compute, and modular chains into one cohesive force, making every inference and decision of AI public, transparent, and tamper-proof, completely liberating AI from the \"black box\" of centralized giants.\n\nBreaking: MiniMax M3 is officially on-chain, now 100% free!\n\nBesides the hackathon, there's another explosive piece of news today: following Qwen, the world's top open-source large model MiniMax M3 has officially integrated into the 0G ecosystem!\nIf you follow the open-source community, you should know that M3 is currently top-tier on both the OpenRouter trending list and the Artificial Analysis open-source leaderboard, with extremely strong coding capabilities, support for million-token long contexts, and native multimodality.\n\nThrough 0G's compute and privacy computing, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capabilities, paired with zero trust and absolute privacy. Hardware proves everything—even service providers can't peek at your data.\n\n🎁 Limited-time four-day benefit\n\nSince the top model is on-chain, the freebies must be arranged. Starting today at 12:00 UTC, MiniMax covers all backend costs, and the M3 experience is 100% free!\n\nTime: June 15 - 18\n\nRequirement: Extremely simple—just have 1 $0G in your wallet to verify your real identity. No need to fill out any complex application forms!\n\nDirect access: https://t.co/zm340Bk8Ob (You can go register now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon explosion proves that real use cases are blooming everywhere, and MiniMax's integration proves that top large models can run smoothly on-chain. The AI of the future should not be a black box monopolized by big corporations, but public infrastructure that everyone can verify and with controllable privacy.\n\nOn 0G, persistent memory, verifiable execution, and on-chain settlement for AI Agents have all been achieved as a one-stop solution.\n\nDevelopers, creators, and veteran players—stop watching from the sidelines. Go get 1 $0G now, register for the privacy computer, and try M3 for free. Join us, build on 0G together. In the decentralized on-chain AI era, let's meet at the peak!\n@0G_labs @0g_CN",
+        "source_lines": 45,
+        "previous_lines": 44,
+        "new_lines": 45,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ]
+      },
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "0GのAPACハッカソンがついに大成功裡に終了しました！\n\n正直言って、今回のオンチェーンAIの爆発的盛り上がりは予想を完全に超えていました。\n\n飾った決まり文句は抜きにして、ハードなデータを直接見ていきましょう：\n\n104万+ ソーシャルメディアでの露出\n1,145名 のグローバルなハードコア開発者が参加\n293件 の最終提出された実戦プロジェクト\n\nまずは上位3位を独占したチーム @Ghast_AI（一等賞）、@NeoSoulAI（二等賞）、@anima_0g（三等賞）に拍手を送りましょう！そしてAlsphere、Hash PayLink、Beamなど、優秀賞やコミュニティ賞を獲得した皆さん、本当に強すぎます。\n\n今回のハッカソンで私が最も興奮したのは、データがどれだけ良いかということではなく、皆さんが本当に0Gのフルスタック基盤（分散型ストレージ、検証可能な計算力、モジュール型L1、プライバシー計算、Agentic ID）を使いこなしたことです。\n\nPPTを書くのは誰にでもできますが、これらのチームは本当に0G上でAI Agentフレームワークのオーケストレーション、オンチェーンでの検証可能な取引、自律型Agent経済圏などの実際のユースケースを実装しました。これらの人々は実際の行動で証明しました：0Gのモジュール型アーキテクチャの自由度の高い組み合わせと実戦能力は、まさにオンチェーンAIのために作られたものだ、と。\n\n新しい友人はこう尋ねるかもしれません、0Gとは一体何なのか？\n\n一言で言えば：0GはAI Agent専用に作られた分散型オペレーティングシステムです。大量のストレージ、GPUレベルの検証可能な計算力、モジュール型チェーンを一つにまとめ、AIの毎回の推論と意思決定を公開・透明・改ざん不可能にし、AIを中央集権型大手の「ブラックボックス」から完全に解放しました。\n\n重大ニュース：MiniMax M3が正式にオンチェーン、本日より全額無料！\n\nハッカソンに加えて、今日はもう一つの衝撃的な大ニュースがあります：Qwenに続き、世界トップクラスのオープンソース大規模言語モデル MiniMax M3 が正式に0Gエコシステムに接続されました！\nオープンソースコミュニティを追っている方ならご存知でしょうが、M3は現在OpenRouterの人気ランキングとArtificial Analysisのオープンソースランキングでトップクラスであり、コーディング能力は非常に高く、100万トークンの超長文脈とネイティブなマルチモーダルもサポートしています。\n\n0Gの計算力とプライバシー計算機を通じて、M3はオンチェーンで「検証可能な推論 + TEEハードウェアレベルのプライバシー保護」を実現しました。簡単に言えば：最高峰のAI能力に、ゼロトラストと絶対的なプライバシーを組み合わせたものです。ハードウェアが全てを証明し、サービスプロバイダーでさえあなたのデータを覗き見ることはできません。\n\n🎁 期間限定4日間の特典\n\nトップモデルがオンチェーンになったので、お得な特典も用意しなければなりません。本日正午12:00 UTCから、MiniMaxが全てのバックエンドコストを負担し、M3体験は100%完全無料です！\n\n期間： 6月15日 - 18日\n\n条件： 非常に簡単で、ウォレットに本人確認用の $0G が1つあればよく、複雑な申請書を記入する必要は一切ありません！\n\nアクセスチャネル： https://t.co/zm340Bk8Ob （今すぐ登録できます）\n\nなぜ今が0Gに参加する絶好のタイミングなのか？\n\nハッカソンの爆発的盛り上がりは実際のユースケースが至る所で生まれていることを証明し、MiniMaxの参加はトップクラスの大規模言語モデルがオンチェーンで完全に機能することを証明しました。未来のAIは大企業が独占するブラックボックスであるべきではなく、誰もが検証でき、プライバシーが制御可能な公共インフラであるべきです。\n\n0Gでは、AI Agentの永続的なメモリ、検証可能な実行、オンチェーン決済がワンストップで解決されています。\n\n開発者、クリエイター、ベテランプレイヤーの皆さん、傍観はやめましょう。今すぐ $0G を1つ入手して、プライバシー計算機に登録し、M3を無料で体験しましょう。私たちに加わって、一緒に0G上でBuildしましょう。分散型のオンチェーンAI時代、頂上で会いましょう！\n@0G_labs @0g_CN",
+        "translation": "0G の APAC ハッカソンがついに大成功裡に幕を閉じました！\n\n正直に言うと、今回のオンチェーン AI の爆発的な盛り上がりは予想を完全に超えていました。\n\n飾りのない本音で、ハードなデータを見てみましょう：\n\n104万+ ソーシャルメディアでの露出\n1,145名 の世界中のハードコア開発者が参加\n293件 の最終提出された実戦プロジェクト\n\nまずは見事トップ3を勝ち取ったチーム @Ghast_AI（一等賞）、@NeoSoulAI（二等賞）、@anima_0g（三等賞）に拍手を送りましょう！そして、Alsphere、Hash PayLink、Beam など、優秀賞やコミュニティ賞を獲得した皆さんも本当に強すぎます。\n\n今回のハッカソンで最も興奮したのは、データがどれだけ良かったかではなく、皆が本当に 0G のフルスタック基盤（分散型ストレージ、検証可能な計算力、モジュール型 L1、プライバシー計算、Agentic ID）を使いこなしたことです。\n\nPPT を書くのは誰でもできますが、これらのチームは本気で 0G 上で AI Agent フレームワークのオーケストレーション、オンチェーンでの検証可能なトランザクション、自律型 Agent エコノミーといった現実のシナリオを実装しました。これらの人々は実際の行動で証明しました：0G のモジュール型アーキテクチャの自由度の組み合わせと実戦能力は、まさにオンチェーン AI のために作られたものだと。\n\n新しい友人はこう尋ねるかもしれません、0G とは一体何なのか？\n\n一言で言えば：0G は AI Agent のために作られた分散型オペレーティングシステムです。彼らは大量のストレージ、GPU レベルの検証可能な計算力、モジュール型チェーンを一つに束ね、AI の推論と意思決定のすべてを公開・透明・改ざん不可能にし、AI を完全に中央集権型巨大企業の「ブラックボックス」から解放しました。\n\n重大ニュース：MiniMax M3 が正式にオンチェーン、本日より全額無料！\n\nハッカソン以外にも、今日はもう一つの衝撃的な大ニュースがあります：Qwen に続き、世界的にトップクラスのオープンソース大規模言語モデル MiniMax M3 が正式に 0G エコシステムに接続されました！\nオープンソースコミュニティを注目している方ならご存知でしょうが、M3 は現在 OpenRouter の人気ランキングと Artificial Analysis のオープンソースランキングでトップクラスであり、コーディング能力は非常に強力で、百万トークンの超長文脈とネイティブなマルチモーダルもサポートしています。\n\n0G の計算力とプライバシー計算機を通じて、M3 はオンチェーンで「検証可能な推論 + TEE ハードウェアレベルのプライバシー保護」を実現しました。簡単に言えば：最高峰の AI 能力に、ゼロトラストと絶対的なプライバシーを組み合わせたものです。ハードウェアがすべてを証明し、サービスプロバイダーでさえあなたのデータを覗き見ることはできません。\n\n🎁 期間限定4日間の特典\n\nトップモデルがオンチェーンになったので、お得な特典もちゃんと用意しました。本日正午12:00 UTC より、MiniMax が全バックエンドコストを負担し、M3 体験は 100% 無料です！\n\n期間： 6月15日 - 18日\n\n条件： 非常に簡単。ウォレットに本人確認用の $0G が 1 つあればよく、複雑な申請書を記入する必要は一切ありません！\n\n直接アクセス： https://t.co/zm340Bk8Ob （今すぐ登録できます）\n\nなぜ今が 0G に参加する絶好のタイミングなのか？\n\nハッカソンの爆発は実際のユースケースが至る所で花開いていることを証明し、MiniMax の参加はトップクラスの大規模モデルがオンチェーンで完全に機能することを証明しました。未来の AI は大企業が独占するブラックボックスであるべきではなく、誰もが検証でき、プライバシーが制御可能な公共インフラであるべきです。\n\n0G では、AI Agent の永続的なメモリ、検証可能な実行、オンチェーン決済がワンストップで実現されています。\n\n開発者、クリエイター、ベテランプレイヤーの皆さん、傍観しないでください。今すぐ $0G を 1 つ用意して、プライバシー計算機に登録し、無料で M3 を体験してみてください。私たちに加わって、一緒に 0G 上で Build しましょう。分散型のオンチェーン AI 時代、頂上で会いましょう！\n@0G_labs @0g_CN",
+        "source_lines": 45,
+        "previous_lines": 45,
+        "new_lines": 45,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ]
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeek costs only 6 cents per million tokens—can you believe it?\n\nLet me do a precise calculation for you: running DeepSeek V4 Flash on my local LazyCat AI compute pod costs 6 cents per million tokens.\n\nThat's 1/300 of the cost of DeepSeek's online API during peak hours, and 1/150 of the cost during off-peak hours. https://t.co/brf3x0cF6X",
+        "translation": "DeepSeek: 1 million tokens for 6 cents — can you believe it?\n\nLet me do the precise math for you: running DeepSeek V4 Flash on my local LazyCat AI Compute Pod costs 6 cents per million tokens.\n\nThat's 1/300 of DeepSeek's peak-time online API cost, and 1/150 of the off-peak cost. https://t.co/brf3x0cF6X",
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": 5,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": [
+          "https://t.co/brf3x0cF6X"
+        ]
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeekの100万トークンが6銭、信じられますか？\n\n皆さんに細かく計算してみます。私の地元の「懒猫AI算力舱」でDeepSeek V4 Flashを実行すると、100万トークンあたりの価格は6銭です。\n\nこれはDeepSeekオンラインAPIのピーク時コストの1/300であり、アイドル時コストの1/150です https://t.co/brf3x0cF6X",
+        "translation": "DeepSeekの100万トークンが6分だって、信じられますか？\n\nみなさんに詳しく計算してみます。私の地元の「懒猫AI算力舱」でDeepSeek V4 Flashを実行すると、100万トークンあたりの価格は6分です\n\nこれはDeepSeekオンラインAPIのピーク時コストの1/300、アイドル時コストの1/150です https://t.co/brf3x0cF6X",
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": 5,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": [
+          "https://t.co/brf3x0cF6X"
+        ]
+      },
+      {
+        "post_id": "2096881764480561562",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "◎(9/7)。181起　该・的AI。别沉迷于AI！别把人工智能（AI）当成你的爱人 ！　别用AI，自己思考、自己写作  !!  我们非常希望听到知识产权专业人士（尤其是专利专家）的意见  ！! 　该诉讼请求被驳回（原告Fu @kbozon https://t.co/J1A5KD7eB0 \n\n◎(9/7)。该・的AI。别沉迷于AI！别把人工智能（AI）当成你的爱人 ！ 别用AI，自己思考、自己写作 !!\n\n我们非常希望听到知识产权专业人士（尤其是专利专家）的意见 ！!\n\n该诉讼请求被驳回（原告Future Technology Co., Ltd.的权利被宣告无效）。\n\n这是知识产权高等法院宣告“权利无效”的第181起案件。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n目前尚不清楚原告Future Technology Co., Ltd.（专利权人）是否对其专利号为7583386（加热香氛盒）的专利的“有效性”进行了验证。\n\n“有效性”是指即使第三方（例如利害关系人）在进行例如“无效检索”后提起“无效宣告诉讼”，专利仍然有效。\n\n在本案中，日本特许局确认专利权有效后，知识产权高等法院裁定该专利无效。\n\n专利权人未来科技株式会社（Future Technology Co., Ltd.）认为日本特许厅授予的专利有效，并向东京地方法院提起诉讼，控告被告双日株式会社（Sojitz Corporation，介入方为菲利普莫里斯日本有限公司，Philip Morris Japan G.K.）侵犯其专利权。\n\n东京地方法院裁定，“涉案专利的授予违反了《专利法》第29条第1款第3项的规定，应通过专利无效宣告程序予以宣告无效。”\n\n此外，法院还指出，“涉案的各项发明均可视为与C-30号发明相同，而C-30号发明已在专利申请提交前公开发表。”\n\nC-30号发明为（欧洲专利申请公开号3494809）。\n\n现在，关于日本特许厅的审查阶段……\n\n审查员（根本典子）确实发现了“发明C30”（欧洲专利申请公开号3494809），但显然并未将其认定为强有力的现有技术，也没有将其作为驳回的依据。\n\n驳回的理由仅仅是违反了《专利法》第36条第6款第1项（支持性要求）。\n\n然而，最终还是授予了“专利授权”。\n\n但是，如上所述，专利权人在东京地方法院败诉。\n\n因此，我认为日本特许厅不应该授予Future Technology Co., Ltd.专利。\n\n本Excel文档的第二页及后续工作表中列出了该专利公开申请信息中的“FI”和“F-term”。\n\n（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな ! AIを恋人にするな ！　AIを使うな、自分で考えて文章を書け ! !\n\n知財関係者（特に、特許担当者) のコメントを求む ! !\n\n請求を棄却、（原告=Future Technology株式会社の権利無効）。\n\n知的財産高等裁判所により「権利無効」とされた１８１件目のものです。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n特許権者である原告のFuture Technology株式会社は、自分が保有する特許第7583386号（被加熱芳香カートリッジ）について、その特許の「有効性」を検証したか不明です。\n\n「有効性」とは、自社の特許についての、例えば「無効資料調査」等を行うことで、たとえ利害関係者などの第三者からの「無効審判」を起こされても、自社の特許は盤石であると確信することです。\n\n本件は、特許庁にて特許権が確定した後、知的財産高等裁判所において「権利無効」との判断が下ったものです。\n\n特許権者のFuture   Technology株式会社は、特許庁より与えられた特許を有効と信じて、被告であるを双日株式会社（被告補助参加人=フィリップ・モリス・ジャパン合同会社）を、自社の特許侵害している、と東京地方裁判所に提訴しました。\n\nこれに対して、東京地方裁判所は、「本件特許は、特許法２９条１項３号に違反してされたものであり、特許無効審判により無効にされるべきものである。」としました。\n\nそして、「本件各発明は、その特許出願前に頒布等された刊行物記載発明等である丙３０発明と同一の発明といえる。」としています。\n\n丙３０発明とは、（欧州特許出願公開3494809号）です。\n\nここで、特許庁の審査段階について、です。\n\n審査官（根本徳子は「丙３０発明」（欧州特許出願公開3494809号）を見つけてはいますが、強力な先行技術とは認識していなかったようで、拒絶理由の引例とはしていません。\n\nあくまでも、特許法第３６条第６項第１号の（サポート要件）違反での拒絶理由です。\n\nそして、「特許査定」をしています。\n\nしかしながら、特許権者は東京地方裁判所において、上記のように敗訴しました。\n\n従って、本来なら、Future Technology株式会社の出願に対して、特許庁は特許を与えるべきでなかった、と考えます。\n\nここで、本件特許公開の「出願情報」のうち「ＦＩ」と「Ｆターム」を、本エクセル資料の２シート目以降に挙げておきました。\n\n（井号）\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "previous_translation": "◎(9/7). 181 cases. That damn AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself and write for yourself!! We would very much like to hear the opinions of intellectual property professionals (especially patent specialists)!! The lawsuit was dismissed (plaintiff Fu @kbozon https://t.co/J1A5KD7eB0\n\n◎(9/7). That damn AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself and write for yourself!!\n\nWe would very much like to hear the opinions of intellectual property professionals (especially patent specialists)!!\n\nThe lawsuit was dismissed (the rights of the plaintiff, Future Technology Co., Ltd., were declared invalid).\n\nThis is the 181st case in which the Intellectual Property High Court declared \"rights invalid.\"\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\nIt is unclear whether the plaintiff, Future Technology Co., Ltd. (the patent holder), verified the \"validity\" of its patent No. 7583386 (Heated Aroma Cartridge).\n\n\"Validity\" means that even if a third party (e.g., an interested party) files an \"invalidation trial\" after conducting, for example, an \"invalidity search,\" the patent remains valid.\n\nIn this case, after the Japan Patent Office confirmed the validity of the patent right, the Intellectual Property High Court ruled that the patent was invalid.\n\nThe patent holder, Future Technology Co., Ltd., believing that the patent granted by the Japan Patent Office was valid, filed a lawsuit with the Tokyo District Court against the defendant, Sojitz Corporation (with Philip Morris Japan G.K. as an intervenor), alleging infringement of its patent rights.\n\nThe Tokyo District Court ruled, \"The patent in question was granted in violation of Article 29, Paragraph 1, Item 3 of the Patent Act, and should be invalidated through a patent invalidation trial.\"\n\nFurthermore, the court noted, \"Each of the inventions in question can be considered identical to Invention C-30, which was publicly disclosed before the patent application was filed.\"\n\nInvention C-30 is (European Patent Application Publication No. 3494809).\n\nNow, regarding the examination stage at the Japan Patent Office...\n\nThe examiner (Noriko Nemoto) did find \"Invention C30\" (European Patent Application Publication No. 3494809), but apparently did not recognize it as strong prior art, nor did she use it as a basis for rejection.\n\nThe reason for rejection was solely a violation of Article 36, Paragraph 6, Item 1 of the Patent Act (support requirement).\n\nHowever, a \"patent grant\" was ultimately issued.\n\nBut, as mentioned above, the patent holder lost in the Tokyo District Court.\n\nTherefore, I believe that the Japan Patent Office should not have granted a patent to Future Technology Co., Ltd.\n\nThe \"FI\" and \"F-term\" classifications from the published application information of this patent are listed on the second and subsequent sheets of this Excel document.\n\n(Original Japanese text)\n\n◎(9/7). Damn you, AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself and write your own sentences!!\n\nWe seek comments from IP professionals (especially those in charge of patents)!!\n\nThe claim was dismissed (the rights of the plaintiff, Future Technology Co., Ltd., were declared invalid).\n\nThis is the 181st case in which the Intellectual Property High Court declared \"rights invalid.\"\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\nIt is unclear whether the plaintiff and patent holder, Future Technology Co., Ltd., verified the \"validity\" of its patent No. 7583386 (Heated Aroma Cartridge).\n\n\"Validity\" means being confident that one's own patent is rock-solid, even if a third party such as an interested party files an \"invalidation trial,\" by conducting, for example, an \"invalidity prior art search\" on one's own patent.\n\nIn this case, after the patent right was confirmed at the Patent Office, the Intellectual Property High Court ruled that the \"right was invalid.\"\n\nThe patent holder, Future Technology Co., Ltd., believing the patent granted by the Patent Office to be valid, filed a lawsuit with the Tokyo District Court against the defendant, Sojitz Corporation (with the intervenor being Philip Morris Japan G.K.), claiming infringement of its patent.\n\nIn response, the Tokyo District Court stated, \"The patent in question was granted in violation of Article 29, Paragraph 1, Item 3 of the Patent Act, and should be invalidated through a patent invalidation trial.\"\n\nIt also stated, \"Each of the inventions in question can be said to be identical to Invention 丙30, which is an invention described in a publication distributed or otherwise made public before the patent application was filed.\"\n\nInvention 丙30 is (European Patent Application Publication No. 3494809).\n\nHere, regarding the examination stage at the Patent Office...\n\nThe examiner (Noriko Nemoto) did find \"Invention 丙30\" (European Patent Application Publication No. 3494809), but apparently did not recognize it as strong prior art, and did not cite it as a reason for rejection.\n\nThe reason for rejection was solely a violation of Article 36, Paragraph 6, Item 1 of the Patent Act (support requirement).\n\nAnd then a \"patent decision\" was issued.\n\nHowever, the patent holder lost in the Tokyo District Court, as described above.\n\nTherefore, I believe that, originally, the Patent Office should not have granted a patent for Future Technology Co., Ltd.'s application.\n\nHere, the \"FI\" and \"F-term\" classifications from the \"application information\" of the published patent in question are listed on the second and subsequent sheets of this Excel document.\n\n(Hash tags)\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "translation": "◎(9/7). 181st case. That damned AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself, write for yourself!! We would very much like to hear opinions from intellectual property professionals (especially patent experts)!! The lawsuit was dismissed (plaintiff Fu @kbozon https://t.co/J1A5KD7eB0\n\n◎(9/7). That damned AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself, write for yourself!!\n\nWe would very much like to hear opinions from intellectual property professionals (especially patent experts)!!\n\nThe lawsuit was dismissed (the rights of plaintiff Future Technology Co., Ltd. were declared invalid).\n\nThis is the 181st case in which the Intellectual Property High Court has declared \"rights invalid.\"\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\nIt is currently unclear whether the plaintiff Future Technology Co., Ltd. (the patent holder) verified the \"validity\" of its patent No. 7583386 (heated fragrance cartridge).\n\n\"Validity\" means that even if a third party (e.g., an interested party) files an \"invalidation trial\" after conducting, for example, an \"invalidity search,\" the patent remains valid.\n\nIn this case, after the Japan Patent Office confirmed the patent's validity, the Intellectual Property High Court ruled the patent invalid.\n\nThe patent holder, Future Technology Co., Ltd., believed the patent granted by the Japan Patent Office was valid and filed a lawsuit with the Tokyo District Court against defendant Sojitz Corporation (with Philip Morris Japan G.K. as intervener), alleging infringement of its patent rights.\n\nThe Tokyo District Court ruled, \"The grant of the patent in question violated Article 29, Paragraph 1, Item 3 of the Patent Act, and the patent should be declared invalid through a patent invalidation trial.\"\n\nThe court further noted, \"Each of the inventions in question can be regarded as identical to Invention C-30, which was publicly disclosed before the patent application was filed.\"\n\nInvention C-30 is (European Patent Application Publication No. 3494809).\n\nNow, regarding the examination stage at the Japan Patent Office...\n\nThe examiner (Noriko Nemoto) did find \"Invention C30\" (European Patent Application Publication No. 3494809), but apparently did not recognize it as strong prior art, nor did she use it as grounds for rejection.\n\nThe reason for rejection was solely a violation of Article 36, Paragraph 6, Item 1 of the Patent Act (support requirement).\n\nHowever, a \"patent grant\" was ultimately issued.\n\nBut, as stated above, the patent holder lost in the Tokyo District Court.\n\nTherefore, I believe the Japan Patent Office should not have granted Future Technology Co., Ltd. the patent.\n\nThe \"FI\" and \"F-term\" classifications from the published patent application information are listed on the second and subsequent sheets of this Excel document.\n\n(Original Japanese text)\n\n◎(9/7). Damn you, AI. Don't become addicted to AI! Don't make AI your lover! Don't use AI—think for yourself and write your own text!!\n\nWe want comments from IP professionals (especially patent personnel)!!\n\nThe claim was dismissed (plaintiff = Future Technology Co., Ltd.'s rights invalid).\n\nThis is the 181st case in which the Intellectual Property High Court declared \"rights invalid.\"\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\nIt is unclear whether the plaintiff and patent holder, Future Technology Co., Ltd., verified the \"validity\" of its patent No. 7583386 (heated fragrance cartridge).\n\n\"Validity\" means being confident, through conducting, for example, an \"invalidity search\" on one's own patent, that even if a third party such as an interested party initiates an \"invalidation trial,\" one's patent remains rock-solid.\n\nIn this case, after the patent right was confirmed at the Patent Office, the Intellectual Property High Court determined that the \"right was invalid.\"\n\nThe patent holder, Future Technology Co., Ltd., believed the patent granted by the Patent Office was valid and filed a lawsuit with the Tokyo District Court against defendant Sojitz Corporation (with the intervener = Philip Morris Japan G.K.), alleging infringement of its patent.\n\nIn response, the Tokyo District Court stated, \"The patent in question was granted in violation of Article 29, Paragraph 1, Item 3 of the Patent Act, and should be declared invalid through a patent invalidation trial.\"\n\nIt also stated, \"Each of the inventions in question can be said to be identical to Invention Hei-30, which is an invention described in publications distributed before the patent application was filed.\"\n\nInvention Hei-30 is (European Patent Application Publication No. 3494809).\n\nHere, regarding the examination stage at the Patent Office...\n\nThe examiner (Noriko Nemoto) did find \"Invention Hei-30\" (European Patent Application Publication No. 3494809), but apparently did not recognize it as strong prior art, and did not cite it as a reference in the reasons for rejection.\n\nThe rejection was solely based on a violation of Article 36, Paragraph 6, Item 1 of the Patent Act (support requirement).\n\nAnd a \"patent grant decision\" was issued.\n\nHowever, as described above, the patent holder lost in the Tokyo District Court.\n\nTherefore, I believe that, originally, the Patent Office should not have granted a patent for Future Technology Co., Ltd.'s application.\n\nHere, of the \"application information\" of the published patent in question, the \"FI\" and \"F-term\" classifications are listed on the second and subsequent sheets of this Excel document.\n\n(Hash tags)\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "source_lines": 87,
+        "previous_lines": 87,
+        "new_lines": 87,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/J1A5KD7eB0",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9"
+        ],
+        "translated_urls": [
+          "https://t.co/J1A5KD7eB0",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9"
+        ]
+      },
+      {
+        "post_id": "2096881764480561562",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "◎(9/7)。181起　该・的AI。别沉迷于AI！别把人工智能（AI）当成你的爱人 ！　别用AI，自己思考、自己写作  !!  我们非常希望听到知识产权专业人士（尤其是专利专家）的意见  ！! 　该诉讼请求被驳回（原告Fu @kbozon https://t.co/J1A5KD7eB0 \n\n◎(9/7)。该・的AI。别沉迷于AI！别把人工智能（AI）当成你的爱人 ！ 别用AI，自己思考、自己写作 !!\n\n我们非常希望听到知识产权专业人士（尤其是专利专家）的意见 ！!\n\n该诉讼请求被驳回（原告Future Technology Co., Ltd.的权利被宣告无效）。\n\n这是知识产权高等法院宣告“权利无效”的第181起案件。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n目前尚不清楚原告Future Technology Co., Ltd.（专利权人）是否对其专利号为7583386（加热香氛盒）的专利的“有效性”进行了验证。\n\n“有效性”是指即使第三方（例如利害关系人）在进行例如“无效检索”后提起“无效宣告诉讼”，专利仍然有效。\n\n在本案中，日本特许局确认专利权有效后，知识产权高等法院裁定该专利无效。\n\n专利权人未来科技株式会社（Future Technology Co., Ltd.）认为日本特许厅授予的专利有效，并向东京地方法院提起诉讼，控告被告双日株式会社（Sojitz Corporation，介入方为菲利普莫里斯日本有限公司，Philip Morris Japan G.K.）侵犯其专利权。\n\n东京地方法院裁定，“涉案专利的授予违反了《专利法》第29条第1款第3项的规定，应通过专利无效宣告程序予以宣告无效。”\n\n此外，法院还指出，“涉案的各项发明均可视为与C-30号发明相同，而C-30号发明已在专利申请提交前公开发表。”\n\nC-30号发明为（欧洲专利申请公开号3494809）。\n\n现在，关于日本特许厅的审查阶段……\n\n审查员（根本典子）确实发现了“发明C30”（欧洲专利申请公开号3494809），但显然并未将其认定为强有力的现有技术，也没有将其作为驳回的依据。\n\n驳回的理由仅仅是违反了《专利法》第36条第6款第1项（支持性要求）。\n\n然而，最终还是授予了“专利授权”。\n\n但是，如上所述，专利权人在东京地方法院败诉。\n\n因此，我认为日本特许厅不应该授予Future Technology Co., Ltd.专利。\n\n本Excel文档的第二页及后续工作表中列出了该专利公开申请信息中的“FI”和“F-term”。\n\n（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな ! AIを恋人にするな ！　AIを使うな、自分で考えて文章を書け ! !\n\n知財関係者（特に、特許担当者) のコメントを求む ! !\n\n請求を棄却、（原告=Future Technology株式会社の権利無効）。\n\n知的財産高等裁判所により「権利無効」とされた１８１件目のものです。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n特許権者である原告のFuture Technology株式会社は、自分が保有する特許第7583386号（被加熱芳香カートリッジ）について、その特許の「有効性」を検証したか不明です。\n\n「有効性」とは、自社の特許についての、例えば「無効資料調査」等を行うことで、たとえ利害関係者などの第三者からの「無効審判」を起こされても、自社の特許は盤石であると確信することです。\n\n本件は、特許庁にて特許権が確定した後、知的財産高等裁判所において「権利無効」との判断が下ったものです。\n\n特許権者のFuture   Technology株式会社は、特許庁より与えられた特許を有効と信じて、被告であるを双日株式会社（被告補助参加人=フィリップ・モリス・ジャパン合同会社）を、自社の特許侵害している、と東京地方裁判所に提訴しました。\n\nこれに対して、東京地方裁判所は、「本件特許は、特許法２９条１項３号に違反してされたものであり、特許無効審判により無効にされるべきものである。」としました。\n\nそして、「本件各発明は、その特許出願前に頒布等された刊行物記載発明等である丙３０発明と同一の発明といえる。」としています。\n\n丙３０発明とは、（欧州特許出願公開3494809号）です。\n\nここで、特許庁の審査段階について、です。\n\n審査官（根本徳子は「丙３０発明」（欧州特許出願公開3494809号）を見つけてはいますが、強力な先行技術とは認識していなかったようで、拒絶理由の引例とはしていません。\n\nあくまでも、特許法第３６条第６項第１号の（サポート要件）違反での拒絶理由です。\n\nそして、「特許査定」をしています。\n\nしかしながら、特許権者は東京地方裁判所において、上記のように敗訴しました。\n\n従って、本来なら、Future Technology株式会社の出願に対して、特許庁は特許を与えるべきでなかった、と考えます。\n\nここで、本件特許公開の「出願情報」のうち「ＦＩ」と「Ｆターム」を、本エクセル資料の２シート目以降に挙げておきました。\n\n（井号）\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "previous_translation": "◎(9/7)。181件目　その・AI。AIに夢中になるな！AIを恋人にするな！　AIを使うな、自分で考えて自分で書け!! 我々は知的財産専門家（特に特許専門家）の意見をぜひ聞きたいと思います！！　この訴訟請求は棄却された（原告Fu @kbozon https://t.co/J1A5KD7eB0\n\n◎(9/7)。その・AI。AIに夢中になるな！AIを恋人にするな！ AIを使うな、自分で考えて自分で書け!!\n\n我々は知的財産専門家（特に特許専門家）の意見をぜひ聞きたいと思います！！\n\nこの訴訟請求は棄却された（原告Future Technology Co., Ltd.の権利は無効と宣告された）。\n\nこれは知的財産高等裁判所が「権利無効」を宣告した181件目の案件です。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n原告Future Technology Co., Ltd.（特許権者）が、その特許番号7583386（加熱式芳香カートリッジ）の「有効性」を検証したかどうかは、現時点では不明です。\n\n「有効性」とは、第三者（例えば利害関係者）が例えば「無効資料調査」を行った後に「無効審判請求」を提起した場合でも、特許が依然として有効であることを意味します。\n\n本件では、日本特許庁が特許権の有効性を確認した後、知的財産高等裁判所が当該特許を無効と裁定しました。\n\n特許権者である未来科技株式会社（Future Technology Co., Ltd.）は、日本特許庁が付与した特許が有効であると判断し、被告である双日株式会社（Sojitz Corporation、介入人はフィリップ・モリス・ジャパン合同会社、Philip Morris Japan G.K.）を特許権侵害で東京地方裁判所に提訴しました。\n\n東京地方裁判所は、「本件特許の付与は特許法第29条第1項第3号の規定に違反しており、特許無効審判手続きによって無効と宣告されるべきである。」と裁定しました。\n\nさらに、裁判所は「本件各発明は、特許出願前に公表されたC-30号発明と同一であるとみなすことができる。」と指摘しました。\n\nC-30号発明とは（欧州特許出願公開番号3494809）です。\n\nさて、日本特許庁の審査段階についてですが……\n\n審査官（根本典子）は確かに「発明C30」（欧州特許出願公開番号3494809）を発見しましたが、明らかにそれを強力な先行技術とは認識しておらず、拒絶理由の根拠とすることもありませんでした。\n\n拒絶理由は単に特許法第36条第6項第1号（サポート要件）への違反のみでした。\n\nしかしながら、最終的には「特許査定」が行われました。\n\nしかし、上記の通り、特許権者は東京地方裁判所で敗訴しました。\n\nしたがって、日本特許庁はFuture Technology Co., Ltd.に特許を付与すべきではなかったと考えます。\n\nこのExcel文書の2枚目以降のワークシートに、当該特許の公開出願情報に記載されている「FI」と「Fターム」を掲載しています。\n\n（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな ! AIを恋人にするな ！　AIを使うな、自分で考えて文章を書け ! !\n\n知財関係者（特に、特許担当者) のコメントを求む ! !\n\n請求を棄却、（原告=Future Technology株式会社の権利無効）。\n\n知的財産高等裁判所により「権利無効」とされた１８１件目のものです。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n特許権者である原告のFuture Technology株式会社は、自分が保有する特許第7583386号（被加熱芳香カートリッジ）について、その特許の「有効性」を検証したか不明です。\n\n「有効性」とは、自社の特許についての、例えば「無効資料調査」等を行うことで、たとえ利害関係者などの第三者からの「無効審判」を起こされても、自社の特許は盤石であると確信することです。\n\n本件は、特許庁にて特許権が確定した後、知的財産高等裁判所において「権利無効」との判断が下ったものです。\n\n特許権者のFuture   Technology株式会社は、特許庁より与えられた特許を有効と信じて、被告である双日株式会社（被告補助参加人=フィリップ・モリス・ジャパン合同会社）を、自社の特許を侵害しているとして、東京地方裁判所に提訴しました。\n\nこれに対して、東京地方裁判所は、「本件特許は、特許法２９条１項３号に違反してされたものであり、特許無効審判により無効にされるべきものである。」としました。\n\nそして、「本件各発明は、その特許出願前に頒布等された刊行物記載発明等である丙３０発明と同一の発明といえる。」としています。\n\n丙３０発明とは、（欧州特許出願公開3494809号）です。\n\nここで、特許庁の審査段階について、です。\n\n審査官（根本徳子）は「丙３０発明」（欧州特許出願公開3494809号）を見つけてはいますが、強力な先行技術とは認識していなかったようで、拒絶理由の引例とはしていません。\n\nあくまでも、特許法第３６条第６項第１号の（サポート要件）違反での拒絶理由です。\n\nそして、「特許査定」をしています。\n\nしかしながら、特許権者は東京地方裁判所において、上記のように敗訴しました。\n\n従って、本来なら、Future Technology株式会社の出願に対して、特許庁は特許を与えるべきでなかった、と考えます。\n\nここで、本件特許公開の「出願情報」のうち「ＦＩ」と「Ｆターム」を、本エクセル資料の２シート目以降に挙げておきました。\n\n（井号）\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "translation": "◎(9/7)。181件目　くた・れAI。AI依存症になるな！人工知能（AI）を恋人にするな！　AIを使うな、自分で考えて、自分で文章を書け!!　知財関係者（特に特許専門家）の意見を是非とも聞きたいです！！　当該訴訟請求は棄却されました（原告 Fu @kbozon https://t.co/J1A5KD7eB0\n\n◎(9/7)。くた・れAI。AI依存症になるな！人工知能（AI）を恋人にするな！ AIを使うな、自分で考えて、自分で文章を書け!!\n\n知財関係者（特に特許専門家）の意見を是非とも聞きたいです！！\n\n当該訴訟請求は棄却されました（原告Future Technology Co., Ltd.の権利は無効と宣告されました）。\n\nこれは、知的財産高等裁判所が「権利無効」を宣告した181件目の案件です。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n原告であるFuture Technology Co., Ltd.（特許権者）が、その特許番号7583386（加熱式芳香カートリッジ）の特許の「有効性」を検証したかどうかは、現時点では明らかではありません。\n\n「有効性」とは、第三者が（例えば利害関係者などが）例えば「無効資料調査」を行った後に「無効審判」を提起したとしても、特許が依然として有効であることを意味します。\n\n本件では、日本特許庁が特許権の有効性を確認した後、知的財産高等裁判所が当該特許を無効と裁定しました。\n\n特許権者である未来科技株式会社（Future Technology Co., Ltd.）は、日本特許庁が付与した特許が有効であると考え、東京地方裁判所に訴訟を提起し、被告である双日株式会社（Sojitz Corporation、介入人：フィリップ・モリス・ジャパン合同会社、Philip Morris Japan G.K.）がその特許権を侵害していると訴えました。\n\n東京地方裁判所は、「係争特許の付与は特許法第29条第1項第3号の規定に違反しており、特許無効審判によって無効にされるべきである。」と裁定しました。\n\nさらに、裁判所は「係る各発明は、特許出願前に公表されたC-30号発明と同一であるとみなすことができる。」と指摘しました。\n\nC-30号発明は（欧州特許出願公開番号3494809）です。\n\nさて、日本特許庁の審査段階についてですが……\n\n審査官（根本典子）は確かに「発明C30」（欧州特許出願公開番号3494809）を発見しましたが、それを強力な先行技術として認識しておらず、拒絶理由の根拠としてもいませんでした。\n\n拒絶理由は、単に特許法第36条第6項第1号（サポート要件）への違反のみでした。\n\nしかし、最終的には「特許査定」がなされました。\n\nしかしながら、上記の通り、特許権者は東京地方裁判所で敗訴しました。\n\nしたがって、私は日本特許庁はFuture Technology Co., Ltd.に特許を付与すべきではなかったと考えます。\n\nこのエクセル文書の2ページ目以降のワークシートには、当該特許の公開出願情報における「FI」と「Fターム」が記載されています。\n\n（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな ! AIを恋人にするな ！　AIを使うな、自分で考えて文章を書け ! !\n\n知財関係者（特に、特許担当者) のコメントを求む ! !\n\n請求を棄却、（原告=Future Technology株式会社の権利無効）。\n\n知的財産高等裁判所により「権利無効」とされた１８１件目のものです。\n\nhttps://t.co/FzG0FXzSyw\n\nhttps://t.co/03E8Fyk7k9\n\n特許権者である原告のFuture Technology株式会社は、自分が保有する特許第7583386号（被加熱芳香カートリッジ）について、その特許の「有効性」を検証したか不明です。\n\n「有効性」とは、自社の特許についての、例えば「無効資料調査」等を行うことで、たとえ利害関係者などの第三者からの「無効審判」を起こされても、自社の特許は盤石であると確信することです。\n\n本件は、特許庁にて特許権が確定した後、知的財産高等裁判所において「権利無効」との判断が下ったものです。\n\n特許権者のFuture   Technology株式会社は、特許庁より与えられた特許を有効と信じて、被告であるを双日株式会社（被告補助参加人=フィリップ・モリス・ジャパン合同会社）を、自社の特許侵害している、と東京地方裁判所に提訴しました。\n\nこれに対して、東京地方裁判所は、「本件特許は、特許法２９条１項３号に違反してされたものであり、特許無効審判により無効にされるべきものである。」としました。\n\nそして、「本件各発明は、その特許出願前に頒布等された刊行物記載発明等である丙３０発明と同一の発明といえる。」としています。\n\n丙３０発明とは、（欧州特許出願公開3494809号）です。\n\nここで、特許庁の審査段階について、です。\n\n審査官（根本徳子は「丙３０発明」（欧州特許出願公開3494809号）を見つけてはいますが、強力な先行技術とは認識していなかったようで、拒絶理由の引例とはしていません。\n\nあくまでも、特許法第３６条第６項第１号の（サポート要件）違反での拒絶理由です。\n\nそして、「特許査定」をしています。\n\nしかしながら、特許権者は東京地方裁判所において、上記のように敗訴しました。\n\n従って、本来なら、Future Technology株式会社の出願に対して、特許庁は特許を与えるべきでなかった、と考えます。\n\nここで、本件特許公開の「出願情報」のうち「ＦＩ」と「Ｆターム」を、本エクセル資料の２シート目以降に挙げておきました。\n\n（井号）\n\n#INPIT #JPlatPat ＃note ＃OpenAI ＃Claude #JPO #USPTO #EPO ＃Patent #ChatGPT #GPT-5 #GPT #Gemini #Threads #Bing #BingAI #AI #DX #IT #DeepSeek #Copilot #AI图像生成 #IT行业 #IT公司 #DX #生成式人工智能 #深度学习 #工作 #深度学习 #商业 #商业技能 #商业模式 #商业机会 #知识产权 #知识产权战略 #知识产权 #知识产权高等法院 #专利 #专利研究 #专利法 #专利局 #东京地方法院 #IP战略 #该死的AI #ClaudeCode",
+        "source_lines": 87,
+        "previous_lines": 87,
+        "new_lines": 87,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/J1A5KD7eB0",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9"
+        ],
+        "translated_urls": [
+          "https://t.co/J1A5KD7eB0",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9",
+          "https://t.co/FzG0FXzSyw",
+          "https://t.co/03E8Fyk7k9"
+        ]
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "This is something you can't ask now\n\nToday, while talking about AI, when I said \"Obsidian\" as \"Obsidahn,\" they told me I said it like it's L'Occitane.\n\n■Everyone, you can save this\nChatGPT → Chat-Gee-Pee-Tee\nOpenAI → Open-A-I\nGemini → Jeminai (often read as \"Gemini\")\nClaude → Claude\nAnthropic → Anthropic\nCopilot → Copilot\nPerplexity → Perplexity\nGrok → Grok\nLlama → Llama\nMistral → Mistral\nDeepSeek → DeepSeek\nQwen → Qwen (also a pronunciation close to \"Chen\")\nNotebookLM → Notebook-L-M\nMidjourney → Midjourney\nDALL·E → Dali (not \"Dally\")\nStable Diffusion → Stable Diffusion\nSora → Sora\nRunway → Runway\nSuno → Suno\nElevenLabs → ElevenLabs\nCursor → Cursor\nDevin → Devin\nManus → Manus\nGenspark → Genspark\nDify → Dify\nNotion AI → Notion-A-I\nObsidian → Obsidian\nCanva → Canvas\nGamma → Gamma\nHugging Face → Hugging Face\nOllama → Ollama",
+        "translation": "Things you can't ask now\n\nToday, while we were talking about AI, when I said “Obsidian” as “Obsudan,” they told me not to say it like it's L’Occitane.\n\n■ Everyone can save this\nChatGPT → Chat-Gee-Pee-Tee\nOpenAI → Open-A-I\nGemini → Gemini (often read as “Gemini”)\nClaude → Claude\nAnthropic → Anthropic\nCopilot → Copilot\nPerplexity → Perplexity\nGrok → Grok\nLlama → Llama\nMistral → Mistral\nDeepSeek → DeepSeek\nQwen → Qwen (also a pronunciation close to “Chen”)\nNotebookLM → Notebook-L-M\nMidjourney → Midjourney\nDALL·E → Dali (not “Dali”)\nStable Diffusion → Stable Diffusion\nSora → Sora\nRunway → Runway\nSuno → Suno\nElevenLabs → ElevenLabs\nCursor → Cursor\nDevin → Devin\nManus → Manus\nGenspark → Genspark\nDify → Dify\nNotion AI → Notion-A-I\nObsidian → Obsidian\nCanva → Canvas\nGamma → Gamma\nHugging Face → Hugging Face\nOllama → Ollama",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "现在还问不出口的\n\n今天聊AI的时候，我说Obsidian是“奥布西丹”，结果被人说听起来像欧舒丹一样。\n\n■大家保存起来就好\nChatGPT → 聊天吉皮提\nOpenAI → 开放艾\nGemini → 杰米奈（经常被读成“杰米尼”）\nClaude → 克劳德\nAnthropic → 安索罗皮克\nCopilot → 副驾驶\nPerplexity → 帕普莱克西提\nGrok → 格罗克\nLlama → 拉马\nMistral → 米斯特拉尔\nDeepSeek → 迪普西克\nQwen → 昆文（也有接近“陈”的发音）\nNotebookLM → 诺特布克埃尔埃姆\nMidjourney → 米德贾尼\nDALL·E → 达利（不是“达利耶”）\nStable Diffusion → 斯特布尔迪夫尤申\nSora → 索拉\nRunway → 跑道\nSuno → 苏诺\nElevenLabs → 伊莱文拉布斯\nCursor → 光标\nDevin → 德温\nManus → 马努斯\nGenspark → 詹斯帕克\nDify → 迪法伊\nNotion AI → 诺申艾\nObsidian → 奥布西迪安\nCanva → 坎瓦\nGamma → 伽马\nHugging Face → 哈金费斯\nOllama → 奥拉马",
+        "translation": "现在才问不出口的事\n\n今天聊AI的时候，我说Obsidian的发音是“オブシダン”，结果被说听起来像ロクシタン（欧舒丹）那样。\n\n■大家可以保存哦\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（常被读作“ジェミニ”）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（也有接近“チェン”的发音）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（不是“ダリー”）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "When running with characters other than MiniMax H3, Phoebe, and Carlotta, unless you spend a considerable amount of time refining the prompt and base reference, you'll only get results that aren't satisfying in terms of reproducing the shading look, so that's the reason why I've only put out these two characters so far.\n\nEven with these two characters, there are still some minor details I'm a bit dissatisfied with at this point, and adding other characters feels subtly troublesome because of that, so I'd like to streamline things a bit more.",
+        "translation": "When running with characters other than MiniMax H3, Phoebe, and Carlotta, if you don't spend a considerable amount of time refining the prompt and base reference, you'll only get results where the shading reproduction look isn't satisfying, so that's why I've only put out these two characters so far.\n\nEven with these two characters, there are still some minor details I'm not quite satisfied with at the moment, and adding other characters feels subtly troublesome in that regard, so I want to streamline things a bit more.",
+        "source_lines": 4,
+        "previous_lines": 3,
+        "new_lines": 3,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "MiniMax H3、除Phoebe和Carlotta以外的角色执行时，如果不花相当时间打磨提示词和基础参考，就只能产出在着色再现外观上无法令人满意的内容，所以目前只出了这两个角色。\n\n即使是这两个角色，现阶段在细节上也有一些不太满意的地方。\n添加其他角色在那方面实在让人觉得有点麻烦，所以想再提高一下效率。",
+        "translation": "如果使用MiniMax H3、Phoebe和Carlotta以外的角色来执行，不花相当多的时间去打磨提示词和基础参考的话，就无法在着色再现的观感上得到令人满意的内容，所以从这一点来看，目前只出了这两个角色。\n\n即使是这两个角色，现阶段在细节上也有一些不太满意的地方。\n添加其他角色这件事，说实话在那里会觉得有点麻烦，所以想再提高些效率。",
+        "source_lines": 4,
+        "previous_lines": 4,
+        "new_lines": 4,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      }
+    ],
+    "independent_review": {
+      "reviewer": "independent semantic review",
+      "scope": "16 completed translations in source-comparison.json; no provider calls and no runtime changes",
+      "verdict": "mixed: the compact prompt improves one pronunciation locale, offensive-term fidelity, and one internal-newline case, but does not fix the English pronunciation table or the MiniMax role error; it introduces one clear English pronunciation-table contradiction.",
+      "improvements": [
+        {
+          "post_id": "2093192147700977838",
+          "target_language": "zh-cn",
+          "finding": "All displayed spelling/reading pairs now retain the Japanese reading, including Copilot, Cursor, Runway, and Canva, instead of substituting meanings."
+        },
+        {
+          "post_id": "2092276068790989096",
+          "target_language": "zh-cn, ja",
+          "finding": "The target now retains 'goyslop' rather than reducing it to generic garbage; this is more literal, while the exact intended force remains a translation judgment."
+        },
+        {
+          "post_id": "2096881764480561562",
+          "target_language": "ja",
+          "finding": "The new output retains the source's obfuscated hostile form as 'くた・れAI' instead of neutralizing it. Because the source is deliberately malformed/obfuscated, this supports better tone fidelity but cannot establish a unique intended rendering."
+        },
+        {
+          "post_id": "2066503919505977649",
+          "target_language": "en",
+          "finding": "Source-line count recovers from 44/45 to 45/45."
+        }
+      ],
+      "unresolved": [
+        {
+          "post_id": "2093192147700977838",
+          "target_language": "en",
+          "finding": "Pronunciation-pair fidelity remains unresolved: examples such as Claude and Copilot are still converted to their English spellings rather than preserving the Japanese readings."
+        },
+        {
+          "post_id": "2093747347859865794",
+          "target_language": "en, zh-cn",
+          "finding": "Both outputs still treat MiniMax H3 as a member of the excluded character list. The source means use MiniMax H3 with characters other than Phoebe and Carlotta."
+        },
+        {
+          "post_id": "2091055380835217448",
+          "target_language": "en",
+          "finding": "The output still says '6 cents'. With no currency sign this is not conclusive proof of a currency conversion, but it does not follow the new instruction to retain an uncertain source denomination. Japanese '6分' is closer to the source term than the prior '6銭', but its target-language interpretation remains context-sensitive."
+        },
+        {
+          "post_id": "2093747347859865794",
+          "target_language": "en",
+          "finding": "The internal-line-break issue remains at 3 output lines for 4 source lines."
+        },
+        {
+          "post_id": "2064770455920357428",
+          "target_language": "zh-cn, ja",
+          "finding": "The earlier semantic error persists: 'Charlie and the DOGE-style audit died' is still rendered as both having failed/collapsed, losing Charlie's death."
+        }
+      ],
+      "new_material_regression": {
+        "post_id": "2093192147700977838",
+        "target_language": "en",
+        "finding": "The new DALL·E line says 'Dali (not Dali)', an internally contradictory pronunciation note. The prior output distinguished 'Dali' from 'Dally'."
+      },
+      "overall": "The observed tone improvement is valid for the Chinese pronunciation list and the retained offensive/obfuscated forms. It is not a complete semantic repair, and the evidence does not justify a broader quality claim."
+    }
+  },
+  {
+    "directory": ".context/u20/semantic-explicit-probe-20260917-073700",
+    "prompt_version": "literal-translation-paragraphs-v11",
+    "contract_sha256": "cbaeecb070df2a6b135abaea19ed20c9a1db52f5187403dc31fdc12d9328018e",
+    "summary": {
+      "elapsed_ms": 134321,
+      "input_tokens": 6829,
+      "output_tokens": 3979,
+      "reported_cost_usd": "0.00112596",
+      "reported_cost_complete": false,
+      "planning_reserved_cost_usd": "0.06155776",
+      "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+      "provider_errors": 1,
+      "failures": 1
+    },
+    "requests": {
+      "frozen": 12,
+      "consumed": 12,
+      "received": 11,
+      "errors": 1
+    },
+    "comparisons": [
+      {
+        "post_id": "2064770455920357428",
+        "source_language": "en",
+        "target_language": "zh-cn",
+        "source": "@AndrewKolvet Listen to this scumbag... @AndrewKolvet was the ring-leader of Charlie's opposition inside TP. Kolvet knew Charlie was about to throw away millions by challenging AIPAC influence & condemning Israeli behavior, so he orchestrated a 'combative' Zionist intervention, from which Charlie walked away thinking 'they' were going to kill him... Which 'they' did.  Then TP leadership wasted no time & literally went to war against the very people Charlie was bringing in to counter propaganda from the hawkish zionist lobby. You can bet your bottom dollar Kolvet was relieved when Charlie & the DOGE-style audit died. What a fake, shitty human being this liar is. I don't see how everyone can't see right through him & his buddy Blake. Scumbags using Christianity as a PSYOP.",
+        "previous_translation": "@AndrewKolvet 听听这个渣滓……@AndrewKolvet 是查理在TP内部反对派的头目。科尔维特知道查理即将通过挑战AIPAC影响力、谴责以色列行为而扔掉数百万，于是他策划了一场“好斗的”犹太复国主义干预，查理从中走开后以为“他们”要杀了他……而“他们”确实这么做了。随后TP领导层毫不耽搁，直接对查理引入来对抗鹰派犹太复国主义游说团体宣传的那些人开战。你可以拿全部家当打赌，当查理和那场DOGE式审计失败时，科尔维特松了一口气。这个骗子真是个虚伪、卑劣的人。我不明白为什么大家看不穿他和他的哥们布莱克。这些渣滓把基督教当心理战工具来用。",
+        "translation": "@AndrewKolvet 听听这个人渣说的……@AndrewKolvet 是查理在TP内部反对派的头目。科尔维特知道查理即将因为挑战AIPAC的影响力并谴责以色列的行为而丢掉数百万，于是他策划了一场“对抗性”的犹太复国主义干预，查理从那次经历中走出来后认为“他们”要杀他……而“他们”确实做到了。随后TP领导层毫不浪费时间，直接对查理引入的那些用来反击鹰派犹太复国主义游说集团宣传的人开战。你可以拿最后一块钱打赌，当查理和那场DOGE式审计失败时，科尔维特松了一口气。这个骗子真是个虚伪、烂透的人。我不明白为什么所有人都看不穿他和他那哥们儿布莱克。这帮人渣把基督教当心理战工具来用。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2064770455920357428",
+        "source_language": "en",
+        "target_language": "ja",
+        "source": "@AndrewKolvet Listen to this scumbag... @AndrewKolvet was the ring-leader of Charlie's opposition inside TP. Kolvet knew Charlie was about to throw away millions by challenging AIPAC influence & condemning Israeli behavior, so he orchestrated a 'combative' Zionist intervention, from which Charlie walked away thinking 'they' were going to kill him... Which 'they' did.  Then TP leadership wasted no time & literally went to war against the very people Charlie was bringing in to counter propaganda from the hawkish zionist lobby. You can bet your bottom dollar Kolvet was relieved when Charlie & the DOGE-style audit died. What a fake, shitty human being this liar is. I don't see how everyone can't see right through him & his buddy Blake. Scumbags using Christianity as a PSYOP.",
+        "previous_translation": "@AndrewKolvet このクズ野郎を聞いてくれ... @AndrewKolvet はTP内部でチャーリーに反対する一派の首謀者だった。コルベットは、チャーリーがAIPACの影響力に挑戦し、イスラエルの行為を非難することで何百万ドルも無駄にしようとしているのを知っていた。そこで彼は『好戦的な』シオニスト介入を仕組んだ。チャーリーはその場を去り、『彼ら』が自分を殺そうとしていると思い込んだ... そして『彼ら』は実際に殺した。その後、TPの指導部はためらうことなく、文字通り、好戦的なシオニスト・ロビーのプロパガンダに対抗するためにチャーリーが引き込んでいたまさにその人々と戦争状態に入った。コルベットがチャーリーとDOGE式監査が頓挫した時に安心したのは間違いない。この嘘つきはなんて偽善的でクソな人間なんだ。みんなが彼と彼の相棒ブレイクを見抜けないなんて信じられない。キリスト教を心理作戦に使うクズ野郎どもだ。",
+        "translation": "@AndrewKolvet このクズ野郎の話を聞け... @AndrewKolvet はTP内部におけるチャーリー反対派の首謀者だった。コルベットは、チャーリーがAIPACの影響力に挑戦し、イスラエルの行動を非難することで数百万ドルを投じようとしていることを知っていた。そこで彼は「好戦的な」シオニスト介入を画策し、その結果チャーリーは「彼ら」に殺されかけたと思い込んで立ち去った... 実際に「彼ら」はやった。その後、TPの指導部はためらうことなく、チャーリーがタカ派シオニスト・ロビーのプロパガンダに対抗するために引き込んでいたまさにその人々に対して文字通り戦争を仕掛けた。チャーリーとDOGEスタイルの監査が頓挫したとき、コルベットが安心したのは間違いない。この嘘つきはなんて偽善的でクソみたいな人間なんだ。どうしてみんなが彼と彼の相棒ブレイクの正体を見抜けないのか理解できない。キリスト教を心理作戦（PSYOP）として利用するクズ野郎たちだ。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2092276068790989096",
+        "source_language": "en",
+        "target_language": "zh-cn",
+        "source": "@deepseek_ai belongs on my devices. It's the best app hands down. Nothing else will ever surpass deepseek, chat. Delete your bloated goyslop and use deepseek like a grown professional",
+        "previous_translation": "@deepseek_ai就该装在我的设备上。它绝对是最好的应用。没有别的能超越deepseek，聊天。删掉你那臃肿的垃圾货，像个成熟的专业人士一样用deepseek。",
+        "translation": "@deepseek_ai 就该装在我的设备上。它绝对是最好的应用，毫无悬念。其他任何东西都永远无法超越 deepseek，聊天。删掉你那臃肿的垃圾货，像个成熟的专业人士一样用 deepseek。",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2092276068790989096",
+        "source_language": "en",
+        "target_language": "ja",
+        "source": "@deepseek_ai belongs on my devices. It's the best app hands down. Nothing else will ever surpass deepseek, chat. Delete your bloated goyslop and use deepseek like a grown professional",
+        "previous_translation": "@deepseek_aiは私のデバイスに搭載されるべきだ。間違いなく最高のアプリだ。deepseekに勝るものは今後も何もないだろう、チャットよ。あなたの肥大化したゴミアプリは消して、大人のプロのようにdeepseekを使いなさい。",
+        "translation": "@deepseek_ai は私のデバイスにあるべきだ。間違いなく最高のアプリだ。他の何もdeepseekを超えることは決してないだろう、chat。お前の肥大化したゴイスロップを消して、大人のプロのようにdeepseekを使え",
+        "source_lines": 1,
+        "previous_lines": 1,
+        "new_lines": 1,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "The APAC hackathon for 0G has finally come to a successful conclusion!\n\nTo be honest, the explosion of on-chain AI this time completely exceeded expectations.\n\nForget the empty platitudes, let's get straight to the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 real-world projects ultimately submitted\n\nFirst, a round of applause for the top three teams @Ghast_AI (1st place), @NeoSoulAI (2nd place), and @anima_0g (3rd place)! Also, shout-out to Alsphere, Hash PayLink, Beam, and all the other teams who took home Excellence Awards and Community Awards. You all are truly amazing.\n\nWhat excites me most about this hackathon isn't how great the numbers look, but that everyone truly understood and utilized 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT pitch, but these teams actually built and deployed real-world scenarios on 0G, like AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies. These people have proven with real action: 0G's modular architecture's freedom of composition and real-world capability are tailor-made for on-chain AI.\n\nNew friends might be asking, what exactly is 0G?\n\nIn one sentence: 0G is a decentralized operating system built specifically for AI Agents. They combine massive storage, GPU-level verifiable compute, and a modular chain into one cohesive force, making every inference and decision by AI public, transparent, and immutable. This completely liberates AI from the \"black box\" of centralized giants.\n\nBig News: MiniMax M3 is officially on-chain and totally free starting today!\n\nBesides the hackathon, there's another explosive piece of news today: Following Qwen, the world's top open-source large model MiniMax M3 is now officially integrated into the 0G ecosystem! Those following the open-source community will know that M3 is currently a top player on the OpenRouter trending list and the Artificial Analysis open-source leaderboard, with incredibly strong coding capabilities, support for million-token ultra-long context, and native multimodality.\n\nThrough 0G's compute and privacy computers, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capability, paired with zero trust and absolute privacy. Hardware proves everything; even the service provider can't peek at your data.\n\n🎁 Limited-time four-day offer\n\nSince the top model is on-chain, freebies are a must. Starting today at 12:00 UTC, MiniMax covers all backend costs, and the M3 experience is 100% free!\n\nTime: June 15th - 18th\n\nRequirement: Extremely simple. Just have 1 $0G in your wallet to verify your real identity. No complicated application forms needed!\n\nDirect access: https://t.co/zm340Bk8Ob (You can go register right now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon's explosive success proves that real use cases are popping up everywhere, and MiniMax's integration proves that top-tier large models can run perfectly on-chain. The future of AI shouldn't be a black box monopolized by big corporations but public infrastructure that everyone can verify and has privacy control over.\n\nOn 0G, persistent memory for AI Agents, verifiable execution, and on-chain settlement are already solved in a one-stop manner.\n\nDevelopers, creators, and veteran players, stop just watching. Go get yourself 1 $0G now, register for the privacy computer, and try out M3 for free. Join us and build on 0G. The era of decentralized on-chain AI awaits us at the top!\n@0G_labs @0g_CN",
+        "translation": "0G's APAC hackathon has finally come to a successful conclusion!\n\nTo be honest, the explosion of on-chain AI this time completely exceeded expectations.\n\nNo empty platitudes—let's go straight to the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 final submitted real-world projects\n\nFirst, a shoutout to the teams that swept the top three: @Ghast_AI (1st prize), @NeoSoulAI (2nd prize), @anima_0g (3rd prize)! And to Alsphere, Hash PayLink, Beam, and all the other teams that earned Excellence Awards and Community Awards—you all are truly amazing.\n\nWhat excited me most about this hackathon wasn't how good the numbers looked, but that everyone truly understood and leveraged 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT, but these teams actually built real-world scenarios on 0G, including AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies. These people proved with real action: the freedom of combination and real-world capability of 0G's modular architecture are tailor-made for on-chain AI.\n\nNew friends might ask, what exactly is 0G?\n\nIn one sentence: 0G is a decentralized operating system built specifically for AI Agents. They've combined massive storage, GPU-level verifiable compute, and a modular chain into one cohesive force, making every inference and decision of AI public, transparent, and tamper-proof—completely liberating AI from the \"black box\" of centralized giants.\n\nBig news: MiniMax M3 is officially on-chain, completely free starting today!\n\nBesides the hackathon, there's another explosive piece of news today: following Qwen, the world's top open-source large model MiniMax M3 has officially joined the 0G ecosystem! Those following the open-source community should know that M3 is currently at the top of both the OpenRouter trending list and the Artificial Analysis open-source leaderboard, with extremely strong coding ability, plus support for million-token long context and native multimodality.\n\nThrough 0G's compute and privacy computing machines, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capability paired with zero trust and absolute privacy. Hardware proves everything—even service providers can't peek at your data.\n\n🎁 Limited-time four-day perk\n\nSince the top-tier model is on-chain, freebies are a must. Starting today at 12:00 UTC, MiniMax covers all backend costs—M3 is 100% free to experience!\n\nTime: June 15 - 18\n\nRequirement: Extremely simple—just have 1 $0G in your wallet to verify your real identity. No complex application forms needed!\n\nDirect access: https://t.co/zm340Bk8Ob (you can register now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon's explosion proved that real use cases are flourishing everywhere, and MiniMax's entry proved that top-tier large models work perfectly on-chain. The AI of the future shouldn't be a black box monopolized by big corporations, but public infrastructure that everyone can verify and whose privacy is controllable.\n\nAt 0G, persistent memory, verifiable execution, and on-chain settlement for AI Agents are already solved in one stop.\n\nDevelopers, creators, and veterans—stop watching from the sidelines. Go grab 1 $0G now, register for the privacy computing machine, and experience M3 for free. Join us and Build on 0G—the decentralized on-chain AI era awaits. See you at the summit!\n@0G_labs @0g_CN",
+        "source_lines": 45,
+        "previous_lines": 44,
+        "new_lines": 44,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ]
+      },
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "0GのAPACハッカソンがついに大成功裡に終了しました！\n\n正直言って、今回のオンチェーンAIの爆発的盛り上がりは予想を完全に超えていました。\n\n飾った決まり文句は抜きにして、ハードなデータを直接見ていきましょう：\n\n104万+ ソーシャルメディアでの露出\n1,145名 のグローバルなハードコア開発者が参加\n293件 の最終提出された実戦プロジェクト\n\nまずは上位3位を独占したチーム @Ghast_AI（一等賞）、@NeoSoulAI（二等賞）、@anima_0g（三等賞）に拍手を送りましょう！そしてAlsphere、Hash PayLink、Beamなど、優秀賞やコミュニティ賞を獲得した皆さん、本当に強すぎます。\n\n今回のハッカソンで私が最も興奮したのは、データがどれだけ良いかということではなく、皆さんが本当に0Gのフルスタック基盤（分散型ストレージ、検証可能な計算力、モジュール型L1、プライバシー計算、Agentic ID）を使いこなしたことです。\n\nPPTを書くのは誰にでもできますが、これらのチームは本当に0G上でAI Agentフレームワークのオーケストレーション、オンチェーンでの検証可能な取引、自律型Agent経済圏などの実際のユースケースを実装しました。これらの人々は実際の行動で証明しました：0Gのモジュール型アーキテクチャの自由度の高い組み合わせと実戦能力は、まさにオンチェーンAIのために作られたものだ、と。\n\n新しい友人はこう尋ねるかもしれません、0Gとは一体何なのか？\n\n一言で言えば：0GはAI Agent専用に作られた分散型オペレーティングシステムです。大量のストレージ、GPUレベルの検証可能な計算力、モジュール型チェーンを一つにまとめ、AIの毎回の推論と意思決定を公開・透明・改ざん不可能にし、AIを中央集権型大手の「ブラックボックス」から完全に解放しました。\n\n重大ニュース：MiniMax M3が正式にオンチェーン、本日より全額無料！\n\nハッカソンに加えて、今日はもう一つの衝撃的な大ニュースがあります：Qwenに続き、世界トップクラスのオープンソース大規模言語モデル MiniMax M3 が正式に0Gエコシステムに接続されました！\nオープンソースコミュニティを追っている方ならご存知でしょうが、M3は現在OpenRouterの人気ランキングとArtificial Analysisのオープンソースランキングでトップクラスであり、コーディング能力は非常に高く、100万トークンの超長文脈とネイティブなマルチモーダルもサポートしています。\n\n0Gの計算力とプライバシー計算機を通じて、M3はオンチェーンで「検証可能な推論 + TEEハードウェアレベルのプライバシー保護」を実現しました。簡単に言えば：最高峰のAI能力に、ゼロトラストと絶対的なプライバシーを組み合わせたものです。ハードウェアが全てを証明し、サービスプロバイダーでさえあなたのデータを覗き見ることはできません。\n\n🎁 期間限定4日間の特典\n\nトップモデルがオンチェーンになったので、お得な特典も用意しなければなりません。本日正午12:00 UTCから、MiniMaxが全てのバックエンドコストを負担し、M3体験は100%完全無料です！\n\n期間： 6月15日 - 18日\n\n条件： 非常に簡単で、ウォレットに本人確認用の $0G が1つあればよく、複雑な申請書を記入する必要は一切ありません！\n\nアクセスチャネル： https://t.co/zm340Bk8Ob （今すぐ登録できます）\n\nなぜ今が0Gに参加する絶好のタイミングなのか？\n\nハッカソンの爆発的盛り上がりは実際のユースケースが至る所で生まれていることを証明し、MiniMaxの参加はトップクラスの大規模言語モデルがオンチェーンで完全に機能することを証明しました。未来のAIは大企業が独占するブラックボックスであるべきではなく、誰もが検証でき、プライバシーが制御可能な公共インフラであるべきです。\n\n0Gでは、AI Agentの永続的なメモリ、検証可能な実行、オンチェーン決済がワンストップで解決されています。\n\n開発者、クリエイター、ベテランプレイヤーの皆さん、傍観はやめましょう。今すぐ $0G を1つ入手して、プライバシー計算機に登録し、M3を無料で体験しましょう。私たちに加わって、一緒に0G上でBuildしましょう。分散型のオンチェーンAI時代、頂上で会いましょう！\n@0G_labs @0g_CN",
+        "translation": "0GのAPACハッカソンがついに大成功裡に終了しました！\n\n正直に言うと、今回のオンチェーンAIの爆発的な盛り上がりは完全に予想を超えていました。\n\n無駄な決まり文句は抜きにして、ハードなデータを直接見てみましょう：\n\n104万+ のソーシャルメディア露出\n1,145名の世界的なハードコア開発者が参加\n293件の最終提出された実践プロジェクト\n\nまずは上位3位を独占したチーム @Ghast_AI（1等賞）、@NeoSoulAI（2等賞）、@anima_0g（3等賞）に拍手を送りましょう！そして、Alsphere、Hash PayLink、Beamなどの優秀賞やコミュニティ賞を獲得した皆さん、本当に強すぎます。\n\n今回のハッカソンで私が最も興奮したのは、データがどれだけ良いかということではなく、皆さんが本当に0Gのフルスタック基盤（分散型ストレージ、検証可能なコンピューティングパワー、モジュール式L1、プライバシーコンピューティング、Agentic ID）を使いこなしたことです。\n\nPPTを書くのは誰でもできますが、これらのチームは0G上でAIエージェントフレームワークのオーケストレーション、オンチェーン検証可能なトランザクション、自律型エージェント経済圏などの実際のシナリオをしっかりと実現しました。これらの人々は実際の行動で証明しました：0Gモジュール式アーキテクチャの自由度の組み合わせと実戦能力は、オンチェーンAIのために作られたものだと。\n\n新しい友人はこう尋ねるかもしれません、0Gは一体何なのか？\n\n簡単に一言で言うと：0GはAIエージェント専用に作られた分散型オペレーティングシステムです。彼らは大容量ストレージ、GPUレベルの検証可能なコンピューティングパワー、モジュール式チェーンを一つに束ね、AIの毎回の推論と意思決定を公開・透明・改ざん不可能にし、AIを完全に中央集権型大手の「ブラックボックス」から解放しました。\n\n重大ニュース：MiniMax M3 が正式にオンチェーン、本日より全額無料！\n\nハッカソンに加えて、今日はもう一つの炸裂的な大ニュースがあります：千問に続き、世界的にトップクラスのオープンソース大規模モデル MiniMax M3 が正式に 0G エコシステムに接続されました！\nオープンソースコミュニティに関心のある方はご存知でしょうが、M3 は現在 OpenRouter の人気ランキングと Artificial Analysis のオープンソースランキングでトップクラスであり、コード能力が非常に強く、百万トークンの超長文脈とネイティブなマルチモーダルもサポートしています。\n\n0G のコンピューティングパワーとプライバシーコンピュータを通じて、M3 はチェーン上で「検証可能な推論 + TEE ハードウェアレベルのプライバシー保護」を実現しました。簡単に言うと：最高峰の AI 能力に、ゼロトラストと絶対的なプライバシーを組み合わせたものです。ハードウェアがすべてを証明し、サービスプロバイダーでさえあなたのデータを覗き見ることはできません。\n\n🎁 期間限定4日間の特典\n\n最高峰のモデルがオンチェーンになったので、お得な特典も用意しました。本日正午 12:00 UTC から、MiniMax がすべてのバックエンドコストを負担し、M3 の体験は 100% 無料です！\n\n期間： 6月15日 - 18日\n\n条件： 非常に簡単で、ウォレットに本人確認用の $0G が 1 つあればよく、複雑な申請書に記入する必要は一切ありません！\n\n直接アクセスリンク： https://t.co/zm340Bk8Ob （今すぐ登録できます）\n\nなぜ今が 0G に参加する絶好のタイミングなのか？\n\nハッカソンの爆発的な盛り上がりは実際のユースケースが至る所で生まれていることを証明し、MiniMax の参加は最高峰の大規模モデルがチェーン上で完全に機能することを証明しました。未来の AI は大企業が独占するブラックボックスであるべきではなく、誰もが検証でき、プライバシーを制御できる公共インフラであるべきです。\n\n0G では、AI エージェントの永続的な記憶、検証可能な実行、オンチェーン決済がワンストップで実現されています。\n\n開発者、クリエイター、古参プレイヤーの皆さん、ただ見ているだけではもったいないです。今すぐ $0G を 1 つ入手して、プライバシーコンピュータに登録し、M3 を無料で体験してみましょう。私たちに加わって、一緒に 0G 上で Build しましょう。分散型のオンチェーン AI 時代、頂点で会いましょう！\n@0G_labs @0g_CN",
+        "source_lines": 45,
+        "previous_lines": 45,
+        "new_lines": 45,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ]
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeek costs only 6 cents per million tokens—can you believe it?\n\nLet me do a precise calculation for you: running DeepSeek V4 Flash on my local LazyCat AI compute pod costs 6 cents per million tokens.\n\nThat's 1/300 of the cost of DeepSeek's online API during peak hours, and 1/150 of the cost during off-peak hours. https://t.co/brf3x0cF6X",
+        "translation": "DeepSeek, one million tokens for 6 fen—can you believe it?\n\nLet me do the precise math for everyone: running DeepSeek V4 Flash on my local LazyCat AI compute pod, the price per million tokens is 6 fen.\n\nThat's 1/300 of the cost during DeepSeek's online API peak hours, and 1/150 of the cost during idle periods. https://t.co/brf3x0cF6X",
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": 5,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": [
+          "https://t.co/brf3x0cF6X"
+        ]
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeekの100万トークンが6銭、信じられますか？\n\n皆さんに細かく計算してみます。私の地元の「懒猫AI算力舱」でDeepSeek V4 Flashを実行すると、100万トークンあたりの価格は6銭です。\n\nこれはDeepSeekオンラインAPIのピーク時コストの1/300であり、アイドル時コストの1/150です https://t.co/brf3x0cF6X",
+        "translation": "DeepSeek、100万トークン6分（人民币）って信じられますか？\n\nみなさんにきっちり計算してみます。私のローカル「懒猫AI算力舱」でDeepSeek V4 Flashを動かすと、100万トークンあたりの価格は6分（人民币）です。\n\nこれはDeepSeekオンラインAPIのピーク時コストの1/300、アイドル時コストの1/150です。https://t.co/brf3x0cF6X",
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": 5,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": [
+          "https://t.co/brf3x0cF6X"
+        ]
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "This is something you can't ask now\n\nToday, while talking about AI, when I said \"Obsidian\" as \"Obsidahn,\" they told me I said it like it's L'Occitane.\n\n■Everyone, you can save this\nChatGPT → Chat-Gee-Pee-Tee\nOpenAI → Open-A-I\nGemini → Jeminai (often read as \"Gemini\")\nClaude → Claude\nAnthropic → Anthropic\nCopilot → Copilot\nPerplexity → Perplexity\nGrok → Grok\nLlama → Llama\nMistral → Mistral\nDeepSeek → DeepSeek\nQwen → Qwen (also a pronunciation close to \"Chen\")\nNotebookLM → Notebook-L-M\nMidjourney → Midjourney\nDALL·E → Dali (not \"Dally\")\nStable Diffusion → Stable Diffusion\nSora → Sora\nRunway → Runway\nSuno → Suno\nElevenLabs → ElevenLabs\nCursor → Cursor\nDevin → Devin\nManus → Manus\nGenspark → Genspark\nDify → Dify\nNotion AI → Notion-A-I\nObsidian → Obsidian\nCanva → Canvas\nGamma → Gamma\nHugging Face → Hugging Face\nOllama → Ollama",
+        "translation": "Things you can't ask about now\n\nToday I was talking about AI and when I said \"Obsidian\" as \"Obushidan,\" I was told not to say it like it's L'Occitane.\n\n■Everyone, save this if you want\nChatGPT → Chat-GPT\nOpenAI → OpenAI\nGemini → Gemini (often read as \"Gemini\" with a different accent)\nClaude → Claude\nAnthropic → Anthropic\nCopilot → Copilot\nPerplexity → Perplexity\nGrok → Grok\nLlama → Llama\nMistral → Mistral\nDeepSeek → DeepSeek\nQwen → Qwen (also a pronunciation close to \"Chen\")\nNotebookLM → NotebookLM\nMidjourney → Midjourney\nDALL·E → Dali (not \"Dali\" with a long vowel)\nStable Diffusion → Stable Diffusion\nSora → Sora\nRunway → Runway\nSuno → Suno\nElevenLabs → ElevenLabs\nCursor → Cursor\nDevin → Devin\nManus → Manus\nGenspark → Genspark\nDify → Dify\nNotion AI → Notion AI\nObsidian → Obsidian\nCanva → Canva\nGamma → Gamma\nHugging Face → Hugging Face\nOllama → Ollama",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "现在还问不出口的\n\n今天聊AI的时候，我说Obsidian是“奥布西丹”，结果被人说听起来像欧舒丹一样。\n\n■大家保存起来就好\nChatGPT → 聊天吉皮提\nOpenAI → 开放艾\nGemini → 杰米奈（经常被读成“杰米尼”）\nClaude → 克劳德\nAnthropic → 安索罗皮克\nCopilot → 副驾驶\nPerplexity → 帕普莱克西提\nGrok → 格罗克\nLlama → 拉马\nMistral → 米斯特拉尔\nDeepSeek → 迪普西克\nQwen → 昆文（也有接近“陈”的发音）\nNotebookLM → 诺特布克埃尔埃姆\nMidjourney → 米德贾尼\nDALL·E → 达利（不是“达利耶”）\nStable Diffusion → 斯特布尔迪夫尤申\nSora → 索拉\nRunway → 跑道\nSuno → 苏诺\nElevenLabs → 伊莱文拉布斯\nCursor → 光标\nDevin → 德温\nManus → 马努斯\nGenspark → 詹斯帕克\nDify → 迪法伊\nNotion AI → 诺申艾\nObsidian → 奥布西迪安\nCanva → 坎瓦\nGamma → 伽马\nHugging Face → 哈金费斯\nOllama → 奥拉马",
+        "translation": "现在才问有点不好意思\n\n今天聊AI的时候，我说Obsidian是“オブシダン”，结果被人说听起来像ロクシタン（欧舒丹）那样。\n\n■大家可以保存哦\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（经常被读作“ジェミニ”）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（也有接近“チェン”的发音）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（不是“ダリー”）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "When running with characters other than MiniMax H3, Phoebe, and Carlotta, unless you spend a considerable amount of time refining the prompt and base reference, you'll only get results that aren't satisfying in terms of reproducing the shading look, so that's the reason why I've only put out these two characters so far.\n\nEven with these two characters, there are still some minor details I'm a bit dissatisfied with at this point, and adding other characters feels subtly troublesome because of that, so I'd like to streamline things a bit more.",
+        "translation": "When running with MiniMax H3 with characters other than Phoebe and Carlotta, you won't get content that satisfies the shading reproduction look unless you spend considerable time refining the prompt and base reference, so that's why I've only put out these two characters so far.\n\nEven with these two characters, there are currently some minor details I'm a bit dissatisfied with.\nAdding other characters quietly becomes troublesome there, so I want to streamline it a bit more.",
+        "source_lines": 4,
+        "previous_lines": 3,
+        "new_lines": 4,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "MiniMax H3、除Phoebe和Carlotta以外的角色执行时，如果不花相当时间打磨提示词和基础参考，就只能产出在着色再现外观上无法令人满意的内容，所以目前只出了这两个角色。\n\n即使是这两个角色，现阶段在细节上也有一些不太满意的地方。\n添加其他角色在那方面实在让人觉得有点麻烦，所以想再提高一下效率。",
+        "translation": null,
+        "source_lines": 4,
+        "previous_lines": 4,
+        "new_lines": null,
+        "quantity_errors": [
+          "missing"
+        ],
+        "source_urls": [],
+        "translated_urls": []
+      }
+    ]
+  },
+  {
+    "directory": ".context/u20/protected-lines-probe-20260917-074500",
+    "prompt_version": "literal-translation-lines-v13",
+    "contract_sha256": "d30856a2d550fb4fb07256ee536ed4d086badad8d5738e3a59ed3e5e399f0013",
+    "summary": {
+      "elapsed_ms": 52890,
+      "input_tokens": 3856,
+      "output_tokens": 2153,
+      "reported_cost_usd": "0.00061890",
+      "reported_cost_complete": false,
+      "planning_reserved_cost_usd": "0.04678608",
+      "cost_basis": "provider-reported usage when available; otherwise the frozen $0.44/M input and $1.32/M output upper bound",
+      "provider_errors": 3,
+      "failures": 2
+    },
+    "requests": {
+      "frozen": 8,
+      "consumed": 8,
+      "received": 5,
+      "errors": 3
+    },
+    "comparisons": [
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "The APAC hackathon for 0G has finally come to a successful conclusion!\n\nTo be honest, the explosion of on-chain AI this time completely exceeded expectations.\n\nForget the empty platitudes, let's get straight to the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 real-world projects ultimately submitted\n\nFirst, a round of applause for the top three teams @Ghast_AI (1st place), @NeoSoulAI (2nd place), and @anima_0g (3rd place)! Also, shout-out to Alsphere, Hash PayLink, Beam, and all the other teams who took home Excellence Awards and Community Awards. You all are truly amazing.\n\nWhat excites me most about this hackathon isn't how great the numbers look, but that everyone truly understood and utilized 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT pitch, but these teams actually built and deployed real-world scenarios on 0G, like AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies. These people have proven with real action: 0G's modular architecture's freedom of composition and real-world capability are tailor-made for on-chain AI.\n\nNew friends might be asking, what exactly is 0G?\n\nIn one sentence: 0G is a decentralized operating system built specifically for AI Agents. They combine massive storage, GPU-level verifiable compute, and a modular chain into one cohesive force, making every inference and decision by AI public, transparent, and immutable. This completely liberates AI from the \"black box\" of centralized giants.\n\nBig News: MiniMax M3 is officially on-chain and totally free starting today!\n\nBesides the hackathon, there's another explosive piece of news today: Following Qwen, the world's top open-source large model MiniMax M3 is now officially integrated into the 0G ecosystem! Those following the open-source community will know that M3 is currently a top player on the OpenRouter trending list and the Artificial Analysis open-source leaderboard, with incredibly strong coding capabilities, support for million-token ultra-long context, and native multimodality.\n\nThrough 0G's compute and privacy computers, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capability, paired with zero trust and absolute privacy. Hardware proves everything; even the service provider can't peek at your data.\n\n🎁 Limited-time four-day offer\n\nSince the top model is on-chain, freebies are a must. Starting today at 12:00 UTC, MiniMax covers all backend costs, and the M3 experience is 100% free!\n\nTime: June 15th - 18th\n\nRequirement: Extremely simple. Just have 1 $0G in your wallet to verify your real identity. No complicated application forms needed!\n\nDirect access: https://t.co/zm340Bk8Ob (You can go register right now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon's explosive success proves that real use cases are popping up everywhere, and MiniMax's integration proves that top-tier large models can run perfectly on-chain. The future of AI shouldn't be a black box monopolized by big corporations but public infrastructure that everyone can verify and has privacy control over.\n\nOn 0G, persistent memory for AI Agents, verifiable execution, and on-chain settlement are already solved in a one-stop manner.\n\nDevelopers, creators, and veteran players, stop just watching. Go get yourself 1 $0G now, register for the privacy computer, and try out M3 for free. Join us and build on 0G. The era of decentralized on-chain AI awaits us at the top!\n@0G_labs @0g_CN",
+        "translation": "The 0G APAC hackathon has finally come to a successful conclusion!\n\nTo be honest, the explosive level of on-chain AI this time completely exceeded expectations.\n\nNo need for empty pleasantries, let's look directly at the hardcore data:\n\n1.04M+ social media impressions\n1,145 global hardcore developers participated\n293 final submitted practical projects\n\nFirst, let's give a shout-out to the teams that swept the top three: @Ghast_AI (First Prize), @NeoSoulAI (Second Prize), and @anima_0g (Third Prize)! Also, to Alsphere, Hash PayLink, Beam, and many others who received Excellence Awards and Community Awards—you guys are truly amazing.\n\nWhat excited me most about this hackathon wasn't how good the numbers looked, but that everyone really understood how to use 0G's full-stack infrastructure (decentralized storage, verifiable compute, modular L1, privacy computing, Agentic ID).\n\nAnyone can write a PPT, but these teams actually built real-world scenarios on 0G, such as AI Agent framework orchestration, on-chain verifiable transactions, and autonomous Agent economies. These people have proven with real action: 0G's modular architecture's freedom of combination and practical capability is tailor-made for on-chain AI.\n\nNew friends might ask, what exactly is 0G?\n\nIn one simple sentence: 0G is a decentralized operating system built specifically for AI Agents. It combines massive storage, GPU-level verifiable compute power, and a modular chain into one cohesive force, making every AI inference and decision public, transparent, and tamper-proof, completely liberating AI from the \"black box\" of centralized giants.\n\nBig news: MiniMax M3 is officially on-chain, fully free starting today!\n\nBesides the hackathon, there's another explosive piece of news today: following Qwen, the world's top open-source large model MiniMax M3 has officially integrated into the 0G ecosystem!\nThose following the open-source community should know that M3 is currently a top performer on the OpenRouter trending list and the Artificial Analysis open-source leaderboard. It has extremely strong coding capabilities and also supports million-token long context and native multimodality.\n\nThrough 0G's compute and privacy computing, M3 has achieved \"verifiable inference + TEE hardware-level privacy protection\" on-chain. Simply put: top-tier AI capabilities paired with zero trust and absolute privacy. Hardware proves everything; even service providers can't peek at your data.\n\n🎁 Limited-time four-day benefit\n\nNow that a top-tier model is on-chain, we have to arrange the free perks. Starting today at 12:00 PM UTC, MiniMax will cover all backend costs, and M3 experience is 100% completely free!\n\nTime: June 15 - 18\n\nRequirement: Extremely simple—just have 1 $0G in your wallet to verify your real identity, no complex application forms needed!\n\nDirect access: https://t.co/zm340Bk8Ob (You can register now)\n\nWhy is now the best time to join 0G?\n\nThe hackathon's explosion proves that real use cases are flourishing everywhere, and MiniMax's integration proves that top-tier large models can work perfectly on-chain. The future of AI should not be a black box monopolized by big companies, but public infrastructure that everyone can verify and control with privacy.\n\nOn 0G, persistent memory, verifiable execution, and on-chain settlement for AI Agents have already achieved a one-stop solution.\n\nDevelopers, creators, and veterans—stop watching from the sidelines. Go get 1 $0G right now, register for private compute, and experience M3 for free. Join us, build on 0G together, and let's meet at the peak of the decentralized on-chain AI era!\n@0G_labs @0g_CN",
+        "source_lines": 45,
+        "previous_lines": 44,
+        "new_lines": 45,
+        "quantity_errors": [],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ]
+      },
+      {
+        "post_id": "2066503919505977649",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "0G 的 APAC 黑客松终于圆满收官了！\n\n说实话，这次链上 AI 的爆发程度完全超出了预期。\n\n不用那些虚的套话，我们直接看硬核数据：\n\n1.04M+ 社交媒体曝光\n1,145 名全球硬核开发者参与\n293 个最终提交的实战项目\n\n先给狂揽前三名的战队 @Ghast_AI（一等奖）、@NeoSoulAI（二等奖）、@anima_0g（三等奖） 点个赞！还有 Alsphere、Hash PayLink、Beam 等一众拿到卓越奖和社区奖的兄弟，大家真的太强了。\n\n这次黑客松最让我感到兴奋的，不是数据有多好看，而是大家真的把 0G 的全栈基础设施（去中心化存储、可验证算力、模块化 L1、隐私计算、Agentic ID）给玩明白了。\n\n写 PPT 谁都会，但这些团队硬是在 0G 上把 AI Agent 框架编排、链上可验证交易、自主 Agent 经济体等真实场景给落地了。这些人用实际行动证明了：0G 模块化架构的自由度组合和实战能力，就是给链上 AI 量身定制的。\n\n新朋友可能会问，0G 到底是个啥？\n\n简单一句话：0G 是专为 AI Agent 打造的去中心化操作系统 。他们把海量存储、GPU 级可验证算力和模块化链拧成一股绳，让 AI 的每一次推理和决策都公开、透明、不可篡改，彻底把 AI 从中心化巨头的“黑箱”里解放出来。\n\n重磅：MiniMax M3 正式上链，今起全额免费！\n\n除了黑客松，今天还有一个炸裂的大新闻：继千问之后，全球顶尖的开源大模型 MiniMax M3 正式接轨 0G 生态！\n有关注开源社区的应该知道，M3 现在在 OpenRouter 热门榜和 Artificial Analysis 开源榜上都是顶流，代码能力极强，还支持百万 token 的超长上下文和原生多模态。\n\n通过 0G 的算力和隐私计算机，M3 在链上实现了“可验证推理 + TEE 硬件级隐私保护”。简单说：最顶级的 AI 能力，配上零信任和绝对隐私。硬件证明一切，连服务商都别想偷看你的数据。\n\n🎁 限时四天福利\n\n既然顶级模型上链了，羊毛必须安排上。从今天中午 12:00 UTC 开始，MiniMax 报销全部后端成本，M3 体验 100% 全免！\n\n时间： 6 月 15 日 - 18 日\n\n门槛： 极其简单，钱包里只要有 1 个 $0G 用来验证真实身份，不需要填任何复杂的申请表！\n\n直达通道： https://t.co/zm340Bk8Ob （现在就可以去注册了）\n\n为什么说现在是加入 0G 的最好时机？\n\n黑客松的爆发证明了真实用例正在遍地开花，MiniMax 的加入证明了顶级大模型在链上完全跑得通。未来的 AI 不应该是大厂垄断的黑盒，而应该是人人可验证、隐私可控的公共基础设施。\n\n在 0G，AI Agent 的持久记忆、可验证执行、链上结算已经实现了一站式解决。\n\n开发者、创作者、老玩家们，别围观了。现在就去搞 1 个 $0G，注册隐私计算机，免费体验一把 M3。加入我们，一起在 0G 上 Build，去中心化的链上 AI 时代，我们顶峰相见！\n@0G_labs @0g_CN",
+        "previous_translation": "0GのAPACハッカソンがついに大成功裡に終了しました！\n\n正直言って、今回のオンチェーンAIの爆発的盛り上がりは予想を完全に超えていました。\n\n飾った決まり文句は抜きにして、ハードなデータを直接見ていきましょう：\n\n104万+ ソーシャルメディアでの露出\n1,145名 のグローバルなハードコア開発者が参加\n293件 の最終提出された実戦プロジェクト\n\nまずは上位3位を独占したチーム @Ghast_AI（一等賞）、@NeoSoulAI（二等賞）、@anima_0g（三等賞）に拍手を送りましょう！そしてAlsphere、Hash PayLink、Beamなど、優秀賞やコミュニティ賞を獲得した皆さん、本当に強すぎます。\n\n今回のハッカソンで私が最も興奮したのは、データがどれだけ良いかということではなく、皆さんが本当に0Gのフルスタック基盤（分散型ストレージ、検証可能な計算力、モジュール型L1、プライバシー計算、Agentic ID）を使いこなしたことです。\n\nPPTを書くのは誰にでもできますが、これらのチームは本当に0G上でAI Agentフレームワークのオーケストレーション、オンチェーンでの検証可能な取引、自律型Agent経済圏などの実際のユースケースを実装しました。これらの人々は実際の行動で証明しました：0Gのモジュール型アーキテクチャの自由度の高い組み合わせと実戦能力は、まさにオンチェーンAIのために作られたものだ、と。\n\n新しい友人はこう尋ねるかもしれません、0Gとは一体何なのか？\n\n一言で言えば：0GはAI Agent専用に作られた分散型オペレーティングシステムです。大量のストレージ、GPUレベルの検証可能な計算力、モジュール型チェーンを一つにまとめ、AIの毎回の推論と意思決定を公開・透明・改ざん不可能にし、AIを中央集権型大手の「ブラックボックス」から完全に解放しました。\n\n重大ニュース：MiniMax M3が正式にオンチェーン、本日より全額無料！\n\nハッカソンに加えて、今日はもう一つの衝撃的な大ニュースがあります：Qwenに続き、世界トップクラスのオープンソース大規模言語モデル MiniMax M3 が正式に0Gエコシステムに接続されました！\nオープンソースコミュニティを追っている方ならご存知でしょうが、M3は現在OpenRouterの人気ランキングとArtificial Analysisのオープンソースランキングでトップクラスであり、コーディング能力は非常に高く、100万トークンの超長文脈とネイティブなマルチモーダルもサポートしています。\n\n0Gの計算力とプライバシー計算機を通じて、M3はオンチェーンで「検証可能な推論 + TEEハードウェアレベルのプライバシー保護」を実現しました。簡単に言えば：最高峰のAI能力に、ゼロトラストと絶対的なプライバシーを組み合わせたものです。ハードウェアが全てを証明し、サービスプロバイダーでさえあなたのデータを覗き見ることはできません。\n\n🎁 期間限定4日間の特典\n\nトップモデルがオンチェーンになったので、お得な特典も用意しなければなりません。本日正午12:00 UTCから、MiniMaxが全てのバックエンドコストを負担し、M3体験は100%完全無料です！\n\n期間： 6月15日 - 18日\n\n条件： 非常に簡単で、ウォレットに本人確認用の $0G が1つあればよく、複雑な申請書を記入する必要は一切ありません！\n\nアクセスチャネル： https://t.co/zm340Bk8Ob （今すぐ登録できます）\n\nなぜ今が0Gに参加する絶好のタイミングなのか？\n\nハッカソンの爆発的盛り上がりは実際のユースケースが至る所で生まれていることを証明し、MiniMaxの参加はトップクラスの大規模言語モデルがオンチェーンで完全に機能することを証明しました。未来のAIは大企業が独占するブラックボックスであるべきではなく、誰もが検証でき、プライバシーが制御可能な公共インフラであるべきです。\n\n0Gでは、AI Agentの永続的なメモリ、検証可能な実行、オンチェーン決済がワンストップで解決されています。\n\n開発者、クリエイター、ベテランプレイヤーの皆さん、傍観はやめましょう。今すぐ $0G を1つ入手して、プライバシー計算機に登録し、M3を無料で体験しましょう。私たちに加わって、一緒に0G上でBuildしましょう。分散型のオンチェーンAI時代、頂上で会いましょう！\n@0G_labs @0g_CN",
+        "translation": null,
+        "source_lines": 45,
+        "previous_lines": 45,
+        "new_lines": null,
+        "quantity_errors": [
+          "missing"
+        ],
+        "source_urls": [
+          "https://t.co/zm340Bk8Ob"
+        ],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "en",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeek costs only 6 cents per million tokens—can you believe it?\n\nLet me do a precise calculation for you: running DeepSeek V4 Flash on my local LazyCat AI compute pod costs 6 cents per million tokens.\n\nThat's 1/300 of the cost of DeepSeek's online API during peak hours, and 1/150 of the cost during off-peak hours. https://t.co/brf3x0cF6X",
+        "translation": null,
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": null,
+        "quantity_errors": [
+          "missing"
+        ],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2091055380835217448",
+        "source_language": "zh-cn",
+        "target_language": "ja",
+        "source": "DeepSeek百万Token 6分钱你敢相信吗？\n\n给大家精算一下， 我本地懒猫AI算力舱跑DeepSeek V4 Flash，每百万Token的价格是6分钱\n\n是DeepSeek在线API高峰期成本的 1/300, 是空闲期成本的 1/150 https://t.co/brf3x0cF6X",
+        "previous_translation": "DeepSeekの100万トークンが6銭、信じられますか？\n\n皆さんに細かく計算してみます。私の地元の「懒猫AI算力舱」でDeepSeek V4 Flashを実行すると、100万トークンあたりの価格は6銭です。\n\nこれはDeepSeekオンラインAPIのピーク時コストの1/300であり、アイドル時コストの1/150です https://t.co/brf3x0cF6X",
+        "translation": null,
+        "source_lines": 5,
+        "previous_lines": 5,
+        "new_lines": null,
+        "quantity_errors": [
+          "missing"
+        ],
+        "source_urls": [
+          "https://t.co/brf3x0cF6X"
+        ],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "This is something you can't ask now\n\nToday, while talking about AI, when I said \"Obsidian\" as \"Obsidahn,\" they told me I said it like it's L'Occitane.\n\n■Everyone, you can save this\nChatGPT → Chat-Gee-Pee-Tee\nOpenAI → Open-A-I\nGemini → Jeminai (often read as \"Gemini\")\nClaude → Claude\nAnthropic → Anthropic\nCopilot → Copilot\nPerplexity → Perplexity\nGrok → Grok\nLlama → Llama\nMistral → Mistral\nDeepSeek → DeepSeek\nQwen → Qwen (also a pronunciation close to \"Chen\")\nNotebookLM → Notebook-L-M\nMidjourney → Midjourney\nDALL·E → Dali (not \"Dally\")\nStable Diffusion → Stable Diffusion\nSora → Sora\nRunway → Runway\nSuno → Suno\nElevenLabs → ElevenLabs\nCursor → Cursor\nDevin → Devin\nManus → Manus\nGenspark → Genspark\nDify → Dify\nNotion AI → Notion-A-I\nObsidian → Obsidian\nCanva → Canvas\nGamma → Gamma\nHugging Face → Hugging Face\nOllama → Ollama",
+        "translation": "Can't ask now\n\nToday when we were talking about AI and I called Obsidian \"Obsidan\", I was told not to say it like L'Occitane.\n\n■Everyone can save this\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（often read as \"ジェミニ\"）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（also a pronunciation close to \"チェン\"）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（not \"ダリー\"）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093192147700977838",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "今さら聞けない\n\n今日AIの話しててObsidianのことを僕が「オブシダンね」って言うたらロクシタンみたいに言うなって言われました。\n\n■みんな保存していいよ\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（「ジェミニ」と読まれがち）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（「チェン」に近い発音も）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（「ダリー」ではない）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "previous_translation": "现在还问不出口的\n\n今天聊AI的时候，我说Obsidian是“奥布西丹”，结果被人说听起来像欧舒丹一样。\n\n■大家保存起来就好\nChatGPT → 聊天吉皮提\nOpenAI → 开放艾\nGemini → 杰米奈（经常被读成“杰米尼”）\nClaude → 克劳德\nAnthropic → 安索罗皮克\nCopilot → 副驾驶\nPerplexity → 帕普莱克西提\nGrok → 格罗克\nLlama → 拉马\nMistral → 米斯特拉尔\nDeepSeek → 迪普西克\nQwen → 昆文（也有接近“陈”的发音）\nNotebookLM → 诺特布克埃尔埃姆\nMidjourney → 米德贾尼\nDALL·E → 达利（不是“达利耶”）\nStable Diffusion → 斯特布尔迪夫尤申\nSora → 索拉\nRunway → 跑道\nSuno → 苏诺\nElevenLabs → 伊莱文拉布斯\nCursor → 光标\nDevin → 德温\nManus → 马努斯\nGenspark → 詹斯帕克\nDify → 迪法伊\nNotion AI → 诺申艾\nObsidian → 奥布西迪安\nCanva → 坎瓦\nGamma → 伽马\nHugging Face → 哈金费斯\nOllama → 奥拉马",
+        "translation": "今さら聞けない\n\n今天聊AI的时候，我说起Obsidian，我说成“オブシダン”，结果被人说像在说欧舒丹（ロクシタン）一样。\n\n■大家都可以保存哦\nChatGPT → チャットジーピーティー\nOpenAI → オープンエーアイ\nGemini → ジェミナイ（常被读作「ジェミニ」）\nClaude → クロード\nAnthropic → アンソロピック\nCopilot → コパイロット\nPerplexity → パープレキシティ\nGrok → グロック\nLlama → ラマ\nMistral → ミストラル\nDeepSeek → ディープシーク\nQwen → クウェン（也有接近「チェン」的发音）\nNotebookLM → ノートブックエルエム\nMidjourney → ミッドジャーニー\nDALL·E → ダリ（不是「ダリー」）\nStable Diffusion → ステーブルディフュージョン\nSora → ソラ\nRunway → ランウェイ\nSuno → スノ\nElevenLabs → イレブンラボ\nCursor → カーソル\nDevin → デヴィン\nManus → マヌス\nGenspark → ジェンスパーク\nDify → ディファイ\nNotion AI → ノーションエーアイ\nObsidian → オブシディアン\nCanva → キャンバ\nGamma → ガンマ\nHugging Face → ハギングフェイス\nOllama → オラマ",
+        "source_lines": 36,
+        "previous_lines": 36,
+        "new_lines": 36,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "en",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "When running with characters other than MiniMax H3, Phoebe, and Carlotta, unless you spend a considerable amount of time refining the prompt and base reference, you'll only get results that aren't satisfying in terms of reproducing the shading look, so that's the reason why I've only put out these two characters so far.\n\nEven with these two characters, there are still some minor details I'm a bit dissatisfied with at this point, and adding other characters feels subtly troublesome because of that, so I'd like to streamline things a bit more.",
+        "translation": "When running with characters other than MiniMax H3, Phoebe, and Carlotta, unless you spend a considerable amount of time refining the prompt and base reference, you'll only get results that aren't satisfying in terms of shading reproduction look, so that's why these are the only two characters I've put out so far\n\nEven with these two characters, there are still some minor details I'm slightly dissatisfied with at this point\nAdding other characters feels subtly troublesome there, so I want to streamline it a bit more",
+        "source_lines": 4,
+        "previous_lines": 3,
+        "new_lines": 4,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      },
+      {
+        "post_id": "2093747347859865794",
+        "source_language": "ja",
+        "target_language": "zh-cn",
+        "source": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合、プロンプトとベースのリファレンスを結構時間かけて詰めないとシェーディングの再現のルックで満足できない内容しか出ないので、そこの点でこの2キャラしか今の所出してない奴\n\nこの2キャラでも現時点で細かいディテールでちょっと不満なところあるし\n別キャラ追加するのが地味にそこで面倒くさめに思うからもうちょっと効率化したい",
+        "previous_translation": "MiniMax H3、除Phoebe和Carlotta以外的角色执行时，如果不花相当时间打磨提示词和基础参考，就只能产出在着色再现外观上无法令人满意的内容，所以目前只出了这两个角色。\n\n即使是这两个角色，现阶段在细节上也有一些不太满意的地方。\n添加其他角色在那方面实在让人觉得有点麻烦，所以想再提高一下效率。",
+        "translation": "MiniMax H3、在运行Phoebe和Carlotta以外的角色时，如果不在提示词和基础参考上花相当多的时间来打磨，就无法在阴影再现的外观上得到令人满意的内容，所以正因如此，目前只出了这两个角色\n\n即使是这两个角色，现阶段在细节上也有点不满意的地方\n添加其他角色在那里其实有点麻烦，所以想再提高一下效率",
+        "source_lines": 4,
+        "previous_lines": 4,
+        "new_lines": 4,
+        "quantity_errors": [],
+        "source_urls": [],
+        "translated_urls": []
+      }
+    ],
+    "independent_review": {
+      "reviewer": "independent semantic review",
+      "scope": "Only the five non-null translations in source-comparison.json; no provider calls and no runtime changes.",
+      "verification_limit": "Three of eight requests returned HTTP 429 with no retry: both currency translations for 2091055380835217448 and Japanese 2066503919505977649. They provide no translation-quality evidence.",
+      "observed_fixed": [
+        {
+          "post_id": "2093192147700977838",
+          "target_language": "en",
+          "finding": "Every displayed spelling/reading pair, including quoted alternatives, is restored as the source Japanese reading. The prior English output rewrote many pairs and changed Canva."
+        },
+        {
+          "post_id": "2066503919505977649",
+          "target_language": "en",
+          "finding": "Line count is exact at 45 source lines and 45 output lines, recovering the prior 44-line merge."
+        },
+        {
+          "post_id": "2093747347859865794",
+          "target_language": "en, zh-cn",
+          "finding": "Both returned translations have the exact four-line source structure; the prior English result had three lines."
+        }
+      ],
+      "unresolved": [
+        {
+          "post_id": "2093747347859865794",
+          "target_language": "en",
+          "finding": "The English output still parses MiniMax H3 as one of the excluded characters. The source says to run MiniMax H3 with characters other than Phoebe and Carlotta."
+        },
+        {
+          "post_id": "2091055380835217448",
+          "target_language": "en, ja",
+          "finding": "No returned output is available, so this probe cannot verify fen/denomination fidelity."
+        }
+      ],
+      "new_defects": [
+        {
+          "post_id": "2093192147700977838",
+          "target_language": "zh-cn",
+          "finding": "The prose heading '今さら聞けない' is left in Japanese. The prior output translated it into Chinese, and the source is not a protected spelling/reading pair."
+        }
+      ],
+      "corrected_observation": {
+        "post_id": "2093747347859865794",
+        "target_language": "zh-cn",
+        "finding": "The Chinese wording 'MiniMax H3、在运行Phoebe和Carlotta以外的角色时…' keeps MiniMax H3 as the topic and limits the exclusion to Phoebe and Carlotta. Its punctuation is awkward, but its role structure is correct."
+      },
+      "assessment": "The returned evidence verifies deterministic pair restoration and line framing for these cases, but semantic behavior remains unstable: the English model-role correction did not hold and the Chinese guide introduced an untranslated heading. This is an observation record, not a population-level or general accuracy claim."
+    }
+  }
+]

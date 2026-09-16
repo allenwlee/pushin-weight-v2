@@ -294,8 +294,8 @@ def test_paragraph_tracking_preserves_separators_quotes_and_calls_once_per_targe
     assert row["text_zh_cn"] == 'T:"Quoted" line\n \n\nT:Second paragraph\n\n\nT:Third paragraph'
     assert row["text_ja"] == row["text_zh_cn"]
     assert len(client.calls) == 2
-    assert all("literal-translation-paragraphs-v7" in _prompt(c) for c in client.calls)
-    assert all("Translate every block independently" in _prompt(c) for c in client.calls)
+    assert all("literal-translation-lines-v13" in _prompt(c) for c in client.calls)
+    assert all("Include every block" in _prompt(c) for c in client.calls)
     assert all(" -> " not in _prompt(c) for c in client.calls)
     assert all(c["max_tokens"] <= 8192 for c in client.calls)
 
@@ -407,7 +407,7 @@ def test_paragraph_tracking_keeps_single_paragraph_on_original_raw_protocol():
         paragraph_tracking=True,
     )[0]
     assert len(client.calls) == 2
-    assert all("literal-translation-paragraphs-v7" not in _prompt(call) for call in client.calls)
+    assert all("literal-translation-lines-v13" not in _prompt(call) for call in client.calls)
     assert row["text_zh_cn"] == "zh"
 
 
@@ -452,7 +452,7 @@ def test_paragraph_framing_blank_lines_are_removed_without_stripping_indentation
     class FramingClient(PlaintextClient):
         def messages_create_text(self, **kwargs):
             self.calls.append(kwargs)
-            return TextResponse(_marked_reply(kwargs, ["\n \n  第一\n  続き  \n\n", "\n\t第二\t\n"]))
+            return TextResponse(_marked_reply(kwargs, ["\n \n  第一\n", "  続き  \n\n", "\n\t第二\t\n"]))
 
     source = "first\ncontinuation\n \n\nsecond"
     row = translate_batch_literal_plaintext(
@@ -532,3 +532,100 @@ def test_terminal_normalization_does_not_relax_content_or_marker_integrity(reply
 
     text, usage, elapsed = _parse_paragraph_response(reply, ["[[PW0:001]]", "[[PW0:002]]", "[[PW0:END]]"], ["", "\n\n", ""], {"input_tokens": 9}, 7)
     assert text is None and usage["input_tokens"] == 9 and elapsed == 7
+
+
+@pytest.mark.parametrize("paragraph_tracking", [False, True])
+def test_fidelity_rules_reach_both_real_translation_formats(paragraph_tracking):
+    """Prompt-delivery pin, not a simulated claim of translation accuracy."""
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "Use Model A with characters B and C.\n\nPronunciation: Widget → ウィジェット"
+    client = PlaintextClient([TextResponse("译文"), TextResponse("訳文")])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "semantic-prompt", "text": source, "lang": "en"}],
+        client, paragraph_tracking=paragraph_tracking,
+    )[0]
+    assert row["text_en"] == source
+    assert len(client.calls) == 2
+    for call in client.calls:
+        prompt = _prompt(call)
+        assert "whole post as context" in prompt
+        assert "who did what to whom" in prompt
+        assert "retain pronunciation spellings" in prompt
+        assert "currency and denomination" in prompt
+        assert "Do not soften insults" in prompt
+        assert "every source line break" in prompt
+        assert "block independently" not in prompt
+
+
+def test_pronunciation_examples_are_protected_and_single_lines_framed():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = 'Pronunciations\nWidget → ウィジェット（not 「ウィジェト」）\n\nEnd'
+
+    class EchoMarkers(PlaintextClient):
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            _, blocks = _payload_markers_and_paragraphs(kwargs)
+            assert len(blocks) == 3
+            assert 'ウィジェット' not in _prompt(kwargs)
+            assert 'ウィジェト' not in _prompt(kwargs)
+            return TextResponse(_marked_reply(kwargs, blocks))
+
+    client = EchoMarkers([])
+    row = translate_batch_literal_plaintext(
+        [{'tweet_id': 'readings', 'text': source, 'lang': 'en'}],
+        client, paragraph_tracking=True,
+    )[0]
+    assert row['text_en'] == row['text_zh_cn'] == row['text_ja'] == source
+    assert len(client.calls) == 2
+
+
+def test_pronunciation_protection_is_narrow_and_collision_safe():
+    from x_monitor.translation_invariants import (
+        protect_translation_spans,
+        restore_token_quantities,
+    )
+
+    source = 'Ordinary prose 「カーソル」. [[PQ0:001]]\nWidget → ウィジェット（not 「ウィジェト」）\nA → ordinary translation'
+    payload, replacements = protect_translation_spans(source, 'en')
+    assert 'Ordinary prose 「カーソル」' in payload
+    assert 'A → ordinary translation' in payload
+    assert len(replacements) == 2
+    assert all(k.startswith('[[PQ1:') for k in replacements)
+    assert restore_token_quantities(payload, replacements) == source
+    marker = next(iter(replacements))
+    assert restore_token_quantities(payload.replace(marker, ''), replacements) is None
+    assert restore_token_quantities(payload + marker, replacements) is None
+
+
+def test_line_framing_rejects_inserted_internal_newline_and_retains_usage():
+    from x_monitor.literal_translation import _parse_paragraph_response
+
+    value, usage, _ = _parse_paragraph_response(
+        '[[PW0:001]]\nfirst\ninvented line\n[[PW0:END]]',
+        ['[[PW0:001]]', '[[PW0:END]]'], ['', ''], {'input_tokens': 12}, 0,
+    )
+    assert value is None
+    assert usage['input_tokens'] == 12
+
+
+def test_readings_and_quantities_share_unique_restorable_markers():
+    from x_monitor.translation_invariants import (
+        protect_translation_spans,
+        restore_token_quantities,
+    )
+
+    source = '10.9 trillion tokens\r\nWidget → ウィジェット\r\nWidget → ウィジェット'
+    payload, replacements = protect_translation_spans(source, 'ja')
+    assert len(replacements) == 3
+    assert restore_token_quantities(payload, replacements) == source.replace('10.9 trillion tokens', '10.9兆トークン')
+
+
+def test_long_pronunciation_only_source_copy_is_not_untranslated_prose():
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    source = '\n'.join(['Widget → ウィジェット', 'Another → アナザー'] * 5)
+    assert not _is_untranslated_copy(source, source, 'en')
+    prose = 'これは発音を説明する長い日本語の文章です。説明文までコピーしてはいけません。\n' + source
+    assert _is_untranslated_copy(prose, prose, 'en')

@@ -4373,3 +4373,102 @@ Detailed exhibit and next quality concerns:
 Total three new paid runs: $0.01311114. Compared with the previous plaintext
 run, the final full45 cost increased about 33% and serial duration about 13%;
 this does not establish a tenfold reduction or production throughput.
+
+
+### September 17 — Compact semantic-fidelity correction (owner authorized)
+
+The owner requested the shortest elegant fixes for remaining pronunciation,
+entity-role, tone, currency and internal-newline errors, with model-specific
+limitations stated. Test one compact instruction rewrite (raw v8 / paragraph
+v9): use whole-post context, preserve actor/entity relationships, copy
+pronunciation spellings while translating explanation, retain hostile tone
+and identity references without resolving ambiguity, preserve currency units
+and line breaks. Remove duplicated paragraph instructions and the instruction
+to translate each block independently. This is a general fidelity contract,
+empirically tuned on 0731; no evidence yet establishes model exclusivity.
+Do not add a model-specific post dictionary, second call, repair pass, numeric
+regex for semantic roles, or guessed newline insertion. Existing numeric
+protection and strict paragraph parsing remain unchanged.
+
+Regression net: capture both real translation formats and the CycleRunner
+artifact path; retain native copies, quantities, usage and call cardinality.
+Freeze one 0731-only targeted run on eight existing posts: 2064770455920357428,
+2092276068790989096, 2091055380835217448, 2096881764480561562,
+2093192147700977838, 2093747347859865794, 2066503919505977649 and
+2095737515894313379. These cover every flagged failure family plus numerical
+protection and bilingual content. Exactly 16 serial calls, no retries,
+180-second socket-idle limit, reserved cost at most $0.20; use the existing
+frozen-cohort harness and pinned 0731 route. Inspect semantic fidelity against
+source and preserve all original failures. If confirmed defects remain,
+diagnose before another change; do not buy a full45 rerun on a failed probe.
+No model activation, production mutation, deployment or new human gate.
+
+The v8/v9 targeted run completed all 16 calls / 8 posts without provider or
+parser failure: $0.00231120, 294.963 seconds. Chinese pronunciation pairs and
+one internal-linebreak failure recovered; English pronunciation pairs,
+model-versus-character roles and explicit monetary units did not. Preserve
+this consumed run at `.context/u20/semantic-probe-20260917-073100/`. General
+fidelity instructions are insufficient for these 0731 cases.
+
+Try one final compact instruction variant (raw v10 / paragraph v11): explicitly
+retain kana in pronunciation examples, distinguish a model/tool topic before
+a comma from following list members, retain currency-unit names (fen versus
+generic cents), and retain single newlines inside blocks. Keep stylized prose
+translation explicit. No source-specific brand/character dictionary or extra
+call. Freeze a separate six-post / 12-call 0731-only probe: 2093192147700977838,
+2093747347859865794, 2091055380835217448, 2092276068790989096,
+2064770455920357428 and 2066503919505977649. Same serial/no-retry/180-second
+contract, maximum reserved cost $0.15. Do not re-run the long bilingual and
+numerical controls yet; their v8/v9 evidence remains separately identified.
+If confirmed defects persist, stop prompt growth and report the limitation.
+
+The v10/v11 probe is preserved at
+`.context/u20/semantic-explicit-probe-20260917-073700/`: 11/12 responses,
+134.321 seconds, $0.00112596 reported for responses with usage (incomplete
+billing evidence), one HTTP 429 on the Chinese MiniMax-character translation.
+English now correctly treats MiniMax H3 as the model and retains all four
+source lines; currency is now fen and Japanese identifies renminbi. English
+pronunciation examples still ignore the kana-copy instruction; the other
+linebreak defect returned. This is a limit of prompting on this observed route,
+not proof that other models fail or that this model always fails.
+
+Stop adding semantic prompt rules. Reuse existing protection/framing instead:
+raw v12 and opt-in line v13 protect narrowly anchored Latin-name → katakana
+reading pairs and quoted katakana alternatives on the same line, restoring
+exact source spellings through the existing exactly-once placeholder checker.
+Keep surrounding explanations translatable; ordinary Japanese prose/quotes
+remain unmasked. This is not a general-purpose pronunciation detector. Reuse
+the existing ordered-block parser at nonempty-source-line granularity and
+restore source separators verbatim; reject inserted internal line breaks.
+No line-by-line calls, post-specific dictionary, guessed word segmentation,
+repair, fallback or deployment. Native copies remain exact. The historical
+`paragraph_tracking` API flag stays opt-in but v13 now identifies line framing.
+
+Regression net includes collision handling, mixed quantity/pronunciation
+markers, unprotected prose, duplicate/missing-marker rejection, exact CRLF
+roundtrip, line count, retained usage and actual CycleRunner publication
+rejection when a pronunciation marker is missing. After review/tests, freeze
+one final 0731-only four-post/eight-call proof on 2093192147700977838,
+2093747347859865794, 2091055380835217448 and 2066503919505977649, reserved
+cost <= $0.10, serial, 180-second socket idle, no retries. This is a new
+request shape, not retrying the consumed 429. Any further failure is recorded
+without another automatic prompt-tuning run or full45 purchase.
+
+Final v12/v13 proof completed at
+`.context/u20/protected-lines-probe-20260917-074500/`: five responses from
+8 attempts, 52.890 seconds, $0.00061890 known reported cost; three HTTP 429
+failures have no usage. All returned outputs pass marker and line checks;
+34 pronunciation spans survive exactly in both guide translations, and both
+previous English merged-line cases match source line counts. English entity
+roles regress again and Chinese leaves a Japanese heading untranslated.
+Currency is unavailable in this final run (429), not marked passing. Earlier
+prompt-only tone/slang improvements were inconsistent. U20 remains open.
+
+90 focused tests passed including 17 required PostgreSQL tests and zero skips;
+Ruff/diff checks and independent code review passed. No further prompt growth,
+full45 inference, repair call, provider activation or deployment this turn.
+Retain the inactive deterministic preservation changes, recorded model/route
+limitations and original rate-limit failures. Detailed exhibit:
+`docs/analysis/2026-09-17-075000-u20-compact-fidelity-fixes.md` and JSON sibling.
+The three experiments have $0.00405606 known reported inference spend, not a
+complete billing total for requests without usage and excluding review work.
