@@ -294,7 +294,7 @@ def test_paragraph_tracking_preserves_separators_quotes_and_calls_once_per_targe
     assert row["text_zh_cn"] == 'T:"Quoted" line\n \n\nT:Second paragraph\n\n\nT:Third paragraph'
     assert row["text_ja"] == row["text_zh_cn"]
     assert len(client.calls) == 2
-    assert all("literal-translation-paragraphs-v3" in _prompt(c) for c in client.calls)
+    assert all("literal-translation-paragraphs-v7" in _prompt(c) for c in client.calls)
     assert all("Translate every block independently" in _prompt(c) for c in client.calls)
     assert all(" -> " not in _prompt(c) for c in client.calls)
     assert all(c["max_tokens"] <= 8192 for c in client.calls)
@@ -407,5 +407,94 @@ def test_paragraph_tracking_keeps_single_paragraph_on_original_raw_protocol():
         paragraph_tracking=True,
     )[0]
     assert len(client.calls) == 2
-    assert all("literal-translation-paragraphs-v3" not in _prompt(call) for call in client.calls)
+    assert all("literal-translation-paragraphs-v7" not in _prompt(call) for call in client.calls)
     assert row["text_zh_cn"] == "zh"
+
+
+def test_untranslated_japanese_prose_is_rejected_without_retry_and_retains_usage():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "日本語の発音について説明します。こちらの例を読んでください。発音と意味の違いを確認しましょう。"
+    client = PlaintextClient([
+        TextResponse(source, {"input_tokens": 11, "output_tokens": 21}),
+        TextResponse("这是日语发音的说明。请阅读例子并注意发音与意思的区别。", {"input_tokens": 12, "output_tokens": 22}),
+    ])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "wrong-language", "text": source, "lang": "ja"}], client,
+    )[0]
+    assert len(client.calls) == 2
+    assert row["translation_failed"] is True
+    assert row["text_en"] is None
+    assert row["text_ja"] == source
+    assert row["text_zh_cn"] is not None
+    assert row["input_tokens"] == 23 and row["output_tokens"] == 43
+
+
+def test_quantity_contradiction_is_rejected_even_when_headline_is_correct():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([
+        TextResponse("训练使用了[[PQ0:001]]。"),
+        TextResponse("[[PQ0:001]]。本文では100億トークンで学習したと述べる。"),
+    ])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "wrong-number", "text": "Trained on 10.9 trillion tokens.", "lang": "en"}], client,
+    )[0]
+    assert len(client.calls) == 2
+    assert row["text_zh_cn"] is not None
+    assert row["text_ja"] is None
+    assert row["translation_failed"] is True
+
+
+def test_paragraph_framing_blank_lines_are_removed_without_stripping_indentation():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    class FramingClient(PlaintextClient):
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            return TextResponse(_marked_reply(kwargs, ["\n \n  第一\n  続き  \n\n", "\n\t第二\t\n"]))
+
+    source = "first\ncontinuation\n \n\nsecond"
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "framing", "text": source, "lang": "en"}], FramingClient([]),
+        paragraph_tracking=True,
+    )[0]
+    assert row["text_zh_cn"] == "  第一\n  続き  \n \n\n\t第二\t"
+    assert not row["translation_failed"]
+
+
+@pytest.mark.parametrize("source,translated,target", [
+    ("ChatGPT → チャットジーピーティー", "ChatGPT → チャットジーピーティー", "en"),
+    ("```\n日本語のコード例をそのまま残してくださいという例です\n```", "```\n日本語のコード例をそのまま残してくださいという例です\n```", "en"),
+    ("日本語の発音について説明します。こちらの例を読んでください。", "Read these Japanese pronunciation examples: オブシディアン", "en"),
+    ("繁體中文的相同漢字在簡體中也可能保持相同的寫法。", "繁體中文的相同漢字在簡體中也可能保持相同的寫法。", "zh-Hans"),
+])
+def test_source_copy_detector_leaves_short_examples_code_and_translated_prose_alone(source, translated, target):
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    assert not _is_untranslated_copy(source, translated, target)
+
+
+def test_caller_restores_localized_token_quantity_without_model_arithmetic():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "More than 10.9 trillion tokens.\n\nThe next trillion tokens."
+
+    class ProtectedClient(PlaintextClient):
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            _, blocks = _payload_markers_and_paragraphs(kwargs)
+            assert "10.9" not in blocks[0]
+            assert "next" in blocks[1]
+            return TextResponse(_marked_reply(kwargs, [
+                "使用[[PQ0:001]]以上。", "次の[[PQ0:002]]。",
+            ]), {"input_tokens": 5, "output_tokens": 7})
+
+    client = ProtectedClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "protected", "text": source, "lang": "en"}], client, paragraph_tracking=True,
+    )[0]
+    assert row["text_en"] == source
+    assert row["text_ja"] == "使用10.9兆トークン以上。\n\n次の1兆トークン。"
+    assert not row["translation_failed"]
+    assert len(client.calls) == 2

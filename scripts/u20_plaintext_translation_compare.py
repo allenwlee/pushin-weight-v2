@@ -113,6 +113,7 @@ def source_hashes() -> dict[str, str]:
             "scripts/u20_plaintext_translation_compare.py",
             "scripts/u20_translation_synthesis_execute.py",
             "x_monitor/literal_translation.py",
+            "x_monitor/translation_invariants.py",
             "x_monitor/translator.py",
             "x_monitor/attribution.py",
             "x_monitor/openrouter.py",
@@ -184,7 +185,9 @@ def capture_requests(rows: list[dict[str, Any]], model_arm: str, *, paragraph_tr
         translation_inputs(rows), client, cfg=caller_config(model_arm), max_workers=1,
         paragraph_tracking=paragraph_tracking
     )
-    if len(output) != len(rows) or any(row.get("translation_failed") for row in output):
+    # Fake echoes are request-capture fixtures, not valid translations. Semantic
+    # rejection must not invalidate offline capture or bypass validation at run time.
+    if len(output) != len(rows) or len(client.requests) != 2 * len(rows):
         raise ValueError("provider-free caller capture failed")
     return client.requests
 

@@ -51,7 +51,7 @@ def test_prepare_invokes_true_plaintext_caller_and_freezes_90_requests_per_arm(t
     assert contract["limits"]["socket_idle_timeout_seconds"] == 180
     assert all(len(values) == 90 for values in requests.values())
     assert all(
-        request["messages"][0]["content"].startswith("Translate one")
+        request["messages"][0]["content"].startswith(harness.LITERAL_TRANSLATION_PROMPT_VERSION + ". Translate one")
         for values in requests.values() for request in values
     )
     assert all(
@@ -187,7 +187,7 @@ def test_prepare_targeted_paragraph_probe_freezes_only_selected_source_rows(tmp_
     contract = harness.prepare(directory, paragraph_tracking=True, post_ids=["en-0"])
     assert contract["limits"]["calls_per_arm"] == 2
     assert contract["paragraph_tracking"] is True
-    assert contract["literal_translation_prompt_version"] == "literal-translation-paragraphs-v3"
+    assert contract["literal_translation_prompt_version"] == "literal-translation-paragraphs-v7"
     assert [r["post_id"] for r in contract["rows"]] == ["en-0"]
     loaded, requests = harness.load_execution(directory)
     assert loaded == contract

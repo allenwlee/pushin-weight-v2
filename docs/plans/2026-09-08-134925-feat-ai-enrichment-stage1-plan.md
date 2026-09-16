@@ -4268,3 +4268,69 @@ opt-in experiment. U20 is not closed: next address number magnitudes, target
 language and entity fidelity, then run a new frozen full-cohort quality and
 operational check before selecting or activating any translator route.
 No new human-review gate is being added.
+
+### September 16 — Owner-approved translation invariants and spacing correction
+
+Owner approved the proposed quantity-preservation checks, unchanged-source
+language detection, and paragraph-framing whitespace correction. Update the
+raw and paragraph prompt identities; make the same checks at the shared
+translation caller, without a reviewer call or automatic repair/retry. Check
+only supported explicit numeric quantities, normalize their units in code,
+and reject observed contradictions; document unsupported forms rather than
+claiming universal numeric validation. Reject clearly untranslated prose
+copied across incompatible scripts, while allowing names, URLs, and short
+examples. Strip added blank framing lines around paragraph blocks, preserving
+content indentation/internal line breaks and the source separators. Preserve
+provider selection, feature flags, classifier behavior and deployment state.
+
+Regression net: reproduce rejected wrong quantities and unchanged Japanese
+in an English field; retain usage and isolate failed locales; exercise the
+CycleRunner-to-artifact path so rejected output cannot publish. Verify valid
+localized quantities, source copies, and paragraph formatting remain accepted.
+After offline validation, freeze one 0731-only four-post probe (eight calls):
+the two previous omission posts plus 2095737515894313379 and
+2093192147700977838. Cap reserved cost at $0.10, serial calls, 180-second
+socket-idle timeout, no retry. If that proof succeeds, run the same frozen
+45-source cohort once with 0731 only (90 calls, $0.50 reserved-cost cap,
+same serial/timeout/no-retry contract). Retain raw outputs and validation
+failures; perform semantic inspection rather than treating acceptance as
+accuracy. No production calls, writes, or activation are authorized by this
+experiment. Save results to a new dated exhibit and checkpoint scoped files.
+
+The v4/v5 eight-call probe completed with zero transport errors but one rejected
+locale: 0731 still changed 10.9 trillion into 109兆 in Japanese. The quantity
+validator prevented publication. Both omission posts preserved content and
+line counts; the pronunciation guide now had English prose. Cost $0.00175404,
+126.166 seconds. Preserve this failure evidence. Do not run its prepared
+full45 contract (`invariant-full45-20260916-211500`).
+
+Complete the same correction using deterministic protection of supported
+token-quantity spans: replace each source occurrence with a collision-free
+placeholder, require it exactly once in the response, and restore an exact
+localized value computed in code. Preserve surrounding qualifiers such as
+"more than" and "next". No model arithmetic, extra call or repair is added.
+Version raw/paragraph identities v6/v7 and pin source copies, markers,
+standard CJK magnitudes, restored quantities, failed-placeholder usage and
+the database failure path. Run one new frozen 0731-only eight-call four-post
+probe under $0.10 reserved; if accepted and inspected, one fresh full45 run
+under $0.50 reserved. This is a changed-protocol experiment, not replay of a
+consumed request. Existing inference, deployment and human-review boundaries
+remain unchanged.
+
+The protected-quantity v6/v7 probe is recorded separately at
+`.context/u20/quantity-probe-20260916-212100/`: 8/8 accepted calls, 4/4 complete
+posts, 144.360 seconds, 8,887 input / 6,748 output tokens, $0.00174786 reported.
+All four source/output line counts match (47, 35, 87, 36); the bilingual post
+retains all five source URL occurrences. Japanese restores three 10.9兆
+occurrences plus the distinct next 1兆 occurrence. Pronunciation-guide prose
+now translates, but its phrasing and pronunciation distinctions still need
+semantic review. This is not a claim of complete fidelity. Latest focused
+validation: 75 passed including 16 required PostgreSQL checks, no skips;
+subsequent 39-test core rerun passed after strengthening the injected-number
+test. Independent review found no blocking code issues.
+
+Freeze/execute the 0731-only full45 at
+`.context/u20/quantity-full45-20260916-212100/`: 90 calls, 224,755 total reserved
+output tokens, maximum 4,621 per request, conservative reservation $0.49167668
+below $0.50. Native fields remain code copies; paragraph mode remains opt-in.
+No incumbent rerun, provider activation, or deployment is part of this probe.

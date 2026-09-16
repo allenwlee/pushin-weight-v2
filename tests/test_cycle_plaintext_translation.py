@@ -45,7 +45,7 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
     assert all(call["model"] == cfg.llm.translator_model for call in calls)
     assert all(call["timeout"] > 0 for call in calls)
     artifact = PostTranslationArtifact.objects.get(post=post)
-    assert artifact.prompt_version == "literal-translation-plaintext-v2"
+    assert artifact.prompt_version == "literal-translation-plaintext-v6"
     if fail_ja:
         assert artifact.state == PostTranslationArtifact.State.FAILED
         assert not artifact.texts.exists()
@@ -60,3 +60,39 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
         assert artifact.output_tokens == 18
         post.refresh_from_db()
         assert post.text_en == source
+
+
+@pytest.mark.parametrize("failure", ["quantity", "language"])
+def test_semantic_rejection_cannot_publish_from_real_post_fetch(monkeypatch, failure):
+    source = (
+        "The model was trained on 10.9 trillion tokens."
+        if failure == "quantity" else
+        "日本語の発音について説明します。こちらの例を読んでください。発音と意味の違いを確認しましょう。"
+    )
+    post = Post.objects.create(tweet_id="invariant-" + failure, text=source, lang="en" if failure == "quantity" else "ja")
+    PostEnrichmentState.objects.create(post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED)
+    calls = []
+
+    class RawClient:
+        _base_url = "https://api.deepseek.com/anthropic"
+
+        def messages_create_text(self, **kwargs):
+            calls.append(kwargs)
+            prompt = kwargs["messages"][0]["content"]
+            if failure == "quantity":
+                text = "109万亿个token" if "Simplified Chinese" in prompt else "10.9兆トークン"
+            else:
+                text = source if "English (en)" in prompt else "请阅读日语发音说明。"
+            return ProviderTextResponse(text, {"input_tokens": 7, "output_tokens": 9})
+
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: RawClient())
+    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100, llm=LlmConfig(
+        literal_translation_v2_enabled=True, translator_model="deepseek-v4-flash",
+        translator_base_url="https://api.deepseek.com/anthropic",
+    ))
+    CycleRunner(cfg=cfg)._run_post_fetch([], run_id="invariant-wiring")
+    artifact = PostTranslationArtifact.objects.get(post=post)
+    assert artifact.state == PostTranslationArtifact.State.FAILED
+    assert not artifact.texts.exists()
+    assert artifact.input_tokens == 14 and artifact.output_tokens == 18
+    assert len(calls) == 2
