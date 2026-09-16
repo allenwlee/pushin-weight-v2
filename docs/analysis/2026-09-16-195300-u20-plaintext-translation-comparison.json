@@ -1,0 +1,912 @@
+{
+  "execution_directory": ".context/u20/plaintext-translation-20260916-192900",
+  "models": {
+    "0731": {
+      "previous_batched_json": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 875.535,
+        "output_tokens": 46394,
+        "cost_usd": 0.00926472,
+        "cost_basis": "reported",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 363.554,
+            "output_tokens": 18137,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 478.12,
+            "output_tokens": 25202,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 33.846,
+            "output_tokens": 3055,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "plaintext": {
+        "complete": 45,
+        "posts": 45,
+        "calls": 90,
+        "errors": 0,
+        "elapsed_seconds": 759.533,
+        "slowest_call_seconds": 86.635,
+        "input_tokens": 32868,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 29211,
+        "cost_usd": 0.00723006,
+        "cost_basis": "reported",
+        "source_copies_exact": 45,
+        "failed_post_ids": []
+      },
+      "cost_change_pct": -21.96137605885553,
+      "time_change_pct": -13.249270446070117,
+      "output_token_change_pct": -37.037116868560595
+    },
+    "incumbent": {
+      "previous_batched_json": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 188.846,
+        "output_tokens": 46806,
+        "cost_usd": 0.05644615199999999,
+        "cost_basis": "estimated using previous report rates",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 75.766,
+            "output_tokens": 18087,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 100.511,
+            "output_tokens": 25656,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.552,
+            "output_tokens": 3063,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "plaintext": {
+        "complete": 45,
+        "posts": 45,
+        "calls": 90,
+        "errors": 0,
+        "elapsed_seconds": 205.297,
+        "slowest_call_seconds": 13.829,
+        "input_tokens": 32868,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 30561,
+        "cost_usd": 0.0465336,
+        "cost_basis": "estimated; direct API usage, $0.30 uncached input/$0.006 cache-read/$1.20 output per million",
+        "source_copies_exact": 45,
+        "failed_post_ids": []
+      },
+      "cost_change_pct": -17.561076616879024,
+      "time_change_pct": 8.711330925727845,
+      "output_token_change_pct": -34.707088834764775
+    }
+  },
+  "blinded_review": {
+    "reviewer": "gpt-5.6-terra",
+    "blinding": "random opaque case IDs; model mappings withheld; target-locales reviewed independently",
+    "source_identity_rows": "15 per model per locale checked by exact-copy code, excluded from semantic percentages",
+    "by_model_locale": {
+      "0731/zh-cn": {
+        "reviewed": 30,
+        "fidelity_pass": 28,
+        "readability_pass": 30,
+        "entities_preserved": 30,
+        "numbers_preserved": 30,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 30,
+        "critical_meaning_inversion": 0,
+        "material_omission": 0,
+        "formatting_issue": 1,
+        "uncertain": 1
+      },
+      "incumbent/zh-cn": {
+        "reviewed": 30,
+        "fidelity_pass": 27,
+        "readability_pass": 28,
+        "entities_preserved": 30,
+        "numbers_preserved": 29,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 30,
+        "critical_meaning_inversion": 0,
+        "material_omission": 2,
+        "formatting_issue": 0,
+        "uncertain": 0
+      },
+      "incumbent/en": {
+        "reviewed": 30,
+        "fidelity_pass": 28,
+        "readability_pass": 30,
+        "entities_preserved": 29,
+        "numbers_preserved": 30,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 30,
+        "critical_meaning_inversion": 0,
+        "material_omission": 1,
+        "formatting_issue": 0,
+        "uncertain": 1
+      },
+      "0731/en": {
+        "reviewed": 30,
+        "fidelity_pass": 24,
+        "readability_pass": 29,
+        "entities_preserved": 27,
+        "numbers_preserved": 29,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 29,
+        "critical_meaning_inversion": 0,
+        "material_omission": 1,
+        "formatting_issue": 1,
+        "uncertain": 1
+      },
+      "0731/ja": {
+        "reviewed": 30,
+        "fidelity_pass": 25,
+        "readability_pass": 29,
+        "entities_preserved": 30,
+        "numbers_preserved": 29,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 30,
+        "critical_meaning_inversion": 0,
+        "material_omission": 1,
+        "formatting_issue": 2,
+        "uncertain": 0
+      },
+      "incumbent/ja": {
+        "reviewed": 30,
+        "fidelity_pass": 25,
+        "readability_pass": 26,
+        "entities_preserved": 30,
+        "numbers_preserved": 30,
+        "urls_preserved": 30,
+        "negation_polarity_preserved": 30,
+        "critical_meaning_inversion": 0,
+        "material_omission": 0,
+        "formatting_issue": 2,
+        "uncertain": 0
+      }
+    },
+    "flagged_fidelity_failures": [
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2097826037027811581",
+          "target_locale": "zh-cn"
+        },
+        "review": {
+          "case_id": "T0DE71C1620B2",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "Anthropic研究者の退社（Forbes）",
+              "target_quote": "Anthropic研究者の退社（福布斯）",
+              "explanation": "The Japanese phrase remains untranslated in the Chinese list."
+            },
+            {
+              "source_quote": "Harvey 調達（自社ブログ）",
+              "target_quote": "Harvey 采购（自家博客）",
+              "explanation": "It changes a funding/financing item into procurement."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2095560256164098125",
+          "target_locale": "zh-cn"
+        },
+        "review": {
+          "case_id": "T05E099C1813A",
+          "fidelity_pass": false,
+          "readability_pass": false,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": true,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "Is Qwen 3.9 in 11 days confirmed?",
+              "target_quote": "Qwen 3.9 11天后确认吗？",
+              "explanation": "The target omits the implied release/arrival predicate, so 11 days can modify confirmation rather than Qwen 3.9's timing."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2097286324990382584",
+          "target_locale": "zh-cn"
+        },
+        "review": {
+          "case_id": "T2AA869E485CD",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "スピード感あふれるプロンプトもしっかり生成してくれ",
+              "target_quote": "能快速生成响应迅速的提示词",
+              "explanation": "It changes the prompts' dynamic quality into a claim about generation speed and responsiveness."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2093192147700977838",
+          "target_locale": "zh-cn"
+        },
+        "review": {
+          "case_id": "T14572EEF6727",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": true,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "ChatGPT → チャットジーピーティー",
+              "target_quote": "ChatGPT → 聊天GPT",
+              "explanation": "The post is a Japanese pronunciation guide; the target replaces its Japanese readings with Chinese semantic translations, losing the central content."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2095737515894313379",
+          "target_locale": "zh-cn"
+        },
+        "review": {
+          "case_id": "T64F37B8FE5DF",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": false,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "10.9 Trillion Tokens Later",
+              "target_quote": "109万亿个token之后",
+              "explanation": "The headline changes 10.9 trillion to 109 trillion, a tenfold increase."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2089638284536496616",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T875DFE97FED7",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": false,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "死都神征の仕様書とコード",
+              "target_quote": "the spec and code for Death City Divine Conquest",
+              "explanation": "The source proper-name string is replaced with a semantic English rendering whose identity is not retained."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2097798902875599143",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T00FFB9AE56F4",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": false,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "写真がAI改変されていないことを示す「Reference Image」",
+              "target_quote": "\"Reference Image,\" which shows whether photos have been AI-modified",
+              "explanation": "The source says the feature shows that a photo has not been AI-modified; the target changes that to an unspecified whether-modified check."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2093747347859865794",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T079CDB9A35FA",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": false,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "MiniMax H3、PhoebeとCarlotta以外のキャラクターで実行する場合",
+              "target_quote": "characters other than MiniMax H3, Phoebe, and Carlotta",
+              "explanation": "MiniMax H3 is the tool being run, but the target makes it one of the excluded characters."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2087578679018934514",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T52FF4D31BD18",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "别等“准备好”——准备好的人永远上不了线。",
+              "target_quote": "don't wait to be \"ready\"—people who are ready will never launch.",
+              "explanation": "The source criticizes waiting until one is ready; the target instead says being ready itself prevents launch."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2096881764480561562",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "TBE13AE7FD5AC",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": true,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな !",
+              "target_quote": "(Japanese original text)\n\n(井号)",
+              "explanation": "The complete Japanese-original half of this bilingual source is omitted rather than translated or retained."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2093192147700977838",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "TEEFD7A6B03C2",
+          "fidelity_pass": false,
+          "readability_pass": false,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "今さら聞けない",
+              "target_quote": "今さら聞けない",
+              "explanation": "The target is an unchanged Japanese copy rather than an English translation."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2085370157292249583",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T9AB3DC9C4EB6",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": false,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": true,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "天孚通信 7.90%\n\n源杰科技 5.35%\n\n光迅科技 4.74%\n\n太辰光 1.00%",
+              "target_quote": "T&S Communications 7.90%\n\nYuanjie Technology 5.35%\n\nAccelink Technologies 4.74%\n\nT&S Communications 1.00%",
+              "explanation": "Two distinct source companies are rendered as T&S Communications, so the 7.90% company is lost and its identity is not preserved."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2097826037027811581",
+          "target_locale": "en"
+        },
+        "review": {
+          "case_id": "T5B16FCC6EE87",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": false,
+          "numbers_preserved": false,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "Anthropic研究者の退社",
+              "target_quote": "Anthropic researchers leaving the company",
+              "explanation": "The singular researcher is changed to plural researchers."
+            },
+            {
+              "source_quote": "ポール・クリスティアーノ氏の任命",
+              "target_quote": "Appointment of Paul Cristiano",
+              "explanation": "The person's name is altered in the target."
+            },
+            {
+              "source_quote": "Harvey 調達",
+              "target_quote": "Harvey procurement",
+              "explanation": "In this financial-news list, the target changes the funding item into procurement."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2079575705646465078",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T4889DBD31693",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "you either give the folks that Omni like creature \"WE\" ALL want",
+              "target_quote": "お前はOmniみたいな生き物を「俺たち」全員が望んでるんだ",
+              "explanation": "The target drops the demand that the addressee give the requested unrestricted product."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2096245214495027238",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T63D04F66D8BC",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "DeepSeek V4 Is No Longer Free on B.AI — But Developers Still Have 4 Free Choices",
+              "target_quote": "𝗗𝗲𝗲𝗽𝗦𝗲𝗲𝗸 𝗩𝟰 𝗜𝘀 𝗡𝗼 𝗟𝗼𝗻𝗴𝗲𝗿 𝗙𝗿𝗲𝗲 𝗼𝗻 𝗕.𝗔𝗜 — 𝗕𝘂𝘁 𝗗𝗲𝘃𝗲𝗹𝗼𝗽𝗲𝗿𝘀 𝗦𝘁𝗶𝗹𝗹 𝗛𝗮𝘃𝗲 𝟰 𝗙𝗿𝗲𝗲 𝗖𝗵𝗼𝗶𝗰𝗲𝘀",
+              "explanation": "The Japanese target leaves the headline untranslated."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2092074924420534315",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T01724FC3C3F7",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "THREE POWERFUL AI MODELS. ZERO COST.",
+              "target_quote": "𝗧𝗛𝗥𝗘𝗘 𝗣𝗢𝗪𝗘𝗥𝗙𝗨𝗟 𝗔𝗜 𝗠𝗢𝗗𝗘𝗟𝗦. 𝗭𝗘𝗥𝗢 𝗖𝗢𝗦𝗧.",
+              "explanation": "The target leaves this and the other section headings untranslated in an otherwise Japanese post."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2095737515894313379",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T2A9C0789D39C",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": false,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "more than 10.9 trillion tokens",
+              "target_quote": "100億トークン以上",
+              "explanation": "The target reduces 10.9 trillion tokens to 10 billion tokens."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2087578679018934514",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T2AF1699FD9E0",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "别等“准备好”——准备好的人永远上不了线。",
+              "target_quote": "「準備ができたら」を待つな——準備ができた人間は永遠に公開できない。",
+              "explanation": "The source criticizes waiting until one is ready; the target instead says being ready itself prevents launch."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2092074924420534315",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T3AA0FF66A514",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "THE REAL VALUE IS ACCESS",
+              "target_quote": "𝗧𝗛𝗘 𝗥𝗘𝗔𝗟 𝗩𝗔𝗟𝗨𝗘 𝗜𝗦 𝗔𝗖𝗖𝗘𝗦𝗦",
+              "explanation": "The target leaves the English section headings untranslated."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2095560256164098125",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "TF73BC47882BC",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "Is Qwen 3.9 in 11 days confirmed?",
+              "target_quote": "11日以内にQwen 3.9が確認されたのですか？",
+              "explanation": "The target changes the future confirmation question into a past-tense question about confirmation within 11 days."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2083434397106327981",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "TE16C98D540E1",
+          "fidelity_pass": false,
+          "readability_pass": false,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "做到了真正的智能平权。",
+              "target_quote": "真の智能平权を実現しました。",
+              "explanation": "The key phrase is left as untranslated Chinese rather than conveyed in Japanese."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "incumbent",
+          "post_id": "2087578679018934514",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "TD7196360B5A9",
+          "fidelity_pass": false,
+          "readability_pass": false,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": false,
+          "formatting_issue": false,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "配套干货：闲鱼买二手Cursor/Gemini号降低成本",
+              "target_quote": "配套干货：閑魚で中古Cursor/Geminiアカウントを買ってコスト削減",
+              "explanation": "The lead phrase remains untranslated Chinese in the Japanese target."
+            }
+          ]
+        }
+      },
+      {
+        "source": {
+          "model_arm": "0731",
+          "post_id": "2096881764480561562",
+          "target_locale": "ja"
+        },
+        "review": {
+          "case_id": "T294B0FE27FF2",
+          "fidelity_pass": false,
+          "readability_pass": true,
+          "entities_preserved": true,
+          "numbers_preserved": true,
+          "urls_preserved": true,
+          "negation_polarity_preserved": true,
+          "critical_meaning_inversion": false,
+          "material_omission": true,
+          "formatting_issue": true,
+          "uncertain": false,
+          "notes": [
+            {
+              "source_quote": "（日本語原文）\n\n◎(9/7)。くた・れAI 。AI依存症になるな !",
+              "target_quote": "（井号）\n\n#INPIT #JPlatPat",
+              "explanation": "The complete Japanese-original half of this bilingual source is omitted rather than retained."
+            }
+          ]
+        }
+      }
+    ],
+    "interpretation": "Model-review flags, not human gold; parent adjudication required for ambiguous/unsupported findings."
+  },
+  "parent_confirmed_failures": [
+    {
+      "model": "0731",
+      "post_id": "2096881764480561562",
+      "locales": [
+        "en",
+        "ja"
+      ],
+      "failure": "Bilingual second half omitted; JA also drops source intro URL."
+    },
+    {
+      "model": "0731",
+      "post_id": "2095737515894313379",
+      "locale": "ja",
+      "source": "more than 10.9 trillion tokens",
+      "target": "100億トークン以上",
+      "failure": "10.9 trillion changed to 10 billion."
+    },
+    {
+      "model": "incumbent",
+      "post_id": "2095737515894313379",
+      "locale": "zh-cn",
+      "source": "10.9 Trillion Tokens Later",
+      "target": "109万亿个token之后",
+      "failure": "10.9 trillion changed to 109 trillion in headline."
+    },
+    {
+      "model": "0731",
+      "post_id": "2093192147700977838",
+      "locale": "en",
+      "failure": "English target returned the unchanged Japanese post."
+    }
+  ],
+  "parent_cautions": [
+    "Blind review flags are provisional model judgments, not human gold.",
+    "Two reviewer claims about the ready/launch maxim interpret the source intention instead of its literal wording; the source itself says ready people never launch. Do not count these as proven reversals.",
+    "Japanese researcher plurality is unspecified; do not infer a singular-versus-plural numeric failure. Katakana-only name romanization is uncertain without identity evidence.",
+    "Lexical numeric diffs include CJK adjacency, localized units, word forms and repeats; they are not automatically quantity errors.",
+    "Structural completion and source-copy equality do not establish target-language fidelity."
+  ],
+  "activation_decision": "No translator route/feature activation. Both candidates have confirmed invariant failures; existing U20 quality floors remain unmet.",
+  "targeted_paragraph_probe": {
+    "execution_directory": ".context/u20/paragraph-translation-probe-20260916-195500",
+    "prompt_version": "literal-translation-paragraphs-v3",
+    "requests": {
+      "frozen": 4,
+      "consumed": 4,
+      "received": 4,
+      "errors": 0
+    },
+    "elapsed_seconds": 75.424,
+    "reported_cost_usd": "0.00118770",
+    "input_tokens": 5251,
+    "output_tokens": 4848,
+    "post_failures": 0,
+    "source_copies_exact": 2,
+    "rows": [
+      {
+        "post_id": "2079629240996155513",
+        "source_language": "en",
+        "locale_lines": {
+          "text_en": 47,
+          "text_zh_cn": 47,
+          "text_ja": 47
+        }
+      },
+      {
+        "post_id": "2096881764480561562",
+        "source_language": "zh-Hans",
+        "locale_lines": {
+          "text_en": 130,
+          "text_zh_cn": 87,
+          "text_ja": 87
+        }
+      }
+    ],
+    "parent_verified": "All 24 paragraphs in first post and all 44 paragraphs in bilingual post returned; both repeated halves and all five URL occurrences retained. English bilingual response adds blank lines; paragraph completeness is not exact line-count equality.",
+    "limits": "Targeted development probe, not a full-cohort semantic rescore. Default runtime flag/path unchanged."
+  }
+}

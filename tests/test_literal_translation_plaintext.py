@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from typing import Any
 
@@ -244,3 +245,167 @@ def test_blank_source_fails_without_calling_the_provider():
     assert client.calls == []
     assert row["translation_failed"] is True
     assert row["text_en"] is None
+
+
+def _payload_markers_and_paragraphs(call: dict[str, Any]) -> tuple[list[str], list[str]]:
+    payload = _prompt(call).split("SOURCE:\n", 1)[1]
+    marker_matches = list(re.finditer(r"(?m)^\[\[PW\d+:(?:\d{3}|END)\]\]$", payload))
+    assert marker_matches and marker_matches[0].start() == 0
+    markers = [match.group(0) for match in marker_matches]
+    paragraphs = [
+        payload[match.end() + 1 : marker_matches[index + 1].start() - 1]
+        for index, match in enumerate(marker_matches[:-1])
+    ]
+    return markers, paragraphs
+
+
+def _marked_reply(
+    call: dict[str, Any], translated: list[str], *, final_protocol_newline: bool = False
+) -> str:
+    markers, _ = _payload_markers_and_paragraphs(call)
+    reply = "\n".join(
+        [item for marker, value in zip(markers[:-1], translated) for item in (marker, value)]
+        + [markers[-1]]
+    )
+    return reply + ("\n" if final_protocol_newline else "")
+
+
+def test_paragraph_tracking_preserves_separators_quotes_and_calls_once_per_target():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = '"Quoted" line\n \n\nSecond paragraph\n\n\nThird paragraph'
+    client = PlaintextClient(
+        [TextResponse("placeholder") for _ in range(2)]
+    )
+
+    class MarkingClient(PlaintextClient):
+        def messages_create_text(self, **kwargs: Any) -> TextResponse:
+            self.calls.append(kwargs)
+            _, source_parts = _payload_markers_and_paragraphs(kwargs)
+            return TextResponse(_marked_reply(kwargs, [f"T:{p}" for p in source_parts]))
+
+    client = MarkingClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "paragraphs", "text": source, "lang": "en"}],
+        client,
+        paragraph_tracking=True,
+    )[0]
+    assert row["text_en"] == source
+    assert row["text_zh_cn"] == 'T:"Quoted" line\n \n\nT:Second paragraph\n\n\nT:Third paragraph'
+    assert row["text_ja"] == row["text_zh_cn"]
+    assert len(client.calls) == 2
+    assert all("literal-translation-paragraphs-v3" in _prompt(c) for c in client.calls)
+    assert all("Translate every block independently" in _prompt(c) for c in client.calls)
+    assert all(" -> " not in _prompt(c) for c in client.calls)
+    assert all(c["max_tokens"] <= 8192 for c in client.calls)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda markers: markers[:-1],
+        lambda markers: [markers[0], markers[0], *markers[1:]],
+        lambda markers: [markers[1], markers[0], *markers[2:]],
+        lambda markers: [markers[0], markers[0][:-4] + "999]]", *markers[1:]],
+    ],
+    ids=["missing", "duplicate", "out-of-order", "unknown"],
+)
+def test_paragraph_marker_validation_fails_and_retains_usage(mutation):
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    class BadClient(PlaintextClient):
+        def messages_create_text(self, **kwargs: Any) -> TextResponse:
+            self.calls.append(kwargs)
+            markers, _ = _payload_markers_and_paragraphs(kwargs)
+            bad = mutation(markers)
+            response = "\n".join(
+                [item for index, marker in enumerate(bad[:-1]) for item in (marker, f"translated-{index}")]
+                + [bad[-1]]
+            )
+            return TextResponse(response, {"input_tokens": 7, "output_tokens": 3})
+
+    client = BadClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "bad-markers", "text": "one\n\ntwo", "lang": "en"}],
+        client,
+        paragraph_tracking=True,
+    )[0]
+    assert len(client.calls) == 2
+    assert row["translation_failed"] is True
+    assert row["text_zh_cn"] is None and row["text_ja"] is None
+    assert row["input_tokens"] == 14
+    assert row["output_tokens"] == 6
+
+
+def test_paragraph_markers_avoid_source_collision_and_native_copy_is_exact():
+    from x_monitor.literal_translation import (
+        _paragraph_protocol,
+        translate_batch_literal_plaintext,
+    )
+
+    source = "contains [[PW0:001]] and [[PW1:END]] and a quote: `x`\n\nsecond"
+    markers, payload, _ = _paragraph_protocol(source, "zh-Hans")
+    assert all(marker not in source for marker in markers)
+    assert all(marker in payload for marker in markers)
+    assert markers[0].startswith("[[PW2:")
+    assert all(8 <= len(marker) <= 12 for marker in markers)
+
+    class CollisionClient(PlaintextClient):
+        def messages_create_text(self, **kwargs: Any) -> TextResponse:
+            self.calls.append(kwargs)
+            return TextResponse(
+                _marked_reply(kwargs, ["保留 [[PW0:001]] 和 [[PW1:END]]", "第二"])
+            )
+
+    client = CollisionClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "native-paragraph", "text": source, "lang": "en"}],
+        client,
+        paragraph_tracking=True,
+    )[0]
+    assert row["text_en"] == source
+    assert len(client.calls) == 2
+    assert "[[PW0:001]]" in row["text_zh_cn"]
+    assert "[[PW1:END]]" in row["text_zh_cn"]
+
+
+def test_paragraph_tracking_restores_blank_boundaries_and_keeps_raw_output_whitespace():
+    from x_monitor.literal_translation import (
+        _paragraph_protocol,
+        translate_batch_literal_plaintext,
+    )
+
+    source = "\n \n\n\tfirst  \n \n\n second\t\n\n \n"
+    _, _, separators = _paragraph_protocol(source, "zh-Hans")
+
+    class WhitespaceClient(PlaintextClient):
+        def messages_create_text(self, **kwargs: Any) -> TextResponse:
+            self.calls.append(kwargs)
+            return TextResponse(
+                _marked_reply(kwargs, ["  第一  ", "\t第二\t"], final_protocol_newline=True)
+            )
+
+    client = WhitespaceClient([])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "boundaries", "text": source, "lang": "en"}],
+        client,
+        paragraph_tracking=True,
+    )[0]
+    expected = separators[0] + "  第一  " + separators[1] + "\t第二\t" + separators[2]
+    assert row["text_zh_cn"] == expected
+    assert row["text_ja"] == expected
+    assert row["text_en"] == source
+
+
+def test_paragraph_tracking_keeps_single_paragraph_on_original_raw_protocol():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([TextResponse("zh"), TextResponse("ja")])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "single", "text": '\n\n"quoted" single line\n\n', "lang": "en"}],
+        client,
+        paragraph_tracking=True,
+    )[0]
+    assert len(client.calls) == 2
+    assert all("literal-translation-paragraphs-v3" not in _prompt(call) for call in client.calls)
+    assert row["text_zh_cn"] == "zh"

@@ -1,0 +1,79 @@
+{
+  "schema": "u20-comparison-summary/v1",
+  "runs": {
+    "0731_translation": {
+      "source_report": ".context/u20/translation-synthesis-execute-20260916-v2/arms/0731/translation/report.json",
+      "complete_rows": 45,
+      "elapsed_seconds": 794.116,
+      "provider_attempts": 3,
+      "output_tokens": 46796,
+      "reported_cost_usd": "0.00868044",
+      "reported_cost_complete": true,
+      "direct_estimated_cost_usd": null,
+      "errors": []
+    },
+    "incumbent_translation": {
+      "source_report": ".context/u20/translation-synthesis-execute-20260916-v3/arms/incumbent/translation/report.json",
+      "complete_rows": 45,
+      "elapsed_seconds": 194.049,
+      "provider_attempts": 3,
+      "output_tokens": 48011,
+      "reported_cost_usd": null,
+      "reported_cost_complete": false,
+      "direct_estimated_cost_usd": "0.057892152",
+      "errors": []
+    },
+    "0731_synthesis": {
+      "source_report": ".context/u20/translation-synthesis-execute-20260916-v3/arms/0731/synthesis/report.json",
+      "complete_rows": 40,
+      "elapsed_seconds": 728.942,
+      "provider_attempts": 45,
+      "output_tokens": 26017,
+      "reported_cost_usd": "0.00605142",
+      "reported_cost_complete": false,
+      "direct_estimated_cost_usd": null,
+      "errors": [
+        {
+          "type": "OpenRouterPermanentError",
+          "message": "openrouter_response_content_invalid",
+          "latency_ms": 23026
+        },
+        {
+          "type": "OpenRouterRetryableError",
+          "message": "openrouter_http_status_429",
+          "latency_ms": 314
+        },
+        {
+          "type": "OpenRouterRetryableError",
+          "message": "openrouter_http_status_429",
+          "latency_ms": 246
+        },
+        {
+          "type": "OpenRouterPermanentError",
+          "message": "openrouter_response_content_invalid",
+          "latency_ms": 11837
+        },
+        {
+          "type": "OpenRouterPermanentError",
+          "message": "openrouter_response_content_invalid",
+          "latency_ms": 25667
+        }
+      ]
+    },
+    "incumbent_synthesis": {
+      "source_report": ".context/u20/translation-synthesis-execute-20260916-v3/arms/incumbent/synthesis/report.json",
+      "complete_rows": 45,
+      "elapsed_seconds": 178.021,
+      "provider_attempts": 45,
+      "output_tokens": 28764,
+      "reported_cost_usd": null,
+      "reported_cost_complete": false,
+      "direct_estimated_cost_usd": "0.037266684",
+      "errors": []
+    }
+  },
+  "direct_pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "direct_estimate_basis": "Peak: uncached input $0.30/M, cache-read $0.006/M, output $1.20/M; direct API does not provide a billed-cost field. OpenRouter reported input includes cache tokens; direct input_tokens excludes cache-read tokens.",
+  "evaluation": "Consumed development cohort; unblinded diagnostics, no activation decision.",
+  "activation_authorized": false
+}

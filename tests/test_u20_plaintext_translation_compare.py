@@ -173,3 +173,25 @@ def test_execute_refuses_unverified_price_preflight():
         harness.require_price_preflight("0731", {"cost_gate_ready": False})
     with pytest.raises(ValueError, match="incumbent price preflight"):
         harness.require_price_preflight("incumbent", {"retrieval": "unverified"})
+
+
+def test_prepare_targeted_paragraph_probe_freezes_only_selected_source_rows(tmp_path, monkeypatch):
+    source = tmp_path / "input-contract.json"
+    _input_contract(source)
+    data = json.loads(source.read_text())
+    data["rows"][0]["text"] = "First paragraph.\n\nRepeated paragraph.\n\nRepeated paragraph."
+    data["rows_sha256"] = harness.digest(data["rows"])
+    source.write_text(json.dumps(data))
+    monkeypatch.setattr(harness, "INPUT_CONTRACT", source)
+    directory = tmp_path / "targeted"
+    contract = harness.prepare(directory, paragraph_tracking=True, post_ids=["en-0"])
+    assert contract["limits"]["calls_per_arm"] == 2
+    assert contract["paragraph_tracking"] is True
+    assert contract["literal_translation_prompt_version"] == "literal-translation-paragraphs-v3"
+    assert [r["post_id"] for r in contract["rows"]] == ["en-0"]
+    loaded, requests = harness.load_execution(directory)
+    assert loaded == contract
+    assert all(len(values) == 2 for values in requests.values())
+    assert "Repeated paragraph." in requests["0731"][0]["messages"][0]["content"]
+    with pytest.raises(ValueError, match="selection"):
+        harness.prepare(tmp_path / "unknown", post_ids=["missing"])

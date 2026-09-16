@@ -45,6 +45,7 @@ except ModuleNotFoundError as exc:
     )
 from x_monitor.literal_translation import (
     LITERAL_TRANSLATION_PROMPT_VERSION,
+    PARAGRAPH_TRANSLATION_PROMPT_VERSION,
     translate_batch_literal_plaintext,
 )
 from x_monitor.provider_telemetry import ProviderTextResponse
@@ -162,22 +163,26 @@ def caller_config(model_arm: str) -> Any:
 class CaptureTextClient:
     """Provider-free recorder that exposes the selected-route sampler shape."""
 
-    def __init__(self, model_arm: str) -> None:
+    def __init__(self, model_arm: str, *, paragraph_tracking: bool = False) -> None:
+        self.paragraph_tracking = paragraph_tracking
         self.request_profile = ARMS[model_arm]["request_profile"]
         self.requests: list[dict[str, Any]] = []
 
     def messages_create_text(self, **kwargs: Any) -> ProviderTextResponse:
         self.requests.append(dict(kwargs))
-        return ProviderTextResponse("captured literal text", provider_usage={})
+        content = kwargs["messages"][0]["content"]
+        text = content.split("SOURCE:\n", 1)[1] if self.paragraph_tracking else "captured literal text"
+        return ProviderTextResponse(text, provider_usage={})
 
 
-def capture_requests(rows: list[dict[str, Any]], model_arm: str) -> list[dict[str, Any]]:
+def capture_requests(rows: list[dict[str, Any]], model_arm: str, *, paragraph_tracking: bool = False) -> list[dict[str, Any]]:
     """Capture all requests from the production plaintext caller, offline."""
     if model_arm not in ARMS:
         raise ValueError("unknown model arm")
-    client = CaptureTextClient(model_arm)
+    client = CaptureTextClient(model_arm, paragraph_tracking=paragraph_tracking)
     output = translate_batch_literal_plaintext(
-        translation_inputs(rows), client, cfg=caller_config(model_arm), max_workers=1
+        translation_inputs(rows), client, cfg=caller_config(model_arm), max_workers=1,
+        paragraph_tracking=paragraph_tracking
     )
     if len(output) != len(rows) or any(row.get("translation_failed") for row in output):
         raise ValueError("provider-free caller capture failed")
@@ -208,15 +213,28 @@ def request_bounds(requests: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def prepare(directory: Path) -> dict[str, Any]:
+def select_rows(rows: list[dict[str, Any]], post_ids: list[str] | None) -> list[dict[str, Any]]:
+    if post_ids is None:
+        return rows
+    if not post_ids or len(set(post_ids)) != len(post_ids) or not set(post_ids).issubset({r["post_id"] for r in rows}):
+        raise ValueError("invalid source post selection")
+    return [row for row in rows if row["post_id"] in post_ids]
+
+
+def prompt_version(paragraph_tracking: bool) -> str:
+    return PARAGRAPH_TRANSLATION_PROMPT_VERSION if paragraph_tracking else LITERAL_TRANSLATION_PROMPT_VERSION
+
+
+def prepare(directory: Path, *, paragraph_tracking: bool = False, post_ids: list[str] | None = None) -> dict[str, Any]:
     """Create one immutable, provider-free execution contract."""
     if directory.exists():
         raise ValueError("run directory exists; refusing to overwrite frozen artifacts")
     source_contract, rows = load_frozen_rows()
-    requests = {model_arm: capture_requests(rows, model_arm) for model_arm in ARMS}
+    rows = select_rows(rows, post_ids)
+    requests = {model_arm: capture_requests(rows, model_arm, paragraph_tracking=paragraph_tracking) for model_arm in ARMS}
     for model_arm, values in requests.items():
-        if len(values) != 90:
-            raise ValueError(f"{model_arm} caller capture must contain exactly 90 requests")
+        if len(values) != 2 * len(rows):
+            raise ValueError(f"{model_arm} caller capture must contain exactly two requests per source")
         if model_arm == "0731" and any(
             request.get("temperature") != 1.0
             or request.get("top_p") != 1.0
@@ -245,12 +263,14 @@ def prepare(directory: Path) -> dict[str, Any]:
             "source_sha256": source_contract.get("source_sha256"),
         },
         "implementation_sha256": source_hashes(),
-        "literal_translation_prompt_version": LITERAL_TRANSLATION_PROMPT_VERSION,
+        "literal_translation_prompt_version": prompt_version(paragraph_tracking),
+        "paragraph_tracking": paragraph_tracking,
+        "selected_post_ids": post_ids,
         "routes": ARMS,
         "requests_sha256": {model_arm: digest(values) for model_arm, values in requests.items()},
         "bounds": bounds,
         "limits": {
-            "calls_per_arm": 90,
+            "calls_per_arm": 2 * len(rows),
             "maximum_concurrency_within_arm": 1,
             "maximum_output_tokens_per_request": 8_192,
             "socket_idle_timeout_seconds": SOCKET_IDLE_TIMEOUT_SECONDS,
@@ -279,11 +299,12 @@ def load_execution(
     if sha(INPUT_CONTRACT) != contract.get("input_contract_sha256"):
         raise ValueError("frozen input contract changed after prepare")
     _source, rows = load_frozen_rows()
+    rows = select_rows(rows, contract.get("selected_post_ids"))
     if digest(rows) != contract.get("rows_sha256") or contract.get("rows") != rows:
         raise ValueError("frozen source rows changed after prepare")
     if source_hashes() != contract.get("implementation_sha256"):
         raise ValueError("plaintext caller or harness source changed after prepare")
-    if contract.get("literal_translation_prompt_version") != LITERAL_TRANSLATION_PROMPT_VERSION:
+    if contract.get("literal_translation_prompt_version") != prompt_version(contract.get("paragraph_tracking", False)):
         raise ValueError("literal translation prompt version changed after prepare")
     if set(requests) != set(ARMS):
         raise ValueError("frozen model arms changed")
@@ -516,6 +537,7 @@ def run_arm(directory: Path, model_arm: str) -> dict[str, Any]:
             transport,
             cfg=caller_config(model_arm),
             max_workers=1,
+            paragraph_tracking=contract.get("paragraph_tracking", False),
         )
         copies = source_copy_evidence(contract["rows"], output)
         errors = [item for item in transport.measurements if item["status"] in {"error", "rejected"}]
@@ -561,11 +583,13 @@ def main() -> None:
     commands = parser.add_subparsers(dest="action", required=True)
     prepare_parser = commands.add_parser("prepare")
     prepare_parser.add_argument("directory", type=Path)
+    prepare_parser.add_argument("--paragraph-tracking", action="store_true")
+    prepare_parser.add_argument("--post-id", action="append", dest="post_ids")
     execute_parser = commands.add_parser("execute")
     execute_parser.add_argument("directory", type=Path)
     execute_parser.add_argument("--model-arm", choices=tuple(ARMS), required=True)
     args = parser.parse_args()
-    result = prepare(args.directory) if args.action == "prepare" else run_arm(args.directory, args.model_arm)
+    result = prepare(args.directory, paragraph_tracking=args.paragraph_tracking, post_ids=args.post_ids) if args.action == "prepare" else run_arm(args.directory, args.model_arm)
     print(
         json.dumps(
             {

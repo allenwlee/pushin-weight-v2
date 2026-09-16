@@ -3,7 +3,7 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-15
+amended: 2026-09-16
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -12,7 +12,7 @@ ollija:
   change_id: feat-ai-enrichment-stage1-2026-09-08-134925
   branch: feat/ai-enrichment-stage1
   workflow: lfg
-  delivery_target: production
+  delivery_target: staging
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -41,7 +41,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `production`
+- Delivery target: `staging`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -52,13 +52,6 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1` without `--force`.
-    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -158,6 +151,120 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     costs against R98+R100. This authorizes only the private evaluation and
     feature-branch artifacts; runtime activation, database publication, and
     staging/production deployment remain prohibited.
+21. On September 15 the owner clarified that DeepSeek V4.1 Flash is the
+    incumbent and the objective is approximately ten times lower LLM cost
+    per inference, under $150/month across all LLM operations; TwitterAPI
+    and hosting are outside this budget. The owner authorized testing
+    Mistral NeMo first, then Ling 3.0 Flash. R104 reuses R101's frozen full
+    primary prompt, public packets, 20/20/5 batches, parser, and sole owner
+    reference; the saved R101 primary is the Flash control. Each alternative
+    gets one small route/JSON smoke and three primary requests, with no
+    retry, repair, fallback, or secondary classifier. Routes are
+    `mistralai/mistral-nemo` on `dekallm/fp8` and
+    `inclusionai/ling-3.0-flash` on `novita`; Novita omits its unsupported
+    JSON-format API parameter but retains the same JSON prompt and parser.
+    Freeze exact requests and prices in
+    `.context/u18/low-cost-single-primary-r104-v1/contract.json` before calls:
+    concurrency one, at most eight transports, 64 smoke output tokens,
+    6,000 output tokens per benchmark request, 180-second timeout, zero
+    reasoning tokens, and $0.006311319 total conservative reservation under
+    a $0.10 refusal ceiling. Preserve raw responses before parsing. Measure
+    billed cost per completed post-brand row, including failed attempts,
+    plus one-time smoke overhead, peak/off-peak Flash comparison, regular
+    Ling pricing, and OpenRouter fees. Keep the original quality floors;
+    independently valid rows from an invalid batch are diagnostic only.
+    This authorizes offline experiments and their evidence, not activation
+    or deployment. The fresh 45-post packet is not scored before owner
+    answers exist and creates no additional mandatory human-review gate.
+22. On September 15 the owner authorized a bounded NeMo adaptation trial
+    after the unchanged-prompt R104 comparison. R105 keeps the same 45 ordered
+    public posts, stored context, current-v3 definitions, owner reference,
+    and saved R101 DeepSeek primary control. Compare schema-only enforcement,
+    a shorter equivalent prompt with compact identifiers/output, five-post
+    batches, temperature 0.3 versus 0, and the same NeMo model on DeepInfra
+    versus DekaLLM. Reserve a six-post singleton diagnostic if five-post
+    batches remain invalid. Freeze the request matrix before paid inference;
+    maximum 30 transports, one in flight, no automatic retries, repairs,
+    provider fallbacks, or extra classifier/judge calls; 180-second request
+    timeout, 35-minute transport-loop limit, and $0.10 total conservative
+    reservation ceiling. Recheck each endpoint's price, supported parameters,
+    and data policy. Preserve raw usage before parsing; report strict batch
+    validity separately from individually valid diagnostic rows and semantic
+    agreement, with missing rows wrong on every exact-agreement axis.
+    Schema constraints and compact identity reconstruction cannot supply
+    missing semantic labels. No owner answers enter model requests; the
+    unreviewed fresh 45 remain excluded. All changes are experiment scripts,
+    tests, and evidence in this existing checkout, with no Git, deployment,
+    production configuration, or database mutation. The completed owner
+    review remains the sole human review; this is development-set tuning,
+    not a claim of unseen accuracy or a waiver of the quality/cost gates.
+23. On September 15 the owner requested GPT-5.6 Sol as a frontier classifier
+    test and asked whether reasoning effort matters. R106 compares `low`
+    with `xhigh` on the same frozen 45 reviewed posts, full R101 primary
+    prompt, strict response schema, and 20/20/5 batches. Pin
+    `openai/gpt-5.6-sol` to OpenRouter's standard `openai` endpoint and verify
+    its advertised dated response alias. Omit unsupported temperature and
+    explicit reasoning-disable flags; request the effort natively and retain
+    billed reasoning-token counts. Each of six maximum sequential requests
+    receives 28,000 total completion tokens (reasoning plus final output),
+    a 300-second timeout, zero retries/repairs/fallbacks/tools, and a frozen
+    aggregate reservation below $2.50 including 5.5% fee sensitivity.
+    The current endpoint advertises 50%-discounted rates of $2/$10 per
+    million input/output tokens; record normal-price and cache-normalized
+    sensitivities separately. Reuse the existing OpenRouter secret and
+    approved public-post transport policy; owner answer sheets stay local.
+    The standard OpenAI provider declares no training but may retain prompts,
+    as already recorded for the R98 OpenAI trial; do not claim zero retention.
+    Freeze request/source identities and provider receipts before calls.
+    Score format coverage and all existing axes/quality floors separately;
+    a frontier result does not waive the tenfold savings goal or authorize
+    production activation. This authorizes only evaluation scripts, checks,
+    and evidence in the existing feature checkout, with no Git, database,
+    staging, or production mutation and no additional human-review gate.
+
+24. On September 16 the owner selected cloud-hosted DeepSeek V4 Flash 0731 as
+    the default classifier model and the two-role, two-call design as the
+    planned runtime method. Pin OpenRouter model
+    `deepseek/deepseek-v4-flash-0731` to DeepInfra FP8 with provider fallback
+    disabled, reasoning disabled, the tested fixed-slot JSON contract, and a
+    20-post runtime batch default. For each batch, dispatch the independent
+    content and brand-interpretation calls concurrently when capacity permits,
+    then assemble their disjoint fields deterministically; do not add a third
+    semantic call, reviewer, judge, repair, or automatic model fallback. The
+    owner also locked the next semantic revision: rename current-write
+    `results_evaluations` to `results_analysis` through versioned compatibility;
+    keep `research_explanations` technical and product-focused; keep
+    `news_reporting` broad; widen `business_finance` to company-value signals
+    relevant to a financial analyst; and persist the identity and matched
+    account, when available, of every detected untracked promoted brand through
+    `BrandDiscoveryCandidate` evidence. This supersedes the earlier open model
+    selection and the deferred-identity clause in R94. Historical model runs,
+    taxonomy keys, and scores retain their recorded meaning. Selection does not
+    waive the revised prompt/schema acceptance fixtures, cost instrumentation,
+    staging proof, or exact-SHA production gates.
+
+25. Later on September 16 the owner broadened the third Geopolitical mode from
+    `nationalistic_stance` to `nationalism`. For this project, nationalism does
+    not require a claim of national superiority. It means that the author
+    adopts an evaluative sentiment toward a nation, national system, or national
+    group, or extends/rationalizes an evaluation of a company, product, or group
+    through its national origin. Mere mention, attributed reporting, and a
+    neutral causal framework do not qualify. A non-`none` China or U.S. national
+    stance requires `nationalism`; when `nationalism` is absent from an assessed
+    classified row, both country stances must be `none`. `framework` and
+    `nationalism` may coexist. The reviewed N03 case is the explicit boundary:
+    it is `framework + nationalism`, China `pro`, and U.S. `none` because the
+    author positively evaluates Chinese AI as a national ecosystem without
+    declaring China morally or categorically superior. Preserve earlier
+    `nationalistic_stance` packets and results under their recorded identity.
+26. On September 16 the owner changed this LFG run's delivery target to
+    staging. Complete U18–U23 so staging is as close as the approved candidate
+    can be to the intended production system, including the selected two-role
+    classifier and each bounded, gated lane. U24 production promotion is
+    excluded from this run and requires new explicit owner authority. This
+    supersedes prior production-delivery authorization only for the current
+    run; it does not relax any quality, cost, migration, provider, staging, or
+    exact-SHA gate.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -169,23 +276,29 @@ The completed owner review also defines a separately versioned next taxonomy:
 `news_reporting`, seven changeable Audience Topics, the `investigate_claim`
 product label,
 and one Geopolitical family that distinguishes reporting, state-level frameworks,
-and author-adopted nationalistic stances. Frozen-corpus prevalence supports each
+and author-adopted nationalism. Frozen-corpus prevalence supports each
 of those additions. Repeated b.ai/Qwen-clip promotion and official-account false
 spam flags will be handled through source-aware promotion rules rather than new
 post types.
 
-The classifier experiment splits the work into two focused calls that run
-in parallel on the same configured batch. R98 measured 20/20/5 batches; the
-completed R99 diagnostic measured 40/5 batches with the output budget scaled
-to 8,000 tokens for the 40-row requests. One call classifies content:
-post types, Audience Topics, and Untracked Brand Promotions. The other judges
-product labels, sentiment, and Geopolitical or national stance for each brand.
-Each field has one owner, and code combines the two valid responses. The
-owner-authorized R100 diagnostic now tests an optional third call on broadly
-screened posts to recover missing jobs, personnel changes, events, and
-opportunities. It reuses R98's saved answers and measures the additional cost
-and false additions. It does not assume that splitting the work guarantees
-better labels or doubles cost.
+The same revision renames current-write `results_evaluations` to
+`results_analysis` while preserving old rows under their recorded taxonomy
+version. `research_explanations` covers technical product/model/system
+knowledge; broad company reporting remains `news_reporting`; and
+`business_finance` covers company-value signals such as competition, strategy,
+organization structure, strategic hiring, key personnel, financing, and capital
+allocation. Every detected untracked promotion also creates or links a
+reviewable brand candidate with visible identity evidence and an exact matched
+account when one is available.
+
+The classifier uses cloud-hosted DeepSeek V4 Flash 0731 through OpenRouter's
+pinned DeepInfra FP8 endpoint. Each batch uses two focused calls: content owns
+post types, Audience Topics, Untracked Brand Promotions, and the promoted
+candidate identity; brand interpretation owns product labels, sentiment,
+Geopolitical modes, and national stance. The independent calls may run in
+parallel, and code combines their disjoint fields only after both validate.
+The runtime default remains 20 posts per batch. There is no routine third call,
+reviewer, judge, semantic repair, or provider fallback.
 
 The trial must improve agreement with the completed owner review and satisfy
 fixed spending and processing-time limits before becoming the delivery
@@ -195,16 +308,13 @@ retain the last good result. Prior single-call and reviewer runs remain
 historical evidence. Replacing a proven portion with a small dedicated
 classifier is deferred so training and new model hosting do not block delivery.
 
-The first OpenRouter comparison tested a small Qwen, a free Gemma, and a large
-Qwen; all three failed complete-pair coverage, so none was selected. The
-separately frozen follow-up then ran the existing direct DeepSeek classifier as
-a control plus four preapproved OpenRouter alternatives. DeepSeek completed all
-45 rows but failed the unchanged semantic gates, while none of the alternatives
-produced a passing complete result. No classifier was selected. SetFit remains
-a later option for replacing a proven task with a trained small classifier. A
-final DeepSeek-only diagnostic now tests the production-scaled 40-post batch
-shape using 40/5 batches and an 8,000-token ceiling while preserving the same
-prompts, model, parser, merge, and quality gates.
+The model bakeoffs remain historical development evidence. The owner selected
+cloud V4 Flash 0731 after reviewing the direct, OpenRouter, frontier, and local
+results. Local MXFP4 is not the runtime candidate. SetFit remains a later option
+for replacing a proven task with a trained small classifier; it does not block
+this delivery. Remaining classifier work now concerns the revised taxonomy,
+prompt boundaries, candidate-identity persistence, acceptance fixtures, and
+staging behavior rather than another model-selection ladder.
 
 Every classifier dimension remains strict to the attributed brand. A
 multi-brand post may therefore have different post types, product labels,
@@ -244,7 +354,10 @@ Repeated mentions of an event will attach as evidence to one canonical occurrenc
 - **Authority:** This plan's Product Contract owns the complete Stage 1 product semantics carried from the owner-selected ideation. `docs/plans/2026-09-08-194415-feat-staged-ai-enrichment-roadmap-plan.md` owns the staged roadmap, and `docs/reference/2026-09-08-194415-enrichment-contracts.md` owns Stage 0 telemetry invariants and receives the bounded durable Stage 1 taxonomy excerpt in U1.
 - **Execution profile:** U1–U17 are implemented through provider-denied local proof and the taxonomy-v3 staging receipt. U18 closes the current-v3 owner-reference and cost gates. U18A implements the separately versioned Audience Topics, news-reporting, claim, Geopolitical, and source-aware refinement. U19 implements Stage 2 headline demand. U20 implements Stage 3 split translation/synthesis and Japanese parity. U21–U22 implement Stage 4 durable demand and feed behavior. U23 refreshes, activates, and debugs staging. U24 promotes and observes the unchanged passing candidate in production.
 - **Stop conditions:** Stop if a migration changes original provenance, rewrites v2 combined rows, requires historical model inference, invents dates/application routes/brand authority, bypasses `CycleRunner`, hides relevant pending posts, couples page rendering to a provider response, allows speculative work to grow without a bound, blends approximate and exact populations, or exceeds a preregistered provider/credit/token cap.
-- **Tail ownership:** The parent LFG workflow owns the complete implementation, reviews, commits, exact-SHA staging and production delivery, bounded activation, monitoring, and guarded final worktree cleanup.
+- **Tail ownership:** The parent LFG workflow owns implementation, reviews,
+  commits, exact-SHA staging delivery, bounded activation, and monitoring.
+  Production delivery and final worktree cleanup remain outside this run until
+  the owner supplies new explicit authority.
 
 ## Product Contract
 
@@ -311,7 +424,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
 
 - R27. After U12 supplies the evaluator and freezes the exact ten-type taxonomy-v2 assessment protocol and prompt identity, add taxonomy `stage1-taxonomy-v3` and prompt `stage1-prompt-v4` with thirteen post types. Replace the combined v2 key `events_opportunities` with separate `events` / Events and `opportunities` / Opportunities keys, and add `job_listings` / Job Listings plus `personnel_changes` / Personnel Changes. This is a semantic split plus two additions, not an identifier alias migration; taxonomy-v2 rows retain their combined key and provenance.
 - R28. `job_listings` requires a concrete role or vacancy plus an actionable application route, including a direct or careers-page URL, email, source-stated QR code, or explicit direct-message instruction. A role list in one source post may produce several listings. General recruiting-brand promotion, workplace culture, employee spotlights, unnamed employers, unverified job-board claims, unrelated jobs carrying AI hashtags, and vague “we are growing” claims do not qualify. Preserve an unresolved or truncated route instead of inventing a URL.
-- R29. `personnel_changes` covers a named person joining, leaving, or explicitly describing a before/after employment transition involving a known or discovered AI lab or brand. The author may be the official brand, staff member, named person, or a third party; account role and handle mentions are evidence features rather than hard gates. A first-person statement such as “I worked at Google DeepMind and now at Anthropic” qualifies even when it is offered as background and gives no effective date. A mere static biography, employee spotlight, quote, or reference to an unchanged position does not qualify.
+- R29. `personnel_changes` covers a named person joining, leaving, or explicitly describing a before/after employment transition involving a known or discovered AI lab or brand. It also covers a formally announced appointment or start/end/change of an adviser, ambassador, executive, or research role, including employment and internships. The author may be the official brand, staff member, named person, or a third party; account role and handle mentions are evidence features rather than hard gates. A first-person statement such as “I worked at Google DeepMind and now at Anthropic” qualifies even when it is offered as background and gives no effective date. A static biography, unchanged affiliation, generic program mention, employee spotlight, quote, or reference to an unchanged position does not qualify.
 - R30. Seed EN, ZH-CN, and JA labels for the four v3-only keys: `events` = `Events` / `活动` / `イベント`; `opportunities` = `Opportunities` / `机会` / `機会`; `job_listings` = `Job Listings` / `招聘信息` / `求人情報`; and `personnel_changes` = `Personnel Changes` / `人事变动` / `人事異動`. Retain the existing taxonomy-v2 `events_opportunities` labels and original provenance for stored v2 rows. Historical reclassification into the new types requires separate authorization.
 - R31. Add ten distinct durable layers: `AccountProfileSnapshot` captures observed source facts; `PersonBrandAffiliation` stores an interpreted person-to-organization relationship owned by either a known brand or a pending organization candidate; `PersonBrandAffiliationEvidence` explains why that interpretation exists; `BrandDiscoveryCandidate` holds a reviewable organization/handle found outside the tracked catalog; `JobListing` stores one public role or requisition; `JobListingEvidence` links that listing to one or more source posts, URLs, or media observations; `JobDiscoveryRun` and `PersonnelDiscoveryRun` record bounded query executions for their separate lanes; `Event` stores an attendance-bearing occurrence; and `Opportunity` stores a bounded action-for-benefit offer. A profile observation, employment claim, organization candidate, job opening, source observation, search run, event, and opportunity are never represented by the same row.
 - R32. Use `Person` / `people` with a stable UUID primary key, canonical display-name fields, nullable `date_of_birth`, `date_of_birth_precision` (`day`, `month`, `year`, `unknown`), the owner-selected `sexs` field, `nationality`, `ethnicity`, and `primary_language`. Store `date_of_birth` as a reduced-precision ISO value whose shape matches its precision (`YYYY-MM-DD`, `YYYY-MM`, or `YYYY`) so partial dates never require a fabricated month or day; null represents unknown. Preserve the stored text for `sexs`, nationality, ethnicity, and primary language without forcing a closed vocabulary in this stage. Use `PersonAccount` / `people_accounts` as a pure person-account junction whose Django field is `account = ForeignKey(Account, to_field="author_id", db_column="author_id")`; its database identity is composite `(person_id, author_id)`, while Django exposes the FK value as `account_id`. Store `is_primary`, first/last-observed timestamps, confidence, and resolution/review status. Enforce at most one confirmed person for an account and at most one primary account per person; conflicting candidate links remain explicit, unconfirmed review records rather than silent merges.
@@ -320,7 +433,7 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - R34. Use `PersonBrandAffiliationEvidence` / `people_brand_affiliation_evidence` with a surrogate primary key, required affiliation FK, nullable source-post and source-profile-snapshot FKs, optional source URL, bounded evidence text, observed timestamp, extracted claim data, extraction method/model/prompt version, confidence, review metadata, evidence hash, and creation timestamp. A database check requires at least one of `source_post_id`, `source_profile_snapshot_id`, or a nonblank validated `source_url`; a URL alone qualifies as a durable source. Service validation rejects a reference that cannot be resolved or normalized. Use the full model name in code and `evidence` / `affiliation` related names; `PBAE` is documentation shorthand only.
 - R35. Use `AccountProfileSnapshot` / `account_profile_snapshots` with a surrogate primary key, account FK, profile hash, first/last-observed timestamps, observation count, first source kind/post/run, handle, display name, description, extended profile-bio text, location, profile image, verification fields, and normalized X business-affiliate-label facts: affiliate target username/URL, label description, badge image URL, label type, and display type. Preserve explicit `present_fields`, normalized `profile_data`, the raw profile payload, and recorded timestamp. Create a new row only when the latest profile hash changes; otherwise advance the observation window and count. A sequence A → B → A creates three rows. Backfill and live writers must distinguish absent fields from explicit nulls. Badge metadata is deterministic organization evidence but does not alone prove legal employment; retain it separately from a bio mention and relationship interpretation.
 - R35A. Reconcile rather than conflate Call A and `brands_accounts`. A dated 2026-09-10 production check found 62 active Call A accounts, 42 with a database brand-role edge, and 20 missing one; the MiniMax subset included list-only `@olive_jy_song` and `@RenLeanna`, while reviewed staff `@VictorSuOrtiz` was not active on the list. The implementation reports current drift afresh, maps person-controlled list accounts to reviewable staff candidates and brand-controlled accounts to official candidates, and never interprets list removal as a departure or demotes a reviewed database edge automatically.
-- R36. Use `BrandDiscoveryCandidate` / `brand_discovery_candidates` for a non-authoritative organization found outside the tracked catalog. Store its observed name, aliases, candidate handles, organization-AI relationship, source post/query identities, confidence, verification status, reviewer facts, and nullable reviewed-to `Brand` FK. A qualifying listing or personnel claim may reference either a known brand or a discovery candidate while retaining the observed organization text; third-party evidence never silently creates or updates an authoritative `Brand`, `Company`, or account relationship.
+- R36. Use `BrandDiscoveryCandidate` / `brand_discovery_candidates` for a non-authoritative organization found outside the tracked catalog. Store its observed name, aliases, candidate handles, domains, products, hashtags, organization-AI relationship, first/last-seen timestamps, occurrence count, confidence, verification status, reviewer facts, and nullable reviewed-to `Brand` FK. Add `UntrackedBrandPromotionEvidence` / `untracked_brand_promotion_evidence` to join a source post and one candidate, with nullable exact-matched `Account` FK, observed name/handle/domain/product, exact evidence text, resolver method/version, confidence, review state, and deterministic evidence identity. Promotion keys remain once per post rather than being copied onto each candidate. A qualifying promotion, listing, or personnel claim may reference either a known brand or a discovery candidate while retaining the observed organization text; third-party evidence never silently creates or updates an authoritative `Brand`, `Company`, or account relationship.
 - R36A. Use `JobListing` / `job_listings` with a surrogate primary key, nullable reviewed brand FK, nullable brand-discovery-candidate FK, and required observed hiring-organization name. Store source/ATS name and listing ID, canonical and application URLs, application route kind (`direct_url`, `careers_page`, `email`, `qr`, `direct_message`, `other`, `unresolved`), application contact and resolution status, title, HTML/plain descriptions, department, team, job function, seniority, employment type, workplace type, original and structured locations, remote-applicant restrictions, original salary text, minimum/maximum, currency and period, posted/updated/first-seen/last-seen/expiry/closed timestamps, listing status, campaign-level openings separately from per-role openings, skills, responsibilities, qualifications, education/experience requirements, benefits, eligibility, source language, organization-AI relationship, role-AI relationship, deterministic listing identity, content hash, extraction version/confidence, and raw payload. Deadline, location, workplace type, openings, and direct URL remain nullable because the source may not state them. Permit partial rows from social announcements and later enrichment from a canonical applicant-tracking-system page without erasing the original source. Prefer `(source, source_listing_id)`, then canonical URL, then a normalized organization/role/location/application identity; enforce the chosen role-level identity against concurrent duplicate writes.
 - R36B. Use `JobListingEvidence` / `job_listing_evidence` with a surrogate primary key, required listing FK, nullable source-post FK, optional source URL, observed author handle/display name, source relationship (`official`, `staff`, `third_party`), bounded evidence text, linked URLs, observed timestamp, optional media URL/hash, extraction method (`structured_text`, `ocr`, `vision`, `manual`), image-derived field names, confidence, raw/truncated evidence, extraction identity, and evidence hash. Require at least one resolvable post, URL, or media source. One source post may support many role rows and one listing may retain several source observations, including a parent/reply pair or later ATS enrichment.
 - R37. Observation timestamps bound what PushinWeight saw; they never become employment start/end dates or job-posted dates unless the source explicitly states those facts. Unknown, year-only, and month-only dates remain distinguishable. “Now at Anthropic” produces current employment with a null start date and unknown precision plus an exact evidence observation time; “worked at Google DeepMind” produces former employment with null start/end dates and unknown precision. The MCP/API exposes `employment_history` as the subset of affiliations whose `affiliation_type` is `employment`, while retaining broader affiliations separately and exposing jobs under `job_listings` with employer-facing names such as `hiring_organization`.
@@ -450,21 +563,35 @@ The production classifier asks for six post types, sentiment, discourse, and two
   judged independently for the current attributed brand. A field supported
   only for another brand in the same post cannot transfer through co-mention,
   comparison, authorship, or shared context. A comparison may still support
-  `results_evaluations` or `opinions_reactions` for every brand that the claim
+  version-appropriate `results_evaluations`/`results_analysis` or
+  `opinions_reactions` for every brand that the claim
   actually evaluates; this does not make a comparison foil the subject of the
   other brand's release or advertising campaign. In a post from an account
   with a reviewed DeepSeek affiliation that says “DSV4 performed better than
   MiniMax; subscribe here,” DeepSeek may receive
-  `advertising_marketing`, `results_evaluations`, and
-  `opinions_reactions`, while MiniMax may receive `results_evaluations` and
+  `advertising_marketing`, `results_analysis`, and
+  `opinions_reactions`, while MiniMax may receive `results_analysis` and
   `opinions_reactions` but not `advertising_marketing`. Sentiment and
   nationalism follow the same attributed-brand evidence boundary.
-  `results_evaluations` requires source-visible product performance or quality
+  Current-write `results_analysis` requires source-visible product performance or quality
   evidence; generic praise, admiration, customer value, or unavailable linked
-  media cannot supply it. `business_finance` is limited to company, business,
-  or investor perspective, so customer affordability, cloud-billing,
-  electricity-cost, subscription-cost, or usage-expense comments alone do not
-  qualify. Testimonial is judged strictly for the current attributed brand,
+  media cannot supply it. It is the versioned successor to historical
+  `results_evaluations`; old rows keep their stored key and readers expose the
+  shared concept without rewriting them. `research_explanations` is limited to
+  technical product/model/system knowledge: how a product works, is trained,
+  evaluated, deployed, or used, including architecture, inference, developer
+  workflows, and technical research. Company resource allocation, hiring or
+  organization design, capital strategy, and competitive positioning do not
+  qualify merely because they concern an AI company. `business_finance` covers
+  brand-specific company-value signals relevant to a financial analyst:
+  financing, investment, ownership, valuation, revenue, monetization, capital
+  expenditure or allocation, partnerships, market and industry competition,
+  company-level product strategy, organization structure, broad strategic
+  hiring, and C-suite or key research appointments. Routine product usage,
+  ordinary hiring, customer affordability, cloud billing, electricity cost,
+  subscription cost, or usage expense alone do not qualify. `news_reporting`
+  remains the broad reporting form and may overlap any supported company,
+  product, personnel, research, or finance subject. Testimonial is judged strictly for the current attributed brand,
   includes clear admiration of that brand's product achievement, and may
   coexist with advertising, usage, results, or opinion types. Praise for an
   event participant or another product/organization does not transfer to the
@@ -497,7 +624,8 @@ The production classifier asks for six post types, sentiment, discourse, and two
   deletion.
 - R85. Do not add or persist a `use_case` product label. Define the versioned
   derived segment `product_evidence/v1` as a current recognized post-brand
-  classification containing `results_evaluations` and not containing the
+  classification containing the versioned results concept
+  (`results_evaluations` in v3 or `results_analysis` in v4) and not containing the
   `ideas_requests` product label. Define its narrower
   `observed_use_cases/v1` subset by additionally requiring
   `hands_on_usage`. Compute both through the shared canonical read/query layer;
@@ -527,9 +655,11 @@ The production classifier asks for six post types, sentiment, discourse, and two
   final judgment provenance; adding or retiring a concept changes the manifest
   and prompt identity rather than database shape.
 - R88. Add `news_reporting` as the fourteenth post type in the next semantic
-  taxonomy revision. It primarily relays a current development, sourced report,
-  announcement, or news roundup and may coexist with release, business,
-  research, result, or opinion types. A first-party product announcement alone
+  taxonomy revision. It primarily relays a development, sourced report,
+  announcement, or news roundup about a company, product, personnel, financing,
+  technical subject, or industry matter and may coexist with release, business,
+  research, result, or opinion types. It is intentionally broad; the narrower
+  labels describe the subject or lens. A first-party product announcement alone
   is not third-party reporting. Keep `releases_updates` limited to a concrete
   release, feature, integration, availability, or pricing change involving the
   attributed brand so product-specific update filters remain exact.
@@ -572,20 +702,24 @@ The production classifier asks for six post types, sentiment, discourse, and two
 - R92. Replace the future-facing Nationalism taxonomy with one versioned
   **Geopolitical** family. Store per-post-brand `geopolitical_modes` as a
   multi-label set containing zero or more of `reporting`, `framework`, and
-  `nationalistic_stance`; zero modes means assessed non-geopolitical, while a
+  `nationalism`; zero modes means assessed non-geopolitical, while a
   pre-v4 row has unavailable mode coverage. `reporting` attributes a
   geopolitical claim or stance without adopting it. `framework` explains or
   predicts relationships among states, policy, markets, security, or national
   systems, including instrumental claims that one strategy is more effective.
-  `nationalistic_stance` requires the author to assign broader moral, civic,
-  cultural, or systemic superiority or inferiority to a state or national
-  group. Modes may coexist. Add correctly named
+  `nationalism` means the author adopts evaluative sentiment toward a nation,
+  national system, or national group, or characterizes/evaluates a company,
+  product, person, or group through national origin. It does not require a
+  superiority claim. Mere national mention, attributed sentiment, or neutral
+  causal analysis does not qualify. Modes may coexist. Add correctly named
   `china_national_stance`/`us_national_stance` current-state fields plus
   `national_stance_keys`/`national_stance_labels`; retain the existing
   six-value direction/intensity vocabulary. During the compatibility window,
   copy v3 current-state values exactly and dual-read/write without changing
   their historical meaning. New v4 judgments populate non-`none` national
-  stance only from author-adopted nationalistic stance. Preserve the old
+  stance only when `nationalism` is present. If `nationalism` is absent from an
+  assessed classified row, both country stances must be `none`; one country may
+  remain `none` when only the other is evaluated. Preserve the old
   current-state and discourse `china_nationalism`/`us_nationalism` fields and
   `nationalism_*` tables as compatibility state; never infer a geopolitical
   mode from them or silently rewrite old discourse rows. Remove those old
@@ -606,8 +740,9 @@ The production classifier asks for six post types, sentiment, discourse, and two
   rows: a MiniMax mention inside a promotion posted by an account with reviewed
   DeepSeek affiliation is a post with a MiniMax association, a DeepSeek
   `advertising_marketing` signal, and that account-brand relationship. A strict DeepSeek-versus-
-  MiniMax evaluation filter requires both brand associations plus
-  `results_evaluations`; a broader exploratory filter may include
+  MiniMax evaluation filter requires both brand associations plus the
+  versioned results concept (`results_evaluations` in v3 or `results_analysis`
+  in v4); a broader exploratory filter may include
   `opinions_reactions`. Do not add a communicative-role, `external_party`, or
   cross-brand label family for this requirement.
 - R94. Replace the user-facing and current-write `unsanctioned` family with
@@ -619,16 +754,21 @@ The production classifier asks for six post types, sentiment, discourse, and two
   meaning instead of silently converting them to the narrower recurrence-based
   `spam`. Store the new family once per post. Find every mentioned tracked brand
   by joining that post through `posts_brands`, then join
-  `posts_brands_signals` only when its classifications are also needed. Do not yet
-  persist the untracked brand's identity, aliases, handles, domains, products,
-  hashtags, or account relationships. Defer a normalized
-  `brand_discovery_candidate_tokens` vocabulary, candidate-account join,
-  deterministic handle/domain/name resolver, recurrence ranking, and reviewed
-  promotion into `brand_search_terms`, `brand_keywords`, `brand_hashtags`, and
-  `brands_accounts`. The deferred resolver must prioritize exact account ID or
+  `posts_brands_signals` only when its classifications are also needed. Every
+  nonempty current-write promotion result must also return at least one bounded
+  promoted-subject identity from visible evidence. Persist that identity through
+  R36 as a `BrandDiscoveryCandidate` plus source-post evidence, including a
+  nullable exact-matched account when the observed handle/account resolves.
+  Store aliases, handles, domains, products, hashtags, evidence spans, first/last
+  seen, and recurrence without silently creating a tracked brand. Tests and
+  evaluation artifacts use the same identity-bearing contract; a promotion flag
+  without a persisted subject fails validation. The resolver prioritizes exact account ID or
   handle, then exact domain, then name plus handle/domain co-occurrence, then a
   reviewed distinctive alias; product-only, generic, acronym, and fuzzy matches
-  remain reviewable evidence and never auto-merge candidates.
+  remain reviewable evidence and never auto-merge candidates. After review, a
+  resolved candidate may seed `brand_search_terms`, `brand_keywords`,
+  `brand_hashtags`, and `brands_accounts` through a separately authorized
+  workflow; recurrence alone never promotes it into the tracked catalog.
 - R94A. Apply one explicit activation policy to every new U18A family without
   reopening the closed human review. Each family must pass 100% of its
   owner-directed positive, negative, overlap, and target-brand boundary
@@ -812,6 +952,39 @@ The production classifier asks for six post types, sentiment, discourse, and two
   possible with zero positives in this cohort. Preserve original R98 cost and
   timing from `adaptive-result.json`; its replayed candidate file contains
   unchanged labels but zeroed replay cost/latency and must not price the base.
+- R107. Use cloud-hosted DeepSeek V4 Flash 0731 as the selected classifier for
+  this delivery. Pin OpenRouter model `deepseek/deepseek-v4-flash-0731` to
+  provider `deepinfra/fp8`, disable provider fallback and reasoning, and retain
+  the tested temperature `1.0`, top-p `1.0`, seed `42`, fixed post/brand slots,
+  plain JSON instructions, and deterministic representation-only
+  normalization. Keep 20 source posts as the runtime batch default. Each batch
+  makes exactly two initial semantic requests: the R95 content role and brand
+  interpretation role. They may run concurrently under the shared transport
+  semaphore and merge only after both validate. Do not route live work to the
+  local MXFP4 checkpoint, the moving V4.1 alias, an automatic OpenRouter
+  fallback, a third specialist/reviewer call, or a different model for one
+  role. Record model, provider, quantization, request settings, prompt/role,
+  input, and merge identities plus billed usage, latency, and request ID.
+- R108. Give the selected 0731 prompts and schema a new semantic identity that
+  pins the owner-reviewed L45 boundaries. Required positive fixtures include:
+  favorable company language such as “star AI company” as positive sentiment;
+  concrete reported security testing as `hands_on_usage`; four-days-versus-two-
+  years and explicit usage-cost comparisons as `results_analysis`; a scheduled
+  winners livestream as `events`; the associated bounded contest as
+  `opportunities`; and anti-China plus constructive-critical-U.S. stance when
+  the author warns against Chinese ideological influence and criticizes U.S.
+  restraint. A detailed reproducible technical workflow may be both
+  `hands_on_usage` and `research_explanations`, while company resource
+  allocation, organizational structure, strategic hiring, and competitive
+  positioning are excluded from `research_explanations` and may receive
+  `news_reporting` plus `business_finance`. A named product or service with a
+  favorable feature description and source-visible link may be an Untracked
+  Brand Promotion without a sales CTA. Astorie/Sider/Stella V/PokePay fixtures
+  must preserve the target-brand boundary; a tracked comparison foil never
+  inherits the untracked subject's advertising. The PokePay giveaway receives
+  post-level `crypto` and `unauthorized`, while DeepSeek receives no advertising
+  from being a poll option. Every positive untracked-promotion fixture persists
+  the promoted candidate identity and exact-matched account when available.
 
 #### Current v3 compatibility labels
 
@@ -857,6 +1030,9 @@ name is historical compatibility and does not name the future U18A family.
 - **Discourse is removed while sentiment and the v3 nationalism compatibility fields remain; U18A replaces the future-facing taxonomy with Geopolitical modes and national stance.** Governs R5, R6, R11, R14, R92. (session-settled: user-directed — the current-v3 evidence stays readable while the next semantic revision uses the owner-selected name and boundaries.)
 - **Classification and needed translation remain universal.** Governs R9, R12, R15. (session-settled: user-directed — chosen over classifying only synthesized or product-labeled posts because discovery and charts require all posts.)
 - **Stages validate separately and promote together.** Governs R18, R58, R76. (session-settled: user-directed — the owner superseded the earlier separate-production sequence so the full roadmap is debugged as one integrated staging candidate before production.)
+- **Cloud DeepSeek V4 Flash 0731 with two disjoint role calls is the selected classifier.** Governs R95–R96 and R107–R108. (session-settled: user-directed — model selection is closed for this delivery; remaining work fixes the prompt, schema, persistence, and acceptance boundaries on the pinned DeepInfra FP8 route.)
+- **News is broad, research is technical/product-focused, and business/finance serves the company-value lens.** Governs R83, R88, and R108. (session-settled: user-directed — reporting form may overlap the narrower subject/lens labels, while company strategy and organization facts do not become technical research explanations.)
+- **Every untracked-brand promotion persists its promoted subject as a reviewable brand candidate.** Governs R36, R94, and R108. (session-settled: user-directed — recurrence and account matches must remain queryable even before the candidate is accepted into the tracked catalog.)
 - **Five identifiers change without changing their meanings.** Governs R1, R3, R19, R22, R25. (session-settled: user-directed — chosen to make the machine keys match the approved reader labels without reopening semantic classification.)
 - **Japanese taxonomy labels land first, then full Japanese parity completes in Stage 3.** Governs R20, R66–R69. (session-settled: user-directed — Japanese is equivalent to EN and ZH-CN throughout the completed product.)
 - **Historical analysis always names its population and policy.** Governs R21–R24, R26. (session-settled: user-directed — chosen over publication-date inference or blended totals because the three populations have different provenance and precision.)
@@ -935,6 +1111,14 @@ name is historical compatibility and does not name the future U18A family.
   price, data policy, source hash, or cap before the affected transport. Direct
   DeepSeek responses retain safe request/model/usage attestation; no secret or
   raw post appears in the durable report.
+- AE50. Covers R92. The reviewed N03 post may receive `framework` and
+  `nationalism` together with China `pro` and U.S. `none`: its positive
+  evaluation of Chinese AI is generalized through the national ecosystem even
+  though it does not claim categorical Chinese superiority. A neutral strategic
+  explanation receives `framework` without `nationalism` and therefore stores
+  both country stances as `none`. A prompt response, persisted row, or review
+  export with a non-`none` China/U.S. stance but no `nationalism` fails
+  validation rather than being silently accepted.
 
 ### Scope Boundaries
 
@@ -1072,9 +1256,10 @@ name is historical compatibility and does not name the future U18A family.
 - KTD44. **Use one Geopolitical family with a small multi-label mode set.** The
   narrow frozen-corpus framework screen found 0.91% of branded posts and 68.4%
   had no historical country stance; the broad screen found 5.07% and 80.0% had
-  no stance. Store `reporting`, `framework`, and `nationalistic_stance` as
-  independently selectable modes and keep China/U.S. national direction only
-  for an author-adopted stance. This replaces the earlier separate
+  no stance. Store `reporting`, `framework`, and `nationalism` as independently
+  selectable modes. `nationalism` covers adopted nation-directed evaluation or
+  national-origin attribution without requiring superiority; any non-`none`
+  China/U.S. direction requires it. This replaces the earlier separate
   `geopolitics_state` Audience Topic and Nationalism family without fabricating
   modes for historical rows. Lexical prevalence selects the shadow candidate;
   only the bounded prompt/cost/error comparison in U18A can activate it.
@@ -1108,7 +1293,20 @@ name is historical compatibility and does not name the future U18A family.
   two-role trial establishes which labels are dependable and what each role
   costs, a separately budgeted experiment may replace one role with a pretrained
   multi-label model such as GLiClass or SetFit's multilingual Sentence Transformer
-  plus a trained multi-label head. SetFit is an explicit candidate after the
+  plus a trained multi-label head. **Owner-selected teacher transport:** use
+  Sol through OpenRouter with application-controlled API messages for labeling.
+  Do not generate teacher labels through Codex sessions/subagents or the
+  ChatGPT subscription; the owner wants to avoid additional agent instructions
+  and session context. The owner permits switching this labeling route to the
+  direct OpenAI API if verified total cost is lower for equivalent model,
+  prompt, evidence, reasoning, schema, and output settings. Compare applicable
+  discounts, funding fees, cache reads/writes, billed reasoning/output, and
+  batch pricing where its turnaround fits the labeling job. Record the price
+  evidence and route/model identity, validate adapter equivalence, and retain
+  separate provenance for each route; do not silently change the model or
+  combine results from different configurations. This transport choice leaves
+  the existing training scope and execution budget unchanged.
+  SetFit is an explicit candidate after the
   OpenRouter trial: it can predict labels without a generative provider call,
   but requires training and measured serving cost. Inventory positive/negative
   support per label and language first, include target-brand and source-role
@@ -1135,16 +1333,17 @@ name is historical compatibility and does not name the future U18A family.
   the three model configurations and evaluation artifacts from live defaults.
   Use the common JSON-object mode described in U18 and deterministic validation;
   provider-enforced schema support is recorded separately from semantic quality.
-- KTD50. **Preserve completed topology experiments; R100 is the explicit
-  owner-authorized exception.** The superseded
+- KTD50. **Preserve completed topology experiments; the R107 runtime has no
+  conditional third call.** The superseded
   single-call, primary/reviewer, exhaustive-verdict, and selector experiments
   remain historical evidence only. R95–R99 defined the two-role classifier
   architecture evaluated for this delivery: R97 and R98 are immutable failed
-  evidence. R99 is also immutable failed evidence. The subsequent owner
-  instruction authorizes R100's separately frozen third conditional call in
-  this same shared plan. Do not expand R100 into voting, another model ladder,
-  repeated tuning runs, or a fourth call. The new classifier lane remains
-  disabled until every full activation gate passes.
+  evidence. R99 is also immutable failed evidence. R100's separately frozen
+  third conditional call remains historical diagnostic evidence. Delivery
+  Exception 24 selects the R107 two-role, two-call runtime and excludes that
+  third call. Do not expand R100 into voting, another model ladder, repeated
+  tuning runs, or a fourth call. The selected classifier lane remains disabled
+  until every full activation gate passes.
 - KTD51. **Use direct DeepSeek as the control and stop the fallback ladder as
   soon as selection is decided.** The first comparison lacked a live run of the
   already-configured classifier and therefore could not show whether the new
@@ -1180,6 +1379,22 @@ name is historical compatibility and does not name the future U18A family.
   repair wrong base labels, context outcomes, sentiment, or nationalism. The
   model-alias change is an explicit confounder; a positive result cannot prove
   that sequence alone caused the improvement or establish production accuracy.
+- KTD55. **Close model selection on the pinned cloud 0731 route.** The DeepInfra
+  FP8 endpoint produced structurally complete fixed-slot two-role results at a
+  materially lower measured price than the incumbent V4.1 Flash and frontier
+  Sol runs. The owner selected it after reviewing cloud, local, and alternative
+  model evidence. Preserve those experiments as development evidence, but do
+  not reopen a fallback ladder or substitute the local MXFP4 checkpoint. Improve
+  behavior through the newly versioned prompt/schema and explicit acceptance
+  fixtures on the selected route.
+- KTD56. **Persist promotion subjects separately from post-level promotion
+  keys.** The five promotion keys describe the post as a whole and remain
+  queryable through its tracked-brand joins. `BrandDiscoveryCandidate` plus
+  `UntrackedBrandPromotionEvidence` records which outside organization/product
+  was promoted, the visible identity tokens, and an exact matched account when
+  available. This permits recurrence ranking and later catalog review without
+  misrepresenting `general`, `spam`, `scam`, `crypto`, or `unauthorized` as a
+  property of a tracked brand or silently creating an authoritative brand.
 
 ### High-Level Technical Design
 
@@ -1652,12 +1867,12 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   1. Add `Person` / `people` with UUID PK, canonical display-name fields, and the R32 nullable birth-date/precision, `sexs`, nationality, ethnicity, and primary-language fields; add `PersonAccount` / `people_accounts` with composite person/account identity and resolution metadata.
   2. Add `AccountProfileSnapshot` / `account_profile_snapshots` with the R35 observed-profile fields, normalized X business-affiliate-label facts, and hash-compression contract.
   3. Add `PersonBrandAffiliation` / `people_brand_affiliations` with the R33 recruiter-ready employment and community relationship types and `PersonBrandAffiliationEvidence` / `people_brand_affiliation_evidence` with the R34 source contract. Preserve the R33A role-resolution confidence, review state, source kind, and conflict state rather than forcing unknown mentions into staff or community.
-  4. Add `BrandDiscoveryCandidate` / `brand_discovery_candidates` with the R36 review-state and observed-identity fields. Audit and seed distinct organization-facing brands and company edges required by R54, including Anthropic and Google DeepMind; a candidate may resolve to a brand after review, but discovery never auto-creates or mutates authoritative organization records.
+  4. Add `BrandDiscoveryCandidate` / `brand_discovery_candidates` and `UntrackedBrandPromotionEvidence` / `untracked_brand_promotion_evidence` with the R36 review-state, observed-identity, recurrence, source-post, and nullable exact-account-match fields. Audit and seed distinct organization-facing brands and company edges required by R54, including Anthropic and Google DeepMind; a candidate may resolve to a brand after review, but discovery never auto-creates or mutates authoritative organization records.
   5. Add `JobListing` / `job_listings` and `JobListingEvidence` / `job_listing_evidence` with the R36A–R36B identity, organization, role, application-route, lifecycle, provenance, media, and extraction fields. Deduplicate listings at the role/requisition level while retaining many evidence rows and the shared source post for a multi-role announcement.
   6. Extend existing `SearchQuery` rows with versioned job/personnel-lane identity where needed; add `JobDiscoveryRun` / `job_discovery_runs` with the R51 per-query execution contract and `PersonnelDiscoveryRun` / `personnel_discovery_runs` with the R56 equivalent personnel counts, provenance, cost, and stop-reason fields.
   7. Add `Event` / `events` and `Opportunity` / `opportunities` with R45–R46 fields and an optional opportunity-to-event link; store source-stated times/statuses and derive lifecycle during reads.
   8. Use `CASCADE` for owned account/person junctions, `PROTECT` for reviewed evidence-bearing entities, and `SET_NULL` for optional source posts so deleting a source wrapper cannot erase a durable reviewed fact. Add database constraints for the R32 confirmed/primary person-account rules and birth-date/precision shape, R34/R36B source-reference invariants, known-brand-or-candidate listing ownership, deterministic affiliation/listing/event/opportunity and run/query/window identities, observed/effective date order where comparable, allowed status/type/precision/application-route values, positive opening counts, nonnegative counters/costs, and coherent salary ranges; use service validation only where PostgreSQL cannot express normalization or partial-date rules.
-- **Test scenarios:** Fresh and upgrade migrations preserve every existing row; exact, month-only, and year-only birth dates round-trip with matching precision while unknown remains null; `sexs`, nationality, ethnicity, and primary language preserve supplied values; one person can have several accounts and repeated employment, ambassador, or creator-partner roles at one brand; two concurrent confirmed-person or primary-account claims cannot violate R32; conflicting person/account, role, or organization identity enters review rather than silent merge; evidence accepts each valid post/URL/media/profile source form and rejects all-null or blank references; full X affiliate-label facts round-trip independently of verification; one post can support 23 distinct role identities without becoming 23 source posts; one listing can retain several evidence sources; partial listings allow unknown deadline/location/workplace/openings and QR/email routes; duplicate job/personnel-discovery execution identities converge while distinct bounded windows remain separate; repeated affiliation/listing/event/opportunity writes converge while legitimate repeats remain separate; invalid birth-date/precision, date, salary, status, or counter combinations fail.
+- **Test scenarios:** Fresh and upgrade migrations preserve every existing row; exact, month-only, and year-only birth dates round-trip with matching precision while unknown remains null; `sexs`, nationality, ethnicity, and primary language preserve supplied values; one person can have several accounts and repeated employment, ambassador, or creator-partner roles at one brand; two concurrent confirmed-person or primary-account claims cannot violate R32; conflicting person/account, role, or organization identity enters review rather than silent merge; evidence accepts each valid post/URL/media/profile source form and rejects all-null or blank references; promotion evidence requires one source post, one candidate, visible identity/evidence, and permits only an exact account match; repeated observations converge while advancing candidate recurrence; the same post may link several promoted candidates without copying post-level promotion keys; full X affiliate-label facts round-trip independently of verification; one post can support 23 distinct role identities without becoming 23 source posts; one listing can retain several evidence sources; partial listings allow unknown deadline/location/workplace/openings and QR/email routes; duplicate job/personnel-discovery execution identities converge while distinct bounded windows remain separate; repeated affiliation/listing/event/opportunity writes converge while legitimate repeats remain separate; invalid birth-date/precision, date, salary, status, or counter combinations fail.
 - **Verification:** `makemigrations --check --dry-run`, forward migration, model checks, constraints, deletion behavior, and fresh/upgrade PostgreSQL tests pass with no rewrite of `accounts`, `posts`, or existing classification rows.
 
 ### U15. Build compressed profile capture and historical discovery
@@ -1712,17 +1927,45 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
 
 ### U18. Complete the owner-reference quality and cost gates
 
-- **Goal:** Preserve the completed R97–R100 comparisons, including R100's
-  six recovered rare labels and one false addition. No classifier is selected
-  while the unchanged full quality and regression gates fail; keep the new
-  live lane disabled.
-- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R101; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD54.
-- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exceptions 15–19 define the bounded architecture/model experiments; R97, R98, and R99 remain terminal failed evidence. R100 purchases only the conditional third calls using saved R98 base answers.
+- **Goal:** Preserve the completed R97–R106 comparisons and implement the
+  owner-selected cloud DeepSeek V4 Flash 0731 two-role classifier with
+  consistent input evidence, label definitions, candidate identity, and
+  encoded owner decisions. Preserve all activation and delivery requirements.
+- **Current execution order, September 16:** Model selection is closed by
+  Delivery Exception 24. Apply the shared corrections and R108 boundaries to a
+  newly versioned content/brand prompt pair, add promotion-candidate identity
+  persistence, run provider-free call-chain/schema tests, then run only the
+  bounded selected-model acceptance needed for U18A and staging. R97–R106 and
+  the numbered experimental steps below remain historical execution evidence,
+  not instructions to restart model or topology bakeoffs.
+- **Owner review material:** The owner reviewed the
+  [fresh 45-post packet](../analysis/2026-09-15-121342-u18-fresh-45-review-packet.md).
+  Keep L45-01 through L45-45 in their existing order, distinct from the original
+  45-case development reference. Reserve these posts and known duplicate/thread
+  groups from teacher-label generation for training, student training, examples
+  in prompts, and threshold tuning. Freeze shared prompt corrections using the
+  already accepted rules and original development cases, without using the new
+  answers to tune the candidate. Sol receives source/context and reviewed
+  author-brand facts, never owner answers, selection rationales, prior model
+  judgments, or expected labels. The owner's supplied L45 comments become
+  explicit prompt/acceptance fixtures under R108; blank fields remain unreviewed
+  and never become negative labels. Record any later use for tuning as
+  consumption of the test set rather than continuing to call it unseen evaluation.
+  Score reviewed fields only: blank means unreviewed, not a negative or `none`;
+  missing candidate output on a reviewed field remains a failure. Keep optional
+  proposed-taxonomy notes separate from current-v3 scores unless a matching
+  versioned contract is explicitly included. Report rare-label support and the
+  actual source-language slices (32 en, 4 ja, 4 zh, 2 es, 1 pt, 1 fr, 1 tr).
+  This deliberately difficult selection is not a population-accuracy sample.
+  Preserve the packet, selection manifest, owner answers, and every model output
+  as separate versioned artifacts.
+- **Requirements:** R16–R17, R40, R48–R59, R81–R86, R95–R100, and R107–R108; KTD14, KTD18–KTD22, KTD24, KTD37–KTD39, KTD47–KTD56.
+- **Dependencies:** U12 evaluator and U17 implementation; the verified September 10 dump; the completed ordered owner reference under R86; exact prompt/model/provider-role identities. U12A is superseded and is not executed. Delivery Exception 24 selects the model/topology; R97–R106 remain immutable development evidence.
 - **Files:** `x_monitor/attribution.py`, `x_monitor/reattribute.py` provider selection and the existing provider-client module, `monitor/cycle.py`, `core/classification_contract.py`, existing classification artifact/state models and migrations only if needed for role provenance, `docs/reference/classifier-prompts.md`; versioned floor/budget/ownership/model-configuration JSON under `docs/analysis/` or `docs/reference/`; ignored source/context and candidate packets; existing classification/discovery/extraction evaluators and commands; focused prompt/parser/real-caller/publication/evaluator/provider-adapter tests; dated durable reports; this plan's execution state.
 - **Approach:**
   1. Preserve the completed taxonomy-v2 baseline, historical v18–v27 reviewer experiments, and any captured single-call results under their original identities. Under Delivery Exception 13 the ordered 45-case owner reference is the sole completed human review. No independent reviewer, new adjudicator, agreement study, or later human cohort is required.
   2. Reuse the frozen source/context packets and keep current-v3 evaluation distinct from new U18A semantics. The verified dump may be read through an access-restricted disposable local PostgreSQL database for existing discovery/prevalence needs; never serve it through the application. Retain hash/provenance controls and source-post versus extracted-role denominators.
-  3. Implement content and brand-interpretation envelopes with one explicit owner per field and one common input/brand/affiliation fingerprint. Use current v3 vocabularies for this trial, concise role-specific definitions, and the explicit KTD49 OpenRouter adapter. Within each of the three candidate runs use the same model for both roles. Neither role consumes the other's predictions. R83 visible-evidence and target-brand rules remain mandatory.
+  3. Implement content and brand-interpretation envelopes with one explicit owner per field and one common input/brand/affiliation fingerprint. Use the R107 pinned OpenRouter/DeepInfra 0731 route and the newly versioned R83/R108 definitions for both roles. Neither role consumes the other's predictions. The content envelope also returns bounded untracked-promotion subject identities for R36/R94 persistence.
   4. Run the roles concurrently through the shared limiter, then assemble their disjoint fields by stable IDs and validate the full current contract. Preserve role artifacts and composite prompt/model/merge provenance. Extend `PostBrandClassificationJudgment` with distinct `content` and `brand_interpretation` stages and give each new assembled `final` row explicit self-FK links to exactly one matching judgment from each role. Historical primary/review/final lineage remains readable. Database nullability/shape checks plus publisher validation enforce matching post, brand, source fingerprint, role revision, and merge revision; a final row cannot point to a role from another classification identity. Publish complete matching pairs atomically; retain last-good state and normal pending handling for incomplete or invalid pairs. Replace the existing uncommitted single-call migration with this role-aware shape; do not ship both call topologies as active competing defaults.
   5. Preserve the frozen R97 budget and terminal report. For R98, complete the
      provider-free adaptive-runner regression net and use the same conservative
@@ -1762,7 +2005,7 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   an existing run marker prevents repeat spend. The focused suite includes
   17 new tests, the existing 29 two-role pilot tests, and 36 Ollija checks.
 - **Regression net:** Drive the actual cycle-to-classifier caller with fake transports and PostgreSQL publication where applicable. Prove two initial logical calls for 20 posts and four for 21, all attributed brands present, no call for an empty batch, real parallel execution when capacity permits, a shared maximum of three concurrent transports across batches/retries, and zero reviewer/topic-only/consensus/semantic-repair/per-post-fallback calls. Reject wrong-role fields, missing/duplicate IDs, mismatched source or role revisions, and incompatible `context_missing` combinations. Exercise sibling failure, exact-identity later reuse, source/affiliation invalidation, race/stale-writer fencing, all-or-nothing publication per post, last-good preservation, role telemetry, and pair-budget refusal before the first call.
-- **Semantic test scenarios:** Preserve the R83 boundaries for generic praise versus results, customer cost versus investor-oriented business/finance, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathons. Both roles receive the reviewed DeepSeek account's relationship in the DeepSeek/MiniMax advertising-foil fixture. A favorable endorsement can retain both content labels and an independently supported testimonial. Job/personnel discovery support, 18-post/55-listing denominators, unknown dates, source provenance, safe event occurrence matching, and no silent brand creation remain required. Missing candidate rows remain coverage failures and cannot be removed from the denominator.
+- **Semantic test scenarios:** Preserve the R83/R108 boundaries for generic praise versus results, technical product explanation versus company-value analysis, customer cost versus analyst-oriented business/finance, broad news overlap, advertising-plus-testimonial overlap, unavailable media, ambiguous valence, and retrospective hackathons. Both roles receive the reviewed DeepSeek account's relationship in the DeepSeek/MiniMax advertising-foil fixture. A favorable endorsement can retain both content labels and an independently supported testimonial. Untracked-promotion fixtures persist the promoted candidate identity and exact-matched account when available without transferring advertising to a tracked foil. Job/personnel discovery support, 18-post/55-listing denominators, unknown dates, source provenance, safe event occurrence matching, and no silent authoritative brand creation remain required. Missing candidate rows remain coverage failures and cannot be removed from the denominator.
 - **Verification:** Retain the immutable taxonomy-v2 baseline and the valid,
   ordered, explicitly unblinded 45-row owner reference with
   `complete_by_owner_acceptance`, `waived_by_owner`, `human_grounded=false`,
@@ -1770,12 +2013,130 @@ at U6; they do not rewrite U1–U5 receipts or treat those units as v2 proof.
   three-model failed report. Record the exact commands and passing counts for
   the focused real-caller/parser/publication/evaluator/adapter suites including
   AE48–AE49, R98 and R99 frozen budget and output hashes, the direct control result,
-  each attempted fallback result, skipped-candidate reasons, and final
-  selection or no-selection decision. R98's three batches per candidate and
+  each attempted fallback result, skipped-candidate reasons, and the owner's
+  R107 selection decision. R98's three batches per candidate and
   R99's two batches provide only pilot latency observations. A failed quality/economics/capacity
-  gate prevents classifier activation and promotion. U18A begins only after the
+  gate prevents classifier activation and promotion without reopening the
+  selected model or adding a fallback ladder; return to the failing
+  prompt/schema/persistence boundary. U18A begins only after the
   current-v3 gate passes; U19/U23 activation and U24 production retain their
   independent gates.
+
+#### Shared classifier corrections from R106 — applicable to every model
+
+The owner requested inspection of Sol's extra assignments, then explicitly
+directed that the prompt learnings be incorporated independently of model
+selection. The full evidence is
+[Sol extra-label review](../analysis/2026-09-15-143001-u18-sol-extra-label-review.md)
+and its [machine-readable packet](../analysis/2026-09-15-143001-u18-sol-extra-label-review.json).
+There are 31 affected posts and 64 distinct post/axis/extra-label assignments
+across the low/xhigh runs. The export preserves original case order, full
+source/context, all six axes, both outputs, and tentative agent commentary.
+An extra means absent from the frozen reference; it is not automatically a
+proven model error or an approved new reference label.
+
+1. **One evidence envelope for every execution shape.** Preserve reviewed
+   per-target-brand author relationships through the actual primary and role
+   callers, not merely in the stored evaluation packet. The current
+   `scripts/u18_single_primary_conditional_pilot.py:primary_input` delegates to
+   `x_monitor/attribution.py:_stage1_payload`, which omits the affiliations
+   already present in four of these 45 packets. Include known/unknown state
+   explicitly; absence is not evidence of non-affiliation. Include the
+   relationship and available context provenance in the input fingerprint.
+   Carry the official-self-praise exclusion into the common semantic prompt,
+   not only the two-role brand prompt. A source relationship never creates a
+   job, event, personnel change, promotion, or positive stance by itself.
+2. **Separate author stance from quoted facts.** Define, by axis, how the
+   main post, local parent, stored quotation, and unavailable media can
+   contribute. Attributed factual background may support content labels when
+   it concerns the target brand; the quotation's praise, criticism, or
+   nationalism is not automatically the posting author's adopted stance.
+   Use only known provenance; do not invent a quotation's author or assume
+   it is the same author. The main post's explicit job/request/announcement
+   must be evaluated independently even when quoted context is much longer.
+   Decide the background-content boundary explicitly before accepting all
+   quote-derived secondary labels. Do not fetch media or add an LLM pass as
+   an implicit remedy.
+3. **Pair every label's inclusion rule with its boundary.** Retain independent
+   overlapping labels, including complaint plus testimonial when different
+   products of the same target brand receive opposite judgments. Enforce
+   target-brand scope independently for each label. A measured generation
+   speed can be results/evaluations even when the post's main argument is
+   about something else. A comparison foil cannot inherit another brand's
+   testimonial, advertisement, request, or sentiment. Clarify whether a
+   source-stated compatibility outcome, historical billing defect, resolved
+   workflow mismatch, or passing release mention meets the existing predicate.
+   Preserve explicit owner case decisions until any genuine semantic change
+   is separately documented; do not turn every plausible inference into a yes.
+4. **Reconcile instructions with the encoded reference.** Trace expected
+   values back to the owner's existing comments and the matching semantic
+   revision. For H7046A8A0689, the current prompt requires neutral sentiment
+   toward comparison-foil Qwen, while the encoded reference retains positive
+   despite the owner identifying the praise as Meta/Muse. For HB4FB5810A09,
+   the reference excludes official self-praise while the primary prompt and
+   wire input omit the required rule/relationship. For H0DEC6F537E0, reconcile
+   the expected support-related ideas/request label with the prompt's narrower
+   product-change wording; do not automatically label every question a product
+   request. These are concrete instruction/evidence/reference alignment cases.
+   Do not require the owner to repeat the completed 45-case human review.
+5. **Keep possible reference omissions distinct from confirmed corrections.**
+   The owner subsequently accepted exactly six additions: H92A808A114E
+   `results_evaluations`, H74C810FB007 `testimonial`, HAF1D06FBEBA `bug`,
+   H9C7C731F3C3 `releases_updates`, HFD61C2DE5BD `testimonial`, and
+   H1E48CCEEB2F `research_explanations`. Their versioned decision ledger and
+   [saved-output comparison](../analysis/2026-09-15-144939-u18-owner-approved-sol-additions-rescore.md)
+   preserve the original reference and all other fields. The older inspection
+   packet remains the pre-approval snapshot; do not interpret its tentative
+   status as overriding this later owner decision. Remaining extras are
+   unresolved, and approval does not extend to every label on these six posts.
+   HCCC266D762E and HF7C5DFD8079 specifically test quoted-background handling.
+   Record unresolved interpretation questions without silently making new
+   human truth or reopening the whole review as a delivery requirement.
+6. **Version corrections and compare every model fairly.** Preserve the
+   frozen R97–R106 requests, owner-reference snapshot, raw results, and scores.
+   Create an explicit reference/prompt revision and decision crosswalk for
+   corrections; record whether each change fixes encoded intent, supplied
+   evidence, or a semantic definition. Re-score saved model outputs without
+   paid inference when only the reference/scorer changes. Show old and revised
+   comparisons together; never repair only Sol's reported score. The six owner-
+   approved additions have now been replayed across 15 strict configurations
+   and three separate invalid-batch diagnostic views, using
+   `.context/u18/owner-reference-sol-six-additions-v1/owner-accepted-reference.json`.
+   This completes that bounded reference correction, not the remaining input,
+   prompt, reference-alignment, or release-gate work. When inputs
+   or prompts change, old responses are historical controls rather than
+   responses to the revised contract. Additional inference needs its own
+   bounded, frozen comparison using equivalent evidence and semantic rules.
+7. **Measure recovery and overassignment separately.** Report correct,
+   extra-relative-to-reference, and missed assignments per label alongside
+   exact-set agreement and F1. Dense labels should not hide jobs or personnel
+   misses, and empty-heavy product labels should not look successful merely
+   because the output is empty. Fix the known rounded-baseline one-case
+   allowance using exact counts in a new scorer revision, then replay saved
+   outputs; preserve the old numeric results. This remains a consumed
+   development corpus, not unseen population accuracy.
+8. **Separate shared semantics from provider settings.** Keep label meaning,
+   source/brand scope, and outcome/null rules in a common versioned contract.
+   Provider-specific request construction may adapt supported schema,
+   temperature, and reasoning parameters without silently changing those
+   meanings. Simplify repetitive omission-focused instructions while retaining
+   their decision rules. No mandatory second classifier, extra judge, long
+   rationale output, or new training/hosting system follows from these lessons.
+
+**Implementation and regression proof:** Update the shared payload, common
+semantic prompt and derived role prompts, their reference documentation, and
+the existing evaluator/reference tooling together. Use the real caller with
+fake providers to assert that reviewed relationship/provenance fields reach
+the serialized request for every supported topology; inspecting a helper or
+stored packet alone is insufficient. Pin quote-versus-author stance,
+main-post retention, target-brand foil handling, same-brand mixed product
+feedback, explicit owner decisions, and missing-media behavior with focused
+fixtures. A versioned decision registry must connect each corrected expected
+value to its source. Verify exact-count scorer boundaries and missing-row
+failures. Before new inference, freeze the revised evidence/semantics/scorer
+identities and recompute cost including provider-specific reasoning. Record
+remaining uncertainty rather than claiming that a prompt change guarantees
+Sol, DeepSeek, or a cheaper model will pass.
 
 #### U18 OpenRouter shortlist — researched September 14, 2026
 
@@ -1886,12 +2247,12 @@ revocation and a new key.
 ### U18A. Add Audience Topics, news reporting, Geopolitical, `investigate_claim`, and source-aware policy
 
 - **Goal:** Implement the owner-directed audience taxonomy without reopening or silently rewriting the completed v3 owner review.
-- **Requirements:** R87–R97; KTD39–KTD50.
+- **Requirements:** R87–R97 and R107–R108; KTD39–KTD50 and KTD55–KTD56.
 - **Dependencies:** U18 owner-reference diagnostic and all current-v3 invariant checks pass; the taxonomy-v2/v3 historical analysis contract remains authoritative.
 - **Files:** `core/models.py`; additive `core/migrations/`; the taxonomy manifest and EN/ZH-CN/JA seed labels; `core/classification_contract.py`; `x_monitor/attribution.py`; classifier prompt/version exhibits; canonical analysis/query services; feed/filter/chart readers; health and cost telemetry; focused schema, prompt, writer, reader, analysis, migration, and browser tests; a dated shadow-prevalence report.
-- **Approach:** Add normalized topic scheme/concept/locale-label/assignment tables and the versioned `investigate_claim` product label. Add normalized Geopolitical mode keys/labels/assignments and correctly named China/U.S. national-stance fields/tables; copy current v3 state values exactly, dual-read/write during the expand-and-contract window, and keep old current-state and discourse nationalism fields behind the version-aware compatibility reader. Advance the post-type taxonomy for `news_reporting` while keeping v2/v3 reads and the historical `misinformation` compatibility key explicit. Resolve source relationship per attributed brand from reviewed account-brand edges, include it in the compact input fingerprint, use it to distinguish a tracked brand's own promotion from promotion of an untracked subject, and never auto-assign a rare post type from account role alone. Replace the user-facing and current-write unsanctioned family with the post-level Untracked Brand Promotions family and exact keys `general`, `spam`, `scam`, `crypto`, and `unauthorized`; keep legacy `marketing_spam` readable under its old meaning, and derive mentioned tracked brands through `posts_brands` without per-brand copies of the promotion judgment. Enforce the R93 brand boundary in both role-specific prompts, the deterministic merge, parser, persistence, readers, and analysis queries; preserve every mentioned brand association while writing only the types and scalar judgments supported for that brand. Derive cross-brand promotion/comparison views from existing per-brand signals and account-brand relationships instead of adding a semantic-role taxonomy. Return Audience Topics and the post-level promotion result through content classification, and product labels and all stance fields through brand interpretation. Both roles use the same post/context/brand/relationship packet and together count against one R96 budget. Introduce no third topic-only, reviewer, consensus, or semantic-repair call. Give the expanded two-role contract new role and merge identities, rerun the call-chain regression net, and measure only supported owner-example mappings plus separately identified shadow evidence for new fields; do not retrofit the 45-case v3 reference. Keep candidate token/account resolution, media fetch, and harvest-time source bans deferred while adding the exact recurrence/context-missing metrics required by R91.
-- **Test scenarios:** Current v3 rows retain their exact values and query meaning; pre-topic and pre-Geopolitical rows report unavailable for the new dimensions; no v3 `none` value is recast as a framework; label-only topic edits preserve concept identity; material definition changes require a revision; the seven initial topics allow multiple assignments per post-brand with exact evidence; geopolitical reporting, framework, and nationalistic stance can be separated and can coexist; “China's AI strategy is more effective” is a framework unless broader national superiority is adopted, while “the U.S. will win because capitalism makes America inherently superior” is a U.S. nationalistic stance; `news_reporting` distinguishes third-party reports, product releases, official announcements, and mixed news/release posts; a reported distillation allegation is not adjudicated false; neither classifier role adjudicates claim truth; official self-praise is not a testimonial; an official or staff account establishes per-brand source context but a job, event, opportunity, or personnel change still requires its content predicate; a tracked brand's official self-promotion is outside Untracked Brand Promotions, while the same account's promotion of a separate untracked subject may qualify; an ordinary XYZ Harness promotion mentioning DeepSeek receives `general`; repeated substantially duplicated promotion may receive `spam`, while a single call to action does not; `general` never coexists with a narrower key; joining the post through `posts_brands` finds DeepSeek without attributing the promotion key to DeepSeek; “DSV4 performed better than MiniMax; subscribe here” gives DeepSeek advertising/results/opinion but gives MiniMax results/opinion without advertising, and the MiniMax association remains queryable; a two-brand evaluation filter requires both brand associations and results while the broader opinion-inclusive filter is explicitly approximate; multi-brand fixtures prove that sentiment, testimonial, complaint, claim, Geopolitical, and national-stance values never transfer between brands; a global view applies its explicit aggregation policy; role changes alter the input fingerprint; unavailable media produces `context_missing`; no candidate token/account resolver, semantic-role/cross-brand taxonomy, per-topic database columns, historical date inference, or automatic harvest ban appears. A shadow-only family renders no selectable control; a stale URL using it is canonicalized by removing the parameter and shows one localized, accessible “classification unavailable” notice. It never looks like a valid filter with zero matching posts, and the API returns its structured unavailable state.
-- **Verification:** Fresh and upgrade PostgreSQL tests, exact 14-post-type, 7-topic, 3-Geopolitical-mode, and five-key Untracked Brand Promotions manifests with EN/ZH-CN/JA labels where applicable; v2/v3/v4 analysis-policy tests; provider-denied/fake-client call-chain tests; legacy `marketing_spam` compatibility and new `spam` recurrence tests; cross-family target-brand/source-role/promotion regressions; derived post-to-brand promotion/comparison query tests; and affected browser filters pass. At least one production-shaped fake-client call-chain test must carry two attributed brands through the two role requests, deterministic merge, writer, and reader, assert the exact different per-brand outputs, and prove no third classifier request occurred. A bounded frozen-corpus shadow report gives per-topic/news/claim/Geopolitical support, overlaps, false-positive samples, media proxy, repeated-promoter counts, prompt bytes, tokens, calls, latency, and maximum cost before v4 live activation. Apply R94A independently and record an enabled or shadow-only decision for each new family/concept; one family's missing support cannot be hidden by aggregate accuracy or silently lower another family's gate. A v3 shortlist pass does not establish quality or cost for the expanded U18A prompts. Failures return to U18A and do not reopen the completed v3 owner review.
+- **Approach:** Add normalized topic scheme/concept/locale-label/assignment tables and the versioned `investigate_claim` product label. Add normalized Geopolitical mode keys/labels/assignments and correctly named China/U.S. national-stance fields/tables; copy current v3 state values exactly, dual-read/write during the expand-and-contract window, and keep old current-state and discourse nationalism fields behind the version-aware compatibility reader. Advance the post-type taxonomy for broad `news_reporting`, rename current-write `results_evaluations` to `results_analysis` through a version-aware concept alias, tighten `research_explanations` to technical product/model/system knowledge, and widen `business_finance` to the R83 company-value lens while keeping historical rows readable under their original keys. Resolve source relationship per attributed brand from reviewed account-brand edges, include it in the compact input fingerprint, use it to distinguish a tracked brand's own promotion from promotion of an untracked subject, and never auto-assign a rare post type from account role alone. Replace the user-facing and current-write unsanctioned family with the post-level Untracked Brand Promotions family and exact keys `general`, `spam`, `scam`, `crypto`, and `unauthorized`; keep legacy `marketing_spam` readable under its old meaning, derive mentioned tracked brands through `posts_brands` without per-brand copies of the promotion judgment, and persist every promoted subject through R36 candidate/evidence rows with nullable exact account matches. Enforce the R93 brand boundary in both role-specific prompts, the deterministic merge, parser, persistence, readers, and analysis queries; preserve every mentioned brand association while writing only the types and scalar judgments supported for that brand. Derive cross-brand promotion/comparison views from existing per-brand signals and account-brand relationships instead of adding a semantic-role taxonomy. Return Audience Topics, the post-level promotion result, and bounded promoted-subject identities through content classification; brand interpretation returns product labels and all stance fields. Use the exact R107 cloud model/route and two-role contract. Both roles receive the same post/context/brand/relationship packet and together count against one R96 budget. Introduce no third topic-only, reviewer, consensus, or semantic-repair call. Give the expanded two-role contract new role and merge identities, rerun the call-chain regression net, and measure only supported owner-example mappings plus separately identified shadow evidence for new fields; do not retrofit the 45-case v3 reference. Keep media fetch and harvest-time source bans deferred while adding the exact recurrence/context-missing metrics required by R91.
+- **Test scenarios:** Current v3 rows retain their exact values and query meaning; old `results_evaluations` rows remain version-exact while current writes use `results_analysis`; pre-topic and pre-Geopolitical rows report unavailable for the new dimensions; no v3 `none` value is recast as a framework; label-only topic edits preserve concept identity; material definition changes require a revision; the seven initial topics allow multiple assignments per post-brand with exact evidence; geopolitical reporting, framework, and `nationalism` can be separated and can coexist; a neutral explanation of a national strategy is `framework` with both national stances `none`, while an author's positive or negative evaluation of a national ecosystem, system, or group is `nationalism` with the matching China/U.S. direction even without a superiority claim; the R108 China/U.S. fixture produces China `anti` and U.S. `constructive_critical`; `news_reporting` remains broad and can overlap company, product, personnel, research, or finance subjects; company resource allocation and organization strategy do not receive `research_explanations`; a strategic civil-engineering hiring report may receive `job_listings`, `news_reporting`, and `business_finance` but no `personnel_changes` without a named transition; a reported distillation allegation is not adjudicated false; neither classifier role adjudicates claim truth; official self-praise is not a testimonial; an official or staff account establishes per-brand source context but a job, event, opportunity, or personnel change still requires its content predicate; a tracked brand's official self-promotion is outside Untracked Brand Promotions, while the same account's promotion of a separate untracked subject may qualify; ordinary XYZ Harness, Sider, Stella V, Astorie, and PokePay fixtures preserve the tracked/untracked subject boundary and persist candidate identities; repeated substantially duplicated promotion may receive `spam`, while a single call to action does not; `general` never coexists with a narrower key; joining the post through `posts_brands` finds DeepSeek without attributing the promotion key to DeepSeek; “DSV4 performed better than MiniMax; subscribe here” gives DeepSeek advertising/results/opinion but gives MiniMax results/opinion without advertising, and the MiniMax association remains queryable; a two-brand evaluation filter requires both brand associations and results while the broader opinion-inclusive filter is explicitly approximate; multi-brand fixtures prove that sentiment, testimonial, complaint, claim, Geopolitical, and national-stance values never transfer between brands; promotion outputs require a visible subject identity, exact evidence, deterministic candidate linkage, and nullable exact account match; a global view applies its explicit aggregation policy; role changes alter the input fingerprint; unavailable media produces `context_missing`; no semantic-role/cross-brand taxonomy, per-topic database columns, historical date inference, or automatic harvest ban appears. A shadow-only family renders no selectable control; a stale URL using it is canonicalized by removing the parameter and shows one localized, accessible “classification unavailable” notice. It never looks like a valid filter with zero matching posts, and the API returns its structured unavailable state.
+- **Verification:** Fresh and upgrade PostgreSQL tests, exact 14-post-type, 7-topic, 3-Geopolitical-mode, and five-key Untracked Brand Promotions manifests with EN/ZH-CN/JA labels where applicable; v2/v3/v4 analysis-policy tests; provider-denied/fake-client call-chain tests; legacy `marketing_spam` compatibility and new `spam` recurrence tests; promotion-subject candidate/evidence/account matching and recurrence tests; cross-family target-brand/source-role/promotion regressions; derived post-to-brand promotion/comparison query tests; and affected browser filters pass. At least one production-shaped fake-client call-chain test must carry two attributed brands plus one promoted untracked subject through the two role requests, deterministic merge, candidate/evidence writer, classification writer, and readers; assert the exact different per-brand outputs and post-level promotion keys; prove the candidate identity and nullable exact account match persisted; and prove no third classifier request occurred. A bounded frozen-corpus shadow report gives per-topic/news/claim/Geopolitical support, overlaps, false-positive samples, media proxy, repeated-promoter and repeated-candidate counts, prompt bytes, tokens, calls, latency, and maximum cost before v4 live activation. Apply R94A independently and record an enabled or shadow-only decision for each new family/concept; one family's missing support cannot be hidden by aggregate accuracy or silently lower another family's gate. A v3 shortlist pass does not establish quality or cost for the expanded U18A prompts. Failures return to U18A and do not reopen the completed v3 owner review or model selection.
 
 #### U18A locked locale labels
 
@@ -1908,11 +2269,12 @@ browser tests all use these values.
 | Audience Topic `openness_license` | Openness & Licensing | 开放性与许可证 | オープン性・ライセンス |
 | Audience Topic `agents_tools` | Agents & Tools | 智能体与工具 | エージェント・ツール |
 | Audience Topic `api_developer_surface` | API & Developer Surface | API 与开发者平台 | API・開発者向け機能 |
+| Post Type `results_analysis` | Results Analysis | 结果分析 | 結果分析 |
 | Post Type `news_reporting` | News Reporting | 新闻报道 | ニュース報道 |
 | Product Label `investigate_claim` | Claim to Investigate | 待核实声明 | 要確認の主張 |
 | Geopolitical `reporting` | Reporting | 地缘政治报道 | 地政学的報道 |
 | Geopolitical `framework` | Framework | 地缘政治框架 | 地政学的フレームワーク |
-| Geopolitical `nationalistic_stance` | Nationalistic Stance | 民族主义立场 | ナショナリズム的立場 |
+| Geopolitical `nationalism` | Nationalism | 民族主义 | ナショナリズム |
 | Promotion family | Untracked Brand Promotions | 未跟踪品牌推广 | 未追跡ブランドのプロモーション |
 | Promotion `general` | General | 一般推广 | 一般 |
 | Promotion `spam` | Spam | 垃圾推广 | スパム |
@@ -1937,8 +2299,23 @@ browser tests all use these values.
 - **Dependencies:** U19 contract settled; current translation/classification call-chain characterized.
 - **Files:** `core/models.py`; additive migrations; normalized artifact readers/publishers; `x_monitor/translator.py`; `monitor/cycle.py`; settings, locale middleware, Python/JavaScript catalogs, taxonomy/metadata seeds, headline schemas/prompts, templates/static locale controls; migration, provider-call, locale, and browser tests; updated reference docs.
 - **Approach:** Characterize the current combined translator first. Extract shared source/context preparation, then implement independent literal-translation and rich-synthesis provider roles. Persist immutable parent artifacts and locale child rows with current/last-good readers. Write all required locales atomically for synthesis; translation may skip the source locale while recording an identity result. Keep legacy field fallback explicit and maintain the minimum rollback projection. Add Japanese locale negotiation, catalogs, text/headline fields through normalized children, cache keys, completeness checks, and UI controls using the same route as EN/ZH-CN. Before locale activation, freeze a source-visible evaluation of at least 15 available posts per source language across EN, ZH-CN, and JA and blind the evaluator to provider/model identity. Record source/output/evaluator/prompt/rubric hashes; require 100% preservation of entities, numbers, URLs, and negation/polarity, zero critical meaning inversions, and at least 90% fidelity/readability pass per target locale. This bounded evaluation is separate from runtime translation and classifier calls.
+- **0731 translation comparison gate:** Before staging activation, freeze a
+  bounded source-visible corpus, the incumbent translation model/route and the
+  pinned cloud `deepseek/deepseek-v4-flash-0731` DeepInfra-FP8 route, prompt
+  and artifact-contract identities, concurrency, transport/token/dollar caps,
+  and stop conditions within the existing U18/U23 budget envelope. Use the
+  literal-translation prompt and contract only; do not reuse classifier or
+  synthesis prompts. Measure each route's exact entity, number, URL,
+  negation/polarity, and line-break preservation, fidelity/readability,
+  critical inversions, valid-locale coverage, complete-result latency, and
+  observed cost. Select 0731 for translation only if it passes every existing
+  locale-quality and operational gate; otherwise retain the incumbent. This
+  is a per-role staging decision, not a blanket provider switch.
 - **Test scenarios:** Translation succeeds while synthesis is absent or failed; synthesis retries do not rerun translation/classification; a context change invalidates synthesis but not an unchanged literal translation; concurrent publication converges; partial locale synthesis cannot become current; existing legacy-only posts remain readable with identified fallback; EN/ZH-CN behavior does not regress; `ja`, `ja-JP`, cookie, query, and default-locale flows resolve consistently; Japanese source text avoids pointless same-language translation; Japanese labels, headline, post text, pending/error copy, and cache identity render without English leakage or overflow. A target-locale quality failure leaves that locale's new artifact lane disabled, serves identified original or last-good content, and exposes an explicit unavailable state instead of publishing the failed output.
 - **Verification:** Fresh/upgrade migrations, strict artifact/version tests, Stage 0 call-cardinality/privacy regressions, all current translation/classification tests, gettext/JavaScript catalog checks, query-count tests, and authenticated browser matrices for EN/ZH-CN/JA pass. The frozen language-quality report records per-direction support, invariant failures, fidelity/readability rates, critical errors, and the enabled/disabled decision against the exact numeric floors. No page request calls a provider, and legacy rollback readers work on the new database.
+  The 0731 comparison receipt additionally records both exact routes and
+  contracts, caps, raw usage/cost, latency, all preservation measurements, and
+  the resulting translation-model decision.
 
 ### U21. Add durable lazy-synthesis demand and an isolated worker
 
@@ -1947,8 +2324,23 @@ browser tests all use these values.
 - **Dependencies:** U20 normalized synthesis contract.
 - **Files:** `core/models.py`; additive migration; synthesis demand/service/worker modules; `/api/v2/` URL/view/serializer surface; a polling management command; `render.yaml`; `render-staging.yaml`; health/metrics; database concurrency, API, provider-call, worker-isolation, and Blueprint tests; agent-facing reference.
 - **Approach:** Add the unique demand identity, priority/reason, expiry, retry, lease, and fence fields from R70. Insert/upsert through one authenticated service used by the API and management command. Claim small batches inside short database transactions with `SELECT FOR UPDATE SKIP LOCKED`; perform provider work outside locks; publish only if the identity/fence remains current and the locale-complete artifact validates. Add dedicated production/staging background workers with only database and synthesis-provider access. Use database state for work; do not attach the worker to Celery or the headline broker.
+- **0731 synthesis comparison gate:** Before staging activation, separately
+  freeze a bounded demand-shaped corpus, the incumbent synthesis model/route
+  and the pinned cloud `deepseek/deepseek-v4-flash-0731` DeepInfra-FP8 route,
+  the synthesis prompt and artifact-contract identities, concurrency,
+  transport/token/dollar caps, and stop conditions within the existing
+  U18/U23 budget envelope. Use the rich-synthesis prompt and locale-complete
+  artifact contract only; no classifier or literal-translation prompt may be
+  reused. Compare valid locale-complete artifacts, source-visible entity,
+  number, URL, negation/polarity, and line-break preservation, completeness,
+  latency, and observed cost. Select 0731 for synthesis only when it passes
+  every existing synthesis and operational gate; otherwise retain the
+  incumbent. The two role selections are independent.
 - **Test scenarios:** Concurrent visible/expanded requests create one demand; user identity does not change artifact identity; a higher-priority reason upgrades an existing row; expired lookahead is never claimed; abandoned leases recover; stale fences cannot publish; attempts stop at configured limits; malformed or partial output preserves last-good; two workers claim disjoint rows; the web/API remains fast while the provider is slow/down; unauthenticated, cross-site, oversized, malformed, or throttled requests fail without demand; Blueprint inspection proves no beat, harvest command, TwitterAPI secret, or headline-broker link.
 - **Verification:** PostgreSQL concurrency and lease/fence tests, API/security/rate tests, fake-provider true-caller tests, `render.yaml`/`render-staging.yaml` topology checks, health/readiness checks, and agent command parity pass. Failure injection proves database reconnect, provider timeout, process death, retry exhaustion, and deploy restart do not duplicate artifacts or block feed reads.
+  The 0731 comparison receipt records both exact routes and contracts, caps,
+  raw usage/cost, latency, artifact-validity and preservation measurements,
+  and the resulting synthesis-model decision.
 
 ### U22. Drive bounded synthesis demand from the feed and install the locked post-type glyphs
 
@@ -1966,13 +2358,17 @@ browser tests all use these values.
 - **Requirements:** R58–R60, R76–R77; KTD23–KTD24 and KTD33.
 - **Dependencies:** U18–U22 focused and aggregate gates pass; candidate is committed and pushed; Ollija check passes.
 - **Files:** provider-aware classifier configuration and factory code; the explicit OpenRouter adapter; `render-staging.yaml`; `render.yaml`; `config/staging_refresh.yaml`; `docs/operations/staging-data-refresh.md`; ignored refresh/activation receipts; dated durable integrated-staging report under `docs/analysis/`; monitoring/cost output; this plan's execution state.
-- **Approach:** Update the exhaustive refresh copy/scrub policy and least-privilege grant documentation for every new table/sequence. Quiesce only the staging-owned headline and synthesis work boundary, purge only its queues/state, run preflight, create a new source snapshot, refresh, verify the same receipt, and run the independent census. Deploy the exact candidate with all new paid lanes disabled. After U18 selects a candidate, keep DeepSeek as the disabled/default rollback route and provision `OPENROUTER_API_KEY` only as a staging secret. Configure the exact selected OpenRouter model/provider pair, role prompts, routing controls, and frozen equal-or-tighter caps without automatic fallback; a provider/model mismatch or missing secret keeps classification disabled. Enable and observe in dependency order: the selected two-role classifier, headline demand, literal translation/JA reads, lazy synthesis, targeted extraction, then one capped job and personnel discovery trial. Run profile history first as a dry-run, then as a bounded checkpointed staging backfill. After each step, inspect data integrity, quality samples, calls/tokens/credits, retries, queue age, UI, and logs; disable and fix any failing lane before continuing.
+- **Approach:** Update the exhaustive refresh copy/scrub policy and least-privilege grant documentation for every new table/sequence. Quiesce only the staging-owned headline and synthesis work boundary, purge only its queues/state, run preflight, create a new source snapshot, refresh, verify the same receipt, and run the independent census. Deploy the exact candidate with all new paid lanes disabled. After U18 selects a candidate, keep DeepSeek as the disabled/default rollback route and provision `OPENROUTER_API_KEY` only as a staging secret. Configure the exact selected OpenRouter model/provider pair, role prompts, routing controls, and frozen equal-or-tighter caps without automatic fallback; a provider/model mismatch or missing secret keeps classification disabled. Apply U20's and U21's independent comparison decisions: 0731 may replace the incumbent translation role and/or the incumbent synthesis role only after that role's frozen staging comparison passes; no result changes another role. Enable and observe in dependency order: the selected two-role classifier, headline demand, the selected literal-translation/JA route, the selected lazy-synthesis route, targeted extraction, then one capped job and personnel discovery trial. Run profile history first as a dry-run, then as a bounded checkpointed staging backfill. After each step, inspect data integrity, quality samples, calls/tokens/credits, retries, queue age, UI, and logs; disable and fix any failing lane before continuing.
 - **Test scenarios:** Refresh refuses unknown relations, an active worker, a nonempty owned queue, wrong role/database/TLS/version, missing space, or unavailable lock; source/private/operational tables are scrubbed per policy; migrations and sequences validate; recovery receipt remains usable. Each disabled lane makes zero calls; each enabled trial stops at its cap; classification/extraction/translation/synthesis rows retain versions and provenance; job/personnel results remain reviewable; pending feed and all three locales work under slow/failing providers; headline/synthesis workers cannot consume each other's work; repeated normal staging cycles converge without credit, backlog, or row-count spikes.
 - **Verification:** Exact Render SHA, migrations, web/headline/synthesis health, refresh receipt/census, aggregate tests, authenticated browser matrix, live bounded quality sample, cost report, queue/backlog telemetry, and rollback-disable drills pass. The selected classifier route must prove the exact pinned provider/model in real caller telemetry, respect the pair reservation and capacity ceilings, and fall back operationally only by disabling the lane; it never silently reroutes. Observe at least two complete normal-equivalent staging cycle intervals after the final activation with no unresolved error, budget breach, or data-integrity anomaly. Preserve a dated secret-free report with exact candidate/config/prompt/model identities and the production flag/cap proposal.
 
 ### U24. Promote the unchanged candidate and verify production
 
 - **Goal:** Release the complete, staging-proven system without changing code or widening cost caps during promotion.
+- **Current-run boundary:** Delivery Exception 26 excludes U24 from this LFG
+  run. Do not promote this candidate, provision a production secret, or remove
+  the worktree unless the owner grants new explicit production authority after
+  reviewing the completed U23 staging evidence.
 - **Requirements:** R58–R60, R76; KTD23 and KTD33.
 - **Dependencies:** U23 passes with no unresolved blocker; final code/data/security/simplicity reviews pass; candidate worktree is clean; Ollija `--check` passes.
 - **Files:** existing Ollija plan metadata and Delivery Guide; `render.yaml`; durable production release report under `docs/analysis/`; no production data-edit script.
@@ -2118,6 +2514,7 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 ## Sources and Research
 
 - `docs/research/2026-09-14-171515-openrouter-classifier-model-selection.json` — public catalog and endpoint receipt for R97's three-model shortlist, observed offers and precision, considered alternatives, and fixed request counts; no inference results.
+- `docs/research/2026-09-16-151113-u18a-two-role-classifier-prompts.md` — complete readable system-prompt templates for the selected content and brand-interpretation calls, including the owner-reviewed brand-isolation, label-boundary, Geopolitical, and deterministic output rules.
 - [OpenRouter model catalog](https://openrouter.ai/api/v1/models), [discounted models](https://openrouter.ai/collections/discounted-models), [provider routing](https://openrouter.ai/docs/guides/routing/provider-selection), and [API authentication](https://openrouter.ai/docs/api_reference/authentication) — current selection, explicit routing, and credential contract; endpoint-specific records take precedence over aggregate headline prices.
 - [SetFit multilingual training](https://huggingface.co/docs/setfit/main/en/index) and [multi-label classification](https://huggingface.co/docs/setfit/main/en/how_to/multilabel) — the explicit deferred KTD48 experiment; library support does not establish this project's sample adequacy or accuracy.
 - [Parallel task sectioning](https://www.anthropic.com/engineering/building-effective-agents) — source for independent concurrent subtasks with programmatic assembly; this model-agnostic pattern does not select Anthropic as a provider or prove quality on the owner cohort.
@@ -2883,7 +3280,7 @@ Topics including `model_distillation`; replace `misinformation` with the single
 `investigate_claim` product label and add no claim subtypes or truth state; replace
 the separate `geopolitics_state` topic and Nationalism family with one
 Geopolitical family containing `reporting`, `framework`, and
-`nationalistic_stance`; pass per-brand source relationship and promotion policy;
+`nationalism`; pass per-brand source relationship and promotion policy;
 add repeat-promoter/relevance handling while retaining source evidence; keep
 media enrichment deferred; and keep limited-access action inside the existing
 `opportunities` boundary. Geopolitical live activation still requires the
@@ -3183,3 +3580,691 @@ report is `docs/analysis/2026-09-15-111545-u18-r101-single-primary-conditional-r
 the machine result hash is
 `4ad0fe6267a74c560a5870b29e50bf9bd20eaa42976a27694e7f7aecb343e5ab`.
 No staging or production mutation occurred.
+
+
+### September 15 — R104 complete: NeMo and Ling are not drop-in replacements
+
+The owner clarified a tenfold reduction in LLM spending per inference relative
+to incumbent DeepSeek V4.1 Flash, within $150/month for all LLM operations.
+R104 tested Mistral NeMo on DekaLLM first and Ling 3.0 Flash on Novita second,
+using the frozen R101 full primary prompt and original 20/20/5 packets. Both
+API smoke checks succeeded; eight total transports completed, with no retries,
+repairs, provider fallbacks, or reasoning tokens. The direct Flash control was
+reused from saved R101 primary responses, with its follow-up excluded.
+
+NeMo produced zero valid batches and only three independently valid diagnostic
+rows. One response omitted posts and emitted illegal values, another hit the
+6,000-token limit with missing identities and unfinished JSON, and the final
+batch also failed the schema. Its three benchmark calls took 267.959 seconds.
+Ling produced two valid batches and 44 independently valid diagnostic rows;
+the invalid row answered for Qwen when the packet requested MiniMax. Its calls
+took 18.768 seconds, versus Flash's 15.369 seconds. Ling recovered zero of 17
+positive product-label assignments, zero of three events, and one of sixteen
+results/evaluation cases. Its two emitted testimonials were false positives.
+Neither candidate passes the unchanged quality/coverage gates.
+
+Actual billed cost, including both tiny smoke calls, was $0.0016699134,
+matching the settled key delta within rounding and staying below the frozen
+$0.006311319 reservation. For the same 45 attempted rows, raw inference cost
+was 7.37 times cheaper on NeMo and 7.03 times cheaper on Ling than current
+off-peak Flash; peak Flash doubles those ratios. Those attempted-call ratios
+do not demonstrate tenfold savings for usable completed classifications.
+Ling's advertised promotion must also be compared with regular rates.
+
+The inherited exploratory scorer credited some missing rows as correct empty
+sets. R104's published report recomputes exact agreements with every missing
+or invalid row counted wrong, while preserving frozen historical outputs.
+Individual rows salvaged from invalid batches are diagnostic only. Six existing
+primary/parser tests and two new raw-response/row-identity tests passed.
+
+The original human review remains complete. This is the consumed development
+reference, not unseen validation; personnel positives are absent, and there is
+only one job positive. The requested fresh 45-case packet is excluded until
+owner answers exist. Keep the incumbent and current activation gates. A short,
+product-label-only Ling experiment is a suggested next diagnostic, not started
+by this result. No runtime, database, staging, or production change occurred.
+
+Evidence: `docs/analysis/2026-09-15-124808-u18-r104-low-cost-primary-results.md` and
+`docs/analysis/2026-09-15-124808-u18-r104-low-cost-primary-results.json`.
+Raw requests, outputs, usage, and provider receipts are retained at
+`.context/u18/low-cost-single-primary-r104-v1/`.
+
+### September 15 — R105 complete: NeMo output fixed; quality still fails
+
+The owner authorized adapting NeMo after the unchanged-prompt result. Five
+full-cohort configurations were measured: schema enforcement alone; a 45%
+shorter prompt with compact IDs/output at 20/20/5; the compact request at
+five rows per call; temperature 0.3; and the same advertised NeMo FP8 model
+on DeepInfra. The 45 ordered public posts, stored context, current-v3
+definitions, saved R101 Flash primary, and owner reference stayed fixed.
+The compact bundle changes prompt and representation together, so their
+individual contributions are not isolated. Account affiliations remain
+omitted to match the original R101 input evidence.
+
+Schema enforcement alone produced one valid five-row batch and two invalid
+20-row batches. All four compact variants produced 45/45 valid post-brand
+rows, versus zero strictly accepted rows in the original NeMo test. The
+strongest measured type/product-label scores came from five-row batches:
+post-type F1 0.420 and product-label F1 0.261, versus Flash 0.789 and 0.645.
+That variant recovered 3/17 expected product labels, none of the three
+expected events or the one job listing, and returned context_missing for
+12 owner-classifiable posts.
+Temperature 0.3 and DeepInfra did not improve the compact DekaLLM scores.
+Every configuration fails the existing quality gates; no model is selected.
+
+The compact 20-row DekaLLM configuration costs 10.92 times less than
+off-peak Flash after OpenRouter's 5.5% fee; the slightly more accurate
+five-row configuration costs only 8.22 times less. Peak Flash doubles
+those ratios. Fewer emitted labels contribute to low output cost, so these
+are not demonstrated quality-preserving savings or a whole-pipeline
+$150/month budget. Serial inference was 72.3–108.1 seconds for compact
+variants versus the saved Flash primary's 15.4 seconds.
+
+All 21 requests completed without retries, repairs, fallback providers,
+extra judges, or production changes. Total billed inference was
+$0.003008445, exactly matching the settled key-usage delta, below the frozen
+$0.014582723 reservation and $0.10 ceiling. Nine focused tests passed;
+zero required tests were skipped or errored. Raw requests, responses,
+provider policies/prices, usage, and source hashes are retained. The
+six-row singleton reserve was not run because its frozen condition (an
+invalid five-row batch) did not occur; single-post semantic accuracy remains
+unmeasured. The original owner review remains complete and the unreviewed
+fresh packet remains excluded. R105 is closed as an unsuccessful replacement
+trial; deployment and quality gates remain unchanged.
+
+Exhibits:
+
+- [R105 readable comparison](../analysis/2026-09-15-132232-u18-r105-nemo-adaptation-results.md)
+- [R105 detailed results](../analysis/2026-09-15-132232-u18-r105-nemo-adaptation-results.json)
+- [R105 frozen contract](../analysis/2026-09-15-132232-u18-r105-nemo-adaptation-contract.json)
+- [R105 compact prompt](../analysis/2026-09-15-132232-u18-r105-nemo-adaptation-compact-prompt.txt)
+
+Private evidence: `.context/u18/nemo-adaptation-r105-v1/`.
+
+### September 15 — R106 complete: Sol xhigh costs more and overassigns labels
+
+The owner requested a frontier GPT-5.6 Sol trial and asked whether reasoning
+effort matters. R106 compared `low` with `xhigh` on the same 45 reviewed
+post-brand rows, unchanged full R101 primary prompt, strict response schema,
+and 20/20/5 batches. Only reasoning effort differed between the arms.
+The standard OpenAI route through OpenRouter was pinned to
+`openai/gpt-5.6-sol-20260709`; unsupported temperature/top_p settings were
+omitted. Six sequential requests completed without retries, repairs,
+fallbacks, truncation, or invalid batches. Both arms accepted all 45 rows.
+
+Low scored post-type F1 0.813 and product-label F1 0.622, compared with
+xhigh's 0.735 and 0.571. Low recovered 76 correct post-type assignments
+with 16 false positives; xhigh recovered 79 with 41 false positives.
+Both recovered 14/17 positive product-label assignments, but false positives
+increased from 14 to 18. Exact agreement across all six axes fell from
+9/45 to 4/45. Extra reasoning therefore worsened agreement on this consumed
+development cohort; it did not solve incomplete classification.
+
+Low used 1,793 reasoning tokens, took 65.165 seconds of serial inference,
+and cost $0.136168. Xhigh used 49,012 reasoning tokens, took 688.894 seconds,
+and cost $0.609898. Each arm had the same 28,825 input tokens, zero cache
+reads, and 28,816 cache writes. The entire billed difference came from
+additional completion tokens; reasoning is already included in that count.
+Current endpoint rates were advertised at 50% off; the report also gives
+regular-price and ordinary-input-rate sensitivities.
+
+Against the saved DeepSeek primary, low improved post-type F1 from 0.789
+to 0.813 but reduced product-label F1 from 0.645 to 0.622 and sentiment
+agreement from 30/45 to 27/45. It cost 22.68 times as much as repriced
+off-peak DeepSeek, before OpenRouter fee sensitivity. Both Sol arms fail
+the unchanged quality gates and the tenfold-savings requirement. No model
+is selected or activated; retain the incumbent. This frontier test does
+not establish the whole-pipeline $150/month budget.
+
+Total inference spending was $0.746066 across six calls, exactly matching
+the settled key-usage delta. Including 5.5% fee sensitivity gives
+$0.78709963, below the frozen $2.434449425 reservation and $2.50 ceiling.
+Twelve focused harness tests passed, with zero required-test skips or
+errors. Source/request identities, raw responses, provider receipts,
+usage, paired case changes, per-label support, and strict/diagnostic scores
+are retained. This experiment uses current-v3 only; no Audience Topics,
+Geopolitical revisions, new affiliations, media access, or fresh unreviewed
+cases were added. The completed owner review remains the sole human review.
+No runtime, database, Git, staging, or production mutation occurred.
+
+Exhibits:
+
+- [R106 readable comparison](../analysis/2026-09-15-134818-u18-r106-sol-reasoning-results.md)
+- [R106 detailed scores and paired cases](../analysis/2026-09-15-134818-u18-r106-sol-reasoning-results.json)
+- [R106 frozen contract](../analysis/2026-09-15-134818-u18-r106-sol-reasoning-contract.json)
+
+Private evidence: `.context/u18/sol-reasoning-r106-v1/`.
+
+Scoring audit: the frozen R98 baseline rounds rates to six decimals before
+subtracting a one-case (1/45) regression allowance. Literal axis gates thus
+reject three low-effort comparisons and one xhigh comparison by less than
+0.000001, despite exactly one fewer correct case. Preserve those original
+outputs and disclose the rounding edges; all substantial quality/cost failures
+and the overall decision remain unchanged. Future scorer maintenance should
+compare exact counts for this boundary and replay saved outputs without new
+paid inference. The detailed R106 JSON identifies every affected comparison.
+
+### September 15 — Consolidated evidence and supplemental-session context
+
+The owner requested a subagent-written comparison of all model tests and
+execution-method changes, saved in research. The consolidated report is
+[Classifier model and architecture experiments](../research/2026-09-15-135812-u18-classifier-model-and-architecture-experiment-report.md).
+It distinguishes actual inference from catalog, authentication, transport,
+and parameter failures; separates strict accepted results from individual
+diagnostics; and preserves price, cache, fee, latency, and cohort differences.
+Its status metadata records whether the final R106 integration is complete.
+
+The owner also requested context for parallel brainstorming and supplemental
+sessions, with the existing main session continuing. An immutable temporary
+brief was created on fuchitalee at
+`/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-09-15-140819-supplemental-session-brief.md`.
+It records HEAD `83c95f2d5ca33369ce257cf8697076d899a81b53`, the uncommitted-file
+inventory, active ownership, latest evidence pointers, and the distinction
+between a committed baseline and worktree-only experiment files. It is a
+context aid, not a backup, a transfer of this session's task, or deployment
+authorization. No checkpoint commit or new worktree was created for this
+request. Independently scoped code work can use a separately agreed committed
+checkpoint; research can begin by reading the current evidence and returning
+separate proposals for integration.
+
+### September 15 — Sol extras inspected; shared prompt lessons adopted
+
+The owner asked to inspect Sol's additional categories rather than assume
+every reference disagreement is an error, then directed that the prompting
+lessons apply regardless of the model chosen. The resulting
+[31-post evidence packet](../analysis/2026-09-15-143001-u18-sol-extra-label-review.md)
+preserves the original case order and supplies full text/context, all six
+classifications, exact low/xhigh extras, and tentative assistant commentary.
+It contains 64 distinct extra assignments across both efforts. Some are
+strong potential reference omissions; others conflict with explicit owner
+decisions or depend on unresolved quote/source boundaries. No new inference
+was purchased and no reference labels or frozen scores were changed.
+
+U18 now explicitly prioritizes common input/prompt/reference consistency
+before more model selection. Its shared-corrections section names the actual
+payload omission, missing official-self-praise rule, quoted versus authored
+stance, primary-post retention, per-brand boundaries, and concrete encoded
+reference conflicts. It specifies versioned correction provenance, fair
+rescoring of every model, exact-count scorer boundaries, and real-caller
+regression proof. These are accepted planning requirements, not a claim that
+the runtime prompt or input builder has already been changed. The original
+human review stays complete; this inspection introduces no mandatory second
+human review, automatic extra LLM call, or deployment action.
+
+### September 15 — Six Sol additions accepted; reference replay complete
+
+The owner accepted the six additions shown in the immediately preceding
+assistant table and observed that Sol may have outperformed the human review.
+The [new reference and comparison](../analysis/2026-09-15-144939-u18-owner-approved-sol-additions-rescore.md)
+record the exact approval, cases, axes, additions, source hashes, and original
+versus revised results. All 45 cases retain their original order and all other
+fields. The reference now contains 98 post-type positives and 20 product-label
+positives. Both Sol settings found all six accepted additions. This is evidence
+of missed labels in the original reference, not a general human-versus-model
+accuracy result; the revised reference was informed by Sol's outputs.
+
+Fifteen strict candidate configurations and three separate invalid-batch
+diagnostic views were rescored from stored outputs with zero new provider
+calls. Sol low post-type F1 changes from 0.813 to 0.832 and product-label F1
+from 0.622 to 0.708; DeepSeek primary changes from 0.789 to 0.775 and from
+0.645 to 0.647. These are development-set agreement scores. The original
+reference, frozen results, paid usage, prompts and all 15 R106 source hashes
+remain unchanged. Historical gate decisions are preserved; this comparison
+does not activate a classifier or complete the remaining shared corrections.
+The original sole human review remains complete.
+
+The owner then asked whether Sol output could train the previously discussed
+embedding-based or smaller model. The researched feasibility note is
+[Sol as a teacher for a small classifier](../research/2026-09-15-145139-u18-sol-teacher-small-classifier-feasibility.md).
+It proposes using model-generated labels on real posts for a multilingual
+SetFit/embedding baseline, with a possible smaller-model fine-tuning comparison,
+explicit per-brand inputs, rare-label support, independent data splits, and
+measured training/serving economics. This remains a considered option under
+KTD48; the question starts no training, bulk paid labeling, new human-review
+requirement, hosting resource, or runtime architecture change.
+
+### September 15 — Teacher labeling stays on OpenRouter
+
+After discussing subscription-backed Codex labeling, the owner chose to keep
+Sol labeling on OpenRouter to avoid the additional agent instructions and
+session context introduced by Codex. A later switch to the direct OpenAI API
+is permitted if verified total cost is lower for equivalent model and request
+settings. KTD48 and the feasibility note now carry this decision. Future cost
+comparisons must include applicable discounts, funding fees, cache behavior,
+billed reasoning/output, and batch turnaround, with route-specific provenance
+and validation of request/output equivalence. No current-price superiority is
+assumed and no provider credentials, runtime route, or frozen experiment were
+changed by this planning update.
+
+### September 15 — Owner reviewing the fresh 45; Sol evaluation next
+
+The owner reported that categorization of the new 45-post packet is underway
+and selected evaluation against Sol as the next step. U18 now records that
+sequence, retains OpenRouter as the chosen route, and reserves this cohort
+from training and tuning. The original packet, case order, and selection
+manifest remain unchanged. Completed owner answers will be stored separately
+and kept out of the model's input. No inference or training was launched while
+the review is in progress, and the original 45-case human review remains closed.
+
+### September 16 — Cloud V4 Flash 0731 and two-role runtime selected
+
+The owner selected cloud-hosted DeepSeek V4 Flash 0731 as the default
+classifier and the two-role, two-call content/brand design as the planned
+runtime architecture. The exact selected evaluation route is OpenRouter model
+`deepseek/deepseek-v4-flash-0731` pinned to DeepInfra FP8 with fallback and
+reasoning disabled, fixed P/D slots, plain JSON instructions, temperature 1,
+top-p 1, seed 42, and 20/20/5 evaluation batches. Production keeps a 20-post
+batch default. The two independent roles may run concurrently and merge only
+through code; no third semantic call, reviewer, repair, judge, or mixed-model
+pair is part of the selected design.
+
+The prior-45 cloud run produced 180/270 exact owner-reference fields, five
+complete cases, post-type F1 0.650, and product-label F1 0.541 for $0.00297612
+raw inference cost. The fresh-45 cloud run produced 249/358 exact reviewed
+fields. These are consumed development-set agreement measurements, not
+population accuracy. The owner selected the route after reviewing the broader
+cloud, frontier, cheaper-model, and local-MXFP4 evidence; local MXFP4 remains
+offline evidence only. Durable comparisons are
+[fresh-45 cloud 0731](../analysis/2026-09-15-225939-u18-fresh-45-owner-v4-0731-comparison.json)
+and
+[prior-45 cloud 0731](../analysis/2026-09-16-061619-u18-prior-45-owner-v4-0731-comparison.json).
+
+The owner's first 25 fresh-case comments lock the next prompt/schema revision.
+Current-write `results_evaluations` becomes `results_analysis` through
+versioned compatibility. Technical product/model/system explanations remain
+`research_explanations`; broad factual company reporting remains
+`news_reporting`; and `business_finance` expands to company-value signals for
+a financial analyst, including industry competition, company strategy,
+organization structure, strategic hiring, C-suite/key research appointments,
+financing, investment, and capital allocation. The acceptance set also pins
+positive company language, hands-on security testing, concrete time/cost
+results, attendance-bearing livestreams, target-brand promotion boundaries,
+crypto/unauthorized promotion, and the reviewed China/U.S. stance directions.
+
+Untracked Brand Promotions now carry bounded promoted-subject identities in
+the content-role output. The writer creates or links `BrandDiscoveryCandidate`
+and `UntrackedBrandPromotionEvidence`, including a nullable exact-matched
+account and recurrence facts. Promotion keys remain stored once per post and
+are never copied onto tracked brands or candidate rows. Tests and future model
+evaluations must retain these identities; a positive promotion judgment with
+no persisted subject fails validation. This supersedes R94's former deferral
+without authorizing automatic catalog promotion.
+
+#### U18A adopted prompt decisions — September 16, 2026
+
+The following decisions are adopted plan decisions from the latest evaluated
+U18A prompt review. They govern implementation and acceptance fixtures; they
+do not authorize editing the standalone prompt artifact or runtime activation
+by themselves.
+
+- `personnel_changes` includes a named formal role start, end, or change:
+  employment, internships, executive or research appointments, and formally
+  announced adviser or ambassador roles. It excludes static biographies,
+  unchanged affiliations, generic programs, employee spotlights, and quotes
+  without a role transition.
+- `evals_benchmarks` requires an actual test, benchmark, evaluation method,
+  score, ranking, reported evaluation result, or source-visible comparative
+  assessment. A country or company superiority claim is not excluded merely
+  because it is a superiority claim.
+  `openness_license` explicitly includes open source, alongside open weights,
+  source availability, licensing, access, and restrictions.
+- Tracked-brand context uses the authoritative active brand catalog, including
+  aliases, handles, domains, and products. The compact catalog is passed to
+  the prompt. Before persisting an untracked candidate, deterministic code
+  normalizes and rechecks the promoted subject against the active catalog, and
+  the request fingerprint includes the catalog revision.
+- `unauthorized` requires visible evidence that the promotion or claimed
+  relationship lacks authorization; uncertainty alone is insufficient.
+- The compact testimonial exclusion is scoped to same-brand official/staff
+  self-praise. It does not suppress an independently supported customer or
+  third-party testimonial for another brand.
+- `ideas_requests` includes an explicitly stated or clearly implied gap,
+  desired outcome, capability, improvement, unmet need, or product idea for
+  the target brand.
+
+These adopted boundaries must appear in the shared semantic contract,
+role-specific prompts, deterministic merge/parser/persistence checks, and
+the U18A regression fixtures. They remain subject to the existing catalog,
+cost, staging, and exact-SHA release gates.
+
+### September 16 — Staging-only runtime acceptance and role comparisons
+
+The owner explicitly selected staging as this LFG run's delivery target. No
+production deployment or pause is part of this run. The owner also requested
+0731 trials for literal translation and rich commentary; U20 and U21 now have
+separate incumbent-versus-0731 comparisons and independent model decisions.
+
+The selected U18 runtime adapter and fixed-slot reconstruction passed 38 local
+checks, including all three required PostgreSQL checks, before a six-request
+live acceptance run. The live run took 10.183 seconds and cost $0.00268614 in
+inference charges. It produced only 25/45 valid merged rows: the second
+20-post content response used a post type as `outcome` in eight decisions, so
+the complete role batch was rejected. The valid rows also missed unchanged
+semantic quality floors. Coverage and quality did not pass; cost and bounded
+latency did. See the [runtime acceptance exhibit](../analysis/2026-09-16-170618-u18-runtime-0731-acceptance.md)
+for exact field matches, limitations, and frozen evidence paths.
+
+The failed run is preserved without repair or replay. Follow-up local work
+separates selected-profile prompt/merge identities from legacy identities,
+restores legacy prompt text, and tests exact publication revision combinations.
+The broader telemetry check exposed a pre-existing stale expected-usage fixture;
+its missing cost/request-ID fields were updated explicitly to null, and all
+18 telemetry/config/acceptance tests then passed.
+
+U18 remains incomplete and U18A plus classifier-dependent staging activation
+remain blocked by the existing gate. The cloud 0731/two-role selection and the
+completed owner review remain settled. The next classifier work must address
+invalid outcome values, assessable-null nationalism, and omitted labels under
+a new explicit prompt revision and bounded acceptance contract; it cannot
+silently repair this run or lower the frozen floors.
+
+Independent U20/U21 preparation is provider-free: freeze 45 posts (15 per
+source language), both roles' true-caller prompts and request settings,
+source/contract hashes, separate arm budgets, and a blinded semantic rubric.
+This preparation is not a paid comparison, a quality pass, or a runtime model
+switch. Actual role comparisons and the integrated staging verification remain
+outstanding.
+
+Final local follow-up: 62 runtime/pilot/PostgreSQL tests passed (three required
+database tests executed, none skipped), plus 18 telemetry/config/acceptance
+tests. An offline replay of all six saved provider responses preserved the
+exact classification results under the new selected revision triplet.
+
+U20/U21 prepare-only harness verification passed five tests, including a
+red-to-green regression for a short post whose stored quote exceeds the
+synthesis caller's input guard. Actual preparation succeeded at
+`.context/u20/translation-synthesis-0731-prepare-20260916-v1/`: 45 posts,
+15 EN/15 ZH-CN/15 JA, stratified by source length; three literal-translation
+and 45 synthesis requests captured per model arm. Both arms' inputs and
+settings are saved. This script has no paid execution path. Planning cost
+reservations are $0.221507 and $0.22260656 respectively, using unverified
+planning price ceilings; current pricing, fees, final wire requests, and
+once-only transport limits still require preflight before any paid comparison.
+The explicit $0.35 per-arm preparation ceiling is not an observed cost or a
+model-selection result. Semantic evaluation and all live role comparisons
+remain outstanding.
+
+### September 16 — Owner reaffirms 0731; restore tested requests before retry
+
+The owner explicitly reaffirmed cloud 0731 and requested another attempt with
+the configuration already demonstrated in R123. This supersedes the interrupted
+interpretation of “use DeepSeek” as a request to switch to the incumbent route;
+no such switch was implemented. Model choice remains 0731.
+
+Investigation found the runtime adapter had shortened the tested prompts and
+changed the slot envelope. Both proven prompts and the `cases`/`post_flags`
+contract are now restored, with separate selected v2 lineage and a preflight
+that rejects any request drift except omission of study-only IDs and the
+more-specific DeepInfra FP8 endpoint pin. Legacy default prompts are unchanged.
+The saved R123 responses pass today's full runtime validation: 45/45 valid.
+
+The fresh six-call retry produced 43/45 strictly valid posts and 178/270 exact
+fields against the original owner reference, compared with 25/45 and 64/270
+for the broken integration and 45/45 and 180/270 for the earlier R123 result.
+Post-type/product-label F1 were 0.6790/0.6667; cost $0.00291204; time 21.279
+seconds. All invalid-outcome errors disappeared. The remaining failures are
+two content-versus-brand relevance conflicts, H1A3B3731E1C and H87229E54527:
+content says context_missing while brand interpretation says testimonial.
+They remain unpublished under the unchanged strict merge rules.
+
+[Restored-contract retry exhibit](../analysis/2026-09-16-173328-u18-0731-restored-contract-retry.md)
+records the exact comparisons, 69 passing local tests (all three required
+PostgreSQL checks executed), unchanged failed acceptance floors, and the two
+remaining conflicts. This retry does not mark U18 closed, change the completed
+human-review status, authorize production, lower a quality floor, or discard
+the planned U18A semantic refinements. It does establish that the shortened
+runtime prompts were a materially different experiment and must not be used
+to reject the selected model.
+
+
+### September 16 — Per-post validation repaired; complete 0731 coverage restored
+
+The selected cloud 0731 route remains unchanged. The selected fixed-slot adapter
+now isolates invalid values per post after validating the whole response
+envelope; all attributed brands within a post still succeed or fail together.
+This restores R95's rule that one malformed result must not discard other
+complete posts. No semantic repairs, third calls, or relaxed vocabularies were
+introduced. Seven new real-caller cases demonstrated four failures before the
+fix; the corrected focused suite passed 78 tests including three required
+PostgreSQL tests with no skips.
+
+The first shared relevance addition regressed and is retained as failed evidence.
+The shorter shared rule plus corrected parser produced 45/45 valid results in
+19.948 seconds for $0.00280908 billed, matching 180/270 original-reference
+fields. Coverage passed, but semantic floors remain unpassed; U18 is incomplete,
+U18A remains gated by the current plan dependency, and classifier-dependent
+staging activation remains disabled. No new human review is required.
+See [coverage and parser exhibit](../analysis/2026-09-16-175138-u18-0731-row-isolation-and-coverage.md).
+
+### September 16 — Owner authorizes raising the literal-translation output ceiling
+
+The bounded U20 comparison exercised actual literal-translation callers and
+found both the incumbent and 0731 reach the self-imposed 13,000 output tokens
+for 20-post batches. The owner explicitly approved raising that ceiling.
+Raise full-batch literal-translation allowance to 32,768, retain the 20-post
+batch maximum and three-language output contract, and capture a fresh bounded
+comparison contract before retries. Keep the failed lower-ceiling run unchanged.
+This changes a maximum allowance, not a requirement to generate that many
+tokens. Record actual tokens, cost, latency, complete rows, and semantic quality;
+no model or locale activation follows merely from valid JSON. The independent
+commentary comparison continues under its existing 1,200-token per-post budget.
+
+
+### September 16 — Extended output comparison and diagnostic limits
+
+The higher literal ceiling is implemented proportionally: 20 posts receive
+32,768 output tokens, five receive 8,192; the batch maximum remains 20.
+A direct-incumbent 20-post response completed with 26,292 output tokens in
+107.061 seconds, demonstrating that 13,000 was too small. Another batch hit
+the experiment's 60-second socket timeout, so the next frozen test allows
+180-second socket inactivity for literal translation. This is not a hard
+wall-clock deadline: provider keep-alives can extend total elapsed time.
+
+The independent incumbent commentary comparison produced 40/45 complete
+artifacts; the five failures reached its 1,200-token allowance. Applying the
+owner's direction to raise self-imposed ceilings, the next **evaluation-only**
+commentary allowance is 4,000. Runtime synthesis configuration remains 1,200
+and disabled pending validated model/locale activation. The fresh bounded
+U20 contract has a conservative $0.50 maximum per model across both roles
+(worst-case reservations $0.44654 incumbent / $0.44764 0731), maximum 48
+provider attempts per complete model comparison, and no transport retries.
+It is stored under `.context/u20/translation-synthesis-execute-20260916-v3/`;
+the corpus/request capture is `translation-synthesis-prepare-20260916-v4/`.
+Source-bearing artifacts remain private. All lower-ceiling failures are kept
+under the earlier execution-v1/v2 directories; no report is overwritten.
+
+A diagnostic review of the first 20 completed 0731 translations found all
+three locales present but one material omission in all three: post
+`2079629240996155513` lost two source sentences describing an observed
+leadership-departure pattern and mid-level researchers updating profiles.
+This is not a blinded acceptance pass. The exact review is
+`.context/u20/translation-diagnostic-20260916.json`; translation fidelity
+remains unpassed even when the full JSON output is now complete.
+
+
+### September 16 — Higher-ceiling translation comparisons complete
+
+Both models now returned 45/45 structurally complete translations. With
+20/20/5 serial batches, cloud 0731 took 794.116 seconds total and reported
+$0.00868044 billed; the incumbent took 194.049 seconds, with a documented-peak
+usage estimate of $0.057892152 (not a provider-reported bill). These are
+development measurements, with other independent test arms sometimes in
+flight, not controlled production p95 estimates. The longest 0731 call was
+526.390 seconds, exceeding the configured 300-second enrichment attempt
+budget; do not infer that experimental success establishes operational
+readiness or that socket timeouts enforce that budget.
+
+A full unblinded diagnostic of the 0731 translations found two affected posts:
+`2079629240996155513` loses two sentences in all three locales, and
+`2097798902875599143` misspells Anthropic as Anhtropic in ZH-CN. The incumbent
+diagnostic found no corresponding material omissions across its 45 outputs.
+Both diagnostics explicitly disclaim blinded acceptance and activation.
+The exact reports are `.context/u20/0731-translation-complete-diagnostic-20260916.json`
+and `.context/u20/incumbent-translation-diagnostic-20260916.json`.
+
+The owner separately requested a browser review page: original on the left,
+translations and commentary on the right, following the one-post-per-tab
+human-review-packet layout. This is an optional inspection artifact, not a
+new mandatory human-review gate. The separate UI session handoff is
+`/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-09-16-090912-supplemental-ui-session-brief.md`;
+it supplements the prior brief and preserves parent ownership of shared
+runtime/plan files while the other session works on an explicitly scoped UI.
+
+
+### September 16 — U20 comparison terminal evidence
+
+All bounded calls finished. The higher-ceiling incumbent produced 45/45
+translations and 45/45 commentary artifacts. Cloud 0731 produced 45/45
+translations and 40/45 commentary artifacts; the five commentary failures
+were three invalid-content JSON responses and two HTTP 429 responses, not
+output truncation. No automatic retry or model activation followed.
+The [comparison exhibit](../analysis/2026-09-16-182000-u20-translation-commentary-comparison.md)
+and [machine-readable summary](../analysis/2026-09-16-182000-u20-translation-commentary-comparison.json)
+record costs, estimated versus reported bills, serial timing, failed and
+successful configurations, source-visible diagnostics, and outstanding gates.
+
+The combined focused test command passed 102 tests, including three required
+PostgreSQL tests with zero skips/errors. The owner-requested browser artifact
+keeps original text left and per-post translations/commentary right; missing
+failed responses must be shown as unavailable, never as empty benchmarks or
+successes. A scoped generator fix and actual browser checks address the initial
+multiple-post insertion defect without changing model responses.
+
+
+### September 16 — Owner-authorized full raised-ceiling repeat
+
+The owner requested one complete repeat of the 45-post translation/commentary
+comparison to test whether the errors recur. The new immutable execution is
+`.context/u20/translation-synthesis-repeat-20260916-183930/`, reusing the exact
+prepared-v4 source and request hashes. Each model has three 20/20/5 literal
+requests and 45 single-post three-locale commentary requests, with 32,768 /
+8,192 literal caps and a 4,000 commentary cap. Prompts, model routes, and
+sampling parameters are unchanged. The literal socket-idle setting is now
+180 seconds for both models; the earlier successful 0731 literal run used
+60 seconds, so this is not an identical timeout comparison. Commentary remains
+60 seconds. Each model runs its calls serially; the two independent provider
+routes overlap. The existing $0.50 cap per model and no-automatic-retry rule
+apply. No runtime configuration, database, staging, or production change is
+part of this repeat. Final results will be recorded below after all calls finish.
+
+
+### September 16 — Full repeat completed; request-shape research remains proposed
+
+All 96 bounded attempts finished. Both models returned 45/45 structurally
+complete translations. Cloud 0731 returned 44/45 accepted commentary outputs
+(previously 40/45); the incumbent returned 42/45 (previously 45/45). The repeat
+0731 commentary failure is a new post with invalid JSON at 604 output tokens;
+none of its prior five failures recurred and no 429 occurred. The incumbent
+had two non-JSON results and one unexpected extra field, all below 4,000 tokens.
+The same two-paragraph 0731 translation omission **did recur in all locales**.
+An agent diagnostic falsely claimed recovery; parent inspection of the saved raw
+response corrected it and retained the rejected diagnostic for audit. The prior
+Anthropic typo was fixed; uncertain Japanese-name romanization is not counted
+as proven source-name corruption. Do not claim comprehensive semantic acceptance
+from the contradicted agent review.
+
+0731 translation took 875.535 seconds, with batches 363.554 / 478.120 / 33.846
+seconds. The longest request still exceeds the 300-second runtime attempt
+budget. Total repeat spend was $0.01515132 reported for 0731 and about $0.09354844
+estimated for the incumbent. Cost differences do not establish monthly savings
+or population quality on this deliberately language-balanced corpus.
+The [repeat exhibit](../analysis/2026-09-16-190600-u20-raised-ceiling-repeat.md)
+and JSON sibling preserve exact counts, timings, error IDs, limitations, and
+source-artifact paths. No deployment, database write, or runtime activation occurred.
+
+The owner then requested brainstorming and web research on request-shape changes.
+[Research and proposed experiments](../research/2026-09-16-190600-u20-0731-request-shape-research.md)
+recommend evaluating deterministic source-language copying, output-size-based
+small batches, minimal structured versus single-language plain-text responses,
+source-segment completeness checks, and bounded retries of only failed units.
+These are proposals, not approved taxonomy/runtime changes or new paid runs.
+The selected classifier's two-call design and existing quality floors are
+unchanged. U18, U18A, and integrated staging activation retain their existing
+requirements; the optional browser review remains no new human-review gate.
+
+
+### September 16 — Approved plain-text literal translation experiment (U20)
+
+Owner approved the proposed request-shape changes and continuation through staging.
+Implement exact native-language copying in code and one source post × one target
+language per raw-text provider call. Code supplies IDs, locale keys and JSON
+serialization. Preserve the classifier two-call design and the legacy combined
+translator rollback flag. Paragraph tracking remains deferred unless measured
+omissions persist. No model/config activation or production change is implied.
+
+Regression net: provider HTTP tests preserve literal quotes/newlines and reject
+truncation with usage; caller tests cover native copies, global source languages,
+isolated failure, deadlines, stable ordering and usage; real CycleRunner →
+PostTranslationArtifact tests cover successful publication and failed locale
+handling with prompt identity literal-translation-plaintext-v2. Database storage
+must validate nonempty content without trimming the source or translations.
+
+Bounded evaluation: freeze the same 45 prepared-v4 posts and caller/provider
+hashes; run each incumbent/0731 arm once, serial within each arm, at most 90
+requests per model (known EN/ZH-CN/JA), no automatic retries, $0.50 ceiling per
+arm verified before spending, one consumed marker before each request. Calls
+reserve 1,024 + ceil(0.75 × source characters) output tokens, capped at 8,192;
+unknown-language detection uses 16 tokens outside this known-language cohort.
+Production helper is bounded by per-post calls, max_workers=3 and the existing
+attempt deadline. Inspect the recurrent omitted paragraphs personally; raw-text
+validity alone does not establish translation fidelity. Record tokens, actual
+billed/estimated cost, failed locales, source-copy equality and wall time.
+Save a scoped tested checkpoint commit; preserve unrelated uncommitted work.
+
+Runtime checkpoint `e2a439e` preserves the plaintext implementation plus the
+previously verified opt-in 0731 classifier dependencies sharing its adapters.
+Validation: 174 affected tests passed (24 required PostgreSQL tests, no skips);
+a subsequent failed-usage persistence regression passed with all 14 artifact
+lifecycle tests. Current live config and flags remain unchanged.
+
+Frozen comparison launched at 2026-09-16 19:29 JST in
+`.context/u20/plaintext-translation-20260916-192900/`. Each model has 90 requests,
+136,670 aggregate reserved output tokens (largest request 3,006), socket-idle
+timeout 180 seconds and one request at a time. The conservative cost bounds
+are $0.32506672 incumbent and $0.32597752 0731. These are reserved ceilings, not
+expected or billed costs. The independent provider arms overlap in wall time.
+The harness and earlier comparison regression tests passed 19/19.
+
+
+### September 16 — Plain-text comparison complete; paragraph guard triggered
+
+The 45-post per-model comparison completed: 90/90 requests and 45/45
+structurally complete rows on both arms, with exact native source copies.
+0731 cost $0.00723006 reported and took 759.533 seconds; incumbent cost
+$0.04653360 estimated and took 205.297 seconds. Parent inspection confirmed
+that the original two missing paragraphs recovered, but 0731 still removed
+the Japanese-original half of a bilingual post. Both models also altered a
+numeric magnitude in a different post. Two fresh, model-blinded Terra reviewers
+assessed all 180 non-native translations; review flags and parent cautions are
+preserved, not treated as human gold. Neither model passes the complete U20
+invariant gate. See `docs/analysis/2026-09-16-195300-u20-plaintext-translation-comparison.md`.
+
+Persistent omissions activate the owner-approved deferred paragraph tracking
+experiment. Add optional `paragraph_tracking=True` with a distinct
+`literal-translation-paragraphs-v3` identity. Native copies and default v2
+behavior stay unchanged. Short source-collision-free markers bound each
+paragraph in the same one-post/one-target-language response. Code validates
+all markers in order and nonempty blocks and restores original separators;
+it never makes one call per paragraph. Invalid responses retain usage and
+fail the locale without automatic retry. Single-paragraph sources keep the
+existing raw-text protocol. This opt-in mode is not activated in CycleRunner.
+
+After focused tests, freeze one targeted 0731 proof on source IDs
+`2079629240996155513` and `2096881764480561562`: exactly four calls, no retries,
+serial requests, 180-second socket-idle setting, conservative reserved cost
+no greater than $0.10 (within the existing per-model $0.50 experiment envelope).
+Only the 0731 arm is authorized for this targeted probe; any prepared incumbent
+arm stays unexecuted. Missing paragraph checks are necessary but do not prove
+correct numeric magnitude, entity identity, negation or target language.
+Record this proof separately; it cannot overwrite or rescore the 45-post run.
+
+The targeted paragraph proof completed: 4/4 accepted calls, 2/2 complete posts,
+75.424 seconds, 5,251 input / 4,848 output tokens, $0.00118770 reported.
+All 24/44 expected blocks and source URL occurrences survived. English
+added blank lines, so block completeness is not exact line-count parity.
+The opt-in guard/harness regression run passed 53 tests, including 14 required
+PostgreSQL tests and no skips. The default raw path remains v2; v3 is only an
+opt-in experiment. U20 is not closed: next address number magnitudes, target
+language and entity fidelity, then run a new frozen full-cohort quality and
+operational check before selecting or activating any translator route.
+No new human-review gate is being added.
