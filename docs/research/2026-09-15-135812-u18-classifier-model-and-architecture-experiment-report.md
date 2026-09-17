@@ -646,3 +646,20 @@ cost or throughput comparison. 90 focused tests passed, including 17 required
 PostgreSQL tests and zero skips. Full source/output evidence, costs, limits
 and independent-review cautions are in
 `docs/analysis/2026-09-17-075000-u20-compact-fidelity-fixes.md` and its JSON sibling.
+
+### Fresh five-post translation reproduction, September 17
+
+This separate U20 translator diagnostic used five purposively selected fresh
+Japanese posts from the September 10 local snapshot, not the owner-reviewed
+classifier cohorts. It returned all 10 EN/ZH responses through 0731 with zero
+provider errors in 67.118 seconds for $0.00075378 reported. The sample had
+three explicit model/tool-versus-character/person cases and two standalone
+heading cases. Native copies were exact 5/5 and all non-native line counts
+matched. F01 Chinese was a complete Japanese-source echo despite passing the
+mechanical echo/line checks; it confirms the untranslated-text symptom but is
+not a translation or role-fidelity pass. The two heading cases translated all
+tested headings, and no role confusion appeared in the usable outputs for the
+three clearer role cases. This is not an accuracy or prevalence estimate and
+does not contradict the earlier elliptical MiniMax/Phoebes failure. No
+classifier architecture, prompt, provider activation, production setting, or
+database state changed. Evidence: `docs/analysis/2026-09-17-124500-u20-five-post-error-reproduction.md` and JSON sibling; U20's quality gate remains open.

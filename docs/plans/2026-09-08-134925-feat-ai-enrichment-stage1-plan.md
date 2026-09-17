@@ -4472,3 +4472,45 @@ limitations and original rate-limit failures. Detailed exhibit:
 `docs/analysis/2026-09-17-075000-u20-compact-fidelity-fixes.md` and JSON sibling.
 The three experiments have $0.00405606 known reported inference spend, not a
 complete billing total for requests without usage and excluding review work.
+
+### September 17 — Fresh five-post error reproduction result
+
+The owner-requested frozen fresh-five translation check completed 10/10 0731
+responses with zero provider errors in 67.118 seconds for $0.00075378 reported.
+The purposive September 10 database snapshot sample had three explicit
+model/tool-versus-character/person cases and two standalone-heading cases, all
+disjoint from the prior 45. Native Japanese copies were exact 5/5 and
+non-native source-line counts matched 10/10. F01 Chinese was a complete
+Japanese-source echo that the mechanical echo validator accepted, reproducing
+the untranslated-text family but not a role-translation pass. F04/F05 headings
+translated and passed their four frozen checks; no role confusion appeared in
+the usable outputs for the three clearer role cases. This does not estimate
+accuracy or prevalence and does not reverse the earlier, more elliptical
+MiniMax/Phoebes failure. No code, prompt, provider, classifier, database, or
+deployment change occurred; 12 harness tests passed and the U20 quality gate
+remains open. Full evidence: `docs/analysis/2026-09-17-124500-u20-five-post-error-reproduction.md` and JSON sibling.
+
+### September 17 — Owner-requested fresh five-post reproduction check
+
+Owner requested five real database posts likely to expose the model/entity-role
+and untranslated-heading failures, then a run through the current process.
+Read the local production-data snapshot `pushinweight_u18_eval` in a read-only
+transaction (211,245 posts, latest source timestamp September 10). Select
+three Japanese entity-role stress cases and two short-heading cases, excluding
+the earlier 45-source cohort. Freeze verbatim source, database provenance,
+selection reasons and source-based expected checks before inference. This is
+a purposive diagnostic sample, not a population prevalence estimate or new
+human gold. Do not rewrite sources or select after seeing model output.
+
+Extend only the evaluation harness to accept an explicitly versioned targeted
+source contract (1–10 unique EN/ZH/JA rows); keep the original 45-row contract's
+language/count requirement unchanged. Verify fingerprints, drift rejection,
+request/cost caps and real caller routing. Translation code/prompts stay at
+f8df295, raw v12 / opt-in line v13. Prepare exactly five source-native JA
+copies and ten 0731-only EN/ZH requests through the same caller: serial,
+180-second socket idle, no retries, reservation <= $0.12, no additional
+semantic judge call in runtime. Prepared incumbent requests remain unexecuted.
+Save every response/error and inspect meaning against frozen expectations;
+provider failures are unavailable, never evidence of a semantic pass/fail.
+Record source/output and reproduction outcomes in a dated exhibit. No DB
+writes, model activation, staging/production deployment or new human gate.

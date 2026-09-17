@@ -54,6 +54,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT_CONTRACT = ROOT / ".context/u20/translation-synthesis-prepare-20260916-v4/contract.json"
 SCHEMA = "u20-plaintext-translation-compare/v1"
 INPUT_SCHEMA = "u20-translation-synthesis-compare/v1"
+DIAGNOSTIC_INPUT_SCHEMA = "u20-targeted-translation-source/v1"
 ARMS = {
     "incumbent": {
         "model": "deepseek-v4-flash",
@@ -122,9 +123,9 @@ def source_hashes() -> dict[str, str]:
     }
 
 
-def load_frozen_rows() -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    contract = read(INPUT_CONTRACT)
-    if contract.get("schema") != INPUT_SCHEMA:
+def load_frozen_rows(input_contract: Path | None = None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    contract = read(input_contract or INPUT_CONTRACT)
+    if contract.get("schema") not in {INPUT_SCHEMA, DIAGNOSTIC_INPUT_SCHEMA}:
         raise ValueError("frozen input contract schema mismatch")
     rows = contract.get("rows")
     if not isinstance(rows, list) or digest(rows) != contract.get("rows_sha256"):
@@ -133,10 +134,15 @@ def load_frozen_rows() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("post_id"), str):
             raise TypeError("frozen input row shape mismatch")
-        if not isinstance(row.get("text"), str):
+        if not isinstance(row.get("text"), str) or not row["text"].strip():
             raise TypeError("frozen input row text missing")
         counts[str(row.get("source_language"))] += 1
-    if len(rows) != 45 or dict(counts) != EXPECTED_LANGUAGES:
+    if len({row["post_id"] for row in rows}) != len(rows) or any(not row["post_id"] for row in rows):
+        raise ValueError("frozen source IDs must be unique and nonempty")
+    if contract["schema"] == DIAGNOSTIC_INPUT_SCHEMA:
+        if not 1 <= len(rows) <= 10 or not set(counts).issubset(EXPECTED_LANGUAGES):
+            raise ValueError("targeted diagnostic requires 1-10 EN/ZH/JA source rows")
+    elif len(rows) != 45 or dict(counts) != EXPECTED_LANGUAGES:
         raise ValueError("frozen input must contain the 45 EN/ZH/JA rows")
     return contract, rows
 
@@ -228,11 +234,12 @@ def prompt_version(paragraph_tracking: bool) -> str:
     return PARAGRAPH_TRANSLATION_PROMPT_VERSION if paragraph_tracking else LITERAL_TRANSLATION_PROMPT_VERSION
 
 
-def prepare(directory: Path, *, paragraph_tracking: bool = False, post_ids: list[str] | None = None) -> dict[str, Any]:
+def prepare(directory: Path, *, paragraph_tracking: bool = False, post_ids: list[str] | None = None, input_contract: Path | None = None) -> dict[str, Any]:
     """Create one immutable, provider-free execution contract."""
     if directory.exists():
         raise ValueError("run directory exists; refusing to overwrite frozen artifacts")
-    source_contract, rows = load_frozen_rows()
+    input_contract = (input_contract or INPUT_CONTRACT).resolve()
+    source_contract, rows = load_frozen_rows(input_contract)
     rows = select_rows(rows, post_ids)
     requests = {model_arm: capture_requests(rows, model_arm, paragraph_tracking=paragraph_tracking) for model_arm in ARMS}
     for model_arm, values in requests.items():
@@ -255,8 +262,8 @@ def prepare(directory: Path, *, paragraph_tracking: bool = False, post_ids: list
     contract = {
         "schema": SCHEMA,
         "created_at": datetime.now(UTC).isoformat(),
-        "input_contract": str(INPUT_CONTRACT),
-        "input_contract_sha256": sha(INPUT_CONTRACT),
+        "input_contract": str(input_contract),
+        "input_contract_sha256": sha(input_contract),
         "input_rows_sha256": digest(rows),
         "rows": rows,
         "rows_sha256": digest(rows),
@@ -299,9 +306,10 @@ def load_execution(
     contract, requests = read(directory / "contract.json"), read(directory / "requests.json")
     if contract.get("schema") != SCHEMA:
         raise ValueError("plaintext execution contract schema mismatch")
-    if sha(INPUT_CONTRACT) != contract.get("input_contract_sha256"):
+    input_contract = Path(contract["input_contract"])
+    if sha(input_contract) != contract.get("input_contract_sha256"):
         raise ValueError("frozen input contract changed after prepare")
-    _source, rows = load_frozen_rows()
+    _source, rows = load_frozen_rows(input_contract)
     rows = select_rows(rows, contract.get("selected_post_ids"))
     if digest(rows) != contract.get("rows_sha256") or contract.get("rows") != rows:
         raise ValueError("frozen source rows changed after prepare")
@@ -587,12 +595,13 @@ def main() -> None:
     prepare_parser = commands.add_parser("prepare")
     prepare_parser.add_argument("directory", type=Path)
     prepare_parser.add_argument("--paragraph-tracking", action="store_true")
+    prepare_parser.add_argument("--input-contract", type=Path)
     prepare_parser.add_argument("--post-id", action="append", dest="post_ids")
     execute_parser = commands.add_parser("execute")
     execute_parser.add_argument("directory", type=Path)
     execute_parser.add_argument("--model-arm", choices=tuple(ARMS), required=True)
     args = parser.parse_args()
-    result = prepare(args.directory, paragraph_tracking=args.paragraph_tracking, post_ids=args.post_ids) if args.action == "prepare" else run_arm(args.directory, args.model_arm)
+    result = prepare(args.directory, paragraph_tracking=args.paragraph_tracking, post_ids=args.post_ids, input_contract=args.input_contract) if args.action == "prepare" else run_arm(args.directory, args.model_arm)
     print(
         json.dumps(
             {

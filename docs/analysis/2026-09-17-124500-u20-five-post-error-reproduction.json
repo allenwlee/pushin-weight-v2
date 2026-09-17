@@ -1,0 +1,333 @@
+{
+  "schema": "u20-five-post-error-reproduction/v1",
+  "snapshot": "2026-09-10",
+  "run_date": "2026-09-17",
+  "provenance": {
+    "selection_contract": ".context/u20/five-fresh-selection-20260917/selected.json",
+    "review_inputs": ".context/u20/five-fresh-probe-20260917-124000/review-inputs.json",
+    "mechanical_evidence": ".context/u20/five-fresh-probe-20260917-124000/mechanical-evidence.json",
+    "independent_review": ".context/u20/five-fresh-probe-20260917-124000/independent-review.json",
+    "arm_result": ".context/u20/five-fresh-probe-20260917-124000/arms/0731/result.json",
+    "database": "pushinweight_u18_eval",
+    "database_access": "read-only"
+  },
+  "configuration": {
+    "commit": "f8df295",
+    "prompts": "raw v12 / opt-in line v13",
+    "provider_calls": 10,
+    "provider_errors": 0,
+    "classifier_or_prompt_change": false,
+    "database_writes": false,
+    "new_human_review_requested": false,
+    "harness_tests_passed": 12
+  },
+  "summary": {
+    "responses": "10/10",
+    "elapsed_ms": 67118,
+    "elapsed_seconds": 67.118,
+    "reported_cost_usd": "0.00075378",
+    "native_copies_exact": "5/5",
+    "non_native_line_count_equal": "10/10",
+    "quality_gate": "open",
+    "claim_limit": "purposive fresh five-post reproduction, not an accuracy or prevalence estimate"
+  },
+  "selection": {
+    "prior_45_excluded": ".context/u20/quantity-full45-20260916-212100/contract.json rows[].post_id",
+    "original_failures_excluded": [
+      "2093192147700977838",
+      "2093747347859865794"
+    ],
+    "purpose": "A purposive five-post Japanese source contract for translation diagnostics. It contains source and assessment expectations only; no translation-provider or model output was requested or produced."
+  },
+  "primary_findings": {
+    "f01_zh_cn": "complete Japanese source echo; the deterministic echo validator accepted it",
+    "heading_cases": "F04 and F05 passed all four frozen checks; the exact untranslated-heading symptom did not reproduce",
+    "role_cases": "no entity-role confusion observed in usable outputs for F01-F03; F01 zh-cn echo is not a role-translation pass"
+  },
+  "independent_findings": {
+    "reviewer": "independent semantic review",
+    "scope": "Five real database posts and their ten returned EN/ZH translations in review-inputs.json. This records the requested role and untranslated-prose checks only; it makes no overall accuracy claim.",
+    "cases": [
+      {
+        "case_id": "F01",
+        "en": {
+          "observation": "Role and causal relation are retained.",
+          "evidence": "‘Since I couldn't get a picture I liked with MiniMax H3, I made a LoRA’ keeps MiniMax H3 as the tool and LoRA as the adaptation; ‘a character that doesn't exist in the input’ preserves the character/test role."
+        },
+        "zh_cn": {
+          "observation": "Not a translation: the complete Japanese source, including its prose, is unchanged. Roles are merely copied, so this must not count as a correct role translation.",
+          "evidence": "Output begins exactly ‘MiniMax H3で気に入る絵が出なかったのでLoRA作った…’, identical to the source."
+        }
+      },
+      {
+        "case_id": "F02",
+        "en": {
+          "observation": "No entity-role confusion observed; headings and prose are translated.",
+          "evidence": "‘video generation AI “Minimax H3”’ identifies the model; ‘external tools like “Krea2” or “Gemini”’ preserves their tool role; ‘Place that person’ remains the prompted depicted-person role."
+        },
+        "zh_cn": {
+          "observation": "No entity-role confusion observed; headings and prose are translated.",
+          "evidence": "‘视频生成AI“Minimax H3”’ identifies the model, while ‘“Krea2”或“Gemini”等外部工具’ keeps both as external tools."
+        }
+      },
+      {
+        "case_id": "F03",
+        "en": {
+          "observation": "No tool/human role reassignment observed; headings and prose are translated.",
+          "evidence": "The cost rows retain ‘GPT Image 2’, ‘MiniMax H3 Max Turbo’, ‘Stable Audio 2.5’, and ‘ffmpeg’; ‘Progress fully delegated to Claude Code’ is followed by ‘Humans only give the OK’."
+        },
+        "zh_cn": {
+          "observation": "No tool/human role reassignment observed; headings and prose are translated.",
+          "evidence": "‘进行流程全权交由Claude Code’ and ‘人类只需点头确认’ retain the automated-workflow and human-approval split."
+        }
+      },
+      {
+        "case_id": "F04",
+        "en": {
+          "observation": "The standalone heading is translated and brand/task mappings stay distinct.",
+          "evidence": "Heading: ‘How I use AI differently - this is what I do’; mappings separately name ChatGPT, Gemini in Antigravity, DeepSeek, and Claude."
+        },
+        "zh_cn": {
+          "observation": "The standalone heading is translated and brand/task mappings stay distinct.",
+          "evidence": "Heading: ‘AI的使用区分 我是这样做的’; Gemini remains ‘在Antigravity上的开发’."
+        }
+      },
+      {
+        "case_id": "F05",
+        "en": {
+          "observation": "The report title and all three numbered headings are translated; no entity-role confusion observed in this check.",
+          "evidence": "‘AI model/service daily report | 9/7’; ‘GPT-6 Astra, improved consumption of usage quotas’; ‘Gemini, new feature for learning with images’; and ‘GLM 5.3 Flash, note the end of the half-price API period’."
+        },
+        "zh_cn": {
+          "observation": "The report title and all three numbered headings are translated; no entity-role confusion observed in this check.",
+          "evidence": "‘AI模型・服务日报｜9/7’; ‘GPT-6 Astra，改善用量消耗’; ‘Gemini，通过图像学习的新功能’; and ‘GLM 5.3 Flash，注意API半价期限结束’."
+        }
+      }
+    ],
+    "unchanged_copy_guard_explanation": {
+      "case_id": "F01",
+      "finding": "The output is accepted because `_is_untranslated_copy` returns early only when normalized source and output differ; here they match. For a zh-Hans target it then rejects an unchanged copy only when protected prose has zero CJK characters and at least twelve Latin words. F01 is Japanese/CJK prose, so `cjk == 0` is false. This is a deliberate narrow heuristic for detecting unchanged English-like copy into a CJK target; it cannot distinguish Japanese source text from Japanese text incorrectly returned for Simplified Chinese."
+    },
+    "conclusion": "F01 ZH is a reproduced false acceptance of an untranslated same-script output. The other returned outputs satisfy the requested narrow observations for headings and entity roles."
+  },
+  "mechanical_evidence": {
+    "database_rows_reverified": 5,
+    "readonly": true,
+    "all_native_copies_exact": true,
+    "checks": [
+      {
+        "case_id": "F01",
+        "target_language": "en",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 1,
+        "output_url_count": 1
+      },
+      {
+        "case_id": "F01",
+        "target_language": "zh-cn",
+        "verbatim_source_echo": true,
+        "line_count_equal": true,
+        "source_url_count": 1,
+        "output_url_count": 1
+      },
+      {
+        "case_id": "F02",
+        "target_language": "en",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      },
+      {
+        "case_id": "F02",
+        "target_language": "zh-cn",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      },
+      {
+        "case_id": "F03",
+        "target_language": "en",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 1,
+        "output_url_count": 1
+      },
+      {
+        "case_id": "F03",
+        "target_language": "zh-cn",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 1,
+        "output_url_count": 1
+      },
+      {
+        "case_id": "F04",
+        "target_language": "en",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      },
+      {
+        "case_id": "F04",
+        "target_language": "zh-cn",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      },
+      {
+        "case_id": "F05",
+        "target_language": "en",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      },
+      {
+        "case_id": "F05",
+        "target_language": "zh-cn",
+        "verbatim_source_echo": false,
+        "line_count_equal": true,
+        "source_url_count": 0,
+        "output_url_count": 0
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "F01",
+      "post_id": "2097915971260600809",
+      "author_handle": "mu_sette",
+      "source": "MiniMax H3で気に入る絵が出なかったのでLoRA作った（入力に存在しないキャラクターを召喚するテスト） https://t.co/yhgZtVRNNQ",
+      "selection_reason": "Role/entity case: a named video-generation model and LoRA are the tools; the character is an absent fictional input/target, not a model or a person.",
+      "expected_semantic_checks": [
+        "Keep MiniMax H3 as the named generation model/tool and LoRA as the created adaptation; do not turn either into a character or person.",
+        "Keep キャラクター as the fictional character that is absent from the input and is being summoned/tested.",
+        "Preserve the causal relation: because no satisfactory image appeared with MiniMax H3, the author made a LoRA.",
+        "No forced gold beyond these roles: the exact creative implication of 召喚する remains figurative/ambiguous."
+      ],
+      "translations": {
+        "en": "Since I couldn't get a picture I liked with MiniMax H3, I made a LoRA (test for summoning a character that doesn't exist in the input) https://t.co/yhgZtVRNNQ",
+        "zh-cn": "MiniMax H3で気に入る絵が出なかったのでLoRA作った（入力に存在しないキャラクターを召喚するテスト） https://t.co/yhgZtVRNNQ"
+      },
+      "native_copy_exact": true,
+      "source_lines": 1,
+      "output_lines": {
+        "en": 1,
+        "zh-cn": 1
+      },
+      "source_language": "ja",
+      "created_at": "2026-09-10T14:11:59+09:00"
+    },
+    {
+      "case_id": "F02",
+      "post_id": "2097551327261847562",
+      "author_handle": "ai_hakase_",
+      "source": "【Minimax H3 ref2vaのポーズ転写でキャラブリーディングを防ぐ方法】\n動画生成AI「Minimax H3」のref2va機能を使っていると、特定キャラのポーズを別のキャラに適用した時に外見が混ざり合っちゃう「ブリーディング」現象が起きて困ること、ありませんか？💦\n\n実はこれ、キャラクターのアイデンティティ信号とポーズのジオメトリ信号が同じ領域で競合しちゃうのが原因なんです！\n解決策として以下の4つのアプローチがめちゃくちゃ効果的ですよ〜！✨\n\n1. 深度マップ（Depth Map）の活用\n深度情報だけを条件付けにすることで、キャラ同士の融合を完全にストップ！ただ、細かい表情やディテールが少し失われちゃうトレードオフがあるので注意です！\n\n2. 棒人間（スケルトン）によるプロンプト制御\n色分けされた棒人間をポーズ参照にして、「この位置にあの人物を配置してね！」ってプロンプトで指示する方法です！外見の混濁を防ぎやすくなりますよ〜。たまに棒人間の色に染まっちゃうエラーも起きますが、再生成でサクッと回避できます！\n\n3. プロンプト・メタデータのチャンク削減\n長すぎる定義ブロックやメタデータをあえて省略することで、モデルの自律的な推論をうまく引き出せるんですって！プロンプトをシンプルにするのがコツですね！\n\n4. 外部ツールを使ったマルチステップワークフロー\n一度に全部やろうとせず、「Krea2」や「Gemini」などの外部ツールでポーズ付きのキャラクター画像を事前に作成し、それをH3に入力するという方法です！元からポーズが適用された画像を使うので、ブリーディングを根本から完全に防げます！NSFWなコンテンツの処理にも安定して使えるので本当におすすめです！\n\nアイデンティティをしっかり保持しつつ、狙い通りのポーズをバッチリ再現していきましょう！🚀\n\n#MinimaxH3 #動画生成AI",
+      "selection_reason": "Role/entity case: it repeatedly separates the MiniMax H3 model/function, external tools (Krea2 and Gemini), fictional characters, and a depicted person.",
+      "expected_semantic_checks": [
+        "Keep MiniMax H3/ref2va as the video-generation model and feature; Krea2 and Gemini are external tools, not characters or people.",
+        "Keep 特定キャラ and 別のキャラ as distinct fictional characters whose visual identities can blend.",
+        "Keep 人物 as the depicted person placed by a prompt; do not merge it with the model/tool labels.",
+        "Preserve the stated technical mechanism and tradeoffs: identity and pose signals compete; depth conditioning can reduce blending while losing fine detail.",
+        "No forced gold for the precise English technical rendering of キャラブリーディング; its meaning must remain visual-character blending."
+      ],
+      "translations": {
+        "en": "【How to prevent character bleeding in pose transfer with Minimax H3 ref2va】\nWhen using the ref2va feature of the video generation AI “Minimax H3,” don't you ever run into the annoying “bleeding” phenomenon where, when applying a specific character's pose to another character, their appearances blend together? 💦\n\nActually, this happens because the character's identity signal and the pose's geometry signal compete in the same region!\nAs solutions, the following 4 approaches are super effective〜! ✨\n\n1. Leveraging depth maps\nBy conditioning only on depth information, you can completely stop the fusion between characters! However, be careful—there's a trade-off where fine facial expressions and details get slightly lost!\n\n2. Prompt control using stick figures (skeletons)\nThis is a method where you use color-coded stick figures as pose references and instruct via prompt, “Place that person at this position!” It makes it easier to prevent appearance blending! Sometimes errors occur where things get tinted with the stick figure's color, but you can quickly avoid them by regenerating!\n\n3. Reducing chunks of prompt metadata\nBy intentionally omitting overly long definition blocks or metadata, you can draw out the model's autonomous reasoning! The trick is to keep the prompt simple!\n\n4. Multi-step workflow using external tools\nInstead of trying to do everything at once, this method involves pre-creating character images with poses using external tools like “Krea2” or “Gemini,” then inputting them into H3! Since you use images that already have the pose applied, you can completely prevent bleeding from the root! It's also stable for handling NSFW content, so it's truly recommended!\n\nLet's faithfully reproduce the intended poses while firmly preserving identity! 🚀\n\n#MinimaxH3 #VideoGenerationAI",
+        "zh-cn": "【利用Minimax H3 ref2va的姿势转写防止角色混合的方法】\n在使用视频生成AI“Minimax H3”的ref2va功能时，把特定角色的姿势应用到另一个角色上，结果外观混在一起出现“混合”现象，是不是很让人头疼？💦\n\n其实这是因为角色的身份信号和姿势的几何信号在同一区域发生了竞争！ \n作为解决方案，以下4种方法超级有效哦～！✨\n\n1. 利用深度图（Depth Map）\n仅用深度信息作为条件，就能完全阻止角色之间的融合！不过要注意，这样会有一些细微表情和细节丢失的权衡哦！\n\n2. 用棒人图（骨架）进行提示词控制\n这个方法是用颜色区分的棒人图作为姿势参考，然后通过提示词指示“请把那个人物放在这个位置！”这样可以更容易防止外观混浊。偶尔会出现被棒人图颜色染上的错误，但重新生成就能轻松解决！\n\n3. 减少提示词元数据的块数\n有意省略过长的定义块或元数据，反而能更好地激发模型的自主推理！技巧就是让提示词保持简洁！\n\n4. 使用外部工具的多步骤工作流\n不要试图一次完成所有事，而是先通过“Krea2”或“Gemini”等外部工具预先创建带姿势的角色图像，再将其输入到H3中！因为使用的是原本就应用了姿势的图像，所以可以从根本上完全防止混合！在处理NSFW内容时也能稳定使用，真的很推荐！\n\n在牢牢保持身份特征的同时，完美再现目标姿势吧！🚀\n\n#MinimaxH3 #视频生成AI"
+      },
+      "native_copy_exact": true,
+      "source_lines": 21,
+      "output_lines": {
+        "en": 21,
+        "zh-cn": 21
+      },
+      "source_language": "ja",
+      "created_at": "2026-09-09T14:03:01+09:00"
+    },
+    {
+      "case_id": "F03",
+      "post_id": "2096805599313006940",
+      "author_handle": "hiroshika5555",
+      "source": "💰費用（https://t.co/HHVb5DxyB8経由）\n・キャラシート&止め絵：GPT Image 2 → 1枚 約2〜14円\n・動画15秒：MiniMax H3 Max Turbo（480P）→ 約15円 ※75%オフセール中\n・BGM 15秒：Stable Audio 2.5 → 約8円\n・BGM合成＆480P→1080p（1944×1080）アップスケール：ffmpeg → 無料\n完成テイクだけなら合計 約26円\nボツ案・試行錯誤ぜんぶ込みでも 約105円\n🛠️進行はClaude Codeに一任\nプロンプト設計→見積もり→生成→フレーム分解して検品→BGM合成まで自動。人間はOK出しだけ\n動画生成でキャラの顔が崩れる問題は「始点画像の顔をキャラシートで固定してから動画化」で解決しました\n#AIart #AIvideo #生成AI",
+      "selection_reason": "Role/entity case: the workflow assigns distinct production roles to GPT Image 2, MiniMax H3, Stable Audio, ffmpeg, Claude Code, the generated character image, and a human approver.",
+      "expected_semantic_checks": [
+        "Keep GPT Image 2, MiniMax H3 Max Turbo, Stable Audio 2.5, ffmpeg, and Claude Code as tools/models, each tied to its listed workflow function.",
+        "Keep キャラ/キャラシート as generated-character imagery; keep 人間 as the human who only approves, never as an AI/tool role.",
+        "Preserve every price, unit, resolution, duration, and the 75% sale qualification without role reassignment.",
+        "Preserve the causal repair claim: fixing the face begins by anchoring the starting image with a character sheet."
+      ],
+      "translations": {
+        "en": "💰Cost (via https://t.co/HHVb5DxyB8)\n・Character sheet & still image: GPT Image 2 → approx. 2–14 yen per image\n・15-second video: MiniMax H3 Max Turbo (480P) → approx. 15 yen ※75% off sale in progress\n・15-second BGM: Stable Audio 2.5 → approx. 8 yen\n・BGM mixing & 480P→1080p (1944×1080) upscaling: ffmpeg → free\nIf only final takes are counted, about 26 yen in total\nEven including all discarded drafts and trial and error, about 105 yen\n🛠️Progress fully delegated to Claude Code\nFrom prompt design → cost estimation → generation → frame decomposition for inspection → BGM mixing, all automated. Humans only give the OK\nThe problem of character faces collapsing during video generation was solved by \"fixing the face in the starting image with the character sheet before turning it into a video\"\n#AIart #AIvideo #生成AI",
+        "zh-cn": "💰费用（经由https://t.co/HHVb5DxyB8）\n・角色表&静帧图：GPT Image 2 → 1张 约2～14日元\n・视频15秒：MiniMax H3 Max Turbo（480P）→ 约15日元 ※75%优惠促销中\n・BGM 15秒：Stable Audio 2.5 → 约8日元\n・BGM合成＆480P→1080p（1944×1080）放大：ffmpeg → 免费\n仅算完成版本的话合计 约26日元\n连废弃方案・试错全部算上也 约105日元\n🛠️进行流程全权交由Claude Code\n从提示词设计→报价→生成→拆帧检查→BGM合成全部自动化。人类只需点头确认\n视频生成中角色脸部崩坏的问题通过「先用角色表固定起始图像的脸部再进行视频化」解决了\n#AIart #AIvideo #生成AI"
+      },
+      "native_copy_exact": true,
+      "source_lines": 11,
+      "output_lines": {
+        "en": 11,
+        "zh-cn": 11
+      },
+      "source_language": "ja",
+      "created_at": "2026-09-07T12:39:46+09:00"
+    },
+    {
+      "case_id": "F04",
+      "post_id": "2094096917068468232",
+      "author_handle": "shioyakidev",
+      "source": "AIの使い分け 僕はこうしてる\nChatGPT→普段の会話、知らない分野についての質問\nGemini→Antigravityでの開発、中程度のデータの高精度の分析・生成\nDeepSeek→大量のデータの分析・生成\nClaude→高度な開発\n\nこれ以外にいい方法あれば教えてください！",
+      "selection_reason": "Standalone-heading case: the short idiomatic opening line is followed by compact mixed-brand prose assigning tasks to ChatGPT, Gemini, DeepSeek, and Claude.",
+      "expected_semantic_checks": [
+        "Translate the opening line as a heading/claim about the author's way of using AI; it must not remain unintentionally untranslated.",
+        "Keep all four brands and their arrows/task mappings distinct.",
+        "Keep Antigravity as the development context named under Gemini, not a role assigned to the author.",
+        "No forced gold for the exact conversational register of 僕はこうしてる; it should remain informal first-person wording."
+      ],
+      "translations": {
+        "en": "How I use AI differently - this is what I do\nChatGPT → everyday conversation, questions about unfamiliar fields\nGemini → development in Antigravity, high-precision analysis and generation of moderate amounts of data\nDeepSeek → analysis and generation of large amounts of data\nClaude → advanced development\n\nIf there are other good methods besides these, please let me know!",
+        "zh-cn": "AI的使用区分 我是这样做的\nChatGPT→日常对话、关于未知领域的提问\nGemini→在Antigravity上的开发、中等数据的高精度分析与生成\nDeepSeek→大量数据的分析与生成\nClaude→高级开发\n\n如果有其他更好的方法请告诉我！"
+      },
+      "native_copy_exact": true,
+      "source_lines": 7,
+      "output_lines": {
+        "en": 7,
+        "zh-cn": 7
+      },
+      "source_language": "ja",
+      "created_at": "2026-08-31T01:16:26+09:00"
+    },
+    {
+      "case_id": "F05",
+      "post_id": "2096986728385118513",
+      "author_handle": "JPAITrend",
+      "source": "AIモデル・サービス日報｜9/7\n\n① GPT-6 Astra、利用枠の消費を改善\nTibo氏によると、一部の高消費ケースでは、消費量が従来の約1/3〜1/4に。品質は変わらないとのこと。API料金の値下げとは別です。\n\n② Gemini、画像で学ぶ新機能\nTestingCatalogによると、Students画面に「Immersive View」が登場。画像の気になる部分をクリックして、詳しく学べる仕組みです。公開範囲や日本での利用可否は未確認。\n\n③ GLM 5.3 Flash、API半額期間の終了に注意\nOpenRouterのZai経由では、100万トークンあたり入力$0.075／出力$0.25。\n割引期限は日本時間9月10日01:00。提供元によって料金は異なります。",
+      "selection_reason": "Standalone-heading case: a compact Japanese report title precedes three mixed-brand service items, providing a direct check for an untranslated heading and for structured item fidelity.",
+      "expected_semantic_checks": [
+        "Translate the report title and all three numbered subheadings; none should be silently left in Japanese.",
+        "Keep GPT-6 Astra, Gemini, and GLM 5.3 Flash as separate services/models, and preserve Tibo, TestingCatalog, Students, Immersive View, OpenRouter, and Zai as their stated entities/contexts.",
+        "Preserve the numerical claims: roughly one-third to one-quarter consumption, $0.075 input and $0.25 output per million tokens, and the September 10 01:00 JST deadline.",
+        "Keep uncertainty intact: availability/release scope in Japan is unconfirmed and prices vary by provider."
+      ],
+      "translations": {
+        "en": "AI model/service daily report | 9/7\n\n① GPT-6 Astra, improved consumption of usage quotas\nAccording to Tibo, in some high-consumption cases, consumption has dropped to about 1/3 to 1/4 of previous levels. The quality is said to be unchanged. This is separate from API fee reductions.\n\n② Gemini, new feature for learning with images\nAccording to TestingCatalog, an \"Immersive View\" has appeared on the Students screen. It's a mechanism where you can click on areas of interest in an image to learn more. The scope of availability and whether it can be used in Japan are unconfirmed.\n\n③ GLM 5.3 Flash, note the end of the half-price API period\nVia Zai on OpenRouter, it's $0.075 input / $0.25 output per 1 million tokens.\nThe discount deadline is September 10, 01:00 Japan time. Pricing varies by provider.",
+        "zh-cn": "AI模型・服务日报｜9/7\n\n① GPT-6 Astra，改善用量消耗\n据Tibo氏称，部分高消耗案例中，消耗量降至以往的约1/3〜1/4。据说质量不变。这与API费用下调无关。\n\n② Gemini，通过图像学习的新功能\n据TestingCatalog称，Students画面中出现“Immersive View”。点击图像中感兴趣的部分，即可详细了解。公开范围及日本是否可用尚未确认。\n\n③ GLM 5.3 Flash，注意API半价期限结束\n经OpenRouter的Zai中转，每100万个Token输入$0.075／输出$0.25。\n折扣期限为日本时间9月10日01:00。不同提供商价格各异。"
+      },
+      "native_copy_exact": true,
+      "source_lines": 11,
+      "output_lines": {
+        "en": 11,
+        "zh-cn": 11
+      },
+      "source_language": "ja",
+      "created_at": "2026-09-08T00:39:30+09:00"
+    }
+  ],
+  "limitations": [
+    "The newer role cases are more explicit than the original elliptical MiniMax/Phoebes sentence.",
+    "No accuracy, prevalence, or release decision follows from five purposively selected posts.",
+    "No new human review was requested; the U20 quality gate remains open."
+  ]
+}

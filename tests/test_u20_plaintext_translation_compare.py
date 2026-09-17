@@ -195,3 +195,38 @@ def test_prepare_targeted_paragraph_probe_freezes_only_selected_source_rows(tmp_
     assert "Repeated paragraph." in requests["0731"][0]["messages"][0]["content"]
     with pytest.raises(ValueError, match="selection"):
         harness.prepare(tmp_path / "unknown", post_ids=["missing"])
+
+
+def test_fresh_diagnostic_sources_freeze_real_caller_and_detect_drift(tmp_path):
+    rows = [{'post_id': str(i), 'source_language': 'ja', 'text': '短い見出し\n\n日本語の本文です。'} for i in range(5)]
+    source = tmp_path / 'new-source.json'
+    data = {'schema': harness.DIAGNOSTIC_INPUT_SCHEMA, 'rows': rows, 'rows_sha256': harness.digest(rows)}
+    source.write_text(json.dumps(data))
+    directory = tmp_path / 'fresh'
+    contract = harness.prepare(directory, input_contract=source, paragraph_tracking=True)
+    loaded, requests = harness.load_execution(directory)
+    assert loaded == contract
+    assert contract['limits']['calls_per_arm'] == 10
+    assert len(requests['0731']) == 10
+    assert all('English (en)' in c['messages'][0]['content'] or 'Simplified Chinese' in c['messages'][0]['content'] for c in requests['0731'])
+    source.write_text(source.read_text() + '\n')
+    with pytest.raises(ValueError, match='input contract changed'):
+        harness.load_execution(directory)
+
+
+@pytest.mark.parametrize('mutation', ['duplicate', 'too_many', 'unsupported_language', 'legacy_schema'])
+def test_diagnostic_input_does_not_weaken_cohort_or_language_constraints(tmp_path, mutation):
+    rows = [{'post_id': str(i), 'source_language': 'ja', 'text': '本文'} for i in range(5)]
+    schema = harness.DIAGNOSTIC_INPUT_SCHEMA
+    if mutation == 'duplicate':
+        rows[1]['post_id'] = '0'
+    elif mutation == 'too_many':
+        rows = [{'post_id': str(i), 'source_language': 'ja', 'text': '本文'} for i in range(11)]
+    elif mutation == 'unsupported_language':
+        rows[0]['source_language'] = 'other'
+    else:
+        schema = harness.INPUT_SCHEMA
+    source = tmp_path / 'source.json'
+    source.write_text(json.dumps({'schema': schema, 'rows': rows, 'rows_sha256': harness.digest(rows)}))
+    with pytest.raises(ValueError):
+        harness.load_frozen_rows(source)
