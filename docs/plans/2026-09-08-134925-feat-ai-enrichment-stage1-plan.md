@@ -3,9 +3,8 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-16
+amended: 2026-09-17
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
 execution: code
 ollija:
@@ -266,9 +265,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     run; it does not relax any quality, cost, migration, provider, staging, or
     exact-SHA gate.
 
+27. On September 17 the owner requested independent, model-specific optimization plans for the snapshot-derived shortlist. R109–R114 and U25–U29 reopen offline research and trial design despite KTD55's earlier closed selection. They permit different prompts, reasoning, output representations, batch sizes, and bounded call shapes for each candidate. These permissions concern new experiment identities only; R107 remains the runtime default until a separately verified staging integration adopts a passing alternative. This planning request starts no paid inference, deployment, or production change. Prices come only from frozen snapshots; official web documentation supplies capability evidence.
+
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
 ## Plain-English Summary
+
+The September 17 model work gives each shortlisted model a separate path toward zero observed errors for classification, translation, or commentary. Research its documented interface first, adapt its prompts and request shape, then check old failures and fresh posts. Choose an affordable passing configuration for each task; an identical-prompt ranking is not the objective. U25–U29 own this work, with [official-documentation findings](../research/2026-09-17-145314-model-specific-optimization-research.md). The existing staging target and production defaults remain in force while these experiments are planned and evaluated.
 
 Stage 1C will classify new posts into thirteen types. It separates attendance-bearing events from time-bounded opportunities, and adds specific job-listing and personnel-change types. It also stores structured people, affiliations, jobs, events, and opportunities so future analysis and MCP/API clients can use the facts without rereading prompt output.
 
@@ -314,7 +317,7 @@ results. Local MXFP4 is not the runtime candidate. SetFit remains a later option
 for replacing a proven task with a trained small classifier; it does not block
 this delivery. Remaining classifier work now concerns the revised taxonomy,
 prompt boundaries, candidate-identity persistence, acceptance fixtures, and
-staging behavior rather than another model-selection ladder.
+staging behavior. The later R109–R114 experiments may recommend replacements, but their results do not activate a new runtime route.
 
 Every classifier dimension remains strict to the attributed brand. A
 multi-brand post may therefore have different post types, product labels,
@@ -986,6 +989,15 @@ The production classifier asks for six post types, sentiment, discourse, and two
   from being a poll option. Every positive untracked-promotion fixture persists
   the promoted candidate identity and exact-matched account when available.
 
+**Model-specific optimization and evidence**
+
+- R109. Optimize each shortlisted model independently for its assigned task toward zero observed errors, preserving the accepted taxonomy, brand boundaries, source-context limits, translation fidelity, and commentary purpose. Changing model settings or request shape is allowed; dropping difficult posts, labels, languages, or required outputs to improve the score is not.
+- R110. Before a model's quality run, bind official model/provider documentation and a verified request profile to the exact route. Distinguish documented capability, proposed tuning, and observed behavior; an unsupported parameter or endpoint is an integration result, not a semantic-quality score.
+- R111. Derive all price estimates from a hashed, saved pricing snapshot, with the chosen endpoint and tier identified. Report the actual input, visible output, reasoning where available, failed attempts, and all configured calls per delivered source post; missing usage is unknown, not zero. A future endpoint-coverage extension requires a separately saved and explicitly adopted snapshot before its prices can be used.
+- R112. Preserve existing classifier and translation/commentary corpora as consumed development evidence. Score only assessed reference fields, retain the fresh45 owner's blanks as unreviewed, and use a newly frozen temporal sample after configuration freeze for generalization evidence. The completed owner review remains the only mandatory human review.
+- R113. A task passes only with complete required outputs, zero confirmed structural or semantic errors, zero unresolved review findings, and the KTD59 cost/latency limits satisfied. Report first-attempt and final-delivery results separately, with counts by source post and applicable output unit. A bounded test establishes zero observed errors for that corpus and rubric, never zero future errors or human-verified accuracy.
+- R114. Finish each attempted model/task with either a qualifying configuration or a terminal report naming its remaining failures, unsupported scope, and spent budget. Adoption requires a whole-system projection within the owner's $150/month LLM-only target, including retained headline and other LLM jobs and the expected 2–3x coverage scenario; a cheap three-task subtotal cannot establish that limit.
+
 #### Current v3 compatibility labels
 
 The following table remains the exact current-v3 vocabulary. Its Nationalism
@@ -1384,9 +1396,10 @@ name is historical compatibility and does not name the future U18A family.
   materially lower measured price than the incumbent V4.1 Flash and frontier
   Sol runs. The owner selected it after reviewing cloud, local, and alternative
   model evidence. Preserve those experiments as development evidence, but do
-  not reopen a fallback ladder or substitute the local MXFP4 checkpoint. Improve
-  behavior through the newly versioned prompt/schema and explicit acceptance
-  fixtures on the selected route.
+  not substitute the local MXFP4 checkpoint. R109–R114 permit new offline
+  model-specific experiments; runtime changes still require their own passing
+  integration and staging evidence. Improve the selected route through the
+  newly versioned prompt/schema and explicit acceptance fixtures meanwhile.
 - KTD56. **Persist promotion subjects separately from post-level promotion
   keys.** The five promotion keys describe the post as a whole and remain
   queryable through its tracked-brand joins. `BrandDiscoveryCandidate` plus
@@ -1396,7 +1409,63 @@ name is historical compatibility and does not name the future U18A family.
   misrepresenting `general`, `spam`, `scam`, `crypto`, or `unauthorized` as a
   property of a tracked brand or silently creating an authoritative brand.
 
+- KTD57. **Give each model a documented task profile and bounded tuning path.** Use the research exhibit's exact candidate/task assignments. Tune representation and reasoning before adding semantic calls, and change one failure-linked factor per revision. This implements R109–R110 (session-settled: user-directed — chosen over identical-structure benchmarking because the objective is each model's best practical result).
+- KTD58. **Separate qualification from development agreement.** Reuse old outputs without repurchasing controls, then freeze the chosen configuration before reading fresh evaluation outputs. Independent automated review sees source/context and the rubric, not candidate identity or old answers; retain evidence spans and adjudicate disagreements. Reference disagreement alone is not an error, and confirmed reference corrections receive a new version rather than silently changing an old score. Covers R112–R113.
+- KTD59. **Bound the search and count the whole workload.** Proposed execution defaults are four complete configuration variants per model/task, at most $3 reserved per model/task, at most $5 total for external review calls, and a $30 portfolio ceiling including that review allowance. Freeze tighter computed request/token/cost caps before transport; unused allowance does not justify extra variants. Use one shared maximum of three in-flight provider calls and one executing experiment process. Qualification allows no hidden retries, semantic repairs, provider fallbacks, or dropped inputs. Diagnostic transport retries, if necessary, require a separate frozen variant and remain in its cost and completion denominators. Retain the classifier's 180-second p95 complete-post gate; propose the same gate for all required translation targets and three-locale commentary, plus a 900-second ceiling per 100-post role run at concurrency three. These are proposed experiment defaults, not new spending authorization or measured results. Covers R111, R113–R114.
+- KTD60. **Reuse production callers and deterministic validation.** Extend the existing U18/U20 harness seams; do not create a parallel enrichment pipeline. Default classifier shape remains two roles, initially five posts per request for new candidates; translation starts one source/target per call and commentary one source per three-locale result. A later profile may fuse the two classifier roles, reduce batches to one, split translation by source paragraph with context retained, or split commentary by locale. A third semantic classifier pass is outside this bounded search. Every profile must restore the complete canonical result in code without inferring missing semantic labels. Covers R109 and preserves R107 for runtime.
+
+### Model-specific tuning and qualification sequence
+
+The [research exhibit](../research/2026-09-17-145314-model-specific-optimization-research.md) owns provider facts and starting hypotheses. Qwen3.7 Flash and Gemini 2.5 Flash-Lite receive independent trials for all three tasks. Hy-MT2-1.8B then Hy-MT2-7B receive translation-only trials; the larger model is conditional on a remaining small-model failure or capacity limitation. GPT-OSS-120B receives classification/commentary trials only where those tasks remain unsatisfied; GPT-5 Nano is a classification reserve. A qualifying model does not excuse another already-started candidate from receiving a terminal report, but no candidate must consume its entire tuning budget.
+
+| Step | Corpus and action | Advancement condition |
+| --- | --- | --- |
+| Route proof | Saved metadata, official documentation, fake-transport request capture, then at most two tiny separately budgeted capability probes | Exact route and accepted request controls established; no silently discarded fields |
+| Smoke | Eight existing diagnostic posts per task, selected before the run | All required records parse, align, and complete; transport failures are diagnosed before semantic tuning |
+| Diagnosis | Up to 24 existing cases covering observed failure families | Every proposed change names the errors it is meant to fix; retain all outputs and new regressions |
+| Revision | At most four complete profiles including baseline under KTD59 | Prefer the lowest-complexity profile that removes the named failure; changing a profile creates a new contract |
+| Regression | The original45 plus fresh45 classifier corpora defined below, with versioned U18A fixtures; or old45 and random100 translation/commentary evidence | Zero observed errors under R113, with unavailable reference dimensions identified rather than scored negative |
+| Fresh qualification | Freeze 100 previously unused source/context rows from one new 24-hour collected-post window, without author/language quotas | Complete, independently reviewed outputs on the frozen profile; rare-label stress results remain separate from random prevalence |
+| Stability and operating fit | Repeat a preselected 20-post slice once with the unchanged profile; compute task cost and whole-system forecast | Zero observed failures and KTD59/R114 operating gates satisfied |
+
+Classifier regression inputs are the 45 IDs in `.context/u18/human-ambiguity-study-v1/selection-manifest.json` and the later 45 IDs in `docs/analysis/2026-09-15-121342-u18-fresh-45-review-packet-selection-manifest.json`. Freeze their row hashes, order, and source/context versions separately before combining their 90 posts. Preserve the first corpus's completed owner-reference policy and the later corpus's explicit blank-is-unreviewed policy. Translation's old45 comes from `.context/u20/translation-synthesis-prepare-20260916-v4/contract.json`; its random100 comes from `docs/analysis/2026-09-17-125626-u20-random100-live-selection.json` and the corresponding durable evidence directory. Recover a missing private source from its archived evidence before running; do not silently substitute posts.
+
+A fresh-sample failure returns to a named diagnosis; that sample becomes development data. Do not repeatedly tune against it and keep calling it unseen. No replacement holdout is purchased within the initial search allowance: close with a failure report and propose a bounded follow-up. Old45/fresh45 and random100 have already been inspected; none is relabeled as untouched. A fresh classifier sample receives source-grounded automated assessment, not an invented human-gold score. Coverage-limited dimensions cannot receive an accuracy claim.
+
+Classification assessment must examine missing and extra labels separately, per-brand sentiment/stance, cross-brand leakage, rare positive and negative cases, official/staff context, promoted-subject identity, and correctly justified `context_missing`. New shadow topics remain shadow-only unless their separate gate passes. Translation checks quantities/currencies, idioms, entity roles, speaker/quote attribution, uncertainty, line/paragraph structure, protected tokens, and all generated target languages. Commentary checks every factual and interpretive assertion against its supplied source/context and the three locale outputs; natural wording differences are not errors. Each automated reviewer must assess omissions as well as additions and record uncertainty. No routine runtime judge is introduced by evaluation review.
+
+Retain separate totals for semantic errors, structural errors, transport failures, and pre-call exclusions. One post with several bad fields counts once in post-level failure and in each affected field count. Source-native copies count toward delivered coverage but never toward generated-translation accuracy. The random100 commentary input-cap exclusions remain in full-service coverage; shortening context cannot turn those into passes by discarding necessary evidence.
+
 ### High-Level Technical Design
+
+The model experiment lifecycle is independent of runtime activation:
+
+```mermaid
+flowchart TB
+  A[Saved price snapshot and official model docs] --> B[Freeze route and task profile]
+  B --> C[Capability probe and diagnostic cases]
+  C --> D{Named failure and allowance remains?}
+  D -->|yes| B
+  D -->|no failure| E[Full regression and fresh qualification]
+  D -->|budget or capability exhausted| F[Terminal failure report]
+  E --> G{Zero observed errors and operating gates pass?}
+  G -->|no| F
+  G -->|yes| H[Task-specific adoption recommendation]
+  H --> I[Separate U23 staging integration proof]
+```
+
+The experiment data path preserves the runtime boundary:
+
+```mermaid
+flowchart TB
+  A[Frozen source context and task rubric] --> B[Model-specific request adapter]
+  B --> C[Shared transport budget and concurrency guard]
+  C --> D[Pinned model endpoint]
+  D --> E[Raw response and usage evidence]
+  E --> F[Deterministic canonical validation]
+  F --> G[Independent offline semantic review]
+  G --> H[Coverage error cost and latency report]
+```
 
 The R95 trial has two independent calls and one strict publication boundary:
 
@@ -1575,6 +1644,16 @@ The active continuation begins at U18. U18 must close the owner-reference diagno
 ---
 
 ## Implementation Units
+
+For the September 17 model-specific work, execute U25–U29 in dependency order; U18/U20 provide the existing callers and evidence. These units produce experiment results and an adoption recommendation, not an automatic production change.
+
+| Unit | Work | Primary files | Depends on |
+| --- | --- | --- | --- |
+| U25 | Freeze documented model/route profiles | `scripts/u18_runtime_classifier_candidate.py`, `scripts/u20_translation_synthesis_execute.py` | Existing U18/U20 harnesses |
+| U26 | Extend bounded trials and failure accounting | `scripts/u20_random100_live.py`, `scripts/u20_plaintext_translation_compare.py` | U25 |
+| U27 | Independently tune assigned model/tasks | U18/U20 callers and versioned experiment artifacts | U26 |
+| U28 | Qualify frozen configurations on fresh evidence | U18/U20 evaluators, `docs/analysis/` | U27 |
+| U29 | Decide task routing and whole-system affordability | Consolidated experiment report, this plan | U28 |
 
 U1–U5 below are the completed taxonomy-v1 baseline and retain their original
 commands, identifiers, and evidence meaning. Executors of this amendment start
@@ -2378,7 +2457,60 @@ browser tests all use these values.
 
 ---
 
+### U25. Freeze model-specific route and request profiles
+
+- **Goal:** Give every shortlisted task/model a researched, reproducible API contract before quality testing.
+- **Requirements:** R109–R111; KTD57 and KTD60.
+- **Dependencies:** Existing U18/U20 frozen harnesses and the September 17 research exhibit.
+- **Files:** `scripts/u18_runtime_classifier_candidate.py`; `scripts/u20_translation_synthesis_execute.py`; `x_monitor/openrouter.py`; planned `scripts/model_task_profiles.py`; `tests/test_u18_runtime_classifier_candidate.py`; `tests/test_u20_translation_synthesis_execute.py`; planned `tests/test_model_task_profiles.py`; versioned profile artifacts under `docs/research/`.
+- **Approach:** Extract only the small reusable profile seam needed by the existing callers. Record exact model/provider/upstream ID, tier/quantization, official URLs and retrieval dates, allowed/omitted parameters, reasoning accounting, representation/schema, batch shape, source/token/output limits, timeout, lifecycle, credential name, and snapshot hash. Remove live-price lookup from new trial preflight. Use existing Qwen/Gemini endpoint captures; mark the four catalog-only profiles ineligible for paid execution until separately adopted endpoint snapshot coverage exists. Use normal Chat Completions for hosted models and preserve native-provider versus gateway distinctions. Resolve capabilities with fake-wire checks and the bounded probes from the tuning sequence; never infer an unsupported field is accepted merely because HTTP returns 200.
+- **Test scenarios:** A GPT-5 Nano profile omits inherited temperature/top-p; Hy uses its user-message/raw-text interface; Qwen cannot silently claim strict-schema support; Gemini Flex cannot switch to standard unnoticed. A missing endpoint price or wrong profile hash prevents a full trial. A captured caller request matches the frozen model and settings; a stale shared environment cannot redirect it. Fake clients exercise the real caller paths rather than only profile helpers.
+- **Verification:** All listed fields have evidence or an explicit probe result; unresolved routes are reported individually and do not stop eligible routes. The profile registry does not change current runtime defaults.
+
+### U26. Extend bounded trials and failure accounting
+
+- **Goal:** Make model-specific customization measurable without duplicate sends or unbounded spend.
+- **Requirements:** R111–R114; KTD59–KTD60.
+- **Dependencies:** U25.
+- **Files:** `scripts/u18_runtime_classifier_candidate.py`; `scripts/u20_random100_live.py`; `scripts/u20_plaintext_translation_compare.py`; `scripts/u20_translation_synthesis_execute.py`; their existing `tests/test_*.py` counterparts.
+- **Approach:** Reuse before-send consumption markers, arm/process locks, source/caller/request hashes, raw response capture, and replay. Add a shared portfolio ledger with per-task reservations and the KTD59 global guard. Give each profile its own request count, output allowance, parser, and deterministic mapping to the canonical result. Calculate token reservations with the selected model's tokenizer when available and a documented conservative bound otherwise. Separate request failures, delivered-output errors, exclusions, and unknown billing. Preserve existing immutable runs and keep all new output out of production tables.
+- **Test scenarios:** Two simultaneous attempts for one frozen request send once; a restart replays completed evidence without charge; changed prompts require a new identity. Cross-role concurrency never exceeds three. Unsupported fields, missing pricing, exhausted reservation, truncated reasoning-only output, wrong provider, and incomplete locale/brand coverage fail visibly. A representation-only normalizer cannot create an absent semantic label or suppress an extra one.
+- **Verification:** Fake-transport call-chain tests prove request identity, accounting, failure retention, and no hidden fallback through the existing classifier, translation, and synthesis callers.
+
+### U27. Tune each assigned model and task independently
+
+- **Goal:** Find each candidate's lowest-complexity configuration that removes its observed failures within the bounded search.
+- **Requirements:** R109–R113; KTD57–KTD60.
+- **Dependencies:** U26 and an eligible U25 route for the task.
+- **Files:** `x_monitor/attribution.py`; `x_monitor/literal_translation.py`; `x_monitor/translation_invariants.py`; `x_monitor/synthesis.py`; `scripts/model_task_profiles.py`; existing U18/U20 runners; `tests/test_model_task_profiles.py`; relevant existing caller tests; timestamped diagnostic contracts/reports under `docs/analysis/`.
+- **Approach:** Follow the researched starting profiles, eight-case smoke, and 24-case diagnostic sequence. Work translation first because its 0731 fidelity failures are already concrete, then commentary, then classification; candidate tasks remain independent. Use Qwen and Gemini plus Hy where applicable; start reserve models only for an unsatisfied assigned task. For each failure distinguish wrong fact/omission, taxonomy ambiguity, formatting, context loss, output truncation, provider failure, and evaluator defect before changing anything. A new revision names its expected fix, changed factor, and regression risk. Use model-specific reasoning and output headroom; test shrinking batches before multiplying semantic roles. Once quality passes, optionally spend a remaining variant on batch sizes 10 or 20 to reduce repeated prompt cost, rerunning the same gate.
+- **Test scenarios:** Cases exercise the historical secondary-label omissions, DeepSeek/MiniMax promotion boundary, vague employment transition, country stance, short ambiguous text, pronunciation/idiom/currency errors, paragraph formatting, and all five documented random100 commentary hallucination families. Different wire shapes must map to identical required fields and source identities. A three-locale split counts three requests and must retain cross-locale meaning. Long inputs or unsupported language pairs remain in coverage, never disappear from the denominator.
+- **Verification:** Every attempted profile has its frozen input/settings, raw output, reviewed errors, spend, latency, and terminal disposition. Nonqualifying profiles remain failures; no test-set-specific post-ID corrections enter code.
+
+### U28. Qualify frozen profiles with independent assessment
+
+- **Goal:** Establish zero observed errors on the complete regression set and a genuinely new temporal sample under a fixed configuration.
+- **Requirements:** R112–R113; KTD58–KTD59.
+- **Dependencies:** U27 qualifying diagnostic profile and versioned review rubric.
+- **Review preflight:** Before buying qualification outputs, freeze the reviewer routes and reserve a conservative envelope for both full review passes and reconciliation across every scored output. Apply KTD59 to that complete envelope. Insufficient remaining review budget blocks qualification before candidate transport; sampling fewer outputs cannot satisfy R113.
+- **Files:** Existing U18 comparison/evaluation scripts and U20 random100 runner; their evaluator tests; source selections, rubric, independent judgments, reconciliation, and reports under `docs/analysis/` and private `.context/`.
+- **Approach:** Reuse all consumed corpora for regression without claiming unseen accuracy. Freeze the fresh selection using the existing read-only collected-post method, exclude prior corpus IDs, and retain its natural language/account distribution. Run the complete current semantic contract, not just old v3 axes. Reuse the previously successful independent reviewer method with candidate identity hidden; configure two independent review passes and source-grounded reconciliation for unresolved differences within KTD59's review budget. If a reviewer is paid, its route/price must pass U25 too. The main agent adjudicates using supplied evidence and the owner's rules; unresolved cases block a zero-error claim without requiring another owner-labeling exercise. Repeat the predetermined 20-case stability slice once and retain both outputs.
+- **Test scenarios:** An owner blank is not scored as `none`; a valid extra classification can expose a reference defect; unreviewed fields remain distinct from assessed negatives. A refusal, missing language, capacity error, context cap, or unjustified `context_missing` cannot earn a perfect score. Reconciliation cannot overwrite the original reviews. Rare-label fixture success does not imply a population prevalence or accuracy estimate.
+- **Verification:** Reports give numerator/denominator, per-label/language support, measured coverage, review uncertainty, complete-post p50/p95 latency, wall time, and cost including all attempts. A fresh-sample failure closes the attempt under the bounded follow-up rule rather than generating more holdouts until one passes.
+
+### U29. Recommend task routing and verify affordability
+
+- **Goal:** Identify an independently qualified route for each task whose combined operating cost fits the owner's budget.
+- **Requirements:** R111, R113–R114; KTD59–KTD60.
+- **Dependencies:** U28 reports; historical production volume audit and snapshot cost screen.
+- **Files:** `docs/research/2026-09-15-135812-u18-classifier-model-and-architecture-experiment-report.md`; timestamped model/task results under `docs/analysis/`; this plan's U18/U20/U23 integration decisions.
+- **Approach:** Report each task on two dimensions: measured error/coverage against its required intelligence, and total delivered-result cost. Include latency separately. Forecast monthly calls from classified posts, generated language targets, requested commentary, headlines, and every retained LLM role; show present and 2x/3x coverage scenarios with demand assumptions. Use measured candidate usage and snapshot endpoint/tier prices, with reasoning, failed calls, cache assumptions, and fees separated. Keep non-LLM TwitterAPI charges outside the $150 target. State when volume or billing gaps prevent a defensible forecast. Recommend only qualifying task routes; otherwise name the unresolved task and cheapest remaining bounded experiment.
+- **Test expectation:** No new unit tests for documentation-only calculation; verify the totals reproducibly from saved ledger and snapshot inputs and reconcile their denominators with the reports.
+- **Verification:** An adoption recommendation includes exact profiles, quality limitations, operating cost, latency, remaining uncertainty, and the U23 caller/staging checks required before activation. Remove abandoned runtime experiment paths while preserving immutable research artifacts. Production remains outside the current delivery target.
+
 ## Verification Contract
+
+For U25–U29, run the focused existing harness/caller suites named in those units plus `tests/test_model_task_profiles.py`. Passing helper tests alone is insufficient: at least one fake-transport call-chain test for each of classification, literal translation, and synthesis must inspect the actual request. The paid qualification criteria are R113 and KTD59; failed experiments can complete the research work under R114 but cannot satisfy the product-quality gate. Recheck Ollija after the final plan amendment. U23 must verify a selected custom shape through the real staging worker/cycle before its model profile becomes active.
 
 | Gate | Applies to | Required evidence |
 | --- | --- | --- |
@@ -2478,6 +2610,8 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 
 ## Definition of Done
 
+- U25–U29: Every attempted model/task has a complete, reproducible success or failure report; every qualified profile satisfies R113 without excluded failures or fabricated reference coverage. U29 records a defensible whole-system affordability result or its explicit missing evidence. Research completion is distinct from model acceptance and runtime activation; a remaining failed task stays open for delivery.
+
 - U1: One versioned, discourse-free classifier contract covers the final ten types, five product labels, context provenance, strict parsing, and deterministic non-gold fixtures.
 - U2: Additive schema and seed migration work on fresh and existing databases; the production Django writer publishes complete per-brand results atomically and never writes discourse or stale rows.
 - U3: Public, internal, and brand reader surfaces replace discourse with product labels, preserve nationalism and discoverability, and pass real browser assurance in supported current locales without layout redesign.
@@ -2512,6 +2646,9 @@ Stages 2–4 also use additive state and reversible activation. Disable headline
 ---
 
 ## Sources and Research
+
+- `docs/research/2026-09-17-145314-model-specific-optimization-research.md` — official model/provider customization evidence, saved-price provenance, candidate task assignments, and unresolved endpoint questions for U25–U29.
+- `docs/research/2026-09-17-143812-openrouter-pricing-snapshot/manifest.json` and `docs/research/2026-09-17-144306-snapshot-only-model-task-cost-screen/README.md` — sole current pricing authority and measured workload screen; no web-price substitution.
 
 - `docs/research/2026-09-14-171515-openrouter-classifier-model-selection.json` — public catalog and endpoint receipt for R97's three-model shortlist, observed offers and precision, considered alternatives, and fixed request counts; no inference results.
 - `docs/research/2026-09-16-151113-u18a-two-role-classifier-prompts.md` — complete readable system-prompt templates for the selected content and brand-interpretation calls, including the owner-reviewed brand-isolation, label-boundary, Geopolitical, and deterministic output rules.
@@ -4514,3 +4651,140 @@ Save every response/error and inspect meaning against frozen expectations;
 provider failures are unavailable, never evidence of a semantic pass/fail.
 Record source/output and reproduction outcomes in a dated exhibit. No DB
 writes, model activation, staging/production deployment or new human gate.
+
+
+### September 17 — Owner-requested live random-100 translation/commentary evaluation
+
+The owner requested a subagent to choose 100 random posts from the live database
+collected within the past 24 hours and run the system, following discussion of
+0731 translation error rates. This authorizes a bounded offline evaluation of
+the current 0731 translation and commentary callers, not harvesting, classifier
+reruns, production writes, provider activation, or deployment. Use production
+read-only queries with a statement timeout. Freeze the database clock/window,
+uniform random selection method, eligible count, 100 unique IDs, verbatim source,
+collection and publication timestamps, source language and available stored
+quote/local-parent context before inference. Apply no language, author-role,
+length, or known-hard-case selection filters and do not replace failures.
+
+Use the existing raw v12 / opt-in line v13 translation callers, preserving
+source-native locale copies and all three target locales for other languages.
+Missing/invalid source language follows the existing detection path. Use the
+existing commentary caller with 4,000 output tokens and all three output locales
+per post. Freeze current source and request hashes, exact 0731 OpenRouter /
+DeepInfra identity, current price preflight and actual conservative reservation
+before transport. The outer experiment cap is $5, with at most 500 requests
+(100 posts times a worst-case detection + three translations + commentary).
+Bound total in-flight requests to three across both roles; preserve serial
+within-post translation and no automatic retries, repairs, fallbacks or judge
+call in the runtime. Use the existing per-role timeout behavior and retain raw
+provider responses, errors, usage, unavailable-cost markers and wall time.
+
+Extend only experiment harness support for this explicit 100-row contract; keep
+legacy 45-row and 1–10-row diagnostic validation intact. Test real caller routing,
+source/request drift rejection, caps, native-language handling and failures.
+Save outputs outside the production database. Distinguish request/structural
+failures, missing translations, minor wording defects, and material meaning
+defects. Independently screen source/output pairs with exact supporting excerpts;
+uncertain findings remain uncertain. Source-language copies are excluded from
+translation-quality denominators. Report by language direction and per post as
+well as per translated output; commentary is a separate denominator. This sample
+represents the collected 24-hour window, not all X posts. Automated semantic
+review is screening evidence, not human gold, and introduces no new owner review
+requirement. Current quality gates remain unchanged.
+
+
+### September 17 — Four audience-topic candidates for the next classifier shadow run
+
+The owner asked when the three previously discussed topics would receive shadow
+testing and added AGI as a fourth. Queue these explicitly in the next U18A
+classifier evaluation, after the ongoing live random-100 translation/commentary
+run and before U23 staging activation. This is a topic-candidate evaluation, not
+a new post-type family. Keep the seven existing audience topics in the baseline
+and these four candidates shadow-only until their individual support, false-positive,
+overlap, and cost findings justify activation. This amendment does not start an
+additional paid classifier run or change the current translator experiment.
+
+- `multimodal`: substantive image, video, speech/audio (including TTS/STT), or
+  cross-modal model capabilities, use, limitations, or development. An attached
+  image/video alone is insufficient.
+- `world_models`: learning or simulating environment dynamics, physical/spatial
+  relationships, or predicting consequences/actions through a world model.
+  Ordinary image/video generation alone is insufficient.
+- `dual_use`: substantive discussion of civilian/military/security applications
+  or beneficial/harmful uses of the same AI capabilities. Geopolitical labels
+  remain independently assigned from their own evidence; no automatic nationalism.
+- `agi`: substantive discussion or claims about artificial general intelligence,
+  progress or limits toward general intelligence, capability criteria, feasibility,
+  timelines, or implications. General praise, isolated task competence, or a bare
+  hashtag without topic-bearing content is insufficient.
+
+These are initial shadow definitions, to be versioned before evaluation. Use
+the existing content-role classifier request and its normal two-role architecture;
+no third topic-only call. Require evidence tied to the current attributed brand,
+while allowing multiple supported topics. Reuse the frozen random100 as an
+unweighted prevalence sample when source/brand context is complete. Add separately
+identified candidate-positive and near-miss examples if random100 contains too
+few positives; do not pool those enriched examples into prevalence estimates.
+Compare the existing seven-topic baseline and expanded candidate contract on
+identical inputs under a separately frozen bounded run. Report new-topic support,
+false positives, confusions, effects on existing axes, tokens, latency and cost.
+No new mandatory owner review is introduced and none of these candidates is
+automatically promoted by this planning decision.
+
+
+Random100 preparation receipt: live `pushinweight-db-shadow`
+(`dpg-d9koekqjobas73fvjqng-a`) yielded 3,960 eligible posts in the frozen window
+2026-09-16T03:56:26.424322Z through 2026-09-17T03:56:26.424322Z. Selected 100
+unique posts, using `fetched_at` (Django `auto_now_add`, first collection) and
+`ORDER BY random() LIMIT 100`. The stored-language mix is 69 English, 10
+Simplified Chinese, 6 Japanese, 1 Traditional Chinese, 1 Korean, and 13 other.
+The exact current caller gives 215 translation calls and 85 native copies.
+Four full-context commentary inputs exceed the existing input cap, leaving 96
+commentary provider requests plus four recorded pre-call coverage failures.
+Frozen run: `.context/u20/random100-live-20260917-125626/`. The maximum
+reservation is $1.64891628 ($0.99896588 translation + $0.64995040 commentary),
+311 requests, no retries, total concurrency three. These are reservations and
+planned counts, not completed results or actual spend.
+
+
+### September 17 — Same-sample incumbent DSV4.1 Flash control
+
+After the live random100 0731 run completed, the owner requested the same test
+using DSV4.1 Flash. Reuse the exact frozen 100 source/context rows and order from
+`.context/u20/random100-live-20260917-125626/`; do not query/resample the database
+or repurchase the 0731 arm. Use the existing direct DeepSeek incumbent adapter
+and credentials, retaining its observed `deepseek-v4-flash` request alias while
+recording the advertised current V4.1 identity and response identity separately.
+Freeze a new contract and preflight current pricing before any paid transport.
+Use identical translation and commentary prompt strings and the same 215
+translation requests, 85 source-native copies, four commentary input-cap
+rejections, and 96 commentary requests. Preserve role output/timeout caps,
+three total in-flight requests, zero retries/repairs/fallbacks, no publication,
+and a separately derived reservation within a $5 outer cap. Differences required
+by each provider's native sampling/thinking API must be explicit rather than
+hidden as identical execution. Save the original 0731 harness source before
+extending arm selection; never rewrite its frozen contracts/results. Add focused
+arm-routing and prompt-equivalence checks before execution. Direct DeepSeek cost
+is a token-based estimate when it supplies no billed dollar amount; distinguish
+that estimate from OpenRouter's reported billing. Review outputs with the same
+frozen rubric and save original and reconciled judgments. This is a paired
+model comparison, not a translator activation or new owner-review requirement.
+
+
+Random100 0731 outcome: all 311 provider requests consumed once. Translation
+returned 202 responses; 13 rate limits and two caller-rejected responses left
+200 available translations, 85 exact native copies, and 12/100 posts with at
+least one missing locale. Reconciled automated screening found 7/200 material
+translation defects, six uncertain outputs, and three minor-only defects.
+Commentary completed 87/100 posts: four input-cap rejects, eight adapter
+invalid-content failures, and one schema mismatch. Reconciled screening found
+15/261 material commentary-locale defects (five complete source posts), three
+uncertain outputs and six minor-only defects. At post level, 17/100 had a missing
+or confirmed-material translation issue; 18/100 had a missing or confirmed-
+material commentary issue. Counts retain unresolved cases and reviewer
+disagreements rather than treating unflagged output as human-verified truth.
+Known reported inference cost $0.02357100 (incomplete billing for some failures),
+wall time 931.320 seconds; 14 focused tests passed. Gates remain open. See
+`docs/analysis/2026-09-17-125626-u20-random100-live-report.md` and its durable
+evidence directory. This sample uses the natural recent language mix; it cannot
+isolate prompt gains against the older balanced language corpus.
