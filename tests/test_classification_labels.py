@@ -160,7 +160,11 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
         PostBrandSignal,
         PostEnrichmentState,
     )
-    from monitor.cycle import _publish_stage1_classification
+    from monitor.cycle import (
+        _classification_tracked_brand_catalog,
+        _publish_stage1_classification,
+    )
+    from x_monitor.attribution import _tracked_brand_catalog
 
     call_command("flush", verbosity=0, interactive=False)
     legacy_post_aliases = tuple(
@@ -275,6 +279,16 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
         "china_national_stance": "none",
         "us_national_stance": "none",
     }
+    tweet = {
+        "tweet_id": post.pk,
+        "text": post.text,
+        "context": [],
+        "brand_ids": [brand.pk],
+        "tracked_brand_catalog": _classification_tracked_brand_catalog(),
+    }
+    catalog = _tracked_brand_catalog([], [tweet])
+    tweet["tracked_brand_catalog"] = catalog["brands"]
+    tweet["_classification_catalog_revision"] = catalog["revision"]
     published = _publish_stage1_classification(
         post_id=post.pk,
         result={
@@ -283,7 +297,7 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
             "promoted_subjects": [],
             "by_brand": {brand.pk: classification},
         },
-        tweet={"text": post.text, "context": []},
+        tweet=tweet,
         model="seed-test-model",
         run_id="seed-v4-writer",
     )

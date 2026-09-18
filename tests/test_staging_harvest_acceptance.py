@@ -766,6 +766,9 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         reattribute, "build_translator_client_from_env", lambda _cfg: client
     )
     monkeypatch.setattr(
+        reattribute, "build_classifier_client_from_env", lambda _cfg: client
+    )
+    monkeypatch.setattr(
         reattribute, "build_relevancy_client_from_env", lambda _cfg: client
     )
 
