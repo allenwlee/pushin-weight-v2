@@ -272,6 +272,13 @@ name, and exact rollback confirmation. Copy the JSON receipt to the operation
 record, but never create a tracked receipt file. The dump is removed in the
 command's guaranteed cleanup path.
 
+Activation revalidates the candidate under its isolated shadow name, disables
+it again, and only then swaps names. It writes the paired active/recovery
+receipt comments while the new canonical database still refuses connections;
+enabling the canonical database is the final cutover action. This ordering
+prevents web health checks or user traffic from racing validation or observing
+an unreceipted database.
+
 The dump explicitly includes only the `public` application schema. Operational
 recovery schemas such as `account_user_about_backup` and
 `account_geography_backup` remain production-only and never enter staging.

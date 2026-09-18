@@ -53,6 +53,13 @@ def _literal_row(post: Post) -> dict[str, object]:
     }
 
 
+def test_synthesis_config_requires_a_lease_safety_margin_over_provider_timeout():
+    with pytest.raises(ValueError, match="lease must exceed provider timeout"):
+        _config(lease_seconds=359, timeout_seconds=300)
+
+    assert _config(lease_seconds=360, timeout_seconds=300).lease_seconds == 360
+
+
 def _synthesis_values(suffix: str = "") -> dict[str, str]:
     return {
         "en": f"The author announces availability and signals a product milestone{suffix}.",

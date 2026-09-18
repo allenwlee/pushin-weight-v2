@@ -92,13 +92,20 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
         PostBrandProductLabel,
         PostBrandSignal,
         PostEnrichmentState,
-        PostUntrackedBrandPromotion,
         PostUnsanctionedFlag,
+        PostUntrackedBrandPromotion,
         UntrackedBrandPromotionEvidence,
     )
-    from monitor.cycle import _parse_published_classifications, _publish_stage1_classification
     from core.targeted_extraction import _organization_candidate
-    from x_monitor.attribution import BrandRow, _tracked_brand_catalog, classify_batch_pragmatics_full
+    from monitor.cycle import (
+        _parse_published_classifications,
+        _publish_stage1_classification,
+    )
+    from x_monitor.attribution import (
+        BrandRow,
+        _tracked_brand_catalog,
+        classify_batch_pragmatics_full,
+    )
 
     # Transactional migration tests flush reference rows after restoring the
     # latest schema. Seed this test's required catalog explicitly so it stays
@@ -271,7 +278,9 @@ def test_promoted_subject_renames_reuse_exact_account_and_refresh_recurrence():
         PostUntrackedBrandPromotion,
         UntrackedBrandPromotionEvidence,
     )
-    from monitor.classification_persistence import _write_promoted_subject
+    from monitor.classification_persistence import (
+        _write_promoted_subject,
+    )
 
     account = Account.objects.create(author_id="renamed-promoter", handle="same_handle")
     posts = [
@@ -318,3 +327,181 @@ def test_promoted_subject_renames_reuse_exact_account_and_refresh_recurrence():
         BrandDiscoveryCandidate.objects.get().pk
     }
     assert [row.recurrence_count for row in evidence] == [2, 2]
+
+    # A replay through the existing evidence row repairs stale counts too.
+    evidence[0].recurrence_count = 99
+    evidence[0].save(update_fields=["recurrence_count"])
+    _write_promoted_subject(
+        promotion=promotions[1],
+        post=posts[1],
+        subject={
+            "name": "New Name",
+            "handle": "same_handle",
+            "account_handle": "same_handle",
+            "domain": "example.ai",
+            "evidence": "Try New Name at example.ai",
+        },
+        observed_at=observed_at,
+    )
+    assert set(
+        UntrackedBrandPromotionEvidence.objects.values_list("recurrence_count", flat=True)
+    ) == {2}
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_candidate_resolution_prefers_exact_account_then_exact_domain():
+    from django.utils import timezone
+
+    from core.models import (
+        Account,
+        BrandDiscoveryCandidate,
+        Post,
+        PostUntrackedBrandPromotion,
+        UntrackedBrandPromotionEvidence,
+    )
+    from monitor.classification_persistence import (
+        _targeted_extraction_identity,
+        _write_promoted_subject,
+    )
+
+    now = timezone.now()
+    account = Account.objects.create(
+        author_id="precedence-account",
+        handle="precedence_handle",
+    )
+
+    def candidate(*, identity: str, name: str, post: Post):
+        return BrandDiscoveryCandidate.objects.create(
+            candidate_identity=identity,
+            observed_name=name,
+            aliases=[name],
+            candidate_handles=[],
+            source_post=post,
+            source_identities=[f"post:{post.pk}"],
+            first_observed_at=now,
+            last_observed_at=now,
+        )
+
+    def promotion(post: Post):
+        return PostUntrackedBrandPromotion.objects.create(
+            post=post,
+            promotion_keys=["general"],
+            contract_version="classification/v4",
+            taxonomy_version="taxonomy/v4",
+            prompt_version="test",
+            model="test",
+            provider_role="content",
+        )
+
+    account_post = Post.objects.create(
+        tweet_id="precedence-account-post",
+        text="Account candidate",
+    )
+    account_promotion = promotion(account_post)
+    account_candidate = candidate(
+        identity="precedence-account-candidate",
+        name="Account Candidate",
+        post=account_post,
+    )
+    UntrackedBrandPromotionEvidence.objects.create(
+        promotion=account_promotion,
+        brand_discovery_candidate=account_candidate,
+        source_post=account_post,
+        exact_matched_account=account,
+        observed_name="Account Candidate",
+        aliases=["Account Candidate"],
+        handles=["@precedence_handle"],
+        domains=[],
+        products=[],
+        hashtags=[],
+        evidence_spans=[],
+        subject_identity="precedence-account-subject",
+        first_seen_at=now,
+        last_seen_at=now,
+        recurrence_count=1,
+    )
+    account_identity = _targeted_extraction_identity(
+        name="Identity Candidate", handle="precedence_handle"
+    )
+    assert account_identity is not None
+    identity_candidate = candidate(
+        identity=account_identity,
+        name="Identity Candidate",
+        post=account_post,
+    )
+
+    account_target_post = Post.objects.create(
+        tweet_id="precedence-account-target",
+        text="Try Identity Candidate.",
+    )
+    _write_promoted_subject(
+        promotion=promotion(account_target_post),
+        post=account_target_post,
+        subject={
+            "name": "Identity Candidate",
+            "handle": "precedence_handle",
+            "account_handle": "precedence_handle",
+            "domain": None,
+            "evidence": "Try Identity Candidate.",
+        },
+        observed_at=now,
+    )
+    account_target_evidence = UntrackedBrandPromotionEvidence.objects.get(
+        source_post=account_target_post,
+    )
+    assert account_target_evidence.brand_discovery_candidate_id == account_candidate.pk
+    assert account_target_evidence.brand_discovery_candidate_id != identity_candidate.pk
+
+    domain_post = Post.objects.create(
+        tweet_id="precedence-domain-post",
+        text="Domain candidate",
+    )
+    domain_promotion = promotion(domain_post)
+    domain_candidate = candidate(
+        identity="precedence-domain-candidate",
+        name="Domain Candidate",
+        post=domain_post,
+    )
+    UntrackedBrandPromotionEvidence.objects.create(
+        promotion=domain_promotion,
+        brand_discovery_candidate=domain_candidate,
+        source_post=domain_post,
+        exact_matched_account=None,
+        observed_name="Domain Candidate",
+        aliases=["Domain Candidate"],
+        handles=[],
+        domains=["precedence.example"],
+        products=[],
+        hashtags=[],
+        evidence_spans=[],
+        subject_identity="precedence-domain-subject",
+        first_seen_at=now,
+        last_seen_at=now,
+        recurrence_count=1,
+    )
+    domain_identity = _targeted_extraction_identity(
+        name="Domain Identity", handle=None
+    )
+    assert domain_identity is None
+
+    domain_target_post = Post.objects.create(
+        tweet_id="precedence-domain-target",
+        text="Try Domain Identity at precedence.example.",
+    )
+    _write_promoted_subject(
+        promotion=promotion(domain_target_post),
+        post=domain_target_post,
+        subject={
+            "name": "Domain Identity",
+            "handle": None,
+            "account_handle": None,
+            "domain": "precedence.example",
+            "evidence": "Try Domain Identity at precedence.example.",
+        },
+        observed_at=now,
+    )
+    domain_target_evidence = UntrackedBrandPromotionEvidence.objects.get(
+        source_post=domain_target_post,
+    )
+    assert domain_target_evidence.brand_discovery_candidate_id == domain_candidate.pk

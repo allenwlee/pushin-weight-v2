@@ -721,9 +721,35 @@ def test_activation_keeps_the_canonical_name_and_persists_one_receipt(
     engine.cleanup_artifact(result.candidate.artifact)
     assert not result.candidate.artifact.path.exists()
     assert manager.verify() == receipt
-    assert events.index(
+    assert events.index("database:receipt") < events.index(
         f"database:allow:{engine.policy.target.database}:true"
-    ) < events.index("database:receipt")
+    )
+
+
+def test_activation_revalidates_the_isolated_candidate_before_any_rename(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    adapter.candidate_census = replace(
+        adapter.candidate_census,
+        row_counts={**adapter.candidate_census.row_counts, "posts": 1},
+    )
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+
+    with (
+        pytest.raises(RefreshError, match="candidate_count_mismatch:posts"),
+        engine.target_lock(),
+    ):
+        manager.activate(result)
+
+    assert adapter.rename_count == 0
+    assert adapter.states[engine.policy.target.database].allow_connections is True
+    assert adapter.states[result.candidate.name].allow_connections is False
 
 
 @pytest.mark.parametrize(

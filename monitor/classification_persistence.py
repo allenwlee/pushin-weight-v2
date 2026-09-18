@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 from django.utils import timezone
 
+from core.classification_contract import UNTRACKED_BRAND_PROMOTION_KEYS
 from core.models import (
     Account,
     AudienceTopicConcept,
@@ -30,7 +31,6 @@ from core.models import (
     PostUntrackedBrandPromotion,
     UntrackedBrandPromotionEvidence,
 )
-from core.classification_contract import UNTRACKED_BRAND_PROMOTION_KEYS
 
 AUDIENCE_TOPIC_SCHEME_KEY = "ai_audience_topics/v1"
 _HANDLE_RE = re.compile(r"^@?([A-Za-z0-9_]{1,64})$")
@@ -298,6 +298,31 @@ def _merge_candidate(
     return candidate
 
 
+def _refresh_candidate_recurrence(candidate: BrandDiscoveryCandidate) -> None:
+    """Keep every evidence row's recurrence count aligned to source posts.
+
+    A candidate can have more than one visible subject identity in a single
+    source post. Recurrence is therefore the number of distinct source posts,
+    not the number of evidence rows. Recompute it after both insert and replay
+    paths so an older inconsistent row is repaired on the next observation.
+    """
+    recurrence_count = (
+        UntrackedBrandPromotionEvidence.objects
+        .filter(brand_discovery_candidate=candidate)
+        .values("source_post_id")
+        .distinct()
+        .count()
+    )
+    if recurrence_count < 1:
+        return
+    (
+        UntrackedBrandPromotionEvidence.objects
+        .filter(brand_discovery_candidate=candidate)
+        .exclude(recurrence_count=recurrence_count)
+        .update(recurrence_count=recurrence_count)
+    )
+
+
 def _write_promoted_subject(
     *, promotion: PostUntrackedBrandPromotion, post: Post, subject: dict[str, Any], observed_at: datetime,
 ) -> None:
@@ -346,13 +371,7 @@ def _write_promoted_subject(
         },
     )
     if created:
-        # This count includes the just-created row and is stable on replay.
-        recurrence_count = UntrackedBrandPromotionEvidence.objects.filter(
-            brand_discovery_candidate=candidate
-        ).count()
-        UntrackedBrandPromotionEvidence.objects.filter(
-            brand_discovery_candidate=candidate
-        ).update(recurrence_count=recurrence_count)
+        _refresh_candidate_recurrence(candidate)
         return
 
     # A retry of the same full result is idempotent.  Update bounded visible
@@ -374,6 +393,7 @@ def _write_promoted_subject(
     for field, value in updates.items():
         setattr(evidence, field, value)
     evidence.save(update_fields=[*updates, "updated_at"])
+    _refresh_candidate_recurrence(candidate)
 
 
 def persist_v4_extensions(

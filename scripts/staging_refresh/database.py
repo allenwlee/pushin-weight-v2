@@ -1448,6 +1448,12 @@ class LifecycleManager:
         prepare_receipt: Callable[[], Receipt],
         failure_code: str,
     ) -> Receipt:
+        # Inspect the incoming database while it still has its isolated name.
+        # Once both names have moved, the canonical database must remain
+        # unavailable until its durable receipt is in place; otherwise the
+        # live web service can race the post-rename validation or briefly
+        # serve an unreceipted database.
+        receipt = prepare_receipt()
         try:
             self.adapter.set_allow_connections(self.target_url, incoming, False)
             self.adapter.terminate_connections(self.target_url, incoming)
@@ -1455,9 +1461,8 @@ class LifecycleManager:
             self.adapter.terminate_connections(self.target_url, self.canonical)
             self.adapter.rename_database(self.target_url, self.canonical, displaced)
             self.adapter.rename_database(self.target_url, incoming, self.canonical)
-            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
-            receipt = prepare_receipt()
             self._write_receipt(receipt)
+            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
         except BaseException:  # noqa: BLE001 - every cutover failure must reconcile
             self._repair_swap(
                 incoming=incoming,
@@ -1502,12 +1507,21 @@ class LifecycleManager:
         receipt = self._receipt(action="refresh", recovery=recovery, result=result)
 
         def prepare_receipt() -> Receipt:
-            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
-            CandidateProcessor(
-                policy=self.policy,
-                target_url=self.target_url,
-                adapter=self.adapter,
-            ).validate(candidate, census)
+            self.adapter.set_allow_connections(self.target_url, candidate.name, True)
+            try:
+                census = self.adapter.inspect_candidate(
+                    self.target_url, candidate.name
+                )
+                CandidateProcessor(
+                    policy=self.policy,
+                    target_url=self.target_url,
+                    adapter=self.adapter,
+                ).validate(candidate, census)
+            finally:
+                self.adapter.set_allow_connections(
+                    self.target_url, candidate.name, False
+                )
+                self.adapter.terminate_connections(self.target_url, candidate.name)
             return receipt
 
         return self._swap(
@@ -1629,14 +1643,19 @@ class LifecycleManager:
             raise RefreshError("recovery_database_already_exists")
 
         def prepare_receipt() -> Receipt:
-            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
-            self._verify_shape(census)
-            return self._receipt(
-                action="rollback",
-                recovery=displaced,
-                prior=active.receipt,
-                census=census,
-            )
+            self.adapter.set_allow_connections(self.target_url, recovery, True)
+            try:
+                census = self.adapter.inspect_candidate(self.target_url, recovery)
+                self._verify_shape(census)
+                return self._receipt(
+                    action="rollback",
+                    recovery=displaced,
+                    prior=active.receipt,
+                    census=census,
+                )
+            finally:
+                self.adapter.set_allow_connections(self.target_url, recovery, False)
+                self.adapter.terminate_connections(self.target_url, recovery)
 
         return self._swap(
             incoming=recovery,

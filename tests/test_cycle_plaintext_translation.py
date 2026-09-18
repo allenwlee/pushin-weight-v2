@@ -1,9 +1,12 @@
 """Exercise the production post-fetch caller and its durable literal writer."""
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from core.models import Post, PostEnrichmentState, PostTranslationArtifact
 from monitor.cycle import CycleRunner
-from x_monitor import reattribute
+from x_monitor import literal_translation, reattribute
 from x_monitor.config import Config, LlmConfig
 from x_monitor.provider_telemetry import ProviderTextResponse
 
@@ -92,6 +95,66 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
         assert artifact.output_tokens == 18
         post.refresh_from_db()
         assert post.text_en == source
+
+
+def test_post_fetch_does_not_publish_literal_response_after_claim_is_reassigned(monkeypatch):
+    """A response from an expired worker must not overwrite a new owner's output."""
+    post = Post.objects.create(
+        tweet_id="literal-claim-fence",
+        text="source",
+        lang="en",
+        text_en="newer English",
+        text_zh_cn="较新的中文",
+    )
+    state = PostEnrichmentState.objects.create(
+        post=post,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+
+    def translate_then_reassign(tweets, client, **kwargs):
+        PostEnrichmentState.objects.filter(pk=state.pk).update(
+            claim_owner="harvester:new-run",
+            claim_run_id="new-run",
+            claim_expires_at=timezone.now() + timedelta(minutes=5),
+        )
+        return [
+            {
+                "tweet_id": tweet["tweet_id"],
+                "lang_detected": "en",
+                "text_en": "source",
+                "text_zh_cn": "过时的中文",
+                "text_ja": "古い日本語",
+            }
+            for tweet in tweets
+        ]
+
+    monkeypatch.setattr(
+        reattribute, "build_translator_client_from_env", lambda cfg: object()
+    )
+    monkeypatch.setattr(
+        literal_translation,
+        "translate_batch_literal_plaintext",
+        translate_then_reassign,
+    )
+    cfg = Config(
+        enabled_models=["deepseek"],
+        daily_ceiling=100,
+        llm=LlmConfig(
+            literal_translation_v2_enabled=True,
+            translator_model="deepseek-v4-flash",
+            translator_base_url="https://api.deepseek.com/anthropic",
+        ),
+    )
+
+    CycleRunner(cfg=cfg)._run_post_fetch([], run_id="old-run")
+
+    state.refresh_from_db()
+    post.refresh_from_db()
+    assert state.claim_run_id == "new-run"
+    assert state.translation_status == PostEnrichmentState.Status.PENDING
+    assert post.text_en == "newer English"
+    assert post.text_zh_cn == "较新的中文"
+    assert not PostTranslationArtifact.objects.filter(post=post).exists()
 
 
 @pytest.mark.parametrize("failure", ["quantity", "language", "pronunciation"])
