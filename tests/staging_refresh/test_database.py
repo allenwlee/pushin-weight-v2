@@ -204,6 +204,7 @@ class FakeLifecycleAdapter(FakeAdapter):
         self.rename_count = 0
         self.fail_after_rename: int | None = None
         self.fail_every_repair = False
+        self.fail_enable_name: str | None = None
 
     def create_shadow(self, _url: str, name: str, marker: str) -> None:
         super().create_shadow(_url, name, marker)
@@ -233,6 +234,9 @@ class FakeLifecycleAdapter(FakeAdapter):
         )
 
     def set_allow_connections(self, _url: str, name: str, allowed: bool) -> None:
+        if allowed and name == self.fail_enable_name:
+            self.fail_enable_name = None
+            raise RefreshError("injected_enable_failure")
         state = self.states[name]
         self.states[name] = replace(state, allow_connections=allowed)
         self.events.append(f"database:allow:{name}:{str(allowed).lower()}")
@@ -265,6 +269,13 @@ class FakeLifecycleAdapter(FakeAdapter):
             self.states[recovery_name], comment=recovery_comment
         )
         self.events.append("database:receipt")
+
+    def write_database_comments(
+        self, _url: str, comments: Mapping[str, str | None]
+    ) -> None:
+        for name, comment in comments.items():
+            self.states[name] = replace(self.states[name], comment=comment)
+        self.events.append("database:comments:restore")
 
     def drop_recovery(self, _url: str, name: str) -> None:
         del self.states[name]
@@ -750,6 +761,34 @@ def test_activation_revalidates_the_isolated_candidate_before_any_rename(
     assert adapter.rename_count == 0
     assert adapter.states[engine.policy.target.database].allow_connections is True
     assert adapter.states[result.candidate.name].allow_connections is False
+
+
+def test_activation_enable_failure_repairs_names_and_original_comments(
+    tmp_path: Path,
+) -> None:
+    engine, adapter, result, _events = _validated_candidate(tmp_path)
+    canonical_comment = adapter.states[engine.policy.target.database].comment
+    candidate_comment = adapter.states[result.candidate.name].comment
+    adapter.fail_enable_name = engine.policy.target.database
+    manager = LifecycleManager(
+        policy=engine.policy,
+        target_url=engine.target_url,
+        adapter=adapter,
+        now=lambda: datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
+    )
+
+    with (
+        pytest.raises(RefreshError, match="activation_failed_repaired"),
+        engine.target_lock(),
+    ):
+        manager.activate(result)
+
+    canonical = adapter.states[engine.policy.target.database]
+    candidate = adapter.states[result.candidate.name]
+    assert canonical.allow_connections is True
+    assert canonical.comment == canonical_comment
+    assert candidate.allow_connections is False
+    assert candidate.comment == candidate_comment
 
 
 @pytest.mark.parametrize(

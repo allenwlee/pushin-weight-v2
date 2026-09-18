@@ -237,6 +237,10 @@ class SnapshotAdapter(Protocol):
         recovery_comment: str,
     ) -> None: ...
 
+    def write_database_comments(
+        self, database_url: str, comments: Mapping[str, str | None]
+    ) -> None: ...
+
     def drop_recovery(self, database_url: str, name: str) -> None: ...
 
 
@@ -804,6 +808,24 @@ class PsycopgSnapshotAdapter:
                     sql.Identifier(recovery_name), sql.Literal(recovery_comment)
                 )
             )
+
+    def write_database_comments(
+        self, database_url: str, comments: Mapping[str, str | None]
+    ) -> None:
+        parameters = admin_connection_parameters(database_url)
+        timeout = str(
+            self.policy.lifecycle.administration_statement_timeout_seconds * 1000
+        )
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, true)", [timeout]
+            )
+            for name, comment in comments.items():
+                cursor.execute(
+                    sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                        sql.Identifier(name), sql.Literal(comment)
+                    )
+                )
 
     def drop_recovery(self, database_url: str, name: str) -> None:
         self.drop_shadow(database_url, name)
@@ -1403,6 +1425,8 @@ class LifecycleManager:
         *,
         incoming: str,
         displaced: str,
+        incoming_comment: str | None,
+        displaced_comment: str | None,
         failure_code: str,
     ) -> None:
         try:
@@ -1429,9 +1453,21 @@ class LifecycleManager:
                 or displaced_state is not None
             ):
                 raise RefreshError("repair_state_invalid")
+            if canonical.allow_connections:
+                self.adapter.set_allow_connections(
+                    self.target_url, self.canonical, False
+                )
+                self.adapter.terminate_connections(self.target_url, self.canonical)
             if incoming_state.allow_connections:
                 self.adapter.set_allow_connections(self.target_url, incoming, False)
                 self.adapter.terminate_connections(self.target_url, incoming)
+            self.adapter.write_database_comments(
+                self.target_url,
+                {
+                    self.canonical: displaced_comment,
+                    incoming: incoming_comment,
+                },
+            )
             self.adapter.set_allow_connections(self.target_url, self.canonical, True)
         except BaseException as exc:
             detail = self._diagnostic(self.canonical, incoming, displaced)
@@ -1453,6 +1489,10 @@ class LifecycleManager:
         # unavailable until its durable receipt is in place; otherwise the
         # live web service can race the post-rename validation or briefly
         # serve an unreceipted database.
+        incoming_state = self._state(incoming, missing="incoming_database_missing")
+        canonical_state = self._state(
+            self.canonical, missing="canonical_database_missing"
+        )
         receipt = prepare_receipt()
         try:
             self.adapter.set_allow_connections(self.target_url, incoming, False)
@@ -1467,6 +1507,8 @@ class LifecycleManager:
             self._repair_swap(
                 incoming=incoming,
                 displaced=displaced,
+                incoming_comment=incoming_state.comment,
+                displaced_comment=canonical_state.comment,
                 failure_code=failure_code,
             )
         return receipt
