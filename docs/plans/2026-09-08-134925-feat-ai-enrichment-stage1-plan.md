@@ -5253,3 +5253,42 @@ deployed at one exact staging SHA, any further Twitter/provider-backed attempt
 requires fresh explicit owner authorization and a new immutable evidence entry.
 Headline enqueueing and provider calls remain disabled, with a required zero
 call delta.
+
+### September 19 — Final exact-SHA staging attempt: inconclusive, production blocked
+
+The corrected candidate `8c80ee1809e44c5dafc88d379e59c8dec8affb21` passed the
+exact local aggregate with 3,195 passed, 25 deselected, 82 warnings, 774
+PostgreSQL-required tests executed, zero skips, and zero errors in 424.24
+seconds. The feature and staging refs resolved to this exact candidate, and
+the staging web, headline, synthesis, and jobs services were verified at the
+same SHA. The harvester was resumed only to deploy and run preflight, then
+immediately suspended again.
+
+The successful preflight job `job-damr673ncjis73chr6o0` proved the staging
+service, staging environment, `pushinweight_staging` database/role, direct
+DeepInfra classifier `deepseek-ai/DeepSeek-V4-Flash-0731`, direct DeepInfra
+translator `google/gemma-4-31B-it-turbo`, credential presence, and selected
+Call A. Inspection job `job-damr5m6k1f9s738l3lv0` failed only because its
+inspection command used obsolete `translation_*` names instead of the live
+`translator_*` names; it made no provider or Twitter call.
+
+The owner-authorized manual Trigger Run was executed exactly once at about
+`2026-09-18T21:58:53Z`, run ID `20260918T215853_0000-4468c64e`. Its top-level
+outcome is **inconclusive** (`no_results`): one Call A completed but returned
+zero results, with zero kept, inserted, updated, persist-failure, or attributed
+rows; `cursor_advanced=true`; and `error_count=0`. All enrichment counts and
+evidence-row counts were zero. Headline dispatch was ineligible with no task;
+headline provider calls were 0 before and after, and the queue was 0 before
+and after. The five historical pending backlog windows, seven
+translation-succeeded/classification-pending enrichment rows, and two fully
+succeeded enrichment rows remained unchanged because the current/carryover cap
+excluded them at 5/5/0.
+
+The harvester was immediately re-suspended and remains on dormant schedule
+`0 0 31 2 *`. Production remained independently live on `*/15 * * * *` and
+was untouched. This exact live attempt does not pass the Stage 1 acceptance
+gate and provides no live classification/enrichment result. Stage 1 is
+therefore not authorized for production, and no retry is permitted under this
+acceptance record. Preserve all earlier failed runs and this inconclusive run
+as immutable evidence. Full details are in
+`docs/analysis/2026-09-19-005400-ai-enrichment-stage1-staging-integration.md`.

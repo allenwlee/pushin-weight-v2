@@ -1,8 +1,8 @@
 ---
 title: AI Enrichment Stage 1 staging integration evidence
 date: 2026-09-19
-status: staging-partial
-candidate_sha: 6a24eecc7242f6cc2dc870a21ee78dc0a9b1fa8a
+status: staging-inconclusive
+candidate_sha: 8c80ee1809e44c5dafc88d379e59c8dec8affb21
 delivery_target: staging
 ---
 
@@ -22,8 +22,9 @@ model use because the staging harvester did not yet have `DEEPINFRA_API_KEY`.
 The owner then authorized one replacement run. It exercised the real Twitter,
 translation, relevancy, and two-role classification path and exposed four
 integration defects described below. The replacement has been consumed and is
-retained as a failed acceptance attempt. The staging harvest cron is suspended.
-Production has not been changed.
+retained as a failed acceptance attempt. A later exact-SHA staging attempt is
+also retained below as inconclusive because it produced no results. The
+staging harvest cron is suspended. Production has not been changed.
 
 ## Locked runtime
 
@@ -203,13 +204,67 @@ when durable backlog transfer and cursor advancement are proved, and routes
 matching relevancy work through the direct DeepInfra classifier client. Legacy
 completion behavior remains unchanged.
 
+## Final exact-SHA staging attempt
+
+The corrected candidate `8c80ee1809e44c5dafc88d379e59c8dec8affb21` passed the
+final local aggregate and was deployed at that exact SHA. The feature branch
+and remote staging ref resolved to the same candidate. The staging web,
+headline, synthesis, and jobs services were independently verified at that
+SHA. The staging harvester was resumed only long enough to deploy and run the
+preflight checks, then was suspended again.
+
+The exact aggregate completed with 3,195 passed, 25 deselected, 82 warnings,
+774 PostgreSQL-required tests executed, zero skips, and zero errors in 424.24
+seconds. The successful preflight job `job-damr673ncjis73chr6o0` proved the
+service was `pushinweight-staging-harvest`, the environment was staging, and
+the database/role was `pushinweight_staging` / `pushinweight_staging`. It also
+proved the locked runtime was direct DeepInfra with classifier
+`deepseek-ai/DeepSeek-V4-Flash-0731` and translator
+`google/gemma-4-31B-it-turbo`; required credentials were present and their
+values were never printed. The preflight selected call A. A second inspection
+job, `job-damr5m6k1f9s738l3lv0`, failed only because its inspection command
+used the obsolete local attribute names `translation_*` instead of the live
+`translator_*` names. It made no provider or Twitter call and does not change
+the successful preflight result.
+
+The owner-authorized manual Trigger Run was executed exactly once at about
+`2026-09-18T21:58:53Z`, with run ID
+`20260918T215853_0000-4468c64e`. The top-level outcome is **inconclusive**,
+with evaluator reason `no_results`: the cycle completed one selected Call A,
+but returned no results. Its terminal metrics were:
+
+| Metric | Result |
+| --- | --- |
+| Twitter results / kept / inserted / updated | 0 / 0 / 0 / 0 |
+| Persist failures / attributed | 0 / 0 |
+| Cursor advanced / errors | `true` / 0 |
+| Enrichment counts | all 0 |
+| Evidence rows | 0 |
+| Headline dispatch | ineligible; no task |
+| Headline provider calls | 0 before / 0 after |
+| Headline queue | 0 before / 0 after |
+
+The historical backlog was not consumed: five pending backlog windows and seven
+translation-succeeded/classification-pending enrichment rows, plus two fully
+succeeded enrichment rows, remained unchanged and were excluded by the
+current/carryover cap of 5/5/0. The staging harvester was immediately
+re-suspended and its dormant
+schedule remains `0 0 31 2 *`. Production remained independently live on the
+main `*/15 * * * *` schedule and was not touched.
+
+This exact live attempt does not pass the Stage 1 acceptance gate. It provides
+no live classification or enrichment result from which to assess the corrected
+pipeline, so Stage 1 is not authorized for production. No retry is permitted
+under this acceptance record. The earlier failed runs and this inconclusive
+run remain immutable historical evidence.
+
 ## Remaining staging gate
 
-The owner-authorized replacement attempt has been consumed. The correction must
-pass local regression checks and be deployed at one exact SHA before another
-live attempt can be considered. A further Twitter/provider-backed Trigger Run
-requires fresh explicit owner authorization and a new immutable evidence entry.
-The staging cron remains suspended between attempts.
+The final exact-SHA attempt has been consumed and is inconclusive because the
+selected call returned no results. The corrected candidate is deployed and
+verified, but the Stage 1 live acceptance gate is not passed. No further
+Twitter/provider-backed Trigger Run is permitted under this evidence record;
+the staging cron remains suspended.
 
 Headline enqueueing and headline provider calls remain disabled and have a
 required zero-call delta; no headline budget authorization is needed while
