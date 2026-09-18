@@ -107,6 +107,159 @@ class ProductLabelLabel(models.Model):
         db_table = "product_label_labels"
 
 
+class AudienceTopicScheme(models.Model):
+    """A versioned, normalized manifest for AI-audience topic concepts."""
+
+    key = models.CharField(
+        max_length=128,
+        primary_key=True,
+        db_collation="case_insensitive",
+    )
+    revision = models.PositiveSmallIntegerField(default=1)
+    manifest_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "audience_topic_schemes"
+        ordering = ["key"]
+
+
+class AudienceTopicConcept(models.Model):
+    """A stable concept identity within one Audience Topics scheme."""
+
+    id = models.BigAutoField(primary_key=True)
+    scheme = models.ForeignKey(
+        AudienceTopicScheme,
+        on_delete=models.PROTECT,
+        related_name="concepts",
+        db_column="scheme_key",
+        to_field="key",
+    )
+    key = models.CharField(max_length=64, db_collation="case_insensitive")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "audience_topic_concepts"
+        ordering = ["scheme_id", "key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scheme", "key"],
+                name="uq_audience_topic_scheme_key",
+            )
+        ]
+
+
+class AudienceTopicLabel(models.Model):
+    """Revisioned locale display copy; concepts retain their identity."""
+
+    pk = models.CompositePrimaryKey("concept", "revision", "lang")
+    concept = models.ForeignKey(
+        AudienceTopicConcept,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="concept_id",
+    )
+    revision = models.PositiveSmallIntegerField(default=1)
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "audience_topic_labels"
+
+
+class GeopoliticalModeKey(models.Model):
+    """Versioned, multi-label geopolitical mode vocabulary."""
+
+    key = models.CharField(
+        max_length=64,
+        primary_key=True,
+        db_collation="case_insensitive",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "geopolitical_mode_keys"
+        ordering = ["key"]
+
+
+class GeopoliticalModeLabel(models.Model):
+    pk = models.CompositePrimaryKey("geopolitical_mode", "lang")
+    geopolitical_mode = models.ForeignKey(
+        GeopoliticalModeKey,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="key",
+        to_field="key",
+    )
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "geopolitical_mode_labels"
+
+
+class NationalStanceKey(models.Model):
+    """Future-facing China/U.S. national-stance direction vocabulary."""
+
+    key = models.CharField(
+        max_length=64,
+        primary_key=True,
+        db_collation="case_insensitive",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "national_stance_keys"
+        ordering = ["key"]
+
+
+class NationalStanceLabel(models.Model):
+    pk = models.CompositePrimaryKey("national_stance", "lang")
+    national_stance = models.ForeignKey(
+        NationalStanceKey,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="key",
+        to_field="key",
+    )
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "national_stance_labels"
+
+
+class UntrackedBrandPromotionKey(models.Model):
+    """Current post-level Untracked Brand Promotions vocabulary."""
+
+    key = models.CharField(
+        max_length=64,
+        primary_key=True,
+        db_collation="case_insensitive",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "untracked_brand_promotion_keys"
+        ordering = ["key"]
+
+
+class UntrackedBrandPromotionLabel(models.Model):
+    pk = models.CompositePrimaryKey("untracked_brand_promotion", "lang")
+    untracked_brand_promotion = models.ForeignKey(
+        UntrackedBrandPromotionKey,
+        on_delete=models.CASCADE,
+        related_name="labels",
+        db_column="key",
+        to_field="key",
+    )
+    lang = models.CharField(max_length=16)
+    label = models.TextField()
+
+    class Meta:
+        db_table = "untracked_brand_promotion_labels"
+
+
 class SentimentKey(models.Model):
     """Lookup table for sentiment vocabulary (positive, negative, mixed, neutral)."""
 
@@ -2029,6 +2182,24 @@ class PostBrandClassificationState(models.Model):
         NationalismKey, on_delete=models.PROTECT, related_name="+",
         db_column="us_nationalism", to_field="key", blank=True, null=True,
     )
+    china_national_stance = models.ForeignKey(
+        NationalStanceKey,
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_column="china_national_stance",
+        to_field="key",
+        blank=True,
+        null=True,
+    )
+    us_national_stance = models.ForeignKey(
+        NationalStanceKey,
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_column="us_national_stance",
+        to_field="key",
+        blank=True,
+        null=True,
+    )
     selected_final_judgment = models.ForeignKey(
         "PostBrandClassificationJudgment",
         on_delete=models.SET_NULL,
@@ -2046,6 +2217,118 @@ class PostBrandClassificationState(models.Model):
                 name="idx_pb_cls_state_brand_outcome",
             ),
             models.Index(fields=["contract_version"], name="idx_pb_cls_state_contract"),
+        ]
+
+
+class PostBrandAudienceTopic(models.Model):
+    """One final Audience Topic assignment for a post-brand and concept."""
+
+    pk = models.CompositePrimaryKey("post", "brand", "concept")
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="audience_topic_assignments",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    concept = models.ForeignKey(
+        AudienceTopicConcept,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+        db_column="concept_id",
+    )
+    scheme = models.ForeignKey(
+        AudienceTopicScheme,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+        db_column="scheme_key",
+        to_field="key",
+    )
+    scheme_revision = models.PositiveSmallIntegerField()
+    evidence = models.JSONField(default=dict)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=256)
+    provider_role = models.CharField(max_length=64)
+    final_judgment = models.ForeignKey(
+        "PostBrandClassificationJudgment",
+        on_delete=models.SET_NULL,
+        related_name="audience_topic_assignments",
+        blank=True,
+        null=True,
+    )
+    assigned_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "posts_brands_audience_topics"
+        indexes = [
+            models.Index(
+                fields=["brand", "concept"],
+                name="idx_pb_aud_topic_brand_concept",
+            ),
+            models.Index(
+                fields=["scheme", "scheme_revision"],
+                name="idx_pb_aud_topic_scheme_rev",
+            ),
+        ]
+
+
+class PostBrandGeopoliticalMode(models.Model):
+    """One final Geopolitical mode assignment for a post-brand."""
+
+    pk = models.CompositePrimaryKey("post", "brand", "geopolitical_mode")
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="geopolitical_mode_assignments",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    geopolitical_mode = models.ForeignKey(
+        GeopoliticalModeKey,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+        db_column="geopolitical_mode_key",
+        to_field="key",
+    )
+    taxonomy_version = models.CharField(max_length=64)
+    evidence = models.JSONField(default=dict)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=256)
+    provider_role = models.CharField(max_length=64)
+    final_judgment = models.ForeignKey(
+        "PostBrandClassificationJudgment",
+        on_delete=models.SET_NULL,
+        related_name="geopolitical_mode_assignments",
+        blank=True,
+        null=True,
+    )
+    assigned_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "posts_brands_geopolitical_modes"
+        indexes = [
+            models.Index(
+                fields=["brand", "geopolitical_mode"],
+                name="idx_pb_geo_mode_brand_mode",
+            ),
+            models.Index(
+                fields=["taxonomy_version"],
+                name="idx_pb_geo_mode_taxonomy",
+            ),
         ]
 
 
@@ -2289,6 +2572,122 @@ class PostUnsanctionedFlag(models.Model):
         indexes = [
             models.Index(
                 fields=["flag_set"], name="idx_unsanctioned_flag_set"
+            ),
+        ]
+
+
+class PostUntrackedBrandPromotion(models.Model):
+    """Current post-level promotion judgment, separate from legacy flags."""
+
+    post = models.OneToOneField(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="untracked_brand_promotion",
+        db_column="post_id",
+        to_field="tweet_id",
+        primary_key=True,
+    )
+    promotion_keys = models.JSONField(default=list)
+    evidence = models.JSONField(default=dict)
+    contract_version = models.CharField(max_length=64)
+    taxonomy_version = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=256)
+    provider_role = models.CharField(max_length=64)
+    final_judgment = models.ForeignKey(
+        "PostBrandClassificationJudgment",
+        on_delete=models.SET_NULL,
+        related_name="untracked_brand_promotions",
+        blank=True,
+        null=True,
+    )
+    decided_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "posts_untracked_brand_promotions"
+        indexes = [
+            models.Index(
+                fields=["promotion_keys"],
+                name="idx_post_untracked_promo_keys",
+            ),
+        ]
+
+
+class UntrackedBrandPromotionEvidence(models.Model):
+    """Visible promoted-subject evidence for one post-level promotion result."""
+
+    id = models.BigAutoField(primary_key=True)
+    promotion = models.ForeignKey(
+        PostUntrackedBrandPromotion,
+        on_delete=models.CASCADE,
+        related_name="subject_evidence",
+        db_column="promotion_post_id",
+        to_field="post_id",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        "BrandDiscoveryCandidate",
+        on_delete=models.PROTECT,
+        related_name="untracked_brand_promotion_evidence",
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.PROTECT,
+        related_name="untracked_brand_promotion_evidence",
+        db_column="source_post_id",
+        to_field="tweet_id",
+    )
+    exact_matched_account = models.ForeignKey(
+        Account,
+        on_delete=models.SET_NULL,
+        related_name="untracked_brand_promotion_evidence",
+        db_column="exact_matched_account_id",
+        to_field="author_id",
+        blank=True,
+        null=True,
+    )
+    observed_name = models.TextField()
+    aliases = models.JSONField(default=list)
+    handles = models.JSONField(default=list)
+    domains = models.JSONField(default=list)
+    products = models.JSONField(default=list)
+    hashtags = models.JSONField(default=list)
+    evidence_spans = models.JSONField(default=list)
+    subject_identity = models.CharField(max_length=64)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    recurrence_count = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "untracked_brand_promotion_evidence"
+        ordering = ["source_post_id", "id"]
+        indexes = [
+            models.Index(
+                fields=["brand_discovery_candidate", "-last_seen_at"],
+                name="idx_untracked_promo_cand_last",
+            ),
+            models.Index(
+                fields=["exact_matched_account", "-last_seen_at"],
+                name="idx_untracked_promo_acct_last",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["promotion", "subject_identity"],
+                name="uq_untracked_promo_subject_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_untracked_promo_evidence_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(recurrence_count__gte=1),
+                name="ck_untracked_promo_evidence_recurrence",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_post=models.F("promotion")),
+                name="ck_untracked_promo_evidence_source_post",
             ),
         ]
 

@@ -10,6 +10,38 @@ from x_monitor.provider_telemetry import ProviderTextResponse
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+def test_post_fetch_passes_the_pinned_direct_gemma_route_to_translator_factory(
+    monkeypatch,
+):
+    """M18 pin: the real post-fetch caller passes its loaded role config."""
+    post = Post.objects.create(tweet_id="deepinfra-translator-wiring", text="hello")
+    PostEnrichmentState.objects.create(
+        post=post,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    received = []
+    monkeypatch.setattr(
+        reattribute,
+        "build_translator_client_from_env",
+        lambda cfg: received.append(cfg.llm) or None,
+    )
+    cfg = Config(
+        enabled_models=["deepseek"],
+        daily_ceiling=100,
+        llm=LlmConfig(
+            translator_provider="deepinfra",
+            translator_model="google/gemma-4-31B-it-turbo",
+            translator_base_url="https://api.deepinfra.com/v1/openai",
+            translator_deepinfra_request_profile="gemma4_translation_v1",
+        ),
+    )
+
+    counters = CycleRunner(cfg=cfg)._run_post_fetch([], run_id="deepinfra-wiring")
+
+    assert received == [cfg.llm]
+    assert counters["n_translator_unavailable"] == 1
+
+
 @pytest.mark.parametrize("fail_ja", [False, True])
 def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatch, fail_ja):
     source = '  "First paragraph"\n\nSecond paragraph.\n'

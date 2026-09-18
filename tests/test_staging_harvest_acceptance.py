@@ -11,7 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from scripts.staging_refresh.policy import load_policy
-from x_monitor.config import Config, SearchConfig
+from x_monitor.config import Config, LlmConfig, SearchConfig
 
 POLICY_PATH = "config/staging_refresh.yaml"
 
@@ -67,6 +67,16 @@ def _config() -> Config:
         daily_ceiling=333,
         search=SearchConfig(max_results=2_000, max_pages=100, max_per_page=20),
         x_monitor_list_id=123,
+        llm=LlmConfig(
+            translator_model="google/gemma-4-31B-it-turbo",
+            translator_base_url="https://api.deepinfra.com/v1/openai",
+            translator_provider="deepinfra",
+            translator_deepinfra_request_profile="gemma4_translation_v1",
+            classifier_model="deepseek-ai/DeepSeek-V4-Flash-0731",
+            classifier_base_url="https://api.deepinfra.com/v1/openai",
+            classifier_provider="deepinfra",
+            classifier_deepinfra_request_profile="deepseek_0731",
+        ),
     )
 
 
@@ -78,6 +88,7 @@ def _environment(**overrides) -> dict[str, str]:
         "X_MONITOR_STAGING_ACCEPTANCE_SERVICE": "pushinweight-staging-harvest",
         "TWITTERAPI_IO_SCHEDULED_API_KEY": "twitter-fixture",
         "DEEPSEEK_API_KEY": "deepseek-fixture",
+        "DEEPINFRA_API_KEY": "deepinfra-fixture",
     }
     values.update(overrides)
     return values
@@ -388,7 +399,7 @@ def test_acceptance_fails_closed_for_independently_corrupted_evidence(
             None,
             "provider_credential_missing:twitter",
         ),
-        ({"DEEPSEEK_API_KEY": ""}, None, "provider_credential_missing:translator"),
+        ({"DEEPINFRA_API_KEY": ""}, None, "provider_credential_missing:translator"),
         ({}, _Connection(host="production.internal"), "database_host_mismatch"),
         ({}, _Connection(database="pushinweight"), "database_name_mismatch"),
         ({}, _Connection(role="pushinweight_prod"), "database_role_mismatch"),

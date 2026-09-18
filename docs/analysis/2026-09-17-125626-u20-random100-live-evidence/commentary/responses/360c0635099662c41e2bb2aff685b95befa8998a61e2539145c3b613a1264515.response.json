@@ -1,0 +1,6 @@
+{
+  "post_id": "2100084301065060711",
+  "commentary_en": "The author suggests that Qwen Code, a model named Qwen-3.8-Max-0902, may rival Claude Code due to a much lower price ($8 vs $60 per 1M tokens). They claim to have tested it and imply that if quality is comparable for a user's needs, the cost savings are significant. The post ends by teasing examples of what they built, but no details are provided. This matters because it highlights competitive pressure in AI coding tools based on price, which could influence user choices and market dynamics, though the post does not verify quality claims or provide data beyond pricing.",
+  "commentary_zh_cn": "作者暗示，名为 Qwen-3.8-Max-0902 的 Qwen Code 可能因价格低得多（每100万token仅8美元，对比Claude Opus 4.1的60美元）而成为Claude Code的有力竞争者。他们称已进行测试，并暗示若输出质量在用户工作流中相近，成本差异将极为显著。帖子结尾预告了用该模型构建的内容，但未提供细节。此事的重要性在于，它凸显了AI编程工具在价格上的竞争压力，可能影响用户选择和市场格局，但帖子未验证质量声明，仅提供了定价对比。",
+  "commentary_ja": "著者は、Qwen-3.8-Max-0902というQwen Codeが、価格が大幅に安い（1Mトークンあたり8ドル vs Claude Opus 4.1の60ドル）ため、Claude Codeの強力な競争相手になり得ると示唆しています。実際にテストしたと述べ、品質が自分のワークフローで十分近ければ、コスト差は非常に大きいと含意しています。投稿の最後は、構築したものを紹介すると予告していますが、詳細はありません。重要なのは、AIコーディングツールにおける価格競争の圧力を浮き彫りにし、ユーザーの選択や市場動向に影響し得る点ですが、品質主張は検証されておらず、価格比較のみが提示されています。"
+}

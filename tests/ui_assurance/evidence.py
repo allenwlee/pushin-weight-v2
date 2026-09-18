@@ -71,6 +71,9 @@ def _check_transition(
     if control in MULTI_CONTROLS:
         expected = ALL if value == ALL else [value]
         assert state["filters"][control] == expected
+    elif control == "untracked_brand_promotions":
+        expected = "off" if value == "off" else [value]
+        assert state["filters"][control] == expected
     elif control in {"unsanctioned", "window"}:
         expected = int(value) if control == "window" else value
         assert state["filters"][control] == expected
@@ -103,6 +106,9 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
         control, value = assignment.split("=", 1)
         if control in MULTI_CONTROLS:
             expected = ALL if value == ALL else [value]
+            assert observed["controls"][control] == expected
+        elif control == "untracked_brand_promotions":
+            expected = "off" if value == "off" else [value]
             assert observed["controls"][control] == expected
         elif control in {"unsanctioned", "window"}:
             expected = int(value) if control == "window" else value
@@ -293,6 +299,11 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
             "source": "historical",
             "post_types": [],
             "product_labels": [],
+            "audience_topics": [],
+            "geopolitical_modes": [],
+            "china_national_stance": None,
+            "us_national_stance": None,
+            "untracked_brand_promotions": [],
             "cn_nationalism": "anti",
             "us_nationalism": "mixed",
         }

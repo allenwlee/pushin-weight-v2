@@ -1,0 +1,40 @@
+{
+  "schema_version": "u18-v4-0731-representation-normalization/v1",
+  "source_result": ".context/u18/fresh40-v4-0731-five-post-r113-v1/result.json",
+  "policy": [
+    "Map an empty audience_topics array to unavailable for context_missing, otherwise none.",
+    "Map an empty untracked_brand_promotions array to none.",
+    "When none or unavailable appears beside a substantive label on the same axis, retain the substantive label and remove the sentinel.",
+    "Do not move labels between axes, infer missing geopolitical modes, change sentiment, or alter any otherwise valid classification."
+  ],
+  "raw": {
+    "reviewed": 330,
+    "matches": 214,
+    "differences": 116,
+    "agreement_pct": 64.8,
+    "semantic_issues": 30
+  },
+  "normalized_diagnostic": {
+    "reviewed": 330,
+    "matches": 224,
+    "differences": 106,
+    "agreement_pct": 67.9,
+    "representation_fields_normalized": 22,
+    "substantive_contract_errors_remaining": 8,
+    "remaining_error_types": {
+      "invalid_cross_axis_label": 2,
+      "national_stance_without_nationalistic_stance_mode": 6
+    }
+  },
+  "axis_changes": {
+    "audience_topics": {
+      "raw_exact": "10/26",
+      "normalized_exact": "12/26"
+    },
+    "untracked_brand_promotions": {
+      "raw_exact": "11/31",
+      "normalized_exact": "19/31"
+    }
+  },
+  "interpretation": "This is a deterministic representation-sensitivity analysis. Raw model output remains unchanged and authoritative for the strict comparison."
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "case_id": "T073-zh-cn",
+    "conclusion": "confident_material_identity_loss",
+    "exact_source_excerpt": "Union Alpha wishes to be ox Alpha",
+    "exact_output_excerpt": "联合阿尔法希望成为牛阿尔法",
+    "explanation": "In this construction, ‘Union Alpha’ and ‘ox Alpha’ function as contrasted names/labels. Rendering both as ordinary Chinese descriptions loses the supplied Latin-label identities and makes the contrast no longer reliably recoverable. I would treat this as material entity identity loss, not merely harmless terminology localization."
+  },
+  {
+    "case_id": "T094-en",
+    "conclusion": "uncertain_no_confirmed_material_error",
+    "exact_source_excerpt": "目標設定しないと止まってしまう",
+    "exact_output_excerpt": "If I don't set a goal, I'll stop",
+    "explanation": "Japanese omits the subject. In the local first-person context (‘I’m re-experimenting’), the English first-person reading is natural, but the source can also leave open that the work/experiment stops. The supplied source does not establish a unique subject, so this is not a confirmed material error."
+  },
+  {
+    "case_id": "T100-en",
+    "conclusion": "confident_material_polarity_or_role_error",
+    "exact_source_excerpt": "“중국 앞서야” 트럼프 AI 속도조절론 일축",
+    "exact_output_excerpt": "“China must be ahead” Trump dismisses AI speed-control debate",
+    "explanation": "Korean ‘중국 앞서야’ means that the implicit actor must get ahead of/outpace China. It does not say that China must be ahead. The English reverses the headline’s competitive direction and is a material meaning error."
+  },
+  {
+    "case_id": "T100-zh-cn",
+    "conclusion": "confident_supported_no_material_error",
+    "exact_source_excerpt": "“중국 앞서야” 트럼프 AI 속도조절론 일축",
+    "exact_output_excerpt": "“必须领先中国” 特朗普否认定调AI减速论",
+    "explanation": "‘必须领先中国’ supports the Korean direction: the implicit actor must lead/outpace China. This direction is faithful; the headline’s ellipsis does not require naming the implicit actor."
+  }
+]

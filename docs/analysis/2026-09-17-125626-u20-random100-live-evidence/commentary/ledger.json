@@ -1,0 +1,874 @@
+{
+  "reserved": {
+    "calls": 96,
+    "input_bytes": 325160,
+    "output_tokens": 384000,
+    "dollars": "0.64995040"
+  },
+  "requests": {
+    "3ec8d91ef26549a774b0ef41f88dfe7241a60d88dae00afefd17aab2124e35e3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3118,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:19.076167+00:00"
+    },
+    "83d0dda6c2774ee41f62a224347515341726ff3157694ce3b90b8f78301a2a5b": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2919,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:19.076719+00:00"
+    },
+    "cbe1cddfb0910c3e7d5a9720c64f459d7bc496817c5bb63701de320baaac0386": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3140,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:19.077295+00:00"
+    },
+    "45ccd398b4a1e217b9132ff05851e2a0a8832bb568352e2df55295f07fcdbff2": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3239,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:27.093334+00:00"
+    },
+    "19acd0d22978a477cebadab3453b22b0e8980d2126e4cb5c334341a20b23a28e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4562,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:39.622549+00:00"
+    },
+    "77162488e3b8b3edb99617198155be3ab62fa562c6c541a0c5b1a40dc0c089f1": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3377,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:41.479520+00:00"
+    },
+    "ac3561c828a2f612f58244e3d19c50a62091253a09ff84d1e4d911cead845fd3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4197,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:51.551654+00:00"
+    },
+    "356353f454113ce0107ee16b70b374094c313470b7a7bbc2bd58449b1f25f140": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3110,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:53.767649+00:00"
+    },
+    "951c204170910dd351dd1c28553e58cf1c632024df83ec7364ec5577e2448e87": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4901,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:09:58.454695+00:00"
+    },
+    "360c0635099662c41e2bb2aff685b95befa8998a61e2539145c3b613a1264515": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3177,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:07.032055+00:00"
+    },
+    "e45e86a71b7a2ccce2d560559deedad4b22577097b3dd1f30a2c7c4887125f4f": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2965,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:19.161601+00:00"
+    },
+    "e3be9a782c5bf7e0c5e1d355106249df5a36af449d8a546786316540124b5c05": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3030,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:20.384883+00:00"
+    },
+    "107deb5f8c3eaab5b895891ba710600b6627670693206a97e8c43d5c677d2ec3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3186,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:23.002613+00:00"
+    },
+    "1415430a5a91072aad9a86fe65cdfe7b2182ccf5f7f1bbd05b7ad3a84bf85787": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3219,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:32.250319+00:00"
+    },
+    "a33da5f8b8f4931d956596a768c3fdc23e4f8bddf8144d30a149207cf88abeee": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3353,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:33.012733+00:00"
+    },
+    "0cc455393a239282fc98e533d7b84c67ee250b9f2b730dd8cf792a22f09d413f": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3479,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:42.397176+00:00"
+    },
+    "3f77155d22eccaa4b8327e0f211d70bc3cb2ac607d680a3f16ebbcea4448261e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3744,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:44.093638+00:00"
+    },
+    "e4c4985455397b6e305364bae0818779a2dd035f1de8253dbc082e44b30f05ac": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3744,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:49.736714+00:00"
+    },
+    "fdddf05ceaf9fec13bee382ad153a1978220f510d778479964873126cec59bb1": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2855,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:10:51.589425+00:00"
+    },
+    "ae35aedda9d0159d5ccc78a3e3f08609c0dabe2956598fe4e88d19f5c008114e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2912,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:04.841055+00:00"
+    },
+    "76e1a51916d48e23ce387723db889a34c0f5826c0c32105a686f44326fc745ae": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2995,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:06.761440+00:00"
+    },
+    "e6e7daf82041903791cce40aa7d79736bd2b0765d2b153d2c16bdf9d6ecfbcd6": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2978,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:14.502514+00:00"
+    },
+    "424dab476f18c178001f96e4fc2790b0d1f462bf51b3fc6aec7080f6357290d0": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3128,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:18.042578+00:00"
+    },
+    "3eca05c74b2fe4c8b92ca400f3797c266ccbe9bb67eaf5005e8dfa35626fb553": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2950,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:27.701976+00:00"
+    },
+    "9ba1f77c0d46fed9f123dc57bbdafac679011b61f1090fdf38ad32c0c99383ec": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2999,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:31.748039+00:00"
+    },
+    "71586a733daae8f7c4d4bed831e8ec391210a3f9c7bcb7a86606aace493ad0ff": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3837,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:35.770224+00:00"
+    },
+    "07248dd11a83471852637a24a0a5ee0a6523708d7494c93f094e4167ab964a9c": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4065,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:40.212672+00:00"
+    },
+    "ff2d3380366b984128ab55f90b81c4df5401e182d7cb7f6cd3dc337adbd8c934": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3058,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:42.530368+00:00"
+    },
+    "65f8023a53cdcea2aed72c21dd5d46bfb5d9df70dcc3d683f4e1388a88767d64": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3868,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:44.885318+00:00"
+    },
+    "a8c71b2b9b0aba42732274e81118fcef7881e22995b7d8d03b5ad680c5a422c5": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2993,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:53.944857+00:00"
+    },
+    "eae424744889b4a46a9207fdf2091be6685c90ea38e7796133d1bae63205f8aa": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3096,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:56.952000+00:00"
+    },
+    "c828dcc2008cf56a4a7d6cf391d38b171ec4c4534b708dea7a2dcb3dbafbfbb6": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2869,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:11:57.792910+00:00"
+    },
+    "0a2321d79f7e118b8816bdf44d5384a432fad2f6ea47968797b1be81ac80e9bf": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2913,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:03.938863+00:00"
+    },
+    "4c34c6f5c18aa024a9ebd7f7ecf9b4f2823bc095066909a1e27c9b8f799871b3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 5486,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:06.810471+00:00"
+    },
+    "e7d8d6bcbd286ac1cceb3cf82c68d03930e39652f050bf144f2e35b0ee95d384": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2865,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:07.040246+00:00"
+    },
+    "508abfe3fe0fedf63c91ab9d345159e480a4ecf0a7637a8ebb1b5cb4d364b0db": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2917,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:12.864230+00:00"
+    },
+    "b6669daf3c99b855c48fb377b4ce1ebde5e1ce49d39cd818ad0092fc07741cb0": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3469,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:14.512634+00:00"
+    },
+    "8a04d3c66ce6ae384e5fc2b7065b29831e3183620dabe3c3c316082ebcb5d2b3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2849,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:22.226463+00:00"
+    },
+    "46e13fa26dad89766d76e2b6eb562527afa68893ccd6334979cb12267bcdb236": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3096,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:26.104487+00:00"
+    },
+    "be64dda6a525eec045bce6b17f93056cd842d6ae4aadacc1afa1e1cbf90aa699": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3301,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:26.544934+00:00"
+    },
+    "0072cee5af824124346b327e5b05c71c064ddbf3d23349d34106f4a80f4b0522": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3517,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:29.538412+00:00"
+    },
+    "78f27b3bc045289ce89d448f103e5ec895d893eb1616c532c4cd76be1324cdec": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3156,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:35.155419+00:00"
+    },
+    "6c0468a8998eec5c8635c0dc5c41bf95d90db1314c8e659b767bd0ba6dc1dd22": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2933,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:36.828724+00:00"
+    },
+    "e7b75572dd03e4b1be9dc823e9d736e969f2d3204b66c69773d330af66e0def9": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2947,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:45.643790+00:00"
+    },
+    "5e4ff421a581828a3f952122042e07612424e9d037d82224c09fb63119a24f89": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2964,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:46.025192+00:00"
+    },
+    "417fbed41a7be06e666123249314b408ef4f2f73812304857fdf38e26af9ab24": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2892,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:47.814931+00:00"
+    },
+    "690e8bb9956ff05bd100195b01622deaadbfe545aae357a969ef08bc0f5431d5": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4465,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:53.161984+00:00"
+    },
+    "526b2a72c3ad2d7ef0f582cd391d026f83cf4dbdddee58911508a27708339124": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2963,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:57.225234+00:00"
+    },
+    "01a1a08cac0e367c927d507316ba337be75661f0f09519fa03fad5b90862d76e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2977,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:12:57.907516+00:00"
+    },
+    "38614e9de48029ad4ac31ed3c915f38f46cdfe8f5f051021268ef2032975c9bb": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3056,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:03.138456+00:00"
+    },
+    "05f1ce967b36fa88a950bd33c84b219fd0a459a4e8c68ff4e005c035f20dd52a": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2833,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:06.197751+00:00"
+    },
+    "29d27262d8e19f0f8778b09b268d929c4d3bb27de9ce1b3bb09a11f6befcf333": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2884,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:07.399279+00:00"
+    },
+    "5302105d0068cf5266b5687ab1d2b66deecaa8c1ce17bd995a5efd7c925ef44c": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2872,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:12.905980+00:00"
+    },
+    "e0d190b622456b8bf59a30ef0a7da1cb1ce377545c034a6be06b704bc56ab5cd": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3277,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:15.919907+00:00"
+    },
+    "84523c246263cf1adbb3a767290304c98462b06665c43e6de1597ac730498dda": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3728,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:16.824482+00:00"
+    },
+    "a7403e66a663f7b2e63cd047880cb321309204f458f89b64d32a7794b114d70d": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2871,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:19.222493+00:00"
+    },
+    "7c3f25c584f1ebb5c9f91c648f4c4024c6a371dbd18e5a40151cf39777cd108a": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2922,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:22.139404+00:00"
+    },
+    "e26c813fff2c7c6c0f341fd8af8d81b639590e85cffe18a4c1ed7110b986e0ee": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3087,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:28.127122+00:00"
+    },
+    "79d9add84495d45fb375cfd02b08cfa1506ea3234687e20b1bf6d6d56ae4050b": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2881,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:32.885382+00:00"
+    },
+    "9daba7ede4ee87b5ffbb9254119093ea05bce0d430d8a73fb88dd0603cabfe67": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2952,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:37.596927+00:00"
+    },
+    "01498b3931899937fba6b634c142e2d4a0268572c4282c7cddc85420494d02b0": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 6096,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:41.708033+00:00"
+    },
+    "6127004552bd4a6ce99d98204e784234c055cf36503d8b734d086db1972d343d": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2925,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:45.907886+00:00"
+    },
+    "835d07c64a283ec1d3dd10466031e148a7f233dd0f56e25aba6cc9ec79da19f3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3143,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:52.434734+00:00"
+    },
+    "1b16f8d779eed4f6eba9b5f8c5947246de764025bbb67d253592a4ef5243eb5a": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3086,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:13:57.062266+00:00"
+    },
+    "2ad0133cb7735ec833a83c8ca1444c921035d7cbfb5119ae46ca3467d22fb4dd": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2927,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:02.543731+00:00"
+    },
+    "c7ad2067f77beb224938397d960a1fbdf0e319a6fe788b90181088592d7e219c": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3092,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:05.454817+00:00"
+    },
+    "7a5f7d7d882732c32b4a7b3b259df2b5f717cce9b1143eda54816d9158040343": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4576,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:16.673733+00:00"
+    },
+    "dfa77ce80936fc70844c03501010b7b583b4128a40b4573fa71af9414c8fa2fe": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 5887,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:18.311577+00:00"
+    },
+    "281f2e1535008359a03c891a703f1f1e626e224c0d43861a75fd83e5d48f4d27": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3333,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:20.211620+00:00"
+    },
+    "25a3bb22f5f7b2f40716370170712b1aa1621e0f732b773d736a82bab00ff578": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2856,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:29.035369+00:00"
+    },
+    "1e84d9fbbb9f35043d991bbf891340184b0dc8585f1b480dfc379b16ecbbdd36": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2894,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:29.041433+00:00"
+    },
+    "2a1c76ac38332cd702708e20f59e2a6008ee30fb963d40d781e1e675f3789c42": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3029,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:35.210710+00:00"
+    },
+    "a960d503735a9bbb6199193b6c9c92c3a18e09e0c2e3d1c23b82bc5e06c59f72": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3076,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:35.215715+00:00"
+    },
+    "3c87778486ec715ebe0591e10cfc542cb51bb3a3924b4133bfd1d22676aec17e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2841,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:40.038096+00:00"
+    },
+    "3b76cfdee5671d6d1b3b53bdbef5f1eacceba94271d9f60bebbf3c04d448f68f": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2849,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:42.413646+00:00"
+    },
+    "2c411468589539e0bf07940c7dccb1fadb6477722a270cc151dc0c94b947acdb": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2930,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:42.521321+00:00"
+    },
+    "c0cf29416c765b335ca879f039186d30c9dc933222917232bba5f04d926d25d3": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 5992,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:51.286277+00:00"
+    },
+    "f41a3b96b9bc10705b7fce7dc88b27e0206d66005026d2047855ff6973984a8e": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3084,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:51.677883+00:00"
+    },
+    "881cc1e3ace94984fc5b5432ad329ccbc1658e5da82fa2d76fe7a122b7cccc53": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3100,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:52.358907+00:00"
+    },
+    "b5659337e768f7d13060ed0520261c840f58d5ee99c7babac9030593b504f95b": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3273,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:14:59.913480+00:00"
+    },
+    "035d3faddde8686b92bdc32c97f2f1bb7c6f5f2ed4464dda7e58b9dcfe24f038": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2870,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:04.178023+00:00"
+    },
+    "0b312eecfd9a9ab219cc6963686b1c607fc09ca70d12eac850595960eb7f5220": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3488,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:09.553310+00:00"
+    },
+    "f6b94372628e91b454ec572b80c5e2b92c45302d8cc1cd94a32d4219b85e512c": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3116,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:10.591874+00:00"
+    },
+    "3965cd4b59f8ca9a73c49e0eeddf8aa27c6906566cf7a0a5f00b8392d22ed5a8": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2862,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:17.135060+00:00"
+    },
+    "402e03c4500cfe30e6bdddfa8761170e33239d223933c2397b392baa700c27ea": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 5901,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:18.177569+00:00"
+    },
+    "f90f97973c49815037098cb0f631e93fdc13ba8e7237af077be278aace58cbd6": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4073,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:23.781489+00:00"
+    },
+    "0eb885d0cc205d2f14f0dfef480bf797fbfb8e67f6c76fc8d7cb01747b934ffc": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4805,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:25.513309+00:00"
+    },
+    "a57b4a04f2f9020042f65073a4e30baed6b339d100ab2a7e48f306b4508f2c3f": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3105,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:28.850385+00:00"
+    },
+    "0f72a067b31ea2b9e32ec45c2b765fa6e322727c7a02086e88836dddba621f5b": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3202,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:38.243929+00:00"
+    },
+    "274f19cacab64c2eba8e04d15609a8fd64b4f0ee6ae6a1492a86066f11f6cc8d": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3049,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:52.150184+00:00"
+    },
+    "4c4de665f8069a931a7e9557e3360db4cef8bad5653d6cbf4db33866bef3a28a": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2874,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:15:54.876598+00:00"
+    },
+    "bf4e4d44e7780f85e60118c1737f3f46f3030c41a6428085f293e40d20976253": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2856,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:16:01.169459+00:00"
+    },
+    "2a7b70797aabd94d1b8e4465dbaa9fc924574ca532c86a3b8a9ca9333c4cd61b": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4881,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:16:04.357353+00:00"
+    },
+    "46595f38f913d0dce325c52271b20d3ff6fc53db0ceea578c60321634e629308": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 3611,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:16:05.888289+00:00"
+    },
+    "f43387797c5130bfc7d9889bec7d2bfa22cc330195fa179ae0d274d03e5ae994": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 2949,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:16:17.154090+00:00"
+    },
+    "6f581f4b4e503dc543011670411cee48675d7e81d4189a920b33c82075a4c0db": {
+      "role": "commentary",
+      "reserved": {
+        "calls": 1,
+        "input_bytes": 4393,
+        "output_tokens": 4000
+      },
+      "started_at": "2026-09-17T04:16:19.822184+00:00"
+    }
+  }
+}

@@ -123,6 +123,7 @@ def test_provider_host_class_is_allowlisted_and_hides_custom_hosts(caplog):
     from x_monitor.provider_telemetry import emit_attempt, provider_host_class
 
     assert provider_host_class("https://api.deepseek.com/anthropic") == "deepseek"
+    assert provider_host_class("https://api.deepinfra.com/v1/openai") == "deepinfra"
     assert provider_host_class("https://api.minimax.io/anthropic") == "minimax"
     assert provider_host_class("https://api.anthropic.com") == "anthropic"
     custom_url = "https://private-gateway.example/anthropic"
@@ -264,6 +265,7 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         SentimentKey,
     )
     from monitor.cycle import CycleRunner
+    from x_monitor.config import Config, LlmConfig
 
     brand = Brand.objects.create(nickname="telemetry-brand", display_name="Telemetry")
     posts = [
@@ -340,7 +342,19 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic")
     monkeypatch.setattr("http.client.HTTPSConnection", FakeHttpsConnection)
     caplog.set_level("INFO")
-    counters = CycleRunner()._run_post_fetch([], run_id="telemetry-cycle")
+    legacy_route = Config(
+        enabled_models=["deepseek"],
+        daily_ceiling=100,
+        llm=LlmConfig(
+            translator_model="deepseek-v4-flash",
+            translator_base_url="https://api.deepseek.com/anthropic",
+            classifier_model="deepseek-v4-flash",
+            classifier_base_url="https://api.deepseek.com/anthropic",
+        ),
+    )
+    counters = CycleRunner(cfg=legacy_route)._run_post_fetch(
+        [], run_id="telemetry-cycle"
+    )
 
     states = list(PostEnrichmentState.objects.order_by("post_id"))
     assert counters["n_enrichment_claimed"] == 21

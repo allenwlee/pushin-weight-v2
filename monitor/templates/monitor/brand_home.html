@@ -19,7 +19,7 @@
   <script src="{% static 'dashboard.js' %}" defer></script>
 </head>
 {% csrf_token %}
-<body data-pw-filters='{{ applied_filters_json|safe }}'
+<body data-pw-filters='{{ applied_filters_json }}'
       data-pw-brands='["{{ brand_id }}"]'
       data-pw-locale="{{ active_locale }}"
       data-pw-window="{{ home_window_days }}"

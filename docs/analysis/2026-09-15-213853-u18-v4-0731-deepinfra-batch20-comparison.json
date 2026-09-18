@@ -1,0 +1,1082 @@
+{
+  "schema_version": "u18-fresh40-v4-0731-deepinfra-r116-diagnostic/v1",
+  "created_at": "2026-09-15T12:40:38.016446+00:00",
+  "contract_sha256": "1445883958ae02e60adb7897ecef92a16c593d1d0fb2a168406eb5bd4ee9cf4d",
+  "diagnostic_result_sha256": "9c02c51d06c8d36a6e9f80ad12f192bbb6a2bc739ace6cf4d10b2803a088afbb",
+  "normalized_diagnostic_result_sha256": "be2878513763c13709a54a6dcba618a5da36e28a21fe7e14f44c67b4174083be",
+  "owner_sha256": "6a27bb37d6c2cd8e6545565131511d43f2d93fbb4869bb203d355476b64bb453",
+  "verdict": "fail",
+  "failure_reasons": [
+    "1-content returned Markdown-fenced JSON instead of a JSON object.",
+    "The two content calls used empty arrays 60 times where the contract requires an explicit sentinel.",
+    "The arm does not meet the user's 10x cost-reduction target against the incumbent control."
+  ],
+  "semantic_finding": "After deterministic representation normalization, exact owner agreement is 70.6%; semantic capability is therefore better than the raw contract score suggests.",
+  "models": {
+    "deepinfra": {
+      "label": "V4 0731 / DeepInfra / 20-post (raw diagnostic)",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 210,
+          "differences": 120,
+          "unreviewed": 126,
+          "agreement_pct": 63.6
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 46,
+            "differences": 0,
+            "agreement_pct": 100.0
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 22,
+            "differences": 16,
+            "agreement_pct": 57.9
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 13,
+            "differences": 6,
+            "agreement_pct": 68.4
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 4,
+            "differences": 22,
+            "agreement_pct": 15.4
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 7,
+            "differences": 24,
+            "agreement_pct": 22.6
+          }
+        }
+      },
+      "timing": {
+        "measured_sequential_seconds": 68.489,
+        "estimated_parallel_role_seconds": 40.201
+      },
+      "semantic_issues": [
+        {
+          "call": "1-content",
+          "path": "D01.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D02.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D03.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D04.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D06.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D07.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D10.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D17.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D18.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D21.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D25.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "D26.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P01.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P02.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P04.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P05.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P08.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P09.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P10.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P11.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P13.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P14.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P15.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P17.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "1-content",
+          "path": "P20.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D01.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D02.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D03.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D04.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D05.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D06.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D07.post_types",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D08.post_types",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D09.post_types",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D10.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D11.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D12.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D13.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D14.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D15.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D16.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D18.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D23.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D24.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "D25.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P01.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P02.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P04.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P08.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P09.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P10.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P11.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P13.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P14.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P16.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P17.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P18.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "2-content",
+          "path": "P19.post_promotions",
+          "issue": "empty classification array"
+        }
+      ],
+      "multi_label": {
+        "post_types": {
+          "reviewed_sets": 46,
+          "exact_sets": 9,
+          "correct_labels": 51,
+          "extra_labels": 38,
+          "missing_labels": 44,
+          "precision": 0.573,
+          "recall": 0.5368
+        },
+        "product_labels": {
+          "reviewed_sets": 19,
+          "exact_sets": 13,
+          "correct_labels": 13,
+          "extra_labels": 6,
+          "missing_labels": 6,
+          "precision": 0.6842,
+          "recall": 0.6842
+        },
+        "audience_topics": {
+          "reviewed_sets": 26,
+          "exact_sets": 4,
+          "correct_labels": 18,
+          "extra_labels": 4,
+          "missing_labels": 28,
+          "precision": 0.8182,
+          "recall": 0.3913
+        },
+        "geopolitical_modes": {
+          "reviewed_sets": 42,
+          "exact_sets": 35,
+          "correct_labels": 43,
+          "extra_labels": 7,
+          "missing_labels": 4,
+          "precision": 0.86,
+          "recall": 0.9149
+        },
+        "untracked_brand_promotions": {
+          "reviewed_sets": 31,
+          "exact_sets": 7,
+          "correct_labels": 7,
+          "extra_labels": 4,
+          "missing_labels": 27,
+          "precision": 0.6364,
+          "recall": 0.2059
+        }
+      },
+      "cost_with_fee_usd": "0.00393257580",
+      "official_status": "failed"
+    },
+    "deepinfra_normalized": {
+      "label": "V4 0731 / DeepInfra / 20-post (representation-normalized)",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 233,
+          "differences": 97,
+          "unreviewed": 126,
+          "agreement_pct": 70.6
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 46,
+            "differences": 0,
+            "agreement_pct": 100.0
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 22,
+            "differences": 16,
+            "agreement_pct": 57.9
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 13,
+            "differences": 6,
+            "agreement_pct": 68.4
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 12,
+            "differences": 14,
+            "agreement_pct": 46.2
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 22,
+            "differences": 9,
+            "agreement_pct": 71.0
+          }
+        }
+      },
+      "timing": {
+        "measured_sequential_seconds": 68.489,
+        "estimated_parallel_role_seconds": 40.201
+      },
+      "semantic_issues": [],
+      "multi_label": {
+        "post_types": {
+          "reviewed_sets": 46,
+          "exact_sets": 9,
+          "correct_labels": 51,
+          "extra_labels": 38,
+          "missing_labels": 44,
+          "precision": 0.573,
+          "recall": 0.5368
+        },
+        "product_labels": {
+          "reviewed_sets": 19,
+          "exact_sets": 13,
+          "correct_labels": 13,
+          "extra_labels": 6,
+          "missing_labels": 6,
+          "precision": 0.6842,
+          "recall": 0.6842
+        },
+        "audience_topics": {
+          "reviewed_sets": 26,
+          "exact_sets": 12,
+          "correct_labels": 26,
+          "extra_labels": 6,
+          "missing_labels": 20,
+          "precision": 0.8125,
+          "recall": 0.5652
+        },
+        "geopolitical_modes": {
+          "reviewed_sets": 42,
+          "exact_sets": 35,
+          "correct_labels": 43,
+          "extra_labels": 7,
+          "missing_labels": 4,
+          "precision": 0.86,
+          "recall": 0.9149
+        },
+        "untracked_brand_promotions": {
+          "reviewed_sets": 31,
+          "exact_sets": 22,
+          "correct_labels": 22,
+          "extra_labels": 9,
+          "missing_labels": 12,
+          "precision": 0.7097,
+          "recall": 0.6471
+        }
+      },
+      "cost_with_fee_usd": "0.00393257580",
+      "official_status": "diagnostic only"
+    },
+    "openinference": {
+      "label": "V4 0731 / OpenInference / 5-post",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 214,
+          "differences": 116,
+          "unreviewed": 126,
+          "agreement_pct": 64.8
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 46,
+            "differences": 0,
+            "agreement_pct": 100.0
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 24,
+            "differences": 14,
+            "agreement_pct": 63.2
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 13,
+            "differences": 6,
+            "agreement_pct": 68.4
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 10,
+            "differences": 16,
+            "agreement_pct": 38.5
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 30,
+            "differences": 12,
+            "agreement_pct": 71.4
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 34,
+            "differences": 7,
+            "agreement_pct": 82.9
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 11,
+            "differences": 20,
+            "agreement_pct": 35.5
+          }
+        }
+      },
+      "timing": {
+        "measured_sequential_seconds": 267.769,
+        "estimated_parallel_role_seconds": 148.425
+      },
+      "semantic_issues": [
+        {
+          "call": "3-content",
+          "path": "D03.audience_topics",
+          "issue": "invalid label",
+          "value": "business_finance"
+        },
+        {
+          "call": "3-content",
+          "path": "D03.audience_topics",
+          "issue": "exclusive sentinel combined with another label"
+        },
+        {
+          "call": "3-content",
+          "path": "D04.audience_topics",
+          "issue": "exclusive sentinel combined with another label"
+        },
+        {
+          "call": "3-content",
+          "path": "D05.audience_topics",
+          "issue": "exclusive sentinel combined with another label"
+        },
+        {
+          "call": "3-content",
+          "path": "P01.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "3-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "3-content",
+          "path": "P04.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "3-content",
+          "path": "P05.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "4-content",
+          "path": "D07.post_types",
+          "issue": "invalid label",
+          "value": "cost_performance"
+        },
+        {
+          "call": "4-content",
+          "path": "P02.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "4-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "4-content",
+          "path": "P04.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "4-content",
+          "path": "P05.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "4-brand",
+          "path": "D02",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "4-brand",
+          "path": "D03",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "4-brand",
+          "path": "D04",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "5-brand",
+          "path": "D01",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "5-brand",
+          "path": "D02",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "5-brand",
+          "path": "D03",
+          "issue": "national stance without nationalistic_stance mode"
+        },
+        {
+          "call": "6-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "6-content",
+          "path": "P04.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "6-content",
+          "path": "P05.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "7-content",
+          "path": "P01.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "7-content",
+          "path": "P02.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "7-content",
+          "path": "P05.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "8-content",
+          "path": "D03.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "8-content",
+          "path": "D04.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "8-content",
+          "path": "D05.audience_topics",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "8-content",
+          "path": "P02.post_promotions",
+          "issue": "empty classification array"
+        },
+        {
+          "call": "8-content",
+          "path": "P03.post_promotions",
+          "issue": "empty classification array"
+        }
+      ],
+      "multi_label": {
+        "post_types": {
+          "reviewed_sets": 46,
+          "exact_sets": 9,
+          "correct_labels": 53,
+          "extra_labels": 38,
+          "missing_labels": 42,
+          "precision": 0.5824,
+          "recall": 0.5579
+        },
+        "product_labels": {
+          "reviewed_sets": 19,
+          "exact_sets": 13,
+          "correct_labels": 15,
+          "extra_labels": 6,
+          "missing_labels": 4,
+          "precision": 0.7143,
+          "recall": 0.7895
+        },
+        "audience_topics": {
+          "reviewed_sets": 26,
+          "exact_sets": 10,
+          "correct_labels": 24,
+          "extra_labels": 12,
+          "missing_labels": 22,
+          "precision": 0.6667,
+          "recall": 0.5217
+        },
+        "geopolitical_modes": {
+          "reviewed_sets": 42,
+          "exact_sets": 30,
+          "correct_labels": 39,
+          "extra_labels": 12,
+          "missing_labels": 8,
+          "precision": 0.7647,
+          "recall": 0.8298
+        },
+        "untracked_brand_promotions": {
+          "reviewed_sets": 31,
+          "exact_sets": 11,
+          "correct_labels": 11,
+          "extra_labels": 5,
+          "missing_labels": 23,
+          "precision": 0.6875,
+          "recall": 0.3235
+        }
+      },
+      "cost_with_fee_usd": "0.00177531180",
+      "official_status": "passed shape"
+    },
+    "v4_1": {
+      "label": "V4.1 Flash direct / 20-post",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 215,
+          "differences": 115,
+          "unreviewed": 126,
+          "agreement_pct": 65.2
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 41,
+            "differences": 5,
+            "agreement_pct": 89.1
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 20,
+            "differences": 18,
+            "agreement_pct": 52.6
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 15,
+            "differences": 4,
+            "agreement_pct": 78.9
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 7,
+            "differences": 19,
+            "agreement_pct": 26.9
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 32,
+            "differences": 10,
+            "agreement_pct": 76.2
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 17,
+            "differences": 14,
+            "agreement_pct": 54.8
+          }
+        }
+      },
+      "timing": {
+        "measured_sequential_seconds": 23.308,
+        "estimated_parallel_role_seconds": 11.705
+      },
+      "semantic_issues": [],
+      "multi_label": {
+        "post_types": {
+          "reviewed_sets": 46,
+          "exact_sets": 9,
+          "correct_labels": 56,
+          "extra_labels": 31,
+          "missing_labels": 39,
+          "precision": 0.6437,
+          "recall": 0.5895
+        },
+        "product_labels": {
+          "reviewed_sets": 19,
+          "exact_sets": 15,
+          "correct_labels": 15,
+          "extra_labels": 4,
+          "missing_labels": 4,
+          "precision": 0.7895,
+          "recall": 0.7895
+        },
+        "audience_topics": {
+          "reviewed_sets": 26,
+          "exact_sets": 7,
+          "correct_labels": 22,
+          "extra_labels": 15,
+          "missing_labels": 24,
+          "precision": 0.5946,
+          "recall": 0.4783
+        },
+        "geopolitical_modes": {
+          "reviewed_sets": 42,
+          "exact_sets": 32,
+          "correct_labels": 37,
+          "extra_labels": 7,
+          "missing_labels": 10,
+          "precision": 0.8409,
+          "recall": 0.7872
+        },
+        "untracked_brand_promotions": {
+          "reviewed_sets": 31,
+          "exact_sets": 17,
+          "correct_labels": 18,
+          "extra_labels": 13,
+          "missing_labels": 16,
+          "precision": 0.5806,
+          "recall": 0.5294
+        }
+      },
+      "offpeak_cost_usd": "0.01211796",
+      "peak_cost_usd": "0.02423592",
+      "official_status": "passed shape"
+    },
+    "sol": {
+      "label": "GPT-5.6 Sol / 20-post",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 225,
+          "differences": 105,
+          "unreviewed": 126,
+          "agreement_pct": 68.2
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 41,
+            "differences": 5,
+            "agreement_pct": 89.1
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 27,
+            "differences": 11,
+            "agreement_pct": 71.1
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 7,
+            "differences": 39,
+            "agreement_pct": 15.2
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 7,
+            "differences": 12,
+            "agreement_pct": 36.8
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 8,
+            "differences": 18,
+            "agreement_pct": 30.8
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 34,
+            "differences": 8,
+            "agreement_pct": 81.0
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 40,
+            "differences": 1,
+            "agreement_pct": 97.6
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 24,
+            "differences": 7,
+            "agreement_pct": 77.4
+          }
+        }
+      },
+      "timing": {
+        "measured_sequential_seconds": 133.871,
+        "estimated_parallel_role_seconds": 77.582
+      },
+      "semantic_issues": [],
+      "multi_label": {
+        "post_types": {
+          "reviewed_sets": 46,
+          "exact_sets": 7,
+          "correct_labels": 68,
+          "extra_labels": 49,
+          "missing_labels": 27,
+          "precision": 0.5812,
+          "recall": 0.7158
+        },
+        "product_labels": {
+          "reviewed_sets": 19,
+          "exact_sets": 7,
+          "correct_labels": 13,
+          "extra_labels": 13,
+          "missing_labels": 6,
+          "precision": 0.5,
+          "recall": 0.6842
+        },
+        "audience_topics": {
+          "reviewed_sets": 26,
+          "exact_sets": 8,
+          "correct_labels": 27,
+          "extra_labels": 22,
+          "missing_labels": 19,
+          "precision": 0.551,
+          "recall": 0.587
+        },
+        "geopolitical_modes": {
+          "reviewed_sets": 42,
+          "exact_sets": 34,
+          "correct_labels": 39,
+          "extra_labels": 8,
+          "missing_labels": 8,
+          "precision": 0.8298,
+          "recall": 0.8298
+        },
+        "untracked_brand_promotions": {
+          "reviewed_sets": 31,
+          "exact_sets": 24,
+          "correct_labels": 25,
+          "extra_labels": 6,
+          "missing_labels": 9,
+          "precision": 0.8065,
+          "recall": 0.7353
+        }
+      },
+      "cost_with_fee_usd": "0.2287651450",
+      "official_status": "passed shape"
+    }
+  }
+}

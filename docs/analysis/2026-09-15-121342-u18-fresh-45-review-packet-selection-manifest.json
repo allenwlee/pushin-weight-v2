@@ -1,0 +1,502 @@
+{
+  "schema_version": "u18-fresh-45-review/v1",
+  "generated_at": "2026-09-15T12:13:42.604139+09:00",
+  "review_status": "unreviewed",
+  "owner_request": "Additional 45 posts enriched for rare/high-value cases; language mix follows leading database source languages.",
+  "selection": "Deterministic ordering after deliberate selection from keyword candidates; strata describe why a case was selected, not gold labels.",
+  "language_allocation": {
+    "zh": 4,
+    "en": 32,
+    "tr": 1,
+    "ja": 4,
+    "es": 2,
+    "pt": 1,
+    "fr": 1
+  },
+  "database_language_counts_reported_by_selection_agent": {
+    "total": 229020,
+    "en": 159880,
+    "zh": 20260,
+    "ja": 18759,
+    "es": 6322,
+    "fr": 3032,
+    "tr": 2995,
+    "pt": 2450
+  },
+  "limits": [
+    "Not a prevalence or population-accuracy sample.",
+    "Sparse personnel positives remain a limitation; affiliation and biography boundary cases are included.",
+    "Current account roles are not time-resolved employment history.",
+    "Stored translations and source-language codes have not been independently validated.",
+    "No paid model inference or production mutation occurred.",
+    "Freeze before using any owner answers; prompt tuning on these answers makes the set development data rather than an untouched holdout."
+  ],
+  "prior_id_exclusion_count": 578,
+  "selected_prior_id_overlap": 0,
+  "unique_tweet_ids": 45,
+  "unique_text_hashes": 45,
+  "ordered_case_ids": [
+    "L45-01",
+    "L45-02",
+    "L45-03",
+    "L45-04",
+    "L45-05",
+    "L45-06",
+    "L45-07",
+    "L45-08",
+    "L45-09",
+    "L45-10",
+    "L45-11",
+    "L45-12",
+    "L45-13",
+    "L45-14",
+    "L45-15",
+    "L45-16",
+    "L45-17",
+    "L45-18",
+    "L45-19",
+    "L45-20",
+    "L45-21",
+    "L45-22",
+    "L45-23",
+    "L45-24",
+    "L45-25",
+    "L45-26",
+    "L45-27",
+    "L45-28",
+    "L45-29",
+    "L45-30",
+    "L45-31",
+    "L45-32",
+    "L45-33",
+    "L45-34",
+    "L45-35",
+    "L45-36",
+    "L45-37",
+    "L45-38",
+    "L45-39",
+    "L45-40",
+    "L45-41",
+    "L45-42",
+    "L45-43",
+    "L45-44",
+    "L45-45"
+  ],
+  "files": {
+    "docs/analysis/2026-09-15-121342-u18-fresh-45-review-packet.md": "b656f85e42bb61dddb684ca381d5d24fec4900b00cdffdd6d0317cb0d31e0093",
+    "docs/analysis/2026-09-15-121342-u18-fresh-45-review-packet.html": "9595d8e4818d022a5ccfcd7d3aabb3d3ec7e1d2e5c565016abbff645563b1e3e",
+    ".context/u18/fresh-human-review-45-v1/frozen-review-inputs.json": "f55ddba9c9b85dc4140b233046115b1e635c91845167eeb43955024654300ef2"
+  },
+  "source_exports": {
+    "u18-leverage-candidates.csv": "0f5e9d43de229c68b736d571daf99222440a03c9694245b4079c94306a3f1a50",
+    "u18-leverage-strict-rare.csv": "adc76a0907cabbb7d92b29dd2069b021ed70513a7d5258f9fddb299b43f1515e",
+    "u18-fresh-45-context.csv": "08d1a1c98f0804730b57303163f7812a55045a5c656d8df6c08a81ee7ba8da8f"
+  },
+  "rows": [
+    {
+      "case_id": "L45-01",
+      "tweet_id": "2099423138501239079",
+      "target_brand": "deepseek",
+      "source_language": "zh",
+      "selection_reason": "reported_personnel_change_uncertain_status",
+      "source_export": "recent",
+      "text_sha256": "7a0e9cdeb8af963fa8fe710769a64719c600052c5e2d6298a1b4f251b77f8790"
+    },
+    {
+      "case_id": "L45-02",
+      "tweet_id": "2097670774702363074",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "b8009bff2b185bd4f22232079dbe1e0da3d7fa52f7a72b71d5a15a559af09f86"
+    },
+    {
+      "case_id": "L45-03",
+      "tweet_id": "2096243130098159952",
+      "target_brand": "moonshot_kimi",
+      "source_language": "en",
+      "selection_reason": "personnel_or_affiliation_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "63980f38584c72318ec23b0c4bea8631b2fc0eb019175fe49084682c540735a2"
+    },
+    {
+      "case_id": "L45-04",
+      "tweet_id": "2095414910863958417",
+      "target_brand": "ernie",
+      "source_language": "en",
+      "selection_reason": "personnel_or_affiliation_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "a7ea9f84423e64b20916e9c5b2c622f7a96e19800376166d4b16086d1361b18d"
+    },
+    {
+      "case_id": "L45-05",
+      "tweet_id": "2098105443046617096",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "6d584432775604c69f003a299b7e7f3c20693ef820d18b611f92187df49843e8"
+    },
+    {
+      "case_id": "L45-06",
+      "tweet_id": "2099636632148168796",
+      "target_brand": "glm",
+      "source_language": "zh",
+      "selection_reason": "third_party_discount_and_promotion_scope",
+      "source_export": "recent",
+      "text_sha256": "4be91e414f0c9fe1c0d7194d274ffd59055587150fec0310ee5ef5a28078b89d"
+    },
+    {
+      "case_id": "L45-07",
+      "tweet_id": "2091208778444075390",
+      "target_brand": "sakana_ai",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "40579ab4c3a935079cc709e404f32c4ba00214c7c3df66fb04030886165fbf2c"
+    },
+    {
+      "case_id": "L45-08",
+      "tweet_id": "2099086329594216546",
+      "target_brand": "deepseek",
+      "source_language": "tr",
+      "selection_reason": "geopolitical_framework_and_reported_claims",
+      "source_export": "recent",
+      "text_sha256": "83591ac492dd59267a2f88cf3378a6178948630aa04794b76a547977b2d65ffe"
+    },
+    {
+      "case_id": "L45-09",
+      "tweet_id": "2099464198770102680",
+      "target_brand": "minimax",
+      "source_language": "ja",
+      "selection_reason": "hands_on_results_mixed_sentiment",
+      "source_export": "recent",
+      "text_sha256": "30343b868bd4f91397d9003a69fdad32ddd7224c6e4aecca9230bceed2d628ae"
+    },
+    {
+      "case_id": "L45-10",
+      "tweet_id": "2098687322300506607",
+      "target_brand": "qwen",
+      "source_language": "es",
+      "selection_reason": "local_use_case_and_third_party_product",
+      "source_export": "recent",
+      "text_sha256": "9f02d4d9d8dcdd0749899f3881ec88643742cc6b53c5079d08f3073f326a3b0b"
+    },
+    {
+      "case_id": "L45-11",
+      "tweet_id": "2098431310171681015",
+      "target_brand": "qwen",
+      "source_language": "pt",
+      "selection_reason": "local_use_case_results_and_testimonial",
+      "source_export": "recent",
+      "text_sha256": "cd5c0e459248a24fa450f799f4421428c91355497676a870dfb7f830cc0fa657"
+    },
+    {
+      "case_id": "L45-12",
+      "tweet_id": "2099382617464594701",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "8aa9a847d6e7e1153ce752000bb78c4c1060cedd5989859b5372a20716572c5a"
+    },
+    {
+      "case_id": "L45-13",
+      "tweet_id": "2087193257520546294",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "1df0bfa60ffd3126b6be368605c9c5f15f36b116019e49d889aea9c08a075e04"
+    },
+    {
+      "case_id": "L45-14",
+      "tweet_id": "2090189053388108166",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "efa6d42d71b7f4d6da6e6b5749fe784e5d3aceee32a84cff2958b3f3219ce78c"
+    },
+    {
+      "case_id": "L45-15",
+      "tweet_id": "2084410948358705273",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "41326cb56c884eb4ecb851e61bc15f65b0fbe5550a22262ac764f7951f293c77"
+    },
+    {
+      "case_id": "L45-16",
+      "tweet_id": "2092380161903886458",
+      "target_brand": "upstage",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "d2f5a9845124b9edc68fa980330905c1a2b18636786a3fe5377fb7a24726849a"
+    },
+    {
+      "case_id": "L45-17",
+      "tweet_id": "2098235570510295162",
+      "target_brand": "deepseek",
+      "source_language": "fr",
+      "selection_reason": "reported_allegations_versus_author_stance",
+      "source_export": "recent",
+      "text_sha256": "68c6412c09494a8a53311b7d317c17847a8a4c6964ab8f8f24ae8fe0323b69ee"
+    },
+    {
+      "case_id": "L45-18",
+      "tweet_id": "2095518760623116311",
+      "target_brand": "doubao",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "e372f44f9a9a4dd1378e93c0bfb95e3f8a473d6578a3696dd9b47e348f052e0f"
+    },
+    {
+      "case_id": "L45-19",
+      "tweet_id": "2090532272730689649",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "c8d7ce8faef4d9879224e32d73baa4e9f94844360dbb864ac16d0edfa74d3323"
+    },
+    {
+      "case_id": "L45-20",
+      "tweet_id": "2098791275952542054",
+      "target_brand": "deepseek",
+      "source_language": "es",
+      "selection_reason": "customer_economics_versus_business_finance",
+      "source_export": "recent",
+      "text_sha256": "3116789f11e5fcb2eeb782de8d8708604d1408d516b59f172619ac6114dbeb03"
+    },
+    {
+      "case_id": "L45-21",
+      "tweet_id": "2099652067568894162",
+      "target_brand": "moonshot_kimi",
+      "source_language": "ja",
+      "selection_reason": "geopolitical_prediction_versus_nationalism",
+      "source_export": "recent",
+      "text_sha256": "df7d591fc7b119f635754657a65d9082cd4a37ad36e26f2fedd327d33c5c7b25"
+    },
+    {
+      "case_id": "L45-22",
+      "tweet_id": "2099101409832788037",
+      "target_brand": "deepseek",
+      "source_language": "zh",
+      "selection_reason": "untracked_launch_with_tracked_brand_as_foil",
+      "source_export": "recent",
+      "text_sha256": "c7acb4366afd5c7f231b7e6bf5073a087f93dc7f7e6201e296ba5bc7b5668715"
+    },
+    {
+      "case_id": "L45-23",
+      "tweet_id": "2088186471467319398",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "8d512e43df02c8d545a76a64b63023ff87a1896982cb819d0c13208bc0847855"
+    },
+    {
+      "case_id": "L45-24",
+      "tweet_id": "2099626765819793511",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "personnel_or_affiliation_boundary",
+      "source_export": "recent",
+      "text_sha256": "1176db53865f2c98ad6324b460ab4863a6fa4be9eb03c8ac747914c047eaeb7d"
+    },
+    {
+      "case_id": "L45-25",
+      "tweet_id": "2088212924884242800",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "f40cfce3d0c60bd24931675b2e90d1c8d1973456aec9c36fd2122dcb15cc1236"
+    },
+    {
+      "case_id": "L45-26",
+      "tweet_id": "2098056192602017960",
+      "target_brand": "minimax",
+      "source_language": "ja",
+      "selection_reason": "bounded_access_referral_and_dates",
+      "source_export": "recent",
+      "text_sha256": "f3e2badba42ae3654873dfc2c57d17b8b17f15611b2f4f6bbe7d679b067136e2"
+    },
+    {
+      "case_id": "L45-27",
+      "tweet_id": "2092458261656027486",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "444a2e48d6b0d00f2d77e93aaff1d55dd36bb1f4204aaad331022210c5b598d3"
+    },
+    {
+      "case_id": "L45-28",
+      "tweet_id": "2099649402432561436",
+      "target_brand": "minimax",
+      "source_language": "ja",
+      "selection_reason": "past_contest_versus_event",
+      "source_export": "recent",
+      "text_sha256": "767a93cad52c2a5f1aa7a26ff535277688c8e2fa0597946c925ffdb14a132aa5"
+    },
+    {
+      "case_id": "L45-29",
+      "tweet_id": "2085933154075058393",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "d9f4bda877329516ed17d7da431bc52126625a60a75a3fea87647ef1319417a8"
+    },
+    {
+      "case_id": "L45-30",
+      "tweet_id": "2098644460813078534",
+      "target_brand": "qwen",
+      "source_language": "zh",
+      "selection_reason": "satirical_hiring_versus_real_vacancy",
+      "source_export": "recent",
+      "text_sha256": "419758baef73ca46a591125f77e59f24461e7cf4be6d301c7977f67e204608df"
+    },
+    {
+      "case_id": "L45-31",
+      "tweet_id": "2085626339231662202",
+      "target_brand": "llama",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "cf16e70ab6c55056551d615506ab173c75299c5df1cf947a61eecba32fd68746"
+    },
+    {
+      "case_id": "L45-32",
+      "tweet_id": "2091390324828745768",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "a96ceeb9a75e6ee1e4d213cd6c4e5c6d649740d69ebcb8169bbc382f0afba560"
+    },
+    {
+      "case_id": "L45-33",
+      "tweet_id": "2099496003812655607",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "personnel_or_affiliation_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "ded9e9b5abd64aaaf8e0a6af40e1cfe2e6ad3296e2f8a24da2ee866dd206384d"
+    },
+    {
+      "case_id": "L45-34",
+      "tweet_id": "2098804615315628338",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "5d5a081bddd6f54ef1758e0695ec9d7646b100b5221909ad2540e0fbbfe41dae"
+    },
+    {
+      "case_id": "L45-35",
+      "tweet_id": "2092668035593072972",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "2be8cb708e2c960d78712e7c3d015a80770a44a27b39baeb96842ce6bc20d36d"
+    },
+    {
+      "case_id": "L45-36",
+      "tweet_id": "2099470616092930513",
+      "target_brand": "glm",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "5f0f0b34429e19f7fb0f86dbbde1cd12c901798a2a9934e15891a139caa4f1b3"
+    },
+    {
+      "case_id": "L45-37",
+      "tweet_id": "2083343038970200420",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "06e8ff50d0131b4c78b3783cbf8823ceb64b5777687f70ee5d28d6c323c8b26f"
+    },
+    {
+      "case_id": "L45-38",
+      "tweet_id": "2087554449141309700",
+      "target_brand": "sakana_ai",
+      "source_language": "en",
+      "selection_reason": "jobs_or_employer_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "be0d8e84d8625639daa8a73669f82ad8df9176a1a2a74ba4347ccfbb3baa54ea"
+    },
+    {
+      "case_id": "L45-39",
+      "tweet_id": "2092722804693327873",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "bc8263b2ef75ec00cfe957d875fdbb7a18faa0b5dbdb99d5ea0e7faed1bd2024"
+    },
+    {
+      "case_id": "L45-40",
+      "tweet_id": "2089956948191920494",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "40a4e6a8bbe836eb1d39c22e8f792e3796748a279ed5abe25e8bdf558bb82da3"
+    },
+    {
+      "case_id": "L45-41",
+      "tweet_id": "2090728083427151968",
+      "target_brand": "qwen",
+      "source_language": "en",
+      "selection_reason": "attendance_or_event_opportunity_overlap",
+      "source_export": "strict-rare",
+      "text_sha256": "9d367a687a1ea4a580773f4ae4b16d60da5990ded22f06ca84117dc8cdeb5bec"
+    },
+    {
+      "case_id": "L45-42",
+      "tweet_id": "2094088018424434933",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "815c741997b682ee5eeb313e3e601588bbfebebba574932bfac0066fefffb981"
+    },
+    {
+      "case_id": "L45-43",
+      "tweet_id": "2095797586469040310",
+      "target_brand": "minimax",
+      "source_language": "en",
+      "selection_reason": "bounded_benefit_or_promotion_scope",
+      "source_export": "strict-rare",
+      "text_sha256": "a7682cbe01f79057417660c41c26525ac8fb3241ad52f0d3c7c635c5740c4bb6"
+    },
+    {
+      "case_id": "L45-44",
+      "tweet_id": "2094847763720577451",
+      "target_brand": "glm",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "0238b33e633a70379158dafedaa82f142b4e7dc538edff72b5cd18410eb88110"
+    },
+    {
+      "case_id": "L45-45",
+      "tweet_id": "2093732660270989715",
+      "target_brand": "deepseek",
+      "source_language": "en",
+      "selection_reason": "multi_axis_or_brand_scope_boundary",
+      "source_export": "strict-rare",
+      "text_sha256": "5e69a8a8b31e58a11b34d02eacc81133aa6c46686ab46d9cbe5988ecdeeee8fb"
+    }
+  ]
+}

@@ -304,6 +304,16 @@
     div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
     div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
     div.setAttribute('data-product-labels', (row.product_label_keys || []).join(','));
+    div.setAttribute('data-audience-topics', (row.audience_topic_keys || []).join(','));
+    div.setAttribute('data-audience-topics-status', row.audience_topics_status || 'unavailable');
+    div.setAttribute('data-geopolitical-modes', (row.geopolitical_mode_keys || []).join(','));
+    div.setAttribute('data-geopolitical-modes-status', row.geopolitical_modes_status || 'unavailable');
+    div.setAttribute('data-china-national-stance-status', row.china_national_stance_status || 'unavailable');
+    div.setAttribute('data-us-national-stance-status', row.us_national_stance_status || 'unavailable');
+    div.setAttribute(
+      'data-untracked-brand-promotions',
+      (row.untracked_brand_promotions || []).join(',')
+    );
     div.setAttribute(
       'data-classification-statuses',
       (row.classification_statuses || []).join(',')
@@ -314,6 +324,8 @@
     );
     div.setAttribute('data-nat-cn', row.nat_cn || '');
     div.setAttribute('data-nat-us', row.nat_us || '');
+    div.setAttribute('data-legacy-nat-cn', (row.legacy_nat_cn || []).join(','));
+    div.setAttribute('data-legacy-nat-us', (row.legacy_nat_us || []).join(','));
     div.setAttribute('data-signal-inspections', JSON.stringify(row.signal_inspections || {}));
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
     div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
@@ -573,6 +585,8 @@
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
           '<div class="sig-row sig-product" data-sig-product></div>' +
+          '<div class="sig-row sig-audience-topic" data-sig-audience></div>' +
+          '<div class="sig-row sig-geopolitical" data-sig-geopolitical></div>' +
           '<div class="sig-row sig-classification-status" data-sig-classification-status></div>' +
           '<div class="sig-row sig-nat" data-sig-nat></div>' +
           '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
@@ -584,13 +598,15 @@
   // Paint Cyber-Quan symbols and existing semantic tints in the right column.
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
-    'releases_updates', 'hands_on_usage', 'results_evaluations',
+    'releases_updates', 'hands_on_usage', 'results_analysis', 'results_evaluations',
     'questions_requests', 'advertising_marketing', 'events', 'opportunities',
     'job_listings', 'personnel_changes',
-    'opinions_reactions', 'research_explanations', 'business_finance', 'other'
+    'opinions_reactions', 'research_explanations', 'business_finance',
+    'news_reporting', 'other'
   ];
   var PRODUCT_ORDER = [
-    'bug', 'complaint', 'testimonial', 'ideas_requests', 'misinformation'
+    'bug', 'complaint', 'testimonial', 'ideas_requests', 'investigate_claim',
+    'misinformation'
   ];
 
   function parseListAttr(raw) {
@@ -647,6 +663,8 @@
     var products = uniqueInOrder(
       parseListAttr(row.getAttribute('data-product-labels')), PRODUCT_ORDER
     );
+    var audienceTopics = parseListAttr(row.getAttribute('data-audience-topics'));
+    var geopoliticalModes = parseListAttr(row.getAttribute('data-geopolitical-modes'));
     var classificationStatuses = parseListAttr(
       row.getAttribute('data-classification-statuses')
     );
@@ -655,6 +673,8 @@
     );
     var natCn = (row.getAttribute('data-nat-cn') || '').trim();
     var natUs = (row.getAttribute('data-nat-us') || '').trim();
+    var legacyNatCn = parseListAttr(row.getAttribute('data-legacy-nat-cn'));
+    var legacyNatUs = parseListAttr(row.getAttribute('data-legacy-nat-us'));
     var showCn = natCn && natCn !== 'none';
     var showUs = natUs && natUs !== 'none';
     var inspections = signalInspections(row);
@@ -689,6 +709,28 @@
       }).join('');
       elP.classList.toggle('is-empty', products.length === 0);
     }
+    var elA = row.querySelector('[data-sig-audience]');
+    if (elA) {
+      elA.innerHTML = audienceTopics.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('audience_topics', key, 'signal-icon'),
+          signalInspectionText(inspections, 'audience_topic', key),
+          'signal-inspection-trigger'
+        );
+      }).join('');
+      elA.classList.toggle('is-empty', audienceTopics.length === 0);
+    }
+    var elG = row.querySelector('[data-sig-geopolitical]');
+    if (elG) {
+      elG.innerHTML = geopoliticalModes.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('geopolitical_modes', key, 'signal-icon'),
+          signalInspectionText(inspections, 'geopolitical_mode', key),
+          'signal-inspection-trigger'
+        );
+      }).join('');
+      elG.classList.toggle('is-empty', geopoliticalModes.length === 0);
+    }
     var elClassification = row.querySelector('[data-sig-classification-status]');
     if (elClassification) {
       elClassification.innerHTML = classificationStatuses.map(function (status, index) {
@@ -714,14 +756,24 @@
         var regions = (showCn
           ? inspectionTriggerHtml(
               renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b>',
-              signalInspectionText(inspections, 'nat_cn', natCn),
-              'signal-inspection-trigger nationalism-region nationalism-cn'
+              signalInspectionText(
+                inspections,
+                legacyNatCn.length ? 'legacy_nat_cn' : 'nat_cn',
+                natCn
+              ),
+              'signal-inspection-trigger nationalism-region nationalism-cn' +
+                (legacyNatCn.length ? ' legacy-nationalism' : '')
             )
           : '') + (showUs
           ? inspectionTriggerHtml(
               renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b>',
-              signalInspectionText(inspections, 'nat_us', natUs),
-              'signal-inspection-trigger nationalism-region nationalism-us'
+              signalInspectionText(
+                inspections,
+                legacyNatUs.length ? 'legacy_nat_us' : 'nat_us',
+                natUs
+              ),
+              'signal-inspection-trigger nationalism-region nationalism-us' +
+                (legacyNatUs.length ? ' legacy-nationalism' : '')
             )
           : '');
         elN.innerHTML = regions;
@@ -735,7 +787,7 @@
         elU.classList.remove('is-empty');
         elU.innerHTML = inspectionTriggerHtml(
           renderIcon('icon-unsanctioned', 'signal-icon tone-negative'),
-          signalInspectionText(inspections, 'unsanctioned', 'true'),
+          signalInspectionText(inspections, 'untracked_brand_promotions', 'true'),
           'signal-inspection-trigger'
         );
       }

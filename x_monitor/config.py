@@ -437,6 +437,7 @@ class HarvestConfig(BaseModel):
 
 
 DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
+DEEPINFRA_OPENAI_BASE_URL = "https://api.deepinfra.com/v1/openai"
 
 
 class LlmConfig(BaseModel):
@@ -456,6 +457,11 @@ class LlmConfig(BaseModel):
         default=DEEPSEEK_ANTHROPIC_BASE_URL,
         description="Explicit translator base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
     )
+    translator_provider: Literal["anthropic", "deepinfra"] = "anthropic"
+    # Direct DeepInfra is deliberately model-profiled rather than inferred
+    # from the base URL. This keeps a stale provider URL or generic API key
+    # from silently changing the scheduled translator route.
+    translator_deepinfra_request_profile: Literal["gemma4_translation_v1"] | None = None
     classifier_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the classifier stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_CLASSIFIER_MODEL.",
@@ -464,7 +470,8 @@ class LlmConfig(BaseModel):
         default=DEEPSEEK_ANTHROPIC_BASE_URL,
         description="Explicit classifier/relevancy base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
     )
-    classifier_provider: Literal["anthropic", "openrouter"] = "anthropic"
+    classifier_provider: Literal["anthropic", "openrouter", "deepinfra"] = "anthropic"
+    classifier_deepinfra_request_profile: Literal["deepseek_0731"] | None = None
     classifier_openrouter_provider: str | None = None
     classifier_openrouter_response_provider: str | None = None
     classifier_openrouter_response_model: str | None = None
@@ -487,6 +494,33 @@ class LlmConfig(BaseModel):
         description="Model name for the per-post signal classifier. Default matches x_monitor/attribution.py::_resolve_signal_model().",
     )
     literal_translation_v2_enabled: bool = False
+
+    @model_validator(mode="after")
+    def _validate_direct_deepinfra_routes(self) -> LlmConfig:
+        """Keep the owner-selected direct routes from silently drifting."""
+        classifier_is_drifted = (
+            self.classifier_model != "deepseek-ai/DeepSeek-V4-Flash-0731"
+            or self.classifier_base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.classifier_deepinfra_request_profile != "deepseek_0731"
+        )
+        if self.classifier_provider == "deepinfra" and classifier_is_drifted:
+            raise ValueError(
+                "classifier DeepInfra route must use "
+                "DeepSeek-V4-Flash-0731, the direct OpenAI endpoint, and "
+                "the deepseek_0731 request profile"
+            )
+        translator_is_drifted = (
+            self.translator_model != "google/gemma-4-31B-it-turbo"
+            or self.translator_base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.translator_deepinfra_request_profile != "gemma4_translation_v1"
+        )
+        if self.translator_provider == "deepinfra" and translator_is_drifted:
+            raise ValueError(
+                "translator DeepInfra route must use Gemma-4-31B-it-turbo, "
+                "the direct OpenAI endpoint, and the "
+                "gemma4_translation_v1 request profile"
+            )
+        return self
 
 
 class HeadlineNarrativeConfig(BaseModel):
@@ -704,29 +738,31 @@ class HeadlineNarrativeConfig(BaseModel):
 class SynthesisConfig(BaseModel):
     """Fail-closed PostgreSQL worker controls for rich post synthesis."""
 
-    provider: Literal["deepseek"] = "deepseek"
-    base_url: str = "https://api.deepseek.com/anthropic"
-    model: str = "deepseek-v4-flash"
-    prompt_version: str = Field(default="post-synthesis-v1", max_length=64)
-    output_schema_version: int = Field(default=1, ge=1, le=32)
+    provider: Literal["deepinfra"] = "deepinfra"
+    base_url: str = DEEPINFRA_OPENAI_BASE_URL
+    model: str = "google/gemma-4-31B-it-turbo"
+    request_profile: Literal["gemma4_tagged"] = "gemma4_tagged"
+    response_format: Literal["tagged_text"] = "tagged_text"
+    prompt_version: str = Field(default="post-synthesis-gemma4-tagged-v2", max_length=64)
+    output_schema_version: int = Field(default=2, ge=1, le=32)
     activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
     provider_calls_enabled: bool = False
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
     batch_size: int = Field(default=5, ge=1, le=10)
     poll_seconds: int = Field(default=2, ge=1, le=30)
-    lease_seconds: int = Field(default=300, ge=30, le=900)
-    timeout_seconds: int = Field(default=60, ge=5, le=120)
+    lease_seconds: int = Field(default=600, ge=30, le=900)
+    timeout_seconds: int = Field(default=300, ge=5, le=300)
     max_attempts: int = Field(default=3, ge=1, le=5)
     max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
-    max_output_tokens_per_post: int = Field(default=1_200, ge=256, le=4_000)
+    max_output_tokens_per_post: int = Field(default=4_096, ge=256, le=8_192)
     daily_request_cap: int = Field(default=200, ge=1, le=10_000)
     daily_input_token_cap: int = Field(default=800_000, ge=1_000)
     daily_output_token_cap: int = Field(default=240_000, ge=1_000)
-    input_usd_per_million: Decimal = Field(default=Decimal("0.44"), ge=0)
-    output_usd_per_million: Decimal = Field(default=Decimal("1.32"), ge=0)
+    input_usd_per_million: Decimal = Field(default=Decimal("0.09"), ge=0)
+    output_usd_per_million: Decimal = Field(default=Decimal("0.34"), ge=0)
     daily_cost_cap_usd: Decimal = Field(default=Decimal("0.70"), gt=0)
     pricing_version: str = Field(
-        default="deepseek-v4-flash-peak-2026-09-02", min_length=1, max_length=96
+        default="deepinfra-gemma4-31b-standard-2026-09-18", min_length=1, max_length=96
     )
     demand_batch_limit: int = Field(default=20, ge=1, le=50)
     visible_expiry_minutes: int = Field(default=120, ge=15, le=1440)
@@ -741,13 +777,19 @@ class SynthesisConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_route(self) -> SynthesisConfig:
         if (
-            self.provider != "deepseek"
-            or self.base_url != "https://api.deepseek.com/anthropic"
-            or self.model != "deepseek-v4-flash"
+            self.provider != "deepinfra"
+            or self.base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.model != "google/gemma-4-31B-it-turbo"
+            or self.request_profile != "gemma4_tagged"
+            or self.response_format != "tagged_text"
         ):
-            raise ValueError("synthesis provider route must match the evaluated route")
+            raise ValueError("synthesis provider route must match the selected direct Gemma route")
         if self.prewarm_enabled and self.prewarm_per_cycle < 1:
             raise ValueError("enabled synthesis prewarm requires a positive cap")
+        if self.lease_seconds < self.timeout_seconds + 60:
+            raise ValueError(
+                "synthesis lease must exceed provider timeout by at least 60 seconds"
+            )
         maximum_cost = (
             Decimal(self.daily_input_token_cap) * self.input_usd_per_million
             + Decimal(self.daily_output_token_cap) * self.output_usd_per_million
@@ -983,7 +1025,15 @@ def load_config(path: Path) -> Config:
         k: v
         for k, v in {
             "translator_model": os.environ.get("X_MONITOR_TRANSLATOR_MODEL"),
+            "translator_provider": os.environ.get("X_MONITOR_TRANSLATOR_PROVIDER"),
+            "translator_deepinfra_request_profile": os.environ.get(
+                "X_MONITOR_TRANSLATOR_DEEPINFRA_REQUEST_PROFILE"
+            ),
             "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
+            "classifier_provider": os.environ.get("X_MONITOR_CLASSIFIER_PROVIDER"),
+            "classifier_deepinfra_request_profile": os.environ.get(
+                "X_MONITOR_CLASSIFIER_DEEPINFRA_REQUEST_PROFILE"
+            ),
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),

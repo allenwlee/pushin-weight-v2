@@ -44,6 +44,7 @@ RUNTIME_FILTER_KEYS = {
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
     "product_labels": "product_labels",
+    "audience_topics": "audience_topics",
     "unsanctioned": "unsanctioned",
     "window": "window",
 }
@@ -80,6 +81,7 @@ def _html(namespace: str) -> str:
   data-pw-filters='{filters}' data-pw-window="1" data-pw-locale="en">
   <nav class="filter-bar"><div id="control-panel">
     {filter_inputs}
+    {''.join(f'<input type="checkbox" data-pw-filter-group="untracked_brand_promotions" value="{value}">' for value in CONTROL_VALUES.get("untracked_brand_promotions", []) if value != "off")}
     <input type="checkbox" data-pw-filter-group="unsanctioned" value="only">
   </div></nav>
   <button data-pw-pulse-entry="deepseek" aria-pressed="false">DeepSeek</button>
@@ -188,6 +190,14 @@ def test_stateful_filter_actions_keep_browser_and_reference_model_aligned() -> N
                         "([key, nextValue]) => window.pwFilter.set(key, nextValue)",
                         [runtime_key, browser_value],
                     )
+                elif control == "untracked_brand_promotions":
+                    self.page.evaluate(
+                        "([key, nextValue]) => window.pwFilter.set(key, nextValue)",
+                        [
+                            RUNTIME_FILTER_KEYS[control],
+                            "off" if value == "off" else [value],
+                        ],
+                    )
                 elif control == "unsanctioned":
                     self.page.locator(
                         '[data-pw-filter-group="unsanctioned"]'
@@ -261,6 +271,10 @@ def test_every_covering_row_executes_against_the_browser_store() -> None:
                     if (multiControls.includes(control)) {
                       window.pwFilter.set(
                         runtimeKeys[control], value === '__all__' ? '__all__' : [value]
+                      );
+                    } else if (control === 'untracked_brand_promotions') {
+                      window.pwFilter.set(
+                        runtimeKeys[control], value === 'off' ? 'off' : [value]
                       );
                     } else if (control === 'unsanctioned') {
                       window.pwFilter.set('unsanctioned', value);

@@ -1,0 +1,220 @@
+{
+  "topic": "SetFit and alternatives for PushinWeight's multilingual, target-brand-specific, overlapping classification axes",
+  "intent": "GENERAL research with project-specific recommendations",
+  "window": {
+    "from": "2026-08-16",
+    "through": "2026-09-15"
+  },
+  "counts": {
+    "Reddit": 0,
+    "X": 4,
+    "YouTube": 0,
+    "Web": 12,
+    "recent_web": 5,
+    "background_web": 7
+  },
+  "counts_definition": "Selected source pages used in the report, not every search hit or independent experiment. X entries are search-retrieved; direct web opening failed. Three X posts discuss the same SetFit experiment.",
+  "limitations": [
+    "Reddit script search timed out; supplementary direct searches found no verified relevant in-window thread.",
+    "YouTube search returned zero; renderer's yt-dlp missing message conflicts with actual execution log and is not treated as evidence of an installation failure.",
+    "No exact-match independent production benchmark was found for this project's full multilingual, multi-axis, per-brand contract.",
+    "Older model documentation is separated from recent experience."
+  ],
+  "sources": [
+    {
+      "id": "W01",
+      "channel": "Web",
+      "title": "SetFit document curation experiment",
+      "url": "https://danielvanstrien.xyz/posts/2026/agents-data-curation/index.html",
+      "date": "2026-09-10",
+      "recent": true,
+      "date_basis": "Author publication date",
+      "kind": "Firsthand experiment",
+      "group": "van-strien-setfit"
+    },
+    {
+      "id": "W02",
+      "channel": "Web",
+      "title": "Chinese/English SetFit intent router",
+      "url": "https://huggingface.co/snival/intent-router-zh-setfit-v2",
+      "date": "2026-08-28",
+      "updated": "2026-08-31",
+      "recent": true,
+      "date_basis": "Hugging Face API repository creation and modification timestamps",
+      "kind": "Author model card and evaluation",
+      "group": "snival-router"
+    },
+    {
+      "id": "W03",
+      "channel": "Web",
+      "title": "SetFit v1.2.0 release",
+      "url": "https://github.com/huggingface/setfit/releases/tag/v1.2.0",
+      "date": "2026-09-04",
+      "recent": true,
+      "date_basis": "GitHub release published_at",
+      "kind": "Maintainer release notes",
+      "group": "setfit-release"
+    },
+    {
+      "id": "W04",
+      "channel": "Web",
+      "title": "Preparing Qwen teacher data with Datatrove and Jobs",
+      "url": "https://danielvanstrien.xyz/posts/2026/distilling-qwen38-datatrove-jobs/index.html",
+      "date": "2026-08-17",
+      "recent": true,
+      "date_basis": "Author publication date",
+      "kind": "Firsthand data-generation experiment; no trained-student result",
+      "group": "van-strien-teacher-data"
+    },
+    {
+      "id": "W05",
+      "channel": "Web",
+      "title": "DualMLC",
+      "url": "https://arxiv.org/abs/2609.12915",
+      "date": "2026-09-11",
+      "recent": true,
+      "date_basis": "arXiv v1 submission date",
+      "kind": "Research paper abstract",
+      "group": "dualmlc"
+    },
+    {
+      "id": "W06",
+      "channel": "Web",
+      "title": "SetFit multilabel documentation",
+      "url": "https://huggingface.co/docs/setfit/how_to/multilabel",
+      "date": null,
+      "recent": false,
+      "date_basis": "Undated current documentation; not evidence of recent release",
+      "kind": "Official documentation",
+      "group": "setfit-method"
+    },
+    {
+      "id": "W07",
+      "channel": "Web",
+      "title": "Multilingual E5 Small",
+      "url": "https://huggingface.co/intfloat/multilingual-e5-small",
+      "retrieved_url": "https://huggingface.co/intfloat/multilingual-e5-small/raw/main/README.md",
+      "date": null,
+      "recent": false,
+      "date_basis": "Older model; card cites 2024 technical report",
+      "kind": "Author model card",
+      "group": "multilingual-e5"
+    },
+    {
+      "id": "W08",
+      "channel": "Web",
+      "title": "mmBERT model family",
+      "url": "https://huggingface.co/jhu-clsp/mmBERT-base",
+      "date": null,
+      "recent": false,
+      "date_basis": "Older model family; card cites 2025 paper",
+      "kind": "Author model card",
+      "group": "mmbert"
+    },
+    {
+      "id": "W09",
+      "channel": "Web",
+      "title": "XLM-RoBERTa Base",
+      "url": "https://huggingface.co/FacebookAI/xlm-roberta-base",
+      "date": null,
+      "recent": false,
+      "date_basis": "Older model; 2019 paper",
+      "kind": "Official-distribution model documentation maintained by Hugging Face",
+      "group": "xlmr"
+    },
+    {
+      "id": "W10",
+      "channel": "Web",
+      "title": "GLiClass Multilang Mini",
+      "url": "https://huggingface.co/knowledgator/gliclass-multilang-mini",
+      "date": "2026-04-23",
+      "updated": "2026-04-30",
+      "recent": false,
+      "date_basis": "Hugging Face API repository timestamps",
+      "kind": "Vendor model card and benchmarks",
+      "group": "gliclass-multilang"
+    },
+    {
+      "id": "W11",
+      "channel": "Web",
+      "title": "GLiClass Multilang Edge",
+      "url": "https://huggingface.co/knowledgator/gliclass-multilang-edge",
+      "date": "2026-04-30",
+      "recent": false,
+      "date_basis": "Hugging Face API repository timestamps",
+      "kind": "Vendor model card and same benchmark suite",
+      "group": "gliclass-multilang"
+    },
+    {
+      "id": "W12",
+      "channel": "Web",
+      "title": "GLiNER2 classification tutorial",
+      "url": "https://github.com/fastino-ai/GLiNER2/blob/main/tutorial/1-classification.md",
+      "date": null,
+      "recent": false,
+      "date_basis": "Current documentation; no recent-publication claim",
+      "kind": "Maintainer documentation",
+      "group": "gliner2"
+    },
+    {
+      "id": "X01",
+      "channel": "X",
+      "title": "Daniel van Strien SetFit workflow",
+      "url": "https://x.com/vanstriendaniel/status/2097297563258876185",
+      "date": "2026-09-08",
+      "recent": true,
+      "date_basis": "last30days X search metadata",
+      "kind": "Author post, related primary article verified",
+      "group": "van-strien-setfit",
+      "engagement": {
+        "likes": 46,
+        "reposts": 1,
+        "replies": 3,
+        "quotes": 1
+      }
+    },
+    {
+      "id": "X02",
+      "channel": "X",
+      "title": "Concern about 200 teacher labels",
+      "url": "https://x.com/blocknovallc/status/2098801197775724916",
+      "date": "2026-09-12",
+      "recent": true,
+      "date_basis": "last30days X search metadata",
+      "kind": "Commentary on W01, not a new experiment",
+      "group": "van-strien-setfit",
+      "engagement": {
+        "replies": 1
+      }
+    },
+    {
+      "id": "X03",
+      "channel": "X",
+      "title": "SetFit cost example amplification",
+      "url": "https://x.com/DarkishOrchid/status/2098800062155358665",
+      "date": "2026-09-12",
+      "recent": true,
+      "date_basis": "last30days X search metadata",
+      "kind": "Amplification of W01, not a new experiment",
+      "group": "van-strien-setfit",
+      "engagement": {
+        "likes": 2,
+        "replies": 2
+      }
+    },
+    {
+      "id": "X04",
+      "channel": "X",
+      "title": "ModernBERT teacher and tree-student experiments",
+      "url": "https://x.com/ThibaultJaigu/status/2098416347453489420",
+      "date": "2026-09-11",
+      "recent": true,
+      "date_basis": "last30days X search metadata",
+      "kind": "Firsthand claim; full write-up not independently located",
+      "group": "jaigu-tree-distillation",
+      "engagement": {
+        "replies": 1
+      }
+    }
+  ]
+}

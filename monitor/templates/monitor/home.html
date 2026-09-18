@@ -21,12 +21,13 @@
 {% csrf_token %}
 <!-- pw-shell:v20 -->
 <body class="pw-v20 desktop-shell"
-      data-pw-filters='{{ applied_filters_json|safe }}'
-      data-pw-brands='{{ brand_nicknames_json|safe }}'
+      data-pw-filters='{{ applied_filters_json }}'
+      data-pw-canonical-url="{{ canonical_home_url|default:'' }}"
+      data-pw-brands='{{ brand_nicknames_json }}'
       data-pw-locale="{{ active_locale }}"
       data-pw-preferences-namespace="{{ home_preferences_namespace }}"
       data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
-      data-pw-country-flag-codes='{{ country_flag_codes_json|safe }}'
+      data-pw-country-flag-codes='{{ country_flag_codes_json }}'
       data-pw-window="{{ home_window_days }}"
       data-pw-page="multi"
       data-pw-shell="v20"
@@ -208,33 +209,43 @@
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="nationalism">
+      {% if audience_topic_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="audience_topics">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_nationalism">{% if is_zh_chrome %}民族主义{% elif is_ja_chrome %}ナショナリズム{% else %}Nationalism{% endif %}</span>
+        <span class="title" data-i18n="pill_audience_topics">{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
-        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}民族主义{% elif is_ja_chrome %}ナショナリズム{% else %}Nationalism{% endif %}" data-idea="b" data-lens-pair="us,cn">
-          <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}民族主义地区{% elif is_ja_chrome %}ナショナリズムの地域{% else %}Nationalism region{% endif %}">
-            <button type="button" role="tab" data-lens="us" class="is-active" aria-selected="true">美 <span class="n" data-lens-count="us">· {{ nationalism_entries|length }}</span></button>
-            <button type="button" role="tab" data-lens="cn" aria-selected="false">中 <span class="n" data-lens-count="cn">· {{ nationalism_entries|length }}</span></button>
-          </div>
-          <div class="dd-toolbar">
-            <button type="button" data-dd-action="all" data-dd-scope="visible" data-i18n="btn_all">{% if is_zh_chrome %}全选{% elif is_ja_chrome %}すべて{% else %}all{% endif %}</button>
-            <button type="button" data-dd-action="clear" data-dd-scope="visible" data-i18n="btn_clear">{% if is_zh_chrome %}清空{% elif is_ja_chrome %}クリア{% else %}clear{% endif %}</button>
-          </div>
-          <div class="dd-lens-body" data-active-lens="us">
-            <div class="dd-grid cols-3" data-tier-grid="us">
-              {% for entry in nationalism_entries %}
-                <label><input type="checkbox" data-pw-filter-group="us_nationalism" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="nationalism" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
-              {% endfor %}
-            </div>
-            <div class="dd-grid cols-3" data-tier-grid="cn">
-              {% for entry in nationalism_entries %}
-                <label><input type="checkbox" data-pw-filter-group="cn_nationalism" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="nationalism" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
-              {% endfor %}
-            </div>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}">
+          <div class="dd-grid cols-3">
+            {% for entry in audience_topic_entries %}
+              <label><input type="checkbox" data-pw-filter-group="audience_topics" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% endfor %}
           </div>
         </div>
-      </div>
+      </div>{% endif %}
+
+      {% if geopolitical_mode_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="geopolitical_modes">
+        <span class="status-dot is-default" aria-hidden="true"></span>
+        <span class="title" data-i18n="pill_geopolitical">{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}</span>
+        <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}">
+          <div class="dd-grid cols-3">
+            {% for entry in geopolitical_mode_entries %}
+              <label><input type="checkbox" data-pw-filter-group="geopolitical_modes" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% endfor %}
+          </div>
+          <div class="dd-subtitle">{% if is_zh_chrome %}中国国家立场{% elif is_ja_chrome %}中国の国家的立場{% else %}China national stance{% endif %}</div>
+          <div class="dd-grid cols-3">
+            {% for entry in national_stance_entries %}
+              <label><input type="checkbox" data-pw-filter-group="china_national_stance" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% endfor %}
+          </div>
+          <div class="dd-subtitle">{% if is_zh_chrome %}美国国家立场{% elif is_ja_chrome %}米国の国家的立場{% else %}U.S. national stance{% endif %}</div>
+          <div class="dd-grid cols-3">
+            {% for entry in national_stance_entries %}
+              <label><input type="checkbox" data-pw-filter-group="us_national_stance" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>{% endif %}
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="product_labels">
         <span class="status-dot is-default" aria-hidden="true"></span>
@@ -249,19 +260,27 @@
         </div>
       </div>
 
-      <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="unsanctioned">
+      {% if untracked_brand_promotion_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="untracked_brand_promotions">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_unsanctioned">{% if is_zh_chrome %}未授权{% elif is_ja_chrome %}非公式{% else %}Unsanctioned{% endif %}</span>
+        <span class="title" data-i18n="pill_untracked_brand_promotions">{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
-        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未授权{% elif is_ja_chrome %}非公式{% else %}Unsanctioned{% endif %}">
-          <div class="dd-grid cols-1">
-            <label><input type="checkbox" data-pw-filter-group="unsanctioned" value="only"><span data-pw-semantic-icon data-pw-semantic-family="unsanctioned" data-pw-semantic-key="only"></span><span class="filter-option-text">{% trans "show only flagged posts" %}</span></label>
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}">
+          <div class="dd-grid cols-2">
+            {% for entry in untracked_brand_promotion_entries %}
+              <label><input type="checkbox" data-pw-filter-group="untracked_brand_promotions" value="{{ entry.key }}"><span data-pw-semantic-icon data-pw-semantic-family="untracked_brand_promotions" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+            {% endfor %}
           </div>
         </div>
-      </div>
+      </div>{% endif %}
 
     </div>
   </nav>
+
+  {% if classification_unavailable_notice %}
+    <div class="classification-unavailable-notice" role="status" aria-live="polite">
+      {{ classification_unavailable_notice }}
+    </div>
+  {% endif %}
 
   <div class="desktop-grid">
     <div class="desktop-col-main">

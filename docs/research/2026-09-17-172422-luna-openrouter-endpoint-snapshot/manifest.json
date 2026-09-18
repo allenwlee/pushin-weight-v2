@@ -1,0 +1,26 @@
+{
+  "captured_at_utc": "2026-09-17T08:24:55.122493+00:00",
+  "model_id": "openai/gpt-5.6-luna",
+  "pricing": {
+    "policy": "No pricing fields are copied or refreshed here; model-task pricing remains pinned to the September 17 saved catalog snapshot.",
+    "source": "docs/research/2026-09-17-143812-openrouter-pricing-snapshot/raw/models.json"
+  },
+  "request": {
+    "authorization": "none",
+    "inference_calls": 0,
+    "method": "GET",
+    "url": "https://openrouter.ai/api/v1/models/openai/gpt-5.6-luna/endpoints"
+  },
+  "response": {
+    "headers": {
+      "cache-control": "private, no-store",
+      "date": "Thu, 17 Sep 2026 08:24:55 GMT"
+    },
+    "raw_bytes": 7794,
+    "raw_path": "raw/endpoints-openai__gpt-5.6-luna.json",
+    "raw_sha256": "61c75640a4344a74b3bdc3440e851c0d978a5d643001a81480bc0d7fb7691fb6",
+    "status": 200
+  },
+  "schema": "openrouter-endpoint-snapshot/v1",
+  "started_at_utc": "2026-09-17T08:24:55.043107+00:00"
+}

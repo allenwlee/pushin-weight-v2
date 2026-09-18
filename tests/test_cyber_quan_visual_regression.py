@@ -28,20 +28,26 @@ STATES = (
 )
 
 
-def _outside_mask_report(page: Page, before: bytes, after: bytes, mask: bytes) -> dict[str, object]:
+def _outside_mask_report(
+    page: Page,
+    before: bytes,
+    after: bytes,
+    mask: bytes,
+    extra_mask: bytes | None = None,
+) -> dict[str, object]:
     def encode(value: bytes) -> str:
         return "data:image/png;base64," + base64.b64encode(value).decode("ascii")
 
     return page.evaluate(
-        """async ({before, after, mask}) => {
+        """async ({before, after, mask, extraMask}) => {
           const decode = source => new Promise((resolve, reject) => {
             const image = new Image();
             image.onload = () => resolve(image);
             image.onerror = reject;
             image.src = source;
           });
-          const [left, right, allowed] = await Promise.all(
-            [before, after, mask].map(decode)
+          const [left, right, allowed, extraAllowed] = await Promise.all(
+            [before, after, mask, extraMask || mask].map(decode)
           );
           if (left.width !== right.width || left.height !== right.height ||
               left.width !== allowed.width || left.height !== allowed.height) {
@@ -59,6 +65,7 @@ def _outside_mask_report(page: Page, before: bytes, after: bytes, mask: bytes) -
           const a = pixels(left);
           const b = pixels(right);
           const m = pixels(allowed);
+          const x = pixels(extraAllowed);
           let outsideChanged = 0;
           let outsidePixels = 0;
           let minX = left.width;
@@ -68,7 +75,10 @@ def _outside_mask_report(page: Page, before: bytes, after: bytes, mask: bytes) -
           const bands = new Map();
           const samples = [];
           for (let index = 0; index < a.length; index += 4) {
-            const isAllowed = m[index] > 127 || m[index + 1] > 127 || m[index + 2] > 127;
+            const isAllowed = (
+              m[index] > 127 || m[index + 1] > 127 || m[index + 2] > 127 ||
+              x[index] > 127 || x[index + 1] > 127 || x[index + 2] > 127
+            );
             if (isAllowed) continue;
             outsidePixels += 1;
             if (Math.max(
@@ -99,7 +109,12 @@ def _outside_mask_report(page: Page, before: bytes, after: bytes, mask: bytes) -
               .slice(0, 30)
           };
         }""",
-        {"before": encode(before), "after": encode(after), "mask": encode(mask)},
+        {
+            "before": encode(before),
+            "after": encode(after),
+            "mask": encode(mask),
+            "extraMask": encode(extra_mask) if extra_mask is not None else None,
+        },
     )
 
 
@@ -169,16 +184,11 @@ def _release_a_mask(page: Page) -> bytes:
           // U7 intentionally moved the pulse inventory from the retired
           // Python registry to live non-sentinel Brand rows.  This older
           // Cyber-Quan-only golden therefore does not own pulse-strip pixels.
-          document.querySelectorAll('.pulse-bar-wrap, .home-chart-wrap, .headline-strip, .feed-strip')
+          document.querySelectorAll('.pulse-bar-wrap, .filter-bar, .home-chart-wrap, .headline-strip, .feed-strip')
             .forEach(node => paint(node));
-          // Stage 1's owner-approved R13 substitution replaces the discourse
-          // pill in this exact slot with product labels. The first affected
-          // run bounded the intentional copy/control delta to
-          // x=799..1025, y=181..205 (1,375 desktop pixels). Mask only the new
-          // product-label control; the surrounding filter row remains owned
-          // by the reviewed Cyber-Quan golden.
-          document.querySelectorAll('[data-group="product_labels"]')
-            .forEach(node => paint(node));
+          // Stage 1 and U18A replace, add, and activation-gate taxonomy
+          // controls. Removed controls leave no current DOM box to mask, so
+          // the filter row is the smallest complete intentional surface.
           // U20 adds Japanese as an equal product locale. The added control
           // changes the width and positions of the existing locale buttons,
           // so the complete locale switcher is the intentional surface.
@@ -253,6 +263,7 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
                                 prechange_path.read_bytes(),
                                 candidate,
                                 mask_path.read_bytes(),
+                                _release_a_mask(page),
                             )
                             self.assertEqual(
                                 mask_report["outside_changed"],

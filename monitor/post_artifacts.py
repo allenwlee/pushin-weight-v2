@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from core.models import (
     Post,
+    PostEnrichmentState,
     PostSynthesisArtifact,
     PostSynthesisDemand,
     PostSynthesisText,
@@ -65,6 +66,7 @@ def publish_literal_translation(
     prompt_version: str,
     model: str,
     expected_source_fingerprint: str,
+    expected_claim_run_id: str | None = None,
     provider_role: str = "literal_translation",
     input_tokens: int = 0,
     output_tokens: int = 0,
@@ -88,6 +90,20 @@ def publish_literal_translation(
     if source is None or any(value is None for value in values.values()):
         return None
     with transaction.atomic():
+        if expected_claim_run_id is not None:
+            claim = (
+                PostEnrichmentState.objects.select_for_update()
+                .filter(post_id=post.pk)
+                .first()
+            )
+            if (
+                claim is None
+                or claim.claim_run_id != str(expected_claim_run_id)[:128]
+                or claim.translation_status != PostEnrichmentState.Status.PENDING
+                or claim.claim_expires_at is None
+                or claim.claim_expires_at < current
+            ):
+                return None
         locked_post = Post.objects.select_for_update().get(pk=post.pk)
         fingerprint = source_content_fingerprint(locked_post)
         if fingerprint != expected_source_fingerprint:
@@ -151,6 +167,7 @@ def record_literal_translation_failure(
     prompt_version: str,
     model: str,
     expected_source_fingerprint: str,
+    expected_claim_run_id: str | None = None,
     error_code: str,
     source_language: object = None,
     provider_role: str = "literal_translation",
@@ -169,6 +186,20 @@ def record_literal_translation_failure(
         or "unknown"
     )
     with transaction.atomic():
+        if expected_claim_run_id is not None:
+            claim = (
+                PostEnrichmentState.objects.select_for_update()
+                .filter(post_id=post.pk)
+                .first()
+            )
+            if (
+                claim is None
+                or claim.claim_run_id != str(expected_claim_run_id)[:128]
+                or claim.translation_status != PostEnrichmentState.Status.PENDING
+                or claim.claim_expires_at is None
+                or claim.claim_expires_at < current
+            ):
+                return None
         locked_post = Post.objects.select_for_update().get(pk=post.pk)
         fingerprint = source_content_fingerprint(locked_post)
         if fingerprint != expected_source_fingerprint:

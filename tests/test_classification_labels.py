@@ -73,7 +73,7 @@ def test_stage1_label_constants_match_the_frozen_taxonomy():
         "nationalism": (NATIONALISM_KEYS, NATIONALISM_LABELS),
     }
 
-    assert sum(len(keys) for keys, _ in active.values()) == 28
+    assert sum(len(keys) for keys, _ in active.values()) == 29
     for keys, labels_by_key in active.values():
         assert all(set(labels_by_key[key]) == {"en", "zh-cn", "ja"} for key in keys)
         assert all(
@@ -101,7 +101,7 @@ def test_japanese_labels_match_the_reviewed_implementation_copy():
     } == {
         "releases_updates": "リリース・アップデート",
         "hands_on_usage": "使用体験",
-        "results_evaluations": "結果・評価",
+        "results_analysis": "結果分析",
         "questions_requests": "質問・要望",
         "advertising_marketing": "広告・マーケティング",
         "events": "イベント",
@@ -111,12 +111,13 @@ def test_japanese_labels_match_the_reviewed_implementation_copy():
         "opinions_reactions": "意見・反応",
         "research_explanations": "研究・解説",
         "business_finance": "ビジネス・金融",
+        "news_reporting": "ニュース報道",
         "other": "その他",
         "bug": "バグ",
         "complaint": "苦情",
         "testimonial": "推奨の声",
         "ideas_requests": "アイデア・要望",
-        "misinformation": "誤情報の可能性",
+        "investigate_claim": "要確認の主張",
         "sentiment:positive": "ポジティブ",
         "sentiment:negative": "ネガティブ",
         "sentiment:neutral": "中立",
@@ -147,7 +148,7 @@ def test_legacy_alias_labels_remain_english_chinese_only():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_seed_command_restores_v1_aliases_and_supports_active_v3_writer():
+def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
     from django.core.management import call_command
 
     from core.models import (
@@ -176,7 +177,7 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v3_writer():
         "feedback_questions",
         "event_announcement",
     )
-    assert legacy_product_aliases == ("product_request",)
+    assert legacy_product_aliases == ("product_request", "misinformation")
 
     for key in legacy_post_aliases:
         key_row, _created = PostTypeKey.objects.get_or_create(key=key)
@@ -240,47 +241,51 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v3_writer():
             (NationalismLabel, "nationalism_id", NATIONALISM_KEYS),
         )
     )
-    assert active_ja_count == 28
+    assert active_ja_count == 29
     assert PostTypeLabel.objects.get(post_type_id="other", lang="en").label == (
         "Preserved custom Other"
     )
 
     writer_post_types = (
         "releases_updates",
-        "results_evaluations",
+        "results_analysis",
         "questions_requests",
         "events",
         "opportunities",
         "job_listings",
         "personnel_changes",
+        "news_reporting",
     )
-    writer_product_labels = ("ideas_requests",)
+    writer_product_labels = ("ideas_requests", "investigate_claim")
     assert set(writer_post_types) <= set(CANONICAL_POST_TYPE_KEYS)
     assert set(writer_product_labels) <= set(CANONICAL_PRODUCT_LABEL_KEYS)
     post = Post.objects.create(
-        tweet_id="seed-v3-writer", text="seed v3 writer", lang_detected="en"
+        tweet_id="seed-v4-writer", text="seed v4 writer", lang_detected="en"
     )
-    brand = Brand.objects.create(nickname="seed-v3-writer", display_name="Seed V3")
+    brand = Brand.objects.create(nickname="seed-v4-writer", display_name="Seed V4")
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v3-writer")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v4-writer")
     classification = {
         "outcome": "classified",
         "post_types": list(writer_post_types),
+        "audience_topics": ["evals_benchmarks"],
         "product_labels": list(writer_product_labels),
         "sentiment": "neutral",
-        "china_nationalism": None,
-        "us_nationalism": None,
+        "geopolitical_modes": ["none"],
+        "china_national_stance": "none",
+        "us_national_stance": "none",
     }
     published = _publish_stage1_classification(
         post_id=post.pk,
         result={
             "valid": True,
-            "unsanctioned_flags": [],
+            "untracked_brand_promotions": [],
+            "promoted_subjects": [],
             "by_brand": {brand.pk: classification},
         },
         tweet={"text": post.text, "context": []},
         model="seed-test-model",
-        run_id="seed-v3-writer",
+        run_id="seed-v4-writer",
     )
 
     assert published is not None

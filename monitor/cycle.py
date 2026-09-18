@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db import DatabaseError, transaction
@@ -49,6 +50,8 @@ from core.classification_contract import (
     CANONICAL_PRODUCT_LABEL_KEYS,
     CONTRACT_VERSION,
     PROMPT_VERSION,
+    STAGE1_PROMPT_V23_VERSION,
+    STAGE1_TAXONOMY_V3_VERSION,
     TAXONOMY_VERSION,
     parse_stage1_classifications,
 )
@@ -61,6 +64,7 @@ from core.models import (
     Account,
     Brand,
     BrandAccount,
+    BrandHashtag,
     BrandKeyword,
     BrandSearchTerm,
     CallState,
@@ -74,6 +78,7 @@ from core.models import (
     PostBrandSignal,
     PostEnrichmentState,
     PostTypeKey,
+    Product,
     SentimentKey,
 )
 from core.profile_snapshots import (
@@ -115,6 +120,7 @@ from x_monitor.attribution import (
     UNATTRIBUTED_BRAND_ID,
     MentionRow,
     _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
+    _two_role_fingerprint,
     attribute_to_brands,
     compile_keyword_index,
 )
@@ -125,6 +131,101 @@ from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
+
+
+def _classification_tracked_brand_catalog() -> list[dict[str, Any]]:
+    """Build the classifier's visible tracked-brand catalog from Django truth.
+
+    This is deliberately a compact, deterministic projection: every term in
+    it is an already-curated attribution or account mapping, never a model
+    inference. The selected classifier hashes this exact projection into its
+    trace identity and uses it to avoid treating a tracked subject as an
+    untracked promotion.
+    """
+    rows: dict[str, dict[str, Any]] = {}
+    for brand in Brand.objects.filter(is_sentinel=False).order_by("nickname"):
+        brand_id = str(brand.nickname)
+        aliases = {
+            brand_id,
+            str(brand.display_name or "").strip(),
+            str(brand.display_name_en or "").strip(),
+            str(brand.display_name_zh_cn or "").strip(),
+        }
+        rows[brand_id] = {
+            "brand_id": brand_id,
+            "aliases": sorted({value for value in aliases if value}, key=str.casefold),
+            "handles": [],
+            "domains": [],
+            "products": [],
+            "keywords": [],
+            "hashtags": [],
+            "accounts": [],
+        }
+    for brand_id, term in BrandSearchTerm.objects.filter(
+        brand_id__in=rows
+    ).values_list("brand_id", "term"):
+        value = str(term or "").strip()
+        if value:
+            rows[str(brand_id)]["aliases"].append(value)
+            rows[str(brand_id)]["keywords"].append(value)
+            parsed = urlparse(value if "://" in value else f"https://{value}")
+            if parsed.hostname and "." in parsed.hostname:
+                rows[str(brand_id)]["domains"].append(parsed.hostname.casefold())
+    for brand_id, pattern, is_regex in BrandKeyword.objects.filter(
+        brand_id__in=rows
+    ).values_list("brand_id", "pattern", "is_regex"):
+        value = str(pattern or "").strip()
+        if value and not is_regex:
+            rows[str(brand_id)]["keywords"].append(value)
+            rows[str(brand_id)]["aliases"].append(value)
+    for brand_id, hashtag in BrandHashtag.objects.filter(
+        brand_id__in=rows
+    ).values_list("brand_id", "hashtag"):
+        value = str(hashtag or "").strip()
+        if value:
+            rows[str(brand_id)]["hashtags"].append(
+                value if value.startswith("#") else f"#{value}"
+            )
+    for brand_id, handle, role in BrandAccount.objects.filter(
+        brand_id__in=rows
+    ).exclude(account__handle__isnull=True).values_list(
+        "brand_id", "account__handle", "role_id"
+    ):
+        value = str(handle or "").strip().removeprefix("@")
+        if value:
+            row = rows[str(brand_id)]
+            row["handles"].append(value)
+            row["accounts"].append({"handle": value, "role": str(role)})
+    for brand_id, display_name, repo_id in Product.objects.filter(
+        brand_id__in=rows
+    ).values_list("brand_id", "display_name", "repo_id"):
+        row = rows[str(brand_id)]
+        for value in (display_name, repo_id):
+            cleaned = str(value or "").strip()
+            if cleaned:
+                row["products"].append(cleaned)
+
+    catalog: list[dict[str, Any]] = []
+    for brand_id in sorted(rows, key=str.casefold):
+        row = rows[brand_id]
+        for field in ("aliases", "handles", "domains", "products", "keywords", "hashtags"):
+            row[field] = sorted(
+                {str(value).strip() for value in row[field] if str(value).strip()},
+                key=str.casefold,
+            )
+        row["accounts"] = sorted(
+            {
+                (str(value["handle"]).casefold(), str(value["role"]))
+                for value in row["accounts"]
+            },
+            key=lambda value: (value[0], value[1]),
+        )
+        row["accounts"] = [
+            {"handle": handle, "role": role}
+            for handle, role in row["accounts"]
+        ]
+        catalog.append(row)
+    return catalog
 
 
 def _classification_revision_id(
@@ -506,9 +607,18 @@ def _persist_two_role_classification_trace(
         strict=True,
     ))
     expected_merge_revision = expected_revisions["final"]
+    expected_taxonomy_version = (
+        TAXONOMY_VERSION
+        if "-v4" in expected_merge_revision
+        else STAGE1_TAXONOMY_V3_VERSION
+    )
     for stage, payload in stages.items():
         if metadata[stage]["input_context_fingerprint"] != fingerprint:
-            raise ValueError("classification_trace_input_fingerprint_mismatch")
+            raise ValueError(
+                "classification_trace_input_fingerprint_mismatch:"
+                f"{stage}:{metadata[stage]['input_context_fingerprint'][:12]}:"
+                f"{fingerprint[:12]}"
+            )
         expected_role = expected_roles.get(stage, "classifier")
         if payload.get("provider_role") != expected_role or metadata[stage]["provider_role"] != expected_role:
             raise ValueError("classification_trace_role_mismatch")
@@ -519,7 +629,7 @@ def _persist_two_role_classification_trace(
             or metadata[stage]["prompt_version"] != expected_revisions[stage]
             or payload["role_revision"] != metadata[stage]["prompt_version"]
             or metadata[stage]["contract_version"] != CONTRACT_VERSION
-            or metadata[stage]["taxonomy_version"] != TAXONOMY_VERSION
+            or metadata[stage]["taxonomy_version"] != expected_taxonomy_version
             or metadata[stage]["model"] != model
             or metadata[stage]["selector_version"] != expected_merge_revision
             or metadata[stage]["validation_state"] != "validated"
@@ -534,17 +644,37 @@ def _persist_two_role_classification_trace(
     for brand_id in brand_ids:
         content = content_rows[brand_id]
         brand = brand_rows[brand_id]
-        if set(content) != {"outcome", "post_types"}:
+        is_v4 = "audience_topics" in content
+        expected_content_fields = (
+            {"outcome", "post_types", "audience_topics"}
+            if is_v4
+            else {"outcome", "post_types"}
+        )
+        expected_brand_fields = (
+            {
+                "product_labels",
+                "sentiment",
+                "geopolitical_modes",
+                "china_national_stance",
+                "us_national_stance",
+            }
+            if is_v4
+            else {
+                "product_labels",
+                "sentiment",
+                "china_nationalism",
+                "us_nationalism",
+            }
+        )
+        if set(content) != expected_content_fields:
             raise ValueError("classification_trace_content_invalid")
-        if set(brand) != {"product_labels", "sentiment", "china_nationalism", "us_nationalism"}:
+        if set(brand) != expected_brand_fields:
             raise ValueError("classification_trace_brand_interpretation_invalid")
         merged = {**content, **brand}
         parsed = parse_stage1_classifications([{"brand_id": brand_id, **merged}], [brand_id])
         if parsed is None or parsed[brand_id] != final_rows[brand_id]:
             raise ValueError("classification_trace_final_mismatch")
-    parsed_final = parse_stage1_classifications(
-        [{"brand_id": brand_id, **row} for brand_id, row in final_rows.items()], brand_ids
-    )
+    parsed_final = _parse_published_classifications(final_rows, brand_ids)
     if parsed_final is None or parsed_final != final_by_brand:
         raise ValueError("classification_trace_final_mismatch")
 
@@ -1063,6 +1193,83 @@ def _finish_enrichment_stage(
     return failed
 
 
+@dataclass(frozen=True)
+class _ClassificationPublishOutcome:
+    """Compatibility result for the current post-level promotion writer."""
+
+    outcome: str
+    degraded: bool = False
+    dead_letter: dict[str, Any] | None = None
+
+
+def _v4_stage_provenance(
+    *,
+    result: dict[str, Any],
+    stage: str,
+    model: str,
+    fingerprint: str,
+) -> dict[str, str]:
+    """Return the role-specific, validated trace identity for a v4 projection."""
+    trace = result.get("classification_trace")
+    if isinstance(trace, dict) and isinstance(trace.get(stage), dict):
+        metadata = _trace_metadata(trace, trace[stage], model=model, fingerprint=fingerprint)
+        return {
+            "prompt_version": metadata["prompt_version"],
+            "provider_role": metadata["provider_role"],
+        }
+    return {"prompt_version": PROMPT_VERSION, "provider_role": "classifier"}
+
+
+def _parse_published_classifications(
+    by_brand: dict[str, dict[str, Any]], expected: set[str],
+) -> dict[str, dict[str, Any]] | None:
+    """Validate transport rows and the v4 parser's derived current shape.
+
+    The selected classifier intentionally puts parser-derived availability
+    states in ``by_brand`` for its final trace.  They are not model-supplied
+    transport keys, so remove exactly those two fields before parsing and
+    require the canonical result to reproduce the original final rows.
+    """
+    raw_rows: list[dict[str, Any]] = []
+    saw_v4_derived_state = False
+    for brand_id, classification in by_brand.items():
+        row = {"brand_id": brand_id, **classification}
+        if "audience_topics" in classification:
+            derived = {
+                key: row.pop(key)
+                for key in ("audience_topics_state", "geopolitical_modes_state")
+                if key in row
+            }
+            if derived:
+                if set(derived) != {
+                    "audience_topics_state", "geopolitical_modes_state"
+                }:
+                    return None
+                saw_v4_derived_state = True
+                if not row["audience_topics"]:
+                    row["audience_topics"] = [
+                        derived["audience_topics_state"]
+                    ]
+                if not row["geopolitical_modes"]:
+                    row["geopolitical_modes"] = [
+                        derived["geopolitical_modes_state"]
+                    ]
+            # ``none`` is a model transport sentinel; the normalized final
+            # projection persists it as an empty list.
+            if not row["product_labels"]:
+                row["product_labels"] = ["none"]
+        raw_rows.append(row)
+    canonical = parse_stage1_classifications(raw_rows, expected)
+    if canonical is None:
+        return None
+    is_v4 = all("audience_topics" in row for row in canonical.values())
+    if is_v4 and saw_v4_derived_state:
+        return canonical if canonical == by_brand else None
+    if not is_v4 and canonical != by_brand:
+        return None
+    return canonical
+
+
 def _publish_stage1_classification(
     *,
     post_id: str,
@@ -1073,8 +1280,6 @@ def _publish_stage1_classification(
     cfg: Any | None = None,
 ) -> Any:
     """Atomically publish one already-complete, per-brand Stage 1 result."""
-    from monitor.unsanctioned_flags import persist_classifier_flags
-
     if not isinstance(result, dict) or result.get("valid") is not True:
         return None
     by_brand = result.get("by_brand")
@@ -1101,40 +1306,24 @@ def _publish_stage1_classification(
         )
         if not expected or set(by_brand) != expected:
             return None
-        fingerprint = hashlib.sha256(
-            json.dumps(
-                {
-                    "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or post_id),
-                    "text": tweet.get("text") or "",
-                    "context": tweet.get("context") or [],
-                    "brand_ids": sorted(str(brand_id) for brand_id in expected),
-                    "source_language": str(tweet.get("source_language") or ""),
-                    "reviewed_affiliations": [
-                        {"brand_id": brand_id, "role": role, "reviewed": True}
-                        for brand_id, role in sorted({
-                            (str(item["brand_id"]), str(item["role"]))
-                            for item in (tweet.get("affiliations") or [])
-                            if isinstance(item, dict)
-                            and item.get("reviewed") is True
-                            and isinstance(item.get("brand_id"), str)
-                            and item["brand_id"]
-                            and isinstance(item.get("role"), str)
-                            and item["role"]
-                        })
-                    ],
-                },
-                ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
-        canonical = parse_stage1_classifications(
-            [
-                {"brand_id": brand_id, **classification}
-                for brand_id, classification in by_brand.items()
-            ],
-            expected,
+        catalog_revision = str(tweet.get("_classification_catalog_revision") or "")
+        fingerprint = _two_role_fingerprint(
+            tweet,
+            tracked_catalog={"revision": catalog_revision} if catalog_revision else None,
         )
-        if canonical is None or canonical != by_brand:
+        canonical = _parse_published_classifications(by_brand, expected)
+        if canonical is None:
             return None
+
+        is_v4 = all("audience_topics" in row for row in canonical.values())
+        if is_v4:
+            # The selected U18A transport owns these two post-level fields.
+            # Reject a direct/malformed publisher caller before replacing the
+            # durable current projection.
+            promotions = result.get("untracked_brand_promotions")
+            subjects = result.get("promoted_subjects")
+            if not isinstance(promotions, list) or not isinstance(subjects, list):
+                return None
 
         final_judgment_ids = {}
         if "classification_trace" in result:
@@ -1149,6 +1338,34 @@ def _publish_stage1_classification(
             )
 
         post = claim.post
+        content_provenance = _v4_stage_provenance(
+            result=result, stage="content", model=model, fingerprint=fingerprint,
+        )
+        brand_provenance = _v4_stage_provenance(
+            result=result, stage="brand_interpretation", model=model, fingerprint=fingerprint,
+        )
+        final_provenance = _v4_stage_provenance(
+            result=result, stage="final", model=model, fingerprint=fingerprint,
+        )
+        final_trace_metadata: dict[str, Any] = {}
+        trace = result.get("classification_trace")
+        if isinstance(trace, dict) and isinstance(trace.get("final"), dict):
+            final_trace_metadata = _trace_metadata(
+                trace, trace["final"], model=model, fingerprint=fingerprint
+            )
+        state_taxonomy_version = (
+            TAXONOMY_VERSION
+            if is_v4
+            else str(
+                final_trace_metadata.get("taxonomy_version")
+                or STAGE1_TAXONOMY_V3_VERSION
+            )
+        )
+        state_prompt_version = (
+            final_provenance["prompt_version"]
+            if is_v4
+            else STAGE1_PROMPT_V23_VERSION
+        )
         for brand_id, classification in canonical.items():
             PostBrandSignal.objects.filter(
                 post_id=post_id, brand_id=brand_id
@@ -1156,22 +1373,38 @@ def _publish_stage1_classification(
             PostBrandProductLabel.objects.filter(
                 post_id=post_id, brand_id=brand_id
             ).delete()
+            state_defaults = {
+                "contract_version": CONTRACT_VERSION,
+                "taxonomy_version": state_taxonomy_version,
+                "prompt_version": state_prompt_version,
+                "model": model,
+                "source_language": post.lang_detected or post.lang or "",
+                "input_context_fingerprint": fingerprint,
+                "outcome": classification["outcome"],
+                "sentiment_id": classification["sentiment"],
+                "selected_final_judgment_id": final_judgment_ids.get(brand_id),
+            }
+            if is_v4:
+                # Keep the legacy scalar columns in lockstep for existing
+                # readers while making the named National Stance fields the
+                # current v4 identity.
+                china_stance = classification["china_national_stance"]
+                us_stance = classification["us_national_stance"]
+                state_defaults.update(
+                    china_national_stance_id=china_stance,
+                    us_national_stance_id=us_stance,
+                    china_nationalism_id=china_stance,
+                    us_nationalism_id=us_stance,
+                )
+            else:
+                state_defaults.update(
+                    china_nationalism_id=classification["china_nationalism"],
+                    us_nationalism_id=classification["us_nationalism"],
+                )
             PostBrandClassificationState.objects.update_or_create(
                 post_id=post_id,
                 brand_id=brand_id,
-                defaults={
-                    "contract_version": CONTRACT_VERSION,
-                    "taxonomy_version": TAXONOMY_VERSION,
-                    "prompt_version": PROMPT_VERSION,
-                    "model": model,
-                    "source_language": post.lang_detected or post.lang or "",
-                    "input_context_fingerprint": fingerprint,
-                    "outcome": classification["outcome"],
-                    "sentiment_id": classification["sentiment"],
-                    "china_nationalism_id": classification["china_nationalism"],
-                    "us_nationalism_id": classification["us_nationalism"],
-                    "selected_final_judgment_id": final_judgment_ids.get(brand_id),
-                },
+                defaults=state_defaults,
             )
             if classification["outcome"] == "classified":
                 PostBrandSignal.objects.bulk_create([
@@ -1187,11 +1420,33 @@ def _publish_stage1_classification(
                     )
                     for label in classification["product_labels"]
                 ])
-        flag_result = persist_classifier_flags(
-            post_id=post_id, classifier_result=result, run_id=run_id
-        )
-        if flag_result.outcome not in {"persisted", "cleared"}:
-            raise ValueError("classifier_flags_invalid")
+        if is_v4:
+            from monitor.classification_persistence import persist_v4_extensions
+
+            extension_outcome = persist_v4_extensions(
+                post=post,
+                canonical=canonical,
+                result=result,
+                final_judgment_ids=final_judgment_ids,
+                fingerprint=fingerprint,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                model=model,
+                content_prompt_version=content_provenance["prompt_version"],
+                content_provider_role=content_provenance["provider_role"],
+                brand_prompt_version=brand_provenance["prompt_version"],
+                brand_provider_role=brand_provenance["provider_role"],
+                tracked_catalog=tweet.get("tracked_brand_catalog") or [],
+            )
+            flag_result = _ClassificationPublishOutcome(extension_outcome)
+        else:
+            from monitor.unsanctioned_flags import persist_classifier_flags
+
+            flag_result = persist_classifier_flags(
+                post_id=post_id, classifier_result=result, run_id=run_id
+            )
+            if flag_result.outcome not in {"persisted", "cleared"}:
+                raise ValueError("classifier_flags_invalid")
         if cfg is not None:
             _finish_enrichment_stage(
                 post_ids=[post_id],
@@ -3045,6 +3300,14 @@ class CycleRunner:
                     "brand_ids": list(brand_ids),
                     "context": context,
                     "source_language": post.lang_detected or post.lang or "",
+                    "created_at": post.created_at.isoformat() if post.created_at else "",
+                    # Carry-over classification may run after a prior
+                    # translation cycle.  Fresh translations replace this
+                    # literal value below, after the artifact is validated.
+                    "english_translation": (
+                        _present_text(post.text_en)
+                        or (text if (post.lang_detected or post.lang) == "en" else "")
+                    ),
                     "affiliations": [
                         affiliation
                         for affiliation in affiliations_by_author.get(str(post.author_id), [])
@@ -3083,7 +3346,10 @@ class CycleRunner:
         from core.models import Brand as BrandModel
 
         # Convert Django Brand models to v1 BrandRow shape expected by classifier
-        from x_monitor.attribution import BrandRow as _BrandRow
+        from x_monitor.attribution import (
+            BrandRow as _BrandRow,
+            _tracked_brand_catalog,
+        )
         brand_rows = BrandModel.objects.filter(is_sentinel=False)
         if any(
             UNATTRIBUTED_BRAND_ID in tweet.get("brand_ids", [])
@@ -3101,7 +3367,6 @@ class CycleRunner:
             )
             for b in brand_rows
         ]
-
         # ---- Stage 1: translate ----
         # The feature flag preserves the prior combined translator as the
         # rollback lane until the split literal contract passes staging.
@@ -3187,6 +3452,7 @@ class CycleRunner:
 
                         record_literal_translation_failure(
                             post=post,
+                            expected_claim_run_id=run_id,
                             prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
                             model=self.cfg.llm.translator_model,
                             expected_source_fingerprint=source_text_fingerprint(
@@ -3207,6 +3473,7 @@ class CycleRunner:
 
                     artifact = publish_literal_translation(
                         post=post,
+                        expected_claim_run_id=run_id,
                         row=r,
                         prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
                         model=self.cfg.llm.translator_model,
@@ -3265,6 +3532,38 @@ class CycleRunner:
             counters["n_failed_translate"] = sum(
                 1 for r in translation_rows if r.get("translation_failed")
             )
+
+        # The selected classifier uses only literal, already-validated English
+        # text.  Refresh the in-memory source packet after its artifact/write
+        # has succeeded; failures retain an earlier literal translation, or an
+        # empty value for a non-English source.  The timestamp is set when the
+        # packet is made and never inferred from fetch time.
+        fresh_english = {
+            str(row.get("tweet_id")): _present_text(row.get("text_en"))
+            for row in translation_rows
+            if str(row.get("tweet_id") or "") in translation_succeeded
+        }
+        for tweet in classification_tweets:
+            tid = str(tweet["tweet_id"])
+            if tid in fresh_english and fresh_english[tid]:
+                tweet["english_translation"] = fresh_english[tid]
+
+        # Only the selected v4 route fingerprints the complete catalog.  It is
+        # assembled after translation so both the prompt and the fingerprint
+        # see their final source packet.  `BrandRow` is intentionally too thin
+        # for this catalog; Django's curated terms/accounts are authoritative.
+        if getattr(classifier_client, "request_profile", None) == "deepseek_0731":
+            catalog_source = _classification_tracked_brand_catalog()
+            for tweet in classification_tweets:
+                tweet["tracked_brand_catalog"] = catalog_source
+            classification_catalog = _tracked_brand_catalog(
+                brand_registry, classification_tweets
+            )
+            for tweet in classification_tweets:
+                tweet["tracked_brand_catalog"] = classification_catalog["brands"]
+                tweet["_classification_catalog_revision"] = classification_catalog[
+                    "revision"
+                ]
 
         newly_failed = _finish_enrichment_stage(
             post_ids=claimed_post_ids,

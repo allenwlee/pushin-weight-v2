@@ -1,0 +1,6 @@
+{
+  "post_id": "2099963285571297560",
+  "commentary_en": "The author observes that AI-generated videos tend to overact facial expressions. They highlight a breakthrough with MiniMax H3: instead of prompting an emotion like 'she is sad,' you should describe micro-actions as keyframes (e.g., lips tighten, eyes fill, tear overflows at 8 seconds, then a smile rises while brows stay furrowed). The point matters because it suggests a practical technique to make AI video feel more natural and subtle, shifting from abstract emotional labels to concrete, time-stamped physical cues. This could improve creative control in AI filmmaking, but the post offers no evidence or wider context beyond this tip.",
+  "commentary_zh_cn": "作者指出，AI生成的视频往往让面部表情显得过度夸张。他们强调了MiniMax H3的一个突破：不要直接写‘她很悲伤’，而是把表情拆解成关键帧式的微动作（例如嘴唇抿紧、眼睛湿润、8秒时泪水溢出，随后嘴角上扬但眉毛依然紧锁）。这之所以重要，是因为它提供了一种实用技巧，让AI视频更自然、更细腻，从抽象情绪标签转向具体、带时间戳的物理细节。这可能提升AI影视创作的掌控力，但帖子本身没有提供证据或更广泛的背景。",
+  "commentary_ja": "著者は、AI生成動画の顔の表情が常にオーバーアクトになると指摘している。MiniMax H3での転機は、「彼女は悲しい」と感情を書くのではなく、キーフレームのように微細な動作を書くことだと強調する（例：唇が引き締まる、目が潤む、8秒で涙がこぼれる、その後笑みが浮かぶが眉は寄せたまま）。これが重要なのは、AI映像をより自然で繊細にする実践的な手法を示しているからだ。抽象的な感情ラベルから、具体的で時間指定された物理的サインへの転換は、AI映像制作の制御性を高める可能性がある。ただし、この投稿は具体的な証拠や広い文脈には触れていない。"
+}

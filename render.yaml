@@ -87,8 +87,8 @@ services:
           type: keyvalue
           name: pushinweight-headlines-broker
           property: connectionString
-      # Same DSV4 credential as translation/classification, scoped to this
-      # worker instead of linking the broad pushinweight-secrets group.
+      # Headline generation still uses DeepSeek directly; translation and
+      # classification use the separate DeepInfra credential on harvest.
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
@@ -123,7 +123,7 @@ services:
         fromDatabase:
           name: pushinweight-db-shadow
           property: connectionString
-      - key: DEEPSEEK_API_KEY
+      - key: DEEPINFRA_API_KEY
         sync: false
       - key: X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED
         value: "True"
@@ -179,6 +179,8 @@ services:
         value: "True"
       - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
         value: "True"
+      - key: DEEPINFRA_API_KEY
+        sync: false
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets

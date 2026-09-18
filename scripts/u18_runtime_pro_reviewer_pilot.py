@@ -25,11 +25,11 @@ from pathlib import Path
 from typing import Any
 
 from core.classification_contract import (
-    CANONICAL_POST_TYPE_KEYS,
-    CANONICAL_TAXONOMY_VERSION,
     CLASSIFICATION_FIELDS,
     CONTRACT_VERSION,
-    PRODUCT_LABEL_KEYS,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
+    STAGE1_TAXONOMY_V3_VERSION,
     parse_stage1_classifications,
 )
 from x_monitor.attribution import (
@@ -40,6 +40,11 @@ from x_monitor.attribution import (
 )
 from x_monitor.provider_telemetry import normalize_usage
 from x_monitor.translator import AnthropicClaudeClient
+
+# Freeze the retired reviewer pilot to the v3 taxonomy it originally scored.
+CANONICAL_POST_TYPE_KEYS = STAGE1_TAXONOMY_V3_POST_TYPE_KEYS
+PRODUCT_LABEL_KEYS = STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS
+CANONICAL_TAXONOMY_VERSION = STAGE1_TAXONOMY_V3_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 STUDY_DIR = ROOT / ".context/u18/human-ambiguity-study-v1"

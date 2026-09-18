@@ -1,0 +1,74 @@
+{
+  "schema_version": "u18-r104-low-cost-primary/v1",
+  "frozen_at": "2026-09-15T03:47:20.907914+00:00",
+  "owner_authorization": "Test Mistral NeMo first, then Ling 3.0; incumbent DeepSeek V4.1 Flash; target 10x lower cost per inference.",
+  "control": "Reuse R101 primary only, same prompt and 20/20/5 packets; no conditional responses.",
+  "candidates": {
+    "mistral_nemo": {
+      "model": "mistralai/mistral-nemo",
+      "provider": "dekallm/fp8",
+      "provider_name": "DekaLLM",
+      "aliases": [
+        "mistralai/mistral-nemo"
+      ],
+      "input": ".018",
+      "output": ".030",
+      "reasoning": null,
+      "json_mode": true,
+      "quantization": "fp8"
+    },
+    "ling_flash": {
+      "model": "inclusionai/ling-3.0-flash",
+      "provider": "novita",
+      "provider_name": "Novita",
+      "aliases": [
+        "inclusionai/ling-3.0-flash",
+        "inclusionai/ling-3.0-flash-20260723"
+      ],
+      "input": ".021",
+      "output": ".063",
+      "reasoning": false,
+      "json_mode": false,
+      "quantization": null
+    }
+  },
+  "candidate_order": [
+    "mistral_nemo",
+    "ling_flash"
+  ],
+  "caps": {
+    "concurrency": 1,
+    "retries": 0,
+    "repairs": 0,
+    "fallbacks": 0,
+    "max_transports_per_candidate": 4,
+    "smoke_output_tokens": 64,
+    "batch_output_tokens": 6000,
+    "timeout_seconds": 180,
+    "hard_cap_usd": ".10",
+    "reserved_usd": {
+      "mistral_nemo": "0.002679474",
+      "ling_flash": "0.003631845"
+    }
+  },
+  "schedule": "One tiny JSON/route smoke, then the original 20/20/5 batches. Complete all three after successful smoke even if a semantic batch fails, to expose failure modes; do not repair or retry.",
+  "cost_gate": "Total measured dollars per valid completed row must be <= 0.10 times the incumbent on the same workload. Report ordinary inference separately from one-time smoke, and show both peak and off-peak DS repricing plus OR fee sensitivity.",
+  "quality": "Preserve all current floors; incomplete rows remain failures in the 45-row denominator. Per-row salvage is diagnostic only, never publication. This consumed owner corpus is development agreement, not unseen accuracy.",
+  "source_sha256": {
+    ".context/u18/human-ambiguity-study-v1/selection-manifest.json": "50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91",
+    ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "docs/analysis/2026-09-11-002632-classification-quality-floors-v3.json": "881a2e297bad803851a42d629b5519b5e0a200f38d055dd5951c194aefaf79ba",
+    "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json": "b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c",
+    ".context/u18/single-primary-conditional-pilot-r101-v1/result.json": "62bd20671bdbf32cef673bddd7658f83f2f65308f52cf99f0c7a6e4158180d9b",
+    "scripts/u18_low_cost_single_primary_pilot.py": "7db57af04ba4f09b6727be76f8e233973d229a94f84facb9dbc04243e4d1d5e5",
+    "scripts/u18_single_primary_conditional_pilot.py": "ec1076ebc44d574a951b89b198b8769d86f2ef2726e14e1bd177e105af9ee71d",
+    "scripts/u18_openrouter_two_role_pilot.py": "a7d294ea45ca7713f11c74b60de8cc2b068dcece2891349a5c17134e08eddc22",
+    "x_monitor/attribution.py": "7e024a8f892cec9496f1910864ec820911949fd1e79f49074abac3bbecf3188a",
+    "x_monitor/openrouter.py": "f46acc9ca318675d57fa7f88b1254d5c6020c87c426c713a95fcedf5c230988a",
+    "core/classification_contract.py": "9f981cb9cdb8820907d621f3105cf37366c2e495c5db906f80e24d7cf5f85377",
+    ".context/u18/low-cost-single-primary-r104-v1/public-packets.json": "2620a6cda45eaa733a446c1547625a4373bc2216783e02f77f1b3f862f2b12cb",
+    ".context/u18/low-cost-single-primary-r104-v1/requests.json": "022e83b932b9a6876c3c0219b14cee6061ca76b3b028837c0309b4f635f12749"
+  },
+  "fresh_45_packet": "Excluded because it has no owner reference yet.",
+  "production_changed": false
+}

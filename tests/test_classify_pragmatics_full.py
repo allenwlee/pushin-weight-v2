@@ -64,6 +64,8 @@ def test_single_prompt_uses_batch_envelope_and_preserves_context():
             {"provenance": "stored_quote", "text": "Quoted artifact"},
             {"provenance": "local_parent", "text": "Parent question"},
         ],
+        "created_at": "",
+        "english_translation": "",
     }]
 
 
@@ -254,7 +256,7 @@ def test_empty_input_missing_client_and_registry_mismatch_make_no_call():
     assert client.calls == []
 
 
-def test_transport_exception_retries_three_times_then_returns_invalid(monkeypatch):
+def test_transport_exception_fails_closed_without_retrying_permanent_error(monkeypatch):
     from x_monitor import attribution
 
     monkeypatch.setattr(attribution, "_BACKOFF_BASE_SECONDS", 0)
@@ -264,5 +266,5 @@ def test_transport_exception_retries_three_times_then_returns_invalid(monkeypatc
         "DeepSeek", ["deepseek"], [], client
     )
 
-    assert len(client.calls) == 3
+    assert len(client.calls) == 1
     assert result["valid"] is False

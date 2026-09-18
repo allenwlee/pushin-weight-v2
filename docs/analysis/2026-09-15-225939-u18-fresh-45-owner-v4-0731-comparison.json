@@ -1,0 +1,4287 @@
+{
+  "schema_version": "u18-fresh45-owner-v4-0731-comparison/v1",
+  "created_at": "2026-09-15T13:59:39.019542+00:00",
+  "owner_source_sha256": "6a27bb37d6c2cd8e6545565131511d43f2d93fbb4869bb203d355476b64bb453",
+  "model_result_sha256": "893a5c12c07a02cdd508d1839c24af71620a462297dbca3a20a0e1a9d6226634",
+  "scoring_policy": "Only nonblank owner controls scored; explicit sentinels count; blanks are unreviewed.",
+  "counts": {
+    "reviewed": 358,
+    "matches": 249,
+    "differences": 109,
+    "unreviewed": 143
+  },
+  "field_counts": {
+    "outcome": {
+      "reviewed": 50,
+      "matches": 46,
+      "differences": 4,
+      "unreviewed": 7
+    },
+    "sentiment": {
+      "reviewed": 41,
+      "matches": 27,
+      "differences": 14,
+      "unreviewed": 16
+    },
+    "post_types": {
+      "reviewed": 51,
+      "matches": 12,
+      "differences": 39,
+      "unreviewed": 6
+    },
+    "product_labels": {
+      "reviewed": 21,
+      "matches": 14,
+      "differences": 7,
+      "unreviewed": 36
+    },
+    "audience_topics": {
+      "reviewed": 29,
+      "matches": 12,
+      "differences": 17,
+      "unreviewed": 28
+    },
+    "geopolitical_modes": {
+      "reviewed": 45,
+      "matches": 37,
+      "differences": 8,
+      "unreviewed": 12
+    },
+    "china_national_stance": {
+      "reviewed": 43,
+      "matches": 39,
+      "differences": 4,
+      "unreviewed": 14
+    },
+    "us_national_stance": {
+      "reviewed": 43,
+      "matches": 39,
+      "differences": 4,
+      "unreviewed": 14
+    }
+  },
+  "cases": {
+    "L45-01": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "personnel_changes",
+                "business_finance",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "sentiment_explanation": "note that this is sentiment towards the company, but you can logically apply that to the product. 'star AI company'; 'puzzle pieces are coming together'",
+            "post_types_explanation": "this seems like hearsay so far, so we may need to wait for confirmation before adding as as personnel change"
+          }
+        },
+        "doubao": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "context_missing",
+              "status": "different"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "other"
+              ],
+              "sol": [],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "unavailable"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "sentiment_explanation": "this was about bytedance the company. is 'neutral' the same as 'none'? we should think about the proper term, if it needs both. 'neutral' means they do talk about the model and have neither positive nor negative feeling about it. 'none' means they just mentioned the app and didn't even consider it."
+          }
+        },
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "context_missing",
+              "status": "different"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "other"
+              ],
+              "sol": [],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "unavailable"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "everything same as doubao"
+          }
+        },
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "context_missing",
+              "status": "different"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "other"
+              ],
+              "sol": [],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "unavailable"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "everything same as doubao"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-02": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "negative",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "research_explanations"
+              ],
+              "sol": [
+                "releases_updates",
+                "research_explanations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "bug"
+              ],
+              "sol": [
+                "bug"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "agents_tools",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "agents_tools"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "sentiment_explanation": "this is about the harness / agent deepseek, not the model. see how many of these types of posts there are, if there are many then we will need to disambiguate",
+            "geopolitical_modes_explanation": "should a positive 'assessed non geopolitical' lead automatically to a negative cn, us national stance?"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-03": {
+      "per_brand": {
+        "moonshot_kimi": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions",
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "business_finance",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-04": {
+      "per_brand": {
+        "ernie": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "personnel_changes",
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "personnel_changes",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "timing_people_employer": "lots of personnel changes mentioned here:\n\nWu Qin, researcher pre-training Ernie\nWei Haoran, ernie multi-modal algos, moves from Deepseek\nSun Tianxiang, new chief"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-05": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "research_explanations"
+              ],
+              "sol": [
+                "releases_updates",
+                "results_evaluations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "evals_benchmarks",
+                "agents_tools",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "cost_performance",
+                "agents_tools"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "THE '1/6' at end of post indicates it is a thread, an in fact in subsequent threads it reveals itself to be a promotion for its own product sider.ai. how should we address this?  potentially threads 5-6 might also be caught by our harvester (although not necessarily). this is praobably a limitation that we may need to live with for now, as i think this requires some fundamental refactoring, but will asjk you first"
+        }
+      }
+    },
+    "L45-06": {
+      "per_brand": {
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "classified",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [
+                "advertising_marketing"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "api_developer_surface",
+                "cost_performance"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "spam",
+            "crypto",
+            "unauthorized"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "b.ai spam again"
+        }
+      }
+    },
+    "L45-07": {
+      "per_brand": {
+        "sakana_ai": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings"
+              ],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-08": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "negative",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "news_reporting"
+              ],
+              "sol": [
+                "news_reporting"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "model_distillation"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "reporting",
+                "framework"
+              ],
+              "sol": [
+                "reporting",
+                "framework"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        },
+        "moonshot_kimi": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "negative",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "news_reporting"
+              ],
+              "sol": [
+                "news_reporting"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "model_distillation"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "reporting",
+                "framework"
+              ],
+              "sol": [
+                "reporting",
+                "framework"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "everything same as deepseek"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-09": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "mixed",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "research_explanations"
+              ],
+              "sol": [
+                "hands_on_usage"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "audience_topics_explanation": "this is also multi-modal (i think we added this topic)"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-10": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "other"
+              ],
+              "sol": [
+                "hands_on_usage",
+                "research_explanations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "local_inference",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "agents_tools",
+                "api_developer_surface"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "sentiment_explanation": "actually no sentiment"
+          }
+        },
+        "llama": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "context_missing",
+              "status": "different"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "other"
+              ],
+              "sol": [],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "local_inference",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "same as qwen"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "the link to a github page is a dead giveaway. are we fetching urls in posts?"
+        }
+      }
+    },
+    "L45-11": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "research_explanations"
+              ],
+              "sol": [
+                "hands_on_usage"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "local_inference",
+                "cost_performance",
+                "evals_benchmarks",
+                "openness_license",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "agents_tools"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "audience_topics_explanation": "what is difference between mention of local inference vs opennes&licensing? isn't local inference by definition a mention of openness&licensing? we need to better define these boundaries"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-12": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "releases_updates",
+                "opportunities"
+              ],
+              "sol": [
+                "advertising_marketing",
+                "opportunities",
+                "events"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "agents_tools"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "to the extent that mm h3 is avail on astorie, this is an 'opportunity' and a 'release', but this is indirect. it's directly a release and opportunity for astorie ",
+            "audience_topics_explanation": "what would you call astorie? is this an agents/tools? or api/dev surface? do we need a new category for these reseller/aggregator/packager of inference? like intermediaries."
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "match"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "definitely a promo for astorie"
+        }
+      }
+    },
+    "L45-13": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings",
+                "opinions_reactions",
+                "research_explanations",
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "job_listings",
+                "news_reporting",
+                "opinions_reactions"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "should posts talking about the industry be automatically tagged as business/finance?"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-14": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "questions_requests",
+                "events",
+                "opinions_reactions",
+                "research_explanations"
+              ],
+              "sol": [
+                "opinions_reactions",
+                "events",
+                "questions_requests"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "ideas_requests"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "agents_tools",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is a probe to see whether people want an event or not. it's posted by an official account and thus a rare perspective",
+            "product_labels_explanation": "the quoted post talks about an initiative; even though the post itself is from the brand, the quoted post constitutes an idea/request"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "the quoted post is an untracked brand promotion for https://huggingface.co/mvp-lab/MiniMax-H3-RAVEN-Streaming-LoRA, but whether the actual post should be categorized as untracked-brand-promotion is another question. this is the post of an official account so if this adds added complexity then we can pass for now. (as it is by definition rare pov)"
+        }
+      }
+    },
+    "L45-15": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "research_explanations",
+                "news_reporting"
+              ],
+              "sol": [
+                "releases_updates",
+                "research_explanations",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "openness_license"
+              ],
+              "sol": [
+                "openness_license"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-16": {
+      "per_brand": {
+        "upstage": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "opportunities"
+              ],
+              "sol": [
+                "advertising_marketing",
+                "opportunities"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "different"
+        }
+      }
+    },
+    "L45-17": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "negative",
+              "sol": "negative",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions",
+                "news_reporting"
+              ],
+              "sol": [
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "model_distillation"
+              ],
+              "sol": [
+                "model_distillation"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "reporting",
+                "framework"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        },
+        "moonshot_kimi": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "negative",
+              "sol": "negative",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions",
+                "news_reporting"
+              ],
+              "sol": [
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "model_distillation"
+              ],
+              "sol": [
+                "model_distillation"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "reporting",
+                "framework"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "all same as deepseek"
+          }
+        },
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "negative",
+              "sol": "negative",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions",
+                "news_reporting"
+              ],
+              "sol": [
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "model_distillation"
+              ],
+              "sol": [
+                "model_distillation"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "reporting",
+                "framework"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "all same as deepseek"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-18": {
+      "per_brand": {
+        "doubao": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings"
+              ],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "timing_people_employer": "AI Machine Learning Engineer Graduate"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-19": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "classified",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "events",
+                "opportunities"
+              ],
+              "sol": [
+                "events",
+                "opportunities",
+                "advertising_marketing"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "the contest is an opportunity, the livestream sep 2 is the event",
+            "audience_topics_explanation": "multi-modal"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "match"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "ComfyUI"
+        }
+      }
+    },
+    "L45-20": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "negative",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "questions_requests"
+              ],
+              "sol": [
+                "results_evaluations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "ideas_requests"
+              ],
+              "sol": [
+                "complaint"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "cost_performance"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-21": {
+      "per_brand": {
+        "moonshot_kimi": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "mixed",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions"
+              ],
+              "sol": [
+                "opinions_reactions"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "sol": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "anti",
+              "sol": "pro",
+              "status": "different"
+            },
+            "us_national_stance": {
+              "owner": "constructive_critical",
+              "sol": "anti",
+              "status": "different"
+            }
+          },
+          "owner_notes": {
+            "audience_topics_explanation": "do we need a category called 'untrustworthy' or 'biased' ai?",
+            "china_national_stance_explanation": "'ideological embedded ai'"
+          }
+        },
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "mixed",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions"
+              ],
+              "sol": [
+                "opinions_reactions"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "sol": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "anti",
+              "sol": "pro",
+              "status": "different"
+            },
+            "us_national_stance": {
+              "owner": "constructive_critical",
+              "sol": "anti",
+              "status": "different"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "all same as kimi"
+          }
+        },
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "mixed",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "opinions_reactions"
+              ],
+              "sol": [
+                "opinions_reactions"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "sol": [
+                "framework",
+                "nationalistic_stance"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "anti",
+              "sol": "pro",
+              "status": "different"
+            },
+            "us_national_stance": {
+              "owner": "constructive_critical",
+              "sol": "anti",
+              "status": "different"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "all same as kimi"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-22": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "releases_updates",
+                "results_evaluations",
+                "events",
+                "opinions_reactions"
+              ],
+              "sol": [
+                "opinions_reactions"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "evals_benchmarks"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "events: there's a reveal whose time is unspecified, then there's a preview at ny conference tomorrow (unclear whether these are related). probably the same time."
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "it's his own LLM model that is unnamed in the post"
+        }
+      }
+    },
+    "L45-23": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "unknown",
+              "sol": "positive",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "events",
+                "news_reporting"
+              ],
+              "sol": [
+                "events",
+                "opportunities"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is reporting on the results of an event, we know it's over, but we don't know when it occurred. "
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-24": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "business_finance",
+                "personnel_changes",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "investigate_claim"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        },
+        "doubao": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "context_missing",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        },
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "context_missing",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        },
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "context_missing",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "unavailable"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-25": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [
+                "opinions_reactions",
+                "advertising_marketing"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "crypto",
+            "unauthorized"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "any post promoting crypto for our tracked models should be considered unauthorized"
+        }
+      }
+    },
+    "L45-26": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "positive",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "opportunities"
+              ],
+              "sol": [
+                "advertising_marketing",
+                "opportunities"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "although translation says 'event', attendance is not reqwuired and this seems more of a temporary time to use the product\nstart time is unspecified, but it is current, and runs until sep 14, 08:59 jst",
+            "audience_topics_explanation": "multimodal"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "match"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "KusArt"
+        }
+      }
+    },
+    "L45-27": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "positive",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "events",
+                "opportunities"
+              ],
+              "sol": [
+                "events",
+                "opportunities"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "sentiment_explanation": "should event/opportunity announcements imply a positive sentiment towards a brand?",
+            "post_types_explanation": "hackathon is the event, and whatever reward is given is the opportunity. the quoted post has details; do we have the posting date of the quoted post? because it's 14 days from there\n"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "match"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "GMI is the co sponsor; in fact, any co-sponsor should be considered authorized"
+        }
+      }
+    },
+    "L45-28": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "opportunities",
+                "news_reporting"
+              ],
+              "sol": [
+                "results_evaluations",
+                "events"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is an opportunity which time has passed"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "this is the same gmi event from before. the dates are unclear even on some investigation on x. therefore we can assume that they are being somewhat vague."
+        }
+      }
+    },
+    "L45-29": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings",
+                "news_reporting"
+              ],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "timing_people_employer": "Code Agent Data Engineer (Game Dev) 40-70k rmb/mo\nWeb 3D & Rendering\n\ni'm not sure what 14 month is referring to"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-30": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "i honestly don't know how to interpret this. will defer to our LLM run"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-31": {
+      "per_brand": {
+        "llama": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings"
+              ],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "unauthorized"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "this is spam, posted by an indian account for jobs in india. it adds Llama as a skill; it is for a company that is not Llama. we will need to be careful about these kinds of posts. once we add frontier models to our tracked brands, these may proliferate. "
+        }
+      }
+    },
+    "L45-32": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "positive",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "opportunities",
+                "news_reporting"
+              ],
+              "sol": [
+                "opportunities",
+                "advertising_marketing"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "agents_tools",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is more about alibaba cloud as the service offering, however this is a higth value post because it is verified, not from a spam account and offers real value related to this brand",
+            "audience_topics_explanation": "we will need clearer boundaires between api/dev surface and agents/tools"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "match"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "Alibaba Cloud"
+        }
+      }
+    },
+    "L45-33": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "personnel_changes",
+                "opinions_reactions"
+              ],
+              "sol": [
+                "personnel_changes",
+                "events"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is someone joining as am ambassador ('community' in our db)\npersonnel change: Natdhanai Praneenatthavee becomes qwen ambassador as of this post date",
+            "geopolitical_modes_explanation": "uncontroversial comment about thailand needing representation in AI"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-34": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "neutral",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "results_evaluations",
+                "opinions_reactions",
+                "research_explanations",
+                "news_reporting"
+              ],
+              "sol": [
+                "opinions_reactions",
+                "research_explanations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "evals_benchmarks",
+                "openness_license"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "framework"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "pro",
+              "sol": "none",
+              "status": "different"
+            },
+            "us_national_stance": {
+              "owner": "pro",
+              "sol": "none",
+              "status": "different"
+            }
+          },
+          "owner_notes": {
+            "outcome_explanation": "Moonshot’s Kimi K3, Alibaba’s Qwen 3.8 also mentioned, should also be targets"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-35": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations"
+              ],
+              "sol": [
+                "hands_on_usage",
+                "results_evaluations"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "local_inference",
+                "cost_performance",
+                "evals_benchmarks"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "audience_topics_explanation": "we need a 'data security / privacy' topic here - evaluate this and what % of our db would be categorized as such"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "author's product"
+        }
+      }
+    },
+    "L45-36": {
+      "per_brand": {
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "research_explanations",
+                "news_reporting"
+              ],
+              "sol": [
+                "opportunities",
+                "opinions_reactions"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "investigate_claim"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "api_developer_surface"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "product_labels_explanation": "hearsay of pushing 500m tokens in one day should be flagged for product peopl"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "general"
+          ],
+          "status": "different"
+        }
+      }
+    },
+    "L45-37": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "questions_requests",
+                "research_explanations"
+              ],
+              "sol": [
+                "hands_on_usage",
+                "questions_requests"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "local_inference",
+                "evals_benchmarks"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-38": {
+      "per_brand": {
+        "sakana_ai": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "job_listings"
+              ],
+              "sol": [
+                "job_listings"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "unfortunately details are in the URL. this is a general report that jobs are available"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-39": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "classified",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "events"
+              ],
+              "sol": [
+                "events",
+                "advertising_marketing"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "details are in the url (not enough details in media); should we open these if they are rare enough? https://www.anyscale.com/ray-summit/2026; we would then need a parser. otherwise, we can just have a 'click on the link on X for details'."
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-40": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "positive",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "events"
+              ],
+              "sol": [
+                "events",
+                "advertising_marketing"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "Votee AI"
+        }
+      }
+    },
+    "L45-41": {
+      "per_brand": {
+        "qwen": {
+          "fields": {
+            "outcome": {
+              "owner": "",
+              "sol": "classified",
+              "status": "owner_unreviewed"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "positive",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "events",
+                "news_reporting"
+              ],
+              "sol": [
+                "events"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [],
+          "sol": [
+            "none"
+          ],
+          "status": "owner_unreviewed"
+        }
+      }
+    },
+    "L45-42": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "neutral",
+              "sol": "neutral",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "opinions_reactions"
+              ],
+              "sol": [
+                "results_evaluations",
+                "opinions_reactions"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "investigate_claim"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "audience_topics": {
+              "owner": [
+                "evals_benchmarks"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "framework"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "product_labels_explanation": "This is a political result of the model which may interest product people"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-43": {
+      "per_brand": {
+        "minimax": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "",
+              "sol": "neutral",
+              "status": "owner_unreviewed"
+            },
+            "post_types": {
+              "owner": [
+                "opportunities"
+              ],
+              "sol": [
+                "opportunities"
+              ],
+              "status": "match"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "geopolitical_modes": {
+              "owner": [],
+              "sol": [
+                "none"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {
+            "post_types_explanation": "this is another minmax h3 collaboration, probably same event as others"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "general"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "different"
+        },
+        "owner_notes": {
+          "untracked_brand_promotions_explanation": "miora"
+        }
+      }
+    },
+    "L45-44": {
+      "per_brand": {
+        "glm": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "unknown",
+              "sol": "positive",
+              "status": "different"
+            },
+            "post_types": {
+              "owner": [
+                "business_finance",
+                "news_reporting"
+              ],
+              "sol": [
+                "results_evaluations",
+                "news_reporting"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "owner_unreviewed"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "evals_benchmarks",
+                "openness_license",
+                "agents_tools"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            },
+            "us_national_stance": {
+              "owner": "",
+              "sol": "none",
+              "status": "owner_unreviewed"
+            }
+          },
+          "owner_notes": {}
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    },
+    "L45-45": {
+      "per_brand": {
+        "deepseek": {
+          "fields": {
+            "outcome": {
+              "owner": "classified",
+              "sol": "classified",
+              "status": "match"
+            },
+            "sentiment": {
+              "owner": "positive",
+              "sol": "positive",
+              "status": "match"
+            },
+            "post_types": {
+              "owner": [
+                "hands_on_usage",
+                "results_evaluations",
+                "research_explanations"
+              ],
+              "sol": [
+                "hands_on_usage",
+                "results_evaluations"
+              ],
+              "status": "different"
+            },
+            "product_labels": {
+              "owner": [
+                "testimonial"
+              ],
+              "sol": [
+                "testimonial"
+              ],
+              "status": "match"
+            },
+            "audience_topics": {
+              "owner": [
+                "cost_performance",
+                "evals_benchmarks"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "different"
+            },
+            "geopolitical_modes": {
+              "owner": [
+                "none"
+              ],
+              "sol": [
+                "none"
+              ],
+              "status": "match"
+            },
+            "china_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            },
+            "us_national_stance": {
+              "owner": "none",
+              "sol": "none",
+              "status": "match"
+            }
+          },
+          "owner_notes": {
+            "audience_topics_explanation": "consider removing evaluation/benchmarks, which is too close to post type results/evaluation"
+          }
+        }
+      },
+      "post_level": {
+        "untracked_brand_promotions": {
+          "owner": [
+            "none"
+          ],
+          "sol": [
+            "none"
+          ],
+          "status": "match"
+        }
+      }
+    }
+  }
+}

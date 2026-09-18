@@ -60,7 +60,7 @@ def test_llm_config_yaml_wins_over_env(monkeypatch):
     from x_monitor.config import load_config
     monkeypatch.setenv("X_MONITOR_TRANSLATOR_MODEL", "from-env")
     cfg = load_config(CONFIG_PATH)
-    assert cfg.llm.translator_model == "deepseek-v4-flash"
+    assert cfg.llm.translator_model == "google/gemma-4-31B-it-turbo"
 
 
 @pytest.mark.parametrize(
@@ -169,12 +169,14 @@ def test_config_yaml_has_llm_block():
         "config.yaml must declare an llm: block so operators can find the LLM config; "
         "the block should pin the four model names with their defaults explicitly."
     )
-    assert raw["llm"]["translator_model"] == "deepseek-v4-flash", (
-        "config.yaml llm: block must pin the Flash translator default."
-    )
-    assert raw["llm"]["classifier_model"] == "deepseek-v4-flash"
-    assert raw["llm"]["translator_base_url"] == "https://api.deepseek.com/anthropic"
-    assert raw["llm"]["classifier_base_url"] == "https://api.deepseek.com/anthropic"
+    assert raw["llm"]["translator_provider"] == "deepinfra"
+    assert raw["llm"]["translator_model"] == "google/gemma-4-31B-it-turbo"
+    assert raw["llm"]["translator_base_url"] == "https://api.deepinfra.com/v1/openai"
+    assert raw["llm"]["translator_deepinfra_request_profile"] == "gemma4_translation_v1"
+    assert raw["llm"]["classifier_provider"] == "deepinfra"
+    assert raw["llm"]["classifier_model"] == "deepseek-ai/DeepSeek-V4-Flash-0731"
+    assert raw["llm"]["classifier_base_url"] == "https://api.deepinfra.com/v1/openai"
+    assert raw["llm"]["classifier_deepinfra_request_profile"] == "deepseek_0731"
     assert raw["llm"]["relevancy_model"] == "deepseek-v4-flash"
     assert raw["llm"]["signal_model"] == "deepseek-v4-flash"
 

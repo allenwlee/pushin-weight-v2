@@ -7,10 +7,12 @@
   var STORAGE_PREFIX = 'pushinweight.home.preferences.v2:';
   var LEGACY_STORAGE_PREFIX = 'pushinweight.home.preferences.v1:';
   var MULTI_VALUE_KEYS = [
-    'brands', 'product_labels', 'post_types', 'role', 'lang', 'sentiment',
-    'cn_nationalism', 'us_nationalism',
+    'brands', 'product_labels', 'post_types', 'audience_topics',
+    'role', 'lang', 'sentiment', 'cn_nationalism', 'us_nationalism',
   ];
-  var FILTER_QUERY_KEYS = MULTI_VALUE_KEYS.concat(['unsanctioned', 'window']);
+  var FILTER_QUERY_KEYS = MULTI_VALUE_KEYS.concat([
+    'unsanctioned', 'window'
+  ]);
   var ALLOWED_WINDOWS = [1, 7, 30, 365];
   var body = document.body;
   var storageEnabled = Boolean(
@@ -27,6 +29,7 @@
       brands: '__all__',
       product_labels: '__all__',
       post_types: '__all__',
+      audience_topics: '__all__',
       role: '__all__',
       lang: '__all__',
       sentiment: '__all__',
@@ -82,8 +85,7 @@
     if (!inputs.length) return undefined;
     if (group === 'unsanctioned') {
       return inputs.some(function (input) { return input.checked && input.value === 'only'; })
-        ? 'only'
-        : 'off';
+        ? 'only' : 'off';
     }
     var selected = inputs.filter(function (input) { return input.checked; })
       .map(function (input) { return input.value; });
@@ -192,7 +194,7 @@
         normalized[group] = normalizeMultiValue(group, candidate[group], fallback[group]);
       }
     });
-    if (candidate.unsanctioned === 'only' || candidate.unsanctioned === 'off') {
+    if (candidate.unsanctioned === 'only' || candidate.unsanctioned === 'off' || candidate.unsanctioned === 'any') {
       normalized.unsanctioned = candidate.unsanctioned;
     }
     var windowDays = Number(candidate.window);
@@ -220,7 +222,7 @@
   }
 
   function normalizeLocale(value, fallback) {
-    if (['zh_cn', 'zh-CN', 'zh_hans', 'en', 'original'].indexOf(value) !== -1) return value;
+    if (['zh_cn', 'zh-CN', 'zh_hans', 'ja', 'ja-JP', 'en', 'original'].indexOf(value) !== -1) return value;
     return fallback;
   }
 
@@ -240,6 +242,18 @@
     ? authoredLocale
     : normalizeLocale(stored && stored.locale, authoredLocale);
   var preferenceTimezone = (stored && stored.timezone) === 'ca' ? 'ca' : 'local';
+  function applyCanonicalUrl() {
+    if (!body || !body.getAttribute('data-pw-canonical-url')) return;
+    try {
+      window.history.replaceState(
+        window.history.state || {},
+        '',
+        body.getAttribute('data-pw-canonical-url')
+      );
+    } catch (_error) {
+      // URL cleanup is progressive enhancement; the page remains usable.
+    }
+  }
   function preferencePayload() {
     return {
       version: STORAGE_VERSION,
@@ -297,6 +311,8 @@
     controlsForGroup(panel, group).forEach(function (input) {
       if (group === 'unsanctioned') {
         input.checked = value === 'only' && input.value === 'only';
+      } else if (group === 'untracked_brand_promotions') {
+        input.checked = Array.isArray(value) && value.indexOf(input.value) !== -1;
       } else if (value === '__all__') {
         input.checked = true;
       } else {
@@ -343,7 +359,7 @@
   }
 
   function setPreference(key, value) {
-    if (key === 'locale' && ['en', 'zh_cn', 'zh_hans', 'zh-CN', 'original'].indexOf(value) !== -1) {
+    if (key === 'locale' && ['en', 'zh_cn', 'zh_hans', 'zh-CN', 'ja', 'ja-JP', 'original'].indexOf(value) !== -1) {
       preferenceLocale = value;
     } else if (key === 'timezone') {
       preferenceTimezone = value === 'ca' ? 'ca' : 'local';
@@ -441,4 +457,5 @@
   } else {
     wireControlPanel();
   }
+  applyCanonicalUrl();
 })();

@@ -211,10 +211,11 @@ Before changing a control, verify the resolved service environment and record
 the new control revision. Render may preserve an older per-service override;
 the deployed value, rather than the Blueprint text alone, is authoritative.
 
-`DEEPSEEK_API_KEY` must be present on the headline and synthesis workers. Its value is the
-same DeepSeek V4 credential used by translation/classification, but it remains
-a worker-scoped Render secret; do not attach the broad `pushinweight-secrets`
-group to the worker.
+`DEEPSEEK_API_KEY` must be present on the headline worker. `DEEPINFRA_API_KEY`
+must be present on the harvest and synthesis services for direct 0731
+classification and direct Gemma translation/commentary. Each worker receives
+only the provider credential its role uses; do not attach the broad
+`pushinweight-secrets` group to a worker.
 Record `X_MONITOR_HEADLINE_CONTROL_REVISION` with every control change.
 `DATABASE_URL` is declared with `fromDatabase: pushinweight-db-shadow` for web,
 cron, headline worker, and synthesis worker. The existing Render services may retain their prior
@@ -247,12 +248,22 @@ URL was applied directly and all three services were redeployed. Never use
 deploy status alone as the retirement gate.
 
 The headline route is pinned to DeepSeek V4 via
-`https://api.deepseek.com/anthropic` + `deepseek-v4-flash`. Translation and
-classification use the same endpoint, credential, and explicit model through
-their separate role configuration. Scheduled enrichment does not read a shared
-Anthropic route or credential. MiniMax remains a separately configured route using
+`https://api.deepseek.com/anthropic` + `deepseek-v4-flash`. Scheduled
+classification uses `deepseek-ai/DeepSeek-V4-Flash-0731` through DeepInfra's
+direct OpenAI-compatible endpoint. Literal translation and on-demand commentary
+use `google/gemma-4-31B-it-turbo` through that same direct DeepInfra endpoint.
+These routes read only `DEEPINFRA_API_KEY`; OpenRouter is not a fallback.
+MiniMax remains a separately configured route using
 `https://api.minimax.io/anthropic` + `MiniMax-M3`; legacy M3 model names and
 the deprecated endpoint are rejected.
+
+Classifier requests contain public post text, stored quote or locally stored
+parent context when available, source timestamp/language, a validated English
+translation, reviewed author-to-brand relationships, and the curated tracked-
+brand alias/handle catalog needed to distinguish tracked from untracked
+promotion. They do not include account bios, profile images, database secrets,
+or provider credentials. Treat DeepInfra's processing and retention terms as
+part of the release review whenever this payload changes.
 
 ## Cost and freshness contract
 

@@ -1,0 +1,122 @@
+{
+  "schema_version": "u18-r105-nemo-adaptation/v1",
+  "frozen_at": "2026-09-15T04:28:55.151835+00:00",
+  "owner_authorization": "yes do that for nemo; bounded adaptations described in preceding recommendation",
+  "variants": {
+    "schema_20": {
+      "compact": false,
+      "batch_size": 20,
+      "temperature": 0,
+      "provider": "deka"
+    },
+    "compact_20": {
+      "compact": true,
+      "batch_size": 20,
+      "temperature": 0,
+      "provider": "deka"
+    },
+    "compact_5": {
+      "compact": true,
+      "batch_size": 5,
+      "temperature": 0,
+      "provider": "deka"
+    },
+    "temperature_03": {
+      "compact": true,
+      "batch_size": 20,
+      "temperature": 0.3,
+      "provider": "deka"
+    },
+    "deepinfra_20": {
+      "compact": true,
+      "batch_size": 20,
+      "temperature": 0,
+      "provider": "deepinfra"
+    },
+    "singleton_diagnostic": {
+      "compact": true,
+      "batch_size": 1,
+      "temperature": 0,
+      "provider": "deka",
+      "indices": [
+        0,
+        1,
+        4,
+        41,
+        43,
+        44
+      ],
+      "conditional": "Run only if compact_5 has any invalid batch."
+    }
+  },
+  "reservations_usd": {
+    "schema_20": "0.002799342",
+    "compact_20": "0.002225142",
+    "compact_5": "0.003533094",
+    "temperature_03": "0.002225250",
+    "deepinfra_20": "0.002325875",
+    "singleton_diagnostic": "0.001474020"
+  },
+  "total_reserved_usd": "0.014582723",
+  "limits": {
+    "hard_cap_usd": "0.10",
+    "transport_attempts": 30,
+    "concurrency": 1,
+    "retries": 0,
+    "repairs": 0,
+    "fallbacks": 0,
+    "timeout_seconds": 180,
+    "transport_loop_minutes": 35
+  },
+  "providers": {
+    "deka": {
+      "model": "mistralai/mistral-nemo",
+      "provider": "dekallm/fp8",
+      "provider_name": "DekaLLM",
+      "aliases": [
+        "mistralai/mistral-nemo"
+      ],
+      "input": ".018",
+      "output": ".030",
+      "reasoning": null,
+      "json_mode": true,
+      "quantization": "fp8"
+    },
+    "deepinfra": {
+      "model": "mistralai/mistral-nemo",
+      "provider": "deepinfra/fp8",
+      "provider_name": "DeepInfra",
+      "aliases": [
+        "mistralai/mistral-nemo"
+      ],
+      "input": ".019",
+      "output": ".030",
+      "reasoning": null,
+      "json_mode": true,
+      "quantization": "fp8"
+    }
+  },
+  "full_prompt_characters": 13944,
+  "compact_prompt_characters": 7667,
+  "control": "Saved R101 primary only and R104 original NeMo; no new DeepSeek calls.",
+  "comparison": "Schema-only changes response_format. Compact bundle changes prompt and identity/output shape together; cannot attribute improvement to only one. Five-post batches and temperature/provider variants each change one factor versus compact_20. Singleton subset is diagnostic, never ranked against full-cohort accuracy.",
+  "scoring": "Frozen owner 45-case development agreement; missing/invalid rows wrong on every axis. Report strict accepted batches separately from diagnostic individually valid rows. No gold answers in model input, no new human labels, no fresh unreviewed packet.",
+  "invariants": "Current v3 taxonomy, no runtime/config/database writes. Same text/context as R101; affiliations not added. Deterministic compact reconstruction restores only IDs and target brand, never labels or nulls.",
+  "selection": "Require all prior quality floors plus <=0.1 of control dollars per strictly completed row including failed calls; report peak/offpeak and fee sensitivity. Diagnose improvements without calling an invalid or less accurate output a replacement. Compare latency on serial calls.",
+  "source_sha256": {
+    "scripts/u18_nemo_adaptation_pilot.py": "12a7c8b97625574e568cf73b55909089ac02f6298d57001512a6a07e53db503f",
+    "scripts/u18_low_cost_single_primary_pilot.py": "7db57af04ba4f09b6727be76f8e233973d229a94f84facb9dbc04243e4d1d5e5",
+    "scripts/u18_single_primary_conditional_pilot.py": "ec1076ebc44d574a951b89b198b8769d86f2ef2726e14e1bd177e105af9ee71d",
+    "scripts/u18_openrouter_two_role_pilot.py": "a7d294ea45ca7713f11c74b60de8cc2b068dcece2891349a5c17134e08eddc22",
+    "core/classification_contract.py": "9f981cb9cdb8820907d621f3105cf37366c2e495c5db906f80e24d7cf5f85377",
+    "x_monitor/attribution.py": "7e024a8f892cec9496f1910864ec820911949fd1e79f49074abac3bbecf3188a",
+    "x_monitor/openrouter.py": "f46acc9ca318675d57fa7f88b1254d5c6020c87c426c713a95fcedf5c230988a",
+    ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "docs/analysis/2026-09-11-002632-classification-quality-floors-v3.json": "881a2e297bad803851a42d629b5519b5e0a200f38d055dd5951c194aefaf79ba",
+    "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json": "b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c",
+    ".context/u18/single-primary-conditional-pilot-r101-v1/result.json": "62bd20671bdbf32cef673bddd7658f83f2f65308f52cf99f0c7a6e4158180d9b",
+    ".context/u18/low-cost-single-primary-r104-v1/local-join-map.json": "6cb8b04af0e45b39b1c3f1352e222291952d18f796993795a8332b553802ae3c",
+    ".context/u18/nemo-adaptation-r105-v1/requests.json": "052884db93a80508ece10d20bd38a8b1aef6616e5afb864fd1cd628926938a42",
+    ".context/u18/nemo-adaptation-r105-v1/public-packets.json": "2620a6cda45eaa733a446c1547625a4373bc2216783e02f77f1b3f862f2b12cb"
+  }
+}

@@ -15,7 +15,7 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below describes the production schema through migration 0041.
+The allowlist below describes the production schema through migration 0043.
 Relations introduced after the production migration boundary at 0027 remain
 optional on the source so a staging refresh can accept an older production
 snapshot and create those relations during the shadow migration. Refresh
@@ -63,25 +63,32 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
   account_based_in_mappings, account_post_appearances,
-  account_profile_snapshots, accounts, brand_discovery_candidates,
+  account_profile_snapshots, accounts, audience_topic_concepts,
+  audience_topic_labels, audience_topic_schemes, brand_discovery_candidates,
   brand_hashtags, brand_keywords,
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
-  django_site, event_evidence, events, hf_orgs, job_discovery_runs,
+  django_site, event_evidence, events, geopolitical_mode_keys,
+  geopolitical_mode_labels, hf_orgs, job_discovery_runs,
   job_listing_evidence,
-  job_listings, nationalism_keys, nationalism_labels, opportunities, people,
+  job_listings, nationalism_keys, nationalism_labels, national_stance_keys,
+  national_stance_labels, opportunities, people,
   people_accounts, people_brand_affiliation_evidence,
   people_brand_affiliations, personnel_discovery_runs, post_type_keys,
   post_type_labels, post_synthesis_artifacts, post_synthesis_texts,
   post_translation_artifacts, post_translation_texts, posts, posts_brands,
-  posts_brands_classification_judgments, posts_brands_classification_states,
-  posts_brands_discourse,
+  posts_brands_audience_topics, posts_brands_classification_judgments,
+  posts_brands_classification_states, posts_brands_discourse,
+  posts_brands_geopolitical_modes,
   posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
-  posts_unsanctioned_flags, product_label_keys, product_label_labels, products,
+  posts_unsanctioned_flags, posts_untracked_brand_promotions,
+  product_label_keys, product_label_labels, products,
   region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
   sentiment_labels, targeted_extraction_attempts, targeted_extraction_states,
-  trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys
+  trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys,
+  untracked_brand_promotion_evidence, untracked_brand_promotion_keys,
+  untracked_brand_promotion_labels
 TO staging_refresh_reader;
 
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
@@ -106,7 +113,8 @@ GRANT SELECT ON
   account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
-  brand_discovery_candidates_id_seq, brand_trend_narratives_id_seq,
+  audience_topic_concepts_id_seq, brand_discovery_candidates_id_seq,
+  brand_trend_narratives_id_seq,
   brand_trend_narrative_texts_id_seq,
   django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
   event_evidence_id_seq, events_id_seq, harvest_backlog_windows_id_seq,
@@ -126,7 +134,7 @@ GRANT SELECT ON
   trend_narrative_demands_id_seq, trend_narrative_provider_calls_id_seq,
   trend_narrative_runs_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
-  twitter_list_memberships_id_seq
+  twitter_list_memberships_id_seq, untracked_brand_promotion_evidence_id_seq
 TO staging_refresh_reader;
 ```
 
@@ -139,7 +147,8 @@ Policy version 3 marks every relation and sequence introduced after the
 production migration boundary at `0027` as optional on the source. This covers
 the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
-`0028`–`0041`, including classification judgment history and event evidence. It
+`0028`–`0043`, including classification judgment history, event evidence, and
+the U18A topic/geopolitical/promotion catalogs and assignments. It
 allows the staging-first release to refresh from the prior
 production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
@@ -284,6 +293,10 @@ UNION ALL SELECT 'companies', count(*) FROM companies
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
 UNION ALL SELECT 'posts_brands_classification_judgments', count(*) FROM posts_brands_classification_judgments
+UNION ALL SELECT 'posts_brands_audience_topics', count(*) FROM posts_brands_audience_topics
+UNION ALL SELECT 'posts_brands_geopolitical_modes', count(*) FROM posts_brands_geopolitical_modes
+UNION ALL SELECT 'posts_untracked_brand_promotions', count(*) FROM posts_untracked_brand_promotions
+UNION ALL SELECT 'untracked_brand_promotion_evidence', count(*) FROM untracked_brand_promotion_evidence
 UNION ALL SELECT 'event_evidence', count(*) FROM event_evidence
 UNION ALL SELECT 'products', count(*) FROM products
 ORDER BY relation;
@@ -358,7 +371,7 @@ find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
 
 Record the exact counts and latest timestamp next to the receipt. The census
 must include the copied classification-judgment and event-evidence tables
-introduced through migration 0041. All 29 scrub counts must be zero; both
+introduced through migration 0043. All 29 scrub counts must be zero; both
 invariant queries must return no rows; the site must be
 `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must

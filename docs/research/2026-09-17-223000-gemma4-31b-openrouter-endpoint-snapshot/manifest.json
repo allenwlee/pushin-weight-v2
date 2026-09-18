@@ -1,0 +1,8 @@
+{
+  "schema": "openrouter-endpoint-capability-snapshot/v1",
+  "captured_at": "2026-09-17T12:23:15.726660+00:00",
+  "model": "google/gemma-4-31b-it",
+  "purpose": "Route and supported-parameter evidence only. The September 17 saved catalog remains the exclusive price authority for trials.",
+  "raw_response": "raw/endpoints-google__gemma-4-31b-it.json",
+  "raw_sha256": "8189242dbeec3701e1faf571e390dfd0eddb8ee3289db85505698babb0334e91"
+}

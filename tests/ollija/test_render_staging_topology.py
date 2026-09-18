@@ -70,6 +70,7 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     }
     assert not {
         "DEEPSEEK_API_KEY",
+        "DEEPINFRA_API_KEY",
         "TWITTERAPI_IO_SCHEDULED_API_KEY",
         "TWITTERAPI_IO_ON_DEMAND_API_KEY",
     } & set(environment)
@@ -93,7 +94,7 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
         environment["X_MONITOR_STAGING_ACCEPTANCE_SERVICE"]["value"] == service["name"]
     )
     assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
-    assert environment["X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"]["value"] == "True"
     assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"] == "False"
     assert (
@@ -107,6 +108,7 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     assert "OLLIJA_STAGING_MODE" not in environment
     assert environment["TWITTERAPI_IO_SCHEDULED_API_KEY"]["sync"] is False
     assert environment["TWITTERAPI_IO_ON_DEMAND_API_KEY"]["sync"] is False
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
     assert not any("fromGroup" in entry for entry in service["envVars"])
 
 
@@ -134,6 +136,7 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
         == HEADLINE_CONTROL_REVISION
     )
     assert environment["DEEPSEEK_API_KEY"]["sync"] is False
+    assert "DEEPINFRA_API_KEY" not in environment
     assert "OLLIJA_STAGING_MODE" not in environment
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert not any("fromGroup" in entry for entry in service["envVars"])
@@ -148,7 +151,8 @@ def test_staging_synthesis_worker_is_database_only_and_provider_scoped() -> None
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
     assert environment["X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED"]["value"] == "False"
     assert environment["X_MONITOR_SYNTHESIS_ACTIVATION_STATE"]["value"] == "pending"
-    assert environment["DEEPSEEK_API_KEY"]["sync"] is False
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
+    assert "DEEPSEEK_API_KEY" not in environment
     assert not {
         "CELERY_BROKER_URL",
         "CELERY_RESULT_BACKEND",

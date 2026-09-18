@@ -1,0 +1,6 @@
+{
+  "post_id": "2100251744559108491",
+  "commentary_en": "The author complains to @opencode that the tool keeps stopping mid-task, comparing it to a prior issue with “ox alpha.” They speculate it is “probably another glm model” sharing the same bug that rendered ox alpha unusable for them. This matters because it flags a potential recurring reliability problem in a specific model family, which could affect users' trust and workflow continuity, though the claim is speculative and based on personal experience only.",
+  "commentary_zh_cn": "作者向@opencode抱怨该工具会中途停止，并提到这与之前使用“ox alpha”时遇到的问题相同。作者推测这“可能是另一个glm模型”，带有同样的缺陷，导致ox alpha对其不可用。此事之所以重要，是因为它指出了某一模型家族中可能反复出现的可靠性问题，可能影响用户的信任和工作流程连续性，但此说法仅为推测，且基于个人经验。",
+  "commentary_ja": "作者は@opencodeに対し、ツールがタスクの途中で停止すると苦情を述べ、「ox alpha」で以前に経験した問題と同じだと指摘している。また「おそらく別のglmモデル」であり、ox alphaを使えなくしたのと同じバグを持つと推測している。この点が重要なのは、特定のモデル系統に繰り返し発生する可能性のある信頼性の問題を示唆しており、ユーザーの信頼や作業の継続性に影響を及ぼす可能性があるからだ。ただし、これはあくまで推測であり、個人的な経験に基づくものである。"
+}

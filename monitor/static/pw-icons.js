@@ -55,6 +55,7 @@
     post_types: Object.freeze({
       hands_on_usage: 'icon-hands-on-hammer',
       results_evaluations: 'icon-compare',
+      results_analysis: 'icon-compare',
       releases_updates: 'icon-announce',
       questions_requests: 'icon-question',
       advertising_marketing: 'icon-marketing',
@@ -68,11 +69,26 @@
       business_finance: 'a-finance',
       other: 'a-other'
     }),
+    audience_topics: Object.freeze({
+      local_inference: 'icon-hands-on-hammer',
+      cost_performance: 'icon-compare',
+      model_distillation: 'icon-discourse',
+      evals_benchmarks: 'icon-compare',
+      openness_license: 'icon-announce',
+      agents_tools: 'a-opportunity',
+      api_developer_surface: 'a-research'
+    }),
+    geopolitical_modes: Object.freeze({
+      reporting: 'icon-discourse',
+      framework: 'icon-nationalism',
+      nationalism: 'icon-nationalism'
+    }),
     product_labels: Object.freeze({
       bug: 'icon-question',
       complaint: 'icon-sentiment-negative',
       testimonial: 'icon-star',
       ideas_requests: 'icon-event',
+      investigate_claim: 'icon-unsanctioned',
       misinformation: 'icon-unsanctioned'
     }),
     role: Object.freeze({
@@ -81,6 +97,13 @@
       community: 'icon-role-badge'
     }),
     nationalism: Object.freeze({ '*': 'icon-nationalism' }),
+    untracked_brand_promotions: Object.freeze({
+      general: 'icon-unsanctioned',
+      spam: 'icon-unsanctioned',
+      scam: 'icon-unsanctioned',
+      crypto: 'icon-unsanctioned',
+      unauthorized: 'icon-unsanctioned'
+    }),
     unsanctioned: Object.freeze({ only: 'icon-unsanctioned' })
   });
 
@@ -95,6 +118,13 @@
       official: 'role-official',
       staff: 'role-staff',
       community: 'role-community'
+    }),
+    untracked_brand_promotions: Object.freeze({
+      general: 'tone-negative',
+      spam: 'tone-negative',
+      scam: 'tone-negative',
+      crypto: 'tone-negative',
+      unauthorized: 'tone-negative'
     }),
     unsanctioned: Object.freeze({ only: 'tone-negative' })
   });

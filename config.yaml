@@ -265,16 +265,18 @@ metrics_refresh:
   per_cycle_cap: 200
 
 
-# LLM routing (plan 2026-08-01-002 U6). Non-null yaml model values win
-# over role-specific environment values. Environment values apply when
-# the corresponding yaml field is omitted or null. Routine harvest enrichment
-# routes explicitly to DeepSeek and does not inherit a shared provider URL.
+# LLM routing. Non-null yaml model values win over role-specific environment
+# values. Scheduled enrichment uses the exact provider/model routes below and
+# never inherits a shared provider URL or credential.
 llm:
-  translator_model: "deepseek-v4-flash"  # BEFORE 2026-08-04: minimax/MiniMax-M3.0[1m] (swapped to lift the M3 proxy-side response cap, plan 2026-08-04-001)
-  translator_base_url: "https://api.deepseek.com/anthropic"
-  classifier_model: "deepseek-v4-flash"
-  classifier_base_url: "https://api.deepseek.com/anthropic"
-  classifier_provider: "anthropic"
+  translator_model: "google/gemma-4-31B-it-turbo"
+  translator_base_url: "https://api.deepinfra.com/v1/openai"
+  translator_provider: "deepinfra"
+  translator_deepinfra_request_profile: "gemma4_translation_v1"
+  classifier_model: "deepseek-ai/DeepSeek-V4-Flash-0731"
+  classifier_base_url: "https://api.deepinfra.com/v1/openai"
+  classifier_provider: "deepinfra"
+  classifier_deepinfra_request_profile: "deepseek_0731"
   classifier_openrouter_provider: null
   classifier_openrouter_response_provider: null
   classifier_openrouter_response_model: null
@@ -358,28 +360,30 @@ headline_narrative:
   control_revision: null
 
 synthesis:
-  provider: "deepseek"
-  base_url: "https://api.deepseek.com/anthropic"
-  model: "deepseek-v4-flash"
-  prompt_version: "post-synthesis-v1"
-  output_schema_version: 1
+  provider: "deepinfra"
+  base_url: "https://api.deepinfra.com/v1/openai"
+  model: "google/gemma-4-31B-it-turbo"
+  request_profile: "gemma4_tagged"
+  response_format: "tagged_text"
+  prompt_version: "post-synthesis-gemma4-tagged-v2"
+  output_schema_version: 2
   activation_state: null
   provider_calls_enabled: null
   control_revision: null
   batch_size: 5
   poll_seconds: 2
-  lease_seconds: 300
-  timeout_seconds: 60
+  lease_seconds: 600
+  timeout_seconds: 300
   max_attempts: 3
   max_input_tokens_per_post: 4000
-  max_output_tokens_per_post: 1200
+  max_output_tokens_per_post: 4096
   daily_request_cap: 200
   daily_input_token_cap: 800000
   daily_output_token_cap: 240000
-  input_usd_per_million: "0.44"
-  output_usd_per_million: "1.32"
+  input_usd_per_million: "0.09"
+  output_usd_per_million: "0.34"
   daily_cost_cap_usd: "0.70"
-  pricing_version: "deepseek-v4-flash-peak-2026-09-02"
+  pricing_version: "deepinfra-gemma4-31b-standard-2026-09-18"
   demand_batch_limit: 20
   visible_expiry_minutes: 120
   lookahead_expiry_minutes: 15

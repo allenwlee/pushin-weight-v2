@@ -962,17 +962,17 @@ def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
     assert len(results) == 1
     assert results[0]["valid"] is False
     assert results[0]["by_brand"] == {}
-    assert results[0]["classification_trace"]["final"]["by_brand"] == {}
-    # The malformed primary is reported once; no review packet is fabricated.
-    assert len(captured_exc) == 1
+    assert "classification_trace" not in results[0]
+    # Shape rejection is a parser result, not a transport exception; no
+    # follow-up review or repair call is fabricated.
+    assert captured_exc == []
     assert all(isinstance(exc, ValueError) for exc in captured_exc)
     assert all("shape drift" in str(exc) for exc in captured_exc)
 
 
-def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch):
-    """The production path repairs semantic drift once and keeps strict parsing."""
+def test_classify_batch_rejects_invalid_role_without_a_repair_call(monkeypatch):
+    """The locked two-role path fails closed instead of adding a third call."""
     from x_monitor.attribution import (
-        _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT,
         _STAGE1_POST_TYPE_KEYS,
         _STAGE1_PRODUCT_LABEL_KEYS,
         classify_batch_pragmatics_full,
@@ -983,26 +983,6 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
     class FakeClient:
         def messages_create(self, **kwargs):
             calls.append(kwargs)
-            if kwargs["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT:
-                return {
-                    "results": [
-                        {
-                            "tweet_id": "_single_",
-                            "classifications": [
-                                {
-                                    "brand_id": "minimax",
-                                    "outcome": "classified",
-                                    "post_types": ["opinions_reactions"],
-                                    "product_labels": ["complaint"],
-                                    "sentiment": "negative",
-                                    "china_nationalism": "none",
-                                    "us_nationalism": "none",
-                                }
-                            ],
-                            "unsanctioned_flags": [],
-                        }
-                    ]
-                }
             payload = json.loads(kwargs["messages"][0]["content"])
             if "source" in payload[0]:
                 packet = payload[0]
@@ -1078,13 +1058,9 @@ def test_classify_batch_repairs_invalid_single_post_under_shared_cap(monkeypatch
         telemetry_context={"prompt_version": "stage1-prompt-v23"},
     )
 
-    assert len(calls) == 4
-    assert calls[2]["system"] == _PRAGMATICS_FULL_REPAIR_SYSTEM_PROMPT
-    assert result[0]["valid"] is True
-    assert result[0]["by_brand"]["minimax"]["post_types"] == [
-        "opinions_reactions"
-    ]
-    assert "invalid_response" in calls[2]["messages"][0]["content"]
+    assert len(calls) == 2
+    assert result[0]["valid"] is False
+    assert result[0]["by_brand"] == {}
 
 
 def test_classify_batch_pragmatics_full_uses_max_tokens_helper_at_call_site(

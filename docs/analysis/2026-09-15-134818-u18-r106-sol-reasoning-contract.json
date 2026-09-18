@@ -1,0 +1,69 @@
+{
+  "schema_version": "u18-r106-sol-reasoning/v1",
+  "frozen_at": "2026-09-15T04:52:36.006159+00:00",
+  "owner_authorization": "Test frontier GPT-5.6 Sol and evaluate whether xhigh reasoning effort matters.",
+  "model": "openai/gpt-5.6-sol",
+  "response_model_alias": "openai/gpt-5.6-sol-20260709",
+  "provider": "openai",
+  "efforts": [
+    "low",
+    "xhigh"
+  ],
+  "execution_order": [
+    "low_0",
+    "xhigh_0",
+    "xhigh_1",
+    "low_1",
+    "low_2",
+    "xhigh_2"
+  ],
+  "batches": [
+    20,
+    20,
+    5
+  ],
+  "prompt": "Unchanged full R101 primary",
+  "request_differences_between_arms": [
+    "reasoning.effort"
+  ],
+  "parameter_adaptation": "Strict JSON schema, no temperature/top_p, no reasoning disable. 28,000 completion tokens include reasoning and final output. No tools, lookups, prior messages or answer-sheet data.",
+  "budget": {
+    "reserved_usd_including_5_5_percent_fee": "2.4344494250",
+    "hard_cap_usd_including_fee": "2.50",
+    "max_transports": 6,
+    "concurrency": 1,
+    "retries": 0,
+    "repairs": 0,
+    "fallbacks": 0,
+    "max_tokens_per_request": 28000,
+    "timeout_seconds": 300
+  },
+  "prices_per_million": {
+    "input": "2",
+    "output": "10",
+    "cache_read": ".2",
+    "cache_write": "2.5",
+    "discount": "OpenRouter endpoint advertises 50% off standard $4/$20; verify before each pair"
+  },
+  "data_policy": "Existing authorized public-X inputs only. OpenAI declares no training and retention possible. data_collection=allow, zdr=false, matching prior R98 OpenAI policy. Owner reference remains local.",
+  "evaluation": "Same consumed owner 45-case current-v3 reference, frozen sources and deterministic parser/scorer. Missing/invalid rows wrong on every exact axis. Show strict batches and independent-row diagnostics separately; no extra LLM judge. Preserve all quality floors. New unreviewed 45 not used.",
+  "cost_comparison": "Actual billed completion count already includes reasoning. Report reasoning separately without adding twice; normalize cache effects and regular pricing. Saved R101 primary usage repriced at current DeepSeek peak/offpeak. Frontier capability experiment, not a claim of tenfold saving or $150/mo compliance.",
+  "limits": "One run per effort on consumed development data, no unseen-generalization estimate. Same full prompt, no new author affiliations/media. Current-v3 only; future Audience Topics/Geopolitical axes absent. One job positive and no personnel/bug positives.",
+  "source_sha256": {
+    "scripts/u18_sol_reasoning_pilot.py": "1c9d6a3a919a8c09c95d550bdfc47cdd9adaec36a3274ff06570fa16313a8678",
+    "scripts/u18_nemo_adaptation_pilot.py": "12a7c8b97625574e568cf73b55909089ac02f6298d57001512a6a07e53db503f",
+    "scripts/u18_low_cost_single_primary_pilot.py": "7db57af04ba4f09b6727be76f8e233973d229a94f84facb9dbc04243e4d1d5e5",
+    "scripts/u18_single_primary_conditional_pilot.py": "ec1076ebc44d574a951b89b198b8769d86f2ef2726e14e1bd177e105af9ee71d",
+    "scripts/u18_openrouter_two_role_pilot.py": "a7d294ea45ca7713f11c74b60de8cc2b068dcece2891349a5c17134e08eddc22",
+    "core/classification_contract.py": "9f981cb9cdb8820907d621f3105cf37366c2e495c5db906f80e24d7cf5f85377",
+    "x_monitor/openrouter.py": "f46acc9ca318675d57fa7f88b1254d5c6020c87c426c713a95fcedf5c230988a",
+    "x_monitor/attribution.py": "7e024a8f892cec9496f1910864ec820911949fd1e79f49074abac3bbecf3188a",
+    ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+    "docs/analysis/2026-09-11-002632-classification-quality-floors-v3.json": "881a2e297bad803851a42d629b5519b5e0a200f38d055dd5951c194aefaf79ba",
+    "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json": "b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c",
+    ".context/u18/single-primary-conditional-pilot-r101-v1/result.json": "62bd20671bdbf32cef673bddd7658f83f2f65308f52cf99f0c7a6e4158180d9b",
+    ".context/u18/low-cost-single-primary-r104-v1/local-join-map.json": "6cb8b04af0e45b39b1c3f1352e222291952d18f796993795a8332b553802ae3c",
+    ".context/u18/sol-reasoning-r106-v1/requests.json": "19c2089ff62ae4319666d5afa9c2ecf7fc9f15380aec3c42a5acd8b08e1039f8",
+    ".context/u18/sol-reasoning-r106-v1/public-packets.json": "2620a6cda45eaa733a446c1547625a4373bc2216783e02f77f1b3f862f2b12cb"
+  }
+}

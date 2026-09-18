@@ -402,6 +402,19 @@ class TestParseFilters:
         assert result["product_labels"] == ["bug", "complaint"]
         assert result["role"] == ["official"]
 
+    def test_oversized_json_filter_is_ignored(self):
+        from django.http import HttpRequest
+        req = HttpRequest()
+        req.GET = {"filters": '{"brands":["' + ("x" * 9_000) + '"]}'}
+        assert _parse_filters_from_request(req) == {}
+
+    def test_comma_separated_filters_have_bounded_fanout(self):
+        from django.http import HttpRequest
+        req = HttpRequest()
+        req.GET = {"brands": ",".join(f"brand-{index}" for index in range(150))}
+        result = _parse_filters_from_request(req)
+        assert len(result["brands"]) == 100
+
 
 # ============================================================================
 # Integration tests (require database)

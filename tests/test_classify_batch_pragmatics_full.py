@@ -647,10 +647,8 @@ def test_invalid_reviewer_never_silently_publishes_primary(monkeypatch):
 
     assert result[0]["valid"] is False
     assert result[0]["by_brand"] == {}
-    assert result[0]["classification_trace"]["primary"]["by_brand"]["deepseek"][
-        "post_types"
-    ] == ["releases_updates"]
-    assert result[0]["classification_trace"]["final"]["by_brand"] == {}
+    assert result[0]["classification_trace"]["review"]["valid"] is False
+    assert result[0]["classification_trace"]["final"]["valid"] is False
 
 
 def test_reviewer_owns_rare_labels_and_context_missing_without_a_third_type_call():

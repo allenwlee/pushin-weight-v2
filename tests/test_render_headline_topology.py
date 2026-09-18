@@ -75,7 +75,8 @@ def test_synthesis_worker_is_database_only_and_provider_scoped():
     assert environment["DATABASE_URL"]["fromDatabase"]["name"] == (
         "pushinweight-db-shadow"
     )
-    assert environment["DEEPSEEK_API_KEY"]["sync"] is False
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
+    assert "DEEPSEEK_API_KEY" not in environment
     assert environment["X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED"]["value"] == "True"
     assert environment["X_MONITOR_SYNTHESIS_ACTIVATION_STATE"]["value"] == (
         "owner_override"

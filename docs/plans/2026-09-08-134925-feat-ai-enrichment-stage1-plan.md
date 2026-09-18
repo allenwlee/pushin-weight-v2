@@ -3,7 +3,7 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-17
+amended: 2026-09-18
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
@@ -267,11 +267,37 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 27. On September 17 the owner requested independent, model-specific optimization plans for the snapshot-derived shortlist. R109–R114 and U25–U29 reopen offline research and trial design despite KTD55's earlier closed selection. They permit different prompts, reasoning, output representations, batch sizes, and bounded call shapes for each candidate. These permissions concern new experiment identities only; R107 remains the runtime default until a separately verified staging integration adopts a passing alternative. This planning request starts no paid inference, deployment, or production change. Prices come only from frozen snapshots; official web documentation supplies capability evidence.
 
+28. The owner authorized autonomous execution of the model-specific trials, starting with Qwen3.7 Flash, with up to three total configuration attempts per model/task. If an attempt exceeds 1% errors, diagnose it, delegate a durable findings report, amend the next frozen configuration, and continue without another approval request. This supersedes the four-variant proposal and zero-error acceptance threshold only for R109–R114/U25–U29. Aim for zero, but accept at most 1% erroneous source-post results in each qualification cohort; count a post with any confirmed semantic, structural, missing-output, transport, or pre-call-coverage failure once. Keep component/output rates visible separately. Unknown or unreviewed results cannot count as correct. The $3/model-task and $30 portfolio ceilings, official-documentation prerequisite, snapshot-only pricing, no hidden fallback, and staging-only delivery remain in force. Paid diagnostic attempts are authorized within these caps; production activation is not.
+
+29. Later on September 17 the owner explicitly directed continued Qwen optimization after the initial three translation configurations: refactor prompts and configuration, rerun the diagnostic cohort, and then test more widely. A failed small diagnostic is evidence for the next correction, not a declaration that the model cannot perform the task. Authorize a further bounded block of three Qwen configurations per task (six total), retaining the existing $3/model-task and $30 portfolio ceilings. This is development-set tuning; broader qualification remains necessary. Use substantive request/prompt changes and keep every prior failure visible. Other models retain the three-configuration bound. Wider diagnostic runs may proceed despite residual errors on the intentionally difficult smoke cohort, to characterize generalization and avoid treating that cohort as a production-prevalence estimate; they remain diagnostic and cannot waive the qualification threshold.
+
+30. The owner directed: “change success to when a model equals or beats 4.1”. For R109–R114/U25–U29, replace the former fixed 1% acceptance threshold with task-specific incumbent quality parity or superiority, measured on matching source/context and required outputs under one adjudicated rubric. Apply this to subsequent decisions and append versioned reassessments of completed runs; preserve all original frozen contracts, outputs and historical scores. Stop tuning a task when the matched qualification evidence meets R113, without demanding zero or 1% absolute errors. Existing configuration/spend/concurrency caps, source completeness, no hidden retries, operating limits and staging-only delivery remain unchanged. This change does not make incumbent predictions gold or authorize a production release.
+
+31. The owner selected cloud 0731 as the classifier candidate based on the existing reviewed comparison and directed that remaining model trials cover translation and commentary only. Stop alternative classifier experiments immediately, including prepared/unspent Gemini revisions and classifier uses of GPT-OSS-120B/GPT-5 Nano. Do not require another paid classifier model comparison to reopen this settled selection. Retain completed results and unused contracts without deletion. The selected route remains `deepseek/deepseek-v4-flash-0731` through pinned DeepInfra FP8, the documented two-role method and bounded mechanical output normalization. Ordinary regression/integration checks for the selected classifier and staging delivery remain required; this decision does not authorize production activation.
+
+32. The owner added `openai/gpt-5.6-luna` through OpenRouter as a translation and commentary control, with model-specific configuration. Use the September 17 saved catalog for prices and the additive immutable `docs/research/2026-09-17-172422-luna-openrouter-endpoint-snapshot/` for route/capability evidence. Research official model documentation before transport; omit unsupported temperature/top_p and explicitly freeze reasoning, output headroom, structured-output shape and provider route. The prior Luna attempt made zero inference requests because of an unsupported temperature requirement; it is not evidence of semantic failure. Apply the existing three-configuration, spend, concurrency, no-retry and matched-review constraints to each task. This adds no classifier trial and does not use the Codex subscription for inference.
+
+33. On September 17, after inspecting Gemini commentary quality and actual reasoning-token charges, the owner directed: “run last test without reasoning”. Authorize one fourth Gemini commentary configuration on the exact retained random100 cohort: copy the latest v3 source-bound prompt, model/provider/Flex route, schema, output ceiling, timeouts and concurrency, changing only reasoning to disabled. Preserve the prior reasoning-enabled contract and outputs. This narrowly extends the Gemini commentary configuration count to four; other model/task bounds, $3/model-task and $30 portfolio ceilings, no retries/fallbacks and staging-only delivery remain unchanged. Verify identical source/context and request content apart from reasoning, and verify zero reasoning tokens in returned usage rather than assuming the flag was honored. Review all required outputs against source evidence under R113, compare with the retained v3 and incumbent outputs, and report actual billed cost and latency. This paired diagnostic does not itself authorize runtime activation or waive other qualification cohorts.
+
+
+34. On September 17 the owner authorized adding Qwen3-235B-A22B-Instruct-2507, Hy-MT2-30B-A3B and Gemma 4 31B to this existing plan and running each through a separate subagent with model-specific configuration. These are translation trials first; cloud 0731 classification remains settled. Qwen235/Gemma commentary are possible subsequent task assignments, not required paid work in this amendment. Use the September 17 saved catalog price ceilings: Qwen235 $0.0875/$0.35, HY30B $0.074/$0.295, Gemma31B $0.09/$0.34 per million input/output tokens. This raises the candidate screening range to roughly twice the selected 0731 translation cost, not the $3/model-task or $30 portfolio experimental caps. Capture missing endpoint capabilities in additive immutable supplements; original pricing snapshots remain unchanged and no more-expensive live price silently replaces a saved ceiling. Official-documentation research and fake-transport verification precede inference. Three model agents own separate research, configuration hypotheses and reports; serialize shared harness edits and paid runs under the existing portfolio lock, with at most three in-flight requests globally. Authorize up to three configurations per new model/task, with evidence-linked corrections and repeat diagnostics without asking again. Reuse matching incumbent outputs and apply R113, including unknowns and missing results. Each model must receive a complete diagnostic attempt unless its route is unavailable; diagnose configuration/transport failures and use remaining attempts for concrete, evidence-linked corrections; an unused allowance alone does not require another variant. A promising frozen configuration advances through existing matched regression/qualification gates within KTD59. Keep all artifacts, record actual billed cost separately from reservations, and append results to the existing experiment report. No production settings, database rows, classifier choice or deployment authority change.
+
+
+35. After the Gemma rate-limit investigation the owner instructed “2 subagents: re run gemma and qwen.” Authorize one separate recovery-aware rerun per candidate: Gemma v1 on the retained random100 and Qwen235 v3 on diagnostic24, preserving source rows, model, prompts, token ceilings, provider and snapshot price caps. This explicitly permits bounded transport retries for HTTP 429/503 only (maximum three total attempts per target), respecting Retry-After or exponential backoff with jitter and a provider-wide cooldown; no semantic retries, fallback routes or new prompt variants. Capture sanitized response error bodies/metadata, retry/rate-limit headers, exact send times, every attempt, usage and missing receipts. Keep originals immutable and distinguish first-attempt versus recovered results. Two independent experiment processes may run concurrently for this owner request, limited to Gemma two in-flight requests plus Qwen one; all other inference experiments must remain idle. Reserve the full worst-case three-attempt spend under the existing shared ledger lock before sending; preserve $3 per model/task and $30 portfolio caps. If Retry-After exceeds the bounded run deadline, retain an incomplete result rather than violate it. Use isolated experiment helpers without production/runtime changes, test retry/cooldown/redaction mechanics with fake responses, then review every returned translation against source evidence and compare to incumbent. These reruns are a narrow exception to prior no-retry/three-configuration and single-paid-process rules, not authorization for an open-ended sweep. Staging delivery is unchanged.
+
+36. On September 18 the owner supplied a direct DeepInfra credential and instructed a direct Gemma test after the OpenRouter upstream-overload diagnosis. Authorize one isolated direct-provider rerun of Gemma v1 on the same retained random100 translation corpus, using DeepInfra's official OpenAI-compatible endpoint and exact model ID `google/gemma-4-31B-it-turbo`. Preserve every source row, caller prompt, target-language request and output ceiling from the frozen OpenRouter Gemma v1 contract; transform only the provider envelope by removing OpenRouter routing, price, reasoning and metadata fields. Use DeepInfra's standard tier at the official saved ceiling of $0.09/M input and $0.34/M output; omit JSON mode, temperature, top-p and reasoning fields. Send one real retained request as a transport probe, reuse its result in the full run, and continue only after authentication, model identity, `stop` completion, nonempty text and usage/cost parsing pass. Run one request at a time with a 300-second socket timeout and a 60-minute wall deadline. Retry only HTTP 429 or 503, at most three total attempts per target, honoring `Retry-After` or using 10- then 30-second provider-wide cooldowns; never retry a timeout, ambiguous transport result, semantic defect or structurally usable answer. Reserve the three-attempt worst-case spend under the existing $3/model-task and $30 portfolio caps, preserve every sanitized attempt and DeepInfra `estimated_cost`, and expose no credential. Test the direct adapter's success, auth-stop, retry, incomplete-output and redaction paths with fake responses before spending. Compare delivery, latency, billed cost and source-grounded errors with both the OpenRouter Gemma run and incumbent V4.1. This experiment changes no shared runtime, database, deployment or production setting; staging delivery remains the target.
+
+37. On September 18 the owner instructed: “let's test gemma431b/deepinfra on commentary.” Authorize one isolated direct-provider commentary run on the exact retained random100 commentary cohort, paired with the already saved V4.1 commentary outputs. Use DeepInfra's official OpenAI-compatible endpoint, exact model ID `google/gemma-4-31B-it-turbo`, standard tier and $0.09/M input plus $0.34/M output price ceiling. Preserve the frozen source rows, context and latest source-bound commentary prompt; change only the model/provider envelope and model-specific controls. Request strict `json_schema` output for the exact four application fields, set `reasoning_effort` to `none`, use temperature `0.2`, omit top-p and other samplers, and cap output at 1,024 tokens. These choices follow DeepInfra's current structured-output guidance to prefer strict schemas for code-dependent fields, validate every response, keep temperature below 0.7, and disable reasoning for summarization. Send one retained request as a paid probe and reuse it in the run only after authentication, exact model identity, `stop`, schema, post identity, locale completeness and usage/cost validation pass. Then run at most three requests concurrently with a 300-second request timeout and 30-minute wall deadline. Retry only HTTP 429 or 503, at most three attempts per request, honoring `Retry-After` or provider-wide 10- then 30-second cooldowns; do not retry ambiguous transport outcomes, timeouts, semantic defects or structurally valid answers. Reserve worst-case spend before the probe under the existing $3 model/task and $30 portfolio caps, retain sanitized request/attempt receipts, and expose no credential. Fake-transport tests must cover schema success, wrong identity, locale duplication/incompleteness, non-stop completion, retry and secret redaction. Review every output against source evidence under R113 through two independent half-corpus reviews and parent reconciliation, then report paired wins, losses, shared defects, uncertainty, delivery, latency and billed cost against V4.1. The run does not activate the route or change runtime, database, staging or production configuration.
+
+38. Exception 37's first paid probe returned the exact model with HTTP 200 and `finish_reason: stop`, but the supposedly strict schema response omitted the closing quote on its final locale value and failed JSON parsing. Preserve that consumed probe as configuration v1 and do not retry it. Under Exception 34's existing three-configuration allowance, authorize configuration v2 on the same cohort and semantic prompt using four explicit tagged text fields instead of provider JSON mode; mechanically parse, validate and wrap those values into the application object. Keep the same model, direct route, reasoning disabled, temperature, source/context, timeouts, retry rules, budgets and review method. Raise the output ceiling to 4,096 because the paired incumbent reached 1,840 tokens, and use one request at a time to isolate direct-route quality from provider-load effects. A new paid probe must prove exact tag multiplicity/order, no extra text, copied post identity, three nonempty distinct locales, exact model, `stop` and usage/cost before the remaining 99 requests run. This correction addresses only serialization and cannot repair or retry semantic output.
+
+39. On September 18 the owner reopened one alternative classifier test and instructed: “let's test gemma4/deepinfra on classification.” Authorize up to three evidence-linked Gemma classifier configurations on the frozen expanded-taxonomy diagnostic24 cohort, paired with the retained direct V4.1 two-role singleton control. Use DeepInfra's direct standard endpoint, exact model `google/gemma-4-31B-it-turbo`, and the saved $0.09/M input plus $0.34/M output ceiling. Preserve the current semantic definitions, source/context, tracked-brand catalog, two roles and one-post-per-request shape; adapt the serialization and model-specific controls when a consumed attempt exposes a mechanical failure. Start with reasoning disabled, temperature 0.2, a 4,096-token ceiling, serial requests, and a strict parser that never invents omitted labels. Send one retained request as a paid probe and reuse it only after exact model identity, `stop`, required slot coverage, taxonomy validity and usage/cost validation pass. Retry only HTTP 429 or 503 at most three transport attempts, honoring provider cooldowns; never retry timeouts, ambiguous transport outcomes, structural or semantic defects. Reserve worst-case spend under the existing $3 model/task and $30 portfolio caps, retain sanitized requests and response-reported charges, and expose no credential. If the first configuration does not deliver the complete two-role contract, diagnose and spend the next allowed configuration without pausing for owner approval. Review every delivered source against visible evidence under R113 and compare paired confirmed failures, uncertainty, coverage, latency and actual charges with the retained V4.1 control. This narrow exception supersedes Exception 31 only for this Gemma diagnostic; it does not change the selected 0731 route or activate any runtime, database, staging or production setting.
+
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
 ## Plain-English Summary
 
-The September 17 model work gives each shortlisted model a separate path toward zero observed errors for classification, translation, or commentary. Research its documented interface first, adapt its prompts and request shape, then check old failures and fresh posts. Choose an affordable passing configuration for each task; an identical-prompt ranking is not the objective. U25–U29 own this work, with [official-documentation findings](../research/2026-09-17-145314-model-specific-optimization-research.md). The existing staging target and production defaults remain in force while these experiments are planned and evaluated.
+The September 17 model work gives each shortlisted model a separate path toward matching or exceeding incumbent 4.1 quality for translation or commentary. Research its documented interface first, adapt its prompts and request shape, then check old failures and fresh posts. Choose an affordable passing configuration for each task; an identical-prompt ranking is not the objective. U25–U29 own this work, with [official-documentation findings](../research/2026-09-17-145314-model-specific-optimization-research.md). The existing staging target and production defaults remain in force while these experiments are planned and evaluated.
 
 Stage 1C will classify new posts into thirteen types. It separates attendance-bearing events from time-bounded opportunities, and adds specific job-listing and personnel-change types. It also stores structured people, affiliations, jobs, events, and opportunities so future analysis and MCP/API clients can use the facts without rereading prompt output.
 
@@ -294,14 +320,16 @@ allocation. Every detected untracked promotion also creates or links a
 reviewable brand candidate with visible identity evidence and an exact matched
 account when one is available.
 
-The classifier uses cloud-hosted DeepSeek V4 Flash 0731 through OpenRouter's
-pinned DeepInfra FP8 endpoint. Each batch uses two focused calls: content owns
-post types, Audience Topics, Untracked Brand Promotions, and the promoted
-candidate identity; brand interpretation owns product labels, sentiment,
-Geopolitical modes, and national stance. The independent calls may run in
-parallel, and code combines their disjoint fields only after both validate.
-The runtime default remains 20 posts per batch. There is no routine third call,
-reviewer, judge, semantic repair, or provider fallback.
+The classifier uses `deepseek-ai/DeepSeek-V4-Flash-0731` through DeepInfra's
+direct OpenAI-compatible endpoint. Translation and commentary use
+`google/gemma-4-31B-it-turbo` through the same direct provider. Each classifier
+batch uses two focused calls: content owns post types, Audience Topics,
+Untracked Brand Promotions, and the promoted candidate identity; brand
+interpretation owns product labels, sentiment, Geopolitical modes, and
+national stance. The independent calls may run in parallel, and code combines
+their disjoint fields only after both validate. The runtime default remains 20
+posts per batch. There is no routine third call, reviewer, judge, semantic
+repair, gateway, or provider fallback.
 
 The trial must improve agreement with the completed owner review and satisfy
 fixed spending and processing-time limits before becoming the delivery
@@ -956,18 +984,26 @@ The production classifier asks for six post types, sentiment, discourse, and two
   timing from `adaptive-result.json`; its replayed candidate file contains
   unchanged labels but zeroed replay cost/latency and must not price the base.
 - R107. Use cloud-hosted DeepSeek V4 Flash 0731 as the selected classifier for
-  this delivery. Pin OpenRouter model `deepseek/deepseek-v4-flash-0731` to
-  provider `deepinfra/fp8`, disable provider fallback and reasoning, and retain
+  this delivery. Route model `deepseek-ai/DeepSeek-V4-Flash-0731` directly to
+  DeepInfra's OpenAI-compatible endpoint with `DEEPINFRA_API_KEY`, no gateway
+  and no provider fallback. Disable reasoning and retain
   the tested temperature `1.0`, top-p `1.0`, seed `42`, fixed post/brand slots,
   plain JSON instructions, and deterministic representation-only
   normalization. Keep 20 source posts as the runtime batch default. Each batch
   makes exactly two initial semantic requests: the R95 content role and brand
   interpretation role. They may run concurrently under the shared transport
   semaphore and merge only after both validate. Do not route live work to the
-  local MXFP4 checkpoint, the moving V4.1 alias, an automatic OpenRouter
+  local MXFP4 checkpoint, the moving V4.1 alias, an automatic provider
   fallback, a third specialist/reviewer call, or a different model for one
   role. Record model, provider, quantization, request settings, prompt/role,
-  input, and merge identities plus billed usage, latency, and request ID.
+  input, and merge identities plus billed usage, latency, and request ID. For
+  this staging delivery, route literal translation and commentary directly to
+  DeepInfra model `google/gemma-4-31B-it-turbo` with the same isolated
+  credential and no fallback. Translation uses the tested raw-text literal
+  contract; commentary uses the tested tagged-text contract and a 4,096-token
+  output ceiling. Delivery Exception 41 is the controlling owner override for
+  adopting these three routes despite the recorded classification and
+  translation qualification failures.
 - R108. Give the selected 0731 prompts and schema a new semantic identity that
   pins the owner-reviewed L45 boundaries. Required positive fixtures include:
   favorable company language such as “star AI company” as positive sentiment;
@@ -991,11 +1027,11 @@ The production classifier asks for six post types, sentiment, discourse, and two
 
 **Model-specific optimization and evidence**
 
-- R109. Optimize each shortlisted model independently for its assigned task toward zero observed errors, preserving the accepted taxonomy, brand boundaries, source-context limits, translation fidelity, and commentary purpose. Changing model settings or request shape is allowed; dropping difficult posts, labels, languages, or required outputs to improve the score is not.
+- R109. Optimize each shortlisted model independently for its assigned task to equal or exceed incumbent DeepSeek V4.1 Flash under R113, preserving the accepted taxonomy, brand boundaries, source-context limits, translation fidelity, and commentary purpose. Changing model settings or request shape is allowed; dropping difficult posts, labels, languages, or required outputs to improve the score is not.
 - R110. Before a model's quality run, bind official model/provider documentation and a verified request profile to the exact route. Distinguish documented capability, proposed tuning, and observed behavior; an unsupported parameter or endpoint is an integration result, not a semantic-quality score.
 - R111. Derive all price estimates from a hashed, saved pricing snapshot, with the chosen endpoint and tier identified. Report the actual input, visible output, reasoning where available, failed attempts, and all configured calls per delivered source post; missing usage is unknown, not zero. A future endpoint-coverage extension requires a separately saved and explicitly adopted snapshot before its prices can be used.
 - R112. Preserve existing classifier and translation/commentary corpora as consumed development evidence. Score only assessed reference fields, retain the fresh45 owner's blanks as unreviewed, and use a newly frozen temporal sample after configuration freeze for generalization evidence. The completed owner review remains the only mandatory human review.
-- R113. A task passes only with complete required outputs, zero confirmed structural or semantic errors, zero unresolved review findings, and the KTD59 cost/latency limits satisfied. Report first-attempt and final-delivery results separately, with counts by source post and applicable output unit. A bounded test establishes zero observed errors for that corpus and rubric, never zero future errors or human-verified accuracy.
+- R113. A model/task succeeds when its reviewed quality equals or exceeds incumbent DeepSeek V4.1 Flash on the same source posts, source/context versions, required outputs and current taxonomy. The primary measure is erroneous source posts: candidate errors must be no greater than incumbent errors in each matched qualification cohort. Count each post once if any required output has a confirmed semantic or structural defect, missing result, transport failure or pre-call exclusion. Use the same source-grounded review rubric for both arms; agreement with incumbent answers is not correctness, and incumbent mistakes are scored too. Report candidate-only failures, incumbent-only failures, shared failures, per-axis/locale and severity breakdowns; never dilute defects by averaging many easy fields. Unreviewed or unresolved outputs remain unknown: compute each arm's lower bound as confirmed erroneous sources and upper bound as confirmed errors plus additional uncertain/unreviewed sources. Observed parity is established conservatively only when the candidate upper bound is no greater than the incumbent lower bound on matching fully accounted cohorts; otherwise resolve uncertainty before acceptance. Never count unknowns as correct. Preserve independent review, complete source accounting and KTD59 cost/latency limits. The former fixed 1% error threshold is superseded by owner direction in Delivery Exception 30. A bounded cohort supports only observed parity/superiority on that cohort, not guaranteed future or human-verified accuracy.
 - R114. Finish each attempted model/task with either a qualifying configuration or a terminal report naming its remaining failures, unsupported scope, and spent budget. Adoption requires a whole-system projection within the owner's $150/month LLM-only target, including retained headline and other LLM jobs and the expected 2–3x coverage scenario; a cheap three-task subtotal cannot establish that limit.
 
 #### Current v3 compatibility labels
@@ -1411,22 +1447,35 @@ name is historical compatibility and does not name the future U18A family.
 
 - KTD57. **Give each model a documented task profile and bounded tuning path.** Use the research exhibit's exact candidate/task assignments. Tune representation and reasoning before adding semantic calls, and change one failure-linked factor per revision. This implements R109–R110 (session-settled: user-directed — chosen over identical-structure benchmarking because the objective is each model's best practical result).
 - KTD58. **Separate qualification from development agreement.** Reuse old outputs without repurchasing controls, then freeze the chosen configuration before reading fresh evaluation outputs. Independent automated review sees source/context and the rubric, not candidate identity or old answers; retain evidence spans and adjudicate disagreements. Reference disagreement alone is not an error, and confirmed reference corrections receive a new version rather than silently changing an old score. Covers R112–R113.
-- KTD59. **Bound the search and count the whole workload.** Proposed execution defaults are four complete configuration variants per model/task, at most $3 reserved per model/task, at most $5 total for external review calls, and a $30 portfolio ceiling including that review allowance. Freeze tighter computed request/token/cost caps before transport; unused allowance does not justify extra variants. Use one shared maximum of three in-flight provider calls and one executing experiment process. Qualification allows no hidden retries, semantic repairs, provider fallbacks, or dropped inputs. Diagnostic transport retries, if necessary, require a separate frozen variant and remain in its cost and completion denominators. Retain the classifier's 180-second p95 complete-post gate; propose the same gate for all required translation targets and three-locale commentary, plus a 900-second ceiling per 100-post role run at concurrency three. These are proposed experiment defaults, not new spending authorization or measured results. Covers R111, R113–R114.
+- KTD59. **Bound the search and count the whole workload.** Owner-authorized execution limits are three total configuration attempts per model/task, at most $3 reserved per model/task, at most $5 total for external review calls, and a $30 portfolio ceiling including that review allowance. Freeze tighter computed request/token/cost caps before transport; unused allowance does not justify extra variants. Use one shared maximum of three in-flight provider calls and one executing experiment process. Qualification allows no hidden retries, semantic repairs, provider fallbacks, or dropped inputs. Diagnostic transport retries, if necessary, require a separate frozen variant and remain in its cost and completion denominators. Retain the classifier's 180-second p95 complete-post gate; propose the same gate for all required translation targets and three-locale commentary, plus a 900-second ceiling per 100-post role run at concurrency three. The owner authorized these bounded trials in Delivery Exception 28; none of these caps is a measured result. Covers R111, R113–R114.
 - KTD60. **Reuse production callers and deterministic validation.** Extend the existing U18/U20 harness seams; do not create a parallel enrichment pipeline. Default classifier shape remains two roles, initially five posts per request for new candidates; translation starts one source/target per call and commentary one source per three-locale result. A later profile may fuse the two classifier roles, reduce batches to one, split translation by source paragraph with context retained, or split commentary by locale. A third semantic classifier pass is outside this bounded search. Every profile must restore the complete canonical result in code without inferring missing semantic labels. Covers R109 and preserves R107 for runtime.
 
 ### Model-specific tuning and qualification sequence
 
-The [research exhibit](../research/2026-09-17-145314-model-specific-optimization-research.md) owns provider facts and starting hypotheses. Qwen3.7 Flash and Gemini 2.5 Flash-Lite receive independent trials for all three tasks. Hy-MT2-1.8B then Hy-MT2-7B receive translation-only trials; the larger model is conditional on a remaining small-model failure or capacity limitation. GPT-OSS-120B receives classification/commentary trials only where those tasks remain unsatisfied; GPT-5 Nano is a classification reserve. A qualifying model does not excuse another already-started candidate from receiving a terminal report, but no candidate must consume its entire tuning budget.
+The [research exhibit](../research/2026-09-17-145314-model-specific-optimization-research.md) owns provider facts and starting hypotheses. **Classifier model selection is settled by the owner: cloud 0731 with the selected two-role method.** Remaining candidate testing covers translation and commentary only. Qwen3.7 Flash and Gemini 2.5 Flash-Lite retain those two task assignments; Hy-MT2-1.8B then Hy-MT2-7B receive translation-only trials. GPT-OSS-120B is a commentary reserve. GPT-5 Nano and all alternative classifier trials are removed from the remaining scope. Existing completed classifier evidence remains historical; prepared/unspent classifier requests are cancelled and retained. Finish terminal reports for already-consumed evidence, but do not spend further calls just to complete a table. Delivery Exception 31 controls this scope change.
+
+
+#### Expanded translation candidates — Delivery Exception 34 (U25–U29)
+
+| Candidate / catalog ID | Starting configuration to validate against official docs and pinned endpoint | Corrections to consider only when supported by observed failures |
+| --- | --- | --- |
+| Qwen3-235B-A22B-Instruct-2507 / `qwen/qwen3-235b-a22b-2507` | Non-thinking Instruct checkpoint; normal system/user messages, existing `structured_translation_lines` JSON-object interface with deterministic line restoration; start temperature 0, omit hybrid-model thinking controls and unsupported samplers; 8192 maximum output, 180-second timeout. Reconfirm endpoint parameters before freeze. | Adjust sampler to official recommendation or use compact native text when evidence implicates overconstraint; preserve entities, quantities, roles and idiom meaning. No invented semantic labels or answer-fed glossaries. |
+| Hy-MT2-30B-A3B / `tencent/hy-mt2-30b-a3b` | Translation-only specialist; use Tencent's native target-language prompt and documented sampling settings, one source/target request; reuse HY adapter with model-appropriate output headroom and deterministic paragraph restoration. Avoid generic assistant/JSON demands unless officially supported and locally proven. | Reuse prior HY failure families (discount arithmetic, slang, model names, pronoun/agent reversal) to choose a smaller prompt or source-derived terminology/context variant; retain original source without asserting its expected translation. |
+| Gemma 4 31B / `google/gemma-4-31b-it` | Explicit reasoning off where the pinned route supports it, ordinary provider chat framing without manually inserted template tokens; start source-bound raw literal translation with inherited unsupported controls removed, 8192 maximum output, 180-second timeout. Inspect returned reasoning and channel text instead of assuming the switch worked. | Structured line representation if framing fails; bounded thinking or prompt revision if semantics fail, only after checking official controls, revising the frozen budget and retaining the prior result. |
+
+**Execution and ownership.** Parent owns plan, shared profile integration and final verification; one agent per model owns official-source research, immutable endpoint evidence and that model's trial/report. Existing source cohorts are `.context/model-task-20260917/smoke8.json` and `diagnostic24.json`; the next matched regression cohorts remain old45 and random100 below. Each candidate starts on the same eight difficult sources and advances to the 24-source diagnosis; report each cohort separately. A smoke failure triggers diagnosis and configuration refinement, not automatic abandonment. At most three configurations total per candidate, including baseline. Any paid capability probe is frozen and charged to the same candidate configuration count, model/task reservation and portfolio ledger; it is never a free or hidden availability check. Reusing one unchanged configuration on a different cohort adds its full reservation but not a new configuration. Public metadata and fake transport incur no paid attempt. No cross-model live concurrency bypasses the global lock. Freeze all shared caller/profile edits before creating contracts; any later edit requires fresh contracts for unspent runs, never rewriting consumed evidence.
+
+**Verification.** Run the existing focused profile/experiment tests against all added profiles: exact model/provider, accepted controls, snapshot hash/price cap, source identity, all target locales, strict line restoration and failures, caller-to-wire shape, ledger/replay/no-fallback behavior. Review every generated target with source/context and current rubric; use two independent assessments for any qualification claim and reconcile exact source spans. A lower error count on eight or 24 difficult posts is diagnostic promise only. Continue a qualifying profile through old45/random100, fresh100 and stability20 only when R113 and the complete reservation envelope permit. Save per-configuration prompt/request hashes, actual provider/model receipt, token split, reported reasoning, cost, latency, coverage and source-level error intervals. The amendment is complete when all three trials have evidence-backed terminal reports or a specific route/budget blocker; product qualification remains separate.
 
 | Step | Corpus and action | Advancement condition |
 | --- | --- | --- |
 | Route proof | Saved metadata, official documentation, fake-transport request capture, then at most two tiny separately budgeted capability probes | Exact route and accepted request controls established; no silently discarded fields |
 | Smoke | Eight existing diagnostic posts per task, selected before the run | All required records parse, align, and complete; transport failures are diagnosed before semantic tuning |
 | Diagnosis | Up to 24 existing cases covering observed failure families | Every proposed change names the errors it is meant to fix; retain all outputs and new regressions |
-| Revision | At most four complete profiles including baseline under KTD59 | Prefer the lowest-complexity profile that removes the named failure; changing a profile creates a new contract |
-| Regression | The original45 plus fresh45 classifier corpora defined below, with versioned U18A fixtures; or old45 and random100 translation/commentary evidence | Zero observed errors under R113, with unavailable reference dimensions identified rather than scored negative |
+| Revision | At most three total attempts including baseline under KTD59 | Prefer the lowest-complexity profile that removes the named failure; changing a profile creates a new contract |
+| Regression | The original45 plus fresh45 classifier corpora defined below, with versioned U18A fixtures; or old45 and random100 translation/commentary evidence | R113 incumbent parity/superiority met, with unavailable reference dimensions identified rather than scored negative |
 | Fresh qualification | Freeze 100 previously unused source/context rows from one new 24-hour collected-post window, without author/language quotas | Complete, independently reviewed outputs on the frozen profile; rare-label stress results remain separate from random prevalence |
-| Stability and operating fit | Repeat a preselected 20-post slice once with the unchanged profile; compute task cost and whole-system forecast | Zero observed failures and KTD59/R114 operating gates satisfied |
+| Stability and operating fit | Repeat a preselected 20-post slice once with the unchanged profile; compute task cost and whole-system forecast | R113 incumbent parity/superiority and KTD59/R114 operating gates satisfied |
 
 Classifier regression inputs are the 45 IDs in `.context/u18/human-ambiguity-study-v1/selection-manifest.json` and the later 45 IDs in `docs/analysis/2026-09-15-121342-u18-fresh-45-review-packet-selection-manifest.json`. Freeze their row hashes, order, and source/context versions separately before combining their 90 posts. Preserve the first corpus's completed owner-reference policy and the later corpus's explicit blank-is-unreviewed policy. Translation's old45 comes from `.context/u20/translation-synthesis-prepare-20260916-v4/contract.json`; its random100 comes from `docs/analysis/2026-09-17-125626-u20-random100-live-selection.json` and the corresponding durable evidence directory. Recover a missing private source from its archived evidence before running; do not silently substitute posts.
 
@@ -1448,7 +1497,7 @@ flowchart TB
   D -->|yes| B
   D -->|no failure| E[Full regression and fresh qualification]
   D -->|budget or capability exhausted| F[Terminal failure report]
-  E --> G{Zero observed errors and operating gates pass?}
+  E --> G{R113 incumbent parity and operating gates pass?}
   G -->|no| F
   G -->|yes| H[Task-specific adoption recommendation]
   H --> I[Separate U23 staging integration proof]
@@ -2489,7 +2538,7 @@ browser tests all use these values.
 
 ### U28. Qualify frozen profiles with independent assessment
 
-- **Goal:** Establish zero observed errors on the complete regression set and a genuinely new temporal sample under a fixed configuration.
+- **Goal:** Meet R113 incumbent quality parity or superiority on the complete regression set and a genuinely new temporal sample under a fixed configuration.
 - **Requirements:** R112–R113; KTD58–KTD59.
 - **Dependencies:** U27 qualifying diagnostic profile and versioned review rubric.
 - **Review preflight:** Before buying qualification outputs, freeze the reviewer routes and reserve a conservative envelope for both full review passes and reconciliation across every scored output. Apply KTD59 to that complete envelope. Insufficient remaining review budget blocks qualification before candidate transport; sampling fewer outputs cannot satisfy R113.
@@ -4788,3 +4837,326 @@ wall time 931.320 seconds; 14 focused tests passed. Gates remain open. See
 `docs/analysis/2026-09-17-125626-u20-random100-live-report.md` and its durable
 evidence directory. This sample uses the natural recent language mix; it cannot
 isolate prompt gains against the older balanced language corpus.
+
+
+### September 17 — U25–U29 autonomous model trials started
+
+The owner authorized three total corrected attempts per model/task with the
+R113 1% source-post error threshold; Delivery Exception 28 is the controlling
+instruction. Checkpoint `a837870` freezes the starting plan, official research,
+and original snapshot/cost screen before execution. No production activation
+or runtime-default change has occurred.
+
+The supplemental specialist endpoint snapshot is adopted for trial pricing:
+`docs/research/2026-09-17-062006-model-specialist-endpoints/manifest.json`, SHA-256
+`46e265fd438f4f85d0766103987d8b10f310d4966f49dd04b3c8716d0e6b4c38`.
+All four specialist models have nonempty endpoint captures. Each eventual
+trial must pin a specific endpoint and cite this manifest; Qwen and Gemini
+continue using the original September 17 snapshot.
+
+One-request capability probes succeeded for Qwen/Alibaba raw text,
+Gemini/Google AI Studio Flex strict JSON Schema (served tier explicitly Flex),
+and Hy-MT2-1.8B/Tencent raw text. All reported zero reasoning tokens, normal
+completion, and no retries/fallbacks. These probes establish interface
+compatibility only. Details and prices are in the execution addendum of
+`docs/research/2026-09-17-145314-model-specific-optimization-research.md`.
+The source-based review rubric is frozen at
+`.context/model-task-20260917/review-rubric.md` (SHA-256
+`0e8cd987c8700a4b8c8b0aafeff99249dd6fafa3ab82998bc97ee513f4cdb709`).
+
+The selected runtime classifier's revision suffix `v4` denotes its r123
+prompt version, not coverage of the expanded proposed taxonomy. The trial
+must use the expanded experiment contract for new categories and retain
+legacy runtime/reference results as explicitly limited regression evidence.
+U27 semantic testing and U28 qualification remain pending. Existing literal
+translation and frozen transport regression suites passed 61 tests before
+new live-trial integration.
+
+
+### September 17 — Qwen refactoring and wider diagnostics
+
+U27 is now in progress, not merely prepared. The owner explicitly rejected
+stopping Qwen after the initial small diagnostic failures; Exception 29
+controls the additional correction block and wider non-qualifying diagnostics.
+The execution record is
+[the model-specific trial report](../research/2026-09-17-160400-model-task-optimization-execution-report.md),
+with separate source-based review reports for every completed configuration.
+
+Qwen translation has completed six configurations: original caller, bounded
+reasoning, compact prompt, structured source lines, interpretation plus
+translation within one call, and larger reasoning plus a development-derived
+language glossary. The structured line version delivered all 55 generated
+outputs on a wider 24-source cohort, but automated independent review found
+11 confirmed defective source posts and one further unresolved source. This
+purposive cohort does not estimate production prevalence. More reasoning
+increased the eight-source translation run to 392 seconds without passing
+quality. Qwen commentary has completed three configurations and still has
+confirmed semantic defects. No new configuration has qualified.
+
+Classifier refactoring is separate: sparse arrays, dense named flags, compact
+bits with deterministic none values, corrected prompt assembly, and singleton
+post requests. A review error about H7046A8A0689 has been corrected: a claim
+that a model is better based on vibes does not meet the results_analysis
+post-type definition. A code error that dropped appended consistency checks
+is recorded against the affected prompt configurations; its correction is a
+new frozen configuration. Mechanical null/empty collection normalization is
+reported separately from semantic label accuracy and preserves raw results.
+The wider singleton diagnostic is finishing before final task adjudication.
+
+Gemini translation has completed three configurations; Gemini commentary two;
+Hy-MT2-1.8B translation two. Their errors remain visible, and remaining task
+trials are queued while the owner-requested Qwen work is completed. U28
+qualification, U29 routing recommendations/integration and staging acceptance
+remain open. None of these research results activate a new production route.
+
+
+### September 17 — Incumbent 4.1 benchmark required throughout specialist trials
+
+The owner explicitly requested: “u should also be testing against 4.1 as benchmark”. Include incumbent DeepSeek V4.1 Flash beside each classification, translation and commentary comparison, on matching source IDs and with the current task rubric. The benchmark is evidence, not automatically correct gold. Keep structural delivery, semantic errors, unknowns, tokens and latency separate; do not compare different cohorts as equivalent accuracy measurements.
+
+For translation/commentary, reuse the completed direct incumbent random100 run at `.context/u20/random100-incumbent-20260917-133300/` when source text, source language, supplied context and caller hashes match. This has been verified for all 24 current diagnostic sources and every original caller hash; receipt: `.context/model-task-20260917/incumbent4.1-reuse-manifest.json`. Re-review the selected outputs under the current rubric, including minor real errors, rather than importing incompatible older aggregate scores. Retain original outputs and reviews unchanged. Candidate-specific prompt adaptations remain allowed and must be identified.
+
+For classification, the expanded current taxonomy is not covered by the older incumbent control. Authorize one fresh 24-source, two-role, singleton direct incumbent run using the same readable contract as Qwen configuration 6, without its experimental bit-vector formats. Freeze exact prompts, source/context, request alias and observed response identity; preserve raw responses and mechanical-normalization results separately. Use the established direct DeepSeek adapter and credentials, no retries/fallback, the shared experiment lock, maximum three in-flight calls, and the existing $3/task/$30 portfolio ceilings. Pricing must come exclusively from already saved snapshots; a missing matching direct-provider price means unavailable billed cost, with any conservative reservation or proxy explicitly labelled. Do not claim OpenRouter rates are direct DeepSeek bills. This new changed-contract control is an explicit owner-authorized addition to KTD58 reuse, not permission to repeat unchanged old runs or deploy a route.
+
+Official capability check: https://api-docs.deepseek.com/guides/anthropic_api/ confirms the native Anthropic-compatible endpoint, supported system/max_tokens/temperature, ignored thinking token budgets, and model-alias mapping. Preserve that alias limitation in results; do not claim an immutable checkpoint from a floating incumbent alias.
+
+
+Incumbent classifier benchmark outcome: 48/48 requests completed, 24/24 sources passed strict two-role parsing, and no mechanical recovery was required. Exact prompt/source equivalence to Qwen v6 was verified for all 48 requests. Aggregate sequential latency was 51.256 seconds. This is not a semantic pass: at least five reviewed sources expose missed question/tutorial/testimonial labels, a reversed China stance, or competitor-to-target attribution. Full receipt: `docs/research/2026-09-17-201000-direct-deepseek-v41-classifier-diagnostic24-report.md`. No route activation follows from this diagnostic.
+
+
+### September 17 — Retain experiment folders until stage completion
+
+Owner instruction: “just don't rm rf right now, u can store somewhere and we can clear out when this stage is finished”. All agents must stop destructive temporary-folder cleanup during this stage. Use a new uniquely named directory for each prepare/run/test retry; preserve earlier contracts, outputs and scratch directories, with superseded/rejected status recorded separately. Do not request deletion approval merely to reuse a path. Defer cleanup until the stage is finished; this instruction does not authorize blanket deletion then. Existing canonical worktree-retention rules remain in force.
+
+
+### September 17 — Success is incumbent quality parity, not fixed 1%
+
+Owner changed the success criterion to equal or beat 4.1, independently for classification, translation and commentary. R109/R113 and Delivery Exception 30 are the current authority. The new rubric is `.context/model-task-20260917/review-rubric-v2-incumbent-parity.md`; the original rubric and frozen runs retain their hashes. Reassess retained source/output evidence using the same semantic definitions and matched cohorts, with wins/losses/shared errors, rather than repurchasing it or overwriting old decisions. Candidate-specific prompt/configuration improvements remain permitted. Cost and speed remain visible and retain the existing operating caps; lower cost cannot hide worse quality. Current partial baseline reviews do not yet establish a complete qualification reference.
+
+
+### September 17 — Classifier selection settled; remaining experiments narrowed
+
+The owner concluded that prior 0731 performance against 4.1 already establishes the classifier candidate and instructed: “we only need to test other models on translation and commentary.” Cloud 0731 remains selected. The classifier worker was interrupted and told not to send any new alternative-model request; Gemini v2 prepared artifacts remain retained/unspent unless a consumption receipt establishes otherwise. Remaining work is task-specific translation/commentary optimization against incumbent quality parity, whole-system budget accounting, selected-route integration and staging verification. Do not introduce another paid classifier bakeoff as a prerequisite.
+
+
+Parity scoring clarification: uncertainty must not create a false pass or an unnecessary block. Count source-level confirmed failures as a lower bound, and include each additional unknown source once in an upper bound. If a completely reviewed candidate has two errors while incumbent has two confirmed errors plus one unknown, the candidate is no worse even if the unknown incumbent case is ultimately good (2 <= 2). This establishes observed diagnostic parity only; regression/fresh qualification and operating fit remain separate. If the bounds overlap without dominance, parity remains unresolved.
+
+### September 17 — Gemini commentary reasoning-disabled paired control completed
+
+Delivery Exception 33 was executed on the exact retained random100 cohort. All 100 requests matched the v3 prompt, source/context, schema, model, pinned provider, Flex tier and 8192-token ceiling apart from disabling reasoning. All returned valid JSON without transport failure; one source nevertheless contained three unfinished commentary fragments (provider STOP after 83 output tokens), which counts as an incomplete result. Provider receipts total $0.0069008 versus reasoning-enabled v3's $0.0299522, a 76.96% saving; reported reasoning tokens fell from 114,584 to eight, not literal zero. Two independent full reviews and parent reconciliation found 21 confirmed erroneous sources plus four unresolved versus the paired, corrected v3 reference's ten confirmed plus three unresolved. The paired inspection corrected two previously missed v3 errors and retained one additional unresolved source; prior records remain unchanged. The disabled variant adds eleven confirmed-error sources, fixes none of the enabled variant's confirmed-error sources, and does not qualify. This bounded test is complete; it activates no runtime route and authorizes no further model calls. Profile/experiment tests plus classifier compatibility tests passed (51 total). Evidence and exact receipts: `.context/model-task-20260917/gemini-commentary-v4-no-reasoning-r113-random100-20260917-220100/parent-paired-comparison.json`; durable discussion stays in the existing model experiment research report. Direct incumbent billing remains unavailable, so Gemini-versus-4.1 dollar savings must not be described as a comparison of actual bills.
+
+
+### September 17 — Three expanded translation candidates: bounded experiments closed
+
+Delivery Exception 34 has been executed through separate candidate agents, with paid runs serialized and at most three in-flight calls. Qwen235, HY-MT2 30B and Gemma 4 31B each received three evidence-driven configurations using official documentation and snapshot-only prices. Smoke8 and diagnostic24 runs are retained; promising HY v3 and Gemma v1 advanced to the same retained random100 sources as the incumbent. All paid runs are complete.
+
+Final parent-reconciled random100 results are Gemma 11 erroneous sources and HY 14, versus V4.1 nine confirmed plus one additional uncertain. Qwen v3 diagnostic24 has 17 erroneous sources, primarily rate-limit-related coverage failures despite serialization and four-second pacing. Neither wider candidate matches incumbent quality; Qwen's route does not establish parity. No candidate is activated. Three-configuration experiment completion does not mean product qualification, U28 closure or staging completion.
+
+Keep cloud 0731 selected for classification. Leave translation/commentary runtime selection unchanged pending remaining plan work. Preserve all contracts and original reviews; use the final additive parent ledgers instead of initial review totals. There is no new owner review requirement. The next decision is translation/commentary selection under the established budget and quality constraints, followed by selected-route integration and staging verification; this entry authorizes no fourth configuration or additional paid sweep by itself.
+
+Validation: 58 focused harness/profile/classifier compatibility tests passed. Fourteen runs contain 982 frozen requests and $0.0975184795 retained provider-reported charges; missing usage on failures prevents treating that sum as a verified invoice. Reservations remain within $3 per new candidate and $30 portfolio caps. See `docs/research/2026-09-17-160400-model-task-optimization-execution-report.md` and the appended section in `docs/research/2026-09-15-135812-u18-classifier-model-and-architecture-experiment-report.md`; exact paired source IDs are in `docs/research/2026-09-17-224500-expanded-translation-final-reconciliation.json`. Delivery target remains staging.
+
+
+### September 17 — Exception 35 recovery reruns completed
+
+Both owner-requested translation reruns and source reviews are complete. Qwen235 v3 diagnostic24 delivered 52/55 targets after four recoveries; parent review finds ten confirmed erroneous sources plus one uncertain, versus incumbent seven plus one. Gemma v1 random100 returned 186/215 targets after twelve recoveries, of which 181 survived caller validation; parent review finds 25 affected sources (21 coverage, four additional semantic). A symmetric price-relation correction raises this paired incumbent control to ten confirmed plus one uncertain; its original nine-plus-one review remains preserved. Neither candidate qualifies. Error metadata confirms upstream shared-provider pool overload on both current routes. No route activation or deployment occurred; delivery remains staging.
+
+The isolated helpers, all retry receipts, stopped setup receipts, corrected per-field reviews and incumbent amendment are retained. Full rerun response-reported charges are $0.02482317 (Gemma) and $0.0044253475 (Qwen); missing error/timeout usage is not assumed free. Existing worst-case reservations remain under both caps. The owner-authorized reruns are closed, with no further paid calls queued. See `docs/research/2026-09-17-235000-gemma-qwen-recovery-rerun-comparison.json` and the Exception 35 section in the existing model-task execution report. This completes this experiment only, not the overall staging plan or production qualification.
+
+
+### September 18 — Exception 36 direct DeepInfra Gemma test completed
+
+The exact retained random100 Gemma v1 corpus ran through DeepInfra's direct standard endpoint as `google/gemma-4-31B-it-turbo`. All 215 requests returned on their first attempt; no 429, 503, timeout, fallback or retry occurred. The production literal-translation parser rejected two generated fields after complete `stop` responses because the model entered a repetitive `our` loop. The serial run took 1,781.804 seconds and DeepInfra reported 111,835 input tokens, 57,171 output tokens and $0.029156410003 total cost.
+
+Two source-grounded half-corpus reviews plus parent reconciliation cover all 300 locale fields. A symmetric price-relation correction and shared ambiguity correction produce ten confirmed-error source posts plus one uncertain for direct Gemma, versus the paired corrected incumbent's ten confirmed plus the same one uncertain. Confirmed errors and paired differences are tied; the strict R113 conservative interval remains unresolved at [10,11] versus [10,11]. Direct access fixes the observed OpenRouter shared-pool delivery failure on this bounded run but does not remove Gemma's semantic defects. No runtime route, database, staging deployment or production configuration changed. Evidence is under `.context/model-task-20260918/gemma4-translation-v1-random100-direct-deepinfra-2026-09-18-110000/`; the detailed comparison is appended to `docs/research/2026-09-17-160400-model-task-optimization-execution-report.md`.
+
+### September 18 — Exceptions 37–38 direct Gemma commentary test completed
+
+The strict-JSON v1 probe returned HTTP 200 from the exact Gemma model but malformed its final JSON string, so it stopped without a full run and retained its $0.00008855 receipt. Tagged-text v2 preserved the same random100 source/context and semantic prompt, disabled reasoning, used temperature 0.2, raised the ceiling to 4,096, and ran serially through direct DeepInfra. All 100 provider requests returned without retries or transport failures; 99 passed application validation and one malformed its tag boundary. The v2 run took 611.232 seconds, used 63,540 input and 20,622 output tokens, and cost $0.011350240014. Including the failed v1 probe, experiment receipts total $0.011438790014.
+
+Two blind half-corpus reviews, a paired critic and parent reconciliation cover all 300 locale outputs. Gemma has three confirmed semantic-error sources, one coverage-failure source and one additional uncertain source, interval [4,5]. The matching corrected V4.1 control has five semantic-error sources, four coverage-failure sources and the same additional uncertain source, interval [9,10]. One confirmed error is shared, three are Gemma-only, eight are V4.1-only, and the uncertain source is shared. Gemma passes R113's conservative rule because candidate upper bound five is below incumbent lower bound nine. The direct tagged profile therefore qualifies for commentary staging integration; no route was activated and no runtime, database, staging deployment or production setting changed. Evidence is under `.context/model-task-20260918/gemma4-commentary-random100-direct-deepinfra-tagged-v2-2026-09-18-154000/`, controlled by `parent-reconciliation.json`; the detailed execution record is in `docs/research/2026-09-17-160400-model-task-optimization-execution-report.md`.
+
+### September 18 — Exception 39 direct Gemma classifier test completed
+
+All three allowed Gemma classifier configurations completed on the frozen
+diagnostic24 two-role singleton corpus. Each delivered 48/48 valid calls and
+24/24 complete source pairs without transport, parser, fallback, or retry
+failure. V1 used tagged fields with thinking disabled; v2 added independent-axis
+and target-brand checks; v3 used Google's documented Gemma 4 thinking token and
+sampling defaults. Their serial wall times were 166.846, 231.965, and 259.468
+seconds, with response-reported costs of $0.010620480041, $0.011007940047, and
+$0.012397540033. V3 exposed no reasoning content in the provider response.
+
+The semantic gate remains closed. Historical nonblank-owner field matches are
+only a secondary diagnostic because the controls are consumed and partly
+legacy. Parent reconciliation finds 19 confirmed Gemma error sources plus two
+uncertain, versus 18 plus the same two for V4.1; the intervals [19,21] and
+[18,20] do not establish R113 parity. Failures include missed independent axes,
+invalid neutral state when target context is absent, missed untracked-brand
+promotion, and incorrect country stance. V3 fixed the MiniMax testimonial that
+v2 lost but introduced other results/topic omissions. Gemma does not qualify
+for classifier activation; cloud 0731 remains selected. No runtime, database,
+staging deployment, or production setting changed. See
+`docs/research/2026-09-18-180500-gemma4-direct-classifier-diagnostic.md`.
+
+### September 18 — Exception 40 direct DeepInfra 0731 provider-isolation tests
+
+The owner explicitly directed a true direct-DeepInfra test of the already
+selected DeepSeek V4 Flash 0731 checkpoint for all three model tasks:
+classification, translation, and commentary. This experiment removes
+OpenRouter from the request path while preserving each task's best established
+0731 semantic prompt and output shape. It is a provider-isolation test, not a
+new generic-model bakeoff.
+
+Use DeepInfra's OpenAI-compatible endpoint with the exact available 0731 model
+identifier confirmed by official provider documentation. Record both the
+requested and returned model identities. Remove only OpenRouter-specific
+routing fields; do not silently substitute another model, fallback provider,
+or generic prompt. Use the existing direct `DEEPINFRA_API_KEY` credential
+without printing it.
+
+For classification, use the frozen expanded diagnostic24 cohort, both
+singleton classifier roles, and the selected 0731 classifier contract. For
+translation and commentary, use the exact retained random100 source cohort,
+source/context inputs, caller contracts, and current task rubrics used by the
+matched V4.1 and Gemma controls. Keep structural delivery, semantic quality,
+token usage, provider-reported cost, and elapsed time separate. Prices used for
+planning or normalized comparisons must come only from the repository's saved
+pricing snapshots; provider response `estimated_cost` is retained as actual
+run evidence and labelled separately.
+
+Run the three paid task suites serially so provider load in one task cannot
+distort another. Begin each task with one paid probe and reuse that response if
+it passes the exact identity and parser contract. Retry only explicit 429 or
+503 responses, at most three attempts with `Retry-After` or bounded backoff;
+do not retry timeouts, ambiguous responses, parser failures, or semantic
+errors. Do not use fallbacks. Retain sanitized request envelopes, raw
+responses, attempt receipts, usage, cost, wall time, parser results, and exact
+source IDs in new uniquely named experiment directories. The existing $3 per
+task and $30 portfolio ceilings apply.
+
+Review every source against the current task rubric and compare it with the
+matched incumbent evidence. A direct route qualifies only if it equals or
+beats the relevant V4.1 quality interval; cheaper transport cannot hide worse
+quality or missing coverage. Append all three direct-0731 outcomes to the one
+canonical execution report at
+`docs/research/2026-09-17-160400-model-task-optimization-execution-report.md`.
+Detailed per-run evidence may remain separate, but do not create a competing
+top-level results summary. This exception authorizes experiments and report
+updates only: no runtime activation, database mutation, staging deployment, or
+production change.
+
+### September 18 — Exception 40 completed outcome
+
+All three direct-DeepInfra 0731 suites are complete and retained. The exact
+R122 classifier replay received 6/6 provider responses but failed the frozen
+application contract on one 20-post brand-role call, leaving 45/45 content rows
+and 25/45 brand rows; the response collapsed separate China/U.S. stance fields,
+so it cannot be repaired as representation-only normalization. Translation
+received 215/215 responses and finished at 10 confirmed-error sources plus one
+uncertain, tied with the fixed V4.1 [10,11] control and unresolved under the
+conservative rule. Commentary received 96/96 called responses but retained
+four pre-call input caps and two malformed responses; full review found eight
+semantic plus six coverage-error sources, [14,14], versus V4.1's [9,10].
+
+Main-suite provider receipts total $0.02915772; a stopped native-JSON probe adds
+$0.00019284. The direct route qualifies for none of the three tasks. Keep 0731
+through OpenRouter pinned to DeepInfra for classification, V4.1 for
+translation, and direct Gemma 4 31B tagged v2 for commentary as staging
+recommendations. No route was activated and no runtime, database, staging or
+production change occurred. The controlling narrative and artifact paths are
+in `docs/research/2026-09-17-160400-model-task-optimization-execution-report.md`.
+
+### September 18 — Delivery Exception 41: owner-selected direct DeepInfra stack
+
+The owner made the execution decision to use direct DeepInfra for all three
+model tasks: `deepseek-ai/DeepSeek-V4-Flash-0731` for the two-role classifier,
+and `google/gemma-4-31B-it-turbo` for literal translation and commentary. Use
+`https://api.deepinfra.com/v1/openai` with `DEEPINFRA_API_KEY`; OpenRouter is
+not in any selected runtime path, and no selected route may silently fall back
+to another provider, model, credential, or gateway.
+
+This is an explicit owner override of the prior quality-selection gates. The
+owner understands and accepts that the direct 0731 classifier failed one
+20-row brand-role schema contract, leaving 25/45 brand rows; direct Gemma
+translation remained unresolved at `[10,11]` against the corrected incumbent
+`[10,11]`; and direct Gemma commentary passed its matched comparison at
+`[4,5]` against `[9,10]`. Preserve these outcomes as failures, uncertainty, and
+success respectively. Do not relabel the first two as passed or rewrite their
+historical evidence. This exception authorizes implementation and bounded
+staging activation despite those results; the owner assumes responsibility for
+that selection.
+
+Lock the tested task shapes: classifier uses the current two independent roles,
+20-source batches, temperature `1.0`, top-p `1.0`, seed `42`, reasoning off,
+plain JSON instructions, no native JSON mode, and deterministic
+representation-only normalization. Literal translation uses the current
+per-source raw-text paragraph protocol without reasoning or native JSON mode.
+Commentary uses the current per-source tagged-text protocol, temperature `0.2`,
+reasoning off, and a 4,096-token output ceiling. Runtime call limits,
+deadlines, durable state, atomic publication, source/context fingerprints,
+telemetry, and last-good behavior remain mandatory.
+
+Supersede the route and model choices in R107, U20, U21, U23, U24 and prior
+recommendations only to the extent they conflict with this locked direct stack.
+Do not reopen model selection as a prerequisite. Complete fake-transport
+request-shape tests, the real post-fetch/worker call-chain regressions, exact
+model/provider telemetry assertions, and a bounded live staging smoke before
+activation. Delivery remains staging; this exception does not authorize a
+production secret, production configuration change, or production promotion.
+
+### September 18 — U18A R94A normalized activation decision
+
+The frozen 220-case, candidate-blind U18A audit was executed against the
+locked direct-DeepInfra 0731 two-role runtime after adding only bounded,
+representation-only normalization. The first run is retained as mechanically
+invalid because all rows failed before semantic scoring. The corrected run
+made 22 successful calls with no transport errors, used 107,038 input and
+21,985 output tokens, took 241.871 seconds, and cost $0.01037958 at the locked
+standard price ($0.00758022 response-reported after cache discounts).
+
+Under R94A, enable only the independently passing Audience Topics
+`local_inference`, `model_distillation`, and `api_developer_surface`. Keep
+`cost_performance`, `evals_benchmarks`, `openness_license`, `agents_tools`,
+`news_reporting`, `investigate_claim`, Geopolitical, and Untracked Brand
+Promotions shadow-only. The classifier may retain their versioned shadow data;
+readers, filters, URLs, APIs, and charts must treat them as unavailable until a
+new frozen activation revision passes. The evaluator SHA-256 is
+`cf1ec56b963fe687eb0abb6a5d5e23d88ebf6475adc48b5b0818617cb4ac9678`
+and the candidate-output SHA-256 is
+`9d47e93d019685be179bfaf8271b19b5eeee70b7b072d7b69298200b98f05cbb`.
+This per-family result implements the existing R94A policy and does not reopen
+the owner's direct-provider model selection.
+
+### September 18 — Locked runtime implementation and local release gate
+
+The owner-selected direct stack is now implemented as the sole configured
+staging runtime: direct DeepInfra `deepseek-ai/DeepSeek-V4-Flash-0731` for the
+two-role classifier and direct DeepInfra `google/gemma-4-31B-it-turbo` for
+literal translation and commentary. All three routes use
+`https://api.deepinfra.com/v1/openai`, require `DEEPINFRA_API_KEY`, verify the
+returned model identity, and fail closed without OpenRouter, credential, model,
+or provider fallback. The classifier keeps the locked 20-source two-role
+shape; translation keeps raw text; commentary keeps tagged text.
+
+Migration 0043 adds the v4 taxonomy, Audience Topics, Geopolitical state,
+Untracked Brand Promotions, and promoted-subject candidate/evidence storage.
+The persisted activation manifest fails closed against the frozen evaluator
+and candidate hashes. Only `local_inference`, `model_distillation`, and
+`api_developer_surface` are exposed by current readers and UI; the remaining
+U18A concepts persist as shadow data and cannot enter filters, URLs, APIs,
+charts, or default feed eligibility. Historical v1-v3 rows and experiment
+evaluators retain their original vocabularies and provenance.
+
+Before staging delivery, the conservative Stage 1 test scope passed **3,140
+tests plus 114 subtests**, with 25 explicitly documented retired/live nodes
+deselected, 771 PostgreSQL-required tests executed, zero required skips, and
+zero errors. The focused browser/UI run passed 95 tests plus 106 subtests.
+`makemigrations --check --dry-run`, Django checks, JavaScript suites, the
+generated UI-assurance obligations, and `git diff --check` also passed. The
+first broad local attempt used production HTTPS redirect settings and produced
+only local HTTP 301/TLS failures; rerunning with the repository's correct
+`DEBUG=1` local-test setting passed the complete scoped gate. Staging deploy,
+schema-v4 refresh/seed, bounded live provider smoke, and EN/ZH-CN/JA browser
+verification remain the next delivery actions. Production remains out of
+scope.

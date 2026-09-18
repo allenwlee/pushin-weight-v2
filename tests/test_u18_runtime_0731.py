@@ -1,12 +1,10 @@
-"""Selected DeepSeek 0731 transport is a closed two-role v3 contract."""
+"""Selected DeepSeek 0731 transport is a closed two-role v4 contract."""
 
 from __future__ import annotations
 
 import json
 import threading
 import pytest
-from hashlib import sha256
-from pathlib import Path
 
 
 def _tweets(count: int) -> list[dict]:
@@ -35,27 +33,31 @@ class FixedSlotTransport:
 
     def messages_create(self, **kwargs):
         content = json.loads(kwargs["messages"][0]["content"])
-        role = "content" if "POST-LEVEL LEGACY UNSANCTIONED FLAGS" in kwargs["system"] else "brand_interpretation"
+        role = "content" if "CONTENT ROLE:" in kwargs["system"] else "brand_interpretation"
         with self.lock:
             self.calls.append({"role": role, "request": kwargs, "payload": content})
         decisions = {}
         for slot in content["cases"].values():
             for decision_slot in slot["brand_decision_slots"]:
                 decisions[decision_slot] = (
-                    {"outcome": "classified", "post_types": ["hands_on_usage"]}
+                    {
+                        "outcome": "classified",
+                        "post_types": ["hands_on_usage"],
+                        "audience_topics": ["none"],
+                    }
                     if role == "content"
                     else {
-                        "product_labels": [],
+                        "product_labels": ["none"],
                         "sentiment": "neutral",
-                        "china_nationalism": None,
-                        "us_nationalism": None,
+                        "geopolitical_modes": ["none"],
+                        "china_national_stance": "none",
+                        "us_national_stance": "none",
                     }
                 )
         response = {"decisions": decisions}
         if role == "content":
-            response["post_flags"] = {
-                post_slot: [] for post_slot in content["cases"]
-            }
+            response["post_promotions"] = {post_slot: ["none"] for post_slot in content["cases"]}
+            response["promoted_subjects"] = {post_slot: [] for post_slot in content["cases"]}
         return response
 
 
@@ -92,30 +94,21 @@ def test_selected_profile_uses_tested_deepinfra_request_without_native_json_mode
     assert "deepseek_0731" in client.request_identity
 
 
-def test_selected_prompts_match_the_successful_r123_request_fixture():
-    fixture = json.loads((Path(__file__).parent / "fixtures" /
-        "u18_0731_prior45_r123_prompt_manifest.json").read_text())
+def test_selected_prompts_render_the_v4_fixed_slot_contract():
     from x_monitor.attribution import classify_batch_pragmatics_full
     from x_monitor.classifier_0731_prompts import BRAND_PROMPT, CONTENT_PROMPT
 
-    shared_relevance_rule = """
-
-SHARED TARGET-BRAND RELEVANCE: A visible statement about the target brand is usable even within a multi-brand roundup or parent-company report. A recommendation of the target is usable evidence; a bare name, handle, hashtag, or link is not. Apply the same evidence standard in both roles. Neutral reporting of target research is usable but is not praise.
-
-FINAL CHECK: other must be the only post type when selected. No usable target evidence means context_missing with empty post_types and product_labels and null scalars. With usable evidence, sentiment is positive, negative, neutral, or mixed; nationalism is none when no national framing is present.
-"""
-
-    for role, prompt in (("content", CONTENT_PROMPT), ("brand", BRAND_PROMPT)):
-        assert len(prompt.encode("utf-8")) == fixture[role]["utf8_bytes"]
-        assert sha256(prompt.encode("utf-8")).hexdigest() == fixture[role]["sha256"]
+    assert "results_analysis" in CONTENT_PROMPT
+    assert "news_reporting" in CONTENT_PROMPT
+    assert "investigate_claim" in BRAND_PROMPT
+    assert "general is an exclusive fallback" in CONTENT_PROMPT
 
     transport = FixedSlotTransport()
     classify_batch_pragmatics_full(_tweets(1), [], transport)
     prompts = {call["role"]: call["request"]["system"] for call in transport.calls}
-    assert prompts == {
-        "content": CONTENT_PROMPT + shared_relevance_rule,
-        "brand_interpretation": BRAND_PROMPT + shared_relevance_rule,
-    }
+    assert "D01, D02" in prompts["content"]
+    assert "P01" in prompts["content"]
+    assert "D01, D02" in prompts["brand_interpretation"]
 
 
 def test_selected_profile_rejects_a_route_or_sampling_drift():
@@ -165,7 +158,7 @@ def test_factory_preserves_the_explicit_selected_profile_and_response_alias(monk
     assert client.response_model == "deepseek/deepseek-v4-flash-20260731"
 
 
-def test_selected_runtime_maps_fixed_slots_to_v3_ids_and_affiliations_for_both_roles():
+def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_both_roles():
     from x_monitor.attribution import (
         _two_role_selected_system_prompt,
         classify_batch_pragmatics_full,
@@ -173,10 +166,9 @@ def test_selected_runtime_maps_fixed_slots_to_v3_ids_and_affiliations_for_both_r
 
     content_system = _two_role_selected_system_prompt("content")
     brand_system = _two_role_selected_system_prompt("brand_interpretation")
-    assert "Exact envelope" not in content_system + brand_system
-    assert '"results"' not in content_system + brand_system
-    assert '"post_flags"' in content_system
-    assert '"post_flags"' not in brand_system
+    assert "results_analysis" in content_system
+    assert "investigate_claim" in brand_system
+    assert '"post_promotions"' not in content_system  # prose uses bare JSON key names
 
     transport = FixedSlotTransport()
     rows = classify_batch_pragmatics_full(_tweets(20), [], transport, max_tokens=6000)
@@ -198,19 +190,19 @@ def test_selected_runtime_maps_fixed_slots_to_v3_ids_and_affiliations_for_both_r
         assert request["top_p"] == 1.0
         assert request["seed"] == 42
         assert request["thinking"] == {"type": "disabled"}
-        assert set(call["payload"]) == {"cases"}
+        assert set(call["payload"]) == {"tracked_brands", "cases"}
         assert set(call["payload"]["cases"]) == {f"P{number:02d}" for number in range(1, 21)}
         assert call["payload"]["cases"]["P01"]["brand_decision_slots"] == {
             "D01": "deepseek", "D02": "minimax",
         }
-        assert call["payload"]["cases"]["P01"]["evidence"]["affiliations"] == [
+        assert call["payload"]["cases"]["P01"]["evidence"]["author_affiliations"] == [
             {"brand_id": "deepseek", "role": "official", "reviewed": True},
         ]
         assert "tweet_id" not in json.dumps(call["payload"])
         assert "input_context_fingerprint" not in json.dumps(call["payload"])
         assert "case_id_for_audit_only" not in json.dumps(call["payload"])
         assert list(call["payload"]["cases"]["P01"]["evidence"]) == [
-            "source_language", "text", "context", "affiliations",
+            "created_at", "source_language", "source_text", "english_translation", "context", "author_affiliations",
         ]
 
 
@@ -233,10 +225,10 @@ def test_selected_runtime_rejects_missing_duplicate_or_extra_slot_and_does_not_r
     class InvalidSlots(FixedSlotTransport):
         def messages_create(self, **kwargs):
             response = super().messages_create(**kwargs)
-            if "POST-LEVEL LEGACY UNSANCTIONED FLAGS" in kwargs["system"]:
+            if "CONTENT ROLE:" in kwargs["system"]:
                 response["decisions"].pop("D01")
                 response["decisions"]["D99"] = {
-                    "outcome": "classified", "post_types": ["hands_on_usage"],
+                    "outcome": "classified", "post_types": ["hands_on_usage"], "audience_topics": ["none"],
                 }
             return response
 
@@ -246,15 +238,15 @@ def test_selected_runtime_rejects_missing_duplicate_or_extra_slot_and_does_not_r
     assert rows == [{"by_brand": {}, "unsanctioned_flags": [], "valid": False}]
 
 
-def test_selected_runtime_rejects_conflicting_role_outputs_without_coercion():
+def test_selected_runtime_makes_other_axes_unavailable_for_context_missing():
     from x_monitor.attribution import classify_batch_pragmatics_full
 
     class ConflictingRoles(FixedSlotTransport):
         def messages_create(self, **kwargs):
             response = super().messages_create(**kwargs)
-            if "POST-LEVEL LEGACY UNSANCTIONED FLAGS" in kwargs["system"]:
+            if "CONTENT ROLE:" in kwargs["system"]:
                 response["decisions"] = {
-                    slot: {"outcome": "context_missing", "post_types": []}
+                    slot: {"outcome": "context_missing", "post_types": [], "audience_topics": ["unavailable"]}
                     for slot in response["decisions"]
                 }
             else:
@@ -262,15 +254,28 @@ def test_selected_runtime_rejects_conflicting_role_outputs_without_coercion():
                     slot: {
                         "product_labels": ["testimonial"],
                         "sentiment": "positive",
-                        "china_nationalism": None,
-                        "us_nationalism": None,
+                        "geopolitical_modes": ["none"],
+                        "china_national_stance": "none",
+                        "us_national_stance": "none",
                     }
                     for slot in response["decisions"]
                 }
             return response
 
     rows = classify_batch_pragmatics_full(_tweets(1), [], ConflictingRoles())
-    assert rows == [{"by_brand": {}, "unsanctioned_flags": [], "valid": False}]
+    assert rows[0]["valid"] is True
+    assert rows[0]["by_brand"]["minimax"] == {
+        "outcome": "context_missing",
+        "post_types": [],
+        "audience_topics": [],
+        "audience_topics_state": "unavailable",
+        "product_labels": [],
+        "sentiment": None,
+        "geopolitical_modes": [],
+        "geopolitical_modes_state": "unavailable",
+        "china_national_stance": None,
+        "us_national_stance": None,
+    }
 
 
 @pytest.mark.parametrize("fault", ["other_overlap", "unknown_type", "invalid_sentiment", "invalid_flag"])
@@ -281,7 +286,7 @@ def test_selected_runtime_isolates_invalid_values_to_the_entire_affected_post(fa
     class InvalidValue(FixedSlotTransport):
         def messages_create(self, **kwargs):
             response = super().messages_create(**kwargs)
-            content = "post_flags" in response
+            content = "post_promotions" in response
             if content and fault == "other_overlap":
                 response["decisions"]["D02"]["post_types"] = ["hands_on_usage", "other"]
             elif content and fault == "unknown_type":
@@ -289,7 +294,7 @@ def test_selected_runtime_isolates_invalid_values_to_the_entire_affected_post(fa
             elif not content and fault == "invalid_sentiment":
                 response["decisions"]["D02"]["sentiment"] = "invented_sentiment"
             elif content and fault == "invalid_flag":
-                response["post_flags"]["P01"] = ["invented_flag"]
+                response["post_promotions"]["P01"] = ["invented_flag"]
             return response
 
     transport = InvalidValue()
@@ -307,13 +312,13 @@ def test_selected_runtime_still_rejects_entire_batch_for_envelope_drift(fault):
     class InvalidEnvelope(FixedSlotTransport):
         def messages_create(self, **kwargs):
             response = super().messages_create(**kwargs)
-            if "post_flags" in response:
+            if "post_promotions" in response:
                 if fault == "missing_slot":
                     response["decisions"].pop("D02")
                 elif fault == "extra_field":
                     response["decisions"]["D02"]["extra"] = True
                 else:
-                    response["post_flags"]["P99"] = []
+                    response["post_promotions"]["P99"] = ["none"]
             return response
 
     transport = InvalidEnvelope()

@@ -46,21 +46,29 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from core.classification_contract import (
     CONTRACT_VERSION as _STAGE1_CONTRACT_VERSION,
+    AUDIENCE_TOPIC_KEYS as _V4_AUDIENCE_TOPIC_KEYS,
+    GEOPOLITICAL_MODE_KEYS as _V4_GEOPOLITICAL_MODE_KEYS,
     NATIONALISM_KEYS as _STAGE1_NATIONALISM_KEYS,
+    NATIONAL_STANCE_KEYS as _V4_NATIONAL_STANCE_KEYS,
 )
 from core.classification_contract import (
-    POST_TYPE_KEYS as _STAGE1_POST_TYPE_KEYS,
+    POST_TYPE_KEYS as _V4_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS as _STAGE1_POST_TYPE_KEYS,
 )
 from core.classification_contract import (
-    PRODUCT_LABEL_KEYS as _STAGE1_PRODUCT_LABEL_KEYS,
+    PRODUCT_LABEL_KEYS as _V4_PRODUCT_LABEL_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS as _STAGE1_PRODUCT_LABEL_KEYS,
 )
 from core.classification_contract import (
     PROMPT_VERSION as _STAGE1_PROMPT_VERSION,
+    STAGE1_TAXONOMY_V3_VERSION as _STAGE1_TAXONOMY_V3_VERSION,
     SENTIMENT_KEYS as _STAGE1_SENTIMENT_KEYS,
     TAXONOMY_VERSION as _STAGE1_TAXONOMY_VERSION,
+    UNTRACKED_BRAND_PROMOTION_KEYS as _UNTRACKED_BRAND_PROMOTION_KEYS,
 )
 from core.classification_contract import (
     parse_stage1_classifications,
+    parse_stage1_v4_classifications,
 )
 
 from ._json_parser import parse_llm_response
@@ -1145,8 +1153,17 @@ def _call_signal_with_retry(
             # transport failures (including timeout/429/5xx) may repeat the
             # identical request; permanent provider and malformed-response
             # failures stay pending for a later normal attempt.
+            from .deepinfra import DeepInfraRetryableError
             from .openrouter import OpenRouterRetryableError
-            if not isinstance(e, (TimeoutError, OpenRouterRetryableError, AnthropicCompatibleRetryableError)):
+            if not isinstance(
+                e,
+                (
+                    TimeoutError,
+                    DeepInfraRetryableError,
+                    OpenRouterRetryableError,
+                    AnthropicCompatibleRetryableError,
+                ),
+            ):
                 raise
             if attempt < _MAX_RETRIES - 1:
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -1520,6 +1537,10 @@ def _stage1_payload(tweets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
             "text": tweet.get("text") or "",
+            "created_at": str(tweet.get("created_at") or ""),
+            "english_translation": str(
+                tweet.get("english_translation") or tweet.get("translation_en") or ""
+            ),
             "brand_ids": list(tweet.get("brand_ids") or []),
             "context": list(tweet.get("context") or []),
         }
@@ -3533,15 +3554,96 @@ def _canonical_reviewed_affiliations(value: Any) -> list[dict[str, str | bool]]:
     ]
 
 
-def _two_role_fingerprint(tweet: dict[str, Any]) -> str:
-    """Stable identity for the source, attributed brands, and affiliation facts."""
+def _tracked_brand_catalog(
+    brand_registry: list[Any] | None, tweets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the compact deterministic catalog supplied to both roles.
+
+    The current caller has only the normalized BrandRow data.  We preserve any
+    richer catalog already attached to a packet, then fill its visible aliases
+    from the authoritative registry.  This is catalog context, never a source
+    of semantic labels.
+    """
+    rows: dict[str, dict[str, Any]] = {}
+    for brand in brand_registry or []:
+        brand_id = getattr(brand, "brand_id", None)
+        if not isinstance(brand_id, str) or not brand_id:
+            continue
+        display_name = getattr(brand, "display_name", "")
+        aliases = [brand_id]
+        if isinstance(display_name, str) and display_name.strip():
+            aliases.append(display_name.strip())
+        rows[brand_id] = {
+            "brand_id": brand_id,
+            "aliases": sorted(set(aliases), key=str.casefold),
+            "handles": [], "domains": [], "products": [],
+            "keywords": [], "hashtags": [], "accounts": [],
+        }
+    for tweet in tweets:
+        for supplied in tweet.get("tracked_brand_catalog") or []:
+            if not isinstance(supplied, dict) or not isinstance(supplied.get("brand_id"), str):
+                continue
+            brand_id = supplied["brand_id"].strip()
+            if not brand_id:
+                continue
+            def strings(key: str) -> list[str]:
+                return sorted({value.strip() for value in supplied.get(key, []) if isinstance(value, str) and value.strip()}, key=str.casefold)
+            accounts = sorted(
+                {
+                    (
+                        value["handle"].strip().removeprefix("@").casefold(),
+                        value["role"].strip(),
+                    )
+                    for value in supplied.get("accounts", [])
+                    if isinstance(value, dict)
+                    and isinstance(value.get("handle"), str)
+                    and value["handle"].strip()
+                    and isinstance(value.get("role"), str)
+                    and value["role"].strip()
+                },
+                key=lambda value: (value[0], value[1]),
+            )
+            rows[brand_id] = {
+                "brand_id": brand_id,
+                "aliases": strings("aliases") or [brand_id],
+                "handles": strings("handles"),
+                "domains": strings("domains"),
+                "products": strings("products"),
+                "keywords": strings("keywords"),
+                "hashtags": strings("hashtags"),
+                "accounts": [
+                    {"handle": handle, "role": role}
+                    for handle, role in accounts
+                ],
+            }
+        for brand_id in tweet.get("brand_ids") or []:
+            if isinstance(brand_id, str) and brand_id and brand_id not in rows:
+                rows[brand_id] = {
+                    "brand_id": brand_id, "aliases": [brand_id],
+                    "handles": [], "domains": [], "products": [],
+                    "keywords": [], "hashtags": [], "accounts": [],
+                }
+    brands = [rows[brand_id] for brand_id in sorted(rows, key=str.casefold)]
+    revision = hashlib.sha256(
+        json.dumps(brands, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {"revision": revision, "brands": brands}
+
+
+def _two_role_fingerprint(
+    tweet: dict[str, Any], *, tracked_catalog: dict[str, Any] | None = None,
+) -> str:
+    """Stable identity for source, attributed brands, affiliations, and catalog."""
     envelope = {
         "tweet_id": str(tweet.get("tweet_id") or tweet.get("id") or ""),
         "text": tweet.get("text") or "",
         "context": tweet.get("context") or [],
+        "created_at": str(tweet.get("created_at") or ""),
+        "english_translation": str(tweet.get("english_translation") or ""),
         "brand_ids": sorted(str(brand_id) for brand_id in tweet.get("brand_ids") or []),
         "source_language": str(tweet.get("source_language") or ""),
         "reviewed_affiliations": _canonical_reviewed_affiliations(tweet.get("affiliations")),
+        "tracked_brand_catalog_revision": (tracked_catalog or {}).get("revision", ""),
     }
     return hashlib.sha256(
         json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -3564,6 +3666,7 @@ def _two_role_revisions(request_profile: str | None = None) -> tuple[str, str, s
 
 def _two_role_payload(
     batch: list[dict[str, Any]], role: str, *, request_profile: str | None = None,
+    tracked_catalog: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     content_revision, brand_revision, _ = _two_role_revisions(request_profile)
     revision = content_revision if role == "content" else brand_revision
@@ -3575,33 +3678,39 @@ def _two_role_payload(
             "brand_ids": list(tweet.get("brand_ids") or []),
             "affiliations": _canonical_reviewed_affiliations(tweet.get("affiliations")),
             "source_language": str(tweet.get("source_language") or ""),
-            "input_context_fingerprint": _two_role_fingerprint(tweet),
+            "created_at": str(tweet.get("created_at") or ""),
+            "english_translation": str(tweet.get("english_translation") or ""),
+            "input_context_fingerprint": _two_role_fingerprint(
+                tweet, tracked_catalog=tracked_catalog,
+            ),
             "role_revision": revision,
         }
         for tweet in batch
     ]
 
 
-def _two_role_selected_system_prompt(role: str) -> str:
-    """Return the frozen successful r123 prompt for the selected slot route."""
-    from .classifier_0731_prompts import (
-        BRAND_PROMPT,
-        CONTENT_PROMPT,
-        SHARED_RELEVANCE_RULE,
-    )
+def _two_role_selected_system_prompt(
+    role: str, *, decision_slots: dict[str, tuple[str, str]] | None = None,
+    post_slots: dict[str, str] | None = None,
+) -> str:
+    """Render the selected v4 prompt with deterministic fixed slot names."""
+    from .classifier_0731_prompts import selected_system_prompt
 
-    if role == "content":
-        return CONTENT_PROMPT + SHARED_RELEVANCE_RULE
-    if role == "brand_interpretation":
-        return BRAND_PROMPT + SHARED_RELEVANCE_RULE
-    raise ValueError("unknown two-role classifier role")
+    return selected_system_prompt(
+        role,
+        decision_slots=list(decision_slots or {"D01": ("", "")}),
+        post_slots=list(post_slots or {"P01": ""}),
+    )
 
 
 def _two_role_fixed_slot_payload(
     batch: list[dict[str, Any]], role: str, *, request_profile: str | None = None,
+    tracked_catalog: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]], dict[str, str], dict[str, Any]] | None:
     """Make the selected model's positional transport without exposing IDs."""
-    payload = _two_role_payload(batch, role, request_profile=request_profile)
+    payload = _two_role_payload(
+        batch, role, request_profile=request_profile, tracked_catalog=tracked_catalog,
+    )
     if not payload or len(payload) > _CLASSIFY_BASE_BATCH_SIZE:
         return None
     cases: dict[str, Any] = {}
@@ -3625,16 +3734,116 @@ def _two_role_fixed_slot_payload(
         cases[post_slot] = {
             "brand_decision_slots": decisions,
             "evidence": {
+                "created_at": item.get("created_at") or "",
                 "source_language": item["source_language"],
-                "text": item["text"],
+                "source_text": item["text"],
+                "english_translation": item.get("english_translation") or "",
                 "context": item["context"],
-                "affiliations": item["affiliations"],
+                "author_affiliations": item["affiliations"],
             },
         }
         post_slots[post_slot] = tweet_id
     if len(post_slots) != len(payload):
         return None
-    return payload, decision_slots, post_slots, {"cases": cases}
+    return payload, decision_slots, post_slots, {
+        "tracked_brands": tracked_catalog or {"revision": "", "brands": []},
+        "cases": cases,
+    }
+
+
+def _unique_classifier_enum_array(value: Any, allowed: tuple[str, ...]) -> list[str] | None:
+    """Validate one model-supplied enum array without semantic normalization."""
+    if not isinstance(value, list):
+        return None
+    values: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or item not in allowed or item in values:
+            return None
+        values.append(item)
+    return values
+
+
+def _promotion_evidence_is_visible(source: dict[str, Any], evidence: str) -> bool:
+    """Require promotion evidence to quote supplied source/context verbatim.
+
+    The selected classifier cannot fetch links, media, or parent posts.  Its
+    subject evidence therefore must be a case-insensitive substring of one of
+    the visible text fields or the serialized context packet supplied to it.
+    """
+    needle = evidence.casefold()
+    visible: list[str] = []
+    for key in ("text", "english_translation"):
+        value = source.get(key)
+        if isinstance(value, str):
+            visible.append(value)
+    try:
+        visible.append(
+            json.dumps(
+                source.get("context") or [],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+    return any(needle in value.casefold() for value in visible)
+
+
+def _normalize_0731_fixed_slot_response(
+    response: Any,
+    contract: tuple[
+        list[dict[str, Any]],
+        dict[str, tuple[str, str]],
+        dict[str, str],
+        dict[str, Any],
+    ],
+    role: str,
+) -> Any:
+    """Normalize only observed, representation-only 0731 deviations.
+
+    The selected checkpoint sometimes preserves positional order while
+    returning the fixed decision map as a list.  It also emits a singleton
+    enum as a scalar and occasionally copies the sole post type into
+    ``outcome``.  These changes do not infer a label or repair omitted data;
+    they only restore the prompt's deterministic wire representation before
+    the strict parser validates every field.
+    """
+    if not isinstance(response, dict):
+        return response
+    normalized = dict(response)
+    _, decision_slots, post_slots, _ = contract
+    decisions = normalized.get("decisions")
+    if isinstance(decisions, list) and len(decisions) == len(decision_slots):
+        normalized["decisions"] = dict(zip(decision_slots, decisions, strict=True))
+    decisions = normalized.get("decisions")
+    if role == "content" and isinstance(decisions, dict):
+        normalized_decisions: dict[str, Any] = {}
+        for slot, value in decisions.items():
+            if not isinstance(value, dict):
+                normalized_decisions[slot] = value
+                continue
+            item = dict(value)
+            outcome = item.get("outcome")
+            post_types = item.get("post_types")
+            if (
+                outcome in _V4_POST_TYPE_KEYS
+                and isinstance(post_types, list)
+                and outcome in post_types
+            ):
+                item["outcome"] = "classified"
+            normalized_decisions[slot] = item
+        normalized["decisions"] = normalized_decisions
+        promotions = normalized.get("post_promotions")
+        if isinstance(promotions, dict) and set(promotions) == set(post_slots):
+            normalized["post_promotions"] = {
+                slot: [value]
+                if isinstance(value, str)
+                and value in {*_UNTRACKED_BRAND_PROMOTION_KEYS, "none"}
+                else value
+                for slot, value in promotions.items()
+            }
+    return normalized
 
 
 def _two_role_parse_fixed_slots(
@@ -3642,60 +3851,149 @@ def _two_role_parse_fixed_slots(
     contract: tuple[list[dict[str, Any]], dict[str, tuple[str, str]], dict[str, str], dict[str, Any]],
     role: str, *, request_profile: str | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Reject all positional-shape drift before rebuilding the v3 envelope."""
+    """Fail closed on the selected v4 fixed-slot response shape and values."""
+    del request_profile
+    response = _normalize_0731_fixed_slot_response(response, contract, role)
     payload, decision_slots, post_slots, _ = contract
-    expected_root = {"decisions", "post_flags"} if role == "content" else {"decisions"}
+    expected_root = (
+        {"decisions", "post_promotions", "promoted_subjects"}
+        if role == "content" else {"decisions"}
+    )
     if (
         role not in {"content", "brand_interpretation"}
         or not isinstance(response, dict)
         or set(response) != expected_root
         or not isinstance(response.get("decisions"), dict)
-        or set(response["decisions"]) != set(decision_slots)
+        or list(response["decisions"]) != list(decision_slots)
     ):
         return {}
     if role == "content" and (
-        not isinstance(response.get("post_flags"), dict)
-        or set(response["post_flags"]) != set(post_slots)
+        not isinstance(response.get("post_promotions"), dict)
+        or not isinstance(response.get("promoted_subjects"), dict)
+        or list(response["post_promotions"]) != list(post_slots)
+        or list(response["promoted_subjects"]) != list(post_slots)
     ):
         return {}
-    classification_fields = (
-        {"outcome", "post_types"}
-        if role == "content"
-        else {"product_labels", "sentiment", "china_nationalism", "us_nationalism"}
-    )
-    if any(
-        not isinstance(value, dict) or set(value) != classification_fields
-        for value in response["decisions"].values()
-    ):
+    content_fields = {"outcome", "post_types", "audience_topics"}
+    brand_fields = {
+        "product_labels", "sentiment", "geopolitical_modes",
+        "china_national_stance", "us_national_stance",
+    }
+    fields = content_fields if role == "content" else brand_fields
+    if any(not isinstance(value, dict) or set(value) != fields for value in response["decisions"].values()):
         return {}
+
     source_by_id = {item["tweet_id"]: item for item in payload}
-    results: list[dict[str, Any]] = []
+    parsed: dict[str, dict[str, Any]] = {}
     for post_slot, tweet_id in post_slots.items():
         source = source_by_id.get(tweet_id)
         if source is None:
             return {}
-        classifications = []
-        for decision_slot, (mapped_tweet_id, brand_id) in decision_slots.items():
-            if mapped_tweet_id == tweet_id:
-                classifications.append({"brand_id": brand_id, **response["decisions"][decision_slot]})
-        item: dict[str, Any] = {
-            "tweet_id": tweet_id,
-            "input_context_fingerprint": source["input_context_fingerprint"],
-            "role_revision": source["role_revision"],
-            "classifications": classifications,
-        }
+        values: dict[str, dict[str, Any]] = {}
+        post_invalid = False
+        for slot, (mapped_tweet_id, brand_id) in decision_slots.items():
+            if mapped_tweet_id != tweet_id:
+                continue
+            value = response["decisions"][slot]
+            if role == "content":
+                outcome = value.get("outcome")
+                post_types = value.get("post_types")
+                topics = value.get("audience_topics")
+                valid_topics = _unique_classifier_enum_array(
+                    topics, (*_V4_AUDIENCE_TOPIC_KEYS, "none", "unavailable"),
+                )
+                if (
+                    outcome not in {"classified", "context_missing"}
+                    or not isinstance(post_types, list)
+                    or len(set(post_types)) != len(post_types)
+                    or any(not isinstance(key, str) or key not in _V4_POST_TYPE_KEYS for key in post_types)
+                    or not valid_topics
+                    or (set(valid_topics) & {"none", "unavailable"} and len(valid_topics) != 1)
+                    or (outcome == "classified" and (not post_types or ("other" in post_types and post_types != ["other"])))
+                    or (outcome == "context_missing" and (post_types or valid_topics != ["unavailable"]))
+                ):
+                    post_invalid = True
+                    break
+            else:
+                labels = _unique_classifier_enum_array(
+                    value.get("product_labels"), (*_V4_PRODUCT_LABEL_KEYS, "none"),
+                )
+                modes = _unique_classifier_enum_array(
+                    value.get("geopolitical_modes"), (*_V4_GEOPOLITICAL_MODE_KEYS, "none", "unavailable"),
+                )
+                sentiment = value.get("sentiment")
+                china = value.get("china_national_stance")
+                us = value.get("us_national_stance")
+                if (
+                    not labels or not modes
+                    or ("none" in labels and labels != ["none"])
+                    or (set(modes) & {"none", "unavailable"} and len(modes) != 1)
+                    or sentiment not in {*_STAGE1_SENTIMENT_KEYS, "unknown"}
+                    or china not in {*_V4_NATIONAL_STANCE_KEYS, "unknown"}
+                    or us not in {*_V4_NATIONAL_STANCE_KEYS, "unknown"}
+                    or (modes == ["unavailable"] and (china != "unknown" or us != "unknown"))
+                    or (modes != ["unavailable"] and "nationalism" not in modes and (china != "none" or us != "none"))
+                ):
+                    post_invalid = True
+                    break
+            values[brand_id] = value
+        if post_invalid:
+            continue
+        expected_brands = [
+            brand_id for _slot, (mapped_tweet_id, brand_id) in decision_slots.items()
+            if mapped_tweet_id == tweet_id
+        ]
+        if list(values) != expected_brands:
+            continue
         if role == "content":
-            item["unsanctioned_flags"] = response["post_flags"][post_slot]
-        results.append(item)
-    # The full slot/key envelope has been checked above. Validate values at
-    # post granularity so one invalid brand answer cannot discard its twenty-
-    # post batch. All brands within an affected post still fail together.
-    parsed: dict[str, dict[str, Any]] = {}
-    for item in results:
-        parsed.update(_two_role_parse(
-            {"results": [item]}, [source_by_id[item["tweet_id"]]], role,
-            request_profile=request_profile,
-        ))
+            promotions = _unique_classifier_enum_array(
+                response["post_promotions"][post_slot],
+                (*_UNTRACKED_BRAND_PROMOTION_KEYS, "none"),
+            )
+            subjects = response["promoted_subjects"][post_slot]
+            if (
+                not promotions or not isinstance(subjects, list)
+                or ("none" in promotions and promotions != ["none"])
+                or ("general" in promotions and promotions != ["general"])
+                or ((promotions == ["none"]) != (subjects == []))
+                or (promotions != ["none"] and not subjects)
+            ):
+                continue
+            normalized_subjects: list[dict[str, Any]] = []
+            for subject in subjects:
+                if not isinstance(subject, dict) or set(subject) != {
+                    "name", "handle", "domain", "account_handle", "evidence",
+                }:
+                    post_invalid = True
+                    break
+                if any(not isinstance(subject[key], str) or not subject[key].strip() for key in ("name", "evidence")):
+                    post_invalid = True
+                    break
+                if any(
+                    subject[key] is not None and (not isinstance(subject[key], str) or not subject[key].strip())
+                    for key in ("handle", "domain", "account_handle")
+                ):
+                    post_invalid = True
+                    break
+                normalized_subject = {
+                    key: subject[key].strip() if isinstance(subject[key], str) else None
+                    for key in subject
+                }
+                if not _promotion_evidence_is_visible(
+                    source, normalized_subject["evidence"]
+                ):
+                    post_invalid = True
+                    break
+                normalized_subjects.append(normalized_subject)
+            if post_invalid:
+                continue
+            parsed[tweet_id] = {
+                "by_brand": values,
+                "untracked_brand_promotions": [] if promotions == ["none"] else promotions,
+                "promoted_subjects": normalized_subjects,
+            }
+        else:
+            parsed[tweet_id] = {"by_brand": values}
     return parsed
 
 
@@ -3805,7 +4103,11 @@ def _two_role_trace(
     )
     common = {
         "contract_version": _STAGE1_CONTRACT_VERSION,
-        "taxonomy_version": _STAGE1_TAXONOMY_VERSION,
+        "taxonomy_version": (
+            _STAGE1_TAXONOMY_VERSION
+            if request_profile == "deepseek_0731"
+            else _STAGE1_TAXONOMY_V3_VERSION
+        ),
         "model": model or _SIGNAL_MODEL,
         "input_context_fingerprint": fingerprint,
         "selector_version": merge_revision,
@@ -3877,6 +4179,7 @@ def classify_batch_pragmatics_full(
         # client path compatible while fixing that request setting here.
         thinking = {"type": "disabled"}
     registry_ids = {brand.brand_id for brand in brand_registry} if brand_registry else None
+    tracked_catalog = _tracked_brand_catalog(brand_registry, tweets)
     indexed_batches: list[tuple[list[int], list[dict[str, Any]]]] = []
     for start in range(0, len(tweets), _CLASSIFY_BASE_BATCH_SIZE):
         indexes = list(range(start, min(start + _CLASSIFY_BASE_BATCH_SIZE, len(tweets))))
@@ -3892,7 +4195,10 @@ def classify_batch_pragmatics_full(
     def call_role(batch: list[dict[str, Any]], role: str, reservation: str | None = None) -> tuple[list[dict[str, Any]], str, dict[str, dict[str, Any]]]:
         fixed_contract = (
             _two_role_fixed_slot_payload(
-                batch, role, request_profile="deepseek_0731"
+                batch,
+                role,
+                request_profile="deepseek_0731",
+                tracked_catalog=tracked_catalog,
             ) if selected_0731 else None
         )
         if selected_0731 and fixed_contract is None:
@@ -3906,7 +4212,11 @@ def classify_batch_pragmatics_full(
                     ensure_ascii=False, separators=(",", ":"), sort_keys=not selected_0731,
                 ),
                 system=(
-                    _two_role_selected_system_prompt(role)
+                    _two_role_selected_system_prompt(
+                        role,
+                        decision_slots=fixed_contract[1],
+                        post_slots=fixed_contract[2],
+                    )
                     if selected_0731 else (
                         _TWO_ROLE_CONTENT_SYSTEM_PROMPT
                         if role == "content" else _TWO_ROLE_BRAND_SYSTEM_PROMPT
@@ -3986,27 +4296,51 @@ def classify_batch_pragmatics_full(
         brand = role_rows.get((tweet_id, "brand_interpretation"))
         if content is None or brand is None:
             continue
-        merged = {
-            brand_id: {**content["by_brand"][brand_id], **brand["by_brand"][brand_id]}
-            for brand_id in tweet.get("brand_ids") or []
-        }
-        canonical = parse_stage1_classifications(
+        merged = {}
+        for brand_id in tweet.get("brand_ids") or []:
+            content_value = content["by_brand"][brand_id]
+            brand_value = brand["by_brand"][brand_id]
+            if selected_0731 and content_value.get("outcome") == "context_missing":
+                # Context-missing is a whole-row state.  The two independent
+                # roles can disagree on its representation, so the merge
+                # deterministically makes the other axes unavailable rather
+                # than inventing or retaining a semantic label.
+                brand_value = {
+                    "product_labels": ["none"],
+                    "sentiment": "unknown",
+                    "geopolitical_modes": ["unavailable"],
+                    "china_national_stance": "unknown",
+                    "us_national_stance": "unknown",
+                }
+            merged[brand_id] = {**content_value, **brand_value}
+        parser = parse_stage1_v4_classifications if selected_0731 else parse_stage1_classifications
+        canonical = parser(
             [{"brand_id": brand_id, **classification} for brand_id, classification in merged.items()],
             list(tweet.get("brand_ids") or []),
         )
         if canonical is None:
             continue
-        empty[index] = {
+        result = {
             "by_brand": canonical,
-            "unsanctioned_flags": content["unsanctioned_flags"],
             "valid": True,
             "classification_trace": _two_role_trace(
                 content=content, brand=brand, final=canonical,
-                fingerprint=_two_role_fingerprint(tweet), model=model,
+                fingerprint=_two_role_fingerprint(
+                    tweet,
+                    tracked_catalog=tracked_catalog if selected_0731 else None,
+                ), model=model,
                 request_identity=getattr(anthropic_client, "request_identity", None),
                 request_profile="deepseek_0731" if selected_0731 else None,
             ),
         }
+        if selected_0731:
+            result["untracked_brand_promotions"] = content["untracked_brand_promotions"]
+            result["promoted_subjects"] = content["promoted_subjects"]
+        else:
+            # The non-selected transports keep their v1-v3 wire contract so
+            # old callers and stored trace fixtures remain valid.
+            result["unsanctioned_flags"] = content["unsanctioned_flags"]
+        empty[index] = result
     return empty
 
 

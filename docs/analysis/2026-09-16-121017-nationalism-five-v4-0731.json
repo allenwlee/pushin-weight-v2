@@ -1,0 +1,476 @@
+{
+  "schema_version": "nationalism-five-v4-0731-20260916/v1",
+  "created_at": "2026-09-16T03:13:09.063909+00:00",
+  "purpose": "Qualitative five-post probe of the proposed Geopolitical mode and national-stance taxonomy.",
+  "source": "Read-only production query over posts created during the preceding 24 hours; candidates selected from existing non-none nationalism tags or explicit geopolitical/state language.",
+  "selection": [
+    "2100052017993683063",
+    "2100037789706600470",
+    "2100011791119966665",
+    "2100011731204358249",
+    "2100007627866468618"
+  ],
+  "source_csv_sha256": "e2924100332bd511d398429c7aba4a4b4d4d4ee2507a49221e93f8ee116585de",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "route": "OpenRouter pinned to DeepInfra FP8",
+  "roles": [
+    "content",
+    "brand"
+  ],
+  "calls": 2,
+  "settings": {
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "seed": 42,
+    "reasoning": false,
+    "response_format": null,
+    "fallbacks": false
+  },
+  "limitations": [
+    "Purposefully enriched five-post sample; not representative prevalence or accuracy.",
+    "No human answer key.",
+    "No browsing, media retrieval, or linked-page retrieval."
+  ],
+  "telemetry": [
+    {
+      "role": "content",
+      "started_at": "2026-09-16T03:13:09.065448+00:00",
+      "status": "received",
+      "request_sha256": "c2822d88101555a88a0bd392c241a6e5230fdce690778d453c0b25ce50302599",
+      "http_status": 200,
+      "raw_response_sha256": "aec3bf8fec31520a3fedfb18fd078fe2207a31a3b15118a8bde9c0585dbcf587",
+      "usage": {
+        "prompt_tokens": 6557,
+        "completion_tokens": 393,
+        "total_tokens": 6950,
+        "cost": 0.00046416,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00046416,
+          "upstream_inference_prompt_cost": 0.00039342,
+          "upstream_inference_completions_cost": 7.074e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "provider": "DeepInfra",
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "request_id": "gen-1789528389-qd4Y8FSlNVFAzFmkOpk3",
+      "latency_ms": 5112
+    },
+    {
+      "role": "brand",
+      "started_at": "2026-09-16T03:13:09.065698+00:00",
+      "status": "received",
+      "request_sha256": "bd803e66bb7a00671be9583ffa6c59aee4c6feeed49ff36d35bf722f776a02df",
+      "http_status": 200,
+      "raw_response_sha256": "f0ff008192592679e10853ae2c923b8731e4d6c01573f7aa4bd89db0c684bb95",
+      "usage": {
+        "prompt_tokens": 6184,
+        "completion_tokens": 437,
+        "total_tokens": 6621,
+        "cost": 0.0004497,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0004497,
+          "upstream_inference_prompt_cost": 0.00037104,
+          "upstream_inference_completions_cost": 7.866e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "provider": "DeepInfra",
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "request_id": "gen-1789528389-ue0t9DzMNDWLDUHDzq9J",
+      "latency_ms": 5539
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "N01",
+      "tweet_id": "2100052017993683063",
+      "created_at": "2026-09-16 02:39:52+00",
+      "url": "https://twitter.com/sunbh_eth/status/2100052017993683063",
+      "source_language": "en",
+      "source_text": "A @deepseek_ai  engineer described Dario as Hitler.\ni really agree with him.\n\n\"So I still believe that the most advanced AI should be available to everyone openly and affordably. I don’t trust Anthropic or OpenAI to make that happen. I especially don’t want Anthropic to control the most advanced AI or AGI. To put it dramatically, that would be no less alarming than Hitler acquiring atomic bomb technology before the Allies.\n\nThat’s why I chose to stay at DeepSeek, and why I remain there. We research powerful, fast, accessible AI and open-source our work. Perhaps that can pull the world a little further away from a Cyberpunk 2077 future.\"",
+      "english_translation": "",
+      "context": {
+        "author": {
+          "handle": "sunbh_eth",
+          "name": "sun",
+          "bio": ""
+        },
+        "quoted_text": "https://t.co/IfgOV2kZ1t",
+        "media_note": "Media and linked-page contents are unavailable unless transcribed in supplied text."
+      },
+      "brand_ids": [
+        "deepseek"
+      ],
+      "author_affiliations": [],
+      "stored_production": {
+        "discourse": [
+          {
+            "brand_id": "deepseek",
+            "discourse_key": "genuine_hype",
+            "us_nationalism": "anti",
+            "china_nationalism": "pro"
+          }
+        ],
+        "signals": [
+          {
+            "brand_id": "deepseek",
+            "post_type": "hands_on_usage",
+            "sentiment": "positive"
+          }
+        ]
+      },
+      "model_result": {
+        "per_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "openness_license"
+            ],
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "framework"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        },
+        "untracked_brand_promotions": [
+          "none"
+        ],
+        "promoted_subjects": []
+      }
+    },
+    {
+      "case_id": "N02",
+      "tweet_id": "2100037789706600470",
+      "created_at": "2026-09-16 01:43:20+00",
+      "url": "https://twitter.com/nuomt/status/2100037789706600470",
+      "source_language": "zh-Hant",
+      "source_text": "【路德社｜路德时评｜剪辑】\n\n中共国安部长罕见自曝AI已成政权级威胁！最致命死结：中共必须得用，又管不住！\n9/14/2026\n@lude_media\nhttps://t.co/lN6hHrqXsf\n\n◉ 相关背景\n\n        路德社早在2025年中共力捧 Deepseek 的时候就通过分析告诉大家，中共举国之力推举出来的AI都是垃圾，因为无论中共怎么训练，底层都是美国的，而中共根本不知道AI模型到底有多少层，中共拿到的也只是一些开源模型。\n(https://t.co/fK2J48qbWq)\n         最近 Anthropic 曝出一系列案例，暴露出中共公安、国安、科研等部门很多都在使用中共的AI过程中，因为中共 AI 蒸馏 Claude 的模型，结果把中共国的很多机密信息都主动交给了美国。\n          其实，AI 会收集这世界上所有的信息、声音，关键是 AI 是如何对这些信息分层的，即你思维的深度。中共的 AI 聪明程度是很低的，解决一些简单问题时是够用的，比如“红烧肉的做法”，但是在被问到地缘政治、科研、机械设计、编程等更复杂的问题是，中共 AI 的模型就太简单了，无法胜任，它们就要去寻求美国的 AI 模型。\n\n◉ 中共国安部发文承认 AI 已成中共政权级威胁\n\n         9月13日，中共国家安全部部长陈一新撰文《全面筑牢人工智能安全屏障 推动人工智能健康有序发展》。其实核心内容就是 AI 已经是未来方向，中共对其不仅无法禁止，还必须得使用，不使用会死得更惨。更重要的是中共意识到 AI 已经防不住了。\n         文中列出了六项「人工智能发展带来的风险挑战」。路德社对其逐点点评：\n\n◉ 风险挑战一：系统性影响政治安全环境。\n   \n       “截至2026年6月，我国人工智能产品用户规模超过5亿人，日均词元调用量突破140万亿，人工智能应用已快速全面铺开。各种敌对势力和别有用心之人滥用深度伪造音视频、AI生成图文、智能水军等生成式人工智能技术，低成本、批量化炮制政治谣言、传播有害信息、煽动对立情绪，对我实施舆论战、认知战，直接威胁我政治安全、制度安全、意识形态安全。”\n\n        ➊ 5亿人在用，日均调用量突破140万亿。这意味着中共对 AI 禁不了、挡不住。\n        ➋ 本来在舆论战、认知战中，中共有巨大的成本优势，中共有海量的网络水军、监狱五毛……但现在 AI 出来后，中共信息垄断的成本优势已经没有了。\n\n◉ 风险挑战二： 颠覆性升级网络攻防态势。\n\n        “以美国科技公司近期推出的‘神话’（Claude Mythos）、‘赛博’（GPT-5.5-Cyber）大模型为标志，人工智能技术正显著提升网络漏洞挖掘、恶意软件开发效率和武器化水平，网络攻防进入漏洞工业化、攻防全自动、AI对AI的新阶段，部分国家、组织具备快速批量挖掘漏洞、自动串联攻击路径、完成复杂黑客任务的能力，大幅拉低实施网络攻击的技术门槛与成本投入，对我国关键信息基础设施带来严重风险隐患。”\n\n         ➊ 关键就是中共的AI水平能不能强过美国的。中共的AI思维程度很低，因为AI是要靠人来训练的。AI训练，除了硬件以外，更需要的是内容、数据。美国的数据来自从英国到美国的法律文件、外交文件、历史记载、实验数据，这些数据真实度极高。而中共别说数据了，连历史都是假的，过去的历史决定了现在思维的深度。\n\n        ➋ 更重要的是，我们根本不知道美国这套 AI 到底有多深，有多少层。哪怕是中共国家安全部部长长，其认知也只是到“神话”、“赛博”这种民用大模型，还说这是“近期推出的”、能“完成复杂黑客任务”。如果中共真的水平高，就不会提美国民用版AI，难道这会是美国最高级别的AI吗？根本不是，美国NSA、能源部、战争部早就进入AGI了。如果中共真的能点名出来一个美国现在掌握的最顶级 AI 模型的名字，那才算有本事，那在认知战上才算赢下一筹，让美国吓住：中共是真的有情报，连我们最顶级的都知道。\n        如果更进一步，中共能把美国最顶级AI的漏洞分析出来，给它公布出来，那这人之战算是真打赢了。所以，现在这篇文章让人一看就知道中共水平实在太低。这就像是你打篮球，对标的是美国某大学球队，觉得他们太牛了，因为在你的认知里你不知道还有个NBA，一个逻辑。\n\n         ➌ “对我国关键信息基础设施带来严重风险隐患”，这句话就意味着中共打造的什么防火墙已经没用了，中共现在想控制信息，已经彻底失败。\n          这段时间路德社一直告诉大家美国针对的就是中共的信息基础设施，其中就包括金融基础设施、指挥中心、防火墙。\n         你不知道的指令，掌握在美国手中。本身中共的关键信息基础设施的源代码都是美国做的，这些系统在设计之初就是有“零日漏洞”的，而在以往找到这些零日漏洞需要花费人力，调用这些零日漏洞需要权限。之前美国人手不够，但现在直接用AI去找这些零日漏洞，会非常容易，然后随时可以调用、攻击。比如中共国所有的银行数据中心、航空数据中心都是IBM做的，因为如果你不是自己在国内自娱自乐，你要做全球化系统、做美元业务、跟世界金融系统、航空系统接轨，你必须用美国认可的数据系统，你要用什么华为打造的数据库，根本过不了安全评估。这些底层规则早在几十年前就定下了。\n\n         ➍ 陈一新之所以写这篇，肯定是中共国最近大量的信息基础设施被攻击，自己也不知道怎么回事。这就是川普前段时间说的：“他们 spy on 我们，我们也 spy on 他们”(https://t.co/h9GEVVLeqX)。 反正最终美国也不会承认，如果你中共的信息基础设施被攻击了，那也是你们民间用AI的人搞的，跟我美国没关系。\n\n🧵1/2\n\n#路德社\n#LudePress\n#LudeMedia",
+      "english_translation": "[Lude Press | Lude Commentary | Cut] CCP Ministry of State Security head rarely reveals AI has become a regime-level threat! The deadliest knot: the CCP must use it, but can't control it! 9/14/2026 @lude_media https://t.co/lN6hHrqXsf ◉ Background: As early as 2025, when the CCP was heavily promoting Deepseek, Lude Press told everyone through analysis that all the AI the CCP lifts up with the whole nation's effort is garbage, because no matter how the CCP trains it, the underlying layer is America's, and the CCP has no idea how many layers an AI model actually has—what the CCP gets is just some open-source models. (https://t.co/fK2J48qbWq) Recently Anthropic exposed a series of cases showing that many CCP public security, state security, and research departments, while using the CCP's AI, had because the CCP's AI distills Claude's model, handed a lot of the CCP's confidential information over to the US. Actually, AI collects all the information and voices in the world; the key is how AI layers this information—i.e., the depth of your thinking. The CCP's AI is very low in intelligence; it's enough to solve simple problems like 'how to make braised pork,' but when asked about geopolitics, research, mechanical design, programming and other more complex questions, the CCP's AI models are too simple and cannot handle them, so they have to seek American AI models. ◉ CCP MSS article admits AI has become a CCP regime-level threat: On Sept 13, CCP Ministry of State Security Minister Chen Yixin wrote 'Comprehensively Building AI Security Barriers to Promote Healthy and Orderly AI Development.' The core is that AI is the future direction, the CCP not only cannot ban it but must use it—not using it means dying worse. More importantly, the CCP realizes AI can no longer be defended against. The article lists six 'risks and challenges brought by AI development.' Lude Press comments point by point: ◉ Risk 1: Systemic impact on the political security environment. 'As of June 2026, China's AI product user base exceeded 500 million, daily average token calls surpassed 140 trillion, and AI applications have rapidly rolled out. Various hostile forces and people with ulterior motives abuse deepfake audio/video, AI-generated images and text, intelligent water armies and other generative AI technologies to fabricate political rumors at low cost and at scale, spread harmful information, incite antagonism, and wage public opinion and cognitive warfare against us, directly threatening our political security, institutional security, and ideological security.' ➊ 500 million users, 140 trillion daily calls. This means the CCP can't ban AI, can't block it. ➋ Originally in public opinion and cognitive warfare, the CCP had a huge cost advantage—massive water armies, prison 'wumao'... but now that AI is out, the CCP's information-monopoly cost advantage is gone. ◉ Risk 2: Disruptive escalation of cyber offense-defense. 'Marked by US tech companies' recently launched 'Mythos' (Claude Mythos) and 'Cyber' (GPT-5.5-Cyber) large models, AI technology is significantly boosting the efficiency of vulnerability discovery, malware development and weaponization; cyber offense-defense has entered a new stage of industrialized vulnerabilities, fully automated attack-defense, and AI-vs-AI; some countries and organizations can rapidly mine vulnerabilities at scale, automatically chain attack paths, and complete complex hacking tasks, greatly lowering the technical threshold and cost of cyberattacks, bringing serious risks to our critical information infrastructure.' ➊ The key is whether the CCP's AI can beat America's. The CCP's AI thinking depth is very low, because AI relies on people to train it. AI training, besides hardware, needs content and data even more. US data comes from legal documents, diplomatic documents, historical records, experimental data from the UK to the US—extremely high authenticity. The CCP, forget data—even its history is fake; past history determines present thinking depth. ➋ More importantly, we simply don't know how deep America's AI really is, how many layers. Even the CCP MSS minister's cognition only reaches civilian large models like 'Mythos' and 'Cyber,' and he calls them 'recently launched' and able to 'complete complex hacking tasks.' If the CCP were really high-level, it wouldn't mention US civilian AI—could that be America's highest-level AI? Not at all; the US NSA, DOE, and War Department entered AGI long ago. If the CCP could really name one of the top AI models the US currently holds, that would be skill—that would win a point in cognitive warfare and scare the US: the CCP really has intelligence, even knows our top secret. If further, the CCP could analyze vulnerabilities of America's top AI and publish them, that would truly win the 'war of men.' So this article immediately shows the CCP's level is really low. It's like playing basketball, benchmarking against some US college team and thinking they're amazing, because in your cognition you don't know the NBA exists—same logic. ➌ 'Bringing serious risks to our critical information infrastructure'—this sentence means the firewall the CCP built is useless; the CCP wanting to control information has completely failed. Recently Lude Press has been telling everyone the US is targeting the CCP's information infrastructure, including financial infrastructure, command centers, firewalls. Instructions you don't know are in America's hands. The source code of the CCP's critical information infrastructure is all American-made; these systems had 'zero-day vulnerabilities' by design, and previously finding them took manpower and calling them took permission. Before, Americans lacked manpower, but now using AI to find these zero-days is very easy, and they can call and attack anytime. For example, all CCP banks' data centers and aviation data centers are made by IBM, because if you're not just playing by yourself domestically—if you want to build global systems, do USD business, integrate with world finance and aviation systems—you must use US-approved data systems; if you want to use a Huawei database, it can't pass security assessment. These underlying rules were set decades ago. ➍ Chen Yixin wrote this because surely a lot of CCP infrastructure was recently attacked and they don't know why. This is what Trump said recently: 'They spy on us, we spy on them' (https://t.co/h9GEVVLeqX). Anyway, the US ultimately won't admit it; if the CCP's infrastructure was attacked, it's also that your own people using AI did it—nothing to do with the US. 🧵1/2 #LudePress #LudeMedia",
+      "context": {
+        "author": {
+          "handle": "nuomt",
+          "name": "糯米团 ⬜️",
+          "bio": ""
+        },
+        "quoted_text": "【路德社】中共国安部长罕见自曝AI已成政权级威胁！陈一新承认系统性冲击政治制度意识形态安全更颠覆网络攻防放大窃密泄密冲击社会治理和军事体系；最致命死结中共不能不用又管不住！9/14/2026  墨博士 https://t.co/9S7O34lOMw 来自 @YouTube",
+        "media_note": "Media and linked-page contents are unavailable unless transcribed in supplied text."
+      },
+      "brand_ids": [
+        "deepseek",
+        "minimax"
+      ],
+      "author_affiliations": [],
+      "stored_production": {
+        "discourse": [
+          {
+            "brand_id": "deepseek",
+            "discourse_key": "fud",
+            "us_nationalism": "pro",
+            "china_nationalism": "anti"
+          }
+        ],
+        "signals": [
+          {
+            "brand_id": "deepseek",
+            "post_type": "performance_comparisons",
+            "sentiment": "negative"
+          },
+          {
+            "brand_id": "minimax",
+            "post_type": "hands_on_usage",
+            "sentiment": "neutral"
+          }
+        ]
+      },
+      "model_result": {
+        "per_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "model_distillation",
+              "evals_benchmarks"
+            ],
+            "product_labels": [
+              "complaint"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "nationalistic_stance"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "pro"
+          },
+          "minimax": {
+            "outcome": "context_missing",
+            "post_types": [],
+            "audience_topics": [
+              "unavailable"
+            ],
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "neutral",
+            "geopolitical_modes": [
+              "nationalistic_stance"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "pro"
+          }
+        },
+        "untracked_brand_promotions": [
+          "none"
+        ],
+        "promoted_subjects": []
+      }
+    },
+    {
+      "case_id": "N03",
+      "tweet_id": "2100011791119966665",
+      "created_at": "2026-09-16 00:00:01+00",
+      "url": "https://twitter.com/TheWorldCorresp/status/2100011791119966665",
+      "source_language": "en",
+      "source_text": "The AI industry gap\n\nIn AI specifically, China's core industry scale exceeded 1.2 trillion yuan in 2025, with over 6,600 AI companies representing 15% of the global total . Chinese open-weight models now account for 8 of the top 10 open-source models globally, and US companies' usage of Chinese AI models on the \"OpenRouter\" platform exceeded 30% weekly since February 2026 . Dario Amodei, the CEO of Anthropic—the company Bannon appeared alongside Sanders to discuss AI safety—has acknowledged that the risk of superintelligence being completed in China is a driver of US regulatory urgency .\n\nThe contradiction in Bannon's position\n\nBannon's argument is that China steals American technology. But the technologies where China now leads—open-weight models, spatial intelligence, battery systems, nuclear fusion—are not things the West possessed first and China copied. DeepSeek R1 achieved 95% of OpenAI's performance at 5% of the training cost, using a model architecture and efficiency innovations that did not exist in the US . The WorldArena spatial intelligence benchmark, developed by Tsinghua University and Princeton, was topped by a Chinese team at the Chinese Academy of Sciences, with the \"trajectory accuracy\" score leading the second-place team by 7.4 points . These are not stolen technologies. They are technologies the West did not build.\n\nWhat the \"quarantine\" would actually target\n\nBannon's proposed quarantine—expelling Chinese nationals from labs, cutting off chips, closing borders—is designed to stop the transfer of American technology to China. The data suggests the flow has already reversed in key fields. The question Bannon's framing cannot answer is why a country that \"steals everything\" is producing the world's leading open-source models, the most cited chemistry papers, and the top-ranked research institutions. The answer is that it is not stealing. It is building.\n\n#SteveBannon #China #AI #Science #Technology #Geopolitics #TheWorldCorrespondent",
+      "english_translation": "",
+      "context": {
+        "author": {
+          "handle": "TheWorldCorresp",
+          "name": "THE WORLD CORRESPONDENT",
+          "bio": ""
+        },
+        "quoted_text": "",
+        "media_note": "Media and linked-page contents are unavailable unless transcribed in supplied text."
+      },
+      "brand_ids": [
+        "deepseek"
+      ],
+      "author_affiliations": [],
+      "stored_production": {
+        "discourse": [
+          {
+            "brand_id": "deepseek",
+            "discourse_key": "genuine_hype",
+            "us_nationalism": "anti",
+            "china_nationalism": "pro"
+          }
+        ],
+        "signals": [
+          {
+            "brand_id": "deepseek",
+            "post_type": "performance_comparisons",
+            "sentiment": "positive"
+          }
+        ]
+      },
+      "model_result": {
+        "per_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "results_analysis"
+            ],
+            "audience_topics": [
+              "evals_benchmarks",
+              "openness_license",
+              "cost_performance"
+            ],
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "framework"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        },
+        "untracked_brand_promotions": [
+          "none"
+        ],
+        "promoted_subjects": []
+      }
+    },
+    {
+      "case_id": "N04",
+      "tweet_id": "2100011731204358249",
+      "created_at": "2026-09-15 23:59:47+00",
+      "url": "https://twitter.com/sohfangwei/status/2100011731204358249",
+      "source_language": "zh-Hans",
+      "source_text": "还是想跟大家再探讨一下中国AI的「内情」。\n川普总统现在把「中共AI直逼美国」当成美国的第一大威胁，超过了「超级人工智能」对人类的威胁。\n因此，「中国AI有多厉害？」成为一个关键问题。\n很多的测试，如Stanford 2026 AI Index，都高度评估中国的AI模型，认为「中美顶尖模型的能力差距已经缩小到很小的个位数百分比」，比如2%或3%。\n但是我要说，中国的AI在很大程度上可能是一个「假货」。\n因为如果不是，为什么中国的7大AI模型要持续地以几千万、甚至上亿次地调用Claude来培训自己？为什么甚至「冒名顶替」，把给Kimi的问题转发给Claude？\n2002年，上海交大微电子研究所的陈进，把Motorola的芯片商标擦掉，印上自己的商标，搞出所谓的「汉芯一号」，今天中国的AI是不是一个货色？\n我认为完全有理由这样怀疑，因为：\n1、中国没有真正自由的创新环境\n2、也没有真正自由的市场竞争来锤炼扎实的AI产品\n3、中共的党国机制鼓励的就是「弯道超车」，准确地说就是弄虚作假，虚报政绩，这样才能拿到下一轮钱。\n当然「汉芯一号」完全是假货，但是中共今天的AI模式确实有很强的能力，但问题是：如果这些能力是抄来的，当美国截断抄袭路线，那中共的AI能和美国一较短长吗？\n中共吹的另一个「AI开源生态」也未必能够成立，因为中共的开源系统本来就比不了美国的闭源，这种开源如果再做本地化设置，等于是失去「活水」，时间一久失去活力和竞争力，限制了它的「智能提升」，最后成为像一带一路一样，说得很酷，但是落不到实处的东西。\n但是中国的DeepSeek吹出来的「性价比」、春晚机器人和机器人运动会，可把美国吓得够呛，导致川普总统要美国公司不顾一切地往前抢。\n但是这样不顾一切地往前抢，反而会带来人类未来的生存危机（未来10年内）。\n我的判断对吗？\n欢迎大家，特别是懂中国AI的专家用事实来反驳！",
+      "english_translation": "Still want to keep discussing the 'inside story' of Chinese AI with everyone.\nPresident Trump now treats 'CCP AI closing in on the US' as America's top threat, above 'superintelligent AI' threatening humanity.\nSo 'how strong is Chinese AI?' becomes a key question.\nMany tests, like Stanford 2026 AI Index, rate Chinese AI models highly, arguing 'the capability gap between top US and Chinese models has narrowed to a small single-digit percentage,' like 2% or 3%.\nBut I have to say, Chinese AI may to a large degree be a 'fake'.\nBecause if it weren't, why would China's top 7 AI models continuously call Claude tens of millions, even hundreds of millions of times to train themselves? Why even 'impersonate', forwarding questions meant for Kimi to Claude?\nIn 2002, Chen Jin of Shanghai Jiao Tong University's Microelectronics Institute erased the Motorola chip trademark, printed his own, and produced the so-called 'Hanxin No. 1' — is China's AI today the same thing?\nI think there's every reason to suspect this, because:\n1. China has no genuinely free innovation environment\n2. Nor a genuinely free market competition to forge solid AI products\n3. The CCP's party-state mechanism encourages exactly 'corner-overtaking' — accurately, fraud and inflated achievements, so they can get the next round of funding.\nOf course 'Hanxin No. 1' was full-on fake, but the CCP's AI model today really has strong capabilities — the question is: if those capabilities are copied, when the US cuts off the copy route, can CCP AI still go head-to-head with the US?\nThe other 'AI open-source ecosystem' the CCP brags about may not hold either, because the CCP's open-source systems intrinsically can't match America's closed-source anyway, and if this open source goes further to localize settings, it effectively loses its 'living water,' and over time loses vitality and competitiveness, capping its 'intelligence improvement,' ending up like the Belt and Road — said to be cool, but nothing that lands.\nBut DeepSeek's hyped 'cost-performance,' the Spring Festival robots, and the robot games did scare America quite badly, pushing President Trump to get American companies to sprint forward at any cost.\nBut sprinting at any cost will actually bring humanity's future survival crisis (within the next 10 years).\nIs my judgment right?\nWelcome everyone, especially experts who understand Chinese AI, to rebut with facts!",
+      "context": {
+        "author": {
+          "handle": "sohfangwei",
+          "name": "方伟｜Allen Zeng",
+          "bio": ""
+        },
+        "quoted_text": "中国AI发展的真相是什么？\n我说一下我的看法。\n习近平2023年提出所谓的「新质生产力」，于是上行下效，掀起了全国大炼半导体、大炼新能源汽车、大炼新能源储存、大炼AI、还有什么低空经济、生物医药、航空航天等一系列运动。\n虽然这些运动，除高端白领外创造不了多少工作，和十亿老百姓的收益没什么大关联，但是这些运动后面有真金白银的：\n1.3万亿人民币的研发经费，\n7万亿的基础设施投资，\n2000亿的长期政府债券...\n总共至少8.5万亿的投资。\n如果你在这六个领域有好项目，你可以从政府拿到60%的创业资金。\n因为不是市场主导，也不是风险投资，金主是政府，政府要的是政绩，做出政绩，讨好官员就成了第一驱动力。\n于是呢，各路人马，海内海外，虾走虾道，蟹走蟹道，纷纷想方设法搞出「惊人成绩」，来骗政府这8.5万亿的钱。\n至于搞出来的东西实不实在，好不好用，扎不扎实，并不重要。\n这就是7家AI模型公司，特别是DeepSeek和Moonshot的“成功”背后的秘密。\n我得坦率说：以上只是我从新闻中得出的观察，但我毕竟去国35年，未必看得准确，但还是在这里把我的观察说出来，看看抛砖是否可以引玉，请到懂得中国高科技界内情的人士分享、指正。",
+        "media_note": "Media and linked-page contents are unavailable unless transcribed in supplied text."
+      },
+      "brand_ids": [
+        "minimax"
+      ],
+      "author_affiliations": [],
+      "stored_production": {
+        "discourse": [
+          {
+            "brand_id": "minimax",
+            "discourse_key": "fud",
+            "us_nationalism": "none",
+            "china_nationalism": "anti"
+          }
+        ],
+        "signals": [
+          {
+            "brand_id": "minimax",
+            "post_type": "performance_comparisons",
+            "sentiment": "negative"
+          }
+        ]
+      },
+      "model_result": {
+        "per_brand": {
+          "minimax": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "model_distillation",
+              "evals_benchmarks"
+            ],
+            "product_labels": [
+              "investigate_claim"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "nationalistic_stance"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "pro"
+          }
+        },
+        "untracked_brand_promotions": [
+          "none"
+        ],
+        "promoted_subjects": []
+      }
+    },
+    {
+      "case_id": "N05",
+      "tweet_id": "2100007627866468618",
+      "created_at": "2026-09-15 23:43:29+00",
+      "url": "https://twitter.com/trashbaby40k/status/2100007627866468618",
+      "source_language": "en",
+      "source_text": "@SOPHONTSIMP OAI and A\\ are not going to war with each other or with Deepseek or Kimi etc. they would either be nationalized or in services of nation-states and it would become a part of geopolitical and national security landscape and would likely result in international / UN coordination.",
+      "english_translation": "",
+      "context": {
+        "author": {
+          "handle": "trashbaby40k",
+          "name": "trash baby 🇺🇦🇪🇺🇹🇼",
+          "bio": ""
+        },
+        "quoted_text": "",
+        "media_note": "Media and linked-page contents are unavailable unless transcribed in supplied text."
+      },
+      "brand_ids": [
+        "deepseek",
+        "moonshot_kimi"
+      ],
+      "author_affiliations": [],
+      "stored_production": {
+        "discourse": [],
+        "signals": [
+          {
+            "brand_id": "deepseek",
+            "post_type": "performance_comparisons",
+            "sentiment": "neutral"
+          },
+          {
+            "brand_id": "moonshot_kimi",
+            "post_type": "performance_comparisons",
+            "sentiment": "neutral"
+          }
+        ]
+      },
+      "model_result": {
+        "per_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ],
+            "product_labels": [
+              "complaint"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "nationalistic_stance"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "pro"
+          },
+          "moonshot_kimi": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ],
+            "product_labels": [
+              "investigate_claim"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "nationalistic_stance"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "pro"
+          }
+        },
+        "untracked_brand_promotions": [
+          "none"
+        ],
+        "promoted_subjects": []
+      }
+    }
+  ]
+}

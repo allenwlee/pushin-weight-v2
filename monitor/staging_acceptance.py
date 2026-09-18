@@ -121,6 +121,8 @@ def _require_provider_credential(
     normalized = (base_url or "").lower()
     if "minimax.io" in normalized:
         present = bool(environ.get("MINIMAX_API_TOKEN"))
+    elif "deepinfra.com" in normalized:
+        present = bool(environ.get("DEEPINFRA_API_KEY"))
     elif "deepseek.com" in normalized:
         present = bool(
             environ.get("DEEPSEEK_API_KEY") or environ.get("DEEPSEEK_API_TOKEN")

@@ -19,6 +19,11 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "结果与评测",
         "ja": "結果・評価",
     },
+    "results_analysis": {
+        "en": "Results Analysis",
+        "zh-cn": "结果分析",
+        "ja": "結果分析",
+    },
     "performance_comparisons": {
         "en": "Results and Evaluations",
         "zh-cn": "结果与评测",
@@ -75,6 +80,11 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "商业与金融",
         "ja": "ビジネス・金融",
     },
+    "news_reporting": {
+        "en": "News Reporting",
+        "zh-cn": "新闻报道",
+        "ja": "ニュース報道",
+    },
     "other": {"en": "Other", "zh-cn": "其他", "ja": "その他"},
 }
 
@@ -97,6 +107,85 @@ PRODUCT_LABEL_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "可能误导的信息",
         "ja": "誤情報の可能性",
     },
+    "investigate_claim": {
+        "en": "Claim to Investigate",
+        "zh-cn": "待核实声明",
+        "ja": "要確認の主張",
+    },
+}
+
+AUDIENCE_TOPIC_LABELS: dict[str, dict[str, str]] = {
+    "local_inference": {
+        "en": "Local Inference",
+        "zh-cn": "本地推理",
+        "ja": "ローカル推論",
+    },
+    "cost_performance": {
+        "en": "Cost & Performance",
+        "zh-cn": "成本与性能",
+        "ja": "コスト・性能",
+    },
+    "model_distillation": {
+        "en": "Model Distillation",
+        "zh-cn": "模型蒸馏",
+        "ja": "モデル蒸留",
+    },
+    "evals_benchmarks": {
+        "en": "Evaluations & Benchmarks",
+        "zh-cn": "评测与基准",
+        "ja": "評価・ベンチマーク",
+    },
+    "openness_license": {
+        "en": "Openness & Licensing",
+        "zh-cn": "开放性与许可证",
+        "ja": "オープン性・ライセンス",
+    },
+    "agents_tools": {
+        "en": "Agents & Tools",
+        "zh-cn": "智能体与工具",
+        "ja": "エージェント・ツール",
+    },
+    "api_developer_surface": {
+        "en": "API & Developer Surface",
+        "zh-cn": "API 与开发者平台",
+        "ja": "API・開発者向け機能",
+    },
+}
+
+GEOPOLITICAL_MODE_LABELS: dict[str, dict[str, str]] = {
+    "reporting": {
+        "en": "Reporting",
+        "zh-cn": "地缘政治报道",
+        "ja": "地政学的報道",
+    },
+    "framework": {
+        "en": "Framework",
+        "zh-cn": "地缘政治框架",
+        "ja": "地政学的フレームワーク",
+    },
+    "nationalism": {
+        "en": "Nationalism",
+        "zh-cn": "民族主义",
+        "ja": "ナショナリズム",
+    },
+}
+
+UNTRACKED_BRAND_PROMOTION_LABELS: dict[str, dict[str, str]] = {
+    "general": {"en": "General", "zh-cn": "一般推广", "ja": "一般"},
+    "spam": {"en": "Spam", "zh-cn": "垃圾推广", "ja": "スパム"},
+    "scam": {"en": "Scam", "zh-cn": "欺诈", "ja": "詐欺"},
+    "crypto": {"en": "Crypto", "zh-cn": "加密货币", "ja": "暗号資産"},
+    "unauthorized": {
+        "en": "Unauthorized",
+        "zh-cn": "未经授权",
+        "ja": "無許可",
+    },
+}
+
+UNTRACKED_BRAND_PROMOTION_FAMILY_LABELS: dict[str, str] = {
+    "en": "Untracked Brand Promotions",
+    "zh-cn": "未跟踪品牌推广",
+    "ja": "未追跡ブランドのプロモーション",
 }
 
 SENTIMENT_LABELS: dict[str, dict[str, str]] = {
@@ -141,8 +230,12 @@ ROLE_LABELS: dict[str, dict[str, str]] = {
 CLASSIFICATION_LABELS: dict[str, dict[str, dict[str, str]]] = {
     "post_type": POST_TYPE_LABELS,
     "product_label": PRODUCT_LABEL_LABELS,
+    "audience_topic": AUDIENCE_TOPIC_LABELS,
+    "geopolitical_mode": GEOPOLITICAL_MODE_LABELS,
     "sentiment": SENTIMENT_LABELS,
     "discourse": DISCOURSE_LABELS,
     "nationalism": NATIONALISM_LABELS,
+    "national_stance": NATIONALISM_LABELS,
+    "untracked_brand_promotion": UNTRACKED_BRAND_PROMOTION_LABELS,
     "role": ROLE_LABELS,
 }

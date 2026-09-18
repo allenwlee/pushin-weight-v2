@@ -1,0 +1,42 @@
+{
+  "schema": "provider-throttling-reproduction-v1",
+  "new_run_only": true,
+  "gemma": {
+    "provider": "DeepInfra",
+    "error_metadata": {
+      "raw": "google/gemma-4-31b-it is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations",
+      "provider_name": "DeepInfra",
+      "is_byok": false,
+      "provider_error_code": "engine_overloaded",
+      "limit_source": "upstream_provider_shared_pool",
+      "remedy_hint": "Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing"
+    },
+    "retry_delay_seconds": 1.169734700735026,
+    "retry_status": 200,
+    "retry_response_id": "gen-1789654706-vmpJ6fEV7MsAeGGbXDm7",
+    "error_receipt": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-recovery-aware-revised-2026-09-17-231128/attempt-records/0022-attempt-1.json",
+    "retry_receipt": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-recovery-aware-revised-2026-09-17-231128/attempt-records/0022-attempt-2.json"
+  },
+  "qwen": {
+    "provider": "GMICloud",
+    "error_metadata": {
+      "headers": {
+        "Retry-After": "60"
+      },
+      "is_byok": false,
+      "limit_source": "upstream_provider_shared_pool",
+      "provider_error_code": "rate_limit_exceeded",
+      "provider_name": "GMICloud",
+      "raw": "qwen/qwen3-235b-a22b-2507 is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations",
+      "remedy_hint": "Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing",
+      "retry_after_seconds": 60,
+      "retry_after_seconds_raw": 60
+    },
+    "retry_headers": {
+      "retry-after": "60",
+      "cf-ray": "a3c8b0cbffe73640-NRT"
+    },
+    "source": ".context/model-task-20260917/qwen235-translation-v3-recovery-rerun-diagnostic24-20260917-230735/live-attempts.partial.json"
+  },
+  "interpretation": "New captured429 bodies identify upstream shared pools. Gemma retry received HTTP200; translation validation/semantic review remains separate. Historical429 bodies were discarded and are not retroactively recovered."
+}

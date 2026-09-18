@@ -74,22 +74,31 @@ class FixedSlotTwoRoleTransport(TwoRoleTransport):
 
     def messages_create(self, **kwargs):
         payload = json.loads(kwargs["messages"][0]["content"])
-        role = "content" if "POST-LEVEL LEGACY UNSANCTIONED FLAGS" in kwargs["system"] else "brand_interpretation"
+        role = "content" if "POST-LEVEL UNTRACKED BRAND PROMOTIONS" in kwargs["system"] else "brand_interpretation"
         with self.lock:
             self.calls.append({"role": role, "payload": payload})
         decisions = {}
         for packet in payload["cases"].values():
             for decision_slot in packet["brand_decision_slots"]:
                 decisions[decision_slot] = (
-                    {"outcome": "classified", "post_types": ["hands_on_usage"]}
+                    {
+                        "outcome": "classified",
+                        "post_types": ["hands_on_usage"],
+                        "audience_topics": ["none"],
+                    }
                     if role == "content" else {
-                        "product_labels": [], "sentiment": "neutral",
-                        "china_nationalism": None, "us_nationalism": None,
+                        "product_labels": ["none"], "sentiment": "neutral",
+                        "geopolitical_modes": ["none"],
+                        "china_national_stance": "none",
+                        "us_national_stance": "none",
                     }
                 )
         response = {"decisions": decisions}
         if role == "content":
-            response["post_flags"] = {
+            response["post_promotions"] = {
+                slot: ["none"] for slot in payload["cases"]
+            }
+            response["promoted_subjects"] = {
                 slot: [] for slot in payload["cases"]
             }
         return response
@@ -542,6 +551,13 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
         _TWO_ROLE_SELECTED_MERGE_REVISION,
     )
 
+    if selected_fixed_slots:
+        # The v4 writer treats a missing versioned label catalog as a failed
+        # deployment state.  The historical test creates only its v3 keys, so
+        # seed the current catalog explicitly before exercising v4 publishing.
+        from django.core.management import call_command
+
+        call_command("seed_i18n_labels", verbosity=0)
     for key in ("hands_on_usage", "other"):
         PostTypeKey.objects.get_or_create(key=key)
     ProductLabelKey.objects.get_or_create(key="testimonial")
@@ -568,7 +584,7 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
     )
     assert len(transport.calls) == 2
     if selected_fixed_slots:
-        assert all(call["payload"]["cases"]["P01"]["evidence"]["affiliations"] == [
+        assert all(call["payload"]["cases"]["P01"]["evidence"]["author_affiliations"] == [
             {"brand_id": brand.pk, "role": "official", "reviewed": True}
             for brand in brands
         ] for call in transport.calls)
@@ -601,3 +617,83 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
         }
     )
     assert prompt_versions == expected
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkeypatch):
+    """M18 pin: v4 fixed slots get their final literal source packet."""
+    from datetime import datetime, timezone
+
+    from django.core.management import call_command
+
+    from core.models import (
+        Account,
+        Brand,
+        BrandAccount,
+        BrandHashtag,
+        BrandKeyword,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        Product,
+        Role,
+    )
+    from monitor.cycle import CycleRunner
+    from x_monitor import literal_translation, reattribute
+    from x_monitor.config import Config, LlmConfig
+
+    call_command("seed_i18n_labels", verbosity=0)
+    role = Role.objects.get(key="official")
+    author = Account.objects.create(author_id="v4-final-author", handle="final_author")
+    brand = Brand.objects.create(nickname="v4_final", display_name="Final Brand")
+    BrandAccount.objects.create(brand=brand, account=author, role=role)
+    BrandKeyword.objects.create(brand=brand, pattern="Final Keyword")
+    BrandHashtag.objects.create(brand=brand, hashtag="FinalTag")
+    Product.objects.create(repo_id="final/product", brand=brand, display_name="Final Product")
+    created_at = datetime(2026, 9, 18, 12, 34, 56, tzinfo=timezone.utc)
+    post = Post.objects.create(
+        tweet_id="v4-final-source", author=author, text="日本語の投稿", lang="ja",
+        created_at=created_at,
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    PostEnrichmentState.objects.create(post=post)
+
+    def translate(rows, *_args, **_kwargs):
+        return [{
+            "tweet_id": row["tweet_id"], "lang_detected": "ja",
+            "text_en": "Validated English literal", "text_zh_cn": "经验证的英文直译",
+            "text_ja": row["text"], "translation_failed": False,
+        } for row in rows]
+
+    transport = FixedSlotTwoRoleTransport()
+    monkeypatch.setattr(literal_translation, "translate_batch_literal_plaintext", translate)
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda _cfg: object())
+    monkeypatch.setattr(reattribute, "build_classifier_client_from_env", lambda _cfg: transport)
+    cfg = Config(
+        enabled_models=[brand.pk], daily_ceiling=100,
+        llm=LlmConfig(literal_translation_v2_enabled=True),
+    )
+
+    counters = CycleRunner(cfg=cfg)._run_post_fetch([], run_id="v4-final-packet")
+
+    assert counters["n_translated"] == 1
+    assert len(transport.calls) == 2
+    for call in transport.calls:
+        packet = call["payload"]
+        evidence = packet["cases"]["P01"]["evidence"]
+        assert evidence["english_translation"] == "Validated English literal"
+        assert evidence["created_at"] == created_at.isoformat()
+        catalog = packet["tracked_brands"]["brands"]
+        assert catalog == [{
+            "brand_id": "v4_final",
+            "aliases": ["Final Brand", "Final Keyword", "v4_final"],
+            "handles": ["final_author"],
+            "domains": [],
+            "products": ["Final Product", "final/product"],
+            "keywords": ["Final Keyword"],
+            "hashtags": ["#FinalTag"],
+            "accounts": [{"handle": "final_author", "role": "official"}],
+        }]
+    post.refresh_from_db()
+    assert post.text_en == "Validated English literal"

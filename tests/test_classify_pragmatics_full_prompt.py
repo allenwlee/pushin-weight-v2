@@ -8,20 +8,20 @@ import pytest
 
 from core.classification_contract import (
     NATIONALISM_KEYS,
-    POST_TYPE_KEYS,
-    PRODUCT_LABEL_KEYS,
     PROMPT_VERSION,
     SENTIMENT_KEYS,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
 )
 from x_monitor.attribution import _PRAGMATICS_FULL_SYSTEM_PROMPT
 
 
-@pytest.mark.parametrize("key", POST_TYPE_KEYS)
+@pytest.mark.parametrize("key", STAGE1_TAXONOMY_V3_POST_TYPE_KEYS)
 def test_prompt_enumerates_every_post_type(key):
     assert f"- {key}:" in _PRAGMATICS_FULL_SYSTEM_PROMPT
 
 
-@pytest.mark.parametrize("key", PRODUCT_LABEL_KEYS)
+@pytest.mark.parametrize("key", STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS)
 def test_prompt_enumerates_every_product_label(key):
     assert f"- {key}:" in _PRAGMATICS_FULL_SYSTEM_PROMPT
 
@@ -150,7 +150,7 @@ def test_prompt_output_has_no_discourse_or_primary_type_contract():
 
 
 def test_prompt_version_tracks_the_system_user_boundary():
-    assert PROMPT_VERSION == "stage1-prompt-v23"
+    assert PROMPT_VERSION == "stage1-prompt-v4"
 
 
 def test_v27_three_pass_and_audit_prompt_bytes_are_frozen():
@@ -252,6 +252,8 @@ def test_prompt_identity_is_shared_by_batch_and_single_builders():
             "text": "text",
             "brand_ids": ["deepseek"],
             "context": [],
+            "created_at": "",
+            "english_translation": "",
         }
     ]
     assert json.loads(batch) == [
@@ -260,5 +262,7 @@ def test_prompt_identity_is_shared_by_batch_and_single_builders():
             "text": "text",
             "brand_ids": ["deepseek"],
             "context": [],
+            "created_at": "",
+            "english_translation": "",
         }
     ]

@@ -13,7 +13,19 @@ from scripts.database_lock import (
     acquire_synthesis_coordination_lock,
 )
 from x_monitor.config import load_config
-from x_monitor.translator import AnthropicClaudeClient
+
+
+def build_synthesis_client(config):
+    """Build only the selected direct provider route, with no credential fallback."""
+    if config.provider != "deepinfra":
+        return None
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+    return DeepInfraChatCompletionsClient.from_config(
+        model=config.model,
+        base_url=config.base_url,
+        request_profile=config.request_profile,
+    )
 
 
 class Command(BaseCommand):
@@ -31,14 +43,13 @@ class Command(BaseCommand):
             self.stdout.write("synthesis provider calls are disabled; worker is idle")
             while True:
                 time.sleep(60)
-        api_key = os.environ.get("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise CommandError("DEEPSEEK_API_KEY is required")
+        client = build_synthesis_client(config)
+        if client is None:
+            raise CommandError("DEEPINFRA_API_KEY is required")
         database_url = os.environ.get("DATABASE_URL")
         environment = os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT")
         if not database_url or environment not in {"staging", "production"}:
             raise CommandError("synthesis worker database/environment is invalid")
-        client = AnthropicClaudeClient(api_key=api_key, base_url=config.base_url)
         try:
             with acquire_synthesis_coordination_lock(
                 database_url, environment=environment

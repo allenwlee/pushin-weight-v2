@@ -1,0 +1,6 @@
+{
+  "post_id": "2100327347496853956",
+  "commentary_en": "The author contrasts their successful training of Nemotron and Qwen models on large datasets with poor evaluation results for Gemma, expressing frustration and deciding to abandon Gemma rather than invest time in tuning it. They praise NVIDIA's Nemotron models. This matters because it highlights practical developer experience with open-model families, signaling that Gemma may require more effort for certain use cases, while Nemotron gains favor—potentially influencing community adoption and resource allocation in model selection.",
+  "commentary_zh_cn": "作者对比了自己在大数据集上成功训练Nemotron和Qwen，但Gemma在评估中表现糟糕，因而感到困惑并决定放弃Gemma，不愿花时间调优。同时高度赞扬NVIDIA的Nemotron模型系列。这反映了开发者在实际使用开源模型时的经验，暗示Gemma在某些场景下可能需要更多调试成本，而Nemotron更受青睐——这可能影响社区的采用倾向和模型选择上的资源分配。",
+  "commentary_ja": "著者は、大規模データセットでNemotronとQwenのトレーニングに成功した一方、Gemmaは評価結果が悪く困惑し、調整に時間をかけるよりは使うのをやめると述べている。また、NVIDIAのNemotronモデル群を高く評価している。これは、オープンモデルを実際に使う開発者の経験を示し、Gemmaは用途によっては手間がかかる一方、Nemotronが好まれる可能性を示唆する——コミュニティの採用傾向やモデル選択のリソース配分に影響しうる点で重要である。"
+}

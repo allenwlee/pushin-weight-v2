@@ -1,0 +1,63 @@
+{
+  "schema": "recovery-rerun-comparison/v1",
+  "scope": "Translation only; distinct matched incumbent cohorts; no production or runtime change",
+  "gemma": {
+    "sources": 100,
+    "targets": 215,
+    "attempts": 286,
+    "http_200": 186,
+    "http_429": 98,
+    "timeouts": 2,
+    "recovered_targets": 12,
+    "final_transport_missing": 29,
+    "caller_rejected": 5,
+    "usable_generated_fields": 181,
+    "null_fields": 34,
+    "error_sources": 25,
+    "additional_uncertain": 0,
+    "incumbent_original_interval": [
+      9,
+      10
+    ],
+    "incumbent_amended_interval": [
+      10,
+      11
+    ],
+    "wall_seconds": 1656.955004,
+    "receipt_cost_usd": 0.02482317,
+    "review": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-recovery-aware-revised-2026-09-17-231128/parent-reconciled-review.json",
+    "qualified": false
+  },
+  "qwen": {
+    "sources": 24,
+    "targets": 55,
+    "attempts": 66,
+    "http_200": 52,
+    "http_429": 14,
+    "recovered_targets": 4,
+    "final_transport_missing": 3,
+    "error_sources": 10,
+    "additional_uncertain": 1,
+    "incumbent_interval": [
+      7,
+      8
+    ],
+    "wall_seconds": 1303.846095,
+    "receipt_cost_usd": 0.0044253475,
+    "review": ".context/model-task-20260917/qwen235-translation-v3-recovery-rerun-diagnostic24-20260917-230735/parent-reconciled-review.json",
+    "qualified": false
+  },
+  "stopped_setup_attempts": {
+    "gemma": {
+      "http_200": 9,
+      "receipt_cost_usd": 0.00055008,
+      "cause": "Local experiment helper redacted numeric usage fields before strict validation; stopped and corrected."
+    },
+    "qwen": {
+      "http_200": 4,
+      "receipt_cost_usd": 0.0002031225,
+      "cause": "Local experiment helper omitted metadata request header; stopped and corrected."
+    }
+  },
+  "cost_limitations": "Response-reported charges, not a billing-export reconciliation. Failed requests/timeouts without usage receipts have unknown charges, not proven zero. All worst-case reservations retained."
+}

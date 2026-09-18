@@ -22,6 +22,9 @@ from core.classification_contract import (
     STAGE1_PROMPT_V3_VERSION,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
     STAGE1_TAXONOMY_V2_VERSION,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
+    STAGE1_TAXONOMY_V3_VERSION,
     TAXONOMY_KEY_CROSSWALK,
     TAXONOMY_VERSION,
     canonicalize_taxonomy_key,
@@ -73,17 +76,17 @@ def test_stored_fixture_covers_taxonomy_languages_and_context_sources():
     ]
     assert {
         post_type for row in valid_rows for post_type in row["post_types"]
-    } == set(POST_TYPE_KEYS)
+    } == set(STAGE1_TAXONOMY_V3_POST_TYPE_KEYS)
     assert {
         label for row in valid_rows for label in row["product_labels"]
-    } == set(PRODUCT_LABEL_KEYS)
+    } == set(STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS)
     assert {case["source_language"] for case in cases} >= {"en", "zh-Hans", "ja"}
     assert {
         source for case in cases for source in case["context_provenance"]
     } == {"stored_quote", "local_parent"}
 
 
-def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
+def test_taxonomy_v4_versions_and_allowlists_are_the_active_write_target():
     assert CONTRACT_VERSION == "stage1-v1"
     assert LEGACY_STAGE1_TAXONOMY_VERSION == "stage1-taxonomy-v1"
     assert LEGACY_STAGE1_PROMPT_VERSION == "stage1-prompt-v2"
@@ -93,11 +96,12 @@ def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
     assert PRODUCT_LABEL_KEYS is CANONICAL_PRODUCT_LABEL_KEYS
     assert STAGE1_TAXONOMY_V2_VERSION == "stage1-taxonomy-v2"
     assert STAGE1_PROMPT_V3_VERSION == "stage1-prompt-v3"
-    assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v3"
-    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v23"
+    assert CANONICAL_TAXONOMY_VERSION == "stage1-taxonomy-v4"
+    assert CANONICAL_PROMPT_VERSION == "stage1-prompt-v4"
     assert COMPATIBLE_TAXONOMY_VERSIONS == (
         LEGACY_STAGE1_TAXONOMY_VERSION,
         STAGE1_TAXONOMY_V2_VERSION,
+        STAGE1_TAXONOMY_V3_VERSION,
         CANONICAL_TAXONOMY_VERSION,
     )
 
@@ -105,7 +109,8 @@ def test_taxonomy_v3_versions_and_allowlists_are_the_active_write_target():
 def test_compatible_crosswalk_is_total_ordered_and_collision_free():
     expected_aliases = {
         ("post_type", "buzz_releases"): "releases_updates",
-        ("post_type", "performance_comparisons"): "results_evaluations",
+        ("post_type", "performance_comparisons"): "results_analysis",
+        ("post_type", "results_evaluations"): "results_analysis",
         ("post_type", "feedback_questions"): "questions_requests",
         ("post_type", "event_announcement"): "events_opportunities",
         ("product_label", "product_request"): "ideas_requests",
@@ -118,17 +123,16 @@ def test_compatible_crosswalk_is_total_ordered_and_collision_free():
         for family, source, canonical in TAXONOMY_KEY_CROSSWALK
         if source != canonical
     } == expected_aliases
+    assert canonicalize_taxonomy_key("post_type", "results_evaluations") == "results_analysis"
+    assert all(canonicalize_taxonomy_key("post_type", key) == key for key in CANONICAL_POST_TYPE_KEYS)
     assert all(
-        canonicalize_taxonomy_key("post_type", key) == key
-        for key in (
-            *STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
-            *CANONICAL_POST_TYPE_KEYS,
-        )
+        canonicalize_taxonomy_key("post_type", key) is not None
+        for key in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
     )
     assert {
         canonicalize_taxonomy_key("product_label", key)
-        for key in (*PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS)
-    } == set(CANONICAL_PRODUCT_LABEL_KEYS)
+        for key in (*STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS)
+    } == {*STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS}
     assert all(
         canonicalize_taxonomy_key(family, key) == key
         for family, keys in (
@@ -605,8 +609,8 @@ def test_bulk_reader_current_precedence_nulls_and_historical_conflicts(
 def test_context_missing_publishes_state_without_edges_or_discourse():
     from core.classification_contract import (
         CONTRACT_VERSION,
-        PROMPT_VERSION,
-        TAXONOMY_VERSION,
+        STAGE1_PROMPT_V23_VERSION,
+        STAGE1_TAXONOMY_V3_VERSION,
     )
     from core.models import (
         Brand,
@@ -666,8 +670,11 @@ def test_context_missing_publishes_state_without_edges_or_discourse():
     assert published.outcome == "cleared"
     state = PostBrandClassificationState.objects.get(post=post, brand=brand)
     assert state.contract_version == CONTRACT_VERSION
-    assert state.taxonomy_version == TAXONOMY_VERSION
-    assert state.prompt_version == PROMPT_VERSION
+    # This fixture deliberately uses the legacy wire shape.  It remains a v3
+    # compatibility projection; only the selected v4 shape publishes current
+    # taxonomy/prompt identities.
+    assert state.taxonomy_version == STAGE1_TAXONOMY_V3_VERSION
+    assert state.prompt_version == STAGE1_PROMPT_V23_VERSION
     assert state.model == "deepseek-v4-flash"
     assert state.source_language == "en"
     assert len(state.input_context_fingerprint) == 64

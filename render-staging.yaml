@@ -141,7 +141,7 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
-      - key: DEEPSEEK_API_KEY
+      - key: DEEPINFRA_API_KEY
         sync: false
       - key: X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED
         value: "False"
@@ -199,11 +199,14 @@ services:
         sync: false
       - key: TWITTERAPI_IO_ON_DEMAND_API_KEY
         sync: false
-      # Translation and classification are explicitly pinned to DeepSeek in
-      # config.yaml; MiniMax remains available to separately configured roles.
+      # Translation and classification are explicitly pinned to direct
+      # DeepInfra routes in config.yaml; DeepSeek and MiniMax remain available
+      # only to their separately configured legacy/headline roles.
       - key: MINIMAX_API_TOKEN
         sync: false
       - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPINFRA_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_ENQUEUE_ENABLED
         value: "False"
@@ -216,7 +219,7 @@ services:
       - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
         value: "False"
       - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
-        value: "False"
+        value: "True"
 
 databases:
   - name: pushinweight-staging-db

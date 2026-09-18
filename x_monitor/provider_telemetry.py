@@ -45,6 +45,7 @@ def provider_host_class(client_or_url: Any) -> str:
         return "unknown"
     return {
         "api.deepseek.com": "deepseek",
+        "api.deepinfra.com": "deepinfra",
         "api.minimax.io": "minimax",
         "api.anthropic.com": "anthropic",
         "openrouter.ai": "openrouter",

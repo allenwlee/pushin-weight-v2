@@ -6,7 +6,10 @@ import json
 
 import pytest
 
-from core.classification_contract import CANONICAL_POST_TYPE_KEYS, PRODUCT_LABEL_KEYS
+from core.classification_contract import (
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS as CANONICAL_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS as PRODUCT_LABEL_KEYS,
+)
 from scripts.u18_runtime_pro_reviewer_pilot import (
     EXPECTED_CLASSIFICATION_FIELDS,
     PILOT_ID,

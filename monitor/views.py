@@ -58,22 +58,32 @@ from core.classification_contract import (
 )
 from core.classification_labels import CLASSIFICATION_LABELS
 from core.classification_readers import read_brand_scalars_many
+from core.u18a_activation import enabled_audience_topics, is_enabled as u18a_enabled
 from core.models import (
     Brand,
     BrandAccount,
     Country,
     CountryLabel,
+    AudienceTopicConcept,
+    AudienceTopicLabel,
+    AudienceTopicScheme,
+    GeopoliticalModeLabel,
+    NationalStanceLabel,
     NationalismLabel,
     Post,
     PostBrand,
     PostBrandClassificationState,
+    PostBrandAudienceTopic,
     PostBrandDiscourse,
+    PostBrandGeopoliticalMode,
     PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
     PostSynthesisRateLimitBucket,
     PostTypeLabel,
     PostUnsanctionedFlag,
+    PostUntrackedBrandPromotion,
+    UntrackedBrandPromotionLabel,
     ProductLabelLabel,
     RegionLabel,
     RoleLabel,
@@ -112,9 +122,59 @@ _LOCALE_TO_COLUMN: dict[str, str] = {
     "original": "__source__",
 }
 
-# Taxonomy keys — imported from the versioned Stage 1 classifier contract.
-_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = CANONICAL_POST_TYPE_KEYS
-_DASHBOARD_PRODUCT_LABEL_KEYS: tuple[str, ...] = CANONICAL_PRODUCT_LABEL_KEYS
+# Taxonomy keys — the dashboard exposes the current U18A vocabulary.  The
+# readers below retain v1-v3 storage compatibility, but old rows do not grow
+# fabricated v4 values merely because these controls exist.
+_DASHBOARD_POST_TYPE_KEYS: tuple[str, ...] = (
+    "releases_updates",
+    "hands_on_usage",
+    "results_analysis",
+    "questions_requests",
+    "advertising_marketing",
+    "events",
+    "opportunities",
+    "job_listings",
+    "personnel_changes",
+    "opinions_reactions",
+    "research_explanations",
+    "business_finance",
+    *(("news_reporting",) if u18a_enabled("news_reporting") else ()),
+    "other",
+)
+_DASHBOARD_PRODUCT_LABEL_KEYS: tuple[str, ...] = (
+    "bug",
+    "complaint",
+    "testimonial",
+    "ideas_requests",
+    *(("investigate_claim",) if u18a_enabled("investigate_claim") else ()),
+)
+_DASHBOARD_AUDIENCE_TOPIC_KEYS: tuple[str, ...] = enabled_audience_topics((
+    "local_inference",
+    "cost_performance",
+    "model_distillation",
+    "evals_benchmarks",
+    "openness_license",
+    "agents_tools",
+    "api_developer_surface",
+))
+_DASHBOARD_GEOPOLITICAL_MODE_KEYS: tuple[str, ...] = (
+    "reporting", "framework", "nationalism",
+) if u18a_enabled("geopolitical") else ()
+_DASHBOARD_NATIONAL_STANCE_KEYS: tuple[str, ...] = (
+    NATIONALISM_KEYS if u18a_enabled("geopolitical") else ()
+)
+_DASHBOARD_UNTRACKED_PROMOTION_KEYS: tuple[str, ...] = (
+    "general", "spam", "scam", "crypto", "unauthorized",
+) if u18a_enabled("untracked_brand_promotions") else ()
+
+_DASHBOARD_POST_TYPE_ALIASES: dict[str, str] = {
+    "buzz_releases": "releases_updates",
+    "performance_comparisons": "results_analysis",
+    "results_evaluations": "results_analysis",
+    "feedback_questions": "questions_requests",
+    "event_announcement": "events",
+    "events_opportunities": "events",
+}
 
 _DASHBOARD_ROLE_FILTER_KEYS: tuple[str, ...] = (
     "official", "staff", "community", "other",
@@ -421,9 +481,25 @@ def _pick_translation(post: Any, locale: str) -> tuple[str | None, bool]:
 _LABEL_MODEL_BY_FAMILY: dict[str, type] = {
     "post_type": PostTypeLabel,
     "product_label": ProductLabelLabel,
+    "audience_topic": AudienceTopicLabel,
+    "geopolitical_mode": GeopoliticalModeLabel,
+    "national_stance": NationalStanceLabel,
     "sentiment": SentimentLabel,
     "nationalism": NationalismLabel,
     "role": RoleLabel,
+    "untracked_brand_promotion": UntrackedBrandPromotionLabel,
+}
+
+_LABEL_ROW_KEY_BY_FAMILY: dict[str, str] = {
+    "post_type": "post_type_id",
+    "product_label": "product_label_id",
+    "audience_topic": "concept__key",
+    "geopolitical_mode": "geopolitical_mode_id",
+    "national_stance": "national_stance_id",
+    "sentiment": "sentiment_id",
+    "nationalism": "nationalism_id",
+    "role": "role_id",
+    "untracked_brand_promotion": "untracked_brand_promotion_id",
 }
 
 # Lang-code lookup order. zh-cn (current seed) takes precedence over zh_cn
@@ -454,7 +530,7 @@ def _localize_classification_value(
 ) -> "str | None":
     """Look up a localized label for a classification key.
 
-    family: one of `post_type`, `product_label`, `sentiment`, `nationalism`.
+    family: one of the dashboard's versioned label families.
     key: the raw DB taxonomy key (e.g. `hands_on_usage`), or None/empty.
     locale: the display locale (`zh_cn`, `en`, `original`).
     label_cache: a `{(family, key, lang)} -> label` dict built by
@@ -507,12 +583,28 @@ def _build_label_cache(
         if not keys:
             continue
         model = _LABEL_MODEL_BY_FAMILY[family]
+        row_key = _LABEL_ROW_KEY_BY_FAMILY[family]
+        # AudienceTopicLabel stores its natural key one relation away through
+        # the concept table; the other label families use a direct FK key.
+        lookup = "concept__key" if family == "audience_topic" else row_key
         qs = model.objects.filter(
-            **{f"{family}_id__in": list(keys)},
+            **{f"{lookup}__in": list(keys)},
             lang__in=lang_codes,
-        ).values(f"{family}_id", "lang", "label")
+        )
+        if family == "audience_topic":
+            scheme_key = "ai_audience_topics/v1"
+            revision = AudienceTopicScheme.objects.filter(
+                key=scheme_key
+            ).values_list("revision", flat=True).first()
+            if revision is None:
+                continue
+            qs = qs.filter(
+                concept__scheme_id=scheme_key,
+                revision=revision,
+            )
+        qs = qs.values(row_key, "lang", "label")
         for row in qs:
-            cache[(family, row[f"{family}_id"], row["lang"])] = row["label"]
+            cache[(family, row[row_key], row["lang"])] = row["label"]
     return cache
 
 
@@ -524,6 +616,10 @@ def _dashboard_filter_entries(
     keys_by_family = {
         "product_label": set(_DASHBOARD_PRODUCT_LABEL_KEYS),
         "post_type": set(_DASHBOARD_POST_TYPE_KEYS),
+        "audience_topic": set(_DASHBOARD_AUDIENCE_TOPIC_KEYS),
+        "geopolitical_mode": set(_DASHBOARD_GEOPOLITICAL_MODE_KEYS),
+        "national_stance": set(_DASHBOARD_NATIONAL_STANCE_KEYS),
+        "untracked_brand_promotion": set(_DASHBOARD_UNTRACKED_PROMOTION_KEYS),
         "role": set(_DASHBOARD_ROLE_FILTER_KEYS[:3]),
         "sentiment": set(sentiment_keys),
         "nationalism": set(_DASHBOARD_NATIONALISM_KEYS),
@@ -563,6 +659,18 @@ def _dashboard_filter_entries(
             for entry in localized("product_label", _DASHBOARD_PRODUCT_LABEL_KEYS)
         ],
         "post_type_entries": localized("post_type", _DASHBOARD_POST_TYPE_KEYS),
+        "audience_topic_entries": localized(
+            "audience_topic", _DASHBOARD_AUDIENCE_TOPIC_KEYS
+        ),
+        "geopolitical_mode_entries": localized(
+            "geopolitical_mode", _DASHBOARD_GEOPOLITICAL_MODE_KEYS
+        ),
+        "national_stance_entries": localized(
+            "national_stance", _DASHBOARD_NATIONAL_STANCE_KEYS
+        ),
+        "untracked_brand_promotion_entries": localized(
+            "untracked_brand_promotion", _DASHBOARD_UNTRACKED_PROMOTION_KEYS
+        ),
         "role_entries": localized("role", _DASHBOARD_ROLE_FILTER_KEYS),
         "lang_entries": [
             {"key": key, "label": lang_names.get(key, key)}
@@ -868,21 +976,32 @@ def _feed_signal_keys(
         for v in (cls.get("post_types") or []):
             k = (v.get("key") if isinstance(v, dict) else v) if v else None
             if k:
-                canonical = canonicalize_taxonomy_key("post_type", str(k))
+                canonical = _dashboard_canonical_key("post_type", str(k))
                 if canonical is not None:
                     types.add(canonical)
         for v in (cls.get("product_labels") or []):
             k = (v.get("key") if isinstance(v, dict) else v) if v else None
             if k:
-                canonical = canonicalize_taxonomy_key("product_label", str(k))
+                canonical = _dashboard_canonical_key("product_label", str(k))
                 if canonical is not None:
                     products.add(canonical)
-        cn = cls.get("cn_nationalism")
+        # Current v4 national stance owns the current display slot.  Legacy
+        # v1-v3 nationalism remains available to inspection consumers below,
+        # but is never mislabeled as a current stance.
+        cn = (
+            cls.get("china_national_stance")
+            if cls.get("china_national_stance_status") == "available"
+            else cls.get("cn_nationalism")
+        )
         if cn:
             k = (cn.get("key") if isinstance(cn, dict) else cn) if cn else None
             if k and k != "none":
                 cn_keys.add(k)
-        us = cls.get("us_nationalism")
+        us = (
+            cls.get("us_national_stance")
+            if cls.get("us_national_stance_status") == "available"
+            else cls.get("us_nationalism")
+        )
         if us:
             k = (us.get("key") if isinstance(us, dict) else us) if us else None
             if k and k != "none":
@@ -1270,8 +1389,12 @@ def _feed_signal_inspections(
         "sentiment": "情感" if use_zh else "Sentiment",
         "post_type": "帖子类型" if use_zh else "Post Type",
         "product_label": "产品信号" if use_zh else "Product signal",
-        "nat_cn": "中国民族主义" if use_zh else "China Nationalism",
-        "nat_us": "美国民族主义" if use_zh else "U.S. Nationalism",
+        "nat_cn": "中国国家立场" if use_zh else "China national stance",
+        "nat_us": "美国国家立场" if use_zh else "U.S. national stance",
+        "legacy_nat_cn": "旧版中国民族主义" if use_zh else "Legacy China nationalism",
+        "legacy_nat_us": "旧版美国民族主义" if use_zh else "Legacy U.S. nationalism",
+        "audience_topic": "受众主题" if use_zh else "Audience topic",
+        "geopolitical_mode": "地缘政治模式" if use_zh else "Geopolitical mode",
         "classification_status": "分类状态" if use_zh else "Classification status",
     }
     brand_names: dict[str, str] = {}
@@ -1291,6 +1414,11 @@ def _feed_signal_inspections(
         "product_label": {},
         "nat_cn": {},
         "nat_us": {},
+        "legacy_nat_cn": {},
+        "legacy_nat_us": {},
+        "audience_topic": {},
+        "geopolitical_mode": {},
+        "untracked_brand_promotions": {},
         "unsanctioned": {},
         "classification_status": {},
     }
@@ -1330,9 +1458,33 @@ def _feed_signal_inspections(
                 append_entry(
                     "product_label", str(item["key"]), nickname, value
                 )
+        for item in classification.get("audience_topics") or []:
+            if isinstance(item, dict) and item.get("key"):
+                append_entry(
+                    "audience_topic", str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
+        for item in classification.get("geopolitical_modes") or []:
+            if isinstance(item, dict) and item.get("key"):
+                append_entry(
+                    "geopolitical_mode", str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
+        for family, field_name, status_field in (
+            ("nat_cn", "china_national_stance", "china_national_stance_status"),
+            ("nat_us", "us_national_stance", "us_national_stance_status"),
+        ):
+            item = classification.get(field_name)
+            if classification.get(status_field) != "available":
+                item = None
+            if isinstance(item, dict) and item.get("key") and item["key"] != "none":
+                append_entry(
+                    family, str(item["key"]), nickname,
+                    str(item.get("label") or item["key"]),
+                )
         for family, field_name in (
-            ("nat_cn", "cn_nationalism"),
-            ("nat_us", "us_nationalism"),
+            ("legacy_nat_cn", "cn_nationalism"),
+            ("legacy_nat_us", "us_nationalism"),
         ):
             item = classification.get(field_name)
             if isinstance(item, dict) and item.get("key") and item["key"] != "none":
@@ -1352,10 +1504,14 @@ def _feed_signal_inspections(
             )
 
     if unsanctioned:
-        text = "非官方发布" if use_zh else "Unsanctioned"
-        result["unsanctioned"]["true"] = [
+        text = "未跟踪品牌推广" if use_zh else "Untracked Brand Promotion"
+        entry = [
             {"brand": "", "value": text, "text": text}
         ]
+        result["untracked_brand_promotions"]["true"] = entry
+        # Compatibility for older JS clients; new readers use the current
+        # family above and never reinterpret legacy URL filters.
+        result["unsanctioned"]["true"] = entry
     return result
 
 
@@ -1387,6 +1543,52 @@ def _v22_feed_display_fields(
             if nickname in selected_brands
         }
     sentiment_keys, _, _, _, _ = _feed_signal_keys(sentiment_classifications)
+    audience_topic_keys = sorted({
+        (key.get("key") if isinstance(key, dict) else key)
+        for classification in classifications.values()
+        if classification.get("audience_topics_status") == "available"
+        for key in classification.get("audience_topics") or []
+        if (key.get("key") if isinstance(key, dict) else key)
+    })
+    geopolitical_mode_keys = sorted({
+        (key.get("key") if isinstance(key, dict) else key)
+        for classification in classifications.values()
+        if classification.get("geopolitical_modes_status") == "available"
+        for key in classification.get("geopolitical_modes") or []
+        if (key.get("key") if isinstance(key, dict) else key)
+    })
+    audience_topics_status = (
+        "available"
+        if any(c.get("audience_topics_status") == "available" for c in classifications.values())
+        else "unavailable"
+    )
+    geopolitical_modes_status = (
+        "available"
+        if any(c.get("geopolitical_modes_status") == "available" for c in classifications.values())
+        else "unavailable"
+    )
+    china_national_stance_status = (
+        "available"
+        if any(c.get("china_national_stance_status") == "available" for c in classifications.values())
+        else "unavailable"
+    )
+    us_national_stance_status = (
+        "available"
+        if any(c.get("us_national_stance_status") == "available" for c in classifications.values())
+        else "unavailable"
+    )
+    legacy_nat_cn = sorted({
+        str(item.get("key") if isinstance(item, dict) else item)
+        for classification in classifications.values()
+        for item in [classification.get("cn_nationalism")]
+        if not nat_cn and item and (item.get("key") if isinstance(item, dict) else item) not in {None, "none"}
+    })
+    legacy_nat_us = sorted({
+        str(item.get("key") if isinstance(item, dict) else item)
+        for classification in classifications.values()
+        for item in [classification.get("us_nationalism")]
+        if not nat_us and item and (item.get("key") if isinstance(item, dict) else item) not in {None, "none"}
+    })
     classification_statuses = list(
         dict.fromkeys(
             str(classification.get("classification_status") or "historical_untyped")
@@ -1406,6 +1608,12 @@ def _v22_feed_display_fields(
         "sentiment_keys": sentiment_keys,
         "post_type_keys": post_type_keys,
         "product_label_keys": product_label_keys,
+        "audience_topic_keys": audience_topic_keys,
+        "audience_topics_status": audience_topics_status,
+        "geopolitical_mode_keys": geopolitical_mode_keys,
+        "geopolitical_modes_status": geopolitical_modes_status,
+        "china_national_stance_status": china_national_stance_status,
+        "us_national_stance_status": us_national_stance_status,
         "classification_statuses": classification_statuses,
         "classification_status_labels": [
             _classification_status_label(status, locale)
@@ -1413,6 +1621,8 @@ def _v22_feed_display_fields(
         ],
         "nat_cn": nat_cn,
         "nat_us": nat_us,
+        "legacy_nat_cn": legacy_nat_cn,
+        "legacy_nat_us": legacy_nat_us,
         "tint_class": _feed_tint_class(sentiment_keys),
         "meta_text": _feed_relative_age(created_at),
         "ts_abs_text": _feed_abs_stamp(created_at),
@@ -1456,9 +1666,16 @@ def _post_to_wire(
     )
 
     def _labelize(family: str, key: str | None) -> dict[str, str] | None:
-        label = _localize_classification_value(family, key, locale, label_cache)
         if not key:
             return None
+        if family in {
+            "post_type", "product_label", "audience_topic",
+            "geopolitical_mode", "national_stance",
+        }:
+            key = _dashboard_canonical_key(family, key)
+            if key is None:
+                return None
+        label = _localize_classification_value(family, key, locale, label_cache)
         return {"key": key, "label": label if label is not None else key}
 
     for pb in post.brands.all():
@@ -1487,6 +1704,18 @@ def _post_to_wire(
                     for k in (cls.get("post_types") or [])
                 ) if v is not None
             ],
+            "audience_topics": [
+                v for v in (
+                    _labelize("audience_topic", k)
+                    for k in (cls.get("audience_topics") or [])
+                ) if v is not None
+            ],
+            "geopolitical_modes": [
+                v for v in (
+                    _labelize("geopolitical_mode", k)
+                    for k in (cls.get("geopolitical_modes") or [])
+                ) if v is not None
+            ],
             "sentiments": [
                 v for v in (
                     _labelize("sentiment", k)
@@ -1495,6 +1724,24 @@ def _post_to_wire(
             ],
             "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
             "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
+            "china_national_stance": _labelize(
+                "national_stance", cls.get("china_national_stance")
+            ),
+            "us_national_stance": _labelize(
+                "national_stance", cls.get("us_national_stance")
+            ),
+            "audience_topics_status": cls.get(
+                "audience_topics_status", "unavailable"
+            ),
+            "geopolitical_modes_status": cls.get(
+                "geopolitical_modes_status", "unavailable"
+            ),
+            "china_national_stance_status": cls.get(
+                "china_national_stance_status", "unavailable"
+            ),
+            "us_national_stance_status": cls.get(
+                "us_national_stance_status", "unavailable"
+            ),
             "role_label": cls.get("role_label"),
             "classification_status": status,
             "classification_status_label": _classification_status_label(status, locale),
@@ -1628,6 +1875,7 @@ def _enrich_posts_with_classifications(
     brand_nickname: str | None = None,
     *,
     include_geography: bool = False,
+    label_locales: tuple[str, ...] = ("zh_cn", "en", "ja"),
 ) -> list[dict[str, Any]]:
     """Enrich a Post QuerySet with per-brand classifications and unsanctioned flags.
 
@@ -1674,12 +1922,50 @@ def _enrich_posts_with_classifications(
         product_qs.values("post_id", "brand_id", "product_label_id")
     )
 
-    # Unsanctioned flags
-    flag_tweet_ids = set(
-        PostUnsanctionedFlag.objects.filter(
+    audience_revision = AudienceTopicScheme.objects.filter(
+        key="ai_audience_topics/v1"
+    ).values_list("revision", flat=True).first()
+    audience_rows = list(
+        PostBrandAudienceTopic.objects.filter(
             post_id__in=tweet_ids,
-        ).values_list("post_id", flat=True)
+            scheme_id="ai_audience_topics/v1",
+            scheme_revision=audience_revision,
+        ).values("post_id", "brand_id", "concept__key")
+    ) if audience_revision is not None else []
+    geo_rows = list(
+        PostBrandGeopoliticalMode.objects.filter(
+            post_id__in=tweet_ids,
+        ).filter(
+            Q(taxonomy_version__icontains="v4")
+            | Q(taxonomy_version__icontains="u18a")
+        ).values("post_id", "brand_id", "geopolitical_mode_id")
     )
+    current_state_rows = list(
+        PostBrandClassificationState.objects.filter(
+            post_id__in=tweet_ids,
+        ).values(
+            "post_id", "brand_id", "taxonomy_version",
+            "china_national_stance_id", "us_national_stance_id",
+        )
+    )
+
+    # Current post-level promotion result. Legacy Unsanctioned rows remain
+    # readable by old routes, but are deliberately not presented as the new
+    # taxonomy because their old meaning is broader and not equivalent.
+    promotion_rows = list(
+        PostUntrackedBrandPromotion.objects.filter(
+            post_id__in=tweet_ids,
+        ).values("post_id", "promotion_keys")
+    )
+    legacy_flag_rows = list(
+        PostUnsanctionedFlag.objects.filter(post_id__in=tweet_ids).values(
+            "post_id", "flag_set", "flags"
+        )
+    )
+    legacy_flag_by_tweet = {
+        item["post_id"]: bool(item.get("flag_set") or item.get("flags"))
+        for item in legacy_flag_rows
+    }
 
     enrichment_rows = list(
         PostEnrichmentState.objects.filter(post_id__in=tweet_ids).values(
@@ -1736,7 +2022,7 @@ def _enrich_posts_with_classifications(
         bid = s["brand_id"]
         if tid not in signals_by_tweet:
             signals_by_tweet[tid] = {}
-        canonical = canonicalize_taxonomy_key("post_type", s["post_type_id"])
+        canonical = _dashboard_canonical_key("post_type", s["post_type_id"])
         if canonical is not None:
             signals_by_tweet[tid].setdefault(bid, []).append(canonical)
 
@@ -1750,11 +2036,49 @@ def _enrich_posts_with_classifications(
                 item["brand_id"], []
             ).append(canonical)
 
+    audience_by_tweet: dict[str, dict[str, list[str]]] = {}
+    for item in audience_rows:
+        key = _dashboard_canonical_key("audience_topic", item["concept__key"])
+        if key:
+            audience_by_tweet.setdefault(item["post_id"], {}).setdefault(
+                item["brand_id"], []
+            ).append(key)
+
+    geo_by_tweet: dict[str, dict[str, list[str]]] = {}
+    for item in geo_rows:
+        key = _dashboard_canonical_key(
+            "geopolitical_mode", item["geopolitical_mode_id"]
+        )
+        if key:
+            geo_by_tweet.setdefault(item["post_id"], {}).setdefault(
+                item["brand_id"], []
+            ).append(key)
+
+    state_by_pair = {
+        (item["post_id"], item["brand_id"]): item
+        for item in current_state_rows
+    }
+    promotion_by_tweet: dict[str, list[str]] = {}
+    for item in promotion_rows:
+        raw_keys = item.get("promotion_keys")
+        if not isinstance(raw_keys, list):
+            raw_keys = []
+        promotion_by_tweet[item["post_id"]] = [
+            key for key in raw_keys
+            if _dashboard_canonical_key(
+                "untracked_brand_promotion", str(key)
+            )
+        ]
+
     # Collect all classification keys present in this page so we can
     # batch-load the label rows for zh_cn + en in one go per family.
     keys_by_family: dict[str, set[str]] = {
         "post_type": set(),
         "product_label": set(),
+        "audience_topic": set(_DASHBOARD_AUDIENCE_TOPIC_KEYS),
+        "geopolitical_mode": set(_DASHBOARD_GEOPOLITICAL_MODE_KEYS),
+        "national_stance": set(_DASHBOARD_NATIONAL_STANCE_KEYS),
+        "untracked_brand_promotion": set(_DASHBOARD_UNTRACKED_PROMOTION_KEYS),
         "sentiment": set(),
         "nationalism": set(),
         # Keep the query shape constant even when the current page has no
@@ -1775,14 +2099,14 @@ def _enrich_posts_with_classifications(
         if scalar.us_nationalism:
             keys_by_family["nationalism"].add(scalar.us_nationalism)
 
-    # Pre-fetch label caches for zh_cn and en up front (1 query per family
-    # per lang code = up to 12 queries, vs. N+1 for per-row lookup). The
-    # feed view only emits one locale per request, but callers occasionally
-    # read enriched rows under multiple locales.
-    label_cache_by_locale: dict[str, dict[tuple[str, str, str], str]] = {
-        "zh_cn": _build_label_cache(keys_by_family, "zh_cn"),
-        "en": _build_label_cache(keys_by_family, "en"),
-        "ja": _build_label_cache(keys_by_family, "ja"),
+    # Build only the locale cache needed by the caller. Feed requests emit one
+    # locale, so eagerly loading all three locale variants multiplied the new
+    # U18A label-family queries without changing the response. Direct callers
+    # retain the three-locale default for callers that intentionally serialize
+    # the same enriched rows more than once.
+    label_cache_by_locale = {
+        locale: _build_label_cache(keys_by_family, locale)
+        for locale in dict.fromkeys(label_locales)
     }
 
     # Build enriched dicts
@@ -1826,9 +2150,25 @@ def _enrich_posts_with_classifications(
             "sentiments": [],
             "cn_nationalism": None,
             "us_nationalism": None,
+            "audience_topics": [],
+            "audience_topics_status": "unavailable",
+            "geopolitical_modes": [],
+            "geopolitical_modes_status": "unavailable",
+            "china_national_stance": None,
+            "china_national_stance_status": "unavailable",
+            "us_national_stance": None,
+            "us_national_stance_status": "unavailable",
             "role_keys": [],
             "role_key": None,
-            "unsanctioned": tid in flag_tweet_ids,
+            "untracked_brand_promotions": (
+                promotion_by_tweet.get(tid, [])
+                if u18a_enabled("untracked_brand_promotions") else []
+            ),
+            "unsanctioned": (
+                bool(promotion_by_tweet.get(tid))
+                if u18a_enabled("untracked_brand_promotions") else False
+            ),
+            "legacy_unsanctioned": legacy_flag_by_tweet.get(tid, False),
             # Legacy rows predate the durable ledger and were already enriched.
             "enrichment_status": enrichment_by_tweet.get(
                 tid, PostEnrichmentState.Status.SUCCEEDED
@@ -1868,16 +2208,37 @@ def _enrich_posts_with_classifications(
                 "sentiments": [],
                 "cn_nationalism": None,
                 "us_nationalism": None,
+                "audience_topics": [],
+                "audience_topics_status": "unavailable",
+                "geopolitical_modes": [],
+                "geopolitical_modes_status": "unavailable",
+                "china_national_stance": None,
+                "china_national_stance_status": "unavailable",
+                "us_national_stance": None,
+                "us_national_stance_status": "unavailable",
             }
             signal_keys = signals_by_tweet.get(tid, {}).get(nick, [])
             product_keys = products_by_tweet.get(tid, {}).get(nick, [])
             scalar = scalar_reads[(tid, nick)]
+            state = state_by_pair.get((tid, nick))
+            state_taxonomy = str((state or {}).get("taxonomy_version") or "").lower()
+            v4_state = "v4" in state_taxonomy or "u18a" in state_taxonomy
             if signal_keys:
-                cls_data["post_types"] = list(dict.fromkeys(signal_keys))
+                cls_data["post_types"] = list(dict.fromkeys(
+                    canonical
+                    for key in signal_keys
+                    if (canonical := _dashboard_canonical_key("post_type", key))
+                    is not None
+                ))
                 for pt in cls_data["post_types"]:
                     if pt not in row["post_types"]:
                         row["post_types"].append(pt)
-            cls_data["product_labels"] = list(dict.fromkeys(product_keys))
+            cls_data["product_labels"] = list(dict.fromkeys(
+                canonical
+                for key in product_keys
+                if (canonical := _dashboard_canonical_key("product_label", key))
+                is not None
+            ))
             for product_label in cls_data["product_labels"]:
                 if product_label not in row["product_labels"]:
                     row["product_labels"].append(product_label)
@@ -1887,6 +2248,34 @@ def _enrich_posts_with_classifications(
                     row["sentiments"].append(scalar.sentiment)
             cls_data["cn_nationalism"] = scalar.china_nationalism
             cls_data["us_nationalism"] = scalar.us_nationalism
+            cls_data["audience_topics"] = list(dict.fromkeys(
+                key for key in audience_by_tweet.get(tid, {}).get(nick, [])
+                if key in _DASHBOARD_AUDIENCE_TOPIC_KEYS
+            ))
+            cls_data["geopolitical_modes"] = list(dict.fromkeys(
+                key for key in geo_by_tweet.get(tid, {}).get(nick, [])
+                if key in _DASHBOARD_GEOPOLITICAL_MODE_KEYS
+            ))
+            cls_data["audience_topics_status"] = (
+                "available"
+                if v4_state or cls_data["audience_topics"]
+                else "unavailable"
+            )
+            cls_data["geopolitical_modes_status"] = (
+                "available"
+                if _DASHBOARD_GEOPOLITICAL_MODE_KEYS
+                and (v4_state or cls_data["geopolitical_modes"])
+                else "unavailable"
+            )
+            if _DASHBOARD_NATIONAL_STANCE_KEYS and v4_state and state:
+                cls_data["china_national_stance"] = _dashboard_canonical_key(
+                    "national_stance", state.get("china_national_stance_id")
+                )
+                cls_data["us_national_stance"] = _dashboard_canonical_key(
+                    "national_stance", state.get("us_national_stance_id")
+                )
+                cls_data["china_national_stance_status"] = "available"
+                cls_data["us_national_stance_status"] = "available"
             cls_data["scalar_source"] = scalar.source
             cls_data["conflicts"] = list(scalar.conflicts)
             current_outcome = scalar.outcome
@@ -1919,6 +2308,33 @@ def _enrich_posts_with_classifications(
                 if classification.get(axis)
             }
             row[axis] = next(iter(distinct)) if len(distinct) == 1 else None
+        for axis in ("audience_topics", "geopolitical_modes"):
+            row[axis] = list(dict.fromkeys(
+                value
+                for classification in row["classifications_by_brand"].values()
+                for value in classification.get(axis, [])
+            ))
+            statuses = {
+                classification.get(f"{axis}_status")
+                for classification in row["classifications_by_brand"].values()
+            }
+            row[f"{axis}_status"] = (
+                "available" if "available" in statuses else "unavailable"
+            )
+        for axis in ("china_national_stance", "us_national_stance"):
+            values = {
+                classification.get(axis)
+                for classification in row["classifications_by_brand"].values()
+                if classification.get(f"{axis}_status") == "available"
+            }
+            statuses = {
+                classification.get(f"{axis}_status")
+                for classification in row["classifications_by_brand"].values()
+            }
+            row[axis] = next(iter(values)) if len(values) == 1 else None
+            row[f"{axis}_status"] = (
+                "available" if "available" in statuses else "unavailable"
+            )
         row["account"]["role"] = row["role_key"]
         row["account"]["role_key"] = row["role_key"]
         row["account"]["role_label"] = row["role_key"] or ""
@@ -1934,11 +2350,28 @@ def _enrich_posts_with_classifications(
 # Filter helpers (mirrors _post_matches_filter)
 # ============================================================================
 
+_MAX_FILTER_JSON_BYTES = 8_192
+_MAX_FILTER_VALUES_PER_AXIS = 100
+_MAX_FILTER_VALUE_CHARS = 128
+
+
+def _bounded_filter_values(values: Any) -> list[str]:
+    """Bound public filter fan-out before it reaches ORM ``IN`` clauses."""
+    if not isinstance(values, (list, tuple, set)):
+        values = [values] if values not in (None, "") else []
+    return list(
+        dict.fromkeys(
+            str(item)
+            for item in list(values)[:_MAX_FILTER_VALUES_PER_AXIS]
+            if item not in (None, "") and len(str(item)) <= _MAX_FILTER_VALUE_CHARS
+        )
+    )
+
 
 def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
     """Read active control-panel filters from query args."""
     raw = request.GET.get("filters")
-    if raw:
+    if raw and len(raw.encode("utf-8")) <= _MAX_FILTER_JSON_BYTES:
         try:
             data = json.loads(raw)
             if isinstance(data, dict):
@@ -1947,15 +2380,26 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
             log.warning("malformed filters JSON; ignoring")
     out: dict[str, Any] = {}
     for key in (
-        "brands", "product_labels", "post_types", "role", "lang", "sentiment",
-        "cn_nationalism", "us_nationalism", "country", "region",
+        "brands", "product_labels", "post_types", "audience_topics",
+        "geopolitical_modes", "china_national_stance", "us_national_stance",
+        "role", "lang", "sentiment", "cn_nationalism", "us_nationalism",
+        "country", "region",
     ):
         v = request.GET.get(key)
         if v:
-            out[key] = [s for s in v.split(",") if s]
-    unsanctioned = request.GET.get("unsanctioned")
-    if unsanctioned in ("off", "only", "any"):
-        out["unsanctioned"] = unsanctioned
+            out[key] = _bounded_filter_values(v.split(","))
+    promotion_mode = request.GET.get("untracked_brand_promotions")
+    legacy_mode = request.GET.get("unsanctioned")
+    if promotion_mode in ("off", "only", "any"):
+        out["untracked_brand_promotions"] = promotion_mode
+    elif promotion_mode:
+        out["untracked_brand_promotions"] = _bounded_filter_values(
+            promotion_mode.split(",")
+        )
+    elif legacy_mode in ("off", "only", "any"):
+        # Preserve the old filter family.  Its rows have a broader historical
+        # meaning and must not be silently interpreted as current promotions.
+        out["unsanctioned"] = legacy_mode
     try:
         window = int(request.GET.get("window", ""))
     except (TypeError, ValueError):
@@ -2007,15 +2451,54 @@ def _parse_hover_freeze_range(
 
 
 _HOME_MULTI_VALUE_FILTERS: tuple[str, ...] = (
-    "brands", "product_labels", "post_types", "role", "lang", "sentiment",
-    "cn_nationalism", "us_nationalism", "country", "region",
+    "brands", "product_labels", "post_types", "audience_topics",
+    "geopolitical_modes", "china_national_stance", "us_national_stance",
+    "role", "lang", "sentiment", "cn_nationalism", "us_nationalism",
+    "country", "region",
 )
+
+_HOME_PROMOTION_FILTER = "untracked_brand_promotions"
+
+
+def _dashboard_canonical_key(family: str, key: str) -> str | None:
+    """Map compatible stored keys into the current reader vocabulary."""
+    if family == "post_type":
+        if key in _DASHBOARD_POST_TYPE_KEYS:
+            return key
+        return _DASHBOARD_POST_TYPE_ALIASES.get(key)
+    if family == "product_label":
+        if key in _DASHBOARD_PRODUCT_LABEL_KEYS:
+            return key
+        if key == "product_request":
+            return "ideas_requests"
+        return None
+    if family == "audience_topic":
+        return key if key in _DASHBOARD_AUDIENCE_TOPIC_KEYS else None
+    if family == "geopolitical_mode":
+        return key if key in _DASHBOARD_GEOPOLITICAL_MODE_KEYS else None
+    if family == "national_stance":
+        return key if key in _DASHBOARD_NATIONAL_STANCE_KEYS else None
+    if family == "untracked_brand_promotion":
+        return key if key in _DASHBOARD_UNTRACKED_PROMOTION_KEYS else None
+    return key
+
+
+def _dashboard_storage_keys(family: str, selected: list[str]) -> list[str]:
+    """Return all compatible source keys that satisfy selected display keys."""
+    if family == "post_type":
+        rows = taxonomy_crosswalk_rows("post_type")
+        return [source for source, canonical in rows if _dashboard_canonical_key(family, canonical) in selected]
+    if family == "product_label":
+        rows = taxonomy_crosswalk_rows("product_label")
+        return [source for source, canonical in rows if _dashboard_canonical_key(family, canonical) in selected]
+    return list(selected)
 
 
 def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
     """Normalize stable machine keys without treating an empty list as all."""
     source = filters if isinstance(filters, dict) else {}
     normalized: dict[str, Any] = {}
+    unavailable: list[str] = []
     for key in _HOME_MULTI_VALUE_FILTERS:
         if key not in source:
             continue
@@ -2023,25 +2506,84 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
         if value == "__all__":
             normalized[key] = "__all__"
             continue
-        if not isinstance(value, (list, tuple, set)):
-            value = [value] if value not in (None, "") else []
-        values = [str(item) for item in value if item not in (None, "")]
-        family = {"post_types": "post_type", "product_labels": "product_label"}.get(key)
+        values = _bounded_filter_values(value)
+        family = {
+            "post_types": "post_type",
+            "product_labels": "product_label",
+            "audience_topics": "audience_topic",
+            "geopolitical_modes": "geopolitical_mode",
+            "china_national_stance": "national_stance",
+            "us_national_stance": "national_stance",
+        }.get(key)
         if family is not None:
-            values = [
-                canonical
-                for item in values
-                if (canonical := canonicalize_taxonomy_key(family, item)) is not None
-            ]
+            canonical_values: list[str] = []
+            for item in values:
+                canonical = _dashboard_canonical_key(family, item)
+                if canonical is None:
+                    unavailable.append(key)
+                elif canonical not in canonical_values:
+                    canonical_values.append(canonical)
+            values = canonical_values
+        elif key in {"cn_nationalism", "us_nationalism"}:
+            allowed = set(_DASHBOARD_NATIONALISM_KEYS)
+            valid_values: list[str] = []
+            for item in values:
+                if item in allowed:
+                    if item not in valid_values:
+                        valid_values.append(item)
+                else:
+                    unavailable.append(key)
+            values = valid_values
         normalized[key] = list(dict.fromkeys(values))
-    mode = source.get("unsanctioned", "off")
-    normalized["unsanctioned"] = mode if mode in {"off", "only", "any"} else "off"
+        if key in unavailable and not normalized[key]:
+            # A retired-only selection is removed rather than becoming an
+            # empty positive filter that falsely makes the page look empty.
+            normalized[key] = None
+    if _HOME_PROMOTION_FILTER in source:
+        mode = source[_HOME_PROMOTION_FILTER]
+        if not u18a_enabled("untracked_brand_promotions"):
+            unavailable.append(_HOME_PROMOTION_FILTER)
+            # Shadow data is observational only.  It must never suppress a
+            # post merely because the current family is unavailable.
+            normalized[_HOME_PROMOTION_FILTER] = "any"
+        elif isinstance(mode, (list, tuple, set)):
+            promotion_values: list[str] = []
+            for item in mode:
+                canonical = _dashboard_canonical_key(
+                    "untracked_brand_promotion", str(item)
+                )
+                if canonical is None:
+                    unavailable.append(_HOME_PROMOTION_FILTER)
+                elif canonical not in promotion_values:
+                    promotion_values.append(canonical)
+            normalized[_HOME_PROMOTION_FILTER] = promotion_values
+        elif mode in {"off", "only", "any"}:
+            normalized[_HOME_PROMOTION_FILTER] = mode
+        else:
+            unavailable.append(_HOME_PROMOTION_FILTER)
+            normalized[_HOME_PROMOTION_FILTER] = "off"
+    elif "unsanctioned" in source:
+        legacy_mode = source["unsanctioned"]
+        if legacy_mode in {"off", "only", "any"}:
+            normalized["unsanctioned"] = legacy_mode
+            # An old URL asks for the old relation only; current promotion
+            # filtering is intentionally left open for compatibility.
+            normalized[_HOME_PROMOTION_FILTER] = "any"
+        else:
+            unavailable.append("unsanctioned")
+            normalized["unsanctioned"] = "off"
+            normalized[_HOME_PROMOTION_FILTER] = "any"
+    else:
+        normalized[_HOME_PROMOTION_FILTER] = (
+            "off" if u18a_enabled("untracked_brand_promotions") else "any"
+        )
     if "window" in source:
         try:
             window = int(source["window"])
         except (TypeError, ValueError):
             window = HOME_WINDOW_DEFAULT
         normalized["window"] = window if window in ALLOWED_HOME_WINDOWS else HOME_WINDOW_DEFAULT
+    normalized["_unavailable_filters"] = sorted(set(unavailable))
     return normalized
 
 
@@ -2049,11 +2591,15 @@ def _applied_home_filters(
     source: dict[str, Any], normalized: dict[str, Any]
 ) -> dict[str, Any]:
     """Return canonical response metadata without inventing absent defaults."""
-    ordered_keys = _HOME_MULTI_VALUE_FILTERS + ("unsanctioned", "window")
+    ordered_keys = _HOME_MULTI_VALUE_FILTERS + (
+        _HOME_PROMOTION_FILTER, "unsanctioned", "window"
+    )
+    unavailable = set(normalized.get("_unavailable_filters", []))
     return {
         key: normalized[key]
         for key in ordered_keys
         if key in source and key in normalized
+        and key not in unavailable
     }
 
 
@@ -2183,6 +2729,45 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
                 if not post_keys.intersection(active):
                     return False
 
+    # U18A Audience Topics and Geopolitical modes are current-only.  Rows
+    # without the current assignment set remain explicitly unavailable and do
+    # not match a selected positive key.
+    for filter_key, classification_key in (
+        ("audience_topics", "audience_topics"),
+        ("geopolitical_modes", "geopolitical_modes"),
+        ("china_national_stance", "china_national_stance"),
+        ("us_national_stance", "us_national_stance"),
+    ):
+        active = filters.get(filter_key)
+        if active is None or active == "__all__":
+            continue
+        if not active:
+            return False
+        if filter_key.endswith("_stance"):
+            values = {
+                classification.get(classification_key)
+                for classification in scoped_classifications
+                if classification.get(f"{classification_key}_status") == "available"
+            }
+        else:
+            values = {
+                value
+                for classification in scoped_classifications
+                if classification.get(f"{classification_key}_status") == "available"
+                for value in classification.get(classification_key, [])
+            }
+        if not classifications_by_brand:
+            if filter_key.endswith("_stance"):
+                values = {
+                    post.get(classification_key)
+                } if post.get(f"{classification_key}_status") == "available" else set()
+            else:
+                values = set(post.get(classification_key) or []) if post.get(
+                    f"{classification_key}_status"
+                ) == "available" else set()
+        if not values.intersection(active):
+            return False
+
     # Lang
     lang = filters.get("lang")
     if lang is not None and lang != "__all__":
@@ -2203,13 +2788,31 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
                 if "other" not in lang:
                     return False
 
-    # Unsanctioned
-    mode = filters.get("unsanctioned") or "off"
-    is_flagged = bool(post.get("unsanctioned"))
-    if mode == "off" and is_flagged:
+    # Legacy unsanctioned links remain a separate compatibility path.  They
+    # inspect the old post-level flag, while the visible current control
+    # inspects only the current Untracked Brand Promotions result.
+    legacy_mode = filters.get("unsanctioned")
+    legacy_flagged = bool(
+        post.get("legacy_unsanctioned", post.get("unsanctioned", False))
+    )
+    if legacy_mode == "off" and legacy_flagged:
         return False
-    if mode == "only" and not is_flagged:
+    if legacy_mode == "only" and not legacy_flagged:
         return False
+
+    mode = filters.get(_HOME_PROMOTION_FILTER) or (
+        "off" if u18a_enabled("untracked_brand_promotions") else "any"
+    )
+    promotion_keys = set(post.get("untracked_brand_promotions") or [])
+    if isinstance(mode, list):
+        if not promotion_keys.intersection(mode):
+            return False
+    else:
+        is_flagged = bool(promotion_keys)
+        if mode == "off" and is_flagged:
+            return False
+        if mode == "only" and not is_flagged:
+            return False
 
     return True
 
@@ -2278,11 +2881,7 @@ def _filter_home_posts_queryset(
             taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
-        stored_types = [
-            source
-            for source, canonical in taxonomy_crosswalk_rows("post_type")
-            if canonical in active_types
-        ]
+        stored_types = _dashboard_storage_keys("post_type", active_types)
         matching_types = PostBrandSignal.objects.filter(
             post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
         ).filter(Exists(current_classified_edge))
@@ -2301,17 +2900,66 @@ def _filter_home_posts_queryset(
             taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
-        stored_products = [
-            source
-            for source, canonical in taxonomy_crosswalk_rows("product_label")
-            if canonical in active_products
-        ]
+        stored_products = _dashboard_storage_keys("product_label", active_products)
         matching_products = PostBrandProductLabel.objects.filter(
             post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
         ).filter(Exists(current_classified_edge))
         if brand_scope not in (None, "__all__"):
             matching_products = matching_products.filter(brand_id__in=brand_scope)
         queryset = queryset.filter(Exists(matching_products))
+
+    active_topics = normalized_filters.get("audience_topics")
+    if active_topics is not None and active_topics != "__all__":
+        if not active_topics:
+            return queryset.none()
+        audience_revision = AudienceTopicScheme.objects.filter(
+            key="ai_audience_topics/v1"
+        ).values_list("revision", flat=True).first()
+        if audience_revision is None:
+            return queryset.none()
+        matching_topics = PostBrandAudienceTopic.objects.filter(
+            post_id=OuterRef("tweet_id"),
+            concept__key__in=active_topics,
+            scheme_id="ai_audience_topics/v1",
+            scheme_revision=audience_revision,
+        )
+        if brand_scope not in (None, "__all__"):
+            matching_topics = matching_topics.filter(brand_id__in=brand_scope)
+        queryset = queryset.filter(Exists(matching_topics))
+
+    active_geo = normalized_filters.get("geopolitical_modes")
+    if active_geo is not None and active_geo != "__all__":
+        if not active_geo:
+            return queryset.none()
+        matching_geo = PostBrandGeopoliticalMode.objects.filter(
+            post_id=OuterRef("tweet_id"), geopolitical_mode_id__in=active_geo,
+        ).filter(
+            Q(taxonomy_version__icontains="v4")
+            | Q(taxonomy_version__icontains="u18a")
+        )
+        if brand_scope not in (None, "__all__"):
+            matching_geo = matching_geo.filter(brand_id__in=brand_scope)
+        queryset = queryset.filter(Exists(matching_geo))
+
+    for filter_key, db_field in (
+        ("china_national_stance", "china_national_stance_id"),
+        ("us_national_stance", "us_national_stance_id"),
+    ):
+        active = normalized_filters.get(filter_key)
+        if active is None or active == "__all__":
+            continue
+        if not active:
+            return queryset.none()
+        current_stances = PostBrandClassificationState.objects.filter(
+            post_id=OuterRef("tweet_id"),
+            **{f"{db_field}__in": active},
+        ).filter(
+            Q(taxonomy_version__icontains="v4")
+            | Q(taxonomy_version__icontains="u18a")
+        )
+        if brand_scope not in (None, "__all__"):
+            current_stances = current_stances.filter(brand_id__in=brand_scope)
+        queryset = queryset.filter(Exists(current_stances))
 
     active_countries = normalized_filters.get("country")
     if active_countries is not None and active_countries != "__all__":
@@ -2417,11 +3065,31 @@ def _filter_home_posts_queryset(
             role_condition |= Q(_has_known_role=False)
         queryset = queryset.filter(role_condition)
 
-    unsanctioned = normalized_filters.get("unsanctioned", "off")
-    if unsanctioned == "off":
+    legacy_mode = normalized_filters.get("unsanctioned")
+    if legacy_mode == "off":
         queryset = queryset.filter(unsanctioned_flags__isnull=True)
-    elif unsanctioned == "only":
+    elif legacy_mode == "only":
         queryset = queryset.filter(unsanctioned_flags__isnull=False)
+
+    promotion_mode = normalized_filters.get(
+        _HOME_PROMOTION_FILTER,
+        "off" if u18a_enabled("untracked_brand_promotions") else "any",
+    )
+    if isinstance(promotion_mode, list):
+        if not promotion_mode:
+            return queryset.none()
+        promotion_match = Q()
+        for key in promotion_mode:
+            promotion_match |= Q(
+                untracked_brand_promotion__promotion_keys__contains=[key]
+            )
+        queryset = queryset.filter(promotion_match)
+    elif promotion_mode == "off":
+        queryset = queryset.filter(untracked_brand_promotion__isnull=True)
+        if legacy_mode is None:
+            queryset = queryset.filter(unsanctioned_flags__isnull=True)
+    elif promotion_mode == "only":
+        queryset = queryset.filter(untracked_brand_promotion__isnull=False)
     return queryset.distinct()
 
 
@@ -2509,11 +3177,31 @@ def _build_home_chart_payload(
             post__created_at__gte=now - timedelta(days=window_days),
             post__created_at__lt=now,
         )
-        unsanctioned = normalized_filters.get("unsanctioned", "off")
-        if unsanctioned == "off":
+        legacy_mode = normalized_filters.get("unsanctioned")
+        if legacy_mode == "off":
             links = links.filter(post__unsanctioned_flags__isnull=True)
-        elif unsanctioned == "only":
+        elif legacy_mode == "only":
             links = links.filter(post__unsanctioned_flags__isnull=False)
+        promotion_mode = normalized_filters.get(
+            _HOME_PROMOTION_FILTER,
+            "off" if u18a_enabled("untracked_brand_promotions") else "any",
+        )
+        if isinstance(promotion_mode, list):
+            if not promotion_mode:
+                links = links.none()
+            else:
+                promotion_match = Q()
+                for key in promotion_mode:
+                    promotion_match |= Q(
+                        post__untracked_brand_promotion__promotion_keys__contains=[key]
+                    )
+                links = links.filter(promotion_match)
+        elif promotion_mode == "off":
+            links = links.filter(post__untracked_brand_promotion__isnull=True)
+            if legacy_mode is None:
+                links = links.filter(post__unsanctioned_flags__isnull=True)
+        elif promotion_mode == "only":
+            links = links.filter(post__untracked_brand_promotion__isnull=False)
 
     if window_days == 1:
         # Minute granularity: 288 5-minute buckets, oldest-first labels
@@ -2844,6 +3532,72 @@ def _home_preferences_namespace(request: HttpRequest) -> str:
     ).hexdigest()[:16]
 
 
+def _classification_unavailable_notice(locale: str) -> str:
+    """Return the single localized notice used for retired/invalid filters."""
+    if _is_zh_locale(locale):
+        return "此页面的部分分类筛选不可用，已移除。"
+    if _is_ja_locale(locale):
+        return "このページでは利用できない分類フィルターを削除しました。"
+    return "Some classification filters are unavailable for this page and were removed."
+
+
+def _home_canonical_url(
+    request: HttpRequest,
+    requested: dict[str, Any],
+    normalized: dict[str, Any],
+) -> str:
+    """Build a shareable URL after dropping invalid classification values."""
+    if not normalized.get("_unavailable_filters"):
+        return ""
+    params = request.GET.copy()
+    raw = params.get("filters")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            parsed = {}
+        if isinstance(parsed, dict):
+            for key in _HOME_MULTI_VALUE_FILTERS + (
+                _HOME_PROMOTION_FILTER, "unsanctioned"
+            ):
+                if key not in parsed or key not in normalized:
+                    continue
+                if key in normalized.get("_unavailable_filters", []):
+                    parsed.pop(key, None)
+                    continue
+                value = normalized[key]
+                if value is None:
+                    parsed.pop(key, None)
+                elif value == "off" and key == _HOME_PROMOTION_FILTER:
+                    parsed.pop(key, None)
+                elif value == "any" and key == "unsanctioned":
+                    parsed[key] = value
+                elif isinstance(value, list):
+                    if value:
+                        parsed[key] = value
+                    else:
+                        parsed.pop(key, None)
+            params["filters"] = json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+    else:
+        for key in _HOME_MULTI_VALUE_FILTERS:
+            if key not in params:
+                continue
+            value = normalized.get(key)
+            if value is None or not value or value == "__all__":
+                params.pop(key, None)
+            elif isinstance(value, list):
+                params[key] = ",".join(value)
+        for key in (_HOME_PROMOTION_FILTER, "unsanctioned"):
+            if key in params and key in normalized:
+                value = normalized[key]
+                if value in {"off", "any"}:
+                    params.pop(key, None)
+                elif isinstance(value, list):
+                    params[key] = ",".join(value)
+    split = urlsplit(request.get_full_path())
+    return urlunsplit((split.scheme, split.netloc, split.path, urlencode(params, doseq=True), split.fragment))
+
+
 @ensure_csrf_cookie
 def home(request: HttpRequest) -> HttpResponse:
     """GET / — multi-brand Pushin' Weight home page.
@@ -2862,8 +3616,13 @@ def home(request: HttpRequest) -> HttpResponse:
         "window": window_days,
     }
     requested_filters = _parse_filters_from_request(request)
+    normalized_requested_filters = _normalize_home_filters(requested_filters)
     if requested_filters:
-        initial_filters.update(_normalize_home_filters(requested_filters))
+        initial_filters.update({
+            key: value
+            for key, value in normalized_requested_filters.items()
+            if not key.startswith("_")
+        })
         # Keep all server projections on the same already-resolved window.
         initial_filters["window"] = window_days
 
@@ -2910,6 +3669,13 @@ def home(request: HttpRequest) -> HttpResponse:
         "app_name_en": APP_DISPLAY_NAME_EN,
         "app_title_zh": APP_TITLE_ZH,
         "home_preferences_namespace": _home_preferences_namespace(request),
+        "classification_unavailable_notice": (
+            _classification_unavailable_notice(locale)
+            if normalized_requested_filters.get("_unavailable_filters") else ""
+        ),
+        "canonical_home_url": _home_canonical_url(
+            request, requested_filters, normalized_requested_filters
+        ),
         "country_flag_codes_json": json.dumps(sorted(COUNTRY_FLAG_CODES)),
         **filter_entries,
         "pulse": initial_chart_payload["pulse"],
@@ -3103,6 +3869,12 @@ def _serialize_feed_row(
     classifications: dict[str, dict[str, Any]] = {}
     for nick, cls in (post.get("classifications_by_brand") or {}).items():
         status = cls.get("classification_status", "historical_untyped")
+        audience_status = cls.get("audience_topics_status", "unavailable")
+        geo_status = cls.get("geopolitical_modes_status", "unavailable")
+        cn_stance_status = cls.get(
+            "china_national_stance_status", "unavailable"
+        )
+        us_stance_status = cls.get("us_national_stance_status", "unavailable")
         classifications[nick] = {
             "product_labels": [
                 v for v in (
@@ -3124,6 +3896,30 @@ def _serialize_feed_row(
             ],
             "cn_nationalism": _labelize("nationalism", cls.get("cn_nationalism")),
             "us_nationalism": _labelize("nationalism", cls.get("us_nationalism")),
+            "audience_topics": [
+                v for v in (
+                    _labelize("audience_topic", k)
+                    for k in (cls.get("audience_topics") or [])
+                ) if v is not None
+            ] if audience_status == "available" else [],
+            "audience_topics_status": audience_status,
+            "geopolitical_modes": [
+                v for v in (
+                    _labelize("geopolitical_mode", k)
+                    for k in (cls.get("geopolitical_modes") or [])
+                ) if v is not None
+            ] if geo_status == "available" else [],
+            "geopolitical_modes_status": geo_status,
+            "china_national_stance": (
+                _labelize("national_stance", cls.get("china_national_stance"))
+                if cn_stance_status == "available" else None
+            ),
+            "china_national_stance_status": cn_stance_status,
+            "us_national_stance": (
+                _labelize("national_stance", cls.get("us_national_stance"))
+                if us_stance_status == "available" else None
+            ),
+            "us_national_stance_status": us_stance_status,
             "role_label": cls.get("role_label"),
             "classification_status": status,
             "classification_status_label": _classification_status_label(status, locale),
@@ -3203,12 +3999,17 @@ def _serialize_feed_row(
         "reply_count": post.get("reply_count", 0),
         "brands": brands,
         "brand_nicknames": post.get("brand_nicknames", []),
+        "untracked_brand_promotions": (
+            post.get("untracked_brand_promotions", [])
+            if u18a_enabled("untracked_brand_promotions") else []
+        ),
         "classifications": classifications,
         "signal_inspections": signal_inspections,
         "signal_inspections_json": json.dumps(
             signal_inspections, ensure_ascii=False, separators=(",", ":")
         ),
         "unsanctioned": unsanctioned,
+        "legacy_unsanctioned": bool(post.get("legacy_unsanctioned", False)),
         "enrichment_status": post.get(
             "enrichment_status", PostEnrichmentState.Status.SUCCEEDED
         ),
@@ -3391,6 +4192,7 @@ def _feed_page_wire(
         posts,
         brand_nickname=brand_nickname,
         include_geography=include_geography,
+        label_locales=(locale,),
     )
     rows = [
         _serialize_feed_row(
@@ -3464,6 +4266,13 @@ def home_feed_json(request: HttpRequest) -> JsonResponse:
         "next_cursor": next_cursor,
         "has_more": has_more,
         "applied_filters": _applied_home_filters(filters, normalized),
+        "classification_unavailable": {
+            "fields": normalized.get("_unavailable_filters", []),
+            "notice": (
+                _classification_unavailable_notice(locale)
+                if normalized.get("_unavailable_filters") else ""
+            ),
+        },
         "locale": locale,
     })
 
@@ -3516,6 +4325,13 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
         "next_cursor": next_cursor,
         "has_more": has_more,
         "applied_filters": _applied_home_filters(filters, normalized),
+        "classification_unavailable": {
+            "fields": normalized.get("_unavailable_filters", []),
+            "notice": (
+                _classification_unavailable_notice(locale)
+                if normalized.get("_unavailable_filters") else ""
+            ),
+        },
         "locale": locale,
     })
 
@@ -3638,6 +4454,13 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     locale = _resolve_locale(request)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
+    payload["classification_unavailable"] = {
+        "fields": filters.get("_unavailable_filters", []),
+        "notice": (
+            _classification_unavailable_notice(locale)
+            if filters.get("_unavailable_filters") else ""
+        ),
+    }
     return JsonResponse(payload)
 
 
@@ -3652,6 +4475,13 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     filters = _normalize_home_filters(requested_filters)
     payload = _build_home_chart_payload(window_days, filters, locale=locale)
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
+    payload["classification_unavailable"] = {
+        "fields": filters.get("_unavailable_filters", []),
+        "notice": (
+            _classification_unavailable_notice(locale)
+            if filters.get("_unavailable_filters") else ""
+        ),
+    }
     return render(
         request,
         "monitor/_home_chart.html",
@@ -3799,6 +4629,13 @@ def brand_chart_json(request: HttpRequest, brand: str) -> JsonResponse:
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
+    payload["classification_unavailable"] = {
+        "fields": filters.get("_unavailable_filters", []),
+        "notice": (
+            _classification_unavailable_notice(_resolve_locale(request))
+            if filters.get("_unavailable_filters") else ""
+        ),
+    }
     return JsonResponse(payload)
 
 
@@ -3821,6 +4658,13 @@ def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
         brand_nickname, window_days, filters, tab, locale=_resolve_locale(request)
     )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
+    payload["classification_unavailable"] = {
+        "fields": filters.get("_unavailable_filters", []),
+        "notice": (
+            _classification_unavailable_notice(_resolve_locale(request))
+            if filters.get("_unavailable_filters") else ""
+        ),
+    }
     return render(
         request,
         "monitor/_brand_chart.html",

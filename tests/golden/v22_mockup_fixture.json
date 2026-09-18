@@ -393,7 +393,7 @@
         "handle": "@awnihannun",
         "offset_minutes": 24,
         "post_types": [
-          "results_evaluations",
+        "results_analysis",
           "questions_requests"
         ],
         "sentiments": [

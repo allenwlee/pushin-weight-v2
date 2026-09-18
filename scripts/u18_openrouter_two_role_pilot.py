@@ -29,11 +29,11 @@ from pathlib import Path
 from typing import Any
 
 from core.classification_contract import (
-    CANONICAL_POST_TYPE_KEYS,
-    CANONICAL_PRODUCT_LABEL_KEYS,
     NATIONALISM_KEYS,
     OUTCOMES,
     SENTIMENT_KEYS,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
     parse_stage1_classifications,
 )
 from x_monitor.attribution import (
@@ -47,6 +47,11 @@ from x_monitor.attribution import (
 )
 from x_monitor.openrouter import OpenRouterPermanentError, OpenRouterRetryableError
 from x_monitor.provider_telemetry import ProviderResponse, normalize_usage
+
+# This evaluator replays the frozen v3 experiment. Live v4 vocabulary must
+# not change its historical denominator or release floors.
+CANONICAL_POST_TYPE_KEYS = STAGE1_TAXONOMY_V3_POST_TYPE_KEYS
+CANONICAL_PRODUCT_LABEL_KEYS = STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / ".context/u18/human-ambiguity-study-v1/selection-manifest.json"

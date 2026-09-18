@@ -8,7 +8,7 @@ type: research
 
 Each candidate gets its own attempt to deliver error-free results for its assigned task, with a bounded tuning budget.
 The canonical execution plan is [U25–U29 in the enrichment plan](../plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md#u25-freeze-model-specific-route-and-request-profiles).
-This report contains documentation findings and starting hypotheses; it contains no new inference results.
+This report contains documentation findings and starting hypotheses. The execution addendum below records the first route probe; semantic quality remains unassessed until the task trials are reviewed.
 
 ## Evidence and pricing boundary
 
@@ -19,13 +19,13 @@ Catalog capabilities describe a model family across routes; only a pinned provid
 
 | Candidate | Assigned tasks | Saved input/output USD per million tokens | Price evidence |
 | --- | --- | --- | --- |
-| Qwen3.7 Flash | Classification, translation, commentary | 0.03 / 0.13 below 32,000 input tokens | Alibaba endpoint; larger inputs have separate saved tiers |
-| Gemini 2.5 Flash-Lite | Classification, translation, commentary | Flex 0.05 / 0.20; standard 0.10 / 0.40 | Separate saved Google AI Studio endpoint tiers |
+| Qwen3.7 Flash | Translation, commentary; classifier trials closed | 0.03 / 0.13 below 32,000 input tokens | Alibaba endpoint; larger inputs have separate saved tiers |
+| Gemini 2.5 Flash-Lite | Translation, commentary; classifier trials stopped | Flex 0.05 / 0.20; standard 0.10 / 0.40 | Separate saved Google AI Studio endpoint tiers |
 | Hy-MT2-1.8B | Translation | 0.044 / 0.177 | Catalog only; endpoint not captured |
 | Hy-MT2-7B | Translation | 0.074 / 0.295 | Catalog only; endpoint not captured |
-| GPT-OSS-120B | Classification and commentary reserve | 0.037 / 0.17 | Catalog only; endpoint not captured |
-| GPT-5 Nano | Classification reserve | 0.05 / 0.40 | Catalog only; endpoint not captured |
-| DeepSeek V4 Flash 0731 | Existing evidence/control | 0.06 / 0.18 | Pinned DeepInfra FP8 endpoint; catalog headline is a different price |
+| GPT-OSS-120B | Commentary reserve only | 0.037 / 0.17 | Catalog only; endpoint not captured |
+| GPT-5 Nano | Removed from remaining scope | 0.05 / 0.40 | Catalog only; endpoint not captured |
+| DeepSeek V4 Flash 0731 | Owner-selected classifier | 0.06 / 0.18 | Pinned DeepInfra FP8 endpoint; catalog headline is a different price |
 
 An endpoint not captured is **unknown**, not an empty endpoint list or an unavailable model.
 Qwen and Gemini do have endpoint captures.
@@ -127,3 +127,20 @@ Do not copy DeepSeek's accepted parameters into a universal profile.
 Before each model's first quality run, the profile must resolve exact provider/model identity, accepted reasoning/sampling/output parameters, effective context/output limits, token accounting, endpoint/tier behavior, credential availability, and lifecycle.
 Unknown compatibility is resolved by a separately budgeted small probe, not guessed during a full corpus run.
 No new model can claim zero error merely because its output parses; reference blanks, unavailable context, unsupported languages, unresolved semantic reviews, and missing outputs remain visible.
+
+## Execution addendum — September 17
+
+The owner authorized up to three configuration attempts per model/task, with automatic diagnosis, delegated reports, and corrections. The owner subsequently replaced the 1% threshold: success now means equal or better reviewed quality than DeepSeek V4.1 Flash on matching source/context and required outputs, independently per task (R113 / Delivery Exception 30). Semantic, structural, transport and coverage failures count for both arms. Model disagreement alone is not error. Original frozen run criteria remain historical; decisions use versioned parity reassessments. Diagnostic parity alone advances to regression/fresh qualification rather than certifying population quality.
+
+The new immutable specialist endpoint snapshot is explicitly adopted as supplemental price authority for future specialist contracts: `docs/research/2026-09-17-062006-model-specialist-endpoints/manifest.json`, SHA-256 `46e265fd438f4f85d0766103987d8b10f310d4966f49dd04b3c8716d0e6b4c38`. It contains 30 endpoint records across all four previously catalog-only candidates. Their status in the original table describes the earlier snapshot; the new snapshot now resolves endpoint availability at capture time. Each paid specialist contract must name its exact selected record and this manifest. Qwen and Gemini retain the original snapshot authority.
+
+A single Qwen Alibaba capability probe returned a Japanese translation in 0.96 seconds, with 32 input tokens, 13 output tokens, zero reported reasoning tokens, `finish_reason=stop`, and reported cost $0.00000265. It pinned `qwen/qwen3.7-flash` to `alibaba`, disabled reasoning and fallback, and used raw text. Evidence: `.context/model-task-20260917/qwen-route-probe/`. This establishes a working request, not translation accuracy or production latency.
+
+Two additional one-request probes also completed with `finish_reason=stop`: Gemini 2.5 Flash-Lite on `google-ai-studio/flex` accepted strict JSON Schema, returned an explicit `service_tier=flex`, and reported 24 input/22 output/zero reasoning tokens in 1.02 seconds ($0.0000056); Tencent Hy-MT2-1.8B on `tencent/fp8` accepted its documented user-only translation template with temperature 0.7 and no unsupported sampling or reasoning fields, reporting 35 input/16 output/zero reasoning tokens in 0.50 seconds ($0.000004372). Evidence is in the adjacent `gemini-route-probe/` and `hy18-route-probe/` directories. Each probe reserved $0.001 before its single send; no retries or fallback occurred. Reported costs are observations, while forward reservations remain snapshot-based.
+
+Classifier preparation uncovered an important version distinction: `x_monitor/classifier_0731_prompts.py` is the historical r123 prompt with 13 post types and legacy flags. Its revision suffix `v4` does not mean the proposed expanded taxonomy. The newer experiment contract includes Audience Topics, Geopolitical modes, claim investigation, and untracked-brand promotions. Tests must label these contracts explicitly and cannot claim expanded-taxonomy qualification from the legacy runtime prompt or incomplete historical references.
+
+
+## Current execution scope after owner classifier selection
+
+The owner selected cloud 0731 for classification and stopped all further alternative classifier tests. Earlier classification advice and completed results above remain historical research, not pending authorization. Continue only translation/commentary candidate trials against 4.1 quality parity. Keep prepared/unspent classifier contracts without running or deleting them. GPT-OSS remains a commentary reserve; GPT-5 Nano is no longer queued. The selected classifier still receives normal integration/regression verification for staging, without reopening model selection.

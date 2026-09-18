@@ -27,7 +27,7 @@ from monitor.post_synthesis import (
     request_post_synthesis,
 )
 from x_monitor.config import SynthesisConfig
-from x_monitor.provider_telemetry import ProviderResponse
+from x_monitor.provider_telemetry import ProviderTextResponse
 from x_monitor.synthesis import SynthesisResponse
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -126,6 +126,41 @@ def test_literal_publication_rejects_output_for_obsolete_source():
     )
 
     assert artifact is None
+    assert not PostTranslationArtifact.objects.exists()
+
+
+def test_literal_publication_rejects_response_from_reassigned_claim():
+    post = Post.objects.create(
+        tweet_id="reassigned-literal",
+        text="source",
+        text_en="newer English",
+        text_zh_cn="较新的中文",
+    )
+    PostEnrichmentState.objects.create(
+        post=post,
+        claim_run_id="new-run",
+        claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+
+    artifact = publish_literal_translation(
+        post=post,
+        row={
+            "tweet_id": post.pk,
+            "lang_detected": "ja",
+            "text_en": "stale English",
+            "text_zh_cn": "过时的中文",
+            "text_ja": "source",
+        },
+        expected_source_fingerprint=source_content_fingerprint(post),
+        expected_claim_run_id="old-run",
+        prompt_version="literal-v1",
+        model="google/gemma-4-31B-it-turbo",
+    )
+
+    post.refresh_from_db()
+    assert artifact is None
+    assert post.text_en == "newer English"
+    assert post.text_zh_cn == "较新的中文"
     assert not PostTranslationArtifact.objects.exists()
 
 
@@ -288,7 +323,7 @@ def test_two_workers_claim_disjoint_rows():
 def test_abandoned_lease_is_reclaimed_and_old_fence_cannot_publish():
     post = Post.objects.create(tweet_id="lease-recovery", text="post")
     now = timezone.now()
-    config = _config(batch_size=1, lease_seconds=30)
+    config = _config(batch_size=1, lease_seconds=65, timeout_seconds=5)
     request_post_synthesis(
         post_ids=[post.pk], reason="operator", config=config, now=now
     )
@@ -319,28 +354,28 @@ def test_abandoned_lease_is_reclaimed_and_old_fence_cannot_publish():
 
 
 class _SynthesisClient:
-    _base_url = "https://api.deepseek.com/anthropic"
+    _base_url = "https://api.deepinfra.com/v1/openai/chat/completions"
 
     def __init__(self):
         self.calls: list[dict] = []
 
-    def messages_create(self, **kwargs):
+    def messages_create_text(self, **kwargs):
         self.calls.append(kwargs)
-        return ProviderResponse(
-            {
-                "post_id": "worker-1",
-                "commentary_en": _synthesis_values()["en"],
-                "commentary_zh_cn": _synthesis_values()["zh-cn"],
-                "commentary_ja": _synthesis_values()["ja"],
-            },
-            usage={"input_tokens": 42, "output_tokens": 24},
+        return ProviderTextResponse(
+            text=(
+                "[[POST_ID]]worker-1[[/POST_ID]]\n"
+                f"[[EN]]{_synthesis_values()['en']}[[/EN]]\n"
+                f"[[ZH_CN]]{_synthesis_values()['zh-cn']}[[/ZH_CN]]\n"
+                f"[[JA]]{_synthesis_values()['ja']}[[/JA]]"
+            ),
+            provider_usage={"input_tokens": 42, "output_tokens": 24},
         )
 
 
 class _FailingSynthesisClient:
-    _base_url = "https://api.deepseek.com/anthropic"
+    _base_url = "https://api.deepinfra.com/v1/openai/chat/completions"
 
-    def messages_create(self, **_kwargs):
+    def messages_create_text(self, **_kwargs):
         raise TimeoutError("provider unavailable")
 
 
@@ -365,8 +400,9 @@ def test_worker_publishes_locale_complete_artifact_and_observed_usage():
     assert demand.artifact_id is not None
     assert budget.observed_input_tokens == 42
     assert budget.observed_output_tokens == 24
-    assert client.calls[0]["model"] == "deepseek-v4-flash"
-    assert client.calls[0]["thinking"] == {"type": "disabled"}
+    assert client.calls[0]["model"] == "google/gemma-4-31B-it-turbo"
+    assert client.calls[0]["temperature"] == 0.2
+    assert "thinking" not in client.calls[0]
 
 
 def test_worker_failure_persists_artifact_state_and_keeps_demand_retryable():

@@ -1,0 +1,366 @@
+{
+  "schema_version": "u18-random-fresh-10-owner-review/v1",
+  "generated_at_local_jst": "2026-09-16T07:04:16.405716+09:00",
+  "review_status": "unreviewed",
+  "purpose": "Uniform random extension of the two prior U18 45-post corpora to a combined 100 unique posts.",
+  "case_id_range": [
+    "L100-91",
+    "L100-100"
+  ],
+  "selection": {
+    "database": "Production PostgreSQL via Render CLI routed over SSH through fuchitalee; read-only query.",
+    "postgres_sampled_at": "2026-09-15T22:03:01.98781+00:00",
+    "window_start_inclusive": "2026-09-14T22:03:01.98781+00:00",
+    "window_end_inclusive": "2026-09-15T22:03:01.98781+00:00",
+    "window_definition": "posts.created_at >= sampled_at - interval 24 hours AND posts.created_at <= sampled_at",
+    "eligible_posts_before_random_sample": 3037,
+    "eligibility": "Nonempty posts.text; created_at within the DB-clock window; at least one row in posts_brands_signals; not in the prior 90-case corpus.",
+    "sampling_method": "PostgreSQL ORDER BY random() LIMIT 10 over eligible distinct posts (posts is keyed by tweet_id); selected brand is independently uniform among each selected post’s signal-backed brands. No stratification by language, role, brand, or label.",
+    "returned_order": "Preserved exactly as PostgreSQL sample_order 1 through 10; case IDs assigned in that order.",
+    "prior_corpus_exclusion": {
+      "count": 90,
+      "sources": [
+        ".context/u18/prior45-v4-0731-r123-v1/packets.json (45 example_id values)",
+        ".context/u18/fresh45-v4-0731-best-r122-v1/packets.json (45 tweet_id values)"
+      ],
+      "excluded_tweet_ids": [
+        "2077190074836672886",
+        "2077404641139249235",
+        "2077433678347862468",
+        "2077981204746588164",
+        "2079708984769237239",
+        "2081630231430058433",
+        "2081687339911536725",
+        "2081689929038680109",
+        "2083343038970200420",
+        "2083424927999316471",
+        "2083429695295730080",
+        "2083816364754829555",
+        "2083925823778619789",
+        "2084410948358705273",
+        "2084599933899022648",
+        "2085604648636055560",
+        "2085626339231662202",
+        "2085746464031125556",
+        "2085757182294085760",
+        "2085933154075058393",
+        "2086923112126218736",
+        "2086987168908763289",
+        "2087058909425189149",
+        "2087193257520546294",
+        "2087554449141309700",
+        "2087672645865427391",
+        "2087951553957356001",
+        "2088168761018962048",
+        "2088186471467319398",
+        "2088186895125602568",
+        "2088212924884242800",
+        "2088481519186895150",
+        "2088577664504492475",
+        "2088584334584500312",
+        "2089363740433260689",
+        "2089623292722438206",
+        "2089956948191920494",
+        "2089975653370147229",
+        "2090189053388108166",
+        "2090532272730689649",
+        "2090728083427151968",
+        "2090955821484011903",
+        "2091208778444075390",
+        "2091390324828745768",
+        "2091909174754005500",
+        "2091939377693733305",
+        "2092380161903886458",
+        "2092447639904408053",
+        "2092458261656027486",
+        "2092561644203438232",
+        "2092588495869280614",
+        "2092668035593072972",
+        "2092722804693327873",
+        "2092803322298195969",
+        "2092980068603846726",
+        "2093732660270989715",
+        "2094088018424434933",
+        "2094092037763014777",
+        "2094209458775949795",
+        "2094847763720577451",
+        "2094965241201512884",
+        "2095414910863958417",
+        "2095436921925226536",
+        "2095518760623116311",
+        "2095674858747081069",
+        "2095797586469040310",
+        "2096243130098159952",
+        "2097002884147872080",
+        "2097670774702363074",
+        "2097672725099663811",
+        "2097735964974088610",
+        "2098056192602017960",
+        "2098105443046617096",
+        "2098235570510295162",
+        "2098431310171681015",
+        "2098644460813078534",
+        "2098687322300506607",
+        "2098791275952542054",
+        "2098804615315628338",
+        "2099086329594216546",
+        "2099101409832788037",
+        "2099382617464594701",
+        "2099423138501239079",
+        "2099464198770102680",
+        "2099470616092930513",
+        "2099496003812655607",
+        "2099626765819793511",
+        "2099636632148168796",
+        "2099649402432561436",
+        "2099652067568894162"
+      ],
+      "selected_overlap_count": 0
+    },
+    "read_only_query_sha256": "4939df773d9c6abcde44d4224da756172363154b35f6e6193e3500906cfe921a",
+    "render_cli_command": "render psql dpg-d9koekqjobas73fvjqng-a --command <frozen SQL> --output text -- --csv -q -t",
+    "read_only_sql": "WITH db_clock AS (SELECT clock_timestamp() AS sampled_at), excluded(tweet_id) AS (VALUES\n('2077190074836672886'),\n('2077404641139249235'),\n('2077433678347862468'),\n('2077981204746588164'),\n('2079708984769237239'),\n('2081630231430058433'),\n('2081687339911536725'),\n('2081689929038680109'),\n('2083343038970200420'),\n('2083424927999316471'),\n('2083429695295730080'),\n('2083816364754829555'),\n('2083925823778619789'),\n('2084410948358705273'),\n('2084599933899022648'),\n('2085604648636055560'),\n('2085626339231662202'),\n('2085746464031125556'),\n('2085757182294085760'),\n('2085933154075058393'),\n('2086923112126218736'),\n('2086987168908763289'),\n('2087058909425189149'),\n('2087193257520546294'),\n('2087554449141309700'),\n('2087672645865427391'),\n('2087951553957356001'),\n('2088168761018962048'),\n('2088186471467319398'),\n('2088186895125602568'),\n('2088212924884242800'),\n('2088481519186895150'),\n('2088577664504492475'),\n('2088584334584500312'),\n('2089363740433260689'),\n('2089623292722438206'),\n('2089956948191920494'),\n('2089975653370147229'),\n('2090189053388108166'),\n('2090532272730689649'),\n('2090728083427151968'),\n('2090955821484011903'),\n('2091208778444075390'),\n('2091390324828745768'),\n('2091909174754005500'),\n('2091939377693733305'),\n('2092380161903886458'),\n('2092447639904408053'),\n('2092458261656027486'),\n('2092561644203438232'),\n('2092588495869280614'),\n('2092668035593072972'),\n('2092722804693327873'),\n('2092803322298195969'),\n('2092980068603846726'),\n('2093732660270989715'),\n('2094088018424434933'),\n('2094092037763014777'),\n('2094209458775949795'),\n('2094847763720577451'),\n('2094965241201512884'),\n('2095414910863958417'),\n('2095436921925226536'),\n('2095518760623116311'),\n('2095674858747081069'),\n('2095797586469040310'),\n('2096243130098159952'),\n('2097002884147872080'),\n('2097670774702363074'),\n('2097672725099663811'),\n('2097735964974088610'),\n('2098056192602017960'),\n('2098105443046617096'),\n('2098235570510295162'),\n('2098431310171681015'),\n('2098644460813078534'),\n('2098687322300506607'),\n('2098791275952542054'),\n('2098804615315628338'),\n('2099086329594216546'),\n('2099101409832788037'),\n('2099382617464594701'),\n('2099423138501239079'),\n('2099464198770102680'),\n('2099470616092930513'),\n('2099496003812655607'),\n('2099626765819793511'),\n('2099636632148168796'),\n('2099649402432561436'),\n('2099652067568894162')\n), eligible AS (\n SELECT p.tweet_id\n FROM posts p CROSS JOIN db_clock c\n WHERE p.created_at >= c.sampled_at - interval '24 hours' AND p.created_at <= c.sampled_at\n   AND p.text IS NOT NULL AND btrim(p.text) <> ''\n   AND NOT EXISTS (SELECT 1 FROM excluded e WHERE e.tweet_id=p.tweet_id)\n   AND EXISTS (SELECT 1 FROM posts_brands_signals s WHERE s.post_id=p.tweet_id)\n), picked_random AS (\n SELECT e.tweet_id FROM eligible e ORDER BY random() LIMIT 10\n), picked AS (\n SELECT tweet_id, row_number() OVER (ORDER BY random()) AS sample_order FROM picked_random\n), selected AS (\n SELECT p.*, c.sampled_at, x.sample_order, target.brand_id AS target_brand\n FROM picked x JOIN posts p USING (tweet_id) CROSS JOIN db_clock c\n CROSS JOIN LATERAL (SELECT s.brand_id FROM posts_brands_signals s WHERE s.post_id=p.tweet_id ORDER BY random() LIMIT 1) target\n)\nSELECT json_build_object(\n 'sampled_at', (SELECT sampled_at FROM db_clock),\n 'window_start', (SELECT sampled_at - interval '24 hours' FROM db_clock),\n 'window_end', (SELECT sampled_at FROM db_clock),\n 'eligible_count', (SELECT count(*) FROM eligible),\n 'excluded_corpus_count', 90,\n 'rows', coalesce((SELECT json_agg(json_build_object(\n  'sample_order',p.sample_order,'tweet_id',p.tweet_id,'target_brand',p.target_brand,'created_at',p.created_at,'text',p.text,'lang',p.lang,'text_en',p.text_en,'text_zh_cn',p.text_zh_cn,'lang_detected',p.lang_detected,'author_handle',p.author_handle,'author_id',p.author_id,'author_name',p.author_name,'author_description',p.author_description,'author_location',p.author_location,'tweet_url',coalesce(nullif(p.tweet_url,''),nullif(p.tweet_twitter_url,''), 'https://x.com/'||coalesce(nullif(p.author_handle,''),'i')||'/status/'||p.tweet_id),'quoted_text',p.quoted_text,'quoted_status_id',p.quoted_status_id,'in_reply_to_id',p.in_reply_to_id,'in_reply_to_username',p.in_reply_to_username,'is_reply',p.is_reply,'is_quote',p.is_quote,'entities',p.entities,'extended_entities',p.extended_entities,'card',p.card,'author_profile_bio',p.author_profile_bio,'brand_associations',(SELECT coalesce(json_agg(pb.brand_id ORDER BY pb.brand_id),'[]'::json) FROM posts_brands pb WHERE pb.post_id=p.tweet_id),'signals',(SELECT coalesce(json_agg(json_build_object('brand_id',s.brand_id,'post_type_key',s.post_type_key,'sentiment',s.sentiment) ORDER BY s.brand_id,s.post_type_key),'[]'::json) FROM posts_brands_signals s WHERE s.post_id=p.tweet_id),'account_brand_roles',(SELECT coalesce(json_agg(json_build_object('brand_id',ba.brand_id,'role_id',ba.role_id) ORDER BY ba.brand_id),'[]'::json) FROM brands_accounts ba WHERE ba.accounts_id=p.author_id)\n ) ORDER BY p.sample_order) FROM selected p),'[]'::json)\n) AS snapshot;"
+  },
+  "rows": [
+    {
+      "sample_order": 1,
+      "case_id": "L100-91",
+      "tweet_id": "2099733920816480349",
+      "target_brand": "moonshot_kimi",
+      "created_at": "2026-09-15T05:35:52+00:00",
+      "source_language": "en",
+      "author_handle": "TinfoilAI",
+      "tweet_url": "https://x.com/TinfoilAI/status/2099733920816480349",
+      "text_sha256": "379852b43a0d14da3e99432c799a3e049804d7f12c6d8f99dd79062db85409a1",
+      "signal_evidence": [
+        {
+          "brand_id": "moonshot_kimi",
+          "post_type_key": "hands_on_usage",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 2,
+      "case_id": "L100-92",
+      "tweet_id": "2099701553615806613",
+      "target_brand": "deepseek",
+      "created_at": "2026-09-15T03:27:15+00:00",
+      "source_language": "in",
+      "author_handle": "ionetIndonesia",
+      "tweet_url": "https://x.com/ionetIndonesia/status/2099701553615806613",
+      "text_sha256": "ece46a78c1c2bb07475e25f267a31b267218585cfc82cd804758efd488b29c10",
+      "signal_evidence": [
+        {
+          "brand_id": "deepseek",
+          "post_type_key": "buzz_releases",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 3,
+      "case_id": "L100-93",
+      "tweet_id": "2099910707168850000",
+      "target_brand": "qwen",
+      "created_at": "2026-09-15T17:18:21+00:00",
+      "source_language": "en",
+      "author_handle": "BitFuturist",
+      "tweet_url": "https://x.com/BitFuturist/status/2099910707168850000",
+      "text_sha256": "0abdf56a6b1869a654bbb1d99c4d82d2e11f9566eebd7bfa00f39eb281f2a4ba",
+      "signal_evidence": [
+        {
+          "brand_id": "qwen",
+          "post_type_key": "performance_comparisons",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 4,
+      "case_id": "L100-94",
+      "tweet_id": "2099864361380798577",
+      "target_brand": "qwen",
+      "created_at": "2026-09-15T14:14:12+00:00",
+      "source_language": "zh",
+      "author_handle": "ashelkovnykov",
+      "tweet_url": "https://x.com/ashelkovnykov/status/2099864361380798577",
+      "text_sha256": "6bbe3d8e3a804c43ead07181eaa1f912501deef15c0c972e7f7ef2dab3106a8b",
+      "signal_evidence": [
+        {
+          "brand_id": "qwen",
+          "post_type_key": "hands_on_usage",
+          "sentiment": "negative"
+        }
+      ]
+    },
+    {
+      "sample_order": 5,
+      "case_id": "L100-95",
+      "tweet_id": "2099898289793704193",
+      "target_brand": "deepseek",
+      "created_at": "2026-09-15T16:29:01+00:00",
+      "source_language": "es",
+      "author_handle": "yhas1984",
+      "tweet_url": "https://x.com/yhas1984/status/2099898289793704193",
+      "text_sha256": "423b8261005f8f7b739de5fd574b6d9528cdb351b7cd3bc4d58fe59262687180",
+      "signal_evidence": [
+        {
+          "brand_id": "deepseek",
+          "post_type_key": "feedback_questions",
+          "sentiment": "positive"
+        }
+      ]
+    },
+    {
+      "sample_order": 6,
+      "case_id": "L100-96",
+      "tweet_id": "2099817449881227342",
+      "target_brand": "qwen",
+      "created_at": "2026-09-15T11:07:47+00:00",
+      "source_language": "en",
+      "author_handle": "RealFedeURU",
+      "tweet_url": "https://x.com/RealFedeURU/status/2099817449881227342",
+      "text_sha256": "20b839ec5f3ec3729e429619a9bada300c1794822735e8a86afcba90bd390f73",
+      "signal_evidence": [
+        {
+          "brand_id": "qwen",
+          "post_type_key": "buzz_releases",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 7,
+      "case_id": "L100-97",
+      "tweet_id": "2099672179373920317",
+      "target_brand": "deepseek",
+      "created_at": "2026-09-15T01:30:32+00:00",
+      "source_language": "en",
+      "author_handle": "cskvarma",
+      "tweet_url": "https://x.com/cskvarma/status/2099672179373920317",
+      "text_sha256": "4f7334aac56140ed7ef72d53b0fe9a31838abc11ac21498ccc5913b6c3375041",
+      "signal_evidence": [
+        {
+          "brand_id": "deepseek",
+          "post_type_key": "feedback_questions",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 8,
+      "case_id": "L100-98",
+      "tweet_id": "2099793373221757326",
+      "target_brand": "deepseek",
+      "created_at": "2026-09-15T09:32:07+00:00",
+      "source_language": "zh",
+      "author_handle": "guxinghanyi",
+      "tweet_url": "https://x.com/guxinghanyi/status/2099793373221757326",
+      "text_sha256": "804ffbb85f5d25edb0439c26c74e6373fe16930aec28b9538ad1a0545818a591",
+      "signal_evidence": [
+        {
+          "brand_id": "deepseek",
+          "post_type_key": "advertising_marketing",
+          "sentiment": "positive"
+        }
+      ]
+    },
+    {
+      "sample_order": 9,
+      "case_id": "L100-99",
+      "tweet_id": "2099701114631602324",
+      "target_brand": "deepseek",
+      "created_at": "2026-09-15T03:25:30+00:00",
+      "source_language": "zh",
+      "author_handle": "DaWigMastaah",
+      "tweet_url": "https://x.com/DaWigMastaah/status/2099701114631602324",
+      "text_sha256": "1cfab06c73c92a63ea5dbd00f5eec4dbd960533fecb9c2e2fbd3f9404a2dd98d",
+      "signal_evidence": [
+        {
+          "brand_id": "deepseek",
+          "post_type_key": "hands_on_usage",
+          "sentiment": "neutral"
+        }
+      ]
+    },
+    {
+      "sample_order": 10,
+      "case_id": "L100-100",
+      "tweet_id": "2099813450717253762",
+      "target_brand": "qwen",
+      "created_at": "2026-09-15T10:51:53+00:00",
+      "source_language": "en",
+      "author_handle": "OKIN_17",
+      "tweet_url": "https://x.com/OKIN_17/status/2099813450717253762",
+      "text_sha256": "2a304b8e641ad41bf123da6b72652f277e25c5d821b0054fa39930fb3285ea41",
+      "signal_evidence": [
+        {
+          "brand_id": "qwen",
+          "post_type_key": "hands_on_usage",
+          "sentiment": "positive"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "production_mutation": false,
+    "classifier_or_translator_run": false,
+    "llm_credit_spend": false,
+    "random_order_rewritten_after_query": false
+  },
+  "files": {
+    "html": {
+      "path": "docs/analysis/2026-09-16-070347-u18-random-fresh-10-owner-review.html",
+      "sha256": "66245f34eb6cdee12096c5861965a5e939ae6b556ccb6b4b62e312c1c07d4baa"
+    },
+    "rendered_source_packet": {
+      "path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1/.context/u18/random-fresh-10-v1/2026-09-16-070347-source.html",
+      "sha256": "54bda3763ebedecd021e02d667da3740325f94e7108e50eeb477031e011b5701"
+    },
+    "review_inputs": {
+      "path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1/.context/u18/random-fresh-10-v1/2026-09-16-070347-review-inputs.json",
+      "sha256": "dddccf430d8c43468d8af163757a62c462bfa9e97d0f4ef3d07efb38f1ca468f"
+    },
+    "signal_export": {
+      "path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1/.context/u18/random-fresh-10-v1/2026-09-16-070347-signals.csv",
+      "sha256": "6e3ce69b36540a17f565ff6a000f37e85b03770e47e8acf28d786ac07f9ad05c"
+    },
+    "production_snapshot": {
+      "path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1/.context/u18/random-fresh-10-v1/2026-09-16-070347-production-snapshot.json",
+      "sha256": "575683f381fdf9a6e574d4c3a043cb00bfa37c033b71af9f368c7677865dac21"
+    }
+  },
+  "taxonomy": {
+    "id": "stage1-u18a-plan-2026-09-15",
+    "source": "/Users/fuchitalee/development/pushin-weight-v2/.agents/skills/human-review-packets/references/latest-taxonomy.json"
+  },
+  "browser_verification": {
+    "chromium": {
+      "tool": "agent-browser (real Chrome engine, local file URL)",
+      "title": "PushinWeight · 10 posts — tabbed brand review",
+      "desktop_viewport_px": [
+        1280,
+        720
+      ],
+      "case_tabs": 10,
+      "post_panels_visible_at_a_time": 1,
+      "brand_panels_visible_at_a_time": 1,
+      "document_horizontal_overflow": false,
+      "source_and_review_panes_independently_scrollable": true,
+      "all_visible_source_text_wrapped_without_horizontal_overflow": true,
+      "navigation": "L100-91 to L100-92 and back via case tabs; exactly one panel remained visible.",
+      "autosave_reload": "A temporary comment on L100-92 autosaved, survived page reload, and restored with one panel visible; isolated browser storage was used.",
+      "exclusive_controls": "Verified other, none, unavailable, and general are cleared when a normal choice in their field is selected.",
+      "page_errors": 0,
+      "console_errors": 0
+    },
+    "allen_chrome": {
+      "host_user": "allenwlee",
+      "active_tab_title": "PushinWeight · 10 posts — tabbed brand review",
+      "active_tab_url_scheme": "data:text/html;base64",
+      "loading": false,
+      "result": "The owner-review packet is open in the active Chrome tab."
+    }
+  }
+}

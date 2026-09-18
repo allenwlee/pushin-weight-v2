@@ -7,13 +7,13 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 from core.classification_contract import (
-    CANONICAL_PRODUCT_LABEL_KEYS,
     CONTRACT_VERSION,
     LEGACY_POST_TYPE_KEYS,
     LEGACY_PRODUCT_LABEL_KEYS,
     NATIONALISM_KEYS,
     SENTIMENT_KEYS,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
 )
 from core.classification_labels import CLASSIFICATION_LABELS
 
@@ -51,7 +51,7 @@ def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges()
         new_post_type_keys = set(STAGE1_TAXONOMY_V2_POST_TYPE_KEYS) - set(
             LEGACY_POST_TYPE_KEYS
         )
-        new_product_keys = set(CANONICAL_PRODUCT_LABEL_KEYS) - set(
+        new_product_keys = set(STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS) - set(
             LEGACY_PRODUCT_LABEL_KEYS
         )
         PostTypeLabel.objects.filter(post_type_id__in=new_post_type_keys).delete()
@@ -145,7 +145,7 @@ def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges()
             ),
             (
                 "product_label", "ProductLabelLabel", "product_label_id",
-                CANONICAL_PRODUCT_LABEL_KEYS,
+                STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
             ),
             ("sentiment", "SentimentLabel", "sentiment_id", SENTIMENT_KEYS),
             ("nationalism", "NationalismLabel", "nationalism_id", NATIONALISM_KEYS),

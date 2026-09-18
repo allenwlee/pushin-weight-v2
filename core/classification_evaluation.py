@@ -31,6 +31,9 @@ from core.classification_contract import (
     STAGE1_PROMPT_V3_VERSION,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
     STAGE1_TAXONOMY_V2_VERSION,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
+    STAGE1_TAXONOMY_V3_VERSION,
     parse_stage1_classifications,
 )
 
@@ -70,7 +73,10 @@ REQUIRED_FLOOR_PATHS = frozenset(
             f"all.post_types.labels.{label}.f1"
             for label in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
         ),
-        *(f"all.product_labels.labels.{label}.f1" for label in PRODUCT_LABEL_KEYS),
+        *(
+            f"all.product_labels.labels.{label}.f1"
+            for label in STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS
+        ),
         *(
             f"all.{dimension}.classes.{value}.recall"
             for dimension, values in REQUIRED_SCALAR_VALUES.items()
@@ -93,10 +99,19 @@ SUPPORTED_TAXONOMIES = {
     STAGE1_TAXONOMY_V2_VERSION: {
         "prompt_version": STAGE1_PROMPT_V3_VERSION,
         "post_type_keys": STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+        "product_label_keys": STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
+    },
+    STAGE1_TAXONOMY_V3_VERSION: {
+        # The held-out v3 evaluator was frozen at v18. Later v3 runtime
+        # prompts remain readable elsewhere but are not interchangeable gold.
+        "prompt_version": "stage1-prompt-v18",
+        "post_type_keys": STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
+        "product_label_keys": STAGE1_TAXONOMY_V3_PRODUCT_LABEL_KEYS,
     },
     CANONICAL_TAXONOMY_VERSION: {
         "prompt_version": CANONICAL_PROMPT_VERSION,
         "post_type_keys": CANONICAL_POST_TYPE_KEYS,
+        "product_label_keys": PRODUCT_LABEL_KEYS,
     },
 }
 
@@ -115,9 +130,13 @@ def required_floor_paths(
             path
             for path in REQUIRED_FLOOR_PATHS
             if not path.startswith("all.post_types.labels.")
+            and not path.startswith("all.product_labels.labels.")
         ) | frozenset(
             f"all.post_types.labels.{label}.f1"
             for label in taxonomy["post_type_keys"]
+        ) | frozenset(
+            f"all.product_labels.labels.{label}.f1"
+            for label in taxonomy["product_label_keys"]
         )
     return paths | frozenset(
         f"by_context.{context}.{suffix}"
@@ -537,7 +556,10 @@ def _validate_document(
 
 
 def _classification(
-    raw: Any, brand_id: str, post_type_keys: Sequence[str]
+    raw: Any,
+    brand_id: str,
+    post_type_keys: Sequence[str],
+    product_label_keys: Sequence[str],
 ) -> tuple[dict[str, Any] | None, str | None]:
     if raw is None:
         return None, None
@@ -553,6 +575,7 @@ def _classification(
         [row],
         [brand_id],
         post_type_keys=post_type_keys,
+        product_label_keys=product_label_keys,
     )
     if parsed is None:
         return None, "invalid_contract"
@@ -724,6 +747,7 @@ def _population(
     rows: Sequence[dict[str, Any]],
     min_support: int,
     post_type_keys: Sequence[str],
+    product_label_keys: Sequence[str],
 ) -> dict[str, Any]:
     type_pairs = [
         (set(row["gold"]["post_types"]), set(row["candidate"]["post_types"]))
@@ -737,7 +761,7 @@ def _population(
         "post_types": _multilabel(
             type_pairs, post_type_keys, min_support
         ),
-        "product_labels": _multilabel(product_pairs, PRODUCT_LABEL_KEYS, min_support),
+        "product_labels": _multilabel(product_pairs, product_label_keys, min_support),
         "outcome": _confusion(
             [(row["gold"]["outcome"], row["candidate"]["outcome"]) for row in rows],
             ("classified", "context_missing"),
@@ -773,6 +797,7 @@ def _gold_support(
     min_slice_support: int,
     required_contexts: Sequence[str],
     post_type_keys: Sequence[str],
+    product_label_keys: Sequence[str],
 ) -> tuple[dict[str, Any], list[str]]:
     post_types = Counter(
         label
@@ -817,7 +842,7 @@ def _gold_support(
         )
         gaps.extend(
             f"product_labels.{label}"
-            for label in PRODUCT_LABEL_KEYS
+            for label in product_label_keys
             if product_labels[label] < min_support
         )
         gaps.extend(
@@ -850,7 +875,7 @@ def _gold_support(
                 label: post_types[label] for label in post_type_keys
             },
             "product_labels": {
-                label: product_labels[label] for label in PRODUCT_LABEL_KEYS
+                label: product_labels[label] for label in product_label_keys
             },
             "scalars": {
                 dimension: {value: scalars[dimension][value] for value in values}
@@ -1066,6 +1091,7 @@ def evaluate_classification_artifacts(
         )
     taxonomy_version = candidate_provenance["taxonomy_version"]
     post_type_keys = SUPPORTED_TAXONOMIES[taxonomy_version]["post_type_keys"]
+    product_label_keys = SUPPORTED_TAXONOMIES[taxonomy_version]["product_label_keys"]
     normalized_policy = _validate_policy(policy, taxonomy_version)
     min_support = normalized_policy.get("min_support", 0)
     min_slice_support = normalized_policy.get("min_slice_support", 0)
@@ -1094,7 +1120,7 @@ def evaluate_classification_artifacts(
     for pair in sorted(gold_index):
         gold_row = gold_index[pair]
         gold_classification, gold_error = _classification(
-            gold_row["classification"], pair[1], post_type_keys
+            gold_row["classification"], pair[1], post_type_keys, product_label_keys
         )
         if gold_error or gold_classification is None:
             raise EvaluationInputError(
@@ -1134,7 +1160,7 @@ def evaluate_classification_artifacts(
             )
             continue
         candidate_classification, candidate_error = _classification(
-            candidate_row["classification"], pair[1], post_type_keys
+            candidate_row["classification"], pair[1], post_type_keys, product_label_keys
         )
         if candidate_error or candidate_classification is None:
             missing_reason = (
@@ -1185,7 +1211,7 @@ def evaluate_classification_artifacts(
         ),
     }
     populations: dict[str, Any] = {
-        "all": _population(scored, min_support, post_type_keys)
+        "all": _population(scored, min_support, post_type_keys, product_label_keys)
     }
     languages = sorted(
         {row["language"] for row in scored}
@@ -1200,6 +1226,7 @@ def evaluate_classification_artifacts(
             [row for row in scored if row["language"] == language],
             min_support,
             post_type_keys,
+            product_label_keys,
         )
         for language in languages
     }
@@ -1208,6 +1235,7 @@ def evaluate_classification_artifacts(
             [row for row in scored if ("+".join(row["context"]) or "none") == context],
             min_support,
             post_type_keys,
+            product_label_keys,
         )
         for context in contexts
     }
@@ -1217,6 +1245,7 @@ def evaluate_classification_artifacts(
         min_slice_support=min_slice_support,
         required_contexts=required_contexts,
         post_type_keys=post_type_keys,
+        product_label_keys=product_label_keys,
     )
     evaluator_source = _normalize_source_identity(
         source_identity or _resolve_source_identity()

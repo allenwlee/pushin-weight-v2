@@ -31,7 +31,7 @@ def test_exact_stage1_vocabularies_are_frozen():
     assert POST_TYPE_KEYS == (
         "releases_updates",
         "hands_on_usage",
-        "results_evaluations",
+        "results_analysis",
         "questions_requests",
         "advertising_marketing",
         "events",
@@ -41,6 +41,7 @@ def test_exact_stage1_vocabularies_are_frozen():
         "opinions_reactions",
         "research_explanations",
         "business_finance",
+        "news_reporting",
         "other",
     )
     assert PRODUCT_LABEL_KEYS == (
@@ -48,7 +49,7 @@ def test_exact_stage1_vocabularies_are_frozen():
         "complaint",
         "testimonial",
         "ideas_requests",
-        "misinformation",
+        "investigate_claim",
     )
     assert SENTIMENT_KEYS == ("positive", "negative", "neutral", "mixed")
     assert NATIONALISM_KEYS == (

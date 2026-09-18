@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from monitor.views import (
+    _DASHBOARD_AUDIENCE_TOPIC_KEYS,
     _DASHBOARD_LANG_FILTER_KEYS,
     _DASHBOARD_NATIONALISM_KEYS,
     _DASHBOARD_POST_TYPE_KEYS,
@@ -94,8 +95,16 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     assert controls["product_labels"]["values"] == [
         "__all__", *_DASHBOARD_PRODUCT_LABEL_KEYS
     ]
+    assert controls["audience_topics"]["values"] == [
+        "__all__", *_DASHBOARD_AUDIENCE_TOPIC_KEYS,
+    ]
+    for control in (
+        "geopolitical_modes", "china_national_stance",
+        "us_national_stance", "untracked_brand_promotions",
+    ):
+        assert control not in controls
     assert controls["unsanctioned"]["values"] == ["off", "only"]
-    assert controls["locale"]["values"] == ["en", "zh_cn", "original"]
+    assert controls["locale"]["values"] == ["en", "zh_cn", "ja", "original"]
     assert controls["window"]["values"] == ["1", "7", "30", "365"]
     assert controls["timezone"]["values"] == ["local", "ca"]
     assert controls["brand_lens"]["values"] == ["open", "closed"]

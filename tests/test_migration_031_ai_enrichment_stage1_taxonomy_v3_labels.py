@@ -7,8 +7,8 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 from core.classification_contract import (
-    CANONICAL_POST_TYPE_KEYS,
     STAGE1_TAXONOMY_V2_POST_TYPE_KEYS,
+    STAGE1_TAXONOMY_V3_POST_TYPE_KEYS,
 )
 from core.classification_labels import POST_TYPE_LABELS
 
@@ -16,7 +16,7 @@ BEFORE = [("core", "0030_ai_enrichment_stage1_taxonomy_v2_edges")]
 TARGET = [("core", "0031_ai_enrichment_stage1_taxonomy_v3_labels")]
 V3_ONLY_KEYS = tuple(
     key
-    for key in CANONICAL_POST_TYPE_KEYS
+    for key in STAGE1_TAXONOMY_V3_POST_TYPE_KEYS
     if key not in STAGE1_TAXONOMY_V2_POST_TYPE_KEYS
 )
 

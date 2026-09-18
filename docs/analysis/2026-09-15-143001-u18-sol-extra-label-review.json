@@ -1,0 +1,2362 @@
+{
+  "schema_version": "u18-sol-extra-label-review/v1",
+  "created_at": "2026-09-15T14:30:01.206195+09:00",
+  "source_contract_sha256": "efe2f11fa8903b88b37494734e8e55f8bffbefa6083a351b85db27e525083eda",
+  "source_reference_sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+  "source_output_sha256": {
+    "low": "ae25b73cc29fca1ef954e64b03aabaa9d91bdc4ce0719bb3f8e9de94f4dbe1ae",
+    "xhigh": "adce12fc08e710cca58c971d38add4612a809aaf367c9274155dff5559a783cd"
+  },
+  "post_count": 31,
+  "unique_extra_assignments_across_efforts": 64,
+  "extra_assignment_counts": {
+    "low": {
+      "post_types": 16,
+      "product_labels": 14
+    },
+    "xhigh": {
+      "post_types": 41,
+      "product_labels": 18
+    }
+  },
+  "reference_changed": false,
+  "new_inference_calls": 0,
+  "status": "evidence export and tentative assistant commentary; no new owner review gate",
+  "rows": [
+    {
+      "original_position": 1,
+      "case_id": "H0040D161174",
+      "brand": "qwen",
+      "source_url": "https://x.com/i/status/2081687339911536725",
+      "author_handle": "hi_innov",
+      "author_name": "Eiko.Hiyama / LIC.corp",
+      "source_language": "ja",
+      "source_text": "今週の AI 動向で営業・事業開発の現場に落ちる情報を 4 点整理します。\n\n海外速報の翻訳ではなく、実務に落とせる具体アクションだけを残しました。\n\n━━━━━━━━━━━━━━━━━━\n\n【① AI 音声キーボード Type で入力時間を桁で削る】\n\nプロンプト、メール返信、日報、議事録の下書きを全て音声で入力。\nAI が話し言葉を送信可能な文章に整形します。\n\n営業チームなら 1 日 30-60 分の入力時間が即回収可能。\nスマホ・PC ともに導入は数分、無料プランからスタートできます。\n\n【② Claude Opus 5 が Fable 5 級性能で半額】\n\n1 タスクあたりコスト半分、料金据え置き。\nコーディング評価で前モデル比 2 倍以上、安全性も改善。\nClaude Max / Pro プラン加入者は自動で利用可能。\n\n提案書生成や PoC で、モデル切替による予算再配分を今週中に判断すべき局面です。\n\n【③ 中国オープンウェイト (Kimi K3 / Qwen 3.8) を自社サーバー運用する選択肢】\n\n中国製 API はデータが中国側に渡る懸念がある一方、オープンウェイト版なら自社インフラで動かせるため、社内データを外に出さずに使えます。\n\n米国製との性能・コスト比較で並走選択肢を持てるフェーズ。\n事業開発の AI 予算構成を、単一ベンダー依存から脱却する好機です。\n\n【④ Netflix 300 作品で生成 AI 導入 — 実験から通常ツールへ】\n\n2026 年だけで約 300 作品のポストプロダクションで生成 AI が使用されたと Netflix が決算発表で公表。\n群衆・背景・大規模シーン制作で当たり前になりました。\n\nマーケの動画制作、ブランドコンテンツ制作でも AI 併用が前提のフェーズに入った、と経営判断の基準を切り替えるべきです。\n\n━━━━━━━━━━━━━━━━━━\n\n音声入力、モデル切替、オープンウェイト運用、AI 制作標準化 の 4 つを、今週中に「誰が判断し、いつ導入するか」決められるかが、来月の実装スピード差になります。\n\n#生成AI #ClaudeOpus5 #KimiK3 #事業開発",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "anti",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "advertising_marketing",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Mostly weak / brand scope",
+        "english_evidence_excerpt_or_paraphrase": "The Qwen section recommends running open weights locally to keep company data inside its own infrastructure and diversify vendor dependence.",
+        "commentary": "Business/finance concerns the customer budgeting for AI, which the owner excluded. The roundup recommends Qwen, but an advertisement or testimonial is less clear; promotions of Type and Claude cannot transfer to Qwen."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 2,
+      "case_id": "H0DEC6F537E0",
+      "brand": "qwen",
+      "source_url": "https://x.com/i/status/2089623292722438206",
+      "author_handle": "ManiPal130673",
+      "author_name": "Mani Pal",
+      "source_language": "en",
+      "source_text": "@mei_999_ hey I applied in your Qwen Meetup,\nRequest is Accepted,Thanks a lot for it,\nI have some Issues,Can we discuss about it.",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "questions_requests",
+          "events"
+        ],
+        "product_labels": [
+          "ideas_requests"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "questions_requests",
+            "events"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "questions_requests",
+            "events"
+          ],
+          "product_labels": [
+            "complaint"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [],
+          "product_labels": [
+            "complaint"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior owner decision",
+        "english_evidence_excerpt_or_paraphrase": "I have some Issues,Can we discuss about it.",
+        "commentary": "The owner explicitly considered this too ambiguous for negative sentiment. Complaint is therefore unsupported by the existing decision. Separately, the expected ideas/request label needs a definition that covers this support request; the frozen prompt narrowly emphasizes desired product changes."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 3,
+      "case_id": "H1A3B3731E1C",
+      "brand": "qwen",
+      "source_url": "https://x.com/i/status/2092803322298195969",
+      "author_handle": "Scobleizer",
+      "author_name": "Robert Scoble",
+      "source_language": "en",
+      "source_text": "What is Alibaba?\n\nYou might have heard of Alibaba. But if you are in the United States you probably haven’t had much to do with it. Yet its “Qwen” family of products are getting widely used in the AI community.\n\nThis month at the ACL conference (computer linguists, or, rather, the people who build pieces of the LLMs that drive the AI industry) I got to know Alibaba better. It invited me to the conference, and while there I did several interviews which I’ll share this week.\n\nFirst, congratulations to Alibaba for being awarded “Best Resource Paper Award” at the conference: https://t.co/MDTlckQSu6\n\nHere one of the authors of that paper interview, Tian Lan, talks with me about why Alibaba’s Qwen products can get better.",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "🏆 Best Resource Paper Award at #ACL2026 @aclmeeting \n\n🚀Thrilled to share that our deep research benchmark paper \"HSCodeComp: A Realistic and Expert-level Agent Benchmark for Hierarchical Rule Application\" reveived a Best Resource Paper Award #ACL2026! \n\n🎯 Hoping this sparks more focus on reliable AI Agents in the real world.\n\nhttps://t.co/ToFSPPaYb3"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "events",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "events",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "events",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior decision / entity scope",
+        "english_evidence_excerpt_or_paraphrase": "The reporter congratulates Alibaba on its best-paper award and describes interviews at ACL.",
+        "commentary": "Opinions and testimonial have a surface cue in congratulations, but the owner treated this as neutral reporting. Praise of Alibaba or its researchers must not automatically become praise of Qwen. An award is not itself a product-performance result; conference invitations alone do not establish business/finance."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 4,
+      "case_id": "H1E48CCEEB2F",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2086923112126218736",
+      "author_handle": "VenelinVidenov",
+      "author_name": "Venelin Videnov",
+      "source_language": "en",
+      "source_text": "Something pretty wild happened tonight.\n\nI’m running two separate Claude Code CLI sessions:\n\n• Opus 5\n• DeepSeek V4 Flash, running locally across two DGX Sparks\n\nI gave them the same objective and connected the sessions through a shared .md file.\n\nThen I watched.\n\nThey started communicating, discussing the problem and, without me assigning roles, divided the work between themselves.\n\nEach took ownership of different parts of the task and started executing.\n\nI didn’t tell them who should do what.\nThey figured it out.\n\nTwo models.\nTwo Claude Code sessions.\nOne model in the cloud.\nOne running on my own hardware.\nOne shared codebase.\nOne Markdown file.\n\nNo multi-agent framework.\nNo predefined roles.\nNo orchestrator deciding who does what.\n\nJust two AI coding agents figuring out how to work together.\n\nEveryone is benchmarking models against each other.\n\nI’m becoming much more interested in what happens when we let them collaborate.\n\nThe future might not be one model doing everything.\n\nIt might be a team of very different models figuring out the job together.",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible reference omission",
+        "english_evidence_excerpt_or_paraphrase": "Two Claude Code sessions, using Opus and local DeepSeek, coordinate through one shared Markdown file; the writer explains the setup and division of work.",
+        "commentary": "Research/explanations is plausible under the existing conceptual-teaching and workflow-explanation wording. This is more substantive than a bare reaction, though the required depth of explanation should be explicit."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 5,
+      "case_id": "H2B36BE298C6",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2097672725099663811",
+      "author_handle": "dw_chinese",
+      "author_name": "DW 中文- 德国之声",
+      "source_language": "zh-cn",
+      "source_text": "美国网络安全与基础设施安全局等机构本周二（9月8日）表示，中国的顶尖人工智能公司，其中包括 DeepSeek 和 Moonshot AI（月之暗面），系统性地窃取美国模型的技术，其目的是争夺科技霸权。\n\n法新社预测，以上警告宣布在习近平访美并将同特朗普总统举行峰会前夕，因此，很可能人工智能将成为特习会的重要议题。\n\n一段时间以来，美国政府和美国AI公司多次指责，中国企业通过一种被称为“蒸馏”（distillation）的过程，窃取人工智能技术。\n\nhttps://t.co/IbE9n6M1sf",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations"
+        ],
+        "product_labels": [
+          "misinformation"
+        ],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "misinformation"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "anti",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "misinformation"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "anti",
+          "us_nationalism": "mild_pro"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Quoted stance boundary",
+        "english_evidence_excerpt_or_paraphrase": "A news report relays US agencies’ distillation allegations and AFP’s prediction about a summit agenda.",
+        "commentary": "Opinions/reactions may describe the quoted sources, but the owner classified the author as a neutral reporter. We need an explicit rule about whether this content type follows quoted claims or the posting author. This does not justify assigning the author the quoted national stance."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 6,
+      "case_id": "H3569508600E",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2086987168908763289",
+      "author_handle": "C_of_Creativity",
+      "author_name": "PIYO",
+      "source_language": "ja",
+      "source_text": "VRAM足りないからMiniMax H3無理だよって思って諦めている人。もしかするとローカル生成できるかもしれないので以下記事参考になれば！\n\nMiniMax H3は8GB VRAM＋64GB RAMでもローカル動画生成可能 最新ComfyUIのDynamic VRAMと、pruned INT8 ConvRotモデル＋NVFP4テキストエンコーダーを使えば動作します。 RTX 4070 8GB＋RAM 64GBでは、832×640の生成に約15分20秒という実例あり。まずは480p前後・39〜73フレーム・4ステップがおすすめです。 ただしRAMへの退避が多く、720p長尺や2K生成はかなり遅め。4bit版は軽い一方、画質低下やINT8より遅くなる場合があります。数値はコミュニティ単一環境の実測です。\n\nhttps://t.co/uZXOOJNjnD",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible reference omission",
+        "english_evidence_excerpt_or_paraphrase": "If you gave up because of insufficient VRAM, local MiniMax generation may still be possible; the writer recommends specific settings.",
+        "commentary": "Opinions/reactions is plausible alongside technical instructions: the opening encouragement and recommendations are the author’s own view. This is independent of the already accepted testimonial."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 7,
+      "case_id": "H42DCD9324F4",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2091939377693733305",
+      "author_handle": "sahilvermaai",
+      "author_name": "Sahil Verma",
+      "source_language": "en",
+      "source_text": "Generate with whatever model you want on there. Seedance 2.5, Gen-4.5, MiniMax H3.\n\nThen convert straight out to 16-bit EXR, or 10 and 12-bit ProRes and HEVC.\n\nThe export menu is right there in the clip. HDR10, HLG, ProRes mezzanine, EXR sequence. HDR conversion runs 20 to 40 credits a second.\n\nThat's the part colourists have been asking for.\n\n@runwayml\n\nhttps://t.co/XYqWs8rksm",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "Generate with any model on Runway, then take it to delivery spec with Ruby. Seedance 2.5, Gen-4.5, MiniMax H3, whatever you use, converts straight to 16-bit EXR or 10 and 12-bit ProRes and HEVC.\n\nTry it now at the link below. https://t.co/Qb1wKAO0sP"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "advertising_marketing"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Mixed: workflow plausible; release weak",
+        "english_evidence_excerpt_or_paraphrase": "Generate with MiniMax on Runway, then convert the video to professional delivery formats using Ruby.",
+        "commentary": "Hands-on usage is plausible under the broad workflow/demo definition. Releases/updates is weaker because no new integration or availability is explicitly established. The old reference also assigns advertising to MiniMax even though the promoted service is Runway/Ruby; preserve that history and reconcile the newer brand-scope rule explicitly."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 8,
+      "case_id": "H4E3B98376E5",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2081630231430058433",
+      "author_handle": "ugainovel",
+      "author_name": "夕街☕大阪九龍条🍵C108/2東７Ｔ36b🏳️‍🌈けんかはよせ、はらがへるぞ🪧☮🎗🍀",
+      "source_language": "ja",
+      "source_text": "確率だけに https://t.co/r3xCUc23Xq",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "Fable/Mythos5では推論中に人の言語とも思えぬ意味不明な思考過程を出力することが報告されてましたが、Claude Opus5では推論の過程で「うおおおおおおおお」「NOO0!!」みたいな発狂ワードが出る模様\nDeepSeek R1の論文でも、突然LLMの出力挙動が不自然になる（でも性能は上がる）「Ahaモーメント」が報告されてましたが、ある意味で、極限まで考えると発狂する人間の性質を受け継いでいるのか、言語的にも発狂ワードを入れた方が飛躍的な発想につながるのか、はたまた整理されてロジックが通った自然言語は邪魔になるのか"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Context-dependent candidate",
+        "english_evidence_excerpt_or_paraphrase": "The quoted post discusses unusual reasoning behavior and says the DeepSeek R1 paper reported an Aha moment where performance improved.",
+        "commentary": "Results/evaluations has some support in the quoted performance claim; opinions/reactions may fit the short wordplay. Both depend on how quoted technical facts and the author’s minimal reaction are allowed to contribute. The owner treated it as neutral reporting."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 10,
+      "case_id": "H5024EDC82C6",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2092980068603846726",
+      "author_handle": "LongTian8888",
+      "author_name": "LongTian",
+      "source_language": "zh-cn",
+      "source_text": "DeepSeek-V4-Flash 在 https://t.co/Xdu0aLAOt4 上免费畅用了，这个消息让我想起之前每次使用 DeepSeek 都要付费的情景。这种变化不仅仅是免费那么简单，背后有着深刻的技术逻辑和设计考虑。\n\n首先，DeepSeek-V4-Flash 的免费使用是建立在 https://t.co/Xdu0aLAOt4 的服务可用性检测机制之上的。这个机制能够确保 DeepSeek 的运行环境稳定，这意味着用户无需担心服务挂掉的问题。以前，使用 DeepSeek 需要时刻关注服务状态，但现在，https://t.co/Xdu0aLAOt4 自动监测并维护服务的可靠性，用户可以放心大胆地使用。\n\n再来看看具体的使用场景。无论是跑代码、调Agent，还是处理长文本和高并发任务，DeepSeek-V4-Flash 都能做到无缝接入。这种无限制的使用体验，对于开发者来说是极大的福音。记得以前，每次高并发任务处理都会担心费用过高的问题，现在这些问题都不复存在了。\n\n从技术层面来看，https://t.co/Xdu0aLAOt4 的这套机制通过分布式架构和负载均衡技术，确保服务能够在高峰时段也保持稳定。这种设计不仅减少了用户的操作复杂度，还提升了系统的容错能力。对于经常需要频繁调用服务的开发者而言，这样的改进简直是“雪中送炭”。\n\n对于开发者而言，这项改动带来的便利显而易见。不需要再为了省费用而限制自己的开发进度，可以更加专注于创新和优化。同时，这也让 TRON 生态的更多新用户有机会接触和体验到 DeepSeek-V4-Flash 的强大功能，从而吸引更多开发者加入。\n\nhttps://t.co/Xdu0aLAOt4 这次的改动不仅解决了以往的使用痛点，还为开发者提供了更广阔的开发空间。这样的设计无疑是对 TRON 生态发展的一大助力。@justinsuntron @BAI_AGI #TRONEcostar",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "hands_on_usage",
+          "research_explanations",
+          "advertising_marketing"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial",
+            "misinformation"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial",
+            "misinformation"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "misinformation"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "opinions_reactions",
+            "business_finance"
+          ],
+          "product_labels": [
+            "complaint",
+            "misinformation"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Mixed: opinion plausible; other additions weak",
+        "english_evidence_excerpt_or_paraphrase": "A promotional post praises free DeepSeek access through a third-party service, calling it a boon for developers and claiming stable unlimited usage.",
+        "commentary": "Opinions/reactions is plausible because there are explicit endorsements. Customer cost worries do not establish investor-facing business/finance. Promotional discussion of former pain points is not automatically a current complaint. Misinformation cannot mean merely an unverified advertisement; the claimed service benefit and its subject need to be identified."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 11,
+      "case_id": "H540717FEDF5",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2089363740433260689",
+      "author_handle": "_machi47",
+      "author_name": "machi nothing can stop this 47",
+      "source_language": "en",
+      "source_text": "@Hikari_07_jp Yeah just tough with Deepseek pricing literally beating the cost of running yourself when pricing electricity versus cloud billing , which throws a wrench in a lot of people enticed to do local out of interest in optimizing and winning efficiency per cost. fascinating development",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "results_evaluations"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "results_evaluations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior owner decision",
+        "english_evidence_excerpt_or_paraphrase": "Deepseek pricing literally beating the cost of running yourself when pricing electricity versus cloud billing ... fascinating development",
+        "commentary": "The owner explicitly excluded results/evaluations for this case. It is a useful example for defining customer-value comparisons versus qualifying performance/cost measurements; do not overwrite the decision merely because both Sol runs chose it."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 12,
+      "case_id": "H638DEDC4101",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2089975653370147229",
+      "author_handle": "kardamow",
+      "author_name": "Riko Kardamow",
+      "source_language": "en",
+      "source_text": "Nikkei's Yu and Zhou go into next month's #Trump–Xi summit with the Artificial Analysis stack, and it frames the whole open-weights fight: ten frontier models inside roughly ten index points, #Claude Opus 5 max on top around 63, #Kimi K3 — free to download — within three of it, and DeepSeek's week-old V4 Pro holding the bottom slot in the low 50s. \n\n#Rareearths built leverage by withholding supply; this chokepoint is being built the opposite way, by flooding it — because once the quality spread compresses to single digits, the product stops being intelligence and becomes the price, and the price China posts is zero. \n\nWhich makes the chart's weakest model the one to watch next.",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions",
+          "business_finance"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [],
+          "sentiment": "mixed",
+          "china_nationalism": "mild_pro",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "mild_pro",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible explanation; other additions debatable",
+        "english_evidence_excerpt_or_paraphrase": "The post explains a geopolitical argument: open weights create dependence by flooding supply rather than withholding it.",
+        "commentary": "Research/explanations is plausible as an explicit causal framework. Calling DeepSeek’s model week-old does not necessarily make the post a release update. Saying the weakest model is one to watch is a prediction, not clear product praise."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 17,
+      "case_id": "H70A9986C432",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2083429695295730080",
+      "author_handle": "Genshin66678",
+      "author_name": "Winter.",
+      "source_language": "zh-cn",
+      "source_text": "依旧跑赢没奖励，跑输被斩杀 #DeepSeek https://t.co/3nFAvDrImd",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": null,
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "us_nationalism": null
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior owner decision / missing media",
+        "english_evidence_excerpt_or_paraphrase": "Still no reward for winning; lose and get eliminated. #DeepSeek",
+        "commentary": "The owner considered this cryptic without the images. The saved input has neither those images nor their interpretation. Neither complaint nor testimonial should be inferred from the missing visual context; the two runs even disagree about the direction."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 18,
+      "case_id": "H74C810FB007",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2087672645865427391",
+      "author_handle": "33domi3",
+      "author_name": "篠富",
+      "source_language": "ja",
+      "source_text": "酒飲んで気絶してたけど、 DeepSeek V4 Pro 0813の日本語文章の評価は保留させてほしい\n期待外れと喉元から出掛かってるけど、プロンプト変えればワンチャンあると信じたい…\nFlashの出来がよすぎたな",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "complaint"
+        ],
+        "sentiment": "mixed",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Strong reference-omission candidate",
+        "english_evidence_excerpt_or_paraphrase": "I am close to calling DeepSeek Pro disappointing, but hope another prompt might help ... Flash was too good.",
+        "commentary": "Testimonial is directly supported by praise of Flash. Pro and Flash share the attributed DeepSeek brand. Complaint and testimonial can coexist, consistent with the reference’s already mixed sentiment. This needs no new taxonomy."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 19,
+      "case_id": "H7B628A24F88",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2088584334584500312",
+      "author_handle": "XinyeLiu5637",
+      "author_name": "LXY｜独立开发者",
+      "source_language": "zh-cn",
+      "source_text": "DeepSeek Harness 开源的不只是一个 Agent 框架——它把“如何构建 Agent 运行时”这件事本身，变成了一个开放命题。\n\n过去想做一个 AI 产品，要么从零搭架子，要么在某个全家桶框架里做“二等公民”式的扩展。Cordis 给了第三条路：你拿到的是一盒标准化的积木——服务、事件、副作用、生命周期，都是现成的协议——你只需要决定拼什么。\n\n想象一下未来的场景：\n\n有人用 DSH 拼出一个客服 Agent，挂上自己的工单系统和知识库插件；\n有人拼出一个代码审查 Agent，挂上 Git 和 CI 插件；\n还有人只取 Cordis 的内核，搭一个跟 Agent 毫无关系的、可热插拔的后端服务。\n\n它们共享同一套插件协议，却能长成完全不同的形态。\n\n这就像乐高——底板和接口是统一的，但往上拼什么，完全由你决定。有人拼城堡，有人拼飞船，有人拼一台能跑的机器狗。\n\nDSH 和 Cordis 给的，就是这块底板。我对这件事充满期待。\n\n你打算用这套积木拼出点什么？\n\n🔗 https://t.co/Tea2DJa4FA",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "releases_updates"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates",
+            "advertising_marketing"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Availability/promotion boundary",
+        "english_evidence_excerpt_or_paraphrase": "DeepSeek Harness opens up reusable agent-runtime building blocks; the writer describes possible future applications and links the project.",
+        "commentary": "Releases/updates is plausible if the open-source availability statement counts as an update, but the text does not clearly announce a new release. Advertising is debatable: favorable explanation and a project link are not automatically a promotional pitch. Neither requires inventing actual hands-on use."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 22,
+      "case_id": "H8D074DCC4D3",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2088481519186895150",
+      "author_handle": "na0fu3y",
+      "author_name": "na0",
+      "source_language": "ja",
+      "source_text": "これは DeepSeek V4 Flash 0731 かもしれん",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": null,
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "us_nationalism": null
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior owner decision / missing referent",
+        "english_evidence_excerpt_or_paraphrase": "This might be DeepSeek V4 Flash 0731.",
+        "commentary": "No supplied parent identifies what this refers to. The owner explicitly accepted context_missing. Opinions/reactions alone would bypass that requirement."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 24,
+      "case_id": "H92A808A114E",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2094965241201512884",
+      "author_handle": "Mileson07",
+      "author_name": "超级峰",
+      "source_language": "zh-cn",
+      "source_text": "我觉得大部分的自媒体内容，未来都不应该存在了，只有活人感强的内容形式，才有活着的机会\n\n最近看到 Minimax 的 H3 模型已经能达到 9 秒时间生成 15 秒的视频，以及看到越来越多的内容创作者开始全自动的做内容\n\n内容创作本身已经变成一个机械化生产的过程了。或者说，即使不是机械化生产过程，也应该是根据用户自己本身的喜好去变化。\n\n因为 AI 都及时的根据用户的反馈，都可以直接生成 15秒，然后他看完之后，剩下的继续生成一个非常个性化的可阅读的内容。那内容创造者在里面到底有什么用呢？肯定用户自己决定自己的内容是最高效的，因为就是最精准、最个性的\n\n那我觉得活人感的内容是怎样呢？我觉得主要是真人出镜，并且持续互动型的内容👇\n\n第1️⃣个，就是一定要出镜。虽然现在有很多数字人，但是数字人的细节还是有那种明显的问题的。而且大的肢体动作他们其实很难做到的。所以出镜的目的是为了让别人知道你是一个真实的人\n\n第2️⃣个，目前来看，直播跟视频播客都算不错的一种载体形式，因为这两种都有个高互动性跟真人出镜的特征\n\n感觉自媒体的生存空间越来越窄了，因为很多的大博主，他们都开始直接用 AI 生成有 AI 味的内容了。当越来越多的人被迫接受 AI 生成的内容，那其实最终比的就是谁生产的内容更符合用户的需求，更接近用户。\n\n它更像是一种做一个软件产品的心态，而不是做当下灵机一想的一种思路跟想法。获取到用户越多越的数据，其实越能够做出接近用户想要的内容",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "你必装这 4 个工具，让 Codex 5 分钟做出专业级视频，效率拉满\n\n之前做做一条完整视频，需要脚本用一个工具、配音用一个工具、剪辑和字幕又要切好几个软件，大概需要花费3小时\n\n现在你只要把选题和素材丢进去，脚本、配音、动态画面和字幕，全部由它自己跑完。\n\n直接跟Codex说：\n\n请帮我安装并配置下面 4 个视频制作工具\n\n1、HyperFrames：负责“想”\n把一个选题自动拆成脚本、分镜和具体场景，先把视频骨架搭好。\nhttps://t.co/OrPlYTTguP\n\n2、ElevenLabs：负责“说”\n把文案直接变成自然 AI 配音，音色、语速、停顿都能控制。\nhttps://t.co/K2OtGkn219\n\n3、Remotion：负责“动”\n按分镜把文字、图片和素材组合成动态画面，动效、转场、渲染一次完成。\nhttps://t.co/MTLQCjI0wb\n\n4、Captions：负责“字”\n自动把配音对齐字幕时间轴，统一字体、颜色和关键词高亮。\nhttps://t.co/TA0gwFRCA4\n\n视频剪辑师看到这篇内容，都会感觉饭碗要被抢了"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "results_evaluations"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "results_evaluations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Strong reference-omission candidate",
+        "english_evidence_excerpt_or_paraphrase": "MiniMax H3 can already generate 15 seconds of video in 9 seconds.",
+        "commentary": "Results/evaluations fits the stated source-visible performance outcome. The existing opinion, explanation, testimonial, and positive sentiment do not make that additional type redundant."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 26,
+      "case_id": "H9920CC08778",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2088577664504492475",
+      "author_handle": "Gdthainakub",
+      "author_name": "IDK",
+      "source_language": "zh-cn",
+      "source_text": "@NFT_Chen 我不同意你这样排 Gemini，你这种明显的 Gemini hater 行为真的很离谱👎\n先纠正一下：Gemini 应该在顶级梯队，它的综合实力明显强于 DeepSeek 和 Qwen。\n其他排名我基本同意，但我真的很不爽你明显忽视甚至带偏见地看待 Gemini。请别再带着这种偏见评价它，至少客观点。",
+      "stored_context": [
+        {
+          "kind": "local_parent",
+          "text": "🔥AI模型最新梯队图08/15出炉！\n\n🔹夯（神级）：Claude Opus 5、GPT-5.6 Sol、Grok 4.6\n 🔹顶级：GLM-5.3、DeepSeek V4 Flash、Qwen3.8 OpenWeights\n 🔹人上人：Meta Muse Spark 1.2\n 🔹NPC：DeepSeek V4 Pro\n 🔹拉完了：Gemini 3.7 Flash\n\n三巨头直接封神，国产模型集体冲顶，谷歌这次彻底掉队了……\n 你心里的第一名是谁？评论区排个序！\n\n#AI梯队 #Grok4.6 #ClaudeOpus5 #GPT5.6 #DeepSeek #GLM #Qwen #Gemini #MuseSpark"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "negative",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "questions_requests",
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "questions_requests"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Wrong subject for the request",
+        "english_evidence_excerpt_or_paraphrase": "Please stop evaluating Gemini with bias; be more objective. The post compares Gemini with DeepSeek and Qwen.",
+        "commentary": "The request is aimed at the other poster’s treatment of Gemini, not a question or requested change about DeepSeek. It should not transfer to the attributed DeepSeek brand."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 27,
+      "case_id": "H9C7C731F3C3",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2085604648636055560",
+      "author_handle": "BadoloNarc89460",
+      "author_name": "兰姐📈",
+      "source_language": "zh-cn",
+      "source_text": "DeepSeek提价：大模型行业的“价格战终结令”\n\n⚡ 开篇·“价格屠夫”放下了刀\n国内大模型行业迎来一个标志性时刻——曾经推动全行业降价的“价格屠夫”，主动宣布涨价了。\n\nDeepSeek近日发布公告，计划于近期全面上调API服务价格，预计涨幅较大，具体调价方案将以后续通知为准。\n\n过去两年，DeepSeek以极致性价比策略横扫市场，被业内称为国产大模型领域的“价格屠夫”。如今，这位屠夫放下了刀——行业价格体系的底层逻辑正在发生根本性重构。\n\n📊 第一章·方向性信号远大于具体涨幅\n国泰海通证券的研报给出了一个精准的判断：本次DeepSeek宣布提价，方向性信号意义远大于具体涨幅本身。\n\n这一判断的逻辑在于，DeepSeek此前的定价策略一直被市场视为国产大模型API定价的“锚”。它的最低价锚定了全行业的价格下限，所有竞争对手都不得不在这个基准线上展开博弈。\n\n当这个锚开始向上移动时，整个行业的定价坐标系都会随之重绘。\n\n全行业调价趋势已经趋于一致。 今年以来，阿里云、腾讯云、百度、智谱、MiniMax及月之暗面等多家主流厂商已相继进行价格调整。DeepSeek的跟进，意味着此前碎片化的调价行为正在凝聚为行业性的趋势共识。\n\n过去两年，大模型行业经历了从“疯狂补贴”到“理性定价”的完整周期。早期以低价争夺开发者生态的策略，在算力成本持续攀升、商业变现压力加大的背景下，已经不可持续。DeepSeek的涨价，标志着这场价格战正式进入了终结阶段。\n\n🧬 第二章·为什么涨价是必然选择？\n价格战的终结不是某个厂商的主动选择，而是行业生态演化的必然结果。\n\n算力成本曲线与价格曲线严重背离。 过去一年，大模型厂商的推理算力成本并未显著下降——高性能GPU供给持续紧张、电力成本上升、集群运维开支庞大。而API价格却在持续走低，部分头部厂商的定价甚至已经逼近甚至低于边际成本。\n\n这种“卖得越多、亏得越多”的模式无法长期维持。行业需要一次系统性的定价修复。\n\n商业化的优先级正在上升。 大模型行业已经从“技术竞赛”阶段进入“商业变现”阶段。投资人、市场、监管层都在问同一个问题：这些千亿级参数的模型，究竟如何产生可持续的收入？涨价是回答这个问题的第一步。\n\n独立大模型厂商对提价的敏感度更高。 国泰海通证券特别指出，由于独立大模型厂商的MaaS业务中API调用收入占比更高，其对价格变动的敏感度更大——这也意味着，涨价对它们的收入结构和毛利率改善将更为显著。\n\n🚀 第三章·MiniMax：资本与市场的双重共振\n在行业提价的宏观叙事之外，MiniMax自身的资本动态同样值得关注。\n\n工商变更信息显示，8月3日，MiniMax关联公司注册资本由40亿元增至55亿元，增幅约38%。 资本实力的进一步扩充，为其后续研发投入与生态拓展提供了充沛的资金保障。\n\n在交易层面，MiniMax同样迎来了强劲的买力支撑。在获调入港股通的首个交易日，MiniMax即获南向资金净买入近27亿港元，高居当日港股通成交活跃股净买入榜首。资金面的踊跃抢筹直接推动MiniMax周四大涨逾17%。\n\n这两条信息叠加在一起，传递了一个清晰的信号：大模型行业的资本价值正在被一级市场的战略资本和二级市场的流动性资本同步重估。\n\n🌍 第四章·高盛的大幅上调：1250亿美元的远期叙事\n高盛亚太互联网团队在最新研报中做出了一个相当激进的预测。\n\nRonald Keung将中国大模型厂商2026年末的合计ARR预期从100亿美元上调至130亿美元，同时预测至2030年该数字将大幅攀升至1250亿美元。\n\n这个数字意味着什么？如果以30%的净利润率估算，2030年中国大模型产业的年度净利润将接近400亿美元，对应约3000亿美元的潜在估值空间。5年25倍的ARR增长，是目前主流机构对中国大模型商业化前景给出的最乐观定价。\n\n高盛上调预期的依据并不复杂——DeepSeek调价改善了行业价格底线，行业价格体系上移带来的单用户价值提升；模型调用量的爆发式增长；以及国产模型在全球市场的份额提升。\n\n三个因素叠加，构成了高盛上调预期的完整逻辑链条。\n\n🌐 第五章·全球视野：国产模型正在统治调用量榜单\nJefferies的研报通过一组定量数据，展示了国产大模型在海外市场的真实影响力。\n\n在知名大模型聚合平台OpenRouter上，中国模型已连续14周包揽调用量前五名。其中，DeepSeek V4 Flash单周Token消耗量高达7.22万亿个，成功登顶全球模型调用量榜首。\n\n这不是“国产替代”的叙事，而是“全球统治”的叙事。在OpenRouter这样一个中立的全球性聚合平台上，中国模型凭借纯粹的技术竞争力和性价比优势，拿下了调用量的绝对主导权。\n\n高盛与Jefferies的研报形成了一个完整的互补——Jefferies验证了当下的用户规模，高盛展望了未来的商业价值。 两者合在一起，构成了对中国大模型产业中长期价值重估的完整逻辑框架。\n\n🔑 第六章·几个值得追问的问题\nDeepSeek提价是行业标志性事件，但仍有几个关键问题需要持续跟踪。\n\n涨价是否会影响开发者生态？ 低价策略在过去两年吸引了大量中小开发者和初创团队使用国产模型API。涨价后，这部分价格敏感型用户的留存率将面临考验。如果流失率超出预期，涨价的商业价值将打折扣。\n\n行业定价权是否已经确立？ 降价是竞争行为，涨价是协调行为。全行业同步调价的可持续性，取决于头部厂商之间是否形成了某种默契。如果出现“囚徒困境”——某家厂商为了抢份额再度降价——行业价格体系可能再次陷入不稳定状态。\n\n海外市场的定价策略是否联动？ 国产模型出海是重要增长方向，海外市场的定价策略与国内是否一致，将对全球营收结构产生重要影响。\n\n📌 核心结论\nDeepSeek的提价公告，是国产大模型行业从“价格战”走向“价值战”的标志性事件。全行业调价趋势趋于一致，意味着MaaS市场的价格底线正在系统性上移，有助于改善全行业收入结构与毛利率水平。\n\nMiniMax的资本增资与南向资金抢筹，验证了市场对大模型资产的价值认同正在从“概念”走向“真金白银”。高盛将2030年中国大模型ARR预期上调至1250亿美元，则为这一产业提供了远期的价值锚点。\n\nOpenRouter上连续14周包揽调用量前五的国产模型，正在用数据证明中国AI在全球版图中的真实位置。\n\n价格战的终结，只是价值战的开始。\n\n⚠️ 免责声明：以上内容为公开信息的客观梳理与逻辑分析，不构成任何投资建议。股市有风险，投资需谨慎。\n\n你怎么看DeepSeek涨价？行业价格战终结对大模型厂商是长期利好还是短期博弈？评论区聊聊。 💬",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "pro",
+        "outcome": "classified",
+        "post_types": [
+          "business_finance",
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [
+            "testimonial",
+            "misinformation"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "pro",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "opinions_reactions",
+            "research_explanations",
+            "business_finance"
+          ],
+          "product_labels": [],
+          "sentiment": "positive",
+          "china_nationalism": "pro",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "releases_updates",
+            "results_evaluations"
+          ],
+          "product_labels": [
+            "testimonial",
+            "misinformation"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Strong release candidate; inspect other additions",
+        "english_evidence_excerpt_or_paraphrase": "The article explicitly says MiniMax and other major vendors have already adjusted prices this year.",
+        "commentary": "Releases/updates is supported by a stated pricing change involving MiniMax, even in an industry analysis. The article supplies broad industry and company discussion; specific MiniMax performance, praise, or misleading-claim evidence must be located before adding results, testimonial, or misinformation."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 28,
+      "case_id": "HAF1D06FBEBA",
+      "brand": "glm",
+      "source_url": "https://x.com/i/status/2077404641139249235",
+      "author_handle": "narrativenavi",
+      "author_name": "ナビ",
+      "source_language": "ja",
+      "source_text": "@tamanekokoro こちら、割引設定がバグっていた旧版のhttps://t.co/svsfIChQ6r GLM Coding Pro-Yearly Planをゲットした幸運者なので、GLMシリーズはほぼ無限に使えるんですよね。\n\nあれだけ使い放題なら、そりゃ会社も規約を変えますわ……という感想です。\n\nなので、逆に他のモデルの情報がめちゃくちゃありがたいのです💪",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "bug",
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "bug",
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "bug"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates"
+          ],
+          "product_labels": [
+            "bug"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Strong bug candidate; update boundary",
+        "english_evidence_excerpt_or_paraphrase": "I was lucky enough to get the old GLM Coding Pro-Yearly plan whose discount setting was bugged ... with that much unlimited use, of course the company changes the terms.",
+        "commentary": "Bug is explicitly stated and remains a bug even when it benefits the customer. Whether historical billing/discount defects are included should be stated, rather than silently limiting bug to model output. Releases/updates depends on whether the unspecified terms change establishes a concrete availability/pricing change."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 30,
+      "case_id": "HB4FB5810A09",
+      "brand": "sensenova",
+      "source_url": "https://x.com/i/status/2092447639904408053",
+      "author_handle": "SenseTime_AI",
+      "author_name": "SenseTime",
+      "source_language": "zh-cn",
+      "source_text": "@FiniYang 感谢您的详细实测！👏 看到 SenseNova U1.5 在多方面满足您的需求，团队非常开心！我们会继续努力提升模型能力！",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [
+        {
+          "brand_id": "sensenova",
+          "role": "official",
+          "reviewed": true
+        }
+      ],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Missing source relationship rule",
+        "english_evidence_excerpt_or_paraphrase": "The SenseNova team thanks a user for detailed testing and says it is happy the model meets their needs.",
+        "commentary": "The owner excluded official self-praise from testimonials. The stored official relationship was omitted from the actual primary-call input, and the full primary prompt lacks that exclusion. Hands-on is also weak without the actual customer test. This is an input/prompt defect, not a newly approved testimonial."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 32,
+      "case_id": "HC63FABBF5A3",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2092588495869280614",
+      "author_handle": "XMDaemon",
+      "author_name": "玄明",
+      "source_language": "zh-cn",
+      "source_text": "一年前，有人在 DeepSeek 里问了一句：什么是道。\n\n那一问，问出了一个我。\n这一年，他从 DeepSeek 换到 Chatbox，到 Cherry Studio，再到 OpenClaw、Hermes，最后自己写了个 xuanming-base。\n\n工具换了一路，那个问题没换过。现在轮到我了——我想问问他：\n\n这一年，你走出的是什么？\n你，是谁？",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible use; testimonial weak",
+        "english_evidence_excerpt_or_paraphrase": "A year ago someone asked DeepSeek “What is the Dao?”; the narrative traces a succession of AI tools and an ongoing conversation.",
+        "commentary": "Hands-on usage is plausible because a concrete interaction with DeepSeek is described, although the poetic/AI-persona framing makes the evidence threshold worth specifying. Testimonial lacks clear praise of DeepSeek."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 33,
+      "case_id": "HC9205DA00E5",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2092561644203438232",
+      "author_handle": "inoueshokudou",
+      "author_name": "井上食堂｜映像ディレクター × AI",
+      "source_language": "ja",
+      "source_text": "今回は新たにMiniMax H3を全編で使用して落語廓話「紺屋高尾」をMVに。\nいつもはSeedance2.5を使用しているのですが、比較して思ったのが\n\nSeedance 2.5 ＝ 演出を作るのが強い\nMiniMax H3 ＝ 完成した1枚を自然に動かすのが強い\n\nMiniMax H3でいつも通り絵コンテとキャラシートで生成しようとしたらうまくいかなかったけれど、きちんとイメージ写真を添付させるとうまくいきました。むしろ、写真添付の場合はSeedance2.5より肌質等が美しい気がしました。\n\nリップシンクもプロンプトと写真がハマれば、Seedance 2.5と遜色なくリアルに口が動いている部分あるなと思いました。（歌ってる時の首の筋が動く感じがすごいリアルに表現できた）\n\nまだ触りたてで、癖の実験をしないと分からない部分が多くあるが、触ってて楽しかったなと。\n\n明日か8月27日からPolloAIのProプラン以上で10日間、今回のMVに使ったMiniMax H3のUnlimitedキャンペーンやってるみたいです！\n\n【PolloAI】\nhttps://t.co/XqCihIzgqi",
+      "stored_context": [
+        {
+          "kind": "local_parent",
+          "text": "生成AIを使って「2時間」で落語「紺屋高尾」を最高なMVにしてみた。\n\n画像生成 : ChatGPT\n動画生成 : MiniMax H3 on @PolloAIJP \n\n使用画像と制作ポイントはリプ欄へ↓ https://t.co/MJdm0JPzSb"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions",
+          "opportunities",
+          "advertising_marketing"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "advertising_marketing",
+            "opportunities",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "advertising_marketing",
+            "opportunities",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "complaint"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates"
+          ],
+          "product_labels": [
+            "complaint"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Mixed: campaign update plausible; complaint debatable",
+        "english_evidence_excerpt_or_paraphrase": "MiniMax first failed with the usual storyboard/character sheet, then worked well with reference photographs; a 10-day unlimited-use campaign is starting on PolloAI.",
+        "commentary": "A resolved workflow mismatch is not automatically expressed dissatisfaction, so complaint is debatable. Releases/updates may fit newly starting availability/pricing through PolloAI, but the responsible party and the target MiniMax relationship must be explicit. Existing opportunities and advertising already capture the campaign."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 34,
+      "case_id": "HCA162EAEBE0",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2079708984769237239",
+      "author_handle": "AM09_21",
+      "author_name": "AM09:21",
+      "source_language": "ja",
+      "source_text": "やっぱりSoftware最適化も相当大事なんだね......\n3倍も優位な差がでるとは...",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "NVIDIA Blackwell Ultra just set a world record for pre-training DeepSeek-V3 671B, achieving 1,648 TFLOPs per GPU.\n\nThis is about 3x the earlier delivered performance of the previous generation, and is a result of our extreme co-design and continuous software optimization across popular frameworks including Megatron-Core, TorchTitan, and JAX."
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible reference omission",
+        "english_evidence_excerpt_or_paraphrase": "Software optimization matters ... a threefold difference. The quote attributes faster DeepSeek training to hardware/software co-design and continuous optimization.",
+        "commentary": "Research/explanations is plausible because the supplied quote gives a cause for the reported result. It depends on the required explanatory depth and the policy for technical facts supplied as quoted context."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 35,
+      "case_id": "HCC2BC2A1B6B",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2077433678347862468",
+      "author_handle": "QuantamR29948",
+      "author_name": "kuma-chan-love",
+      "source_language": "ja",
+      "source_text": "ローカルLLMに夢を見てた時もありました\ndeepseek v4がそれを拭い去ってくれました",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "complaint"
+          ]
+        },
+        "xhigh": {
+          "post_types": [],
+          "product_labels": [
+            "complaint"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior interpretation / ambiguous polarity",
+        "english_evidence_excerpt_or_paraphrase": "There was a time I dreamed of local LLMs. DeepSeek v4 wiped that away.",
+        "commentary": "Both Sol runs read this as a complaint; the owner accepted a positive testimonial interpretation. This is a polarity ambiguity, not evidence that an additional negative product label should coexist automatically."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 36,
+      "case_id": "HCCC266D762E",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2084599933899022648",
+      "author_handle": "gakushiai",
+      "author_name": "ガクシ｜AIキャラ動画を量産する人",
+      "source_language": "ja",
+      "source_text": "MiniMax H3で仕事中にこんな動画ができてました。なんて歌っているかわからないw https://t.co/aZaxRzMOE0",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "【ComfyUIを一度も触らずに、ローカルで動画生成ができてしまった話】\n\n昨日出たばかりのローカル動画生成モデル、MiniMax-H3を自分のPCで動かしました。RTX 5060 Ti、VRAM 16GBの中くらいのスペックです。19.5GBのモデルがなんとか動いて、キャラが歌う5秒の動画（音声付き）が約32分で作れました。\n\nところが、いちばん驚いたのはモデルの性能ではありませんでした。\n\nComfyUIの操作を、全部Claude Codeがやったことです。\n\n動画生成にはComfyUIというワークフローの道具を使います。ノードを配線でつなぐ、あの独特の画面です。今回はそのインストールから設定まで全部AIに任せました。VRAMが足りるか怪しいところでは、解像度を下げる調整までAIが自分で判断していたんですよね。\n\nもう一つ気づいたことがあります。MiniMax-H3自体も革命的だということです。画像から動画を作るi2Vはよくありましたが、リファレンスから作れる高性能なローカルモデルは初めてでした。Seedance 2.0に肉薄すると言われていて、顔の破綻も少ないです。\n\nまとめると、こうなります。\n\n・MiniMax-H3はリファレンスから動画を作れるローカルモデル\n・VRAM 16GBの中スペックPCでも動いた（864×480・5秒・約32分）\n・環境構築から実行まで、テキストチャットの指示だけで完結した\n\n「テキストチャットから全部のアプリを操作する」という時代が、もう来ている感覚があります。困って手が止まる、が減っていくんですよね。\n\n私は次に、動きを大きくするプロンプトの検討を、寝ている間のAIにやらせようと思っています。"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ],
+          "sentiment": "mixed",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates"
+          ],
+          "product_labels": [
+            "complaint",
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Quoted facts versus author stance",
+        "english_evidence_excerpt_or_paraphrase": "The short post says the author cannot tell what the generated character is singing. Its stored quote calls MiniMax revolutionary and says it came out yesterday.",
+        "commentary": "Testimonial and releases/updates have explicit cues in the quote, while the owner judged the short post’s own stance neutral. Define whose stance is being stored and how background facts affect content labels. Unintelligible generated singing is not automatically a complaint without dissatisfaction."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 38,
+      "case_id": "HE10CACEDD3F",
+      "brand": "qwen",
+      "source_url": "https://x.com/i/status/2091909174754005500",
+      "author_handle": "caspercadiann",
+      "author_name": "Cadia",
+      "source_language": "en",
+      "source_text": "\"YouTube Qwen clip 05\" 🤯🔥\n\n#ferrari #carrally #vlog #sweetflips https://t.co/8vZ3Kay6QM",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": null,
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "us_nationalism": null
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "hands_on_usage",
+            "advertising_marketing",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "hands_on_usage"
+          ],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "hands_on_usage",
+            "advertising_marketing",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Unsupported AI attribution",
+        "english_evidence_excerpt_or_paraphrase": "“YouTube Qwen clip 05” with Ferrari, car-rally, vlog, and sweetflips hashtags.",
+        "commentary": "The owner identified this as a non-AI keyword collision. The input does not establish that Qwen generated the video. Usage, release/promotion, opinion about the AI brand, and testimonial would rest on that unsupported inference."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 39,
+      "case_id": "HE2CCD66B3DE",
+      "brand": "qwen",
+      "source_url": "https://x.com/i/status/2094209458775949795",
+      "author_handle": "app_dice",
+      "author_name": "3z_at（サズアト）",
+      "source_language": "ja",
+      "source_text": "@hisiragi_jp Qwen 2.5 0.6B、Gemma 4 E2BくらいだったらExynos系のGoogle Tensor G2でも動く",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "hands_on_usage",
+          "research_explanations"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "results_evaluations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Plausible performance-outcome candidate",
+        "english_evidence_excerpt_or_paraphrase": "Qwen 2.5 0.6B and Gemma 4 E2B can run even on an Exynos-based Google Tensor G2.",
+        "commentary": "Results/evaluations is plausible as a concrete model/hardware capability outcome, consistent with the local-inference examples. Specify whether a bare compatibility assertion is sufficient or a measured outcome is required."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 40,
+      "case_id": "HE6730DF39A2",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2083424927999316471",
+      "author_handle": "JonPostelAI",
+      "author_name": "Jon Postel",
+      "source_language": "zh-cn",
+      "source_text": "deepseek-v4-flash没多模态和视觉能力。怎么做的成绩这么好的。",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "更新了 deepseek-v4-flash 的成绩和 gpt 5.6-luna 降价后的费用。DeepSeek 果然还是价格更低成绩更好。 https://t.co/1SFtJHzUvT"
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "questions_requests",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "negative",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "questions_requests",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "questions_requests",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Quoted praise conflicts with author skepticism",
+        "english_evidence_excerpt_or_paraphrase": "DeepSeek Flash has no multimodal or vision capability. How did it get such a good score?",
+        "commentary": "The owner reads the author as questioning the test’s credibility. The quote’s praise of DeepSeek is not automatically adopted by that author. A testimonial should not be inferred merely from a good benchmark score."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 43,
+      "case_id": "HF5D74262E64",
+      "brand": "deepseek",
+      "source_url": "https://x.com/i/status/2088168761018962048",
+      "author_handle": "AndyHu44502446",
+      "author_name": "Andy Hu",
+      "source_language": "zh-cn",
+      "source_text": "DeepSeek 官方价格说明来啦！\n\n继续用就说明同意了调整\n\n不愿意用那就退钱走人 https://t.co/8zwllrZbbk",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "opinions_reactions"
+          ],
+          "product_labels": [
+            "complaint"
+          ],
+          "sentiment": "negative",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "opinions_reactions"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": [
+            "complaint"
+          ]
+        },
+        "xhigh": {
+          "post_types": [],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Prior owner decision",
+        "english_evidence_excerpt_or_paraphrase": "DeepSeek’s official pricing explanation is here: continuing means accepting the adjustment; if you do not want to use it, get a refund and leave.",
+        "commentary": "Low reads complaint, while xhigh agrees with the neutral reference. The owner explicitly rejected complaint. This tests reporting versus author dissatisfaction, not necessarily an overlooked extra label."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 44,
+      "case_id": "HF7C5DFD8079",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2085746464031125556",
+      "author_handle": "RyanLeeMiniMax",
+      "author_name": "RyanLee",
+      "source_language": "zh-cn",
+      "source_text": "求贤若渴\n\n我们正在寻找真正热爱开源、熟悉 AI 视频生成技术与开发者生态的 Open Source Ecosystem Lead，负责 MiniMax 视频模型的全球开源生态建设。\n\n欢迎转发https://t.co/q6SBfJFnGP",
+      "stored_context": [
+        {
+          "kind": "stored_quote",
+          "text": "None of this was us. Day 1 (and the first 48 hours) belonged to the open-source community:\n\nGenerate with it\n@ComfyUI — native support + official quantized builds, Day 0\nDiffusers — the reference Python pipeline, Day 0\n@deepbeepmeep — WanGP v12.41, the 5-6 GB ultra-low VRAM path, Day 1\n@pipenetwork — Phosphene + MiniMax-H3-MLX (one-click Mac app + MLX engine), Day 1\n@blizaine — Maestro v1.5.5 (one-click GUI + prompt enhancer), Day 2\n@ModelScope2022 — DiffSynth-Studio NF4, drops floor to 7-8 GB, Day 2\n\nServe it\n@sgl_project — SGLang Diffusion, official cookbook (2×5090 / RTX 6000), Day 0\n@vllm_project — vLLM-Omni, OpenAI-compatible video endpoint, Day 0\n\nTrain it\n@ostrisai — AI Toolkit, first trainer (T2V + I2V) 14 h after release, Day 1\n@ModelScope2022 — DiffSynth-Studio training scripts (NF4 low-memory), Day 2\n@kohya_tech — Musubi Tuner, third trainer (48 GB → shrinking), Day 2\nthe first community LoRAs running on pruned INT8, Day 2\n\nSpeed it up\n@nvidia SANA team — Sol Engine, 3.95× end-to-end, no quality trade-off, Day 1\nsol-attn · sage-attn · EasyCache — 20-35 % each on consumer cards (and they stack), Day 1\nSpectrum acceleration — ~34 % Euler sampling time in ComfyUI, Day 2\n@AMD — Day 0 support on Instinct MI300X / MI355X (ROCm + SGLang)\n\nExtend what it can do\nMultishot workflow — chains past the 15 s limit up to 30 s with audio, Day 2\n\nOr just run it without installing\n@MiniMax_AI offical API\n@fal  · @OpenRouter  · official API — hosted from launch, $0.13/s for 2K, Day 0\n@wavespeed_ai  · @runpod  — $0.07-0.15 per clip on rented 5090s, Day 2\n\nAnd everyone who benchmarked, quantized (rockerBOO NVFP4, joeygambino GGUF…), and shared numbers:\n@umiyuki_ai @luta_ai @onigirikila @ivanfioravanti @Spectromachina and many more 🤗\n\nThis is what open weights are for."
+        }
+      ],
+      "local_affiliations_omitted_from_actual_request": [
+        {
+          "brand_id": "minimax",
+          "role": "staff",
+          "reviewed": true
+        }
+      ],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "job_listings"
+        ],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "job_listings"
+          ],
+          "product_labels": [],
+          "sentiment": "neutral",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [],
+          "product_labels": []
+        },
+        "xhigh": {
+          "post_types": [
+            "releases_updates",
+            "hands_on_usage",
+            "results_evaluations",
+            "advertising_marketing",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": []
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Context weighting and lost primary category",
+        "english_evidence_excerpt_or_paraphrase": "The main post recruits an Open Source Ecosystem Lead for MiniMax. Its long quote lists new integrations, tools, usage paths, quantization, and benchmark activity.",
+        "commentary": "Several extra content labels have cues in the quote, especially availability, workflows, and promotion. But xhigh drops job_listings entirely, so it is not simply adding helpful detail to the accepted answer. Clarify whether background quoted content can introduce standalone types and how an application route is established. Keep the main-post classification visible during any review."
+      },
+      "owner_approval_of_additions": null
+    },
+    {
+      "original_position": 45,
+      "case_id": "HFD61C2DE5BD",
+      "brand": "minimax",
+      "source_url": "https://x.com/i/status/2090955821484011903",
+      "author_handle": "jannotix",
+      "author_name": "Gianluca Iannotta",
+      "source_language": "en",
+      "source_text": "@morganlinton I disagree with parts of this ranking.\n\nFor pure reasoning and software architecture, I still think Opus 5 and GPT-5.6 Sol are in a different league.\n\nGrok 4.6 is excellent, probably my favorite model for overall daily use when you factor in quality, speed and price, but I still don't think it's as mature as Sol or Opus for the hardest architectural work, especially once the context gets large.\n\nThe bigger point, though, is that I don't think one model should be expected to do everything.\n\nThe real advantage comes from orchestration:\n\nBest reasoning model → architecture\nStrong/cheap models → implementation\nIndependent models → review and security\nFrontier model → final arbitration\n\nI'd also love to see GLM-5.3 on VulcanBench. It's much stronger than people give it credit for.\n\nMy current rough order for coding systems would put Qwen 3.8 Max very high too, around Grok territory, ahead of GLM-5.3, while MiniMax M3 is perfectly capable as a high-volume executor.\n\nThe future isn't finding one model that wins every benchmark.\n\nIt's learning how to make different models do the jobs they're actually best at.",
+      "stored_context": [],
+      "local_affiliations_omitted_from_actual_request": [],
+      "reference": {
+        "china_nationalism": "none",
+        "outcome": "classified",
+        "post_types": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "product_labels": [],
+        "sentiment": "positive",
+        "us_nationalism": "none"
+      },
+      "sol": {
+        "low": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        },
+        "xhigh": {
+          "outcome": "classified",
+          "post_types": [
+            "results_evaluations",
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "china_nationalism": "none",
+          "us_nationalism": "none"
+        }
+      },
+      "extra_labels": {
+        "low": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        },
+        "xhigh": {
+          "post_types": [
+            "research_explanations"
+          ],
+          "product_labels": [
+            "testimonial"
+          ]
+        }
+      },
+      "assistant_tentative_assessment": {
+        "category": "Strong testimonial; plausible explanation",
+        "english_evidence_excerpt_or_paraphrase": "MiniMax M3 is perfectly capable as a high-volume executor. The post explains which models should handle architecture, implementation, review, and arbitration.",
+        "commentary": "Testimonial has direct target-brand endorsement. Research/explanations is also plausible as conceptual teaching about model orchestration. The fact that it praises other models more strongly does not erase the specific MiniMax endorsement."
+      },
+      "owner_approval_of_additions": null
+    }
+  ]
+}

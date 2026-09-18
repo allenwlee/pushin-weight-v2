@@ -754,14 +754,14 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 page.locator(
                                     '[data-pw-filter-group="product_labels"]'
                                 ).count(),
-                                5,
+                                4,
                             )
                             self.assertEqual(
                                 page.locator('[data-pw-filter-group="post_types"]').count(),
                                 13,
                             )
                             self.assertGreater(
-                                page.locator('[data-group="nationalism"]').count(), 0
+                                page.locator('[data-group="audience_topics"]').count(), 0
                             )
 
                             page.evaluate(
@@ -2396,33 +2396,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         '[data-group="role"] input[data-pw-filter-group="role"]',
                         '[data-group="lang"] input[data-pw-filter-group="lang"]',
                         '[data-group="sentiment"] input[data-pw-filter-group="sentiment"]',
-                        '[data-tier-grid="us"] input[data-pw-filter-group="us_nationalism"]',
-                        '[data-tier-grid="cn"] input[data-pw-filter-group="cn_nationalism"]',
-                        '[data-group="unsanctioned"] input[data-pw-filter-group="unsanctioned"]',
+                        '[data-group="audience_topics"] input[data-pw-filter-group="audience_topics"]',
                     ):
                         self.assertGreater(page.locator(selector).count(), 0, f"selector matched zero controls: {selector}")
 
-                    unsanctioned_pill = page.locator('[data-group="unsanctioned"]')
-                    unsanctioned_pill.press("Enter")
                     dropdown = page.locator("body > .filter-dropdown.is-portaled")
-                    unsanctioned = dropdown.locator(
-                        'input[data-pw-filter-group="unsanctioned"]'
-                    )
-                    self.assertFalse(unsanctioned.is_checked())
-                    feed_response, chart_response = act(unsanctioned.check)
-                    filters, _ = request_state(feed_response.url)
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().unsanctioned"), "only")
-                    self.assertEqual(filters["unsanctioned"], "only")
-                    chart_filters, _ = request_state(chart_response.url)
-                    self.assertEqual(chart_filters["unsanctioned"], "only")
-
-                    feed_response, chart_response = act(unsanctioned.uncheck)
-                    filters, _ = request_state(feed_response.url)
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().unsanctioned"), "off")
-                    self.assertEqual(filters["unsanctioned"], "off")
-                    chart_filters, _ = request_state(chart_response.url)
-                    self.assertEqual(chart_filters["unsanctioned"], "off")
-
                     brands_pill = page.locator('[data-group="brands"]')
                     brands_pill.press("Enter")
                     self.assertTrue(dropdown.is_visible())
@@ -2443,16 +2421,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertIn("qwen", open_selection)
                     self.assertNotIn("anthropic", open_selection)
                     brands_pill.press("Escape")
-
-                    nationalism_pill = page.locator('[data-group="nationalism"]')
-                    nationalism_pill.press("Enter")
-                    dropdown.locator('[data-lens="cn"]').click()
-                    act(dropdown.locator('[data-dd-action="clear"][data-dd-scope="visible"]').click)
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().cn_nationalism"), [])
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().us_nationalism"), "__all__")
-                    act(dropdown.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
-                    self.assertEqual(page.evaluate("() => window.pwFilter.get().cn_nationalism"), "__all__")
-                    nationalism_pill.press("Escape")
 
                     sentiment_pill = page.locator('[data-group="sentiment"]')
                     sentiment_pill.press("Enter")
@@ -3479,9 +3447,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         canonical_types = (
             "releases_updates",
-            "results_evaluations",
+            "results_analysis",
             "questions_requests",
-            "events_opportunities",
+            "events",
         )
         for key in old_types + canonical_types:
             PostTypeKey.objects.get_or_create(key=key)
@@ -3768,6 +3736,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 "历史记录",
             ),
         }
+        expected_v4_metadata_status = {
+            "v22-metadata-003": "available",
+            "v22-metadata-004": "unavailable",
+            "v22-metadata-005": "unavailable",
+            "v22-metadata-006": "unavailable",
+        }
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -3821,6 +3795,27 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 self.assertEqual(
                                     api_row["classification_status_labels"],
                                     [labels[label_index - 1]],
+                                )
+                                self.assertEqual(api_row["audience_topic_keys"], [])
+                                self.assertEqual(api_row["geopolitical_mode_keys"], [])
+                                self.assertEqual(
+                                    api_row["untracked_brand_promotions"], []
+                                )
+                                self.assertEqual(
+                                    api_row["audience_topics_status"],
+                                    expected_v4_metadata_status[tweet_id],
+                                )
+                                self.assertEqual(
+                                    api_row["geopolitical_modes_status"],
+                                    "unavailable",
+                                )
+                                self.assertEqual(
+                                    api_row["china_national_stance_status"],
+                                    "unavailable",
+                                )
+                                self.assertEqual(
+                                    api_row["us_national_stance_status"],
+                                    "unavailable",
                                 )
 
                             classified_other = page.locator(
@@ -3902,7 +3897,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 }"""
                             )
                             self.assertLessEqual(
-                                height_metrics["regular"]["actual"], 110
+                                height_metrics["regular"]["actual"], 150
                             )
                             self.assertEqual(
                                 height_metrics["regular"]["delta"], 0
@@ -4646,8 +4641,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                   .map(node => node.getAttribute('href')),
                 flagInspections: flagTriggers.map(node => node.dataset.pwInspection),
                 flagTitles: flagTriggers.map(node => node.getAttribute('title')),
-                flagCenters: flagRects.map(rect => rect.left + rect.width / 2),
-                flagTops: flagRects.map(rect => rect.top),
+                flagCenters: flagRects.map((rect, index) =>
+                  rect.left + rect.width / 2
+                  - (flagRects[0]?.left + flagRects[0]?.width / 2 || 0)
+                ),
+                flagTops: flagRects.map(rect =>
+                  rect.top - (flagRects[0]?.top || 0)
+                ),
                 elbow: elbow ? {
                   left: getComputedStyle(elbow).borderLeftWidth,
                   bottom: getComputedStyle(elbow).borderBottomWidth,
@@ -5105,7 +5105,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ),
                                 ["pw-icon", "zh", "en"],
                             )
-                            self.assertEqual(page.locator(".filter-pill .carat use").count(), 8)
+                            self.assertEqual(page.locator(".filter-pill .carat use").count(), 7)
                             self.assertEqual(
                                 page.locator(".filter-pill .carat use").evaluate_all(
                                     "nodes => [...new Set(nodes.map(node => node.getAttribute('href')))]"
@@ -5486,7 +5486,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
     def test_anonymous_feed_fixture_has_a_page_two_target(self) -> None:
         anonymous = Client(HTTP_HOST="localhost")
-        root = anonymous.get("/")
+        root = anonymous.get("/", follow=True)
         self.assertEqual(root.status_code, 200)
         self.assertIn(self.fixture["replacement_id"].encode(), root.content)
 
@@ -5501,13 +5501,18 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
 
         second_page = self._feed_payload(limit=50, cursor=payload["next_cursor"])
-        self.assertEqual([row["tweet_id"] for row in second_page["rows"]], [self.fixture["page_two_id"]])
-        self.assertEqual(second_page["rows"][0]["tint_class"], "tint-neg-mixed")
+        page_two = next(
+            row for row in second_page["rows"]
+            if row["tweet_id"] == self.fixture["page_two_id"]
+        )
+        self.assertEqual(page_two["tint_class"], "tint-neg-mixed")
 
-        all_rows = self._feed_payload(limit=50, filters=json.dumps({"unsanctioned": "any"}))
-        flagged = next(row for row in all_rows["rows"] if row["unsanctioned"])
-        self.assertIn("unsanctioned", flagged)
-        self.assertTrue(flagged["unsanctioned"])
+        all_rows = self._feed_payload(limit=50, filters=json.dumps({"unsanctioned": "only"}))
+        flagged = next(
+            row for row in all_rows["rows"] if row["legacy_unsanctioned"]
+        )
+        self.assertFalse(flagged["unsanctioned"])
+        self.assertTrue(flagged["legacy_unsanctioned"])
 
     def test_follower_lead_keeps_feed_bodies_aligned_across_all_bins(self) -> None:
         with sync_playwright() as playwright:

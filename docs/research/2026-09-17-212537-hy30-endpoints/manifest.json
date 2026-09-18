@@ -1,0 +1,49 @@
+{
+  "schema": "openrouter-model-endpoint-snapshot/v1",
+  "started_at_utc": "2026-09-17T12:26:20.454803+00:00",
+  "finished_at_utc": "2026-09-17T12:26:20.612589+00:00",
+  "candidate_model_count": 1,
+  "endpoint_count": 1,
+  "candidate_coverage": [
+    {
+      "model_id": "tencent/hy-mt2-30b-a3b",
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-30b-a3b/endpoints",
+      "http_status": 200,
+      "endpoint_count": 1,
+      "error_type": null,
+      "raw_file": "raw/endpoints-tencent__hy-mt2-30b-a3b.json"
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-30b-a3b/endpoints",
+      "started_at_utc": "2026-09-17T12:26:20.454803+00:00",
+      "retrieved_at_utc": "2026-09-17T12:26:20.611351+00:00",
+      "http_status": 200,
+      "http_version": 11,
+      "http_date": "Thu, 17 Sep 2026 12:26:20 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-tencent__hy-mt2-30b-a3b.json"
+    }
+  ],
+  "pricing_authority": {
+    "path": "../2026-09-17-143812-openrouter-pricing-snapshot/models.csv",
+    "model_id": "tencent/hy-mt2-30b-a3b",
+    "input_usd_per_million_cap": "0.074",
+    "output_usd_per_million_cap": "0.295",
+    "rule": "Endpoint prices are retained as observed metadata only and must not replace these frozen caps."
+  },
+  "scope": "One public GET endpoint-metadata request for Hy-MT2-30B-A3B; no inference, credentials, or paid calls.",
+  "warnings": [
+    "An empty endpoint array means this API response returned no endpoint at capture time.",
+    "Provider availability, tags, parameters, and endpoint prices may change after capture."
+  ],
+  "sha256": {
+    "README.md": "7b9b10f39b93a568495aa1eeaf7fa1f4f35eeafcae05a04f3730c60f07ff57bd",
+    "capture.py": "2e720797ba9de656f3546604de07f3370d4eaa3d39c577482d4f2d089f0c3192",
+    "endpoint-metadata.csv": "01f028ceca8175e629adf3d907132f690213b03345bc4023cf97f1c4ecf351ea",
+    "raw/endpoints-tencent__hy-mt2-30b-a3b.json": "340425a211ee68948a2f7ba9cf4cf28d5eac5ef73df40d1bc016c55e900e7040"
+  }
+}
