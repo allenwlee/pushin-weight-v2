@@ -35,10 +35,18 @@ copying their values into a terminal transcript:
 
 - harvester: `TWITTERAPI_IO_SCHEDULED_API_KEY` for the acceptance cycle,
   `TWITTERAPI_IO_ON_DEMAND_API_KEY` for explicitly launched management jobs,
-  plus the credentials selected by the effective translator/classifier URLs
-  (`ANTHROPIC_API_KEY`, `MINIMAX_API_TOKEN`, or `DEEPSEEK_API_KEY`);
+  plus `DEEPINFRA_API_KEY` for the locked direct-provider translator and
+  classifier routes;
 - headline worker: `DEEPSEEK_API_KEY`;
+- synthesis worker: `DEEPINFRA_API_KEY` for the locked direct-provider
+  commentary route;
 - staging web: `STAGING_REFRESH_SOURCE_DATABASE_URL` only for refresh.
+
+The selected enrichment routes are direct DeepInfra
+`deepseek-ai/DeepSeek-V4-Flash-0731` for classification and direct DeepInfra
+`google/gemma-4-31B-it-turbo` for translation and commentary. OpenRouter is
+not part of these runtime paths. A missing key or route/model mismatch must
+disable the affected lane rather than fall back to another provider.
 
 Do not link the broad production secret group. A distinct revocable provider
 key is preferred, but it still consumes the shared account quota.
