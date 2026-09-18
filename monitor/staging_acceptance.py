@@ -299,10 +299,21 @@ def evaluate_staging_acceptance(
     n_results = selected_call.get("n_results")
     n_inserted = selected_call.get("n_inserted")
     n_updated = selected_call.get("n_updated")
+    safe_truncated_transfer = (
+        call_status == "truncated_replay_queued"
+        and selected_call.get("coverage_transfer") == "transferred"
+        and selected_call.get("cursor_advanced") is True
+        and isinstance(selected_call.get("backlog_window_id"), int)
+        and not isinstance(selected_call.get("backlog_window_id"), bool)
+        and selected_call["backlog_window_id"] > 0
+    )
     if (
         stats.get("status") not in {"completed", "degraded"}
         or bool(stats.get("errors"))
-        or call_status not in {"completed", "no_results"}
+        or (
+            call_status not in {"completed", "no_results"}
+            and not safe_truncated_transfer
+        )
         or not isinstance(n_results, int)
         or isinstance(n_results, bool)
         or n_results < 0

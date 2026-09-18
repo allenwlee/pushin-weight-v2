@@ -177,7 +177,7 @@ def test_config_yaml_has_llm_block():
     assert raw["llm"]["classifier_model"] == "deepseek-ai/DeepSeek-V4-Flash-0731"
     assert raw["llm"]["classifier_base_url"] == "https://api.deepinfra.com/v1/openai"
     assert raw["llm"]["classifier_deepinfra_request_profile"] == "deepseek_0731"
-    assert raw["llm"]["relevancy_model"] == "deepseek-v4-flash"
+    assert raw["llm"]["relevancy_model"] == "deepseek-ai/DeepSeek-V4-Flash-0731"
     assert raw["llm"]["signal_model"] == "deepseek-v4-flash"
 
 

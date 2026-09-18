@@ -19,9 +19,11 @@ disabled before and after the test.
 
 The first bounded harvester acceptance attempt stopped before Twitter search or
 model use because the staging harvester did not yet have `DEEPINFRA_API_KEY`.
-The key is now present on both the harvester and synthesis services, but the
-acceptance runbook prohibits an automatic retry. One replacement attempt needs
-separate owner authorization. Production has not been changed.
+The owner then authorized one replacement run. It exercised the real Twitter,
+translation, relevancy, and two-role classification path and exposed four
+integration defects described below. The replacement has been consumed and is
+retained as a failed acceptance attempt. The staging harvest cron is suspended.
+Production has not been changed.
 
 ## Locked runtime
 
@@ -90,9 +92,9 @@ synthesis services all use database/role `pushinweight_staging` /
 headline, synthesis, and jobs services all reported the candidate SHA.
 
 At rest, the headline and synthesis provider-call controls are false. The
-harvester's schedule remains the intentionally impossible `0 0 31 2 *` and is
-manual-only for acceptance. No production service, database, secret, schedule,
-or branch was changed.
+harvester's schedule remains the intentionally impossible `0 0 31 2 *` and the
+service was suspended at `2026-09-18T21:00:29Z`. No production service,
+database, secret, schedule, or branch was changed.
 
 As a read-only cross-check, the production web, harvester, and headline
 services remained live on Stage 0 SHA
@@ -155,23 +157,62 @@ model calls, and no post or cursor mutation. The cause was the absent
 
 The staging harvester was corrected and a later one-off check proved both the
 DeepInfra and scheduled Twitter credentials are present, with values redacted.
-The exact candidate, refreshed database, one-page/five-post cap, impossible
-schedule, and empty pre-run queues remain unchanged.
+The owner then authorized exactly one replacement Trigger Run. It began at
+`2026-09-18T20:58:46Z` and was recorded as
+`20260918T205912_0000-0c3aa4cf`. It performed one Twitter search/page, received
+two results, kept and inserted one post, and attributed post
+`2101052699269886249`.
 
-The runbook at
-`docs/operations/2026-08-27-171845-staging-harvester-acceptance.md` says:
-“A new attempt requires separate owner authorization and a new recorded
-attempt; the historical result below remains immutable.” A replacement attempt
-therefore remains blocked on that authorization. No replacement trigger has
-been run.
+Translation succeeded. The content classifier call used 7,208 input and 56
+output tokens, cost $0.00044256, and completed in 1,874 ms. The brand classifier
+call used 6,861 input and 48 output tokens, cost $0.00042030, and completed in
+2,990 ms. Both provider calls succeeded, but their output did not produce a
+publishable combined classification; the post remained pending with
+`classification_incomplete`. The relevancy step also attempted the obsolete
+`deepseek-v4-flash` model through an incompatible Anthropic-style adapter,
+failed, and retained its keep-biased result.
+
+The selected search call safely advanced its cursor and transferred the
+uncovered residual window to the durable backlog. Its resulting
+`truncated_replay_queued` status was nevertheless rejected by the old
+acceptance wrapper as `pipeline_or_bound_failure`. This run is therefore
+retained as failed and is not reinterpreted as an acceptance pass.
+
+Two earlier staging executions exposed related defects. The run around
+`19:22 UTC` inserted four posts and completed translation and both classifier
+calls, but publication rejected all four with
+`classification_trace_input_fingerprint_mismatch` because the classifier and
+publisher reconstructed different tracked-brand catalog revisions. The run
+around `20:23 UTC` inserted two posts and persisted both stages, but the wrapper
+reported incomplete output because it still required commentary fields even
+though literal translation and classification complete the harvest lane and
+commentary is a separate synthesis lane.
+
+A read-only Render review found five executions around `17:25`, `18:22`,
+`19:22`, `20:23`, and `20:58 UTC`. The live and Blueprint schedule remained
+`0 0 31 2 *`, there was no matching deployment or schedule change, and each
+execution identified itself as manual. Render audit logs are unavailable on
+the current plan, so the actor cannot be identified. These are recorded as
+unexplained Dashboard/API Trigger Runs, not an old hourly cron. The staging
+harvest service remains suspended.
+
+The local correction now carries one validated tracked-brand catalog snapshot
+through prompt construction and publication, defines literal-v2 completion
+from the current successful EN/ZH-CN/JA artifact, accepts a truncated call only
+when durable backlog transfer and cursor advancement are proved, and routes
+matching relevancy work through the direct DeepInfra classifier client. Legacy
+completion behavior remains unchanged.
 
 ## Remaining staging gate
 
-After authorization, run exactly one replacement acceptance attempt with one
-Twitter search/page and at most five posts, capture the structured route,
-token, persistence, and visibility evidence, then return the harvester to its
-dormant state. Headline enqueueing and provider calls remain disabled and must
-record a zero-call delta; enabling them would require the runbook's separate
-headline-provider budget authorization. Update this report and
-[PR 41](https://github.com/allenwlee/pushin-weight-v2/pull/41) with the result.
-Production remains outside this LFG delivery target.
+The owner-authorized replacement attempt has been consumed. The correction must
+pass local regression checks and be deployed at one exact SHA before another
+live attempt can be considered. A further Twitter/provider-backed Trigger Run
+requires fresh explicit owner authorization and a new immutable evidence entry.
+The staging cron remains suspended between attempts.
+
+Headline enqueueing and headline provider calls remain disabled and have a
+required zero-call delta; no headline budget authorization is needed while
+that lane stays disabled. Update this report and
+[PR 41](https://github.com/allenwlee/pushin-weight-v2/pull/41) with the final
+staging result. Production remains outside this LFG delivery target.

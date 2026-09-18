@@ -317,6 +317,35 @@ class _SelectedTransport:
         }
 
 
+def test_selected_runtime_reports_semantically_invalid_provider_output():
+    from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
+
+    class InvalidTransport(_SelectedTransport):
+        def messages_create(self, **kwargs):
+            self.calls.append(kwargs)
+            return {"decisions": {}}
+
+    errors = []
+    transport = InvalidTransport()
+    rows = classify_batch_pragmatics_full(
+        [{
+            "tweet_id": "p1", "text": "A model result.",
+            "brand_ids": ["minimax"], "context": [],
+            "source_language": "en",
+        }],
+        [BrandRow("minimax", "MiniMax", "#000", False)],
+        transport,
+        on_batch_error=lambda _batch, exc: errors.append(str(exc)),
+    )
+
+    assert len(transport.calls) == 2
+    assert rows[0]["valid"] is False
+    assert sorted(errors) == [
+        "classification_brand_interpretation_response_invalid",
+        "classification_content_response_invalid",
+    ]
+
+
 def test_selected_runtime_uses_two_calls_catalog_fixed_slots_and_v4_merge():
     from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
 

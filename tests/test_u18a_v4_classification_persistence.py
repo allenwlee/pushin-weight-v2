@@ -75,6 +75,34 @@ class _SelectedV4Transport:
         return response
 
 
+def test_selected_v4_rejects_a_stale_catalog_snapshot_before_provider_call():
+    from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
+
+    tweet = {
+        "tweet_id": "stale-catalog",
+        "text": "Brand A shipped a model",
+        "brand_ids": ["v4-a"],
+        "context": [],
+        "source_language": "en",
+        "affiliations": [],
+    }
+    registry = [BrandRow("v4-a", "Brand A", "#111111", False)]
+    transport = _SelectedV4Transport()
+    errors = []
+
+    result = classify_batch_pragmatics_full(
+        [tweet],
+        registry,
+        transport,
+        on_batch_error=lambda _batch, exc: errors.append(str(exc)),
+        tracked_catalog_snapshot={"revision": "stale", "brands": []},
+    )
+
+    assert transport.calls == []
+    assert result[0]["valid"] is False
+    assert errors == ["classification_catalog_snapshot_revision_mismatch"]
+
+
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
 def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_legacy_flags():
@@ -175,14 +203,33 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
         for brand in brands
     ]
     catalog = _tracked_brand_catalog(registry, [tweet])
+    tweet["tracked_brand_catalog"] = catalog["brands"]
     tweet["_classification_catalog_revision"] = catalog["revision"]
     transport = _SelectedV4Transport()
-    result = classify_batch_pragmatics_full([tweet], registry, transport, model="u18a-v4-model")[0]
+    result = classify_batch_pragmatics_full(
+        [tweet],
+        registry,
+        transport,
+        model="u18a-v4-model",
+        tracked_catalog_snapshot=catalog,
+    )[0]
 
     assert result["valid"] is True
     assert sorted(transport.calls) == ["brand_interpretation", "content"]
     parsed = _parse_published_classifications(result["by_brand"], set(tweet["brand_ids"]))
     assert parsed == result["by_brand"], repr(result["by_brand"])
+    without_catalog = {
+        key: value
+        for key, value in tweet.items()
+        if key not in {"tracked_brand_catalog", "_classification_catalog_revision"}
+    }
+    assert _publish_stage1_classification(
+        post_id=post.pk,
+        result=deepcopy(result),
+        tweet=without_catalog,
+        model="u18a-v4-model",
+        run_id="u18a-v4-run",
+    ) is None
     outcome = _publish_stage1_classification(
         post_id=post.pk, result=result, tweet=tweet, model="u18a-v4-model", run_id="u18a-v4-run",
     )

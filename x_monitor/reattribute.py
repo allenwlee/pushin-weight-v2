@@ -516,6 +516,23 @@ def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
     return build_anthropic_client_from_env(cfg)
 
 
+def build_relevancy_client_from_env(cfg: Config | None = None) -> Any | None:
+    """Build the binary relevancy client without crossing provider protocols."""
+    if cfg is None:
+        from x_monitor.config import load_config
+
+        cfg = load_config(Path("config.yaml"))
+    if getattr(cfg.llm, "classifier_provider", "anthropic") == "deepinfra":
+        if cfg.llm.relevancy_model != cfg.llm.classifier_model:
+            logger.warning(
+                "DeepInfra relevancy model must match the configured classifier "
+                "route; relevancy disabled"
+            )
+            return None
+        return build_classifier_client_from_env(cfg)
+    return build_anthropic_client_from_env(cfg)
+
+
 def build_translator_client_from_env(cfg: Config | None = None) -> Any | None:
     """Return an `AnthropicClaudeClient` for the translation stage.
 

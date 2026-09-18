@@ -27,8 +27,11 @@ plain `python manage.py run_cycle`.
 
 Apply only `render-staging.yaml` to the staging Blueprint. Confirm the stage
 branch and names exactly match the ownership table in `docs/deploy/render.md`.
-Do not apply `render.yaml`, suspend `pushinweight-harvest`, or change its
-`*/15 * * * *` schedule.
+Do not apply `render.yaml`, suspend the production `pushinweight-harvest`, or
+change its `*/15 * * * *` schedule. Keep the staging harvester on the dormant
+`0 0 31 2 *` schedule and suspended at rest. If Render requires the staging
+service to be resumed for a manual Trigger Run, resume it only after all gates
+pass and suspend it again as soon as that one run reaches a terminal state.
 
 Configure service-scoped secrets in the Render Dashboard without printing or
 copying their values into a terminal transcript:
@@ -65,8 +68,10 @@ command as a workaround.
 3. Confirm `printenv RENDER_SERVICE_NAME` is
    `pushinweight-staging-harvest` and
    `printenv X_MONITOR_DEPLOYMENT_ENVIRONMENT` is `staging`.
-4. Confirm the cron schedule remains `0 0 31 2 *` and no prior manual run is
-   active.
+4. Confirm the live staging schedule and Blueprint both say `0 0 31 2 *`, the
+   staging harvester is suspended, and no prior manual run is active. A
+   schedule or service-state mismatch stops the attempt. Confirm production is
+   still running its independent `*/15 * * * *` schedule.
 5. Confirm the staging refresh receipt and zero-state census have passed, the
    staging worker is running the same candidate SHA, and its owned queue is
    empty before the attempt.
@@ -74,11 +79,11 @@ command as a workaround.
    returning at most five shared-quota results now. Provider dashboards, not
    old marketing limits, are quota evidence.
 7. Run `python manage.py headline_status --json` on staging and compare it to
-   the candidate `config.yaml`. Confirm the owner separately authorizes the
-   headline-provider envelope: per brand, at most 25 calls, 500,000 input
-   tokens, 160,000 output tokens, and USD 1.00 at pricing revision
-   `deepseek-v4-pro-peak-2026-08-27`, across at most 25 expected brands. Stop if
-   the effective controls or provider dashboard do not fit that authorization.
+   the candidate `config.yaml`. For a harvester-only acceptance, headline
+   enqueueing and provider calls must remain disabled and the recorded call
+   delta must be zero. If headline work is intentionally enabled for a separate
+   gate, first obtain separate owner authorization for the documented per-brand
+   call, token, cost, pricing-revision, and expected-brand envelope.
 
 Read the live database identity independently from a shell on each of
 `pushinweight-staging-web`, `pushinweight-staging-harvest`, and
@@ -110,12 +115,20 @@ Interpret the top-level status literally:
 
 - `accepted`: one through five posts were newly inserted, the inserted IDs are
   exactly the current-cycle claimed IDs, carryover is empty, and every inserted
-  ID is terminal-complete with valid persisted output;
+  ID has succeeded translation and classification with valid persisted output.
+  Under literal-v2, valid harvest output is a current successful EN/ZH-CN/JA
+  translation artifact; commentary remains a separate lazy synthesis gate;
 - `inconclusive`: a safe zero-result, update-only, or still-pending outcome;
   there is no automatic retry and it cannot authorize production;
 - `failed`: an identity, cap, provider, pipeline, carryover, terminal-stage,
-  output-validity, or exact-ID mismatch; there is no retry and it cannot
-  authorize production.
+  output-validity, unsafe coverage-transfer, or exact-ID mismatch; there is no
+  retry and it cannot authorize production.
+
+A selected call with status `truncated_replay_queued` satisfies the pipeline
+status gate only when the structured evidence also reports
+`coverage_transfer: transferred`, `cursor_advanced: true`, and a positive
+integer `backlog_window_id`. It must still satisfy every cap, exact-ID,
+enrichment, output, and feed gate. Missing or malformed transfer proof fails.
 
 An accepted command result is necessary but not sufficient. Read-only staging
 database and feed observations must also prove that every inserted ID was
@@ -191,6 +204,8 @@ classifier_effective_model_redacted:
 classifier_effective_host_redacted:
 provider_routing_candidate_match: pass|fail
 cursor_advanced:
+coverage_transfer:
+backlog_window_id:
 headline_dispatch_status:
 headline_provider_calls_before:
 headline_provider_calls_after:
@@ -251,6 +266,11 @@ Both classifications stop promotion. There is no automatic retry, manual
 substitute, cursor reset, refresh, backfill, or newer-cohort substitution. A
 new attempt requires separate owner authorization and a new recorded attempt;
 the historical result below remains immutable.
+
+Every Trigger Run is immutable, including an unexplained Dashboard/API
+execution. Before any newly authorized run, verify the live dormant schedule
+and suspended state again. Do not reinterpret an earlier failed run as passed
+after changing this evaluator.
 
 ## Same-path staging and production parity
 

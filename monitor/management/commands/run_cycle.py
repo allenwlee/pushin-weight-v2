@@ -227,10 +227,10 @@ class Command(BaseCommand):
         relevancy_client = None
         try:
             from x_monitor.reattribute import (
-                build_anthropic_client_from_env,
+                build_relevancy_client_from_env,
             )
 
-            relevancy_client = build_anthropic_client_from_env(cfg)
+            relevancy_client = build_relevancy_client_from_env(cfg)
         except Exception as exc:  # noqa: BLE001 - keep the existing no-op fallback
             self.stderr.write(
                 f"warn: failed to build relevancy client: {exc}; gate will be no-op"
@@ -365,6 +365,8 @@ class Command(BaseCommand):
             "n_updated",
             "n_persist_failed",
             "cursor_advanced",
+            "coverage_transfer",
+            "backlog_window_id",
         )
         totals = stats.get("totals", {})
         post_fetch = stats.get("post_fetch", {})

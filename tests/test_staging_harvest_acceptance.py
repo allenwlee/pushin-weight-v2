@@ -263,6 +263,64 @@ def test_acceptance_requires_exact_inserted_current_cycle_terminal_cohort():
     ]
 
 
+def test_acceptance_allows_bounded_truncation_after_coverage_is_durably_transferred():
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=42,
+        cursor_advanced=True,
+    )
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "accepted"
+    assert evaluation.reason_codes == ("terminal_complete",)
+    assert evaluation.selected_call["coverage_transfer"] == "transferred"
+    assert evaluation.selected_call["backlog_window_id"] == 42
+
+
+@pytest.mark.parametrize(
+    "missing_field", ["coverage_transfer", "backlog_window_id", "cursor_advanced"]
+)
+def test_acceptance_rejects_incomplete_truncation_transfer_proof(missing_field):
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=42,
+        cursor_advanced=True,
+    )
+    stats["calls"][0].pop(missing_field)
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "failed"
+    assert evaluation.reason_codes == ("pipeline_or_bound_failure",)
+
+
+@pytest.mark.parametrize("backlog_window_id", [None, "42", True, 0, -1])
+def test_acceptance_rejects_invalid_truncation_backlog_identity(backlog_window_id):
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=backlog_window_id,
+        cursor_advanced=True,
+    )
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "failed"
+    assert evaluation.reason_codes == ("pipeline_or_bound_failure",)
+
+
 @pytest.mark.parametrize(
     ("case", "expected_status", "expected_reason"),
     [
@@ -708,7 +766,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         reattribute, "build_translator_client_from_env", lambda _cfg: client
     )
     monkeypatch.setattr(
-        reattribute, "build_anthropic_client_from_env", lambda _cfg: client
+        reattribute, "build_relevancy_client_from_env", lambda _cfg: client
     )
 
     def translate(tweets, _locales, _client, **_kwargs):
@@ -813,7 +871,7 @@ def test_command_refuses_before_writer_lock_or_provider_factory(monkeypatch):
     monkeypatch.setenv("X_MONITOR_STAGING_ACCEPTANCE_ENABLED", "false")
     monkeypatch.setattr("monitor.run_lock.harvest_writer_lock", forbidden_lock)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         forbidden_client,
     )
 
@@ -901,7 +959,7 @@ def test_command_threads_profile_and_emits_secret_free_json(
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(
@@ -998,7 +1056,7 @@ def test_command_emits_structured_json_for_acceptance_failures(
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(

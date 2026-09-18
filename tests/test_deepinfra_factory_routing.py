@@ -95,6 +95,7 @@ def test_selected_factories_pass_exact_direct_routes_to_the_adapter(
     from x_monitor.config import load_config
     from x_monitor.reattribute import (
         build_classifier_client_from_env,
+        build_relevancy_client_from_env,
         build_translator_client_from_env,
     )
 
@@ -106,8 +107,14 @@ def test_selected_factories_pass_exact_direct_routes_to_the_adapter(
     client, calls = deepinfra_adapter
 
     assert build_classifier_client_from_env(cfg) is client
+    assert build_relevancy_client_from_env(cfg) is client
     assert build_translator_client_from_env(cfg) is client
     assert calls == [
+        {
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "base_url": "https://api.deepinfra.com/v1/openai",
+            "request_profile": "deepseek_0731",
+        },
         {
             "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
             "base_url": "https://api.deepinfra.com/v1/openai",
@@ -146,6 +153,31 @@ def test_direct_provider_factory_does_not_fall_back_when_dedicated_key_is_absent
     )()
 
     assert build_classifier_client_from_env(cfg) is None
+
+
+def test_direct_relevancy_route_fails_closed_when_model_does_not_match_classifier(
+    monkeypatch,
+):
+    from x_monitor.config import LlmConfig
+    from x_monitor.reattribute import build_relevancy_client_from_env
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "must-not-be-used")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-be-used")
+    cfg = type(
+        "Config",
+        (),
+        {
+            "llm": LlmConfig(
+                classifier_provider="deepinfra",
+                classifier_model="deepseek-ai/DeepSeek-V4-Flash-0731",
+                classifier_base_url="https://api.deepinfra.com/v1/openai",
+                classifier_deepinfra_request_profile="deepseek_0731",
+                relevancy_model="different-model",
+            )
+        },
+    )()
+
+    assert build_relevancy_client_from_env(cfg) is None
 
 
 @pytest.mark.requires_postgres

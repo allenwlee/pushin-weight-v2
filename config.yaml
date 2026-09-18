@@ -287,7 +287,7 @@ llm:
   classifier_openrouter_data_collection: "deny"
   classifier_openrouter_max_input_price: null
   classifier_openrouter_max_output_price: null
-  relevancy_model: "deepseek-v4-flash"
+  relevancy_model: "deepseek-ai/DeepSeek-V4-Flash-0731"
   signal_model: "deepseek-v4-flash"
   literal_translation_v2_enabled: null
 

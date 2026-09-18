@@ -75,7 +75,7 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
         translator_model="deepseek-v4-flash",
         translator_base_url="https://api.deepseek.com/anthropic",
     ))
-    CycleRunner(cfg=cfg)._run_post_fetch([], run_id="plaintext-wiring")
+    counters = CycleRunner(cfg=cfg)._run_post_fetch([], run_id="plaintext-wiring")
     assert len(calls) == 2
     assert all(call["model"] == cfg.llm.translator_model for call in calls)
     assert all(call["timeout"] > 0 for call in calls)
@@ -95,6 +95,17 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
         assert artifact.output_tokens == 18
         post.refresh_from_db()
         assert post.text_en == source
+        assert post.commentary_en is None
+        assert post.commentary_zh_cn is None
+        assert counters["enrichment_state_facts"] == [
+            {
+                "post_id": post.pk,
+                "lane": "carryover",
+                "translation_status": PostEnrichmentState.Status.SUCCEEDED,
+                "classification_status": PostEnrichmentState.Status.SUCCEEDED,
+                "output_complete": True,
+            }
+        ]
 
 
 def test_post_fetch_does_not_publish_literal_response_after_claim_is_reassigned(monkeypatch):

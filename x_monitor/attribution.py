@@ -3630,6 +3630,25 @@ def _tracked_brand_catalog(
     return {"revision": revision, "brands": brands}
 
 
+def _validated_tracked_brand_catalog_snapshot(value: Any) -> dict[str, Any]:
+    """Return one canonical catalog snapshot or reject a stale revision.
+
+    The selected classifier includes the catalog revision in every trace
+    fingerprint.  Callers that already assembled the richer Django-backed
+    catalog must pass that exact snapshot through instead of asking this
+    module to reconstruct it a second time from thinner ``BrandRow`` values.
+    """
+    if not isinstance(value, dict) or not isinstance(value.get("brands"), list):
+        raise TypeError("classification_catalog_snapshot_missing")
+    canonical = _tracked_brand_catalog(
+        [], [{"tracked_brand_catalog": value["brands"], "brand_ids": []}]
+    )
+    revision = value.get("revision")
+    if not isinstance(revision, str) or not revision or revision != canonical["revision"]:
+        raise ValueError("classification_catalog_snapshot_revision_mismatch")
+    return canonical
+
+
 def _two_role_fingerprint(
     tweet: dict[str, Any], *, tracked_catalog: dict[str, Any] | None = None,
 ) -> str:
@@ -4151,6 +4170,7 @@ def classify_batch_pragmatics_full(
     deadline: Any | None = None,
     max_workers: int = 3,
     telemetry_context: dict[str, Any] | None = None,
+    tracked_catalog_snapshot: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Classify batches with exactly two disjoint, concurrently scheduled roles.
 
@@ -4179,7 +4199,16 @@ def classify_batch_pragmatics_full(
         # client path compatible while fixing that request setting here.
         thinking = {"type": "disabled"}
     registry_ids = {brand.brand_id for brand in brand_registry} if brand_registry else None
-    tracked_catalog = _tracked_brand_catalog(brand_registry, tweets)
+    try:
+        tracked_catalog = (
+            _validated_tracked_brand_catalog_snapshot(tracked_catalog_snapshot)
+            if selected_0731 and tracked_catalog_snapshot is not None
+            else _tracked_brand_catalog(brand_registry, tweets)
+        )
+    except (TypeError, ValueError) as exc:
+        if on_batch_error is not None:
+            on_batch_error(tweets, exc)
+        return empty
     indexed_batches: list[tuple[list[int], list[dict[str, Any]]]] = []
     for start in range(0, len(tweets), _CLASSIFY_BASE_BATCH_SIZE):
         indexes = list(range(start, min(start + _CLASSIFY_BASE_BATCH_SIZE, len(tweets))))
@@ -4239,13 +4268,23 @@ def classify_batch_pragmatics_full(
                 operation_kind="initial",
                 transport_reservation=reservation,
             )
-            return batch, role, (
+            parsed = (
                 _two_role_parse_fixed_slots(
                     response, fixed_contract, role,
                     request_profile="deepseek_0731",
                 )
                 if fixed_contract is not None else _two_role_parse(response, payload, role)
             )
+            if (
+                selected_0731
+                and len(parsed) != len(batch)
+                and on_batch_error is not None
+            ):
+                on_batch_error(
+                    batch,
+                    ValueError(f"classification_{role}_response_invalid"),
+                )
+            return batch, role, parsed
         except Exception as exc:
             if on_batch_error is not None:
                 on_batch_error(batch, exc)

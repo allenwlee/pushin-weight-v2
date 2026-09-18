@@ -1306,10 +1306,23 @@ def _publish_stage1_classification(
         )
         if not expected or set(by_brand) != expected:
             return None
+        is_v4 = all("audience_topics" in row for row in by_brand.values())
         catalog_revision = str(tweet.get("_classification_catalog_revision") or "")
+        if is_v4 and not catalog_revision:
+            return None
+        tracked_catalog = None
+        if catalog_revision:
+            from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
+
+            tracked_catalog = _validated_tracked_brand_catalog_snapshot(
+                {
+                    "revision": catalog_revision,
+                    "brands": tweet.get("tracked_brand_catalog"),
+                }
+            )
         fingerprint = _two_role_fingerprint(
             tweet,
-            tracked_catalog={"revision": catalog_revision} if catalog_revision else None,
+            tracked_catalog=tracked_catalog,
         )
         canonical = _parse_published_classifications(by_brand, expected)
         if canonical is None:
@@ -3620,6 +3633,12 @@ class CycleRunner:
                     deadline=classification_deadline,
                     max_workers=3,
                     telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    tracked_catalog_snapshot=(
+                        classification_catalog
+                        if getattr(classifier_client, "request_profile", None)
+                        == "deepseek_0731"
+                        else None
+                    ),
                 )
             except Exception as exc:
                 logger.warning(
@@ -3716,6 +3735,12 @@ class CycleRunner:
                 post_id__in=claimed_post_ids
             )
         )
+        if self.cfg.llm.literal_translation_v2_enabled:
+            from monitor.post_artifacts import literal_translation_artifact_complete
+
+            output_complete = literal_translation_artifact_complete
+        else:
+            output_complete = post_persisted_output_complete
         current_cycle_id_set = set(claim_batch.current_cycle_post_ids)
         counters["enrichment_state_facts"] = [
             {
@@ -3727,7 +3752,7 @@ class CycleRunner:
                 ),
                 "translation_status": state.translation_status,
                 "classification_status": state.classification_status,
-                "output_complete": post_persisted_output_complete(state.post),
+                "output_complete": output_complete(state.post),
             }
             for state in resolved_states
         ]

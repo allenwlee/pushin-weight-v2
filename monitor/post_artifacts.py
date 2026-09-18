@@ -44,6 +44,28 @@ def source_text_fingerprint(text: object) -> str:
     return _hash({"text": str(text or "")})
 
 
+def literal_translation_artifact_complete(post: Post) -> bool:
+    """Prove that the current source has a complete EN/ZH-CN/JA literal artifact."""
+    artifact = (
+        PostTranslationArtifact.objects.filter(
+            post=post,
+            is_current=True,
+            state=PostTranslationArtifact.State.SUCCEEDED,
+            source_content_fingerprint=source_content_fingerprint(post),
+        )
+        .prefetch_related("texts")
+        .first()
+    )
+    if artifact is None:
+        return False
+    texts = {
+        row.locale: row.text
+        for row in artifact.texts.all()
+        if _literal_text(row.text) is not None
+    }
+    return set(texts) == set(SUPPORTED_CONTENT_LOCALES)
+
+
 def synthesis_context_fingerprint(post: Post, *, parent_text: str = "") -> str:
     return _hash(
         {

@@ -5210,3 +5210,46 @@ Headline enqueueing and provider calls remain disabled, with a required
 zero-call delta; enabling them would require separate budget authorization.
 Production remains untouched and unauthorized. The integrated evidence is in
 `docs/analysis/2026-09-19-005400-ai-enrichment-stage1-staging-integration.md`.
+
+### September 19 — Replacement staging run and acceptance corrections
+
+The owner-authorized replacement staging Trigger Run
+`20260918T205912_0000-0c3aa4cf` began at `2026-09-18T20:58:46Z`. It performed
+one Twitter search/page, received two results, and inserted post
+`2101052699269886249`. Literal translation succeeded. Both direct DeepInfra
+classifier roles returned successfully, but their output did not form a
+publishable combined classification, so the post remained pending with
+`classification_incomplete`. The relevancy gate attempted the obsolete
+`deepseek-v4-flash` route through the wrong protocol adapter, failed, and kept
+the post under its existing keep-biased policy.
+
+The run also exposed two false-negative acceptance rules. Its remaining search
+window was durably transferred to backlog and the cursor advanced, but the old
+wrapper rejected `truncated_replay_queued` as `pipeline_or_bound_failure`.
+Separately, the wrapper treated literal-v2 output as incomplete unless legacy
+commentary columns were populated, even though commentary now belongs to the
+separate lazy synthesis lane. A preceding execution exposed a third defect:
+the classifier and publisher could reconstruct different tracked-brand catalog
+revisions and reject an otherwise complete trace.
+
+The correction preserves one validated catalog snapshot from prompt through
+publication, routes matching relevancy requests through the direct DeepInfra
+client, defines literal-v2 completion from the current successful EN/ZH-CN/JA
+artifact plus successful classification, and accepts
+`truncated_replay_queued` only with a durable transferred backlog window and
+cursor advancement. The legacy completion predicate remains in place for the
+legacy lane.
+
+A read-only audit found five unexplained manual/API Trigger Runs around
+`17:25`, `18:22`, `19:22`, `20:23`, and `20:58 UTC`. The staging schedule
+remained `0 0 31 2 *`, so an hourly cron or schedule drift did not cause them.
+The current Render plan does not expose the actor audit log. The staging harvest
+service was suspended at `2026-09-18T21:00:29Z` and must remain suspended at
+rest. Production was not modified.
+
+The replacement attempt remains failed; changing the evaluator does not rewrite
+that historical result. After the correction passes local checks and is
+deployed at one exact staging SHA, any further Twitter/provider-backed attempt
+requires fresh explicit owner authorization and a new immutable evidence entry.
+Headline enqueueing and provider calls remain disabled, with a required zero
+call delta.

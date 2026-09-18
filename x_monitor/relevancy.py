@@ -260,11 +260,18 @@ def build_binary_relevancy_llm_call(
             kwargs["thinking"] = thinking
         started = time.monotonic()
         try:
-            result = client.messages_create(**kwargs)
+            text_method = getattr(client, "messages_create_text", None)
+            result = (
+                text_method(**kwargs)
+                if callable(text_method)
+                else client.messages_create(**kwargs)
+            )
         except Exception as exc:
             emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="error", started=started, error=exc, attempt_kind="single", **telemetry_context)
             raise
         emit_attempt(logger, role="relevancy", model=model, attempt=1, outcome="success", started=started, response=result, attempt_kind="single", **telemetry_context)
+        if callable(text_method):
+            return str(getattr(result, "text", result) or "")
         # Anthropic SDK returns {"content": [{"text": "...", ...}]} —
         # extract the first text block.
         content = result.get("content") or []

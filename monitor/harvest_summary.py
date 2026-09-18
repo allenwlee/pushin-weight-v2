@@ -74,6 +74,8 @@ _CALL_KEYS = {
     "not_include_drops",
     "llm_drops",
     "cursor_advanced",
+    "coverage_transfer",
+    "backlog_window_id",
     "request_started_at",
     "first_page_received_at",
     "cycle_start_to_first_page_ms",
