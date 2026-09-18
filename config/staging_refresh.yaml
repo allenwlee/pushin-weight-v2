@@ -126,6 +126,8 @@ relations:
     - call_state
     - django_session
     - harvest_backlog_windows
+    - job_source_states
+    - job_source_sync_runs
     - post_enrichment_states
     - post_synthesis_daily_budgets
     - post_synthesis_demands
@@ -155,6 +157,8 @@ relations:
     - job_discovery_runs
     - job_listing_evidence
     - job_listings
+    - job_source_states
+    - job_source_sync_runs
     - opportunities
     - national_stance_keys
     - national_stance_labels
@@ -209,6 +213,7 @@ relations:
     - job_discovery_runs_id_seq
     - job_listing_evidence_id_seq
     - job_listings_id_seq
+    - job_source_sync_runs_id_seq
     - opportunities_id_seq
     - post_synthesis_artifacts_id_seq
     - post_synthesis_daily_budgets_id_seq
@@ -246,6 +251,7 @@ relations:
     - job_discovery_runs_id_seq
     - job_listing_evidence_id_seq
     - job_listings_id_seq
+    - job_source_sync_runs_id_seq
     - opportunities_id_seq
     - people_brand_affiliation_evidence_id_seq
     - people_brand_affiliations_id_seq
@@ -279,6 +285,8 @@ scrub:
     - call_state
     - django_session
     - harvest_backlog_windows
+    - job_source_states
+    - job_source_sync_runs
     - post_enrichment_states
     - post_synthesis_daily_budgets
     - post_synthesis_demands

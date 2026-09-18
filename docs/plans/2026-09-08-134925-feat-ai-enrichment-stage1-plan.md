@@ -5156,7 +5156,23 @@ zero errors. The focused browser/UI run passed 95 tests plus 106 subtests.
 generated UI-assurance obligations, and `git diff --check` also passed. The
 first broad local attempt used production HTTPS redirect settings and produced
 only local HTTP 301/TLS failures; rerunning with the repository's correct
-`DEBUG=1` local-test setting passed the complete scoped gate. Staging deploy,
+`DEBUG=1` local-test setting passed the complete scoped gate. After integrating
+the official-job staging commit, the complete merged gate passed **3,177 tests
+plus 114 subtests**, with 25 documented retired/live nodes deselected and all
+771 PostgreSQL-required tests executed with zero required skips or errors. The
+merged JavaScript chart, feed, official-job-card, and timezone suites also
+passed. Staging deploy,
 schema-v4 refresh/seed, bounded live provider smoke, and EN/ZH-CN/JA browser
 verification remain the next delivery actions. Production remains out of
 scope.
+
+The staging branch also contained the independently reviewed official AI-lab
+job-source ingestion commit `ae94d5a`. The final candidate integrates that
+commit rather than overwriting staging. Its existing migration identity
+`0040_direct_job_sources` remains intact for the already-migrated staging
+database, while no-op merge migration 0044 joins it to the Stage 1 migration
+line. Current `releases_updates` filter semantics replace that commit's stale
+test-only `model_releases` spelling. Focused combined validation passed 138
+Python tests, including four PostgreSQL-required cases, plus the official-job
+feed JavaScript test. The merged candidate then passed the complete scoped
+aggregate recorded above and is eligible for exact-SHA staging deployment.

@@ -57,6 +57,27 @@ services:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
 
+  # Public official-careers pull. Kept separate from run_cycle so an ATS
+  # outage cannot affect Twitter cursors, credit accounting, or enrichment.
+  - type: cron
+    name: pushinweight-jobs
+    runtime: python
+    plan: starter
+    schedule: "17 */6 * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py sync_job_sources
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+
   # --------------------------------------------------------------------------
   # Queue-isolated trend-narrative worker. Render cron remains the scheduler.
   # --------------------------------------------------------------------------

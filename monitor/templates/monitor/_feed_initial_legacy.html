@@ -1,6 +1,49 @@
 {% load monitor_filters %}
 {% load i18n %}
 {% for row in feed.rows %}
+  {% if row.source_kind == 'official_job' %}
+  <tr class="official-job-table-row"
+      data-pw-feed-row
+      data-source-kind="official_job"
+      data-source-url="{{ row.source_url }}"
+      data-tweet-id=""
+      data-created-at-iso="{{ row.created_at_iso|default:'' }}"
+      data-post-types="job_listings">
+    <td class="muted-cell">
+      <a class="feed-date-link"
+         href="{{ row.source_url }}"
+         target="_blank" rel="noopener noreferrer"
+         title="{{ row.created_at }}">
+        {{ row.created_at }}
+      </a>
+    </td>
+    <td>
+      {% for b in row.brands %}
+        <span class="pill">{{ b.display_name|default:b.nickname }}</span>
+      {% endfor %}
+    </td>
+    <td>
+      <strong class="official-job-table-title">{{ row.title }}</strong>
+      {% if row.text_original %}
+        <div class="cell-truncated official-job-table-description" data-pw-cell-truncated>
+          {{ row.text_original }}
+        </div>
+      {% endif %}
+    </td>
+    <td class="official-job-table-meta">
+      {{ row.job_meta_text|default:row.location_text }}
+    </td>
+    <td><span class="pill" data-key="job_listings">{{ row.job_listing_label }}</span></td>
+    <td>
+      <div class="official-job-table-source">{{ row.source_name }}</div>
+      <a class="official-job-table-link"
+         href="{{ row.application_url|default:row.source_url }}"
+         target="_blank" rel="noopener noreferrer">
+        {% if active_locale == 'zh_cn' %}查看官方职位{% elif active_locale == 'ja' %}公式求人を見る{% else %}View official job{% endif %}
+      </a>
+    </td>
+  </tr>
+  {% else %}
   <tr data-pw-feed-row data-tweet-id="{{ row.tweet_id }}" data-created-at-iso="{{ row.created_at_iso|default:'' }}">
     <td class="muted-cell">
       <a class="feed-date-link"
@@ -105,6 +148,7 @@
       </div>
     </td>
   </tr>
+  {% endif %}
 {% empty %}
   <tr><td colspan="6" class="muted-cell">{% trans "no posts in window" %}</td></tr>
 {% endfor %}

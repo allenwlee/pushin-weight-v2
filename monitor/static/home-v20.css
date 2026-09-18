@@ -1091,6 +1091,46 @@
   }
   .feed-row .engagement .feed-x-icon { width: 9px; height: 9px; }
 
+  .feed-row .official-job-body { padding-left: 18px; }
+  .feed-row .official-job-source { font-weight: 700; }
+  .feed-row .official-job-text { cursor: default; display: grid; gap: 5px; }
+  .feed-row .official-job-title { color: var(--ink); font-size: 13px; }
+  .feed-row .official-job-description {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .feed-row .official-job-actions { justify-content: flex-start; }
+  .feed-row .official-job-link {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 9px;
+    text-decoration: none;
+  }
+  .feed-row .official-job-link:hover,
+  .feed-row .official-job-link:focus-visible { border-color: currentColor; }
+
+  @media (max-width: 899px) {
+    .feed-row .official-job-body { padding-left: 4px; }
+    .feed-row .official-job-body .head {
+      align-items: start;
+      display: grid;
+      gap: 1px;
+      overflow: visible;
+      white-space: normal;
+    }
+    .feed-row .official-job-body .handle,
+    .feed-row .official-job-body .meta {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+    }
+  }
+
   .pw-feed-inspection-popover {
     position: fixed;
     z-index: 10020;
