@@ -3,7 +3,7 @@ title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-18
+amended: 2026-09-19
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
@@ -5176,3 +5176,37 @@ test-only `model_releases` spelling. Focused combined validation passed 138
 Python tests, including four PostgreSQL-required cases, plus the official-job
 feed JavaScript test. The merged candidate then passed the complete scoped
 aggregate recorded above and is eligible for exact-SHA staging deployment.
+
+### September 19 — Integrated staging execution state
+
+Candidate `6a24eecc7242f6cc2dc870a21ee78dc0a9b1fa8a` is deployed across the
+staging web, harvest, headline, synthesis, and jobs services. The guarded
+production-shaped refresh, independent receipt verification, scrub census,
+migrations through `0044_merge_20260918_1344`, and 188-row i18n seed check all
+passed. The refreshed database contains 241,905 posts, 296,807 post-brand rows,
+76,808 accounts, and 36 brands; its latest source post is
+`2026-09-18T14:45:49Z`. All checked operational/private state is empty.
+
+The final conservative local gate passed 3,181 tests, with 25 documented
+deselections, all 774 PostgreSQL-required tests executed, zero required skips,
+and zero errors. A bounded direct-DeepInfra Gemma commentary call then passed
+on staging: one demand was claimed and succeeded, EN/ZH-CN/JA output reached
+`ready`, usage was 634 input and 217 output tokens, cost was $0.00013084, and
+the service returned to provider-disabled, empty-queue state. Anonymous hosted
+login rendered cleanly in EN, ZH-CN, and JA. Authenticated hosted feed/glyph
+inspection remains unclaimed because the refresh intentionally scrubbed user
+and session state; local UI suites cover the candidate behavior. Two idle
+15-minute staging intervals then held the post count/latest timestamp, one
+succeeded synthesis artifact, zero active synthesis work, unchanged token
+usage, disabled provider controls, and clean service logs.
+
+The first bounded harvester acceptance attempt stopped at preflight because
+the staging harvester lacked `DEEPINFRA_API_KEY`. It consumed no Twitter or
+model calls and made no data/cursor mutation. The secret wiring has since been
+fixed and proved present, but the acceptance runbook forbids retrying a failed
+Trigger Run without separate owner authorization. Exactly one replacement
+one-search/one-page/five-post attempt is the remaining paid staging gate.
+Headline enqueueing and provider calls remain disabled, with a required
+zero-call delta; enabling them would require separate budget authorization.
+Production remains untouched and unauthorized. The integrated evidence is in
+`docs/analysis/2026-09-19-005400-ai-enrichment-stage1-staging-integration.md`.
