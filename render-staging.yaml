@@ -220,6 +220,32 @@ services:
         value: "False"
       - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
         value: "True"
+      # Optional discovery/extraction lanes remain closed unless a bounded
+      # staging job explicitly supplies both its enable flag and its cap.
+      - key: X_MONITOR_DISCOVERY_JOBS_ENABLED
+        value: "False"
+      - key: X_MONITOR_DISCOVERY_JOBS_PER_CYCLE_CALL_CEILING
+        value: "1"
+      - key: X_MONITOR_DISCOVERY_JOBS_MAX_RESULTS
+        value: "20"
+      - key: X_MONITOR_DISCOVERY_JOBS_MAX_PAGES
+        value: "1"
+      - key: X_MONITOR_DISCOVERY_PERSONNEL_ENABLED
+        value: "False"
+      - key: X_MONITOR_DISCOVERY_PERSONNEL_PER_CYCLE_CALL_CEILING
+        value: "1"
+      - key: X_MONITOR_DISCOVERY_PERSONNEL_MAX_RESULTS
+        value: "20"
+      - key: X_MONITOR_DISCOVERY_PERSONNEL_MAX_PAGES
+        value: "1"
+      - key: X_MONITOR_TARGETED_EXTRACTION_ENABLED
+        value: "False"
+      - key: X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE
+        value: "0"
+      - key: X_MONITOR_SYNTHESIS_PREWARM_ENABLED
+        value: "False"
+      - key: X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE
+        value: "0"
 
   # Official recruiting sites are a separate source family. This staging
   # cron is manual-only and cannot invoke X harvesting or any LLM worker.

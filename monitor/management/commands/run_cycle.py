@@ -9,11 +9,16 @@ Usage:
     python manage.py run_cycle --limit-per-call 20       # cap tweets per API call
     python manage.py run_cycle --skip-fetch              # plan + attribute + persist only
     python manage.py run_cycle --max-pages-per-call 3    # pagination cap
+    python manage.py run_cycle --call-ids JD_EN_ORG,PD_EN_ORG  # selected manual calls only
     python manage.py run_cycle --scheduled               # Render cron semantics
 
 `--brands`, `--limit-per-call`, `--skip-fetch`, and `--max-pages-per-call`
 are threaded through to CycleRunner via Django settings so cycle.py stays
 untouched. Modeled on pushin_weight/crawler/management/commands/run_cycle.py.
+
+`--call-ids` is a manual-only bounded execution selector. It is deliberately
+validated against the current plan before any provider client is constructed,
+then passed through CycleRunner's existing `_backfill_call_ids` narrowing.
 """
 
 from __future__ import annotations
@@ -35,6 +40,56 @@ from monitor.staging_acceptance import (
     evaluate_staging_acceptance,
     prepare_staging_acceptance,
 )
+
+
+def _parse_call_ids(raw: str | None) -> list[str] | None:
+    """Parse a non-empty comma-separated manual call selection."""
+    if raw is None:
+        return None
+    values = [value.strip().upper() for value in raw.split(",")]
+    if any(not value for value in values):
+        raise CommandError("--call-ids must contain only nonblank IDs")
+    if len(values) != len(set(values)):
+        raise CommandError("--call-ids contains duplicates")
+    return values
+
+
+def _configured_call_ids(cfg) -> set[str]:
+    """Return call IDs known to this config, including disabled discovery IDs."""
+    from x_monitor.config import VALID_CALL_IDS
+
+    known = set(VALID_CALL_IDS)
+    for spec in getattr(cfg, "x_query_specs", []) or []:
+        call_id = getattr(spec, "call_id", None)
+        if call_id:
+            known.add(str(call_id).upper())
+    discovery = getattr(cfg, "discovery", None)
+    for lane_name in ("jobs", "personnel"):
+        lane = getattr(discovery, lane_name, None)
+        for query in getattr(lane, "queries", []) or []:
+            query_id = getattr(query, "query_id", None)
+            if query_id:
+                known.add(str(query_id).upper())
+    return known
+
+
+def _validate_manual_call_ids(*, cfg, requested: list[str]) -> list[str]:
+    """Reject unknown or currently unplanned IDs before provider construction."""
+    from monitor.cycle import plan_calls_for_cycle
+
+    unknown = sorted(set(requested) - _configured_call_ids(cfg))
+    if unknown:
+        raise CommandError("unknown --call-ids: " + ", ".join(unknown))
+
+    planned = {
+        str(call.call_id).upper() for call in plan_calls_for_cycle(cfg)
+    }
+    not_planned = sorted(set(requested) - planned)
+    if not_planned:
+        raise CommandError(
+            "--call-ids are not currently planned: " + ", ".join(not_planned)
+        )
+    return requested
 
 
 class Command(BaseCommand):
@@ -83,6 +138,15 @@ class Command(BaseCommand):
             help="Cap pagination depth per TwitterAPI.io call (default: 5).",
         )
         parser.add_argument(
+            "--call-ids",
+            type=str,
+            default=None,
+            help=(
+                "Manual-only comma-separated call IDs to execute (for example "
+                "'JD_EN_ORG,PD_EN_ORG'). IDs must be currently planned."
+            ),
+        )
+        parser.add_argument(
             "--scheduled",
             action="store_true",
             help=(
@@ -101,6 +165,31 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
+        if options.get("call_ids") is not None:
+            incompatible = []
+            if options.get("staging_acceptance") is not None:
+                incompatible.append("--staging-acceptance")
+            if options.get("scheduled"):
+                incompatible.append("--scheduled")
+            if options.get("enqueue"):
+                incompatible.append("--async")
+            if incompatible:
+                raise CommandError(
+                    "--call-ids is manual-only and cannot be combined with "
+                    + ", ".join(incompatible)
+                )
+            # Reject an invalid selection before reserving the shared harvest
+            # writer. A typo in a manual bounded run must never delay the
+            # legitimate scheduled writer.
+            from x_monitor.config import load_config
+
+            manual_cfg = load_config(Path("config.yaml"))
+            requested_call_ids = _parse_call_ids(options["call_ids"])
+            options["_manual_call_ids_config"] = manual_cfg
+            options["_manual_call_ids_selected"] = _validate_manual_call_ids(
+                cfg=manual_cfg,
+                requested=requested_call_ids or [],
+            )
         prepared: PreparedStagingAcceptance | None = None
         with ExitStack() as command_stack:
             if options.get("staging_acceptance") is not None:
@@ -217,8 +306,10 @@ class Command(BaseCommand):
         cfg = (
             prepared.config
             if prepared is not None
-            else load_config(Path("config.yaml"))
+            else options.get("_manual_call_ids_config")
+            or load_config(Path("config.yaml"))
         )
+        selected_call_ids = options.get("_manual_call_ids_selected")
 
         # U6 runtime wire-in: build the Anthropic-backed llm_call
         # for the binary relevancy gate. Returns None if the env is
@@ -260,6 +351,8 @@ class Command(BaseCommand):
         }
         if prepared is not None:
             runner_options["_backfill_call_ids"] = [prepared.profile.selected_call]
+        elif selected_call_ids is not None:
+            runner_options["_backfill_call_ids"] = selected_call_ids
         runner = CycleRunner(**runner_options)
 
         try:

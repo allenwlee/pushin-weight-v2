@@ -42,7 +42,11 @@ from core.models import (
 )
 from core.profile_snapshots import person_id_for_account, person_id_for_handle
 from x_monitor.config import TargetedExtractionConfig
-from x_monitor.provider_telemetry import emit_attempt, provider_host_class
+from x_monitor.provider_telemetry import (
+    ProviderResponse,
+    emit_attempt,
+    provider_host_class,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,16 +217,23 @@ def build_targeted_extraction_calls(
                 attempt_kind="single",
                 **telemetry_context,
             )
-            content = response.get("content") or []
-            text_parts = [
-                str(block.get("text") or "")
-                for block in content
-                if isinstance(block, Mapping) and block.get("type") == "text"
-            ]
-            payload = json.loads("\n".join(text_parts).strip())
+            if isinstance(response, ProviderResponse):
+                # The direct DeepInfra adapter has already parsed and strictly
+                # validated the JSON response. Anthropic-compatible clients
+                # instead expose text content blocks below.
+                payload = dict(response)
+                usage = response.provider_usage
+            else:
+                content = response.get("content") or []
+                text_parts = [
+                    str(block.get("text") or "")
+                    for block in content
+                    if isinstance(block, Mapping) and block.get("type") == "text"
+                ]
+                payload = json.loads("\n".join(text_parts).strip())
+                usage = response.get("usage")
             if not isinstance(payload, dict):
                 raise TypeError("targeted provider response must be a JSON object")
-            usage = response.get("usage")
             if isinstance(usage, Mapping) and "usage" not in payload:
                 payload["usage"] = {
                     "input_tokens": usage.get("input_tokens"),

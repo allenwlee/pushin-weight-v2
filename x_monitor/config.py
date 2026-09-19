@@ -252,7 +252,7 @@ def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
     }
     return {
         role: TargetedExtractionRoleConfig(
-            model="deepseek-v4-flash",
+            model=DEEPSEEK_0731_MODEL,
             prompt_version=versions.get(role, f"{role}-v1"),
         )
         for role in sorted(TARGETED_EXTRACTION_ROLES)
@@ -261,7 +261,9 @@ def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
 
 class TargetedExtractionConfig(BaseModel):
     enabled: bool = False
-    max_calls_per_cycle: int = Field(default=20, ge=1, le=200)
+    # A zero cap is the fail-closed service-manifest value.  An enabled
+    # extraction lane must still name a positive, bounded cap below.
+    max_calls_per_cycle: int = Field(default=20, ge=0, le=200)
     request_timeout_seconds: int = Field(default=30, ge=5, le=90)
     roles: dict[str, TargetedExtractionRoleConfig] = Field(
         default_factory=_default_targeted_roles
@@ -278,6 +280,12 @@ class TargetedExtractionConfig(BaseModel):
                 f"{sorted(TARGETED_EXTRACTION_ROLES)}"
             )
         return value
+
+    @model_validator(mode="after")
+    def _validate_enabled_cap(self) -> TargetedExtractionConfig:
+        if self.enabled and self.max_calls_per_cycle < 1:
+            raise ValueError("enabled targeted extraction requires a positive cap")
+        return self
 
 
 class CycleConfig(BaseModel):
@@ -438,6 +446,7 @@ class HarvestConfig(BaseModel):
 
 DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
 DEEPINFRA_OPENAI_BASE_URL = "https://api.deepinfra.com/v1/openai"
+DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
 
 
 class LlmConfig(BaseModel):
@@ -786,6 +795,10 @@ class SynthesisConfig(BaseModel):
             raise ValueError("synthesis provider route must match the selected direct Gemma route")
         if self.prewarm_enabled and self.prewarm_per_cycle < 1:
             raise ValueError("enabled synthesis prewarm requires a positive cap")
+        if self.prewarm_per_cycle > self.demand_batch_limit:
+            raise ValueError(
+                "synthesis prewarm cap must not exceed demand batch limit"
+            )
         if self.lease_seconds < self.timeout_seconds + 60:
             raise ValueError(
                 "synthesis lease must exceed provider timeout by at least 60 seconds"
@@ -1103,6 +1116,7 @@ def load_config(path: Path) -> Config:
         "provider_calls_enabled": "X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED",
         "control_revision": "X_MONITOR_SYNTHESIS_CONTROL_REVISION",
         "prewarm_enabled": "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
+        "prewarm_per_cycle": "X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE",
         "daily_request_cap": "X_MONITOR_SYNTHESIS_DAILY_REQUEST_CAP",
         "daily_input_token_cap": "X_MONITOR_SYNTHESIS_DAILY_INPUT_TOKEN_CAP",
         "daily_output_token_cap": "X_MONITOR_SYNTHESIS_DAILY_OUTPUT_TOKEN_CAP",
@@ -1124,6 +1138,100 @@ def load_config(path: Path) -> Config:
                 **raw_synthesis_filtered,
             },
         }
+
+    # These lane switches are deliberate operational activation controls.
+    # Unlike role/model values above, the checked-in config stays fail-closed
+    # while a bounded staging job can explicitly open one lane. A truthy enable
+    # is invalid outside staging: production needs a separately reviewed
+    # Blueprint/config change, never a transient environment override. The
+    # discovery caps are explicit so a trial cannot widen to every due query.
+    activation_env_paths = {
+        "X_MONITOR_DISCOVERY_JOBS_ENABLED": ("discovery", "jobs", "enabled"),
+        "X_MONITOR_DISCOVERY_JOBS_PER_CYCLE_CALL_CEILING": (
+            "discovery",
+            "jobs",
+            "per_cycle_call_ceiling",
+        ),
+        "X_MONITOR_DISCOVERY_JOBS_MAX_RESULTS": (
+            "discovery",
+            "jobs",
+            "max_results",
+        ),
+        "X_MONITOR_DISCOVERY_JOBS_MAX_PAGES": (
+            "discovery",
+            "jobs",
+            "max_pages",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_ENABLED": (
+            "discovery",
+            "personnel",
+            "enabled",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_PER_CYCLE_CALL_CEILING": (
+            "discovery",
+            "personnel",
+            "per_cycle_call_ceiling",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_MAX_RESULTS": (
+            "discovery",
+            "personnel",
+            "max_results",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_MAX_PAGES": (
+            "discovery",
+            "personnel",
+            "max_pages",
+        ),
+        "X_MONITOR_TARGETED_EXTRACTION_ENABLED": (
+            "targeted_extraction",
+            "enabled",
+        ),
+        "X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE": (
+            "targeted_extraction",
+            "max_calls_per_cycle",
+        ),
+        "X_MONITOR_SYNTHESIS_PREWARM_ENABLED": (
+            "synthesis",
+            "prewarm_enabled",
+        ),
+        "X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE": (
+            "synthesis",
+            "prewarm_per_cycle",
+        ),
+    }
+    temporary_enable_names = frozenset(
+        {
+            "X_MONITOR_DISCOVERY_JOBS_ENABLED",
+            "X_MONITOR_DISCOVERY_PERSONNEL_ENABLED",
+            "X_MONITOR_TARGETED_EXTRACTION_ENABLED",
+            "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
+        }
+    )
+    truthy_values = frozenset({"1", "on", "t", "true", "y", "yes"})
+    enabled_outside_staging = [
+        env_name
+        for env_name in temporary_enable_names
+        if os.environ.get(env_name, "").strip().casefold() in truthy_values
+    ]
+    if (
+        enabled_outside_staging
+        and os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") != "staging"
+    ):
+        raise ValueError(
+            "temporary Stage 1 activation requires "
+            "X_MONITOR_DEPLOYMENT_ENVIRONMENT=staging"
+        )
+    for env_name, path_parts in activation_env_paths.items():
+        if env_name not in os.environ:
+            continue
+        target = raw
+        for part in path_parts[:-1]:
+            child = target.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                target[part] = child
+            target = child
+        target[path_parts[-1]] = os.environ[env_name]
     try:
         return Config.model_validate(raw)
     except ValidationError:

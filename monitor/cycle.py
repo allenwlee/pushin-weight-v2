@@ -2394,6 +2394,7 @@ class CycleRunner:
             "classifier_unavailable": 0,
             "classifier_flags_invalid": 0,
             "targeted_extraction_failed": 0,
+            "synthesis_prewarm_failed": 0,
             "enrichment_quarantined": 0,
         }
 
@@ -3777,6 +3778,70 @@ class CycleRunner:
             self._errors.append(f"post_fetch.enrichment_quarantined:{newly_failed}")
         return counters
 
+    def _request_synthesis_prewarm(
+        self, kept_posts: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Create bounded DB-only synthesis demand for newly persisted posts.
+
+        The harvest process owns demand creation, while the synthesis worker
+        owns provider calls. Keeping this boundary here means enabling
+        prewarm can never make the harvester call the synthesis provider.
+        """
+        synthesis_cfg = self.cfg.synthesis
+        cap = int(synthesis_cfg.prewarm_per_cycle)
+        evidence: dict[str, Any] = {
+            "enabled": bool(synthesis_cfg.prewarm_enabled),
+            "configured_cap": cap,
+            "candidate_count": 0,
+            "selected_count": 0,
+            "requested_count": 0,
+            "failed_count": 0,
+        }
+        if not synthesis_cfg.prewarm_enabled or cap < 1:
+            return evidence
+
+        post_ids: list[str] = []
+        seen: set[str] = set()
+        for item in kept_posts:
+            # Prewarm only posts created by this fetch. Existing rows may be
+            # refreshed by a later call and should not consume the bounded
+            # per-cycle synthesis demand budget.
+            if not item.get("_db_inserted"):
+                continue
+            post_id = str(item.get("_persisted_post_id") or "")
+            if post_id and post_id not in seen:
+                post_ids.append(post_id)
+                seen.add(post_id)
+
+        evidence["candidate_count"] = len(post_ids)
+        selected_ids = post_ids[:cap]
+        evidence["selected_count"] = len(selected_ids)
+        if not selected_ids:
+            return evidence
+
+        try:
+            # This function writes PostSynthesisDemand rows only. Provider
+            # execution remains exclusively in the synthesis worker.
+            from monitor.post_synthesis import request_post_synthesis
+
+            demands = request_post_synthesis(
+                post_ids=selected_ids,
+                reason="prewarm",
+                config=synthesis_cfg,
+            )
+            evidence["requested_count"] = len(demands)
+        except Exception as exc:
+            # Demand creation must not abort or roll back the harvest cycle.
+            logger.warning("synthesis prewarm demand creation failed: %s", exc)
+            # The cycle summary is a bounded operational record.  Keep the
+            # exception detail in server logs and expose only reliable counts
+            # here; request_post_synthesis is atomic, so zero means none of
+            # this selected batch was persisted.
+            evidence["failed_count"] = 1
+            self._error_counts["synthesis_prewarm_failed"] += 1
+            self._errors.append("synthesis_prewarm_failed")
+        return evidence
+
     def _replay_backlog(
         self,
         *,
@@ -4119,8 +4184,6 @@ class CycleRunner:
             summary["degraded"]["plan"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
-        summary["totals"]["n_calls_planned"] = len(calls)
-
         # Backfill batching: narrow to the requested call IDs.
         if self._backfill_call_ids:
             requested = set(self._backfill_call_ids)
@@ -4131,6 +4194,11 @@ class CycleRunner:
                     "No matching calls in requested batch — may already be done."
                 )
                 return self._finish_summary(summary, started_monotonic=t0)
+
+        # The bounded/backfill selector is part of planning. Report the calls
+        # this run is actually allowed to execute, rather than the wider
+        # candidate plan that existed before narrowing.
+        summary["totals"]["n_calls_planned"] = len(calls)
 
         if not calls:
             summary["status"] = "degraded"
@@ -4611,6 +4679,9 @@ class CycleRunner:
                 summary["degraded"]["classifier_flag_dead_letters"] = list(
                     pf_counters["flag_dead_letters"]
                 )
+            summary["synthesis_prewarm"] = self._request_synthesis_prewarm(
+                kept_all
+            )
             summary.setdefault("n_errors_by_type", {}).update(
                 dict(self._error_counts)
             )

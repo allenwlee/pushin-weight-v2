@@ -49,7 +49,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
 4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
 
 ### Failure handling

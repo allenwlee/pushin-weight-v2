@@ -72,22 +72,28 @@ def request_post_synthesis(
     if len(unique_ids) > config.demand_batch_limit:
         raise ValueError("synthesis demand batch limit exceeded")
     requested_at = now or timezone.now()
-    posts = {str(post.pk): post for post in Post.objects.filter(pk__in=unique_ids)}
     rows = []
-    for post_id in unique_ids:
-        post = posts.get(post_id)
-        if post is None:
-            continue
-        _context, fingerprint, _provenance = post_context(post)
-        rows.append(
-            _upsert_demand(
-                post=post,
-                fingerprint=fingerprint,
-                reason=reason,
-                config=config,
-                now=requested_at,
+    # A caller treats this list as one shared request.  Do not leave a partial
+    # set of demands behind when one post cannot be materialized: that would
+    # make the UI and the prewarm summary disagree about what was requested.
+    with transaction.atomic():
+        posts = {
+            str(post.pk): post for post in Post.objects.filter(pk__in=unique_ids)
+        }
+        for post_id in unique_ids:
+            post = posts.get(post_id)
+            if post is None:
+                continue
+            _context, fingerprint, _provenance = post_context(post)
+            rows.append(
+                _upsert_demand(
+                    post=post,
+                    fingerprint=fingerprint,
+                    reason=reason,
+                    config=config,
+                    now=requested_at,
+                )
             )
-        )
     return rows
 
 
