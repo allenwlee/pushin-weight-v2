@@ -1,0 +1,6 @@
+{
+  "post_id": "2100162811586551914",
+  "commentary_en": "The author announces a deadline: on September 14, 04:00 UTC, the endpoint 'deepseek-v4-pro' will switch to 'V4.1 Flash'. They advise checking pinned model IDs in the stack before that time. The post also notes the license is MIT and serving is via vLLM, SGLang, and Transformers. This matters because it signals a model version change that could affect users relying on the old endpoint, and the open license and serving options indicate broad deployability. The post is factual and time-sensitive, with no stated reason for the switch or impact details.",
+  "commentary_zh_cn": "作者宣布了一个截止日期：9月14日04:00 UTC，端点‘deepseek-v4-pro’将切换为‘V4.1 Flash’。在此之前，建议检查堆栈中固定的模型ID。帖子还提到许可证为MIT，并通过vLLM、SGLang、Transformers提供推理服务。这很重要，因为它表明模型版本变更可能影响依赖旧端点的用户，而开放的许可证和多种推理选项意味着广泛的部署可行性。帖子内容为事实性且有时效性，未说明切换原因或具体影响细节。",
+  "commentary_ja": "著者は締め切りを発表しています：9月14日04:00 UTCに、エンドポイント「deepseek-v4-pro」は「V4.1 Flash」に移行します。それまでにスタック内の固定モデルIDを確認するよう促しています。投稿はライセンスがMITであり、vLLM、SGLang、Transformers経由で提供されることも記しています。これは、旧エンドポイントに依存するユーザーに影響を与える可能性があるモデルバージョン変更を示す点で重要です。また、オープンライセンスと複数の推論オプションは広範なデプロイ可能性を示しています。投稿は事実ベースで時間的制約があり、切り替え理由や影響の詳細は述べられていません。"
+}

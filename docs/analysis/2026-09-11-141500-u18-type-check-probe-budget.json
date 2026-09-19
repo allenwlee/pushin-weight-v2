@@ -1,0 +1,53 @@
+{
+  "baseline": {
+    "exact_post_type_sets": 76,
+    "post_type_exact_set_accuracy": 0.6333333333333333,
+    "product_label_exact_set_accuracy": 0.9,
+    "rows": 120,
+    "source_candidate": "candidate-v3r9.json"
+  },
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "rows": 120,
+    "selection": "fixed-seed 40 each en/zh-cn/ja from the consumed 500-row development cohort",
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "This is a development probe. Continue to a full consumed-development run only if strict parsing succeeds for all 120 rows, exact post-type sets reach at least 0.70, and product-label exact sets do not fall below the 0.90 same-row baseline. A selected production candidate must subsequently pass a fresh unseen final cohort under the unchanged preregistered floors.",
+  "frozen_at": "2026-09-11T05:15:00Z",
+  "global_stop": "The transport refuses request seven and reserves worst-case bytes and output tokens before every call. There are no retries or fallback calls, and capacity cannot transfer to another lane, prompt, cohort, or provider.",
+  "lanes": {
+    "candidate_v11_type_checks_dev120": {
+      "batch_size": 20,
+      "input_usd_per_million": "0.44",
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.11",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 250000,
+      "maximum_output_tokens": 24576,
+      "maximum_requests": 6,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 6,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "prior_probe_results": {
+    "high_effort_thinking": "stopped after one batch exhausted 16384 output tokens and truncated JSON",
+    "low_effort_thinking": "stopped after one valid batch reduced post-type exact sets from 10/20 to 7/20 and product-label exact sets from 18/20 to 14/20"
+  },
+  "prompt": {
+    "bytes": 12194,
+    "post_type_wire_shape": "thirteen required booleans; strict application derivation of the exact true-key array",
+    "sha256": "7b530a6adabed1efe7eb029132c5a37439f71ce2a22fbf1a554203e59289c95c",
+    "version": "stage1-prompt-v11-development"
+  },
+  "reason": "The unseen gate and consumed-development results show omitted secondary post types under the array-only wire shape. Thinking mode was slower, costlier, and worse or invalid. This probe makes the already-required independent thirteen-type pass observable in one non-thinking call, without changing taxonomy meanings or adding a second provider request.",
+  "schema_version": "u18-development-provider-budget-v3"
+}

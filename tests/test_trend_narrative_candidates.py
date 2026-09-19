@@ -10,19 +10,21 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 import monitor.trend_narrative_candidates as trend_candidates
+from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
 from core.models import (
     Account,
     Brand,
     BrandAccount,
-    DiscourseKey,
     NationalismKey,
     Post,
     PostBrand,
-    PostBrandDiscourse,
+    PostBrandClassificationState,
+    PostBrandProductLabel,
     PostBrandSignal,
     PostEnrichmentState,
     PostTypeKey,
     PostUnsanctionedFlag,
+    ProductLabelKey,
     Role,
     SentimentKey,
 )
@@ -98,7 +100,7 @@ def _candidate(
             "volume": {"selected_count": 20, "change_pct": "10.000000"},
             "engagement": {"selected": {"eligible_count": 20}},
             "post_type": {"labels": []},
-            "discourse": {"labels": []},
+            "product_label": {"labels": []},
             "sentiment": {"labels": []},
             "china_nationalism": {"labels": []},
             "us_nationalism": {"labels": []},
@@ -134,7 +136,7 @@ def test_family_seed_merge_then_round_robin_preserves_diversity():
         "volume": ["a:full_window", "b:full_window"],
         "engagement": ["a:full_window", "c:full_window"],
         "post_type": ["a:full_window", "d:full_window"],
-        "discourse": ["a:full_window", "e:full_window"],
+        "product_label": ["a:full_window", "e:full_window"],
         "sentiment": ["a:full_window", "f:full_window"],
         "nationalism": ["a:full_window", "g:full_window"],
     }
@@ -153,7 +155,7 @@ def test_family_seed_merge_then_round_robin_preserves_diversity():
         "volume",
         "engagement",
         "post_type",
-        "discourse",
+        "product_label",
         "sentiment",
         "nationalism",
     ]
@@ -168,7 +170,7 @@ def test_volume_stream_reaches_second_brand_before_extra_same_brand_episode():
         "volume": ["alpha:full_window", "beta:full_window"],
         "engagement": [],
         "post_type": [],
-        "discourse": [],
+        "product_label": [],
         "sentiment": [],
         "nationalism": [],
     }
@@ -464,8 +466,10 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
             "first_party_role": "official",
             "translation_status": "succeeded",
             "classification_status": "succeeded",
-            "post_type_keys": ["buzz_releases"],
-            "discourse_keys": ["comparison"],
+            "classification_outcome": "classified",
+            "scalar_source": "current",
+            "post_type_keys": ["releases_updates"],
+            "product_label_keys": ["testimonial"],
             "sentiment_keys": ["positive"],
             "china_nationalism_keys": ["none"],
             "us_nationalism_keys": ["mild_pro"],
@@ -510,14 +514,99 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
     assert evidence["translation_status"] == "succeeded"
     assert evidence["classification_status"] == "succeeded"
     assert evidence["taxonomy"] == {
-        "post_types": {"status": "available", "values": ["buzz_releases"]},
-        "discourse_roles": {"status": "available", "values": ["comparison"]},
-        "china_nationalism": {"status": "available", "values": ["none"]},
-        "us_nationalism": {"status": "available", "values": ["mild_pro"]},
+        "post_types": {"status": "available", "values": ["releases_updates"]},
+        "product_labels": {"status": "available", "values": ["testimonial"]},
+        "china_nationalism": {
+            "status": "available", "values": ["none"], "provenance": "current"
+        },
+        "us_nationalism": {
+            "status": "available", "values": ["mild_pro"], "provenance": "current"
+        },
         "unsanctioned_flags": {"status": "available", "values": ["misinformation"]},
         "language": {"status": "available", "values": ["en"]},
-        "sentiment": {"status": "available", "values": ["positive"]},
+        "sentiment": {
+            "status": "available", "values": ["positive"], "provenance": "current"
+        },
         "account_role": {"status": "available", "values": ["public_opaque"]},
+    }
+
+
+def test_u4_provider_evidence_uses_per_brand_current_coverage_and_scalar_provenance():
+    base = {
+        "candidate_id": "alpha:full_window",
+        "tweet_id": "post-coverage",
+        "author_id": "author-coverage",
+        "author_handle": "ordinary_handle",
+        "text": "ordinary discussion",
+        "text_en": "ordinary discussion",
+        "text_zh_cn": "普通讨论",
+        "lang": "en",
+        "created_at": AS_OF,
+        "quoted_text": None,
+        "quoted_status_id": None,
+        "is_retweet": False,
+        "is_quote": False,
+        "is_official": False,
+        "translation_status": "succeeded",
+        "classification_status": "succeeded",
+        "post_type_keys": ["release"],
+        "product_label_keys": [],
+        "sentiment_keys": [],
+        "china_nationalism_keys": [],
+        "us_nationalism_keys": [],
+        "unsanctioned_flag_keys": [],
+    }
+    context_missing = trend_candidates._evidence_candidate(
+        {
+            **base,
+            "classification_outcome": "context_missing",
+            "scalar_source": "current",
+        }
+    )
+    historical = trend_candidates._evidence_candidate(
+        {
+            **base,
+            "tweet_id": "post-history",
+            "classification_outcome": None,
+            "scalar_source": "historical",
+            "sentiment_keys": ["positive"],
+        }
+    )
+    classified_empty = trend_candidates._evidence_candidate(
+        {
+            **base,
+            "tweet_id": "post-empty-products",
+            "classification_outcome": "classified",
+            "scalar_source": "current",
+            "sentiment_keys": ["positive"],
+        }
+    )
+    assert context_missing is not None
+    assert historical is not None
+    assert classified_empty is not None
+
+    packet = trend_candidates._provider_dossier(
+        {"brand_key": "alpha", "family_summaries": {}, "evidence": [
+            context_missing, historical, classified_empty,
+        ]}
+    )
+    missing, fallback, empty = packet["evidence"]
+
+    assert missing["taxonomy"]["post_types"] == {
+        "status": "unavailable", "values": []
+    }
+    assert missing["taxonomy"]["product_labels"] == {
+        "status": "unavailable", "values": []
+    }
+    assert missing["taxonomy"]["sentiment"] == {
+        "status": "unavailable", "values": [], "provenance": "current"
+    }
+    assert fallback["taxonomy"]["post_types"]["status"] == "unavailable"
+    assert fallback["taxonomy"]["sentiment"] == {
+        "status": "available", "values": ["positive"], "provenance": "historical"
+    }
+    assert empty["taxonomy"]["product_labels"] == {
+        "status": "available", "values": []
     }
 
 
@@ -709,10 +798,11 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
                 "prior_count": 100,
                 "change_pct": "45.0",
             },
-            "post_type": {
+                "post_type": {
+                    "selected_covered_count": 145,
                 "labels": [
                     {
-                        "key": "buzz_releases",
+                        "key": "releases_updates",
                         "selected_count": 52,
                         "prior_count": 12,
                         "selected_basis_count": 145,
@@ -723,7 +813,8 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
                     }
                 ]
             },
-            "sentiment": {
+                "sentiment": {
+                    "selected_covered_count": 145,
                 "labels": [
                     {
                         "key": "positive",
@@ -748,7 +839,7 @@ def test_u1_citable_facts_cover_volume_mix_and_first_party_quantities():
     by_metric = {fact["metric"]: fact for fact in facts}
 
     assert by_metric["post_count_change_pct"]["display_en"] == "45%"
-    assert by_metric["buzz_releases_share_change_pp"]["display_en"] == "24 pts"
+    assert by_metric["releases_updates_share_change_pp"]["display_en"] == "24 pts"
     assert by_metric["positive_share_change_pp"]["display_en"] == "13 pts"
     assert by_metric["official_staff_post_count"]["display_en"] == "4 posts"
     assert all(fact["fact_id"].startswith("f:deepseek:") for fact in facts)
@@ -1170,26 +1261,17 @@ def _seed_snapshot_posts() -> tuple[Brand, str, str]:
     ]
     Post.objects.bulk_create(posts)
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
-    PostTypeKey.objects.create(key="reaction")
-    SentimentKey.objects.create(key="positive")
-    SentimentKey.objects.create(key="negative")
-    DiscourseKey.objects.create(key="technical_analysis")
-    NationalismKey.objects.create(key="pro")
-    NationalismKey.objects.create(key="anti")
+    PostTypeKey.objects.get_or_create(key="opinions_reactions")
+    SentimentKey.objects.get_or_create(key="positive")
+    SentimentKey.objects.get_or_create(key="negative")
+    NationalismKey.objects.get_or_create(key="pro")
+    NationalismKey.objects.get_or_create(key="anti")
     for index, post in enumerate(posts):
         PostBrandSignal.objects.create(
             post=post,
             brand=brand,
-            post_type_id="reaction",
+            post_type_id="opinions_reactions",
             sentiment_id="negative" if index == 2 else "positive",
-        )
-        PostBrandDiscourse.objects.create(
-            post=post,
-            brand=brand,
-            discourse_id="technical_analysis",
-            act_id=1,
-            china_nationalism_id="pro",
-            us_nationalism_id="anti" if index == 2 else "pro",
         )
     pure_repost = Post.objects.create(
         tweet_id="private-repost-id",
@@ -1221,7 +1303,7 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     def capture_evidence_query(execute, sql, params, many, context):
         normalized = sql.casefold()
         if (
-            "with requested_bounds as" in normalized
+            "requested_bounds as" in normalized
             and "official_accounts as" in normalized
         ):
             evidence_queries.append((sql, params))
@@ -1264,7 +1346,7 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         ("OFFICIAL_STREAM AS", "CATALYST_STREAM AS"),
         ("CATALYST_STREAM AS", "ORIGINAL_STREAM AS"),
         ("ORIGINAL_STREAM AS", "EVIDENCE_SEED AS"),
-        ("DISCOURSE_STREAM AS", "CONTRAST_STREAM AS"),
+        ("POST_TYPE_STREAM AS", "CONTRAST_STREAM AS"),
         ("CONTRAST_STREAM AS", "RECENT_STREAM AS"),
         ("RECENT_STREAM AS", "STREAM_ROWS AS"),
     )
@@ -1277,8 +1359,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
         assert "FROM CANDIDATE_POOL POOL" in stream_sql
         assert "FROM POSTS_BRANDS PB" not in stream_sql
         assert stream_sql.count("LIMIT R.RANK_LIMIT") == 1
-    assert len(evidence_params) == 6
-    assert evidence_params[1] == [brand.nickname]
+    assert len(evidence_params) == 12
+    assert evidence_params[7] == [brand.nickname]
     assert tuple(evidence_params[-2:]) == (AS_OF, 32)
     # U1 exposes an all-brand compact snapshot rather than the legacy
     # shortlist/candidate projection.  The source rows remain private and the
@@ -1392,15 +1474,9 @@ def test_snapshot_resource_limit_reaches_provider_without_losing_other_evidence(
 def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
     brand = Brand.objects.create(nickname="bounded_evidence_brand")
     official_role = Role.objects.create(key="official")
-    PostTypeKey.objects.create(key="bounded_reaction")
+    PostTypeKey.objects.get_or_create(key="opinions_reactions")
     SentimentKey.objects.bulk_create(
         [SentimentKey(key="bounded_positive"), SentimentKey(key="bounded_negative")]
-    )
-    DiscourseKey.objects.bulk_create(
-        [
-            DiscourseKey(key="bounded_technical"),
-            DiscourseKey(key="bounded_release"),
-        ]
     )
     accounts = [
         Account.objects.create(
@@ -1432,14 +1508,15 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
         PostBrandSignal.objects.create(
             post=post,
             brand=brand,
-            post_type_id="bounded_reaction",
+            post_type_id="opinions_reactions",
             sentiment_id=("bounded_positive" if index < 16 else "bounded_negative"),
         )
-        PostBrandDiscourse.objects.create(
-            post=post,
-            brand=brand,
-            discourse_id=("bounded_technical" if index < 16 else "bounded_release"),
-            act_id=1,
+        PostBrandClassificationState.objects.create(
+            post=post, brand=brand, contract_version=CONTRACT_VERSION,
+            taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+            model="test", source_language="en", input_context_fingerprint=f"{index:064x}",
+            outcome="classified",
+            sentiment_id=("bounded_positive" if index < 16 else "bounded_negative"),
         )
 
     candidate = {
@@ -1464,7 +1541,7 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
         "official_rank",
         "catalyst_rank",
         "original_rank",
-        "discourse_rank",
+            "post_type_rank",
         "contrast_rank",
     )
     assert repeated == rows
@@ -1478,7 +1555,7 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
             3,
             4,
         ]
-    assert {row["dominant_discourse"] for row in rows} == {"bounded_technical"}
+    assert {row["dominant_post_type"] for row in rows} == {"opinions_reactions"}
     assert {row["dominant_sentiment"] for row in rows} == {"bounded_positive"}
 
     episode_rows = trend_candidates._fetch_evidence_rows(
@@ -1493,8 +1570,149 @@ def test_evidence_query_returns_deterministic_per_stream_bounded_ranks():
         rank_limit=4,
     )
 
-    assert {row["dominant_discourse"] for row in episode_rows} == {"bounded_release"}
+    assert {row["dominant_post_type"] for row in episode_rows} == {"opinions_reactions"}
     assert {row["dominant_sentiment"] for row in episode_rows} == {"bounded_negative"}
+
+
+def test_u4_evidence_contrast_uses_unambiguous_historical_sentiment_but_current_null_owns():
+    brand = Brand.objects.create(nickname="historical-contrast")
+    account = Account.objects.create(
+        author_id="historical-contrast-author", handle="historical-contrast"
+    )
+    PostTypeKey.objects.get_or_create(key="opinions_reactions")
+    SentimentKey.objects.bulk_create(
+        [SentimentKey(key="historical-positive"), SentimentKey(key="historical-negative")]
+    )
+    posts = [
+        Post(
+            tweet_id=f"historical-positive-{index}", author=account,
+            created_at=AS_OF - timedelta(hours=4, minutes=index),
+            text=f"historical positive {index}", metrics_refreshed_at=AS_OF,
+            like_count=100 - index,
+        )
+        for index in range(3)
+    ] + [
+        Post(
+            tweet_id=f"historical-negative-{index}", author=account,
+            created_at=AS_OF - timedelta(hours=5, minutes=index),
+            text=f"historical negative {index}", metrics_refreshed_at=AS_OF,
+            like_count=2 - index,
+        )
+        for index in range(2)
+    ]
+    current_null = Post(
+        tweet_id="current-null-legacy-negative", author=account,
+        created_at=AS_OF - timedelta(hours=6), text="current null legacy negative",
+        metrics_refreshed_at=AS_OF, like_count=50,
+    )
+    Post.objects.bulk_create([*posts, current_null])
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in [*posts, current_null]])
+    for post in posts[:3]:
+        PostBrandSignal.objects.create(
+            post=post, brand=brand, post_type_id="opinions_reactions",
+            sentiment_id="historical-positive",
+        )
+    for post in [*posts[3:], current_null]:
+        PostBrandSignal.objects.create(
+            post=post, brand=brand, post_type_id="opinions_reactions",
+            sentiment_id="historical-negative",
+        )
+    PostBrandClassificationState.objects.create(
+        post=current_null, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version="stage1-test",
+        model="test", source_language="en", input_context_fingerprint="4" * 64,
+        outcome="context_missing", sentiment=None, china_nationalism=None,
+        us_nationalism=None,
+    )
+
+    rows = trend_candidates._fetch_evidence_rows(
+        [{
+            "candidate_id": f"{brand.nickname}:full_window",
+            "brand_key": brand.nickname,
+            "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+            "end_at": AS_OF.isoformat(),
+        }],
+        as_of=AS_OF,
+        rank_limit=6,
+    )
+
+    assert {row["dominant_sentiment"] for row in rows} == {"historical-positive"}
+    contrast = next(row for row in rows if row["contrast_rank"] == 1)
+    assert str(contrast["tweet_id"]).startswith("historical-negative-")
+    assert contrast["scalar_source"] == "historical"
+
+
+def test_u7_evidence_sql_canonicalizes_edges_and_excludes_unknown_state_values():
+    brand = Brand.objects.create(nickname="taxonomy-evidence")
+    account = Account.objects.create(
+        author_id="taxonomy-evidence-author", handle="taxonomy-evidence"
+    )
+    for key in ("buzz_releases", "releases_updates", "other"):
+        PostTypeKey.objects.get_or_create(key=key)
+    for key in ("product_request", "ideas_requests", "unknown_product"):
+        ProductLabelKey.objects.get_or_create(key=key)
+    SentimentKey.objects.get_or_create(key="positive")
+    posts = [
+        Post.objects.create(
+            tweet_id=f"taxonomy-evidence-{suffix}",
+            author=account,
+            created_at=AS_OF - timedelta(minutes=index + 1),
+            text=f"taxonomy evidence {suffix}",
+            metrics_refreshed_at=AS_OF,
+        )
+        for index, suffix in enumerate(("current", "unknown"))
+    ]
+    PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
+    PostBrandClassificationState.objects.bulk_create(
+        [
+            PostBrandClassificationState(
+                post=posts[0], brand=brand, contract_version=CONTRACT_VERSION,
+                taxonomy_version="stage1-taxonomy-v2", prompt_version="stage1-prompt-v3",
+                model="test", source_language="en", input_context_fingerprint="9" * 64,
+                outcome="classified", sentiment_id="positive",
+            ),
+            PostBrandClassificationState(
+                post=posts[1], brand=brand, contract_version="unknown-contract",
+                taxonomy_version="unknown-taxonomy", prompt_version="unknown-prompt",
+                model="test", source_language="en", input_context_fingerprint="a" * 64,
+                outcome="classified", sentiment_id="positive",
+            ),
+        ]
+    )
+    PostBrandSignal.objects.bulk_create(
+        [
+            PostBrandSignal(post=posts[0], brand=brand, post_type_id=key, sentiment_id="positive")
+            for key in ("buzz_releases", "releases_updates")
+        ]
+        + [PostBrandSignal(post=posts[1], brand=brand, post_type_id="other", sentiment_id="positive")]
+    )
+    PostBrandProductLabel.objects.bulk_create(
+        [
+            PostBrandProductLabel(post=posts[0], brand=brand, product_label_id=key)
+            for key in ("product_request", "ideas_requests", "unknown_product")
+        ]
+    )
+    rows = trend_candidates._fetch_evidence_rows(
+        [{
+            "candidate_id": f"{brand.nickname}:full_window",
+            "brand_key": brand.nickname,
+            "start_at": (AS_OF - timedelta(days=1)).isoformat(),
+            "end_at": AS_OF.isoformat(),
+        }],
+        as_of=AS_OF,
+        rank_limit=2,
+    )
+    by_id = {str(row["tweet_id"]): row for row in rows}
+
+    current = by_id["taxonomy-evidence-current"]
+    assert current["post_type_keys"] == ["releases_updates"]
+    assert current["product_label_keys"] == ["ideas_requests"]
+    assert current["dominant_post_type"] == "releases_updates"
+    unknown = by_id["taxonomy-evidence-unknown"]
+    assert unknown["post_type_keys"] == []
+    assert unknown["product_label_keys"] == []
+    assert unknown["sentiment_keys"] == []
+    assert unknown["scalar_source"] == "unrecognized"
 
 
 def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
@@ -1510,13 +1728,13 @@ def test_near_duplicate_source_clusters_cannot_fill_two_evidence_roles():
         "interactions": 5,
         "is_official": False,
         "sentiment_keys": [],
-        "discourse_keys": [],
-        "dominant_discourse": None,
+        "product_label_keys": [],
+        "dominant_post_type": None,
         "dominant_sentiment": None,
         "official_rank": 1,
         "catalyst_rank": 1,
         "original_rank": 1,
-        "discourse_rank": 1,
+        "post_type_rank": 1,
         "contrast_rank": 1,
     }
     rows = [
@@ -1587,13 +1805,13 @@ def _adaptive_evidence_row(
         "is_official": index == 0,
         "post_type_keys": ["hands_on" if hands_on else "release"],
         "sentiment_keys": ["positive" if positive else "negative"],
-        "discourse_keys": ["technical_analysis" if hands_on else "release_buzz"],
-        "dominant_discourse": "technical_analysis",
+        "product_label_keys": ["testimonial" if hands_on else "complaint"],
+        "dominant_post_type": "hands_on",
         "dominant_sentiment": "positive",
         "official_rank": index + 1,
         "catalyst_rank": index + 1,
         "original_rank": index + 1,
-        "discourse_rank": index + 1,
+        "post_type_rank": index + 1,
         "contrast_rank": index + 1,
     }
 
@@ -1615,7 +1833,7 @@ def test_adaptive_evidence_deepens_the_story_leader_and_preserves_strata():
             "end_at": AS_OF.isoformat(),
             "signals": [
                 {"family": "volume", "rank": 1, "stream_position": 1},
-                {"family": "discourse", "rank": 1, "stream_position": 1},
+                {"family": "product_label", "rank": 1, "stream_position": 1},
                 {"family": "sentiment", "rank": 1, "stream_position": 1},
             ],
             "family_facts": {"volume": {"selected_count": 4_000}},
@@ -1641,8 +1859,8 @@ def test_adaptive_evidence_deepens_the_story_leader_and_preserves_strata():
                 ),
                 "post_type_keys": [],
                 "sentiment_keys": [],
-                "discourse_keys": [],
-                "dominant_discourse": None,
+                "product_label_keys": [],
+                "dominant_post_type": None,
                 "dominant_sentiment": None,
             }
             for index in range(12)
@@ -1663,9 +1881,9 @@ def test_adaptive_evidence_deepens_the_story_leader_and_preserves_strata():
     assert allocations["comparison:full_window"]["allocation_class"] == "floor"
     assert {row["post_type_keys"][0] for row in lead} == {"hands_on", "release"}
     assert {row["sentiment_keys"][0] for row in lead} == {"positive", "negative"}
-    assert {row["discourse_keys"][0] for row in lead} == {
-        "technical_analysis",
-        "release_buzz",
+    assert {row["product_label_keys"][0] for row in lead} == {
+        "testimonial",
+        "complaint",
     }
     observed_hours = {datetime.fromisoformat(row["created_at"]).hour for row in lead}
     assert min(observed_hours) <= 2
@@ -1758,7 +1976,7 @@ def test_high_volume_reservoir_and_final_allocation_remain_bounded():
     )
 
     allocation = allocations["large:full_window"]
-    assert allocation["reservoir_count"] <= 32 * 5
+    assert allocation["reservoir_count"] <= 32 * 6
     assert allocation["selected_count"] == len(selected["large:full_window"])
     assert allocation["selected_count"] <= 48
 

@@ -1,0 +1,6 @@
+{
+  "post_id": "2100260635858600320",
+  "commentary_en": "The author reports heavy daily use of GLM 5.3 flash since its unannounced release, but claims the advertised 1 million token context window is unreliable because the model stalls once the context fills to about half that size. This matters because it challenges a key marketing specification, suggesting real-world performance may fall short of claims, which could affect user trust and product adoption for AI tools relying on long-context processing.",
+  "commentary_zh_cn": "作者表示自GLM 5.3 flash悄然发布以来，每天持续使用16小时甚至更久。但他认为100万token的上下文窗口宣传不实，当上下文接近50%时模型会卡顿。此说法之所以重要，是因为它质疑了核心规格的实际表现，可能影响依赖长上下文场景的用户信任与产品采纳。",
+  "commentary_ja": "投稿者はGLM 5.3 flashをステルスローンチ以降、毎日16時間以上使い続けていると報告。しかし100万トークンのコンテキスト窓は誇張で、約50%まで埋まるとモデルが停止すると主張。この点は宣伝スペックと実性能の乖離を示すため、長文処理を重視するユーザーや製品信頼性に影響するため重要である。"
+}

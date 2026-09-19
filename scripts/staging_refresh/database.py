@@ -25,6 +25,7 @@ from psycopg.conninfo import conninfo_to_dict
 from scripts.database_lock import (
     acquire_cluster_lock,
     acquire_harvest_coordination_lock,
+    acquire_synthesis_coordination_lock,
     admin_connection_parameters,
 )
 
@@ -55,6 +56,8 @@ class SourceCensus:
     classification_counts: Mapping[str, int]
     terminal_narrative_count: int
     current_narrative_count: int
+    pending_migration_count_deltas: Mapping[str, int]
+    pending_migration_translation_count_deltas: Mapping[str, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +237,10 @@ class SnapshotAdapter(Protocol):
         recovery_comment: str,
     ) -> None: ...
 
+    def write_database_comments(
+        self, database_url: str, comments: Mapping[str, str | None]
+    ) -> None: ...
+
     def drop_recovery(self, database_url: str, name: str) -> None: ...
 
 
@@ -309,6 +316,38 @@ def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
     return counts
 
 
+def _pending_migration_count_deltas(
+    policy: RefreshPolicy, migration_rows: list[tuple[Any, ...]]
+) -> dict[str, int]:
+    return _pending_migration_deltas(
+        policy.validation.forward_migration_count_deltas, migration_rows
+    )
+
+
+def _pending_migration_translation_count_deltas(
+    policy: RefreshPolicy, migration_rows: list[tuple[Any, ...]]
+) -> dict[str, int]:
+    return _pending_migration_deltas(
+        policy.validation.forward_migration_translation_count_deltas,
+        migration_rows,
+    )
+
+
+def _pending_migration_deltas(
+    configured: Mapping[str, Mapping[str, int]],
+    migration_rows: list[tuple[Any, ...]],
+) -> dict[str, int]:
+    applied = {(str(row[0]), str(row[1])) for row in migration_rows}
+    pending: dict[str, int] = {}
+    for migration, deltas in configured.items():
+        app, name = migration.split(".", 1)
+        if (app, name) in applied:
+            continue
+        for table, delta in deltas.items():
+            pending[table] = pending.get(table, 0) + delta
+    return pending
+
+
 def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
     """Scrub one already-restored non-serving database inside its transaction."""
 
@@ -378,11 +417,20 @@ class PsycopgSnapshotAdapter:
                 "COALESCE(column_default, '') FROM information_schema.columns "
                 "WHERE table_schema = 'public' ORDER BY table_name, ordinal_position"
             )
-            schema_checksum = _hash_rows(list(cursor.fetchall()))
+            schema_rows = list(cursor.fetchall())
+            schema_checksum = _hash_rows(schema_rows)
+            source_tables = frozenset(str(row[0]) for row in schema_rows)
             cursor.execute(
                 "SELECT app, name, applied FROM django_migrations ORDER BY app, name"
             )
-            migration_checksum = _hash_rows(list(cursor.fetchall()))
+            migration_rows = list(cursor.fetchall())
+            migration_checksum = _hash_rows(migration_rows)
+            pending_migration_count_deltas = _pending_migration_count_deltas(
+                self.policy, migration_rows
+            )
+            pending_migration_translation_count_deltas = (
+                _pending_migration_translation_count_deltas(self.policy, migration_rows)
+            )
             row_counts: dict[str, int] = {}
             for table in self.policy.validation.exact_count_tables:
                 cursor.execute(
@@ -404,6 +452,7 @@ class PsycopgSnapshotAdapter:
             classification_counts = {
                 table: _table_count(cursor, table)
                 for table in self.policy.validation.classification_tables
+                if table in source_tables
             }
             cursor.execute(
                 "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
@@ -427,6 +476,10 @@ class PsycopgSnapshotAdapter:
                 classification_counts=classification_counts,
                 terminal_narrative_count=terminal_narrative_count,
                 current_narrative_count=current_narrative_count,
+                pending_migration_count_deltas=pending_migration_count_deltas,
+                pending_migration_translation_count_deltas=(
+                    pending_migration_translation_count_deltas
+                ),
             )
             try:
                 yield census
@@ -756,6 +809,24 @@ class PsycopgSnapshotAdapter:
                 )
             )
 
+    def write_database_comments(
+        self, database_url: str, comments: Mapping[str, str | None]
+    ) -> None:
+        parameters = admin_connection_parameters(database_url)
+        timeout = str(
+            self.policy.lifecycle.administration_statement_timeout_seconds * 1000
+        )
+        with self.connect(**parameters) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, true)", [timeout]
+            )
+            for name, comment in comments.items():
+                cursor.execute(
+                    sql.SQL("COMMENT ON DATABASE {} IS {}").format(
+                        sql.Identifier(name), sql.Literal(comment)
+                    )
+                )
+
     def drop_recovery(self, database_url: str, name: str) -> None:
         self.drop_shadow(database_url, name)
 
@@ -898,6 +969,7 @@ class SnapshotRestoreEngine:
                     "--format=custom",
                     "--no-owner",
                     "--no-privileges",
+                    "--schema=public",
                     f"--snapshot={census.snapshot_id}",
                     *(
                         f"--exclude-table-data=public.{table}"
@@ -1005,7 +1077,9 @@ class SnapshotRestoreEngine:
             )
             command = [
                 self._executables["pg_restore"],
+                "--clean",
                 "--exit-on-error",
+                "--if-exists",
                 "--no-owner",
                 "--no-privileges",
                 "--jobs=1",
@@ -1147,12 +1221,14 @@ class CandidateProcessor:
             if missing:
                 raise RefreshError(f"candidate_column_missing:{table}.{min(missing)}")
         for table, expected in source.row_counts.items():
+            expected += source.pending_migration_count_deltas.get(table, 0)
             if census.row_counts.get(table) != expected:
                 raise RefreshError(f"candidate_count_mismatch:{table}")
         for table in self.policy.validation.required_nonempty_tables:
             if census.row_counts.get(table, 0) <= 0:
                 raise RefreshError(f"candidate_required_table_empty:{table}")
         for key, expected in source.translation_counts.items():
+            expected += source.pending_migration_translation_count_deltas.get(key, 0)
             if census.translation_counts.get(key) != expected:
                 raise RefreshError(f"candidate_translation_mismatch:{key}")
         for table, expected in source.classification_counts.items():
@@ -1349,6 +1425,8 @@ class LifecycleManager:
         *,
         incoming: str,
         displaced: str,
+        incoming_comment: str | None,
+        displaced_comment: str | None,
         failure_code: str,
     ) -> None:
         try:
@@ -1375,9 +1453,21 @@ class LifecycleManager:
                 or displaced_state is not None
             ):
                 raise RefreshError("repair_state_invalid")
+            if canonical.allow_connections:
+                self.adapter.set_allow_connections(
+                    self.target_url, self.canonical, False
+                )
+                self.adapter.terminate_connections(self.target_url, self.canonical)
             if incoming_state.allow_connections:
                 self.adapter.set_allow_connections(self.target_url, incoming, False)
                 self.adapter.terminate_connections(self.target_url, incoming)
+            self.adapter.write_database_comments(
+                self.target_url,
+                {
+                    self.canonical: displaced_comment,
+                    incoming: incoming_comment,
+                },
+            )
             self.adapter.set_allow_connections(self.target_url, self.canonical, True)
         except BaseException as exc:
             detail = self._diagnostic(self.canonical, incoming, displaced)
@@ -1394,6 +1484,16 @@ class LifecycleManager:
         prepare_receipt: Callable[[], Receipt],
         failure_code: str,
     ) -> Receipt:
+        # Inspect the incoming database while it still has its isolated name.
+        # Once both names have moved, the canonical database must remain
+        # unavailable until its durable receipt is in place; otherwise the
+        # live web service can race the post-rename validation or briefly
+        # serve an unreceipted database.
+        incoming_state = self._state(incoming, missing="incoming_database_missing")
+        canonical_state = self._state(
+            self.canonical, missing="canonical_database_missing"
+        )
+        receipt = prepare_receipt()
         try:
             self.adapter.set_allow_connections(self.target_url, incoming, False)
             self.adapter.terminate_connections(self.target_url, incoming)
@@ -1401,13 +1501,14 @@ class LifecycleManager:
             self.adapter.terminate_connections(self.target_url, self.canonical)
             self.adapter.rename_database(self.target_url, self.canonical, displaced)
             self.adapter.rename_database(self.target_url, incoming, self.canonical)
-            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
-            receipt = prepare_receipt()
             self._write_receipt(receipt)
+            self.adapter.set_allow_connections(self.target_url, self.canonical, True)
         except BaseException:  # noqa: BLE001 - every cutover failure must reconcile
             self._repair_swap(
                 incoming=incoming,
                 displaced=displaced,
+                incoming_comment=incoming_state.comment,
+                displaced_comment=canonical_state.comment,
                 failure_code=failure_code,
             )
         return receipt
@@ -1448,12 +1549,21 @@ class LifecycleManager:
         receipt = self._receipt(action="refresh", recovery=recovery, result=result)
 
         def prepare_receipt() -> Receipt:
-            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
-            CandidateProcessor(
-                policy=self.policy,
-                target_url=self.target_url,
-                adapter=self.adapter,
-            ).validate(candidate, census)
+            self.adapter.set_allow_connections(self.target_url, candidate.name, True)
+            try:
+                census = self.adapter.inspect_candidate(
+                    self.target_url, candidate.name
+                )
+                CandidateProcessor(
+                    policy=self.policy,
+                    target_url=self.target_url,
+                    adapter=self.adapter,
+                ).validate(candidate, census)
+            finally:
+                self.adapter.set_allow_connections(
+                    self.target_url, candidate.name, False
+                )
+                self.adapter.terminate_connections(self.target_url, candidate.name)
             return receipt
 
         return self._swap(
@@ -1575,14 +1685,19 @@ class LifecycleManager:
             raise RefreshError("recovery_database_already_exists")
 
         def prepare_receipt() -> Receipt:
-            census = self.adapter.inspect_candidate(self.target_url, self.canonical)
-            self._verify_shape(census)
-            return self._receipt(
-                action="rollback",
-                recovery=displaced,
-                prior=active.receipt,
-                census=census,
-            )
+            self.adapter.set_allow_connections(self.target_url, recovery, True)
+            try:
+                census = self.adapter.inspect_candidate(self.target_url, recovery)
+                self._verify_shape(census)
+                return self._receipt(
+                    action="rollback",
+                    recovery=displaced,
+                    prior=active.receipt,
+                    census=census,
+                )
+            finally:
+                self.adapter.set_allow_connections(self.target_url, recovery, False)
+                self.adapter.terminate_connections(self.target_url, recovery)
 
         return self._swap(
             incoming=recovery,
@@ -1642,6 +1757,7 @@ class PostgresRuntime:
         runner: Callable[..., CommandResult] = subprocess.run,
         lock_factory: Callable[..., Any] = acquire_cluster_lock,
         harvest_lock_factory: Callable[..., Any] = acquire_harvest_coordination_lock,
+        synthesis_lock_factory: Callable[..., Any] | None = None,
         now: Callable[[], datetime] | None = None,
         broker_url: str | None = None,
         quiescence_guard: Callable[[], QuiescenceInspection] | None = None,
@@ -1660,6 +1776,11 @@ class PostgresRuntime:
         self.runner = runner
         self.lock_factory = lock_factory
         self.harvest_lock_factory = harvest_lock_factory
+        self.synthesis_lock_factory = synthesis_lock_factory or (
+            harvest_lock_factory
+            if harvest_lock_factory is not acquire_harvest_coordination_lock
+            else acquire_synthesis_coordination_lock
+        )
         self.quiescence_guard = quiescence_guard or (
             lambda: inspect_staging_quiescence(policy, broker_url)
         )
@@ -1785,8 +1906,18 @@ class PostgresRuntime:
         ):
             yield
 
+    @contextmanager
+    def _synthesis_lock(self) -> Iterator[None]:
+        if not self.target_url:
+            raise RefreshError("target_url_missing")
+        with self.synthesis_lock_factory(
+            self.target_url,
+            environment=self.policy.quiescence.harvest_environment,
+        ):
+            yield
+
     def _refresh(self) -> Receipt:
-        with self._harvest_lock():
+        with self._harvest_lock(), self._synthesis_lock():
             self._require_quiescence()
             if self.engine is None:
                 raise RefreshError("refresh_urls_missing")
@@ -1833,7 +1964,7 @@ class PostgresRuntime:
 
     def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]:
         if action == "preflight":
-            with self._harvest_lock():
+            with self._harvest_lock(), self._synthesis_lock():
                 self._require_quiescence()
                 if self.engine is None:
                     raise RefreshError("refresh_urls_missing")
@@ -1850,13 +1981,13 @@ class PostgresRuntime:
         if action == "rollback":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._harvest_lock(), self._target_lock():
+            with self._harvest_lock(), self._synthesis_lock(), self._target_lock():
                 self._require_quiescence()
                 return self._lifecycle().rollback(recovery).to_payload()
         if action == "prune":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._harvest_lock(), self._target_lock():
+            with self._harvest_lock(), self._synthesis_lock(), self._target_lock():
                 self._require_quiescence()
                 pruned = self._lifecycle().prune(recovery)
             return {"action": "prune", "recovery_database": pruned}

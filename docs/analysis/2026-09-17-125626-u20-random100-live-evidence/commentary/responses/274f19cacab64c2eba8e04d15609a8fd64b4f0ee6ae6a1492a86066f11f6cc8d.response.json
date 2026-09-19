@@ -1,0 +1,6 @@
+{
+  "post_id": "2100404178355167577",
+  "commentary_en": "The author says they are re-running an experiment to build Tetris with Qwen 3.8, noting that without setting a goal they would stop. The stored quote (from a prior post) says that running Codex heavily turns it into a heater, and that they are running it using only a local LLM. The author's point is that they are re-attempting a coding project with a specific local model, emphasizing that having a clear objective is necessary to keep going. This matters because it highlights practical constraints and motivations in using local AI models for development, including hardware heat issues and the need for self-imposed goals to sustain work.",
+  "commentary_zh_cn": "作者表示正在用Qwen 3.8重新进行构建俄罗斯方块的实验，并说如果不设定目标就会停下来。存储的引用（来自之前的帖子）提到，重度使用Codex会使其变成取暖设备，而且他们只用本地大语言模型在运行。作者的意思是，他们正在用特定的本地模型重新尝试一个编码项目，并强调有明确的目标才能继续推进。这之所以重要，是因为它反映了使用本地AI模型进行开发时的实际限制和动机，包括硬件发热问题以及需要自我设定目标来维持工作。",
+  "commentary_ja": "作者はQwen 3.8でテトリスを作る再実験をしていると述べ、目標を設定しないと止まってしまうと指摘しています。保存された引用（以前の投稿）には、Codexを大量に回すと暖房器具になり、ローカルLLMだけで動かしているとあります。作者の意図は、特定のローカルモデルでコーディングプロジェクトを再度試みることであり、明確な目標がないと継続できないという点を強調しています。これが重要なのは、ローカルAIモデルを開発に使う際の実際的な制約（ハードウェアの発熱など）と、作業を続けるための自己目標設定の必要性を示しているからです。"
+}

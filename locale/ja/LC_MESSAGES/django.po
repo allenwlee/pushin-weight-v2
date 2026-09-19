@@ -1,0 +1,257 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pushin-weight\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-10 23:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+#: monitor/templates/monitor/_brand_chart.html:3
+msgid "Single-brand stacked-area chart"
+msgstr "単一ブランドの積み上げ面グラフ"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:28
+msgid "translated from:"
+msgstr "翻訳元:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:54
+#: tests/test_i18n_catalog_pinned.py:152
+msgid "types:"
+msgstr "種類:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:58
+msgid "product signals:"
+msgstr "製品シグナル:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:62
+#: tests/test_i18n_catalog_pinned.py:158
+msgid "sentiments:"
+msgstr "感情:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:66
+#: tests/test_i18n_catalog_pinned.py:137
+msgid "中国民族主义:"
+msgstr "中国ナショナリズム:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:70
+#: tests/test_i18n_catalog_pinned.py:140
+msgid "美国民族主义:"
+msgstr "米国ナショナリズム:"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:81
+#: monitor/templates/monitor/brand_home.html:143
+#: monitor/templates/monitor/home_internal.html:137
+msgid "unsanctioned"
+msgstr "非公式"
+
+#: monitor/templates/monitor/_feed_initial_legacy.html:109
+#: monitor/templates/monitor/_feed_initial_v22.html:120
+#: monitor/templates/monitor/home.html:343
+msgid "no posts in window"
+msgstr "この期間には投稿がありません"
+
+#: monitor/templates/monitor/_feed_initial_v22.html:77
+msgid "综合"
+msgstr "分析"
+
+#: monitor/templates/monitor/_feed_initial_v22.html:79
+msgid "直译"
+msgstr "直訳"
+
+#: monitor/templates/monitor/_feed_initial_v22.html:81
+msgid "原文"
+msgstr "原文"
+
+#: monitor/templates/monitor/_home_chart.html:3
+msgid "Daily total posts per brand"
+msgstr "ブランド別の日次投稿数"
+
+#: monitor/templates/monitor/brand_home.html:30
+#: monitor/templates/monitor/home_internal.html:29
+msgid "24h window"
+msgstr "過去24時間"
+
+#: monitor/templates/monitor/brand_home.html:31
+msgid "← multi-brand"
+msgstr "← 複数ブランド"
+
+#: monitor/templates/monitor/brand_home.html:34
+#: monitor/templates/monitor/home_internal.html:32
+msgid "window:"
+msgstr "期間:"
+
+#: monitor/templates/monitor/brand_home.html:42
+#: monitor/templates/monitor/home_internal.html:40
+msgid "lang:"
+msgstr "言語:"
+
+#: monitor/templates/monitor/brand_home.html:72
+#: monitor/templates/monitor/home_internal.html:56
+msgid "Filters"
+msgstr "フィルター"
+
+#: monitor/templates/monitor/brand_home.html:78
+msgid "(locked)"
+msgstr "（固定）"
+
+#: monitor/templates/monitor/brand_home.html:93
+#: monitor/templates/monitor/home_internal.html:87
+msgid "post_type"
+msgstr "投稿タイプ"
+
+#: monitor/templates/monitor/brand_home.html:103
+#: monitor/templates/monitor/home_internal.html:97
+msgid "account.role"
+msgstr "アカウントの役割"
+
+#: monitor/templates/monitor/brand_home.html:113
+#: monitor/templates/monitor/home_internal.html:107
+msgid "lang"
+msgstr "言語"
+
+#: monitor/templates/monitor/brand_home.html:123
+#: monitor/templates/monitor/home_internal.html:117
+msgid "us_nationalism"
+msgstr "米国ナショナリズム"
+
+#: monitor/templates/monitor/brand_home.html:133
+#: monitor/templates/monitor/home_internal.html:127
+msgid "cn_nationalism"
+msgstr "中国ナショナリズム"
+
+#: monitor/templates/monitor/brand_home.html:146
+#: monitor/templates/monitor/home.html:258
+#: monitor/templates/monitor/home_internal.html:140
+msgid "show only flagged posts"
+msgstr "フラグ付き投稿のみ表示"
+
+#: monitor/templates/monitor/brand_home.html:161
+#: monitor/templates/monitor/home_internal.html:154
+msgid "datetime"
+msgstr "日時"
+
+#: monitor/templates/monitor/brand_home.html:162
+#: monitor/templates/monitor/home_internal.html:155
+msgid "brand"
+msgstr "ブランド"
+
+#: monitor/templates/monitor/brand_home.html:163
+#: monitor/templates/monitor/home_internal.html:156
+msgid "translated"
+msgstr "翻訳"
+
+#: monitor/templates/monitor/brand_home.html:164
+#: monitor/templates/monitor/home_internal.html:157
+msgid "original"
+msgstr "原文"
+
+#: monitor/templates/monitor/brand_home.html:165
+#: monitor/templates/monitor/home_internal.html:158
+msgid "classifications"
+msgstr "分類"
+
+#: monitor/templates/monitor/brand_home.html:166
+#: monitor/templates/monitor/home_internal.html:159
+msgid "handle"
+msgstr "ハンドル"
+
+#: monitor/templates/monitor/brand_home.html:173
+#: monitor/templates/monitor/home.html:344
+#: monitor/templates/monitor/home.html:352
+#: monitor/templates/monitor/home_internal.html:166
+msgid "loading more…"
+msgstr "読み込み中…"
+
+#: monitor/templates/monitor/brand_home.html:174
+#: monitor/templates/monitor/home.html:353
+#: monitor/templates/monitor/home_internal.html:167
+msgid "end of feed"
+msgstr "フィードの末尾"
+
+#: monitor/templates/monitor/brand_home.html:182
+#: monitor/templates/monitor/home_internal.html:175
+msgid "Spend panel — stubbed for U7."
+msgstr "支出パネル — U7用の仮表示。"
+
+#: monitor/templates/monitor/home.html:98
+msgid "Trending models"
+msgstr "注目モデル"
+
+#: monitor/templates/monitor/home.html:141
+#: monitor/templates/monitor/home.html:148
+msgid "none"
+msgstr "なし"
+
+#: monitor/templates/monitor/home.html:274
+msgid "Trend summary refresh failed; showing last result"
+msgstr "トレンド概要の更新に失敗しました。前回の結果を表示しています"
+
+#: monitor/templates/monitor/home.html:275
+msgid "Trend summaries updated"
+msgstr "トレンド概要を更新しました"
+
+#: monitor/templates/monitor/home.html:280
+#: monitor/templates/monitor/home.html:285
+msgid "Trend summary"
+msgstr "トレンド概要"
+
+#: monitor/templates/monitor/home.html:319
+msgid "Top voices"
+msgstr "注目の発信者"
+
+#: monitor/templates/monitor/home.html:320
+msgid "by followers"
+msgstr "フォロワー数順"
+
+#: monitor/templates/monitor/home.html:322
+#: monitor/templates/monitor/home.html:329
+msgid "no top voices this period"
+msgstr "この期間には注目の発信者がいません"
+
+#: monitor/templates/monitor/home_internal.html:29
+#, python-format
+msgid "%(days)sd window"
+msgstr "%(days)s日間"
+
+#: monitor/templates/monitor/home_internal.html:60
+msgid "Brands"
+msgstr "ブランド"
+
+#: monitor/templates/monitor/home_internal.html:62
+msgid "only"
+msgstr "のみ"
+
+#: monitor/templates/monitor/home_internal.html:63
+msgid "all"
+msgstr "すべて"
+
+#: monitor/views.py:1008
+#, python-format
+msgid "X reports this account is based in %(place)s"
+msgstr "Xによると、このアカウントの拠点は%(place)sです"
+
+#: tests/test_i18n_catalog_pinned.py:145
+msgid "zh_cn:"
+msgstr "中国語:"
+
+#: tests/test_i18n_catalog_pinned.py:148
+msgid "en:"
+msgstr "英語:"
+
+#: tests/test_i18n_catalog_pinned.py:155
+msgid "discourses:"
+msgstr "論点:"
+
+#: tests/test_i18n_catalog_pinned.py:169
+msgid "definitely_not_a_msgid_xyz"
+msgstr "definitely_not_a_msgid_xyz"

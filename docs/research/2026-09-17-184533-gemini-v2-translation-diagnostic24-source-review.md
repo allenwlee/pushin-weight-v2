@@ -1,0 +1,9 @@
+# Gemini v2 diagnostic24 translation source review
+
+Reviewed 2026-09-17 18:45 JST against all 24 supplied source/context records, then reconciled at 19:47 JST. All 55 generated targets were delivered; the 17 native-language controls were exact.
+
+Nine source posts have confirmed translation defects. Five have material errors: the long roster changes US-based roles to American nationality and leaves ordinary table content untranslated in Chinese and Japanese; English and Japanese change a 90% price reduction to 10% off; English and Chinese turn approving French slang into negative reactions, with Chinese also assigning USD to `cts`; Chinese and Japanese invent a Mistral cyberattack, with Japanese also reversing the reasoning-token explanation; and all Korean targets reverse who must lead China. Four have minor errors: English and Chinese weaken the OpenCode Go subscription relationship; Japanese retains an unresolved AI referent; Japanese omits the Hausa second paragraph's law-abiding qualifier; and Japanese turns the technical cap that prevents generated junk from being saved to disk into physical debris attaching to a disk. The Chinese and Japanese tokenizer attachments remain unknown.
+
+The initial narrative's `55 good` was a transcription error: `locale_review` originally counted 57 good, 11 material, two minor, and two unknown. The three subsequently adjudicated Japanese rows change good to minor. The final counter is 54 good, 11 material errors, five minor errors, and two unknown outputs: nine confirmed erroneous sources plus one uncertain source, for a 9–10 interval. Against the supplied S3 incumbent interval of 7–8, this cohort does not establish conservative parity or improvement.
+
+Machine-readable record: `.context/model-task-20260917/review-gemini-v2-translation-diagnostic24.json`.

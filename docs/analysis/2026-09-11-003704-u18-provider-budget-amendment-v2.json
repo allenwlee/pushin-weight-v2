@@ -1,0 +1,26 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T00:37:04Z",
+  "reason": "candidate_v3 batch 009 remained contract-invalid after its allowed retry; this separate lane supplies the production-equivalent single-post fallback without increasing the frozen batch lane",
+  "source_budget": "2026-09-11-002632-u18-provider-budgets.json",
+  "lanes": {
+    "candidate_v3_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 410,
+      "maximum_requests": 410,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 820,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 3500000,
+      "maximum_output_tokens": 984000,
+      "maximum_cost_usd": "0.77",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "This lane refuses its next request when any request, per-request retry, token, or dollar cap would be exceeded; it cannot fund another lane."
+}

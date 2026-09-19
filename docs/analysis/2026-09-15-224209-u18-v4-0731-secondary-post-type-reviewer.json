@@ -1,0 +1,405 @@
+{
+  "schema_version": "u18-v4-0731-secondary-reviewer-comparison/v1",
+  "created_at": "2026-09-15T13:42:09.819021+00:00",
+  "contract_sha256": "a1ffbca051bc8b717389269591f4039f4f969e41d9f02952ef8981c41b992c88",
+  "owner_sha256": "6a27bb37d6c2cd8e6545565131511d43f2d93fbb4869bb203d355476b64bb453",
+  "models": {
+    "reviewed": {
+      "label": "0731 primary + add-only reviewer",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 231,
+          "differences": 99,
+          "unreviewed": 126,
+          "agreement_pct": 70.0
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 45,
+            "differences": 1,
+            "agreement_pct": 97.8
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 22,
+            "differences": 16,
+            "agreement_pct": 57.9
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 8,
+            "differences": 38,
+            "agreement_pct": 17.4
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 14,
+            "differences": 5,
+            "agreement_pct": 73.7
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 12,
+            "differences": 14,
+            "agreement_pct": 46.2
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 21,
+            "differences": 10,
+            "agreement_pct": 67.7
+          }
+        }
+      },
+      "post_types": {
+        "reviewed_sets": 46,
+        "exact_sets": 8,
+        "correct_labels": 54,
+        "extra_labels": 39,
+        "missing_labels": 41,
+        "precision": 0.5806,
+        "recall": 0.5684
+      },
+      "cost_usd": "0.00383199210",
+      "timing": {
+        "measured_call_seconds": 62.99,
+        "estimated_primary_parallel_plus_review_seconds": 37.159
+      },
+      "additions": 5
+    },
+    "fresh_primary": {
+      "label": "Same-run 0731 primary",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 232,
+          "differences": 98,
+          "unreviewed": 126,
+          "agreement_pct": 70.3
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 45,
+            "differences": 1,
+            "agreement_pct": 97.8
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 22,
+            "differences": 16,
+            "agreement_pct": 57.9
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 14,
+            "differences": 5,
+            "agreement_pct": 73.7
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 12,
+            "differences": 14,
+            "agreement_pct": 46.2
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 21,
+            "differences": 10,
+            "agreement_pct": 67.7
+          }
+        }
+      },
+      "post_types": {
+        "reviewed_sets": 46,
+        "exact_sets": 9,
+        "correct_labels": 52,
+        "extra_labels": 36,
+        "missing_labels": 43,
+        "precision": 0.5909,
+        "recall": 0.5474
+      }
+    },
+    "prior_two_role": {
+      "label": "Prior 0731 two-call",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 233,
+          "differences": 97,
+          "unreviewed": 126,
+          "agreement_pct": 70.6
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 46,
+            "differences": 0,
+            "agreement_pct": 100.0
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 22,
+            "differences": 16,
+            "agreement_pct": 57.9
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 13,
+            "differences": 6,
+            "agreement_pct": 68.4
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 12,
+            "differences": 14,
+            "agreement_pct": 46.2
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 22,
+            "differences": 9,
+            "agreement_pct": 71.0
+          }
+        }
+      },
+      "post_types": {
+        "reviewed_sets": 46,
+        "exact_sets": 9,
+        "correct_labels": 51,
+        "extra_labels": 38,
+        "missing_labels": 44,
+        "precision": 0.573,
+        "recall": 0.5368
+      }
+    },
+    "three_split": {
+      "label": "0731 split-three-call",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 229,
+          "differences": 101,
+          "unreviewed": 126,
+          "agreement_pct": 69.4
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 42,
+            "differences": 4,
+            "agreement_pct": 91.3
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 23,
+            "differences": 15,
+            "agreement_pct": 60.5
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 12,
+            "differences": 34,
+            "agreement_pct": 26.1
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 13,
+            "differences": 6,
+            "agreement_pct": 68.4
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 9,
+            "differences": 17,
+            "agreement_pct": 34.6
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 35,
+            "differences": 7,
+            "agreement_pct": 83.3
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 21,
+            "differences": 10,
+            "agreement_pct": 67.7
+          }
+        }
+      },
+      "post_types": {
+        "reviewed_sets": 46,
+        "exact_sets": 12,
+        "correct_labels": 52,
+        "extra_labels": 20,
+        "missing_labels": 43,
+        "precision": 0.7222,
+        "recall": 0.5474
+      }
+    },
+    "v4_1": {
+      "label": "V4.1 two-call",
+      "score": {
+        "totals": {
+          "reviewed": 330,
+          "matches": 215,
+          "differences": 115,
+          "unreviewed": 126,
+          "agreement_pct": 65.2
+        },
+        "by_field": {
+          "outcome": {
+            "reviewed": 46,
+            "matches": 41,
+            "differences": 5,
+            "agreement_pct": 89.1
+          },
+          "sentiment": {
+            "reviewed": 38,
+            "matches": 20,
+            "differences": 18,
+            "agreement_pct": 52.6
+          },
+          "post_types": {
+            "reviewed": 46,
+            "matches": 9,
+            "differences": 37,
+            "agreement_pct": 19.6
+          },
+          "product_labels": {
+            "reviewed": 19,
+            "matches": 15,
+            "differences": 4,
+            "agreement_pct": 78.9
+          },
+          "audience_topics": {
+            "reviewed": 26,
+            "matches": 7,
+            "differences": 19,
+            "agreement_pct": 26.9
+          },
+          "geopolitical_modes": {
+            "reviewed": 42,
+            "matches": 32,
+            "differences": 10,
+            "agreement_pct": 76.2
+          },
+          "china_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "us_national_stance": {
+            "reviewed": 41,
+            "matches": 37,
+            "differences": 4,
+            "agreement_pct": 90.2
+          },
+          "untracked_brand_promotions": {
+            "reviewed": 31,
+            "matches": 17,
+            "differences": 14,
+            "agreement_pct": 54.8
+          }
+        }
+      },
+      "post_types": {
+        "reviewed_sets": 46,
+        "exact_sets": 9,
+        "correct_labels": 56,
+        "extra_labels": 31,
+        "missing_labels": 39,
+        "precision": 0.6437,
+        "recall": 0.5895
+      }
+    }
+  },
+  "addition_audit": {
+    "decisions_with_additions": 5,
+    "true_added_labels": 2,
+    "false_added_labels": 3,
+    "unreviewed_added_labels": 0
+  }
+}

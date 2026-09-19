@@ -1,0 +1,203 @@
+{
+  "schema_version": "stage1c-intelligence-read-contract-v1",
+  "contract_kind": "deterministic-json-read-shape/v1",
+  "documents": {
+    "person_intelligence": {
+      "root_keys": ["person", "affiliations", "employment_history"],
+      "required_paths": [
+        "person.id",
+        "person.display_names.en",
+        "person.display_names.zh-cn",
+        "person.display_names.ja",
+        "person.date_of_birth.value",
+        "person.date_of_birth.precision",
+        "person.sexs",
+        "person.nationality",
+        "person.ethnicity",
+        "person.primary_language",
+        "person.accounts[].author_id",
+        "affiliations[].brand_id",
+        "affiliations[].brand_discovery_candidate_id",
+        "affiliations[].organization_review",
+        "affiliations[].affiliation_type",
+        "affiliations[].status",
+        "affiliations[].start_date.precision",
+        "affiliations[].end_date.precision",
+        "affiliations[].review_status",
+        "affiliations[].evidence[].observed_at",
+        "affiliations[].evidence[].profile_observation.business_affiliate_label.target_username",
+        "employment_history[].affiliation_type"
+      ],
+      "example": {
+        "person": {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "display_name": "Example Person",
+          "display_names": {"en": "Example Person", "zh-cn": null, "ja": null},
+          "date_of_birth": {"value": "1987", "precision": "year"},
+          "sexs": null,
+          "nationality": null,
+          "ethnicity": null,
+          "primary_language": "en",
+          "accounts": []
+        },
+        "affiliations": [],
+        "employment_history": []
+      }
+    },
+    "job_listing_document": {
+      "root_keys": [
+        "id", "brand_id", "brand_discovery_candidate_id", "organization_review",
+        "hiring_organization", "title", "description", "organization", "source",
+        "application", "location", "compensation", "status", "posted_at",
+        "updated_source_at", "expires_at", "closed_at", "first_seen_at",
+        "last_seen_at", "campaign_openings", "role_openings", "skills",
+        "responsibilities", "qualifications", "education_requirements",
+        "experience_requirements", "benefits", "eligibility", "source_language",
+        "organization_ai_relationship", "role_ai_relationship", "extraction", "evidence"
+      ],
+      "required_paths": [
+        "id",
+        "hiring_organization",
+        "title",
+        "organization_review.verification_status",
+        "application.route_kind",
+        "location.values",
+        "compensation.currency",
+        "extraction.version",
+        "extraction.confidence",
+        "evidence[].source_post_id",
+        "evidence[].source_relationship",
+        "evidence[].observed_at",
+        "evidence[].extraction_method"
+      ],
+      "example": {
+        "id": 1,
+        "brand_id": null,
+        "brand_discovery_candidate_id": 7,
+        "organization_review": {
+          "candidate_id": 7,
+          "observed_name": "Example AI Co",
+          "candidate_handles": ["example_ai"],
+          "verification_status": "pending",
+          "reviewed_brand_id": null
+        },
+        "hiring_organization": "Example AI Co",
+        "title": "Research Engineer",
+        "description": {"html": null, "text": null},
+        "organization": {
+          "department": null, "team": null, "job_function": null,
+          "seniority": null, "employment_type": null
+        },
+        "source": {"name": "X", "listing_id": null, "canonical_url": null},
+        "application": {
+          "url": "https://example.com/jobs/1", "route_kind": "direct_url",
+          "contact": null, "resolution_status": null
+        },
+        "location": {
+          "raw": null, "values": [], "workplace_type": null,
+          "remote_applicant_restrictions": null
+        },
+        "compensation": {
+          "raw": null, "minimum": null, "maximum": null,
+          "currency": null, "period": null
+        },
+        "status": "open",
+        "posted_at": null,
+        "updated_source_at": null,
+        "expires_at": null,
+        "closed_at": null,
+        "first_seen_at": "2026-09-10T08:00:00+00:00",
+        "last_seen_at": "2026-09-10T08:00:00+00:00",
+        "campaign_openings": null,
+        "role_openings": 1,
+        "skills": [],
+        "responsibilities": [],
+        "qualifications": [],
+        "education_requirements": null,
+        "experience_requirements": null,
+        "benefits": [],
+        "eligibility": null,
+        "source_language": "en",
+        "organization_ai_relationship": null,
+        "role_ai_relationship": null,
+        "extraction": {"version": "job-listing-extraction-v2", "confidence": 0.9},
+        "evidence": []
+      }
+    },
+    "event_document": {
+      "root_keys": [
+        "id", "brand_id", "title", "attendance_mode", "attendance_url",
+        "organizer", "location", "start", "end", "source_status",
+        "source_timezone", "source_schedule_text", "lifecycle", "as_of",
+        "source_post_id", "source_url", "first_seen_at", "last_seen_at",
+        "review_status", "extraction"
+      ],
+      "required_paths": [
+        "organizer.name", "location.physical", "start.value", "start.precision",
+        "end.value", "end.precision", "lifecycle", "as_of", "review_status",
+        "extraction.version"
+      ],
+      "example": {
+        "id": 1,
+        "brand_id": "example",
+        "title": "Live workshop",
+        "attendance_mode": "online_live",
+        "attendance_url": null,
+        "organizer": {"name": "Example", "handle": "example"},
+        "location": {"physical": null, "virtual": "X Spaces"},
+        "start": {"value": null, "precision": "unknown"},
+        "end": {"value": null, "precision": "unknown"},
+        "source_status": "scheduled",
+        "source_timezone": null,
+        "source_schedule_text": null,
+        "lifecycle": "upcoming",
+        "as_of": "2026-09-10T08:00:00+00:00",
+        "source_post_id": "example-post",
+        "source_url": null,
+        "first_seen_at": "2026-09-10T08:00:00+00:00",
+        "last_seen_at": "2026-09-10T08:00:00+00:00",
+        "review_status": "pending",
+        "extraction": {"version": "event-extraction-v1", "confidence": 0.9}
+      }
+    },
+    "opportunity_document": {
+      "root_keys": [
+        "id", "brand_id", "related_event_id", "opportunity_type", "action_type",
+        "action_url", "sponsor", "benefit", "opens", "closes", "source_status",
+        "source_timezone", "source_availability_text", "eligibility",
+        "geographic_restrictions", "lifecycle", "as_of", "source_post_id",
+        "source_url", "first_seen_at", "last_seen_at", "review_status", "extraction"
+      ],
+      "required_paths": [
+        "sponsor.name", "benefit.type", "benefit.value", "opens.precision",
+        "closes.precision", "lifecycle", "as_of", "review_status",
+        "extraction.version"
+      ],
+      "example": {
+        "id": 1,
+        "brand_id": "example",
+        "related_event_id": null,
+        "opportunity_type": "grant",
+        "action_type": "apply",
+        "action_url": null,
+        "sponsor": {"name": "Example", "handle": "example"},
+        "benefit": {"type": "funding", "value": null, "currency": null, "text": null},
+        "opens": {"value": null, "precision": "unknown"},
+        "closes": {"value": null, "precision": "unknown"},
+        "source_status": "open",
+        "source_timezone": null,
+        "source_availability_text": null,
+        "eligibility": null,
+        "geographic_restrictions": null,
+        "lifecycle": "open",
+        "as_of": "2026-09-10T08:00:00+00:00",
+        "source_post_id": "example-post",
+        "source_url": null,
+        "first_seen_at": "2026-09-10T08:00:00+00:00",
+        "last_seen_at": "2026-09-10T08:00:00+00:00",
+        "review_status": "pending",
+        "extraction": {"version": "opportunity-extraction-v1", "confidence": 0.9}
+      }
+    }
+  }
+}

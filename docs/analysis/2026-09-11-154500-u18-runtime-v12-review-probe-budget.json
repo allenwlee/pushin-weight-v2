@@ -1,0 +1,64 @@
+{
+  "cohort": {
+    "bytes": 248569,
+    "cohort_id": "u18-development-thinking-probe-v1",
+    "development_only": true,
+    "rows": 120,
+    "sha256": "54f86b329475a87dfd1dc64e5aeec9fed83053b452a8e4456c884df83b3cb908"
+  },
+  "decision_rule": "Continue to a new full consumed-development assessment only if all 120 rows are valid, post-type exact-set accuracy is at least 0.70, product-label exact-set accuracy is at least 0.85, outcome accuracy is at least 0.90, and context_missing recall is at least 0.50. This probe cannot approve release.",
+  "frozen_at": "2026-09-11T06:37:23Z",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, or lane.",
+  "lane": "runtime_v12_review_probe",
+  "lanes": {
+    "runtime_v12_review_probe": {
+      "allowed_system_sha256": [
+        "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+        "658b20e990c50ef693710860120e40aeb637a5d3c6b3bb2254130c3e8637021e",
+        "159a7777be4fe2c44ec82e7e65beb74860523bca3720d01396049ff7ece0b81c"
+      ],
+      "batch_size": 10,
+      "expected_cost_usd": "0.10",
+      "input_token_reservation": "ceil((UTF-8 system bytes + UTF-8 user bytes) / 2) per transport attempt",
+      "input_usd_per_million": "0.44",
+      "max_concurrent_transport_calls": 3,
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "0.66",
+      "maximum_examples": 120,
+      "maximum_input_tokens": 750000,
+      "maximum_output_tokens": 245760,
+      "maximum_requests": 50,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 60,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "production_shape": {
+    "base_passes": 2,
+    "base_requests": 24,
+    "base_reserved_input_tokens": 324606,
+    "base_reserved_output_tokens": 98304,
+    "batch_size": 10,
+    "maximum_shared_semantic_repairs": 20,
+    "rare_adjudication": "only when a base pass proposes personnel_changes or other",
+    "row_fallback": "only missing, duplicate, or schema-invalid rows"
+  },
+  "prompt": {
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "rare_sha256": "658b20e990c50ef693710860120e40aeb637a5d3c6b3bb2254130c3e8637021e",
+    "review_bytes": 10640,
+    "review_sha256": "0f7eb3818aca886f7eb680f51f1fa3f99327b365a9d64b6e47264523adb41c39",
+    "version": "stage1-prompt-v12"
+  },
+  "reason": "The exact v11 runtime failed because two repetitions of the full publication prompt still omitted supported secondary types and over-rejected attributed-brand context. Two prior independent ten-post review-shaped passes reached 0.786 exact-set accuracy on the same consumed cohort and missed only rare-label floors. This bounded probe measures the implemented review-shaped production wire plus narrow rare-label adjudication before spending on all 500 development rows.",
+  "schema_version": "u18-runtime-development-budget/v2"
+}

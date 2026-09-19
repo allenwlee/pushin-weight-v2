@@ -17,6 +17,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TextIO
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    CANONICAL_PROMPT_VERSION,
+    CANONICAL_TAXONOMY_VERSION,
+    COMPATIBLE_TAXONOMY_VERSIONS,
+    CONTRACT_VERSION,
+    NATIONALISM_KEYS,
+    PROMPT_VERSION,
+    SENTIMENT_KEYS,
+    TAXONOMY_VERSION,
+    canonicalize_taxonomy_key,
+    taxonomy_crosswalk_rows,
+)
+
 DATABASE_RESOURCE = "pushinweight-db-shadow"
 DEFAULT_LATEST = 20
 MAX_COHORT = 200
@@ -27,6 +46,12 @@ _TWEET_ID_RE = re.compile(r"^[0-9]{1,32}$")
 _SAFE_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _VALID_STAGE_STATUSES = {"pending", "succeeded", "failed"}
 _CANONICAL_LANG_CODES = {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
+_STAGE1_RELATIONS = (
+    "posts_brands_classification_states",
+    "posts_brands_product_labels",
+    "product_label_keys",
+    "product_label_labels",
+)
 
 
 class HealthCheckError(Exception):
@@ -106,15 +131,20 @@ def _selected_cte(*, latest: int | None, tweet_ids: Sequence[str] | None) -> str
   )"""
 
 
-def build_query(
+def _snapshot_select(
     *,
-    latest: int | None,
-    tweet_ids: Sequence[str] | None,
-    detailed: bool = False,
+    selected_cte: str,
+    detailed: bool,
+    stage1: bool,
 ) -> str:
-    """Build one fixed, bounded, read-only PostgreSQL snapshot query."""
+    def crosswalk_values(family: str) -> str:
+        rows = taxonomy_crosswalk_rows(family)
+        if any(not re.fullmatch(r"[a-z_]+", value) for row in rows for value in row):
+            raise HealthCheckError("query", "invalid_taxonomy_crosswalk")
+        return ", ".join(f"('{source}', '{canonical}')" for source, canonical in rows)
 
-    selected_cte = _selected_cte(latest=latest, tweet_ids=tweet_ids)
+    post_type_crosswalk = crosswalk_values("post_type")
+    product_crosswalk = crosswalk_values("product_label")
     post_detail_fields = ""
     brand_detail_fields = ""
     discourse_detail_fields = ""
@@ -176,11 +206,78 @@ def build_query(
         discourse_detail_fields = """,
                     'china_nationalism', discourse.china_nationalism,
                     'us_nationalism', discourse.us_nationalism"""
-    return f"""BEGIN TRANSACTION READ ONLY;
-SET LOCAL statement_timeout = '15s';
-SET LOCAL lock_timeout = '1s';
-SET LOCAL idle_in_transaction_session_timeout = '20s';
-WITH
+    classification_fields = ""
+    if stage1:
+        classification_fields = f""",
+              'classification_state', CASE
+                WHEN classification_state.post_id IS NULL THEN NULL
+                ELSE jsonb_build_object(
+                  'contract_version', classification_state.contract_version,
+                  'taxonomy_version', classification_state.taxonomy_version,
+                  'prompt_version', classification_state.prompt_version,
+                  'prompt_version_active_write',
+                    classification_state.prompt_version = '{PROMPT_VERSION}',
+                  'taxonomy_version_current_compatible',
+                    classification_state.contract_version = '{CONTRACT_VERSION}'
+                    AND classification_state.taxonomy_version = ANY(
+                      ARRAY[{", ".join(repr(value) for value in COMPATIBLE_TAXONOMY_VERSIONS)}]
+                    ),
+                  'active_write_taxonomy_version', '{TAXONOMY_VERSION}',
+                  'active_write_prompt_version', '{PROMPT_VERSION}',
+                  'latest_taxonomy_version', '{CANONICAL_TAXONOMY_VERSION}',
+                  'latest_prompt_version', '{CANONICAL_PROMPT_VERSION}',
+                  'outcome', classification_state.outcome,
+                  'sentiment', classification_state.sentiment,
+                  'china_nationalism',
+                    classification_state.china_nationalism,
+                  'us_nationalism', classification_state.us_nationalism
+                )
+              END,
+              'product_labels', COALESCE((
+                SELECT jsonb_agg(
+                  canonical_key ORDER BY canonical_key
+                )
+                FROM (
+                  SELECT DISTINCT mapping.canonical_key
+                  FROM posts_brands_product_labels product
+                  JOIN product_crosswalk mapping
+                    ON mapping.source_key = product.product_label_key::text
+                  WHERE product.post_id = p.tweet_id
+                    AND product.brand_id = pb.brand_id
+                ) canonical_products
+              ), '[]'::jsonb),
+              'stored_product_label_keys', COALESCE((
+                SELECT jsonb_agg(product.product_label_key ORDER BY product.product_label_key)
+                FROM posts_brands_product_labels product
+                WHERE product.post_id = p.tweet_id
+                  AND product.brand_id = pb.brand_id
+              ), '[]'::jsonb),
+              'stored_post_type_keys', COALESCE((
+                SELECT jsonb_agg(signal.post_type_key ORDER BY signal.post_type_key)
+                FROM posts_brands_signals signal
+                WHERE signal.post_id = p.tweet_id
+                  AND signal.brand_id = pb.brand_id
+              ), '[]'::jsonb)"""
+    else:
+        classification_fields = """,
+              'classification_state', NULL,
+              'product_labels', '[]'::jsonb"""
+
+    classification_join = ""
+    if stage1:
+        classification_join = """
+            LEFT JOIN posts_brands_classification_states classification_state
+              ON classification_state.post_id = p.tweet_id
+             AND classification_state.brand_id = pb.brand_id"""
+
+    schema_profile = "stage1" if stage1 else "legacy"
+    return f"""WITH
+  post_type_crosswalk(source_key, canonical_key) AS (
+    VALUES {post_type_crosswalk}
+  ),
+  product_crosswalk(source_key, canonical_key) AS (
+    VALUES {product_crosswalk}
+  ),
   {selected_cte},
   post_rows AS (
     SELECT
@@ -230,17 +327,55 @@ WITH
           SELECT jsonb_agg(
             jsonb_build_object(
               'brand_id', pb.brand_id{brand_detail_fields},
+              'legacy_sentiments', COALESCE((
+                SELECT jsonb_agg(value ORDER BY value)
+                FROM (
+                  SELECT DISTINCT NULLIF(BTRIM(signal.sentiment), '') AS value
+                  FROM posts_brands_signals signal
+                  WHERE signal.post_id = p.tweet_id
+                    AND signal.brand_id = pb.brand_id
+                ) distinct_values
+                WHERE value IS NOT NULL
+              ), '[]'::jsonb),
+              'legacy_china_nationalisms', COALESCE((
+                SELECT jsonb_agg(value ORDER BY value)
+                FROM (
+                  SELECT DISTINCT
+                    NULLIF(BTRIM(discourse.china_nationalism), '') AS value
+                  FROM posts_brands_discourse discourse
+                  WHERE discourse.post_id = p.tweet_id
+                    AND discourse.brand_id = pb.brand_id
+                ) distinct_values
+                WHERE value IS NOT NULL
+              ), '[]'::jsonb),
+              'legacy_us_nationalisms', COALESCE((
+                SELECT jsonb_agg(value ORDER BY value)
+                FROM (
+                  SELECT DISTINCT
+                    NULLIF(BTRIM(discourse.us_nationalism), '') AS value
+                  FROM posts_brands_discourse discourse
+                  WHERE discourse.post_id = p.tweet_id
+                    AND discourse.brand_id = pb.brand_id
+                ) distinct_values
+                WHERE value IS NOT NULL
+              ), '[]'::jsonb){classification_fields},
               'signals', COALESCE((
                 SELECT jsonb_agg(
                   jsonb_build_object(
-                    'post_type', signal.post_type_key,
-                    'sentiment', signal.sentiment
+                    'post_type', canonical_signal.post_type,
+                    'sentiment', canonical_signal.sentiment
                   )
-                  ORDER BY signal.post_type_key, signal.sentiment
+                  ORDER BY canonical_signal.post_type, canonical_signal.sentiment
                 )
-                FROM posts_brands_signals signal
-                WHERE signal.post_id = p.tweet_id
-                  AND signal.brand_id = pb.brand_id
+                FROM (
+                  SELECT DISTINCT mapping.canonical_key AS post_type,
+                                  signal.sentiment
+                  FROM posts_brands_signals signal
+                  JOIN post_type_crosswalk mapping
+                    ON mapping.source_key = signal.post_type_key::text
+                  WHERE signal.post_id = p.tweet_id
+                    AND signal.brand_id = pb.brand_id
+                ) canonical_signal
               ), '[]'::jsonb),
               'discourses', COALESCE((
                 SELECT jsonb_agg(
@@ -258,6 +393,7 @@ WITH
             ORDER BY pb.brand_id
           )
           FROM posts_brands pb
+          {classification_join}
           WHERE pb.post_id = p.tweet_id
         ), '[]'::jsonb)
       ) AS post_data
@@ -266,12 +402,66 @@ WITH
   )
 SELECT jsonb_build_object(
   'transaction_read_only', current_setting('transaction_read_only'),
+  'schema_profile', '{schema_profile}',
   'posts', COALESCE(
     jsonb_agg(post_data ORDER BY ordinal),
     '[]'::jsonb
   )
-)::text
-FROM post_rows;
+) AS snapshot FROM post_rows"""
+
+
+def build_query(
+    *,
+    latest: int | None,
+    tweet_ids: Sequence[str] | None,
+    detailed: bool = False,
+) -> str:
+    """Build one schema-aware, bounded, read-only PostgreSQL observation."""
+
+    selected_cte = _selected_cte(latest=latest, tweet_ids=tweet_ids)
+    legacy_select = _snapshot_select(
+        selected_cte=selected_cte,
+        detailed=detailed,
+        stage1=False,
+    )
+    stage1_select = _snapshot_select(
+        selected_cte=selected_cte,
+        detailed=detailed,
+        stage1=True,
+    )
+    relation_values = ", ".join(f"'{name}'" for name in _STAGE1_RELATIONS)
+    relation_count = len(_STAGE1_RELATIONS)
+    partial_select = """SELECT jsonb_build_object(
+  'transaction_read_only', current_setting('transaction_read_only'),
+  'schema_profile', 'partial',
+  'posts', '[]'::jsonb
+) AS snapshot"""
+    return f"""BEGIN TRANSACTION READ ONLY;
+SET LOCAL statement_timeout = '15s';
+SET LOCAL lock_timeout = '1s';
+SET LOCAL idle_in_transaction_session_timeout = '20s';
+WITH schema_state AS (
+  SELECT COUNT(*) FILTER (
+    WHERE to_regclass('public.' || relation_name) IS NOT NULL
+  ) AS stage1_relation_count
+  FROM unnest(ARRAY[{relation_values}]) AS relation_name
+), chosen_query AS (
+  SELECT CASE
+    WHEN stage1_relation_count = 0
+      THEN $legacy_query${legacy_select}$legacy_query$
+    WHEN stage1_relation_count = {relation_count}
+      THEN $stage1_query${stage1_select}$stage1_query$
+    ELSE $partial_query${partial_select}$partial_query$
+  END AS sql
+  FROM schema_state
+)
+SELECT snapshot
+FROM chosen_query
+CROSS JOIN LATERAL XMLTABLE(
+  '/row'
+  PASSING query_to_xml(chosen_query.sql, false, true, '')
+  COLUMNS snapshot text PATH 'snapshot/text()'
+) AS result;
 COMMIT;"""
 
 
@@ -285,6 +475,7 @@ def build_command(sql: str) -> list[str]:
         "--output",
         "text",
         "--",
+        "--no-psqlrc",
         "--no-align",
         "--tuples-only",
         "--quiet",
@@ -292,9 +483,9 @@ def build_command(sql: str) -> list[str]:
     ]
 
 
-def parse_snapshot(stdout: str) -> dict[str, Any]:
+def parse_snapshot(output: str) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
-    for line in stdout.splitlines():
+    for line in output.splitlines():
         stripped = line.strip()
         if not stripped.startswith("{"):
             continue
@@ -395,12 +586,208 @@ def _stage_reasons(
     return []
 
 
+def _string_values(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _legacy_axis(brand: dict[str, Any], field: str) -> tuple[str | None, bool]:
+    values = set(_string_values(brand.get(field)))
+    if len(values) == 1:
+        return values.pop(), False
+    return None, len(values) > 1
+
+
+def _legacy_brand_summary(brand: dict[str, Any]) -> dict[str, Any]:
+    sentiments = brand.get("legacy_sentiments")
+    if not isinstance(sentiments, list):
+        sentiments = [
+            signal.get("sentiment")
+            for signal in brand.get("signals", [])
+            if isinstance(signal, dict)
+        ]
+        brand = {**brand, "legacy_sentiments": sentiments}
+    for axis, discourse_key in (
+        ("legacy_china_nationalisms", "china_nationalism"),
+        ("legacy_us_nationalisms", "us_nationalism"),
+    ):
+        if not isinstance(brand.get(axis), list):
+            brand = {
+                **brand,
+                axis: [
+                    discourse.get(discourse_key)
+                    for discourse in brand.get("discourses", [])
+                    if isinstance(discourse, dict)
+                ],
+            }
+    sentiment, sentiment_conflict = _legacy_axis(brand, "legacy_sentiments")
+    china, china_conflict = _legacy_axis(brand, "legacy_china_nationalisms")
+    us, us_conflict = _legacy_axis(brand, "legacy_us_nationalisms")
+    conflicts = [
+        name
+        for name, conflict in (
+            ("sentiment", sentiment_conflict),
+            ("china_nationalism", china_conflict),
+            ("us_nationalism", us_conflict),
+        )
+        if conflict
+    ]
+    return {
+        "state": "historical_untyped",
+        "contract_version": None,
+        "taxonomy_version": None,
+        "prompt_version": None,
+        "outcome": None,
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": sentiment,
+        "china_nationalism": china,
+        "us_nationalism": us,
+        "scalar_source": "historical" if any((sentiment, china, us)) else "unknown",
+        "legacy_conflicts": conflicts,
+    }
+
+
+def _stage1_brand_health(
+    brand: dict[str, Any], *, brand_id: str
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    state = brand.get("classification_state")
+    if not isinstance(state, dict):
+        return _legacy_brand_summary(brand), []
+
+    signals = brand.get("signals") if isinstance(brand.get("signals"), list) else []
+    product_labels = _string_values(brand.get("product_labels"))
+    post_types = [
+        signal.get("post_type")
+        for signal in signals
+        if isinstance(signal, dict) and isinstance(signal.get("post_type"), str)
+    ]
+    stored_post_types = _string_values(brand.get("stored_post_type_keys"))
+    stored_products = _string_values(brand.get("stored_product_label_keys"))
+    if (
+        state.get("contract_version") != CONTRACT_VERSION
+        or state.get("taxonomy_version") not in COMPATIBLE_TAXONOMY_VERSIONS
+    ):
+        summary = {
+            "state": "stale",
+            "contract_version": state.get("contract_version"),
+            "taxonomy_version": state.get("taxonomy_version"),
+            "prompt_version": state.get("prompt_version"),
+            "stale_outcome": state.get("outcome"),
+            "outcome": None,
+            "post_types": [],
+            "product_labels": [],
+            "sentiment": None,
+            "china_nationalism": None,
+            "us_nationalism": None,
+            "scalar_source": "unrecognized",
+            "legacy_conflicts": [],
+        }
+        return summary, [
+            _reason("classification", "stale_state", brand_id=brand_id)
+        ]
+
+    summary = {
+        "state": "current",
+        "contract_version": state.get("contract_version"),
+        "taxonomy_version": state.get("taxonomy_version"),
+        "prompt_version": state.get("prompt_version"),
+        "taxonomy_version_current_compatible": True,
+        "active_write_taxonomy_version": TAXONOMY_VERSION,
+        "active_write_prompt_version": PROMPT_VERSION,
+        "latest_taxonomy_version": CANONICAL_TAXONOMY_VERSION,
+        "latest_prompt_version": CANONICAL_PROMPT_VERSION,
+        "outcome": state.get("outcome"),
+        "post_types": post_types,
+        "product_labels": product_labels,
+        "stored_post_type_keys": stored_post_types,
+        "stored_product_label_keys": stored_products,
+        "sentiment": state.get("sentiment"),
+        "china_nationalism": state.get("china_nationalism"),
+        "us_nationalism": state.get("us_nationalism"),
+        "scalar_source": "current",
+        "legacy_conflicts": [],
+    }
+    reasons: list[dict[str, str]] = []
+    if not isinstance(state.get("prompt_version"), str) or not state["prompt_version"]:
+        reasons.append(
+            _reason("classification", "missing_prompt_version", brand_id=brand_id)
+        )
+    outcome = state.get("outcome")
+    if outcome not in {"classified", "context_missing"}:
+        reasons.append(_reason("classification", "invalid_outcome", brand_id=brand_id))
+    for field in ("china_nationalism", "us_nationalism"):
+        value = state.get(field)
+        if value is not None and value not in NATIONALISM_KEYS:
+            reasons.append(
+                _reason("classification", f"invalid_{field}", brand_id=brand_id)
+            )
+    sentiment = state.get("sentiment")
+    if sentiment is not None and sentiment not in SENTIMENT_KEYS:
+        reasons.append(
+            _reason("classification", "invalid_sentiment", brand_id=brand_id)
+        )
+    invalid_types = [value for value in post_types if value not in CANONICAL_POST_TYPE_KEYS]
+    invalid_types.extend(
+        value
+        for value in stored_post_types
+        if canonicalize_taxonomy_key("post_type", value) is None
+    )
+    if invalid_types or len(post_types) != len(signals):
+        reasons.append(
+            _reason("classification", "invalid_post_type", brand_id=brand_id)
+        )
+    invalid_products = any(
+        label not in CANONICAL_PRODUCT_LABEL_KEYS for label in product_labels
+    ) or any(
+        canonicalize_taxonomy_key("product_label", label) is None
+        for label in stored_products
+    )
+    if invalid_products:
+        reasons.append(
+            _reason("classification", "invalid_product_label", brand_id=brand_id)
+        )
+
+    if outcome == "classified":
+        if not post_types:
+            reasons.append(
+                _reason("classification", "missing_post_type", brand_id=brand_id)
+            )
+        if sentiment is None:
+            reasons.append(
+                _reason("classification", "missing_sentiment", brand_id=brand_id)
+            )
+        if "other" in post_types and post_types != ["other"]:
+            reasons.append(
+                _reason("classification", "other_not_exclusive", brand_id=brand_id)
+            )
+        for signal in signals:
+            if not isinstance(signal, dict) or signal.get("sentiment") != sentiment:
+                reasons.append(
+                    _reason(
+                        "classification",
+                        "signal_sentiment_mismatch",
+                        brand_id=brand_id,
+                    )
+                )
+                break
+    elif outcome == "context_missing" and (post_types or product_labels):
+        reasons.append(
+            _reason(
+                "classification", "context_missing_has_edges", brand_id=brand_id
+            )
+        )
+    return summary, reasons
+
+
 def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
     tweet_id = str(row.get("tweet_id") or "")
     translation_status = row.get("translation_status") or "missing"
     classification_status = row.get("classification_status") or "missing"
     brands = row.get("brands") if isinstance(row.get("brands"), list) else []
     reasons: list[dict[str, str]] = []
+    brand_classifications: list[dict[str, Any]] = []
 
     if not tweet_id:
         reasons.append(_reason("persistence", "missing_tweet_id"))
@@ -444,6 +831,15 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
             if not isinstance(brand_id, str) or not brand_id:
                 reasons.append(_reason("classification", "missing_brand_id"))
                 continue
+            if row.get("schema_profile") == "stage1":
+                brand_summary, brand_reasons = _stage1_brand_health(
+                    brand, brand_id=brand_id
+                )
+                brand_classifications.append(
+                    {"brand_id": brand_id, **brand_summary}
+                )
+                reasons.extend(brand_reasons)
+                continue
             signals = (
                 brand.get("signals") if isinstance(brand.get("signals"), list) else []
             )
@@ -467,6 +863,21 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
             # No discourse row is the canonical persisted form of
             # ``uncategorized``; the UI supplies that fallback label.
 
+    if row.get("classification_status") != "succeeded":
+        for brand in brands:
+            if not isinstance(brand, dict):
+                continue
+            brand_id = brand.get("brand_id")
+            if not isinstance(brand_id, str) or not brand_id:
+                continue
+            if row.get("schema_profile") == "stage1":
+                summary, _unused_reasons = _stage1_brand_health(
+                    brand, brand_id=brand_id
+                )
+            else:
+                summary = _legacy_brand_summary(brand)
+            brand_classifications.append({"brand_id": brand_id, **summary})
+
     if reasons:
         state = "unhealthy"
     elif "pending" in {translation_status, classification_status}:
@@ -484,6 +895,7 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
         "has_commentary_en": bool(row.get("has_commentary_en")),
         "has_commentary_zh_cn": bool(row.get("has_commentary_zh_cn")),
         "brand_count": len(brands),
+        "brand_classifications": brand_classifications,
         "reasons": reasons,
     }
 
@@ -576,6 +988,11 @@ def evaluate_snapshot(
 ) -> tuple[dict[str, Any], int]:
     if snapshot.get("transaction_read_only") != "on":
         return _error_payload("query", "transaction_not_read_only"), 2
+    schema_profile = snapshot.get("schema_profile", "legacy")
+    if schema_profile == "partial":
+        return _error_payload("query", "stage1_schema_partial"), 2
+    if schema_profile not in {"legacy", "stage1"}:
+        return _error_payload("query", "snapshot_invalid"), 2
     rows = snapshot.get("posts")
     if not isinstance(rows, list):
         return _error_payload("query", "snapshot_invalid"), 2
@@ -586,7 +1003,9 @@ def evaluate_snapshot(
     evaluated_by_id = {
         post["tweet_id"]: post
         for post in (
-            _evaluate_post(row, grace_hours=grace_hours)
+            _evaluate_post(
+                {**row, "schema_profile": schema_profile}, grace_hours=grace_hours
+            )
             for row in rows
             if isinstance(row, dict)
         )
@@ -636,6 +1055,7 @@ def evaluate_snapshot(
         "latest_limit": latest,
         "grace_hours": grace_hours,
         "transaction_read_only": True,
+        "schema_profile": schema_profile,
         "summary": summary,
         "cohort_tweet_ids": cohort_tweet_ids,
         "returned_tweet_ids": returned_tweet_ids,
@@ -654,6 +1074,7 @@ def _render_human(payload: dict[str, Any]) -> str:
         (
             "harvester-health "
             f"status={payload['status']} "
+            f"schema_profile={payload.get('schema_profile', 'legacy')} "
             f"regression_gate={payload['regression_gate']} "
             f"acceptance_gate={payload['acceptance_gate']} "
             f"mode={payload['mode']} "
@@ -1018,7 +1439,29 @@ def _post_report_section(
                 "",
                 _json_block(brand.get("signals") or []),
                 "",
-                "Discourse and nationalism:",
+                "Stage 1 classification state and prompt provenance:",
+                "",
+                _json_block(brand.get("classification_state")),
+                "",
+                "Product labels:",
+                "",
+                _json_block(brand.get("product_labels") or []),
+                "",
+                "Historical scalar fallback evidence:",
+                "",
+                _json_block(
+                    {
+                        "sentiments": brand.get("legacy_sentiments") or [],
+                        "china_nationalisms": (
+                            brand.get("legacy_china_nationalisms") or []
+                        ),
+                        "us_nationalisms": (
+                            brand.get("legacy_us_nationalisms") or []
+                        ),
+                    }
+                ),
+                "",
+                "Historical discourse evidence:",
                 "",
                 _json_block(brand.get("discourses") or []),
                 "",
@@ -1113,6 +1556,7 @@ def render_detailed_report(
                 ("Overall status", payload.get("status")),
                 ("Regression gate", payload.get("regression_gate")),
                 ("Acceptance gate", payload.get("acceptance_gate")),
+                ("Schema profile", payload.get("schema_profile")),
                 ("Cohort mode", payload.get("mode")),
                 ("Total posts", summary.get("total")),
                 ("Complete", summary.get("complete")),
@@ -1137,8 +1581,9 @@ def render_detailed_report(
             "The checker made one `render psql` call to the configured production "
             "database resource. The selected cohort was bounded before related "
             "facts were joined. The transaction declared read-only mode, applied "
-            "statement/lock/idle timeouts, and returned the transaction mode in "
-            "the same snapshot. No production row was mutated."
+            "statement/lock/idle timeouts, detected the complete Stage 1 schema "
+            "before planning any Stage 1 table reference, and returned the "
+            "transaction mode in the same snapshot. No production row was mutated."
         ),
         "",
         "The checker did not run harvesting, call TwitterAPI, or create an LLM client.",

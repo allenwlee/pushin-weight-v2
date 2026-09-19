@@ -16,10 +16,45 @@ def _cfg():
 
 
 def _state(tweet_id: str):
-    from core.models import Post, PostEnrichmentState
+    from core.models import (
+        Brand,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostTypeKey,
+        SentimentKey,
+    )
 
     post = Post.objects.create(tweet_id=tweet_id, text="DeepSeek release")
+    brand, _created = Brand.objects.get_or_create(
+        nickname="deepseek",
+        defaults={"display_name": "DeepSeek"},
+    )
+    SentimentKey.objects.get_or_create(key="neutral")
+    PostTypeKey.objects.get_or_create(key="releases_updates")
+    PostBrand.objects.create(post=post, brand=brand)
     return PostEnrichmentState.objects.create(post=post)
+
+
+def _classification_results(tweets):
+    return [
+        {
+            "by_brand": {
+                brand_id: {
+                    "outcome": "classified",
+                    "post_types": ["releases_updates"],
+                    "product_labels": [],
+                    "sentiment": "neutral",
+                    "china_nationalism": None,
+                    "us_nationalism": None,
+                }
+                for brand_id in tweet.get("brand_ids", [])
+            },
+            "unsanctioned_flags": [],
+            "valid": bool(tweet.get("brand_ids")),
+        }
+        for tweet in tweets
+    ]
 
 
 def test_claims_are_bounded_and_active_claims_are_not_double_owned():
@@ -178,7 +213,7 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
 
     def classify(tweets, brands, client, **kwargs):
         classified_ids.extend(tweet["tweet_id"] for tweet in tweets)
-        return [{"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets]
+        return _classification_results(tweets)
 
     monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
 
@@ -342,10 +377,7 @@ def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
 
     def classify(tweets, brands, classifier_client, **kwargs):
         classifier_calls.append((list(tweets), kwargs))
-        return [
-            {"by_brand": {}, "unsanctioned_flags": []}
-            for _tweet in tweets
-        ]
+        return _classification_results(tweets)
 
     monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
     monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
@@ -369,7 +401,8 @@ def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
     assert classifier_calls[0][1]["model"] == "deepseek-v4-flash"
     assert translator_calls[0][1]["cfg"].llm.translator_model == "deepseek-v4-flash"
     assert translator._TRANSLATION_BATCH_SIZE == 20
-    assert attribution._CLASSIFY_BATCH_SIZE == 20
+    assert attribution._CLASSIFY_BASE_BATCH_SIZE == 20
+    assert attribution._CLASSIFY_REVIEW_BATCH_SIZE == 10
 
 
 def test_no_cutoff_preserves_legacy_fifty_row_capacity():
@@ -500,7 +533,7 @@ def test_translation_timeout_does_not_consume_classifier_stage_budget(monkeypatc
 
     def classify(tweets, brands, client, **kwargs):
         assert kwargs["deadline"].remaining() == 300
-        return [{"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets]
+        return _classification_results(tweets)
 
     monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
     monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
@@ -673,9 +706,7 @@ def test_classification_only_debt_does_not_rerun_translator(monkeypatch):
     monkeypatch.setattr(
         attribution,
         "classify_batch_pragmatics_full",
-        lambda tweets, brands, client, **kwargs: [
-            {"by_brand": {}, "unsanctioned_flags": []} for _tweet in tweets
-        ],
+        lambda tweets, brands, client, **kwargs: _classification_results(tweets),
     )
 
     CycleRunner(cfg=_cfg())._run_post_fetch([], run_id="classification-only-run")

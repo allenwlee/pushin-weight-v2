@@ -97,7 +97,7 @@ def test_backfill_incomplete_call_remains_pending(monkeypatch, tmp_path):
         lambda cfg=None: [SimpleNamespace(call_id="B1")],
     )
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda cfg: None,
     )
 

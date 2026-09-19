@@ -1,0 +1,152 @@
+[
+  {
+    "case_id": "C058-en",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C058-zh-cn",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C058-ja",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C061-en",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C061-zh-cn",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C061-ja",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C065-en",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C065-zh-cn",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C065-ja",
+    "conclusion": "no_confirmed_error",
+    "material_error": false,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "",
+    "exact_output_excerpt": "",
+    "explanation": "The synthesis preserves the main claim. Its ‘why it matters’ discussion is marked as interpretation or possibility and is reasonably grounded in the supplied source."
+  },
+  {
+    "case_id": "C069-en",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "DeepSeek V4.1 Flash is FREE ... you can also try: GLM 5.3 Flash, MiMo 2.5, Muse Spark 1.2, Solar Pro 4 ... some models may have limited access",
+    "exact_output_excerpt": "these AI models are now freely accessible",
+    "explanation": "Only DeepSeek V4.1 Flash is explicitly called free. The other models are said to be tryable and may have limited access. The commentary expands the free-access claim to all listed models, a material availability addition."
+  },
+  {
+    "case_id": "C069-zh-cn",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "DeepSeek V4.1 Flash is FREE ... you can also try: GLM 5.3 Flash, MiMo 2.5, Muse Spark 1.2, Solar Pro 4 ... some models may have limited access",
+    "exact_output_excerpt": "这些AI模型现在可以免费获取",
+    "explanation": "Only DeepSeek V4.1 Flash is explicitly called free. The other models are said to be tryable and may have limited access. The commentary expands the free-access claim to all listed models, a material availability addition."
+  },
+  {
+    "case_id": "C069-ja",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "DeepSeek V4.1 Flash is FREE ... you can also try: GLM 5.3 Flash, MiMo 2.5, Muse Spark 1.2, Solar Pro 4 ... some models may have limited access",
+    "exact_output_excerpt": "これらのAIモデルが無料でアクセスできるようになった",
+    "explanation": "Only DeepSeek V4.1 Flash is explicitly called free. The other models are said to be tryable and may have limited access. The commentary expands the free-access claim to all listed models, a material availability addition."
+  },
+  {
+    "case_id": "C088-en",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "My guess is a new Qwen model based on tokenizer.",
+    "exact_output_excerpt": "a new version built on a different tokenizer",
+    "explanation": "The source only says the author guesses a new Qwen model ‘based on tokenizer’; it does not establish that the tokenizer is different/new. The output promotes that technical detail from ambiguity to a specific claim."
+  },
+  {
+    "case_id": "C088-zh-cn",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "My guess is a new Qwen model based on tokenizer.",
+    "exact_output_excerpt": "基于新分词器的新模型",
+    "explanation": "The source only says the author guesses a new Qwen model ‘based on tokenizer’; it does not establish that the tokenizer is different/new. The output promotes that technical detail from ambiguity to a specific claim."
+  },
+  {
+    "case_id": "C088-ja",
+    "conclusion": "material_error",
+    "material_error": true,
+    "minor_error": false,
+    "uncertain": false,
+    "exact_source_excerpt": "My guess is a new Qwen model based on tokenizer.",
+    "exact_output_excerpt": "新しいトークナイザーに基づく新バージョン",
+    "explanation": "The source only says the author guesses a new Qwen model ‘based on tokenizer’; it does not establish that the tokenizer is different/new. The output promotes that technical detail from ambiguity to a specific claim."
+  }
+]

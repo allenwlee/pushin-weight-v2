@@ -26,14 +26,41 @@ def test_staging_declaration_only_changes_deployment_scope() -> None:
 
     assert _semantic_body(staging) == _semantic_body(production)
 
+    assert production["base_origin"] == "https://pushinweight-web.onrender.com"
     assert staging["base_origin"] == "https://pushinweight-staging-web.onrender.com"
     assert staging["asset_origins"] == production["asset_origins"]
     assert {profile["destination_scope"] for profile in staging["profiles"]} == {"remote"}
 
 
+def test_local_candidate_declaration_is_isolated_and_keeps_both_workloads() -> None:
+    production = _load("declaration.json")
+    local = _load("declaration.local-candidate.json")
+
+    assert local["fixture"] == production["fixture"]
+    assert local["package_source_revision"] == production["package_source_revision"]
+    assert local["base_origin"] == "http://127.0.0.1:8764"
+    assert local["asset_origins"] == []
+    assert {profile["destination_scope"] for profile in local["profiles"]} == {
+        "local-only"
+    }
+    assert [scenario["id"] for scenario in local["scenarios"]] == [
+        "homepage-desktop",
+        "homepage-mobile",
+    ]
+    assert all(
+        expectation["path"] == "/static/country-flags.svg"
+        for scenario in local["scenarios"]
+        for expectation in scenario["cache_expectations"]
+    )
+
+
 def test_performance_actions_use_inert_inspection_click() -> None:
     expected = ".follower-magnitude.pw-inspection-trigger"
-    for name in ("declaration.json", "declaration.staging.json"):
+    for name in (
+        "declaration.json",
+        "declaration.staging.json",
+        "declaration.local-candidate.json",
+    ):
         declaration = _load(name)
         assert all(
             action == {"kind": "click", "target": expected}

@@ -1,0 +1,6 @@
+{
+  "post_id": "2100346971144036571",
+  "commentary_en": "The author replies to @The_Alex, speculating that an upcoming release—likely related to Qwen, an AI model family—will be a new version built on a different tokenizer. This is an educated guess, not a confirmed fact. It matters because tokenizer changes can affect model performance, vocabulary coverage, and multilingual efficiency, so such speculation signals ongoing development in the open-source AI space, but the claim remains unverified.",
+  "commentary_zh_cn": "作者在回复 @The_Alex，猜测即将发布的版本（可能与Qwen模型系列相关）是基于新分词器的新模型。这只是一个推测，并非已确认的事实。其重要性在于分词器的变化可能影响模型性能、词汇覆盖和多语言效率，因此这种猜测暗示开源AI领域持续有开发活动，但该说法仍未经证实。",
+  "commentary_ja": "作者は@The_Alexに返信し、次に公開されるモデル（おそらくQwenシリーズ）が新しいトークナイザーに基づく新バージョンだと推測している。これは確定的な事実ではなく憶測に過ぎない。トークナイザーの変更はモデルの性能、語彙カバレッジ、多言語効率に影響し得るため、この推測はオープンソースAI分野での継続的な開発を示唆するが、未確認の主張である。"
+}

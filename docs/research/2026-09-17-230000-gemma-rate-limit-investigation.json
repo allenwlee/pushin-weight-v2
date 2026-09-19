@@ -1,0 +1,91 @@
+{
+  "schema": "gemma429-diagnosis-v1",
+  "created_at": "2026-09-17T13:53:47.782166+00:00",
+  "historical_run": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-20260917-220700",
+  "report_sha256": "5a398b6af1a0dd545eaad863e85322390a7a2490edbf04741d850dda5bbffdc1",
+  "total_requests": 215,
+  "received": 208,
+  "http429": 7,
+  "rate_limited_source_ids": [
+    "2100307770360913963",
+    "2100314574721315014",
+    "2100320389226225806",
+    "2100322545949962294",
+    "2100325161845330415"
+  ],
+  "max_concurrency": 3,
+  "retry_count": 0,
+  "fallback_count": 0,
+  "route": {
+    "only": [
+      "deepinfra/turbo"
+    ],
+    "allow_fallbacks": false,
+    "require_parameters": true,
+    "data_collection": "allow",
+    "zdr": false,
+    "max_price": {
+      "prompt": 0.09,
+      "completion": 0.34
+    }
+  },
+  "failed_requests": [
+    {
+      "request_identity": "0157-3451436843a4f1ac4fd039e5fa15c82eb69c35750f80362a0b2b5761cd980da5",
+      "latency_ms": 239,
+      "approx_started_at_utc": "2026-09-17T13:23:00.909404+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:01.148404+00:00"
+    },
+    {
+      "request_identity": "0158-b8440e50b318ca3e86eb0d00451b26d1ef944f78f837371484f2c334d107b17f",
+      "latency_ms": 476,
+      "approx_started_at_utc": "2026-09-17T13:23:01.151288+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:01.627288+00:00"
+    },
+    {
+      "request_identity": "0160-b99c47c9cafb6e885201d843e55567a3ed9ea1e2741fc55ede58bf1fee26ff25",
+      "latency_ms": 387,
+      "approx_started_at_utc": "2026-09-17T13:23:07.796658+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:08.183658+00:00"
+    },
+    {
+      "request_identity": "0161-09e051d6eb6a957002519c7893be697f6683c29a415c9dff054efd1295e66280",
+      "latency_ms": 259,
+      "approx_started_at_utc": "2026-09-17T13:23:08.187086+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:08.446086+00:00"
+    },
+    {
+      "request_identity": "0162-2e6b8e3aed3ad3713688effbf0fcb8653e91bdc03460206828f7cf9547cc8d7a",
+      "latency_ms": 736,
+      "approx_started_at_utc": "2026-09-17T13:23:08.449647+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:09.185647+00:00"
+    },
+    {
+      "request_identity": "0163-2f993b079eec1c5ff311000f71e1f9026f35eca9f9bed3632397632b9bcd9faa",
+      "latency_ms": 303,
+      "approx_started_at_utc": "2026-09-17T13:23:09.189245+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:09.492244+00:00"
+    },
+    {
+      "request_identity": "0152-6ed4cebfcb2406783c36a1d89a254237a39e91a1a15dea6dea54c1ee0301f2de",
+      "latency_ms": 277,
+      "approx_started_at_utc": "2026-09-17T13:23:10.344374+00:00",
+      "approx_finished_at_utc": "2026-09-17T13:23:10.621374+00:00"
+    }
+  ],
+  "timing_method": "Approximate starts reconstructed from per-request file modification times minus retained latency; original consumed_at was overwritten. Not exact send telemetry.",
+  "attribution_correction": {
+    "post_id": "2100158906307670018",
+    "request_index": 56,
+    "locale": "zh-cn",
+    "http_outcome": "received; finish_reason=stop",
+    "actual_failure": "Returned Danish source unchanged for Chinese; validator rejected it. Not HTTP429.",
+    "raw_text": "@sonderby hej Peter ;) imo p.t. stack DGX Sparks med GLM 5.3 Flash eller DeepSeek v4.1 Flash .. RTX 5090 \"kun\" til video .. check @MiaAI_lab",
+    "primary_source_score_unchanged": 11
+  },
+  "diagnosis": "Transient serving-route capacity throttling is the leading hypothesis; exact origin unresolved because HTTP body and response headers were discarded. No new inference sent.",
+  "sources": [
+    "https://openrouter.ai/docs/api_reference/limits",
+    "https://docs.deepinfra.com/account/rate-limits"
+  ]
+}

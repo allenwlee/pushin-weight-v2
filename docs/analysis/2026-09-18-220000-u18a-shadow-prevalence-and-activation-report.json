@@ -1,0 +1,393 @@
+{
+  "schema_version": "u18a_shadow_prevalence_activation/v1",
+  "created_at": "2026-09-18T22:00:00+09:00",
+  "scope": "U18A bounded frozen-corpus shadow/prevalence evidence and R94A activation record; no provider calls, application database writes, or runtime activation.",
+  "database": {
+    "name": "pushinweight_u18_eval",
+    "read_only": true,
+    "posts": 211245,
+    "dump_sha256": "618f31498b94a42e54940c4e5bf90d7bb09a122b72f1406181b4e029f9b25e06",
+    "dump_verification": "211,245-post verified 2026-09-10 frozen dump",
+    "primary_prevalence_artifact": {
+      "path": "docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json",
+      "sha256": "d0cb2163f79f9baf993f845e265c7d26859897c934033bf36fde1458350954f1"
+    }
+  },
+  "lexical_topic_proxies": {
+    "denominator": 211245,
+    "text_fields": [
+      "text",
+      "text_en",
+      "text_zh_cn"
+    ],
+    "normalization": "lower(concat_ws(' ', text, text_en, text_zh_cn)); PostgreSQL case-insensitive regex (~*)",
+    "interpretation": "These are broad lexical screens, not U18A labels, precision estimates, recall estimates, or model-quality measurements. A post may match multiple proxies.",
+    "regexes": {
+      "local_inference": "(local(ly)?|on[- ]device|self[- ]host|on[- ]prem|air[- ]gapped|llama[.]cpp|ollama|local inference|本地|本機|自托管|自部署|离线|ローカル|オンデバイス|セルフホスト|ローカル推論)",
+      "cost_performance": "(cost[- ]?performance|cost|price|pricing|cheap|cheaper|nearly free|free|latency|speed|faster|slower|efficient|efficiency|throughput|tokens?[/ ]s|tps|vram|ram|gpu|compute|resource|performance|性价比|成本|价格|便宜|免费|延迟|速度|效率|吞吐|显存|内存|算力|性能|コスト|価格|安い|無料|速度|効率|性能)",
+      "model_distillation": "(distill|蒸馏|蒸餾|蒸溜|蒸留|套壳|套殼|teacher[ -]?model|student[ -]?model|model extraction|imitat|trained on.{0,20}output)",
+      "evals_benchmarks": "(benchmark|evaluation|evals?|score|ranking|ranked|leaderboard|test(ed|ing)?|measured|accuracy|win rate|swe[- ]?bench|arena|基准|基準|评测|測評|评分|排名|榜单|测试|测评|ベンチマーク|評価|スコア|ランキング|テスト)",
+      "openness_license": "(open[- ]source|open[- ]weights?|source available|weights? released|license|licen[cs]|apache|mit license|gpl|access terms|download|开放源|开源|开放权重|开放模型|权重|许可证|许可|开放获取|オープンソース|オープンウェイト|ライセンス|公開)",
+      "agents_tools": "(agents?|harness|mcp|tool[- ]use|function calling|orchestrat|workflow|autonom|agentic|copilot|coding agent|智能体|代理|工具调用|编排|工作流|自主|智能代理|エージェント|ハーネス|ツール呼び出し|オーケストレーション|自律)",
+      "api_developer_surface": "(api|sdk|developer|developers|endpoint|integration|webhook|rate limit|quota|context window|开发者|开发接口|集成|配额|限流|上下文窗口|开发者平台|エンドポイント|開発者|統合|クォータ|レートリミット)"
+    },
+    "counts": {
+      "local_inference": {
+        "posts": 21815,
+        "rate": 0.10327,
+        "percent": 10.327
+      },
+      "cost_performance": {
+        "posts": 118995,
+        "rate": 0.5633,
+        "percent": 56.33
+      },
+      "model_distillation": {
+        "posts": 3195,
+        "rate": 0.01512,
+        "percent": 1.512
+      },
+      "evals_benchmarks": {
+        "posts": 38104,
+        "rate": 0.18038,
+        "percent": 18.038
+      },
+      "openness_license": {
+        "posts": 27827,
+        "rate": 0.13173,
+        "percent": 13.173
+      },
+      "agents_tools": {
+        "posts": 43730,
+        "rate": 0.20701,
+        "percent": 20.701
+      },
+      "api_developer_surface": {
+        "posts": 32143,
+        "rate": 0.15216,
+        "percent": 15.216
+      }
+    },
+    "overlap_summary": {
+      "zero_topic_proxy_hits": {
+        "posts": 59183,
+        "rate": 0.28016,
+        "percent": 28.016
+      },
+      "exactly_one_topic_proxy_hit": {
+        "posts": 75461,
+        "rate": 0.35722,
+        "percent": 35.722
+      },
+      "two_or_more_topic_proxy_hits": {
+        "posts": 76601,
+        "rate": 0.36262,
+        "percent": 36.262
+      },
+      "pairwise_posts": {
+        "local_inference_and_cost_performance": 15007,
+        "local_inference_and_model_distillation": 626,
+        "local_inference_and_evals_benchmarks": 5878,
+        "local_inference_and_openness_license": 5922,
+        "local_inference_and_agents_tools": 7178,
+        "local_inference_and_api_developer_surface": 5718,
+        "cost_performance_and_model_distillation": 2275,
+        "cost_performance_and_evals_benchmarks": 28213,
+        "cost_performance_and_openness_license": 20221,
+        "cost_performance_and_agents_tools": 30744,
+        "cost_performance_and_api_developer_surface": 25854,
+        "model_distillation_and_evals_benchmarks": 1205,
+        "model_distillation_and_openness_license": 1180,
+        "model_distillation_and_agents_tools": 1082,
+        "model_distillation_and_api_developer_surface": 1084,
+        "evals_benchmarks_and_openness_license": 9138,
+        "evals_benchmarks_and_agents_tools": 14833,
+        "evals_benchmarks_and_api_developer_surface": 11618,
+        "openness_license_and_agents_tools": 10039,
+        "openness_license_and_api_developer_surface": 8716,
+        "agents_tools_and_api_developer_surface": 14499
+      }
+    }
+  },
+  "other_shadow_proxies": {
+    "source": "docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json",
+    "news_reporting": {
+      "third_party_news_marker_posts": 4299,
+      "rate": 0.020414,
+      "news_without_historical_release_posts": 3556,
+      "news_without_historical_release_rate": 0.016886,
+      "news_and_historical_release_posts": 743,
+      "news_and_historical_release_rate": 0.003528,
+      "historical_release_posts": 13298,
+      "historical_release_rate": 0.063147,
+      "release_without_news_marker_posts": 12555,
+      "release_without_news_marker_rate": 0.059619
+    },
+    "investigate_claim": {
+      "tight_distillation_allegation_posts": 961,
+      "tight_distillation_allegation_rate": 0.004563,
+      "tight_distillation_allegation_with_historical_negative_sentiment_posts": 209,
+      "negative_sentiment_coverage_of_tight_screen": 0.217482,
+      "generic_allegation_posts": 10856,
+      "generic_allegation_rate": 0.051551,
+      "interpretation": "The tight screen is a lexical upper-bound proxy; the generic allegation screen is too noisy to stand in for the product label."
+    },
+    "geopolitical": {
+      "historical_any_non_none_country_stance_posts": 6468,
+      "historical_any_non_none_country_stance_rate": 0.030714,
+      "broad_actor_framework_posts": 10683,
+      "broad_actor_framework_rate": 0.05073,
+      "broad_actor_framework_without_stored_stance_posts": 8543,
+      "broad_without_stance_share": 0.799682,
+      "narrow_china_us_framework_posts": 1913,
+      "narrow_china_us_framework_rate": 0.009084,
+      "narrow_china_us_framework_without_stored_stance_posts": 1308,
+      "narrow_without_stance_share": 0.683743
+    },
+    "untracked_brand_promotions": {
+      "third_party_advertising_pairs": 15090,
+      "third_party_advertising_marketing_spam_pairs": 10761,
+      "third_party_advertising_marketing_spam_share": 0.713121,
+      "third_party_advertising_unflagged_pairs": 4329,
+      "third_party_advertising_unflagged_share": 0.286879,
+      "official_posts": 1204,
+      "official_marketing_spam_posts": 143,
+      "official_marketing_spam_rate": 0.118771,
+      "staff_posts": 1001,
+      "staff_marketing_spam_posts": 66,
+      "staff_marketing_spam_rate": 0.065934
+    },
+    "media_dependency": {
+      "stored_media_posts": 57055,
+      "stored_media_rate": 0.270932,
+      "short_media_no_context_posts": 6691,
+      "short_media_no_context_rate": 0.031773,
+      "short_url_no_context_posts": 9228,
+      "short_url_no_context_rate": 0.04382,
+      "agent_assessed_exploratory_rows": 100,
+      "agent_assessed_clearly_media_or_link_dependent": 1,
+      "agent_assessed_rate": 0.01
+    },
+    "repeated_promoter_proxies": {
+      "bai_mention_posts": 4116,
+      "bai_mention_rate": 0.019545,
+      "bai_authors": 341,
+      "bai_legacy_marketing_spam_posts": 1988,
+      "bai_legacy_flagged_share": 0.482993,
+      "qwen_clip_collision_posts": 372,
+      "qwen_clip_collision_rate": 0.001766,
+      "qwen_clip_collision_authors": 8,
+      "qwen_clip_collision_legacy_marketing_spam_posts": 5,
+      "qwen_clip_collision_legacy_flagged_share": 0.013441,
+      "qwen_clip_normalized_templates": 12,
+      "qwen_clip_top_10_template_share": 0.922043,
+      "brand_discovery_candidates_rows_in_frozen_db": 0,
+      "brand_discovery_candidates_note": "No persisted BrandDiscoveryCandidate rows existed in the read-only frozen database; this report therefore supplies no population estimate for novel promoted-brand identities."
+    }
+  },
+  "candidate_quality": {
+    "scope": "R94A source-visible agent audit, not human gold, not population accuracy, and not a runtime reviewer call.",
+    "evaluator_artifact": {
+      "path": "docs/analysis/2026-09-18-210000-u18a-r94a-candidate-blind-source-visible-audit.json",
+      "sha256": "cf1ec56b963fe687eb0abb6a5d5e23d88ebf6475adc48b5b0818617cb4ac9678",
+      "source_cohort_sha256": "3c7ddbe896f0fc5b5f163f7ac300af4431d8aacac2c3da615b6e239960f1598b",
+      "all_cases_sha256": "cadfd813ea768a08ea737228a81cded4c9685a73ed7e50f5c9540cb4c1f05734"
+    },
+    "comparison_artifact": {
+      "path": "docs/analysis/2026-09-18-212500-u18a-r94a-direct-0731-normalized-candidate-comparison.json",
+      "sha256": "dcf845e0c413c1240abd950dd32de05304d9328ab321d71927f590948d0be2ee",
+      "candidate_output_sha256": "9d47e93d019685be179bfaf8271b19b5eeee70b7b072d7b69298200b98f05cbb",
+      "comparator_sha256": "6514ea2030cc38a9c6124d6d609bba2a78b09cb6559461e14bec3c849d2ccc8b"
+    },
+    "cohort": {
+      "families": 11,
+      "cases": 220,
+      "positive_cases": 110,
+      "negative_or_boundary_cases": 110,
+      "retained_real_positive_cases": 33,
+      "synthetic_positive_cases": 77
+    },
+    "families": {
+      "local_inference": {
+        "positive_unsupported": 1,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 0,
+        "negative_or_boundary_denominator": 10,
+        "decision": "enabled"
+      },
+      "cost_performance": {
+        "positive_unsupported": 10,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 9,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "model_distillation": {
+        "positive_unsupported": 0,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 0,
+        "negative_or_boundary_denominator": 10,
+        "decision": "enabled"
+      },
+      "evals_benchmarks": {
+        "positive_unsupported": 1,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 6,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "openness_license": {
+        "positive_unsupported": 10,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 7,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "agents_tools": {
+        "positive_unsupported": 4,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 0,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "api_developer_surface": {
+        "positive_unsupported": 1,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 0,
+        "negative_or_boundary_denominator": 10,
+        "decision": "enabled"
+      },
+      "news_reporting": {
+        "positive_unsupported": 5,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 0,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "investigate_claim": {
+        "positive_unsupported": 10,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 7,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "geopolitical": {
+        "positive_unsupported": 10,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 10,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      },
+      "untracked_brand_promotions": {
+        "positive_unsupported": 10,
+        "positive_denominator": 10,
+        "negative_or_boundary_unsupported": 8,
+        "negative_or_boundary_denominator": 10,
+        "decision": "shadow_only"
+      }
+    },
+    "quality_interpretation": "Unsupported expected assignments are comparator failures against the frozen source-visible expected field. They are not independently verified false-positive/false-negative rates and do not measure the frozen database population. The activation floor is at most one unsupported case in each positive and negative/boundary set.",
+    "false_positive_pressure": {
+      "interpretation": "Source-visible hard negatives from the frozen evaluator. Most unsupported negative rows were mechanically incomplete, so these are pressure cases rather than observed candidate or population false positives.",
+      "cases": [
+        {
+          "family": "cost_performance",
+          "case_id": "cost_performance-N01",
+          "text": "MiniMax’s office rent increased; no model cost or product performance is discussed."
+        },
+        {
+          "family": "evals_benchmarks",
+          "case_id": "evals_benchmarks-N01",
+          "text": "MiniMax is impressive; generic praise is not an evaluation or benchmark."
+        },
+        {
+          "family": "openness_license",
+          "case_id": "openness_license-N01",
+          "text": "MiniMax opened a new office; “opened” is not an openness or licensing claim."
+        },
+        {
+          "family": "agents_tools",
+          "case_id": "agents_tools-N01",
+          "text": "MiniMax hired a talent agent; that employment role is not an AI agent/tool topic."
+        },
+        {
+          "family": "news_reporting",
+          "case_id": "news_reporting-N01",
+          "text": "I think MiniMax will release a better model next year; this is a prediction, not reporting."
+        },
+        {
+          "family": "investigate_claim",
+          "case_id": "investigate_claim-N01",
+          "text": "MiniMax is worse than its rival; ordinary opinion is not a consequential investigate-claim."
+        },
+        {
+          "family": "geopolitical",
+          "case_id": "geopolitical-N01",
+          "text": "MiniMax is based in China; nationality alone is not geopolitical mode or nationalism."
+        },
+        {
+          "family": "untracked_brand_promotions",
+          "case_id": "untracked_brand_promotions-N01",
+          "text": "MiniMax’s official account promotes MiniMax H3; a tracked brand’s own promotion is not an untracked-brand promotion."
+        }
+      ]
+    }
+  },
+  "execution": {
+    "provider": "DeepInfra",
+    "endpoint": "direct",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "request_profile": "deepseek_0731",
+    "calls": 22,
+    "transport_errors": 0,
+    "input_tokens": 107038,
+    "output_tokens": 21985,
+    "calculated_cost_usd": 0.01037958,
+    "response_reported_cost_usd": 0.00758022,
+    "wall_seconds": 241.871,
+    "reserved_cost_usd": 0.07622016,
+    "reservation_cap_usd": 0.1,
+    "prompt_bytes": {
+      "measurement": "UTF-8 system prompt plus compact JSON user payload, representative 20-case family; system prompt is fixed by role, user payload varies by case text/context/catalog.",
+      "content_system_prompt_bytes": 6158,
+      "brand_interpretation_system_prompt_bytes": 4350,
+      "user_payload_bytes_min": 11169,
+      "user_payload_bytes_max": 29235,
+      "user_payload_bytes_total_across_22_calls": 320548,
+      "combined_prompt_bytes_min": 15519,
+      "combined_prompt_bytes_max": 35393,
+      "combined_prompt_bytes_total_across_22_calls": 436136
+    },
+    "no_provider_calls_in_report_generation": true,
+    "no_database_writes_in_report_generation": true
+  },
+  "activation": {
+    "enabled": [
+      "local_inference",
+      "model_distillation",
+      "api_developer_surface"
+    ],
+    "shadow_only": [
+      "cost_performance",
+      "evals_benchmarks",
+      "openness_license",
+      "agents_tools",
+      "news_reporting",
+      "investigate_claim",
+      "geopolitical",
+      "untracked_brand_promotions"
+    ],
+    "shadow_rows_may_be_persisted": true,
+    "user_facing_filter_rule": "Only enabled gates may appear as active filters or valid query dimensions; shadow-only values remain unavailable and stale links must be canonicalized as unavailable.",
+    "decision_basis": "R94A per-family source-visible audit floor; owner-selected model route override is separate from family activation quality decisions."
+  },
+  "limitations": [
+    "Lexical proxies use broad multilingual regexes over stored source/English/Chinese text and therefore include false positives, miss paraphrases, and overcount generic words such as cost, performance, test, API, and open.",
+    "The frozen classifier labels predate U18A and are not a gold set. Historical labels, legacy flags, and role/account relationships cannot establish U18A precision or recall.",
+    "Synthetic audit fixtures fill rare predicates and matched boundaries; their results must not be projected to production prevalence.",
+    "The R94A evaluator was source-visible and provider-free; its expected decisions are an agent audit contract, not human adjudication. Candidate unsupported counts are comparator evidence, not population accuracy.",
+    "Frozen-corpus rates are time-concentrated and are not a forward forecast. BrandDiscoveryCandidate had no rows in this dump, so novel-brand identity recurrence is not estimated.",
+    "Media screens are structural upper bounds; only the 100-row exploratory review supplied an agent-assessed dependency signal.",
+    "The report records the owner's activation decision for three families and eight shadow-only gates; it does not claim the shadow-only gates are solved or production-ready."
+  ]
+}

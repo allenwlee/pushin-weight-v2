@@ -1,0 +1,54 @@
+{
+  "schema_version": "u18-runtime-development-budget/v9",
+  "frozen_at": "2026-09-11T08:50:00Z",
+  "reason": "The v21 grouped DeepSeek Flash probe failed strict response validity, and its provider-free diagnostic normalization scored only 33.3% exact post-type sets. Across the consumed development evidence, DeepSeek Flash has now failed the full classifier, candidate-blind review, consensus, evidence audit, common-label check, three-pass selector, smaller batches, singleton calls, and independent label groups. The architecture is reconsidered by holding the proven candidate-blind review contract constant and measuring the codebase's existing direct Anthropic Haiku role. This cannot approve release.",
+  "lane": "runtime_v22_haiku_review_pilot",
+  "credential_env": "ANTHROPIC_API_KEY_AL",
+  "cohort": {
+    "cohort_id": "u18-development-v19-en30-batch5-pilot-v1",
+    "development_only": true,
+    "rows": 30,
+    "bytes": 82097,
+    "sha256": "5386093a5c156accbe817d1c49778eeb8f9a84bf9da2f450acd784e0571dc74b",
+    "selection": "the same frozen 30 EN rows used by v19 through v21; no row or label selection changed after scoring"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v18-review-v1",
+    "bytes": 9403,
+    "sha256": "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+    "fallback_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "fallback_repair_sha256": "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326"
+  },
+  "lanes": {
+    "runtime_v22_haiku_review_pilot": {
+      "provider": "anthropic-direct",
+      "model": "claude-haiku-4-5-20251001",
+      "temperature": 0,
+      "thinking": "omitted at direct provider transport",
+      "pricing_source": "https://www.anthropic.com/claude/haiku",
+      "pricing_version": "anthropic-standard-2026-09-11",
+      "input_usd_per_million": "1.00",
+      "output_usd_per_million": "5.00",
+      "batch_size": 10,
+      "max_concurrent_transport_calls": 3,
+      "maximum_examples": 30,
+      "expected_logical_requests_before_fallback": 3,
+      "maximum_requests": 12,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 18,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 240000,
+      "maximum_output_tokens": 73728,
+      "expected_cost_usd": "0.08",
+      "maximum_cost_usd": "0.61",
+      "twitterapi_credits": 0,
+      "allowed_system_sha256": [
+        "f54f2e3f1ac8245447b6ce07aa284d9eb4b2e8bd0e9f562250063eab651ff525",
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326"
+      ]
+    }
+  },
+  "decision_rule": "Continue this provider architecture only if all 30 rows validate, EN exact post-type sets are at least 0.70, exact product-label sets are at least 0.85, outcome accuracy is at least 0.90, and every supported post/product label meets its unchanged floor. A pass permits one all-locale development probe; it does not approve release. A failure blocks further classifier transport and requires an owner-visible reconsideration of provider quality, taxonomy ambiguity, or the exact-set gate.",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum standard-list price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, provider, model, prompt, or lane."
+}

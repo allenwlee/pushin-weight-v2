@@ -1,0 +1,6 @@
+{
+  "post_id": "2100143559139897620",
+  "commentary_en": "The author advises @cneuralnetwork to use Qwen 3 Omni as the LLM, combined with Qwen 3 ASR and TTS, to build a custom app, contingent on having GPUs. This suggests a practical, do-it-yourself approach to assembling multimodal AI components (text, speech recognition, and speech synthesis) into a single application. The mention of GPUs adds a hardware caveat, implying the user must have sufficient compute resources. The post matters because it reflects a trend of modular AI system building using open-source or accessible model variants, though it does not verify availability, performance, or licensing of the named tools.",
+  "commentary_zh_cn": "作者建议 @cneuralnetwork 使用Qwen 3 Omni作为大语言模型，并结合Qwen 3的ASR（语音识别）和TTS（语音合成），在拥有GPU的前提下，自行构建一个应用。这暗示一种实用的DIY方法：将多模态AI组件（文本、语音识别、语音合成）组装成单一应用程序。提及GPU意味着需要足够的计算资源作为前提。该帖的意义在于反映了使用开源或易获取的模型变体进行模块化AI系统构建的趋势，但未验证所提工具的可用性、性能或许可证情况。",
+  "commentary_ja": "著者は @cneuralnetwork に対し、LLMとしてQwen 3 Omniを使用し、Qwen 3のASR（音声認識）とTTS（音声合成）を組み合わせて、GPUがあれば自分でアプリを構築するようアドバイスしています。これは、テキスト・音声認識・音声合成のマルチモーダルAIコンポーネントを1つのアプリに統合する実用的なDIY手法を示唆しています。GPUへの言及は、十分な計算リソースが必要という前提条件を意味します。この投稿は、オープンソースまたは入手しやすいモデルを使ったモジュール式AI構築のトレンドを反映している点で重要ですが、挙げられたツールの可用性、性能、ライセンスは検証されていません。"
+}

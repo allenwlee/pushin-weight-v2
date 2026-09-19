@@ -152,6 +152,142 @@ class SearchConfig(BaseModel):
     max_pages: int = Field(default=5, ge=1)
 
 
+class DiscoveryQueryConfig(BaseModel):
+    """One stable global-discovery query inside a disabled-by-default lane."""
+
+    query_id: str = Field(pattern=r"^[A-Z][A-Z0-9_]+$")
+    language: Literal["en", "zh-cn", "ja"]
+    query_family: str = Field(min_length=1, max_length=32)
+    primary_terms: list[str] = Field(min_length=1)
+    co_occurrence: list[str] = Field(min_length=1)
+    not_include: list[str] = Field(default_factory=list)
+
+    @field_validator("primary_terms", "co_occurrence", "not_include")
+    @classmethod
+    def _validate_query_terms(cls, values: list[str]) -> list[str]:
+        if any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError("discovery query terms must be nonblank strings")
+        if len(set(values)) != len(values):
+            raise ValueError("discovery query terms must be unique")
+        return values
+
+
+class DiscoveryLaneConfig(BaseModel):
+    """Cost and scheduling boundary for one optional discovery lane."""
+
+    enabled: bool = False
+    query_pack_version: str = Field(min_length=1, max_length=64)
+    cadence_minutes: int = Field(default=60, ge=15)
+    max_lookback_hours: float = Field(default=24.0, gt=0, le=168)
+    max_results: int = Field(default=20, ge=1, le=100)
+    max_pages: int = Field(default=1, ge=1, le=5)
+    max_per_page: int = Field(default=20, ge=1, le=20)
+    request_timeout_seconds: int = Field(default=30, ge=5, le=60)
+    per_cycle_call_ceiling: int = Field(default=1, ge=1, le=12)
+    daily_credit_ceiling: int = Field(default=1500, ge=1)
+    credits_per_result: int = Field(default=15, ge=1)
+    minimum_credits_per_call: int = Field(default=15, ge=1)
+    queries: list[DiscoveryQueryConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_enabled_lane(self) -> DiscoveryLaneConfig:
+        if self.enabled and not self.queries:
+            raise ValueError("enabled discovery lane requires at least one query")
+        if self.max_results > self.max_pages * self.max_per_page:
+            raise ValueError(
+                "discovery max_results must fit within max_pages * max_per_page"
+            )
+        if self.daily_credit_ceiling < self.minimum_credits_per_call:
+            raise ValueError(
+                "discovery daily credit ceiling must cover one call minimum"
+            )
+        query_ids = [query.query_id for query in self.queries]
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("discovery query_id values must be unique within a lane")
+        return self
+
+
+class DiscoveryConfig(BaseModel):
+    jobs: DiscoveryLaneConfig = DiscoveryLaneConfig(
+        query_pack_version="jobs-discovery-v1"
+    )
+    personnel: DiscoveryLaneConfig = DiscoveryLaneConfig(
+        query_pack_version="personnel-discovery-v1"
+    )
+
+    @model_validator(mode="after")
+    def _validate_global_query_ids(self) -> DiscoveryConfig:
+        query_ids = [
+            query.query_id
+            for lane in (self.jobs, self.personnel)
+            for query in lane.queries
+        ]
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("discovery query_id values must be globally unique")
+        return self
+
+
+TARGETED_EXTRACTION_ROLES = frozenset(
+    {
+        "event_extraction",
+        "opportunity_extraction",
+        "job_listing_extraction",
+        "personnel_change_extraction",
+        "profile_affiliation_extraction",
+    }
+)
+
+
+class TargetedExtractionRoleConfig(BaseModel):
+    model: str = Field(min_length=1, max_length=256)
+    prompt_version: str = Field(min_length=1, max_length=64)
+    max_tokens: int = Field(default=2_000, ge=256, le=16_000)
+
+
+def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
+    versions = {
+        "job_listing_extraction": "job-listing-extraction-v2",
+        "personnel_change_extraction": "personnel-change-extraction-v2",
+        "profile_affiliation_extraction": "profile-affiliation-extraction-v2",
+    }
+    return {
+        role: TargetedExtractionRoleConfig(
+            model=DEEPSEEK_0731_MODEL,
+            prompt_version=versions.get(role, f"{role}-v1"),
+        )
+        for role in sorted(TARGETED_EXTRACTION_ROLES)
+    }
+
+
+class TargetedExtractionConfig(BaseModel):
+    enabled: bool = False
+    # A zero cap is the fail-closed service-manifest value.  An enabled
+    # extraction lane must still name a positive, bounded cap below.
+    max_calls_per_cycle: int = Field(default=20, ge=0, le=200)
+    request_timeout_seconds: int = Field(default=30, ge=5, le=90)
+    roles: dict[str, TargetedExtractionRoleConfig] = Field(
+        default_factory=_default_targeted_roles
+    )
+
+    @field_validator("roles")
+    @classmethod
+    def _validate_roles(
+        cls, value: dict[str, TargetedExtractionRoleConfig]
+    ) -> dict[str, TargetedExtractionRoleConfig]:
+        if set(value) != TARGETED_EXTRACTION_ROLES:
+            raise ValueError(
+                "targeted extraction roles must be exactly "
+                f"{sorted(TARGETED_EXTRACTION_ROLES)}"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_enabled_cap(self) -> TargetedExtractionConfig:
+        if self.enabled and self.max_calls_per_cycle < 1:
+            raise ValueError("enabled targeted extraction requires a positive cap")
+        return self
+
+
 class CycleConfig(BaseModel):
     """Cycle-level runtime constants (plan 2026-08-01-001).
 
@@ -257,10 +393,7 @@ class EnrichmentConfig(BaseModel):
 
     @property
     def claim_safe_envelope_seconds(self) -> int:
-        return (
-            2 * self.attempt_budget_seconds
-            + self.terminalization_reserve_seconds
-        )
+        return 2 * self.attempt_budget_seconds + self.terminalization_reserve_seconds
 
     def start_attempt_deadline(
         self, *, monotonic: Callable[[], float] = time.monotonic
@@ -311,35 +444,92 @@ class HarvestConfig(BaseModel):
         )
 
 
+DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
+DEEPINFRA_OPENAI_BASE_URL = "https://api.deepinfra.com/v1/openai"
+DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
+
+
 class LlmConfig(BaseModel):
     """LLM model-name configuration (plan 2026-08-01-002 U1).
 
     Committed non-null yaml model values are authoritative. Role-specific
     environment values apply when the corresponding yaml field is omitted or
-    null. The translator_base_url defaults to ANTHROPIC_BASE_URL when the
-    configured value is null.
+    null. Routine harvest enrichment defaults to the explicit DeepSeek
+    Anthropic-compatible endpoint for every role.
     """
 
     translator_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the translator stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_TRANSLATOR_MODEL.",
     )
-    translator_base_url: str | None = Field(
-        default=None,
-        description="Optional override for the translator's base URL. When None, falls back to ANTHROPIC_BASE_URL env (resolves to MiniMax proxy if set).",
+    translator_base_url: str = Field(
+        default=DEEPSEEK_ANTHROPIC_BASE_URL,
+        description="Explicit translator base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
     )
+    translator_provider: Literal["anthropic", "deepinfra"] = "anthropic"
+    # Direct DeepInfra is deliberately model-profiled rather than inferred
+    # from the base URL. This keeps a stale provider URL or generic API key
+    # from silently changing the scheduled translator route.
+    translator_deepinfra_request_profile: Literal["gemma4_translation_v1"] | None = None
     classifier_model: str = Field(
         default="deepseek-v4-flash",
         description="Model name for the classifier stage. Default is deepseek-v4-flash; a non-null yaml value wins over X_MONITOR_CLASSIFIER_MODEL.",
     )
+    classifier_base_url: str = Field(
+        default=DEEPSEEK_ANTHROPIC_BASE_URL,
+        description="Explicit classifier/relevancy base URL. The default routes to DeepSeek's Anthropic-compatible endpoint.",
+    )
+    classifier_provider: Literal["anthropic", "openrouter", "deepinfra"] = "anthropic"
+    classifier_deepinfra_request_profile: Literal["deepseek_0731"] | None = None
+    classifier_openrouter_provider: str | None = None
+    classifier_openrouter_response_provider: str | None = None
+    classifier_openrouter_response_model: str | None = None
+    classifier_openrouter_zdr: bool = False
+    classifier_openrouter_endpoint_tag: str | None = None
+    classifier_openrouter_reasoning_enabled: bool | None = None
+    classifier_openrouter_quantizations: list[str] | None = None
+    # Opt-in model-specific transport contract.  The committed configuration
+    # leaves this unset until the selected U18 route is explicitly activated.
+    classifier_openrouter_request_profile: Literal["deepseek_0731"] | None = None
+    classifier_openrouter_data_collection: Literal["allow", "deny"] = "deny"
+    classifier_openrouter_max_input_price: Decimal | None = None
+    classifier_openrouter_max_output_price: Decimal | None = None
     relevancy_model: str = Field(
-        default="claude-haiku-4-5",
+        default="deepseek-v4-flash",
         description="Model name for the relevancy gate. Default matches x_monitor/relevancy.py::DEFAULT_RELEVANCY_MODEL.",
     )
     signal_model: str = Field(
-        default="claude-haiku-4-5",
+        default="deepseek-v4-flash",
         description="Model name for the per-post signal classifier. Default matches x_monitor/attribution.py::_resolve_signal_model().",
     )
+    literal_translation_v2_enabled: bool = False
+
+    @model_validator(mode="after")
+    def _validate_direct_deepinfra_routes(self) -> LlmConfig:
+        """Keep the owner-selected direct routes from silently drifting."""
+        classifier_is_drifted = (
+            self.classifier_model != "deepseek-ai/DeepSeek-V4-Flash-0731"
+            or self.classifier_base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.classifier_deepinfra_request_profile != "deepseek_0731"
+        )
+        if self.classifier_provider == "deepinfra" and classifier_is_drifted:
+            raise ValueError(
+                "classifier DeepInfra route must use "
+                "DeepSeek-V4-Flash-0731, the direct OpenAI endpoint, and "
+                "the deepseek_0731 request profile"
+            )
+        translator_is_drifted = (
+            self.translator_model != "google/gemma-4-31B-it-turbo"
+            or self.translator_base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.translator_deepinfra_request_profile != "gemma4_translation_v1"
+        )
+        if self.translator_provider == "deepinfra" and translator_is_drifted:
+            raise ValueError(
+                "translator DeepInfra route must use Gemma-4-31B-it-turbo, "
+                "the direct OpenAI endpoint, and the "
+                "gemma4_translation_v1 request profile"
+            )
+        return self
 
 
 class HeadlineNarrativeConfig(BaseModel):
@@ -372,6 +562,14 @@ class HeadlineNarrativeConfig(BaseModel):
         min_length=1,
         max_length=64,
     )
+    demand_shaping_enabled: bool = False
+    demand_hot_minutes: int = Field(default=180, ge=15, le=10_080)
+    prewarm_brand_keys: list[str] = Field(default_factory=list, max_length=5)
+    prewarm_windows: list[Literal[1, 7, 30, 365]] = Field(
+        default_factory=list, max_length=2
+    )
+    critic_risk_routing_enabled: bool = False
+    critic_audit_percent: int = Field(default=5, ge=0, le=100)
     cadence_minutes: dict[int, int] = Field(
         default_factory=lambda: {1: 60, 7: 1_440, 30: 10_080, 365: 43_200}
     )
@@ -477,6 +675,10 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline cadences must cover 1, 7, 30, and 365 days")
         if set(self.stale_minutes) != windows:
             raise ValueError("headline stale limits must cover all fixed windows")
+        if len(set(self.prewarm_brand_keys)) != len(self.prewarm_brand_keys):
+            raise ValueError("headline prewarm brands must be unique")
+        if len(set(self.prewarm_windows)) != len(self.prewarm_windows):
+            raise ValueError("headline prewarm windows must be unique")
         if any(
             self.stale_minutes[window] != self.cadence_minutes[window] * 2
             for window in windows
@@ -542,6 +744,76 @@ class HeadlineNarrativeConfig(BaseModel):
         return self
 
 
+class SynthesisConfig(BaseModel):
+    """Fail-closed PostgreSQL worker controls for rich post synthesis."""
+
+    provider: Literal["deepinfra"] = "deepinfra"
+    base_url: str = DEEPINFRA_OPENAI_BASE_URL
+    model: str = "google/gemma-4-31B-it-turbo"
+    request_profile: Literal["gemma4_tagged"] = "gemma4_tagged"
+    response_format: Literal["tagged_text"] = "tagged_text"
+    prompt_version: str = Field(default="post-synthesis-gemma4-tagged-v2", max_length=64)
+    output_schema_version: int = Field(default=2, ge=1, le=32)
+    activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
+    provider_calls_enabled: bool = False
+    control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
+    batch_size: int = Field(default=5, ge=1, le=10)
+    poll_seconds: int = Field(default=2, ge=1, le=30)
+    lease_seconds: int = Field(default=600, ge=30, le=900)
+    timeout_seconds: int = Field(default=300, ge=5, le=300)
+    max_attempts: int = Field(default=3, ge=1, le=5)
+    max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
+    max_output_tokens_per_post: int = Field(default=4_096, ge=256, le=8_192)
+    daily_request_cap: int = Field(default=200, ge=1, le=10_000)
+    daily_input_token_cap: int = Field(default=800_000, ge=1_000)
+    daily_output_token_cap: int = Field(default=240_000, ge=1_000)
+    input_usd_per_million: Decimal = Field(default=Decimal("0.09"), ge=0)
+    output_usd_per_million: Decimal = Field(default=Decimal("0.34"), ge=0)
+    daily_cost_cap_usd: Decimal = Field(default=Decimal("0.70"), gt=0)
+    pricing_version: str = Field(
+        default="deepinfra-gemma4-31b-standard-2026-09-18", min_length=1, max_length=96
+    )
+    demand_batch_limit: int = Field(default=20, ge=1, le=50)
+    visible_expiry_minutes: int = Field(default=120, ge=15, le=1440)
+    lookahead_expiry_minutes: int = Field(default=15, ge=1, le=120)
+    prewarm_enabled: bool = False
+    prewarm_per_cycle: int = Field(default=0, ge=0, le=10)
+
+    @property
+    def provider_calls_active(self) -> bool:
+        return self.provider_calls_enabled and self.activation_state != "pending"
+
+    @model_validator(mode="after")
+    def _validate_route(self) -> SynthesisConfig:
+        if (
+            self.provider != "deepinfra"
+            or self.base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
+            or self.model != "google/gemma-4-31B-it-turbo"
+            or self.request_profile != "gemma4_tagged"
+            or self.response_format != "tagged_text"
+        ):
+            raise ValueError("synthesis provider route must match the selected direct Gemma route")
+        if self.prewarm_enabled and self.prewarm_per_cycle < 1:
+            raise ValueError("enabled synthesis prewarm requires a positive cap")
+        if self.prewarm_per_cycle > self.demand_batch_limit:
+            raise ValueError(
+                "synthesis prewarm cap must not exceed demand batch limit"
+            )
+        if self.lease_seconds < self.timeout_seconds + 60:
+            raise ValueError(
+                "synthesis lease must exceed provider timeout by at least 60 seconds"
+            )
+        maximum_cost = (
+            Decimal(self.daily_input_token_cap) * self.input_usd_per_million
+            + Decimal(self.daily_output_token_cap) * self.output_usd_per_million
+        ) / Decimal(1_000_000)
+        if maximum_cost > self.daily_cost_cap_usd:
+            raise ValueError(
+                "synthesis token caps must fit inside the daily dollar cap"
+            )
+        return self
+
+
 class Config(BaseModel):
     enabled_models: list[str] = Field(min_length=1)
     daily_ceiling: int = Field(gt=0)
@@ -550,10 +822,13 @@ class Config(BaseModel):
     quote_tweets: QuoteTweetConfig = QuoteTweetConfig()
     metrics_refresh: MetricsRefreshConfig = MetricsRefreshConfig()
     search: SearchConfig = SearchConfig()
+    discovery: DiscoveryConfig = DiscoveryConfig()
+    targeted_extraction: TargetedExtractionConfig = TargetedExtractionConfig()
     cycle: CycleConfig = CycleConfig()
     harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()
     headline_narrative: HeadlineNarrativeConfig = HeadlineNarrativeConfig()
+    synthesis: SynthesisConfig = SynthesisConfig()
     query_rot_streak_threshold: int = Field(default=3, ge=1)
     query_rot_streak_threshold_per_model: dict[str, int] = Field(default_factory=dict)
     review_reasons: list[str] = Field(
@@ -753,11 +1028,9 @@ def load_config(path: Path) -> Config:
     # Plan 2026-07-13-002 U4: same rename handling for call_b_groups.
     # Legacy v1.7.x config files may also carry this under a different
     # shape — pass through as-is when the key is present.
-    # Plan 2026-08-01-002 U1: env-var resolution into Config.llm.*.
-    # The translator's model name + base URL live in env vars on the
-    # operator's shell (ANTHROPIC_MODEL, ANTHROPIC_BASE_URL) and may
-    # differ from config.yaml. Merge env vars into Config.llm only
-    # when the field is not already explicitly set in yaml — yaml wins.
+    # Role-specific environment values may fill omitted/null Config.llm
+    # fields. Non-null YAML values remain authoritative, so shared provider
+    # environment variables cannot redirect scheduled enrichment.
     import os
 
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
@@ -765,10 +1038,22 @@ def load_config(path: Path) -> Config:
         k: v
         for k, v in {
             "translator_model": os.environ.get("X_MONITOR_TRANSLATOR_MODEL"),
+            "translator_provider": os.environ.get("X_MONITOR_TRANSLATOR_PROVIDER"),
+            "translator_deepinfra_request_profile": os.environ.get(
+                "X_MONITOR_TRANSLATOR_DEEPINFRA_REQUEST_PROFILE"
+            ),
             "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
+            "classifier_provider": os.environ.get("X_MONITOR_CLASSIFIER_PROVIDER"),
+            "classifier_deepinfra_request_profile": os.environ.get(
+                "X_MONITOR_CLASSIFIER_DEEPINFRA_REQUEST_PROFILE"
+            ),
             "relevancy_model": os.environ.get("X_MONITOR_RELEVANCY_MODEL"),
             "signal_model": os.environ.get("X_MONITOR_SIGNAL_MODEL"),
             "translator_base_url": os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL"),
+            "classifier_base_url": os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL"),
+            "literal_translation_v2_enabled": os.environ.get(
+                "X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"
+            ),
         }.items()
         if v is not None
     }
@@ -802,6 +1087,8 @@ def load_config(path: Path) -> Config:
         "publication_source": "X_MONITOR_HEADLINE_PUBLICATION_SOURCE",
         "legacy_fallback_enabled": "X_MONITOR_HEADLINE_LEGACY_FALLBACK_ENABLED",
         "control_revision": "X_MONITOR_HEADLINE_CONTROL_REVISION",
+        "demand_shaping_enabled": "X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED",
+        "critic_risk_routing_enabled": "X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED",
     }
     env_headline_overrides = {
         field: os.environ[env_name]
@@ -819,6 +1106,132 @@ def load_config(path: Path) -> Config:
                 **raw_headline_filtered,
             },
         }
+    raw_synthesis = (
+        raw.get("synthesis", {})
+        if isinstance(raw.get("synthesis"), dict)
+        else {}
+    )
+    synthesis_env_names = {
+        "activation_state": "X_MONITOR_SYNTHESIS_ACTIVATION_STATE",
+        "provider_calls_enabled": "X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED",
+        "control_revision": "X_MONITOR_SYNTHESIS_CONTROL_REVISION",
+        "prewarm_enabled": "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
+        "prewarm_per_cycle": "X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE",
+        "daily_request_cap": "X_MONITOR_SYNTHESIS_DAILY_REQUEST_CAP",
+        "daily_input_token_cap": "X_MONITOR_SYNTHESIS_DAILY_INPUT_TOKEN_CAP",
+        "daily_output_token_cap": "X_MONITOR_SYNTHESIS_DAILY_OUTPUT_TOKEN_CAP",
+        "daily_cost_cap_usd": "X_MONITOR_SYNTHESIS_DAILY_COST_CAP_USD",
+    }
+    env_synthesis_overrides = {
+        field: os.environ[env_name]
+        for field, env_name in synthesis_env_names.items()
+        if env_name in os.environ
+    }
+    raw_synthesis_filtered = {
+        key: value for key, value in raw_synthesis.items() if value is not None
+    }
+    if raw_synthesis or env_synthesis_overrides:
+        raw = {
+            **raw,
+            "synthesis": {
+                **env_synthesis_overrides,
+                **raw_synthesis_filtered,
+            },
+        }
+
+    # These lane switches are deliberate operational activation controls.
+    # Unlike role/model values above, the checked-in config stays fail-closed
+    # while a bounded staging job can explicitly open one lane. A truthy enable
+    # is invalid outside staging: production needs a separately reviewed
+    # Blueprint/config change, never a transient environment override. The
+    # discovery caps are explicit so a trial cannot widen to every due query.
+    activation_env_paths = {
+        "X_MONITOR_DISCOVERY_JOBS_ENABLED": ("discovery", "jobs", "enabled"),
+        "X_MONITOR_DISCOVERY_JOBS_PER_CYCLE_CALL_CEILING": (
+            "discovery",
+            "jobs",
+            "per_cycle_call_ceiling",
+        ),
+        "X_MONITOR_DISCOVERY_JOBS_MAX_RESULTS": (
+            "discovery",
+            "jobs",
+            "max_results",
+        ),
+        "X_MONITOR_DISCOVERY_JOBS_MAX_PAGES": (
+            "discovery",
+            "jobs",
+            "max_pages",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_ENABLED": (
+            "discovery",
+            "personnel",
+            "enabled",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_PER_CYCLE_CALL_CEILING": (
+            "discovery",
+            "personnel",
+            "per_cycle_call_ceiling",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_MAX_RESULTS": (
+            "discovery",
+            "personnel",
+            "max_results",
+        ),
+        "X_MONITOR_DISCOVERY_PERSONNEL_MAX_PAGES": (
+            "discovery",
+            "personnel",
+            "max_pages",
+        ),
+        "X_MONITOR_TARGETED_EXTRACTION_ENABLED": (
+            "targeted_extraction",
+            "enabled",
+        ),
+        "X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE": (
+            "targeted_extraction",
+            "max_calls_per_cycle",
+        ),
+        "X_MONITOR_SYNTHESIS_PREWARM_ENABLED": (
+            "synthesis",
+            "prewarm_enabled",
+        ),
+        "X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE": (
+            "synthesis",
+            "prewarm_per_cycle",
+        ),
+    }
+    temporary_enable_names = frozenset(
+        {
+            "X_MONITOR_DISCOVERY_JOBS_ENABLED",
+            "X_MONITOR_DISCOVERY_PERSONNEL_ENABLED",
+            "X_MONITOR_TARGETED_EXTRACTION_ENABLED",
+            "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
+        }
+    )
+    truthy_values = frozenset({"1", "on", "t", "true", "y", "yes"})
+    enabled_outside_staging = [
+        env_name
+        for env_name in temporary_enable_names
+        if os.environ.get(env_name, "").strip().casefold() in truthy_values
+    ]
+    if (
+        enabled_outside_staging
+        and os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") != "staging"
+    ):
+        raise ValueError(
+            "temporary Stage 1 activation requires "
+            "X_MONITOR_DEPLOYMENT_ENVIRONMENT=staging"
+        )
+    for env_name, path_parts in activation_env_paths.items():
+        if env_name not in os.environ:
+            continue
+        target = raw
+        for part in path_parts[:-1]:
+            child = target.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                target[part] = child
+            target = child
+        target[path_parts[-1]] = os.environ[env_name]
     try:
         return Config.model_validate(raw)
     except ValidationError:

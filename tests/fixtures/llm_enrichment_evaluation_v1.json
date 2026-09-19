@@ -10,22 +10,22 @@
     {
       "id": "reported-total-only",
       "provider_usage": {"input_tokens": 12, "output_tokens": 4, "total_tokens": 16},
-      "expected_normalized": {"input_tokens": 12, "output_tokens": 4, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": 16}
+      "expected_normalized": {"input_tokens": 12, "output_tokens": 4, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": 16, "cost_usd": null, "provider_request_id": null}
     },
     {
       "id": "missing-usage",
       "provider_usage": null,
-      "expected_normalized": {"input_tokens": null, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null}
+      "expected_normalized": {"input_tokens": null, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null, "cost_usd": null, "provider_request_id": null}
     },
     {
       "id": "overlap-is-not-added",
       "provider_usage": {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 1, "reasoning_tokens": 5, "total_tokens": 13},
-      "expected_normalized": {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 1, "reasoning_tokens": 5, "total_tokens": 13}
+      "expected_normalized": {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 1, "reasoning_tokens": 5, "total_tokens": 13, "cost_usd": null, "provider_request_id": null}
     },
     {
       "id": "reserved-limit-is-not-usage",
       "provider_usage": {"max_tokens": 200, "input_tokens": 7, "output_tokens": null},
-      "expected_normalized": {"input_tokens": 7, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null}
+      "expected_normalized": {"input_tokens": 7, "output_tokens": null, "cache_read_input_tokens": null, "cache_creation_input_tokens": null, "reasoning_tokens": null, "total_tokens": null, "cost_usd": null, "provider_request_id": null}
     }
   ],
   "semantic_status_cases": [

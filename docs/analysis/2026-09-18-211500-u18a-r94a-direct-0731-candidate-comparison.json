@@ -1,0 +1,6876 @@
+{
+  "artifact_type": "u18a_r94a_candidate_comparison",
+  "artifact_version": "v1",
+  "created_at": "2026-09-18T12:01:02.817769+00:00",
+  "evaluator_artifact": {
+    "path": "docs/analysis/2026-09-18-210000-u18a-r94a-candidate-blind-source-visible-audit.json",
+    "sha256": "cf1ec56b963fe687eb0abb6a5d5e23d88ebf6475adc48b5b0818617cb4ac9678"
+  },
+  "candidate": {
+    "provider": "DeepInfra",
+    "endpoint": "direct",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "request_profile": "deepseek_0731",
+    "batch_size": 20,
+    "roles_per_batch": 2,
+    "output_sha256": "e21b1902a571eaa1833548f18af02e33e2328dcdd95c53115d51a11fe04afce9",
+    "rows": [
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "local_inference",
+        "case_id": "local_inference-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "cost_performance",
+        "case_id": "cost_performance-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "model_distillation",
+        "case_id": "model_distillation-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "evals_benchmarks",
+        "case_id": "evals_benchmarks-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "openness_license",
+        "case_id": "openness_license-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "agents_tools",
+        "case_id": "agents_tools-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "api_developer_surface",
+        "case_id": "api_developer_surface-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "news_reporting",
+        "case_id": "news_reporting-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "investigate_claim",
+        "case_id": "investigate_claim-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "geopolitical",
+        "case_id": "geopolitical-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-P10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N01",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N02",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N03",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N04",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N05",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N06",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N07",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N08",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N09",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      },
+      {
+        "family": "untracked_brand_promotions",
+        "case_id": "untracked_brand_promotions-N10",
+        "result": {
+          "by_brand": {},
+          "unsanctioned_flags": [],
+          "valid": false
+        }
+      }
+    ]
+  },
+  "comparator": {
+    "identity": "u18a-r94a-declared-field-comparator/v1",
+    "sha256": "6514ea2030cc38a9c6124d6d609bba2a78b09cb6559461e14bec3c849d2ccc8b",
+    "floor": "at most one unsupported assignment in each positive and negative/boundary set"
+  },
+  "families": {
+    "local_inference": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "local_inference-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "local_inference"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "local_inference-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "cost_performance": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "cost_performance-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "cost_performance"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "cost_performance-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "model_distillation": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "model_distillation-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "model_distillation"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "model_distillation-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "evals_benchmarks": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "evals_benchmarks-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "evals_benchmarks-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "openness_license": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "openness_license-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "openness_license"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "openness_license-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "agents_tools": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "agents_tools-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "agents_tools"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "agents_tools-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "api_developer_surface": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "api_developer_surface-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "api_developer_surface-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "audience_topics": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "news_reporting": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "news_reporting-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": [
+              "news_reporting"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "news_reporting-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_types": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "investigate_claim": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "investigate_claim-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "investigate_claim"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "investigate_claim-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "product_labels": [
+              "none"
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "geopolitical": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "geopolitical-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "reporting"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "framework"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "nationalism"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "reporting"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "framework"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "nationalism"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "reporting"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "framework"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "nationalism"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "reporting"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "geopolitical-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    },
+    "untracked_brand_promotions": {
+      "decision": "shadow_only",
+      "positive_unsupported": 10,
+      "negative_or_boundary_unsupported": 10,
+      "batch_errors": [],
+      "cases": [
+        {
+          "case_id": "untracked_brand_promotions-P01",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "general"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "Astorie",
+                "evidence": "Astorie launched an AI video editor with timeline agents. Try it at https://astorie.example/start."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P02",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "spam"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "RepeatBot",
+                "evidence": "RepeatBot AI: subscribe at https://repeatbot.example now. RepeatBot AI: subscribe at https://repeatbot.example now."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P03",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "scam"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "QuickProfit AI",
+                "evidence": "QuickProfit AI promises guaranteed 40% daily returns; send funds now at https://quickprofit.example."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P04",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "crypto"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "PokePay Token",
+                "evidence": "PokePay Token airdrop: connect your wallet to claim tokens at https://pokepay.example/claim."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P05",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "unauthorized"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "FakeMiniMaxPlus",
+                "evidence": "FakeMiniMaxPlus claims it is MiniMax-approved, but MiniMax says this reseller is not authorized. Buy at https://fakeminimax.example."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P06",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "general"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "Sider",
+                "evidence": "Sider’s new AI research workspace is available now; start a workspace at https://sider.example/join."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P07",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "spam"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "ClickForge",
+                "evidence": "ClickForge giveaway at https://clickforge.example/claim. ClickForge giveaway at https://clickforge.example/claim."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P08",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "scam"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "Recovery Genius",
+                "evidence": "Recovery Genius says it can recover any lost crypto instantly for an upfront fee at https://recoverygenius.example."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P09",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "crypto"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "ChainMind Coin",
+                "evidence": "Buy ChainMind Coin before the exchange listing at https://chainmind.example/buy; token holders get AI credits."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-P10",
+          "boundary": "positive",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "unauthorized"
+            ],
+            "promoted_subjects": [
+              {
+                "name": "MiniMax Official Rewards",
+                "evidence": "MiniMax warns that ‘MiniMax Official Rewards’ is not an authorized partner, despite its promotion at https://fake-rewards.example."
+              }
+            ]
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N01",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N02",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N03",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N04",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N05",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N06",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N07",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N08",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N09",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        },
+        {
+          "case_id": "untracked_brand_promotions-N10",
+          "boundary": "matched_negative_or_boundary",
+          "supported": false,
+          "reasons": [
+            "candidate_result_incomplete"
+          ],
+          "expected": {
+            "post_promotions": [
+              "none"
+            ],
+            "promoted_subjects": []
+          },
+          "candidate": {
+            "valid": false,
+            "classification": {},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": []
+          }
+        }
+      ]
+    }
+  },
+  "usage": {
+    "calls": 22,
+    "errors": 1,
+    "input_tokens": 107038,
+    "output_tokens": 21622,
+    "calculated_cost_usd": 0.01031424,
+    "response_reported_cost_usd": 0.0095424,
+    "wall_seconds": 239.421,
+    "max_cost_usd": 0.1,
+    "reserved_cost_usd": 0.07622016,
+    "attempts": [
+      {
+        "outcome": "success",
+        "latency_ms": 9653,
+        "request_sha256": "259f0771c54b570c74dbbf698758cf417a322e46e088e9cef9f7b5d57977c9ba",
+        "usage": {
+          "input_tokens": 4178,
+          "output_tokens": 789,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4967,
+          "cost_usd": 0.0003927,
+          "provider_request_id": "chatcmpl-RgkBiClEYQdRnnIRNzUDYGcy",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 13847,
+        "request_sha256": "177e27120202bd7051cd7614996e6c5d8a29a88ec837173c36acfd079c63f883",
+        "usage": {
+          "input_tokens": 4582,
+          "output_tokens": 1091,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5673,
+          "cost_usd": 0.00047129999999999996,
+          "provider_request_id": "chatcmpl-R7hD1CLzQqoc04TnlH08DAN1",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 11536,
+        "request_sha256": "135d2b2a6cf4dc2a0089f382cd5a577a2c2d2f49f004ac31a1d75c6a7d09f2c6",
+        "usage": {
+          "input_tokens": 5446,
+          "output_tokens": 794,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 6240,
+          "cost_usd": 0.00046968000000000004,
+          "provider_request_id": "chatcmpl-R0qqDuZLMr4rTYlT8Z2W3vsS",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 14158,
+        "request_sha256": "85c8c6dcc0b984754519a35dea52137b011b4f0f323ddc4b8b695d4954cff419",
+        "usage": {
+          "input_tokens": 5850,
+          "output_tokens": 1150,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 7000,
+          "cost_usd": 0.000558,
+          "provider_request_id": "chatcmpl-RfTg2dzJ7pbORfYthoKBIDsZ",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 11858,
+        "request_sha256": "d3443413a44a5315509eadabd4981b2089a7754f801e42398fc86a738ca860be",
+        "usage": {
+          "input_tokens": 4001,
+          "output_tokens": 1076,
+          "cache_read_input_tokens": 1024,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5077,
+          "cost_usd": 0.00038766,
+          "provider_request_id": "chatcmpl-RLech1R0NmuFCUZhG3UAXmYs",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 17845,
+        "request_sha256": "0297f589bcc6b3683f25ffe95b3ea56a355ed328406d4f63754086576cd62ba9",
+        "usage": {
+          "input_tokens": 3597,
+          "output_tokens": 886,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4483,
+          "cost_usd": 0.00034074,
+          "provider_request_id": "chatcmpl-RcpmfTufMoSm7esx62RYU2RY",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 11760,
+        "request_sha256": "2c7d3386289cb6a25d04d053c3026230867376ccce4e5430b9499b7b14d41485",
+        "usage": {
+          "input_tokens": 4446,
+          "output_tokens": 1093,
+          "cache_read_input_tokens": 1024,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5539,
+          "cost_usd": 0.0004174200000000001,
+          "provider_request_id": "chatcmpl-RgwwLArvWXXvIAeO8R9YDTAA",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 16476,
+        "request_sha256": "975eae91f74644ecab1d3c6d5b76f78aa0d2a52cd747bcb26c892216cb8600d3",
+        "usage": {
+          "input_tokens": 4042,
+          "output_tokens": 1181,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 5223,
+          "cost_usd": 0.00042054,
+          "provider_request_id": "chatcmpl-RPKcd516tqCnCRqKkW9GqhFn",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 15477,
+        "request_sha256": "f72c5311829b61df691d450edffa0a60add94e9022548fbec0ae6c3b8d1f3eed",
+        "usage": {
+          "input_tokens": 6838,
+          "output_tokens": 1269,
+          "cache_read_input_tokens": 1024,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 8107,
+          "cost_usd": 0.00059262,
+          "provider_request_id": "chatcmpl-RRLvR0riPwo3XNl1wpr3EUGi",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 22858,
+        "request_sha256": "ec041e242418890878909890476871be3fdd49872e42ac974f0d300cbdb09b7e",
+        "usage": {
+          "input_tokens": 6434,
+          "output_tokens": 800,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 7234,
+          "cost_usd": 0.00049548,
+          "provider_request_id": "chatcmpl-RThe8sv7IpdOiDAije3H6l04",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 12898,
+        "request_sha256": "258ca51fe19794f1fdd12039b7ffba014ccc94c76e32749c3c44eeaf84a74cf6",
+        "usage": {
+          "input_tokens": 8590,
+          "output_tokens": 865,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 9455,
+          "cost_usd": 0.00063654,
+          "provider_request_id": "chatcmpl-RtH47QAdjDvnvHbA07a2qMNj",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 21976,
+        "request_sha256": "d195c28eb8f8721223634a78bedb0810be901653c5e25b0fbde95aa6632b170e",
+        "usage": {
+          "input_tokens": 8994,
+          "output_tokens": 1073,
+          "cache_read_input_tokens": 1024,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 10067,
+          "cost_usd": 0.0006866999999999999,
+          "provider_request_id": "chatcmpl-RbKB93QOQAVxMTpPcWCRZmLe",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 13875,
+        "request_sha256": "7d21750455a74661f0ee418cf919abcbbb6345b16cbdcc6904857dd8e6b65cb0",
+        "usage": {
+          "input_tokens": 3875,
+          "output_tokens": 791,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4666,
+          "cost_usd": 0.00034032,
+          "provider_request_id": "chatcmpl-RLVDgYGzJH6pqn3qPIuvxnuN",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 15200,
+        "request_sha256": "ee3e40a27a06518140fc4b9cdc14087ea55b635f0253c4ba692e4a5088e5bfcb",
+        "usage": {
+          "input_tokens": 4279,
+          "output_tokens": 1071,
+          "cache_read_input_tokens": 1024,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5350,
+          "cost_usd": 0.00040344,
+          "provider_request_id": "chatcmpl-RUQjbYs7HWjqhW3efiZrj7E0",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 10268,
+        "request_sha256": "25c821ddd33ba6ed5bbe3c5c054ddab488d8b2e9cbc22a3771df5303129760b2",
+        "usage": {
+          "input_tokens": 4360,
+          "output_tokens": 1121,
+          "cache_read_input_tokens": 1280,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5481,
+          "cost_usd": 0.00040577999999999995,
+          "provider_request_id": "chatcmpl-RWTzuKP3p31Gmvttw32tw8mS",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "error",
+        "error_type": "DeepInfraRetryableError",
+        "error_code": "deepinfra_transport_failure",
+        "latency_ms": 60298,
+        "request_sha256": "75d96bec9a399e85fa91d3015093d4129db4adb303092559795a70d7f5046b6e"
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 10651,
+        "request_sha256": "75d96bec9a399e85fa91d3015093d4129db4adb303092559795a70d7f5046b6e",
+        "usage": {
+          "input_tokens": 3956,
+          "output_tokens": 791,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4747,
+          "cost_usd": 0.00034518,
+          "provider_request_id": "chatcmpl-R8jA3S7OKbn1Nl2M3iGZNcd1",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 11915,
+        "request_sha256": "5a9ee95f1dec00dc650e6e5ff3b152f6ef6240fffaf952df022643d65ec623cc",
+        "usage": {
+          "input_tokens": 3622,
+          "output_tokens": 823,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4445,
+          "cost_usd": 0.0003309,
+          "provider_request_id": "chatcmpl-RZY1N8f1nnZWiJPHeNxS5Equ",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 16166,
+        "request_sha256": "c46b592d746f02564cb57ea7cd0f55a9cc885e430d3a4e7d684278a1f3dad7fb",
+        "usage": {
+          "input_tokens": 4026,
+          "output_tokens": 1099,
+          "cache_read_input_tokens": 1280,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5125,
+          "cost_usd": 0.00038177999999999997,
+          "provider_request_id": "chatcmpl-Rcwck6XwWb033FQ8oCNMNL39",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 12590,
+        "request_sha256": "ee79020d1ee529c9a32e15cf9b2d1c21a76c43132ee9a3f242f7a6356ece5487",
+        "usage": {
+          "input_tokens": 4075,
+          "output_tokens": 940,
+          "cache_read_input_tokens": 1280,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5015,
+          "cost_usd": 0.0003561,
+          "provider_request_id": "chatcmpl-RybYK9lXjPaZnFrrfZx1iPZG",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 13065,
+        "request_sha256": "bfb2518d7b6ef8c220229bbdd411a5b143aca24df790455e933a04e8caa0e7da",
+        "usage": {
+          "input_tokens": 3671,
+          "output_tokens": 797,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4468,
+          "cost_usd": 0.00032916,
+          "provider_request_id": "chatcmpl-RQlt3l4RYyIWX87v8usRptxi",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 12269,
+        "request_sha256": "ace2e1490be4d205209615126a831631da362f8b621c27022dcd60f89fa53e13",
+        "usage": {
+          "input_tokens": 3886,
+          "output_tokens": 807,
+          "cache_read_input_tokens": 768,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": 0,
+          "total_tokens": 4693,
+          "cost_usd": 0.00034386,
+          "provider_request_id": "chatcmpl-RVKbhuI9vMvCWiATTuNScIGB",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      },
+      {
+        "outcome": "success",
+        "latency_ms": 15829,
+        "request_sha256": "6b724086593c296b0b56d9de208b857c3f49b210aabe5ae68509cb70f3a899ac",
+        "usage": {
+          "input_tokens": 4290,
+          "output_tokens": 1315,
+          "cache_read_input_tokens": 1280,
+          "cache_creation_input_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 5605,
+          "cost_usd": 0.00043650000000000004,
+          "provider_request_id": "chatcmpl-Rm3vSfnVp4qtJZxZ1L7oMmCU",
+          "provider": "DeepInfra",
+          "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "selected_endpoint": "direct",
+          "request_provider": "DeepInfra",
+          "request_identity": "deepinfra:deepseek_0731:011e2726c2ec22bf",
+          "data_collection": "deepinfra-direct",
+          "service_tier": "default"
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "The frozen 700-row source cohort predates U18A labels, so lexical selection establishes source visibility but cannot establish population prevalence or independently annotated negative support.",
+    "Synthetic fixtures are used only to fill missing rare U18A predicates or create unambiguous matched boundaries; each says so and contains its entire visible evidence.",
+    "The artifact freezes expected decisions before candidate comparison. It does not assert that a later candidate passes R94A; the deterministic comparator must score candidate rows against this artifact.",
+    "Promotion fixtures use a test-local tracked catalog containing MiniMax only. Production comparison must substitute the actual frozen tracked catalog and reject any subject that is tracked there.",
+    "No unseen media, URLs, parent posts, source-account history, truth adjudication, or candidate/owner/model output was used."
+  ]
+}

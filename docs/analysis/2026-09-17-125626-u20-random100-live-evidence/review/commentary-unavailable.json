@@ -1,0 +1,54 @@
+[
+  {
+    "post_id": "2100010148131746219",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100074485743304992",
+    "error": "synthesis_input_cap_exceeded"
+  },
+  {
+    "post_id": "2100077710332584287",
+    "error": "synthesis_input_cap_exceeded"
+  },
+  {
+    "post_id": "2100079736537923768",
+    "error": "synthesis_input_cap_exceeded"
+  },
+  {
+    "post_id": "2100184789831823696",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100189614463988083",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100270972465008655",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100271108863696950",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100277491390951481",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100320389226225806",
+    "error": "synthesis_input_cap_exceeded"
+  },
+  {
+    "post_id": "2100404047882727911",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100415487914160589",
+    "error": "synthesis_response_schema_invalid"
+  },
+  {
+    "post_id": "2100420165917982857",
+    "error": "synthesis_response_schema_invalid"
+  }
+]

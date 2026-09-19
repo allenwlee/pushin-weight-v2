@@ -14,6 +14,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from core.classification_contract import canonicalize_taxonomy_key
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = REPO_ROOT / "docs/ideation/mockups/06-tier1-composed.v22-master.html"
 
@@ -216,10 +218,20 @@ def _feed_fixture(feed: dict[str, Any], source: Path) -> dict[str, Any]:
                     "en": text["attrs"].get("data-text-en", text["attrs"].get("data-text", "")),
                 },
                 "sentiments": row["attrs"].get("data-sentiments", "").split(","),
-                "post_types": row["attrs"].get("data-post-types", "").split(","),
+                "post_types": [
+                    _canonical_post_type(key, source)
+                    for key in row["attrs"].get("data-post-types", "").split(",")
+                ],
             }
         )
     return {"items": items, "empty": {"items": [], "message": "No posts in this window"}}
+
+
+def _canonical_post_type(key: str, source: Path) -> str:
+    canonical = canonicalize_taxonomy_key("post_type", key)
+    if canonical is None:
+        raise MockupSpecError(f"Mockup source {source}: unknown post type {key!r}")
+    return canonical
 
 
 def build_fixture(source: Path | str = DEFAULT_SOURCE) -> dict[str, Any]:

@@ -1,0 +1,28 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T01:45:00Z",
+  "reason": "one prompt-v5 single-example fallback copied complaint into post_types after its allowed retry; this isolated lane repairs only the candidate response into the production closed schema",
+  "source_budgets": [
+    "2026-09-11-013000-u18-provider-budget-amendment-v8.json"
+  ],
+  "lanes": {
+    "candidate_v3r2_repair": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 500,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 5000000,
+      "maximum_output_tokens": 600000,
+      "maximum_cost_usd": "0.87",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The candidate repair lane refuses its next request when any request, token, or dollar cap would be exceeded; an invalid repaired response blocks the assessment."
+}

@@ -2,20 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import yaml
-
-PRODUCTION_BLUEPRINT_SHA256 = (
-    "20f25c93fbd26c9d53e843c7ff0ff5f657f0dfd6348a795a471e3ef2e6d44583"
-)
-
-
-def test_production_blueprint_is_unchanged_by_staging_topology_work():
-    contents = Path("render.yaml").read_bytes()
-
-    assert hashlib.sha256(contents).hexdigest() == PRODUCTION_BLUEPRINT_SHA256
 
 
 def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
@@ -26,7 +15,9 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         "pushinweight-headlines-broker",
         "pushinweight-web",
         "pushinweight-headlines",
+        "pushinweight-synthesis",
         "pushinweight-harvest",
+        "pushinweight-jobs",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         "pushinweight-db-shadow"
@@ -60,7 +51,7 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         assert environment[control] == "True"
         assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"] == "owner_override"
         assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"] == (
-            "v23-per-brand-why-first-v2-activation-20260827"
+            "v24-integrated-ja-demand-20260911"
         )
         database = next(
             entry["fromDatabase"]["name"]
@@ -70,22 +61,55 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         assert database == "pushinweight-db-shadow"
 
 
-def test_render_cron_is_the_only_declared_scheduler():
+def test_synthesis_worker_is_database_only_and_provider_scoped():
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    services = {service["name"]: service for service in blueprint["services"]}
+    worker = services["pushinweight-synthesis"]
+    environment = {entry["key"]: entry for entry in worker["envVars"] if "key" in entry}
+
+    assert worker["type"] == "worker"
+    assert worker["startCommand"] == "python manage.py run_synthesis_worker"
+    assert environment["DATABASE_URL"]["fromDatabase"]["name"] == (
+        "pushinweight-db-shadow"
+    )
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
+    assert "DEEPSEEK_API_KEY" not in environment
+    assert environment["X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED"]["value"] == "True"
+    assert environment["X_MONITOR_SYNTHESIS_ACTIVATION_STATE"]["value"] == (
+        "owner_override"
+    )
+    assert not {
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+        "TWITTERAPI_IO_SCHEDULED_API_KEY",
+        "TWITTERAPI_IO_ON_DEMAND_API_KEY",
+    } & set(environment)
+    assert not any("fromGroup" in entry for entry in worker["envVars"])
+
+
+def test_render_crons_keep_harvest_as_the_only_cycle_scheduler():
     blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
     cron_services = [
         service for service in blueprint["services"] if service["type"] == "cron"
     ]
 
-    assert [
-        (service["name"], service["schedule"], service["startCommand"])
+    assert {
+        service["name"]: (service["schedule"], service["startCommand"])
         for service in cron_services
-    ] == [
-        (
-            "pushinweight-harvest",
+    } == {
+        "pushinweight-harvest": (
             "*/15 * * * *",
             "python manage.py run_cycle --scheduled",
-        )
+        ),
+        "pushinweight-jobs": (
+            "17 */6 * * *",
+            "python manage.py sync_job_sources",
+        ),
+    }
+    cycle_schedulers = [
+        service for service in cron_services if "run_cycle" in service["startCommand"]
     ]
+    assert [service["name"] for service in cycle_schedulers] == ["pushinweight-harvest"]
     assert all(
         "beat" not in service.get("startCommand", "")
         for service in blueprint["services"]

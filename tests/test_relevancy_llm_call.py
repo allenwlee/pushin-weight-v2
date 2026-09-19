@@ -11,14 +11,20 @@ shape expected by CycleRunner._relevancy_llm_call.
 from __future__ import annotations
 
 from x_monitor.relevancy import build_binary_relevancy_llm_call
+from x_monitor.provider_telemetry import ProviderTextResponse
 
 
 class FakeAnthropicClient:
     """Mimics the messages_create(**kwargs) -> dict interface used by
     translator + classifier (see x_monitor.translator.AnthropicClaudeClient)."""
 
-    def __init__(self, response_text: str = "KEEP"):
+    def __init__(
+        self,
+        response_text: str = "KEEP",
+        base_url: str = "",
+    ):
         self.response_text = response_text
+        self._base_url = base_url
         self.calls: list[dict] = []
 
     def messages_create(self, **kwargs):
@@ -49,6 +55,19 @@ def test_llm_call_invokes_client_with_system_and_user():
         {"role": "user", "content": "USER_PROMPT"}
     ]
     assert kwargs["max_tokens"] <= 128  # gate output is small
+
+
+def test_llm_call_uses_actual_deepseek_route_for_thinking(monkeypatch):
+    """A stale shared URL cannot change a DeepSeek relevancy request."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    fake = FakeAnthropicClient(
+        base_url="https://api.deepseek.com/anthropic",
+    )
+    llm_call = build_binary_relevancy_llm_call(client=fake)
+
+    llm_call("sys", "user")
+
+    assert fake.calls[0]["thinking"] == {"type": "disabled"}
 
 
 def test_llm_call_returns_empty_string_on_empty_content():
@@ -98,3 +117,24 @@ def test_llm_call_passes_max_tokens():
     llm_call = build_binary_relevancy_llm_call(client=fake, max_tokens=64)
     llm_call("sys", "user")
     assert fake.calls[0]["max_tokens"] == 64
+
+
+def test_llm_call_uses_plaintext_method_for_openai_compatible_client():
+    class FakeDirectClient:
+        _base_url = "https://api.deepinfra.com/v1/openai/chat/completions"
+
+        def __init__(self):
+            self.calls = []
+
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            return ProviderTextResponse("KEEP\nAI model discussion", {})
+
+    fake = FakeDirectClient()
+    llm_call = build_binary_relevancy_llm_call(
+        client=fake,
+        model="deepseek-ai/DeepSeek-V4-Flash-0731",
+    )
+
+    assert llm_call("sys", "user") == "KEEP\nAI model discussion"
+    assert fake.calls[0]["model"] == "deepseek-ai/DeepSeek-V4-Flash-0731"

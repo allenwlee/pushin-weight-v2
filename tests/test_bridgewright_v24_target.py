@@ -16,6 +16,7 @@ FEED_HEADLINE_CONTRACT = "docs/reference/2026-08-28-164425-feed-headline-usabili
 HOVER_FREEZE_CONTRACT = "docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
 GEOGRAPHY_CONTRACT = "docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
 FEED_INSPECTION_CONTRACT = "docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
+STAGE1_PLAN = "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md"
 
 
 def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
@@ -35,6 +36,7 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert CHART_CONTRACT in authorities["approved_product_intent"]
     assert PRODUCTION_CONTRACT in authorities["approved_product_intent"]
     assert V24_CONTRACT in authorities["approved_product_intent"]
+    assert STAGE1_PLAN in authorities["approved_product_intent"]
     assert adapter["surface"] == "v24-home"
     assert adapter["mockup"] == V24_MOCKUP
     assert manifest["configuration"]["semantic_anchors"] == [
@@ -77,6 +79,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.feed-inspection-pagination",
             "description": "Owner-approved feed inspection, X-only navigation, language and region projection, flag-tree hierarchy, one-day chart sizing, and window-complete pagination delta.",
+        },
+        {
+            "key": "staging.home.ai-enrichment-stage1",
+            "description": "Owner-approved Stage 1 replacement of active discourse UI with ten post types and five independent product labels.",
         },
         {
             "key": "trend.headline",
@@ -145,7 +151,7 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "Approval status: APPROVED" in cyber_quan_contract
     assert "icon-only delta" in cyber_quan_contract
     assert "9a5fd90add8e5d60baf87796054b0211fbb94d9ad92e952fc5133465eb9da658" in cyber_quan_contract
-    assert "exactly these 32 symbols" in cyber_quan_contract
+    assert "exactly these 33 symbols" in cyber_quan_contract
     assert "mark A (`mark-quiet`)" in cyber_quan_contract
     assert "physical iPhone" in cyber_quan_contract
 

@@ -20,7 +20,7 @@ def test_scheduled_entrypoint_threads_configured_model_and_timeout(monkeypatch):
 
     monkeypatch.setattr(tasks, "load_config", lambda path: cfg)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda config: object(),
     )
 
@@ -70,7 +70,7 @@ def test_management_command_explicit_scheduled_mode_reaches_cycle_runner(monkeyp
     )
     monkeypatch.setattr("x_monitor.config.load_config", lambda _path: cfg)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(

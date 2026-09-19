@@ -24,7 +24,6 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
-
 # Allowed query IDs.
 QUERY_IDS: tuple[str, ...] = ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6")
 
@@ -55,7 +54,7 @@ LANG_ALLOWLIST: dict[str, set[str]] = {}
 
 
 class Query(BaseModel):
-    """A single curated X advanced-search query (one of Q1-Q6 for a model).
+    """A validated X advanced-search query used by legacy and current callers.
 
     U9 (migration 022): `expected_signal` was REMOVED. The legacy
     6-signal taxonomy is gone; per-tweet classification
@@ -64,7 +63,10 @@ class Query(BaseModel):
     `expected_signal` field.
     """
 
-    id: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"]
+    id: Literal[
+        "Q1", "Q2", "Q3", "Q4", "Q5", "Q6",
+        "A", "B1", "B2", "B3", "C1", "C2", "C3",
+    ]
     query_string: str = Field(min_length=1)
     max_results: int = Field(default=50, ge=1, le=200)
     enabled: bool = True

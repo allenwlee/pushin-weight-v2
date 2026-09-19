@@ -1,0 +1,6 @@
+{
+  "post_id": "2100106762875744524",
+  "commentary_en": "The author summarizes a research paper that addresses a vulnerability in LLM safety: removing a single 'refusal direction' can disable safety mechanisms. The proposed method, Decoy Direction Optimization (DDO), adds a decoy to corrupt the estimation of this direction. Reported results show reduced attack success rates across several models and lower computational cost than fine-tuning. The post highlights the practical threat to open-weight models and frames DDO as a lightweight countermeasure. The single upvote noted implies limited initial attention despite the paper's potential significance for model alignment research. No claims beyond the post's numbers or links are added.",
+  "commentary_zh_cn": "作者总结了一篇研究论文，该论文针对LLM安全的一个漏洞：删除单个‘拒绝方向’即可使安全机制失效。提出的方法‘诱饵方向优化’（DDO）通过向MLP神经元注入诱饵来干扰该方向的估计。报告的结果显示，在多个模型中攻击成功率降低，且计算成本低于微调。帖子强调了这一威胁对开放权重模型的实际影响，并将DDO定位为轻量级对策。帖中提到仅1个Hacker News点赞，暗示该论文虽具潜在重要性但初始关注度有限。除帖子中的数字和链接外，未添加其他主张。",
+  "commentary_ja": "著者は、LLMの安全性に関する脆弱性—単一の「拒否方向」を削除すると安全機構が無効化される—を扱う研究論文を要約しています。提案手法「デコイ方向最適化（DDO）」は、MLPニューロンにデコイを注入してこの方向の推定を妨害します。報告された結果では、複数のモデルで攻撃成功率が低下し、微調整よりも計算コストが低いとされています。投稿は、オープンウェイトモデルへの現実的脅威を強調し、DDOを軽量な対策として位置づけています。Hacker Newsでのアップヴォートが1件のみであることは、論文の潜在的な重要性にもかかわらず初期の注目が限定的であることを示唆しています。投稿内の数値やリンク以外の主張は加えていません。"
+}

@@ -27,12 +27,7 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
-from contextlib import redirect_stdout, redirect_stderr
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
+from contextlib import redirect_stderr, redirect_stdout
 
 
 class _StubClaudeClient:
@@ -50,7 +45,7 @@ def _monkey_call_with_retry(monkeypatch, exc_to_raise: Exception):
     """
     from x_monitor import translator
 
-    def _raise(_client, _prompt):
+    def _raise(*args, **kwargs):
         raise exc_to_raise
 
     monkeypatch.setattr(translator, "_call_with_retry", _raise)
@@ -61,10 +56,17 @@ def _run_pipeline_with_posts(posts, args, monkeypatch):
     AnthropicClaudeClient. Returns (rc, stdout).
     """
     from scripts import post_fetch_smoketest
-    from x_monitor import translator
+    from x_monitor import attribution, translator
 
     monkeypatch.setattr(
         translator, "AnthropicClaudeClient", lambda: _StubClaudeClient()
+    )
+    monkeypatch.setattr(
+        attribution,
+        "classify_pragmatics_full",
+        lambda *args, **kwargs: {
+            "by_brand": {}, "unsanctioned_flags": [], "valid": False
+        },
     )
 
     out_buf = io.StringIO()

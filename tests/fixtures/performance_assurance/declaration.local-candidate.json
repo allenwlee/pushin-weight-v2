@@ -1,0 +1,69 @@
+{
+  "schema_version": "bridgewright.performance.declaration/v1",
+  "profile": "performance-assurance/v1",
+  "package_source_revision": "0390f3c42195856a67afcb1d62464052cebf3476",
+  "fixture": {
+    "path": "tests/fixtures/ui_assurance/data.json",
+    "sha256": "0d45d13925beaddc04c128314a2bc1b6b063571347ba2b6b8f6655545c981cf6"
+  },
+  "base_origin": "http://127.0.0.1:8764",
+  "asset_origins": [],
+  "profiles": [
+    {
+      "id": "desktop",
+      "device": "desktop",
+      "viewport": {"width": 1440, "height": 960},
+      "device_scale_factor": 1,
+      "throttling": "desktop",
+      "cache_mode": "warm",
+      "storage_reset": "reset",
+      "destination_scope": "local-only",
+      "phase_limits": {"navigation_ms": 30000, "interaction_ms": 10000, "scenario_ms": 180000, "process_ms": 90000, "max_stdout_bytes": 200000, "max_stderr_bytes": 200000},
+      "output_limits": {"max_artifact_bytes": 10000000, "max_network_observations": 250}
+    },
+    {
+      "id": "mobile",
+      "device": "mobile",
+      "viewport": {"width": 390, "height": 844},
+      "device_scale_factor": 1,
+      "throttling": "mobile",
+      "cache_mode": "warm",
+      "storage_reset": "reset",
+      "destination_scope": "local-only",
+      "phase_limits": {"navigation_ms": 30000, "interaction_ms": 10000, "scenario_ms": 180000, "process_ms": 90000, "max_stdout_bytes": 200000, "max_stderr_bytes": 200000},
+      "output_limits": {"max_artifact_bytes": 10000000, "max_network_observations": 250}
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "homepage-desktop",
+      "route": "/?locale=en",
+      "profile": "desktop",
+      "runs": 2,
+      "state_seeds": [{"storage":"cookie","name":"locale","value":"en"},{"storage":"cookie","name":"home_window","value":"365"}],
+      "actions": [{"kind":"click","target":".follower-magnitude.pw-inspection-trigger"}],
+      "required_metrics": ["lcp","cls","inp"],
+      "metric_engines": {"lcp":"lighthouse","cls":"lighthouse","inp":"web-vitals"},
+      "web_vitals_metrics": ["lcp","cls","inp"],
+      "lighthouse_assertions": [{"id":"lcp-advisory-desktop","audit":"largest-contentful-paint","operator":"lte","threshold":5000,"enforcement":"advisory"},{"id":"cls-advisory-desktop","audit":"cumulative-layout-shift","operator":"lte","threshold":0.5,"enforcement":"advisory"}],
+      "budgets": [{"metric":"dom-elements","max_value":6000,"enforcement":"blocking"}],
+      "network_expectations": [{"path":"/static/country-flags.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
+      "cache_expectations": [{"path":"/static/country-flags.svg","policy":"no_store","min_max_age_seconds":0,"must_reuse":false}]
+    },
+    {
+      "id": "homepage-mobile",
+      "route": "/?locale=zh_hans",
+      "profile": "mobile",
+      "runs": 2,
+      "state_seeds": [{"storage":"cookie","name":"locale","value":"zh_hans"},{"storage":"cookie","name":"home_window","value":"365"}],
+      "actions": [{"kind":"click","target":".follower-magnitude.pw-inspection-trigger"}],
+      "required_metrics": ["lcp","cls","inp"],
+      "metric_engines": {"lcp":"lighthouse","cls":"lighthouse","inp":"web-vitals"},
+      "web_vitals_metrics": ["lcp","cls","inp"],
+      "lighthouse_assertions": [{"id":"lcp-advisory-mobile","audit":"largest-contentful-paint","operator":"lte","threshold":6000,"enforcement":"advisory"},{"id":"cls-advisory-mobile","audit":"cumulative-layout-shift","operator":"lte","threshold":0.5,"enforcement":"advisory"}],
+      "budgets": [{"metric":"dom-elements","max_value":6000,"enforcement":"blocking"}],
+      "network_expectations": [{"path":"/static/country-flags.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
+      "cache_expectations": [{"path":"/static/country-flags.svg","policy":"no_store","min_max_age_seconds":0,"must_reuse":false}]
+    }
+  ]
+}

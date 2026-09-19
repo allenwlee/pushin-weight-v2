@@ -53,10 +53,22 @@ def admin_connection_parameters(database_url: str) -> dict[str, str]:
 def harvest_coordination_lock_keys(environment: str) -> tuple[int, int]:
     """Return stable signed PostgreSQL keys for one environment's harvest gate."""
 
+    return _coordination_lock_keys("harvest", environment)
+
+
+def synthesis_coordination_lock_keys(environment: str) -> tuple[int, int]:
+    """Return stable signed PostgreSQL keys for one environment's synthesis gate."""
+
+    return _coordination_lock_keys("synthesis", environment)
+
+
+def _coordination_lock_keys(kind: str, environment: str) -> tuple[int, int]:
+    """Build one namespace-separated, environment-specific advisory-lock key."""
+
     if not environment or "\n" in environment or "\r" in environment:
-        raise DatabaseLockError("harvest_lock_environment_invalid")
+        raise DatabaseLockError(f"{kind}_lock_environment_invalid")
     digest = hashlib.sha256(
-        f"pushinweight:harvest-coordination:{environment}".encode()
+        f"pushinweight:{kind}-coordination:{environment}".encode()
     ).digest()
     unsigned = (
         int.from_bytes(digest[:4], "big"),
@@ -109,6 +121,47 @@ def acquire_harvest_coordination_lock(
                         cursor.execute("SELECT pg_advisory_unlock(%s, %s)", list(keys))
                 except Exception as exc:
                     raise DatabaseLockError("harvest_lock_release_failed") from exc
+
+
+@contextmanager
+def acquire_synthesis_coordination_lock(
+    database_url: str,
+    *,
+    environment: str,
+    connect: Callable[..., Connection] = psycopg.connect,
+) -> Iterator[None]:
+    """Exclude a synthesis worker and database refresh across DB-name swaps."""
+
+    parameters: dict[str, Any] = admin_connection_parameters(database_url)
+    keys = synthesis_coordination_lock_keys(environment)
+    try:
+        connection = connect(**parameters, autocommit=True)
+    except Exception as exc:
+        raise DatabaseLockError("synthesis_lock_connection_failed") from exc
+
+    acquired = False
+    with connection:
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_try_advisory_lock(%s, %s)", list(keys))
+                row = cursor.fetchone()
+                acquired = bool(row and row[0])
+                if not acquired:
+                    raise DatabaseLockError("synthesis_lock_unavailable")
+        except DatabaseLockError:
+            raise
+        except Exception as exc:
+            raise DatabaseLockError("synthesis_lock_acquire_failed") from exc
+
+        try:
+            yield
+        finally:
+            if acquired:
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_unlock(%s, %s)", list(keys))
+                except Exception as exc:
+                    raise DatabaseLockError("synthesis_lock_release_failed") from exc
 
 
 @contextmanager

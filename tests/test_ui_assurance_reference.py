@@ -109,9 +109,9 @@ def test_locale_change_preserves_filters_window_timezone_and_lenses() -> None:
 
 
 def test_or_within_one_dimension_and_and_across_dimensions() -> None:
-    state = set_control(initial_state(), "brands", ["deepseek", "minimax"])
+    state = set_control(initial_state(), "brands", ["deepseek", "inclusionai"])
     state = set_control(state, "sentiment", ["mixed", "neutral"])
-    assert projection(FIXTURE, state)["feed"] == ["p01", "p03"]
+    assert projection(FIXTURE, state)["feed"] == ["p01", "p07"]
 
     state = set_control(state, "role", "official")
     assert projection(FIXTURE, state)["feed"] == ["p01"]

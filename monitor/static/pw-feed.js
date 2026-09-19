@@ -57,6 +57,184 @@
     return bodyLocale || (root && root.getAttribute('data-pw-locale')) || 'en';
   }
 
+  var synthesisGeneration = 0;
+  var synthesisVisibleObserver = null;
+  var synthesisLookaheadObserver = null;
+  var synthesisLookaheadCount = 0;
+  var synthesisQueues = { visible: {}, expanded: {}, lookahead: {} };
+  var synthesisFlushTimer = null;
+  var synthesisPollTimers = [];
+  var synthesisControllers = [];
+  var SYNTHESIS_POLL_DELAYS = [2000, 4000, 8000, 16000, 30000, 30000];
+
+  function csrfToken() {
+    var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function synthesisLabel(status) {
+    var locale = currentLocale();
+    if (locale === 'ja' || locale === 'ja-JP') {
+      return status === 'failed' ? '分析を生成できませんでした' :
+        status === 'cancelled' ? '分析リクエストは期限切れです' : '分析を生成中';
+    }
+    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans') {
+      return status === 'failed' ? '分析生成失败' :
+        status === 'cancelled' ? '分析请求已过期' : '正在生成分析';
+    }
+    return status === 'failed' ? 'Analysis failed' :
+      status === 'cancelled' ? 'Analysis request expired' : 'Analysis pending';
+  }
+
+  function resetSynthesisDemand() {
+    synthesisGeneration += 1;
+    if (synthesisVisibleObserver) synthesisVisibleObserver.disconnect();
+    if (synthesisLookaheadObserver) synthesisLookaheadObserver.disconnect();
+    synthesisVisibleObserver = null;
+    synthesisLookaheadObserver = null;
+    synthesisLookaheadCount = 0;
+    synthesisQueues = { visible: {}, expanded: {}, lookahead: {} };
+    if (synthesisFlushTimer != null) clearTimeout(synthesisFlushTimer);
+    synthesisFlushTimer = null;
+    synthesisPollTimers.forEach(clearTimeout);
+    synthesisPollTimers = [];
+    synthesisControllers.forEach(function (controller) { controller.abort(); });
+    synthesisControllers = [];
+  }
+
+  function updateSynthesisRow(result) {
+    var row = $$('.feed-row[data-tweet-id]').find(function (candidate) {
+      return candidate.getAttribute('data-tweet-id') === String(result.post_id);
+    });
+    if (!row) return;
+    var status = result.status || 'pending';
+    row.setAttribute('data-synthesis-status', status);
+    var text = $('.text[data-text-cycle]', row);
+    var synthesis = result.synthesis || {};
+    var literal = result.literal || {};
+    if (text) {
+      if (synthesis.en) text.setAttribute('data-commentary-en', synthesis.en);
+      if (synthesis['zh-cn']) text.setAttribute('data-commentary-zh-cn', synthesis['zh-cn']);
+      if (synthesis.ja) text.setAttribute('data-commentary-ja', synthesis.ja);
+      if (literal.en) text.setAttribute('data-text-en', literal.en);
+      if (literal['zh-cn']) text.setAttribute('data-literal-cn', literal['zh-cn']);
+      if (literal.ja) text.setAttribute('data-text-ja', literal.ja);
+      text.setAttribute('data-layer-idx', '0');
+      renderTextLayer(text);
+    }
+    var badge = $('.synthesis-status', row);
+    if (status === 'ready') {
+      if (badge) badge.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.setAttribute('role', 'status');
+      badge.setAttribute('aria-live', 'polite');
+      var meta = $('.meta', row);
+      if (meta) meta.appendChild(badge);
+    }
+    badge.className = 'enrichment-status synthesis-status synthesis-status-' + status;
+    badge.textContent = synthesisLabel(status);
+  }
+
+  function requestSynthesis(postIds, reason, generation, pollAttempt) {
+    if (!postIds.length || document.hidden || generation !== synthesisGeneration) return;
+    var controller = typeof AbortController === 'undefined' ? null : new AbortController();
+    if (controller) synthesisControllers.push(controller);
+    fetch('/api/v2/post-synthesis-demands/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken(),
+      },
+      body: JSON.stringify({
+        post_ids: postIds,
+        reason: reason,
+        poll_only: pollAttempt > 0,
+      }),
+    }).then(function (response) {
+      if (!response.ok) throw new Error('synthesis request failed');
+      return response.json();
+    }).then(function (payload) {
+      if (generation !== synthesisGeneration || !payload || !Array.isArray(payload.results)) return;
+      payload.results.forEach(updateSynthesisRow);
+      var pending = payload.results.filter(function (result) {
+        return ['ready', 'failed', 'cancelled'].indexOf(result.status) === -1;
+      }).map(function (result) { return String(result.post_id); });
+      if (pending.length && pollAttempt < SYNTHESIS_POLL_DELAYS.length) {
+        var timer = setTimeout(function () {
+          synthesisPollTimers = synthesisPollTimers.filter(function (item) {
+            return item !== timer;
+          });
+          requestSynthesis(pending, reason, generation, pollAttempt + 1);
+        }, SYNTHESIS_POLL_DELAYS[pollAttempt]);
+        synthesisPollTimers.push(timer);
+      }
+    }).catch(function () {
+      // Feed content remains readable from source/literal text during outages.
+    }).finally(function () {
+      if (!controller) return;
+      synthesisControllers = synthesisControllers.filter(function (item) {
+        return item !== controller;
+      });
+    });
+  }
+
+  function flushSynthesisQueues() {
+    synthesisFlushTimer = null;
+    if (document.hidden) return;
+    var generation = synthesisGeneration;
+    ['expanded', 'visible', 'lookahead'].forEach(function (reason) {
+      var cap = reason === 'lookahead' ? 10 : 20;
+      var ids = Object.keys(synthesisQueues[reason]).slice(0, cap);
+      synthesisQueues[reason] = {};
+      requestSynthesis(ids, reason, generation, 0);
+    });
+  }
+
+  function queueSynthesis(row, reason) {
+    if (!row || document.hidden ||
+        ['ready', 'failed', 'cancelled'].indexOf(
+          row.getAttribute('data-synthesis-status')
+        ) !== -1) return;
+    var postId = row.getAttribute('data-tweet-id');
+    if (!postId) return;
+    synthesisQueues[reason][postId] = true;
+    if (synthesisFlushTimer == null) {
+      synthesisFlushTimer = setTimeout(flushSynthesisQueues, 50);
+    }
+  }
+
+  function observeSynthesisRows(rows) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    var scrollRoot = $('[data-pw-feed-scroll]') || null;
+    if (!synthesisVisibleObserver) {
+      synthesisVisibleObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) queueSynthesis(entry.target, 'visible');
+        });
+      }, { root: scrollRoot, rootMargin: '0px' });
+    }
+    if (!synthesisLookaheadObserver) {
+      synthesisLookaheadObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting || synthesisLookaheadCount >= 10) return;
+          synthesisLookaheadCount += 1;
+          queueSynthesis(entry.target, 'lookahead');
+          synthesisLookaheadObserver.unobserve(entry.target);
+        });
+      }, { root: scrollRoot, rootMargin: '250px 0px' });
+    }
+    rows.forEach(function (row) {
+      if (row.getAttribute('data-synthesis-status') === 'ready') return;
+      synthesisVisibleObserver.observe(row);
+      synthesisLookaheadObserver.observe(row);
+    });
+  }
+
   // ---------------------------------------------------------------------
   // U2: pretty relative-time formatter
   // ---------------------------------------------------------------------
@@ -112,24 +290,56 @@
     }
   }
 
+  function feedNow() {
+    var raw = document.body && document.body.getAttribute('data-pw-feed-now');
+    var anchored = raw ? new Date(raw) : null;
+    return anchored && !isNaN(anchored.getTime()) ? anchored : new Date();
+  }
+
   function renderRow(row) {
     var div = document.createElement('div');
     var tint = row.tint_class || 'tint-neutral';
     div.className = 'feed-row';
     div.setAttribute('data-pw-feed-row', '');
+    div.setAttribute('data-source-kind', row.source_kind || 'x_post');
+    div.setAttribute('data-source-url', row.source_url || '');
     div.setAttribute('data-tweet-id', row.tweet_id || '');
     div.setAttribute(
       'data-x-url',
-      row.tweet_id ? 'https://x.com/i/web/status/' + encodeURIComponent(row.tweet_id) : ''
+      row.source_kind === 'official_job'
+        ? ''
+        : (row.tweet_id ? 'https://x.com/i/web/status/' + encodeURIComponent(row.tweet_id) : '')
     );
     div.setAttribute('data-created-at-iso', row.created_at_iso || '');
     div.setAttribute('data-sentiments', (row.sentiment_keys || []).join(','));
     div.setAttribute('data-post-types', (row.post_type_keys || []).join(','));
+    div.setAttribute('data-product-labels', (row.product_label_keys || []).join(','));
+    div.setAttribute('data-audience-topics', (row.audience_topic_keys || []).join(','));
+    div.setAttribute('data-audience-topics-status', row.audience_topics_status || 'unavailable');
+    div.setAttribute('data-geopolitical-modes', (row.geopolitical_mode_keys || []).join(','));
+    div.setAttribute('data-geopolitical-modes-status', row.geopolitical_modes_status || 'unavailable');
+    div.setAttribute('data-china-national-stance-status', row.china_national_stance_status || 'unavailable');
+    div.setAttribute('data-us-national-stance-status', row.us_national_stance_status || 'unavailable');
+    div.setAttribute(
+      'data-untracked-brand-promotions',
+      (row.untracked_brand_promotions || []).join(',')
+    );
+    div.setAttribute(
+      'data-classification-statuses',
+      (row.classification_statuses || []).join(',')
+    );
+    div.setAttribute(
+      'data-classification-status-labels',
+      (row.classification_status_labels || []).join(',')
+    );
     div.setAttribute('data-nat-cn', row.nat_cn || '');
     div.setAttribute('data-nat-us', row.nat_us || '');
+    div.setAttribute('data-legacy-nat-cn', (row.legacy_nat_cn || []).join(','));
+    div.setAttribute('data-legacy-nat-us', (row.legacy_nat_us || []).join(','));
     div.setAttribute('data-signal-inspections', JSON.stringify(row.signal_inspections || {}));
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
     div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
+    div.setAttribute('data-synthesis-status', row.synthesis_status || 'not_requested');
     div.setAttribute('data-tint', tint);
     div.innerHTML = renderRowHtml(row);
     return div;
@@ -150,6 +360,15 @@
     var label = row.enrichment_status_label || ('enrichment ' + status);
     return '<span class="enrichment-status enrichment-status-' + status +
       '" role="status">' + escapeHtml(label) + '</span>';
+  }
+
+  function synthesisStatusHtml(row) {
+    var status = row.synthesis_status || 'not_requested';
+    if (status === 'ready') return '';
+    var label = row.synthesis_status_label || synthesisLabel(status);
+    return '<span class="enrichment-status synthesis-status synthesis-status-' +
+      escapeHtml(status) + '" role="status" aria-live="polite">' +
+      escapeHtml(label) + '</span>';
   }
 
   // U3 helper: strip a leading "@" if present.
@@ -290,7 +509,49 @@
 
   // Render the production two-column grid. paintSignals() fills the reserved
   // signal column after the row enters the DOM.
+  function officialJobActionLabel() {
+    var locale = currentLocale();
+    return locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
+      ? '查看官方职位' : (locale === 'ja' || locale === 'ja-JP')
+        ? '公式求人を見る' : 'View official job';
+  }
+
+  function renderOfficialJobRowHtml(row) {
+    var actionLabel = officialJobActionLabel();
+    var sourceUrl = row.source_url || row.application_url || '';
+    var applicationUrl = row.application_url || sourceUrl;
+    return (
+      '<div class="feed-row-shell ' + escapeHtml(row.tint_class || 'tint-neutral') + '">' +
+        '<div class="feed-main"><div class="body official-job-body">' +
+          '<div class="head"><span class="handle">' +
+            '<a class="feed-handle-link official-job-source" href="' + escapeHtml(sourceUrl) +
+              '" target="_blank" rel="noopener noreferrer">' +
+              escapeHtml(row.source_name || '') + '</a></span>' +
+            '<span class="meta">· ' +
+              escapeHtml(row.job_meta_text || row.location_text || '') +
+              ' <span class="ts-abs">' + escapeHtml(row.ts_abs_text || '') + '</span></span></div>' +
+          '<div class="text official-job-text"><strong class="official-job-title">' +
+            escapeHtml(row.title || '') + '</strong>' +
+            (row.text_original ? '<span class="official-job-description">' +
+              escapeHtml(row.text_original) + '</span>' : '') + '</div>' +
+          '<div class="engagement official-job-actions"><a class="official-job-link" href="' +
+            escapeHtml(applicationUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(actionLabel) + '</a></div>' +
+        '</div></div>' +
+        '<div class="feed-signals">' +
+          '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
+          '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
+          '<div class="sig-row sig-product" data-sig-product></div>' +
+          '<div class="sig-row sig-classification-status" data-sig-classification-status></div>' +
+          '<div class="sig-row sig-nat" data-sig-nat></div>' +
+          '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   function renderRowHtml(row) {
+    if (row.source_kind === 'official_job') return renderOfficialJobRowHtml(row);
     var handleRaw = (row.account && row.account.handle) || '';
     var handleLabel = (row.account && row.account.display_name) || handleRaw || '@unknown';
     var handleHtml = handleRaw
@@ -310,13 +571,17 @@
     var sourceText = row.text_original || row.text || '';
     var commentaryZhCn = row.commentary_zh_cn || '';
     var commentaryEn = row.commentary_en || '';
+    var commentaryJa = row.commentary_ja || '';
     var literalCnText = row.text_zh_cn || '';
     var englishText = row.text_en || '';
+    var japaneseText = row.text_ja || '';
     var languageDisplay = row.language_display || 'undetected';
     var leadMetadata = accountLeadMetadataHtml(row);
     var locale = currentLocale();
     var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
       ? (commentaryZhCn || literalCnText || sourceText)
+      : locale === 'ja' || locale === 'ja-JP'
+        ? (commentaryJa || japaneseText || sourceText)
       : locale === 'original'
         ? sourceText
         : (commentaryEn || englishText || sourceText);
@@ -338,14 +603,16 @@
           '<div class="body">' +
             '<div class="head">' +
               '<span class="handle">' + handleHtml + '</span>' +
-              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + '</span>' +
+              '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + synthesisStatusHtml(row) + '</span>' +
             '</div>' +
             '<div class="text" data-text-cycle role="button" tabindex="0"' +
               ' data-language-display="' + escapeHtml(languageDisplay) + '"' +
               ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
               ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
+              ' data-commentary-ja="' + escapeHtml(commentaryJa) + '"' +
               ' data-literal-cn="' + escapeHtml(literalCnText) + '"' +
               ' data-text-en="' + escapeHtml(englishText) + '"' +
+              ' data-text-ja="' + escapeHtml(japaneseText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
               '<span class="post-language-tag">' + escapeHtml(languageDisplay) + '</span>' +
               escapeHtml((initialText || '').toString()) +
@@ -358,7 +625,8 @@
                 encodeURIComponent(row.tweet_id || '') + '" target="_blank"' +
                 ' rel="noopener noreferrer" aria-label="' +
                 escapeHtml((locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans')
-                  ? '在 X 查看原帖' : 'Open original post on X') + '">' +
+                  ? '在 X 查看原帖' : (locale === 'ja' || locale === 'ja-JP')
+                    ? 'X で元の投稿を表示' : 'Open original post on X') + '">' +
                 '<svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
                   '<path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path>' +
                 '</svg></a>' +
@@ -368,6 +636,10 @@
         '<div class="feed-signals">' +
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
+          '<div class="sig-row sig-product" data-sig-product></div>' +
+          '<div class="sig-row sig-audience-topic" data-sig-audience></div>' +
+          '<div class="sig-row sig-geopolitical" data-sig-geopolitical></div>' +
+          '<div class="sig-row sig-classification-status" data-sig-classification-status></div>' +
           '<div class="sig-row sig-nat" data-sig-nat></div>' +
           '<div class="sig-row sig-unsanctioned" data-sig-unsanctioned></div>' +
         '</div>' +
@@ -375,11 +647,60 @@
     );
   }
 
+  function renderOfficialJobTableRowHtml(row) {
+    var actionLabel = officialJobActionLabel();
+    var sourceUrl = row.source_url || row.application_url || '';
+    var applicationUrl = row.application_url || sourceUrl;
+    var brand = (row.brands || [])[0] || {};
+    return (
+      '<td class="muted-cell"><a class="feed-date-link" href="' +
+        escapeHtml(sourceUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(row.created_at || '') + '</a></td>' +
+      '<td><span class="pill">' +
+        escapeHtml(brand.display_name || brand.display_name_en || brand.nickname || '') +
+        '</span></td>' +
+      '<td><strong class="official-job-table-title">' + escapeHtml(row.title || '') +
+        '</strong>' + (row.text_original
+          ? '<div class="cell-truncated official-job-table-description" ' +
+              'data-pw-cell-truncated>' + escapeHtml(row.text_original) + '</div>'
+          : '') + '</td>' +
+      '<td class="official-job-table-meta">' +
+        escapeHtml(row.job_meta_text || row.location_text || '') + '</td>' +
+      '<td><span class="pill" data-key="job_listings">' +
+        escapeHtml(row.job_listing_label || 'job listings') + '</span></td>' +
+      '<td><div class="official-job-table-source">' +
+        escapeHtml(row.source_name || '') + '</div>' +
+        '<a class="official-job-table-link" href="' + escapeHtml(applicationUrl) +
+        '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(actionLabel) + '</a></td>'
+    );
+  }
+
+  function renderOfficialJobTableRow(row) {
+    var element = document.createElement('tr');
+    element.className = 'official-job-table-row';
+    element.setAttribute('data-pw-feed-row', '');
+    element.setAttribute('data-source-kind', 'official_job');
+    element.setAttribute('data-source-url', row.source_url || '');
+    element.setAttribute('data-tweet-id', '');
+    element.setAttribute('data-created-at-iso', row.created_at_iso || '');
+    element.setAttribute('data-post-types', 'job_listings');
+    element.innerHTML = renderOfficialJobTableRowHtml(row);
+    return element;
+  }
+
   // Paint Cyber-Quan symbols and existing semantic tints in the right column.
   var SENT_ORDER = ['positive', 'neutral', 'negative', 'mixed'];
   var TYPE_ORDER = [
-    'buzz_releases', 'hands_on_usage', 'performance_comparisons',
-    'feedback_questions', 'advertising_marketing', 'event_announcement'
+    'releases_updates', 'hands_on_usage', 'results_analysis', 'results_evaluations',
+    'questions_requests', 'advertising_marketing', 'events', 'opportunities',
+    'job_listings', 'personnel_changes',
+    'opinions_reactions', 'research_explanations', 'business_finance',
+    'news_reporting', 'other'
+  ];
+  var PRODUCT_ORDER = [
+    'bug', 'complaint', 'testimonial', 'ideas_requests', 'investigate_claim',
+    'misinformation'
   ];
 
   function parseListAttr(raw) {
@@ -433,8 +754,21 @@
   function paintSignals(row) {
     var sents = uniqueInOrder(parseListAttr(row.getAttribute('data-sentiments')), SENT_ORDER);
     var types = uniqueInOrder(parseListAttr(row.getAttribute('data-post-types')), TYPE_ORDER);
+    var products = uniqueInOrder(
+      parseListAttr(row.getAttribute('data-product-labels')), PRODUCT_ORDER
+    );
+    var audienceTopics = parseListAttr(row.getAttribute('data-audience-topics'));
+    var geopoliticalModes = parseListAttr(row.getAttribute('data-geopolitical-modes'));
+    var classificationStatuses = parseListAttr(
+      row.getAttribute('data-classification-statuses')
+    );
+    var classificationStatusLabels = parseListAttr(
+      row.getAttribute('data-classification-status-labels')
+    );
     var natCn = (row.getAttribute('data-nat-cn') || '').trim();
     var natUs = (row.getAttribute('data-nat-us') || '').trim();
+    var legacyNatCn = parseListAttr(row.getAttribute('data-legacy-nat-cn'));
+    var legacyNatUs = parseListAttr(row.getAttribute('data-legacy-nat-us'));
     var showCn = natCn && natCn !== 'none';
     var showUs = natUs && natUs !== 'none';
     var inspections = signalInspections(row);
@@ -458,6 +792,56 @@
         );
       }).join('');
     }
+    var elP = row.querySelector('[data-sig-product]');
+    if (elP) {
+      elP.innerHTML = products.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('product_labels', key, 'signal-icon'),
+          signalInspectionText(inspections, 'product_label', key),
+          'signal-inspection-trigger product-signal product-' + key
+        );
+      }).join('');
+      elP.classList.toggle('is-empty', products.length === 0);
+    }
+    var elA = row.querySelector('[data-sig-audience]');
+    if (elA) {
+      elA.innerHTML = audienceTopics.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('audience_topics', key, 'signal-icon'),
+          signalInspectionText(inspections, 'audience_topic', key),
+          'signal-inspection-trigger'
+        );
+      }).join('');
+      elA.classList.toggle('is-empty', audienceTopics.length === 0);
+    }
+    var elG = row.querySelector('[data-sig-geopolitical]');
+    if (elG) {
+      elG.innerHTML = geopoliticalModes.map(function (key) {
+        return inspectionTriggerHtml(
+          semanticIcon('geopolitical_modes', key, 'signal-icon'),
+          signalInspectionText(inspections, 'geopolitical_mode', key),
+          'signal-inspection-trigger'
+        );
+      }).join('');
+      elG.classList.toggle('is-empty', geopoliticalModes.length === 0);
+    }
+    var elClassification = row.querySelector('[data-sig-classification-status]');
+    if (elClassification) {
+      elClassification.innerHTML = classificationStatuses.map(function (status, index) {
+        var inspection = signalInspectionText(
+          inspections, 'classification_status', status
+        );
+        return inspectionTriggerHtml(
+          '<span class="classification-state-label">' +
+            escapeHtml(classificationStatusLabels[index] || status) + '</span>',
+          inspection,
+          'signal-inspection-trigger classification-state classification-state-' + status
+        );
+      }).join('');
+      elClassification.classList.toggle(
+        'is-empty', classificationStatuses.length === 0
+      );
+    }
     var elN = row.querySelector('[data-sig-nat]');
     if (elN) {
       if (!showCn && !showUs) { elN.innerHTML = ''; elN.classList.add('is-empty'); }
@@ -466,18 +850,27 @@
         var regions = (showCn
           ? inspectionTriggerHtml(
               renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b>',
-              signalInspectionText(inspections, 'nat_cn', natCn),
-              'signal-inspection-trigger nationalism-region nationalism-cn'
+              signalInspectionText(
+                inspections,
+                legacyNatCn.length ? 'legacy_nat_cn' : 'nat_cn',
+                natCn
+              ),
+              'signal-inspection-trigger nationalism-region nationalism-cn' +
+                (legacyNatCn.length ? ' legacy-nationalism' : '')
             )
           : '') + (showUs
           ? inspectionTriggerHtml(
               renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b>',
-              signalInspectionText(inspections, 'nat_us', natUs),
-              'signal-inspection-trigger nationalism-region nationalism-us'
+              signalInspectionText(
+                inspections,
+                legacyNatUs.length ? 'legacy_nat_us' : 'nat_us',
+                natUs
+              ),
+              'signal-inspection-trigger nationalism-region nationalism-us' +
+                (legacyNatUs.length ? ' legacy-nationalism' : '')
             )
           : '');
-        elN.innerHTML = '<span class="sig-nat-prefix" aria-hidden="true">' +
-          renderIcon('icon-discourse', 'signal-icon') + ':</span>' + regions;
+        elN.innerHTML = regions;
       }
     }
     var elU = row.querySelector('[data-sig-unsanctioned]');
@@ -488,7 +881,7 @@
         elU.classList.remove('is-empty');
         elU.innerHTML = inspectionTriggerHtml(
           renderIcon('icon-unsanctioned', 'signal-icon tone-negative'),
-          signalInspectionText(inspections, 'unsanctioned', 'true'),
+          signalInspectionText(inspections, 'untracked_brand_promotions', 'true'),
           'signal-inspection-trigger'
         );
       }
@@ -653,6 +1046,13 @@
         { key: 'en', label: 'en', value: english },
       ]);
     }
+    if (locale === 'ja' || locale === 'ja-JP') {
+      return uniqueTextLayers([
+        { key: 'synthesis', label: '分析', value: textValue(el, 'commentary-ja') },
+        { key: 'literal_ja', label: '直訳', value: textValue(el, 'text-ja') },
+        { key: 'source', label: '原文', value: source },
+      ]);
+    }
     return uniqueTextLayers([
       { key: 'synthesis', label: 'synthesis', value: textValue(el, 'commentary-en') },
       { key: 'en', label: 'en', value: english },
@@ -689,16 +1089,22 @@
   }
 
   function hydrateRows(rows) {
-    var now = new Date();
+    var now = feedNow();
     rows.forEach(function (row) {
       paintSignals(row);
       attachCellClickHandlers(row);
       formatRowTimestamp(row, now);
     });
+    observeSynthesisRows(rows);
   }
 
   function appendRows(body, rows) {
-    var inserted = rows.map(renderRow);
+    var inserted = rows.map(function (row) {
+      if (body.tagName === 'TBODY' && row.source_kind === 'official_job') {
+        return renderOfficialJobTableRow(row);
+      }
+      return renderRow(row);
+    });
     inserted.forEach(function (row) { body.appendChild(row); });
     hydrateRows(inserted);
     return inserted;
@@ -716,6 +1122,7 @@
   }
 
   function replaceRows(body, rows) {
+    resetSynthesisDemand();
     if (inspectionPopover) {
       var trigger = inspectionPopover.activeTrigger();
       if (trigger && body.contains(trigger)) inspectionPopover.close();
@@ -828,6 +1235,7 @@
           if (other !== el) collapseText(other);
         });
         el.classList.add('is-expanded');
+        queueSynthesis(row, 'expanded');
         advanceTextLayer(el);
         e.stopPropagation();
       });
@@ -918,8 +1326,10 @@
     if (!root) return;
     var zh = ['zh_cn', 'zh-cn', 'zh_hans', 'zh-hans']
       .indexOf(String(currentLocale()).toLowerCase()) !== -1;
-    setFeedTitle(root.getAttribute(zh ? 'data-pw-default-title-zh' : 'data-pw-default-title-en') ||
-      (zh ? '本窗口最新' : 'Latest in window'));
+    var ja = ['ja', 'ja-jp'].indexOf(String(currentLocale()).toLowerCase()) !== -1;
+    setFeedTitle(root.getAttribute(zh ? 'data-pw-default-title-zh' :
+      ja ? 'data-pw-default-title-ja' : 'data-pw-default-title-en') ||
+      (zh ? '本窗口最新' : ja ? 'この期間の最新投稿' : 'Latest in window'));
   }
 
   function showFeedStatus(kind) {
@@ -966,6 +1376,7 @@
     if (!root) return;
     var body = $('[data-pw-feed-body]', root);
     if (!body) return;
+    resetSynthesisDemand();
     // Clear the body but preserve the first batch (already rendered by
     // Jinja). For the simplest behavior, refetch from the server and
     // replace the entire body. U4 (2026-07-16): pass the current
@@ -1174,6 +1585,16 @@
     wireSortHeaders();
     wireFilterChange();
     startAutoRefresh();
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        resetSynthesisDemand();
+        return;
+      }
+      var currentBody = $('[data-pw-feed-body]');
+      if (currentBody) {
+        observeSynthesisRows($$('.feed-row[data-pw-feed-row]', currentBody));
+      }
+    });
   }
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -1183,12 +1604,14 @@
       formatRelative: formatRelative,
       formatLocalTooltip: formatLocalTooltip,
       enrichmentStatusHtml: enrichmentStatusHtml,
+      synthesisStatusHtml: synthesisStatusHtml,
       textLayers: textLayers,
       hydrateRows: hydrateRows,
       paintSignals: paintSignals,
       replaceRows: replaceRows,
       isFeedPayload: isFeedPayload,
       renderRowHtml: renderRowHtml,
+      renderOfficialJobTableRowHtml: renderOfficialJobTableRowHtml,
       hoverFreezeFilters: hoverFreezeFilters,
     };
     return;

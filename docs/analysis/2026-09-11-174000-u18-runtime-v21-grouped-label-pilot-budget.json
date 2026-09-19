@@ -1,0 +1,73 @@
+{
+  "schema_version": "u18-runtime-development-budget/v8",
+  "frozen_at": "2026-09-11T08:40:00Z",
+  "reason": "The exact v19 batch-5 and v20 singleton base-prompt pilots reached only 56.7% and 40.0% post-type exact sets on the same 30 English development rows. Batch size is rejected as the remedy. This bounded probe decomposes the eight common post types into three independent evidence-backed judgment groups while preserving the v19 base outcome, scalar, product-label, event, opportunity, job, personnel, and Other decisions. It cannot approve release.",
+  "lane": "runtime_v21_grouped_label_pilot",
+  "cohort": {
+    "cohort_id": "u18-development-v19-en30-batch5-pilot-v1",
+    "development_only": true,
+    "rows": 30,
+    "bytes": 82097,
+    "sha256": "5386093a5c156accbe817d1c49778eeb8f9a84bf9da2f450acd784e0571dc74b",
+    "selection": "the same frozen 30 EN rows used by v19 and v20; no row or label selection changed after scoring"
+  },
+  "base_candidate": {
+    "path": ".context/u18/candidate-v19-en-batch5-pilot.json",
+    "sha256": "0a3deda4a59d5970434d01bd0ab1a4d55182a1bbab901cf0d959c7bc27979797",
+    "preserved_fields": "outcome, sentiment, nationalism, product labels, events, opportunities, job listings, personnel changes, and Other"
+  },
+  "prompt": {
+    "version": "stage1-prompt-v21-grouped-label-pilot-v1",
+    "source_envelope": "candidate-blind source fields only; no base proposal, gold labels, strata, source roles, or source hints",
+    "groups": {
+      "factual": {
+        "labels": ["releases_updates", "business_finance", "research_explanations"],
+        "bytes": 2001,
+        "sha256": "e3f9f89c5b4c2783ad049d9103b86936eecd46c7faf29d6046f15e54cafaa525"
+      },
+      "experience": {
+        "labels": ["hands_on_usage", "results_evaluations", "opinions_reactions"],
+        "bytes": 2058,
+        "sha256": "285f152460e4b6ded611ab6861d2f32f60b3e7ad4777e8aff131a2db084d5338"
+      },
+      "action": {
+        "labels": ["questions_requests", "advertising_marketing"],
+        "bytes": 1694,
+        "sha256": "f1ba3934c32dfa2c3fb34814e2112b0338b963f64f28daa68e5d36e313b2756b"
+      }
+    },
+    "merge": "replace all eight grouped-label decisions; preserve every unlisted base field; remove Other when a grouped type is true; use Other only if a classified row would otherwise be empty"
+  },
+  "lanes": {
+    "runtime_v21_grouped_label_pilot": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "thinking": "disabled",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "input_usd_per_million": "0.44",
+      "output_usd_per_million": "1.32",
+      "batch_size": 10,
+      "max_concurrent_transport_calls": 3,
+      "maximum_examples": 30,
+      "expected_logical_requests_before_failure": 9,
+      "maximum_requests": 18,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 21,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 360000,
+      "maximum_output_tokens": 86016,
+      "expected_cost_usd": "0.04",
+      "maximum_cost_usd": "0.28",
+      "twitterapi_credits": 0,
+      "allowed_system_sha256": [
+        "e3f9f89c5b4c2783ad049d9103b86936eecd46c7faf29d6046f15e54cafaa525",
+        "285f152460e4b6ded611ab6861d2f32f60b3e7ad4777e8aff131a2db084d5338",
+        "f1ba3934c32dfa2c3fb34814e2112b0338b963f64f28daa68e5d36e313b2756b"
+      ]
+    }
+  },
+  "decision_rule": "Continue this grouped architecture only if all 30 rows validate, EN exact post-type sets are at least 0.70, exact product-label sets are at least 0.85, outcome accuracy is at least 0.90, and every supported post/product label meets its unchanged floor. A pass permits one all-locale development probe; it does not approve release. A failure rejects this grouping and blocks further transport until the classification architecture and quality gate are reconsidered.",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, grouping, or lane. A malformed semantic response stops the probe; there is no repair lane."
+}

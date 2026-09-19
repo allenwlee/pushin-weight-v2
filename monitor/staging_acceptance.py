@@ -22,7 +22,7 @@ from monitor.post_enrichment import (
 from scripts.staging_refresh.policy import RefreshPolicy
 from x_monitor.config import Config
 from x_monitor.twitterapi_credentials import (
-    TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+    TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
     TwitterApiCredentialPurpose,
 )
 
@@ -121,6 +121,8 @@ def _require_provider_credential(
     normalized = (base_url or "").lower()
     if "minimax.io" in normalized:
         present = bool(environ.get("MINIMAX_API_TOKEN"))
+    elif "deepinfra.com" in normalized:
+        present = bool(environ.get("DEEPINFRA_API_KEY"))
     elif "deepseek.com" in normalized:
         present = bool(
             environ.get("DEEPSEEK_API_KEY") or environ.get("DEEPSEEK_API_TOKEN")
@@ -297,10 +299,21 @@ def evaluate_staging_acceptance(
     n_results = selected_call.get("n_results")
     n_inserted = selected_call.get("n_inserted")
     n_updated = selected_call.get("n_updated")
+    safe_truncated_transfer = (
+        call_status == "truncated_replay_queued"
+        and selected_call.get("coverage_transfer") == "transferred"
+        and selected_call.get("cursor_advanced") is True
+        and isinstance(selected_call.get("backlog_window_id"), int)
+        and not isinstance(selected_call.get("backlog_window_id"), bool)
+        and selected_call["backlog_window_id"] > 0
+    )
     if (
         stats.get("status") not in {"completed", "degraded"}
         or bool(stats.get("errors"))
-        or call_status not in {"completed", "no_results"}
+        or (
+            call_status not in {"completed", "no_results"}
+            and not safe_truncated_transfer
+        )
         or not isinstance(n_results, int)
         or isinstance(n_results, bool)
         or n_results < 0
@@ -505,15 +518,11 @@ def prepare_staging_acceptance(
     if call_id not in _configured_call_ids(cfg):
         raise StagingAcceptanceError("call_id_not_configured")
 
-    if not environ.get(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV):
+    if not environ.get(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV):
         raise StagingAcceptanceError("provider_credential_missing:twitter")
 
-    translator_base_url = cfg.llm.translator_base_url or environ.get(
-        "ANTHROPIC_BASE_URL"
-    )
-    classifier_base_url = environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL", environ.get("ANTHROPIC_BASE_URL")
-    )
+    translator_base_url = cfg.llm.translator_base_url
+    classifier_base_url = cfg.llm.classifier_base_url
     _require_provider_credential(
         label="translator",
         base_url=translator_base_url,

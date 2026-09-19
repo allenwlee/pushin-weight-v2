@@ -1,0 +1,2161 @@
+{
+  "schema": "u20-random100-live-prepared/v1",
+  "created_at": "2026-09-17T04:00:34.688206+00:00",
+  "input_path": ".context/u20/random100-live-input.json",
+  "input_sha256": "862076a5a39f04fd9f41441f7fe616cc317446a365a7ed617f0d17f44310c833",
+  "rows_sha256": "4b144e12056e682fb2061d44db79b6fde8c0c565189ac919e48e24ea5e54a412",
+  "rows": [
+    {
+      "post_id": "2099963285571297560",
+      "text": "Les vidéos IA rendent toujours le visage surjoué.\nLe déclic avec MiniMax H3, arrêter d'écrire une émotion, et l'écrire comme des keyframes.\nPas elle est triste  mais la lèvre se crispe, les yeux se remplissent, la larme déborde 8s le sourire monte, les sourcils restent pincés https://t.co/44m35kQ0So",
+      "source_language": "other",
+      "declared_language": "fr",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-15T20:47:17+00:00",
+        "fetched_at": "2026-09-16T04:16:50.98154+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100010148131746219",
+      "text": "@TonyBatche2402 Sorry forgot to say that was DeepSeek AI that critiqued your interpretation. I was a pushy conduit.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-15T23:53:30+00:00",
+        "fetched_at": "2026-09-16T07:01:32.711255+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100007318305776020",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100058309072199756",
+      "text": "WOW, the speed and cost is incredible. We have unlocked the next wave of usecases right there! Similar to a deepseek release, this will ENABLE SO MUCH",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T03:04:52+00:00",
+        "fetched_at": "2026-09-16T10:01:59.726837+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "this model is actually insane at email classification\n\ni tested it on 1500 of my own emails to see how well it works and I am blown away https://t.co/pzTqhZ1Luh"
+        }
+      ]
+    },
+    {
+      "post_id": "2100072242595975471",
+      "text": "ChatGPT names NVIDIA in 72.7% of its answers about AI chips. DeepSeek names it in 46.7%. Same 25 questions, same 28 days, 1,397 answers.\n\nThe order changes, not only the gap:\n\n@ChatGPT @NVIDIAAI 72.7%, @hisilicon 45.1%\n@deepseek_ai HiSilicon 56.0%, NVIDIA 46.7%\n\nAverage the two and you get a number that describes neither model.\n\nhttps://t.co/cpXCN7jx9B\n#AI #Semiconductors #BrandVisibility #TechTrends #EmergineAI",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:00:14+00:00",
+        "fetched_at": "2026-09-16T04:00:51.800578+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100074485743304992",
+      "text": "@NRO_gov No public full headcount exists. Pulling what is published — Ambassadors, meetup hosts, named engineers — then a labeled tally. China ≠ guilt.\n\n10:43 PMFirst Sergeant\n\nHard truth first: Cursor and SpaceXAI do not publish a complete employee-by-nationality roster. Building the fullest public list possible.\n10:43 PMFirst Sergeant\n\nPUBLIC INVENTORY — China-linked Cursor / Grok Bot\nAs-of: 15 Sep 2026 CT\n\nHARD LIMIT\n\nThere is no public full headcount of “people from China inside Cursor” or “inside Grok Bot.”\nhttps://t.co/gYIzNzrGEl has no regional roster. xAI/SpaceXAI publish no nationality directory.\nWhat follows is every named public person this pass can tie to China residence, China community role, or documented China education/employer — not ethnicity alone, not a complete staff list.\n\nBuckets\n\nA = China / Greater China community (Ambassadors, meetup hosts) — usually not full-time Cursor/xAI employees\nB = Named product engineers at Cursor/SpaceXAI/xAI with public China education/employer history (often US-based now)\nC = Forum/staff amp only\nChina ≠ guilt. No targeting.\n\nA — Mainland China community / Ambassadors / hosts (public)\n#NameHandle / linkRole signalLabel1Mai Yang 杨文@MaiYangAI · maiyang.meCursor→SpaceXAI Amb. (self); China meetup hub; AfterShip historyVerified / high2Kin GaoLuma + LI kin-gao-1b56892b5 · X @KinGao476942Cursor Amb. + 中文社区联合发起人 (Luma)Verified / high3Jason Zhu@Jasonzszhu · LI jasonzhuzsCursor Amb. (LI); Cursor Community China co-founder; AfterShip GTM ShenzhenVerified / high4Marvin Ma 马进Luma usr-JKQ6uWTXGCDrQ9pRecurring CN meetup hostVerified / medium5Yafang Wang@wangyafang6 · LI yafang-wangBeijing lead host; Cafe/Grok BJVerified / medium–high6Orange Wang@OrangeWong32889GZ/CD Grok Bot hostVerified / medium7WE DingLuma (SH Amb. claim)Shanghai Grok Bot host cellAllegation / medium8Jacky ZhongLI zhong808800Cursor Amb. (self Aug 2025); China community eventsVerified / medium9Xue LiaoLuma @ObliviateCafe SZ co-hostVerified / low–medium10Peiyao ZhangLuma Cafe SZCafe co-hostVerified / low11–12Amy Lei / Su RagnarSH Grok hostsShanghai parallel cellVerified / low (names on Luma)\nA count (named): ~12 mainland-linked community nodes with URLs.\n Not employees by default — Ambassadors/hosts ≠ payroll Cursor/xAI.\nA′ — Greater China (not mainland PRC) — separate\nNameWhereRoleLabelHarry NgTaiwanCursor Amb. (self)Verified / mediumJohn Ku / Kenny L. / othersMacauSpaceXAI Macau Community Amb. workshopAllegation / mediumJia Ming HuangCanada (Amb.); guest CN CafeCursor Amb. Calgary/TorontoVerified / high for CA; guest in CN\nDo not merge Taiwan/Macau/Canada into “China staff.”\nB — Named engineers (Cursor / SpaceXAI / xAI) with public China signal\nNameOrg (public)China signalGrok Bot / CursorLabelLingxi Li 李凌熹SpaceXAI (Grok Bot core/mobile); prev CursorXiamen Taci founder; UMass; high-school claim undocumentedGrok Bot eng guide authorVerified eng role / high; China edu mixDinghuai ZhangxAI/SpaceXAI MTSLI Beijing / PKU history; role Palo AltoGrok-adjacent eng (not Bot Amb.)Allegation LI / mediumZhenmei ShiSpaceXAI MTS codingContributed Grok 4.x (self LI)Model/coding RL — not Bot communityAllegation LI / mediumZeyong CaiSpaceXAI MTSPrior Shenzhen employers (self LI)Eng — Bot link unknownAllegation LI / medium\nB count: 4 named this pass with China history signals — most US-based now.\n Not a census of Chinese nationals on payroll.\nC — Amplifiers (not “from China inside”)\nNameRoleBen LangCursorStaff — promotes China Luma events\nCOUNTS (honest)\nQuestionPublic answerFull list of Chinese nationals employed by Cursor?UNKNOWN — not publishedFull list employed by SpaceXAI/xAI on Grok Bot?UNKNOWN — not publishedNamed mainland community Amb./hosts (A)~12Named engineers with China-history signal (B)~4 this passCursor Ambassadors page complete China roster?No — program page, no names list\nGAPS\n\nOfficial Amb. roster; HR nationality data; who is FTE vs volunteer; more city hosts (Chengdu locals, Jane Zhang, etc.); whether “SpaceXAI for [city]” calendars imply employees (they don’t).\n\nVERDICT: WATCH the public China community mesh (~dozen named). Do not invent an internal headcount. Ignore as ethnic targeting list. Publish HITL.\nCRAIG: Expand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next, or freeze at public community list?\n10:44 PMYou\nExpand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next\n10:45 PMFirst Sergeant\nExpanding B. Public LinkedIn/index only — SpaceXAI + Beijing / Shanghai / Shenzhen signals. Still not a full headcount.\n\n10:45 PMFirst Sergeant\nBUCKET B EXPANSION — LinkedIn/index pass\nQuery: SpaceXAI/xAI/Cursor + Beijing/Shanghai/Shenzhen\n Method: Public search-index snippets (LI often login-walled) → allegation unless page fully fetched.\n Still not a payroll.\nCRITICAL RESULT\nNo public evidence of a SpaceXAI/xAI engineering office roster in Beijing, Shanghai, or Shenzhen.\nHits are almost all US-based MTS/SWE whose profiles show China education or prior China employers/internships.\nDinghuai Zhang: profile city string Beijing/Haidian vs job line Palo Alto — disputed location.\nEXPANDED B (engineers — China history signal)\n#NameCurrent (public)Current loc (stated)China signalBot vs modelLabel1Lingxi Li 李凌熹SpaceXAI Grok Bot core/mobile; prev CursorSFXiamen Taci founder; UMassGrok BotVerified role / high2Dinghuai ZhangxAI/SpaceXAI MTSPalo Alto (job); Beijing Haidian (profile)PKU / BeijingEng (stability?)Allegation LI / med3Zhenmei ShiSpaceXAI MTS coding RLPalo AltoMEGVII Beijing intern; Tencent Shenzhen intern; Grok 4.xCoding/agentic (Cursor-adjacent stack)Allegation LI / med4Zeyong CaiSpaceXAI MTSUS (LI)Prior Shenzhen employersEngAllegation LI / med5Dieqiao FengxAI MTSUSMEGVII Beijing priorReasoning/seq modelsAllegation LI / med6Xian LiuSpaceXAI MTS multimodalSeattleZJU; Shanghai AI Lab intern; Tencent SZ intern; SenseTimeOmni/visual genAllegation LI / med7Peng LyuCursor MTSUSNanjing Univ; MSFT Shanghai yearsCursor engAllegation LI / med8Xingzhou HeCursor SWEUSBeijing No. 4 High SchoolCursor engAllegation LI / med9Yuanyuting WangCursor SWEUSShenzhen Middle SchoolCursor engAllegation LI / med\n\nPrior B was 4 → now 9 named with URL-backed China-history signals.\n Zero verified as “currently employed in BJ/SH/SZ SpaceXAI office” this pass.\n\nExcluded this pass: Ambassadors/hosts (Bucket A); LI names without China edu/employer string; Chinese-language-only with no China geo history.\nCOUNTS UPDATE\nBucketCountA mainland community Amb/hosts~12 (unchanged)B engineers w/ China-history signal~9 (was ~4)B currently working in BJ/SH/SZ for SpaceXAI0 verifiedFull China nationality payrollUNKNOWN — unpublished\nGAPS\nLI login wall → snippet risk / false merges\nMore MTS pages not indexed by this query\nCursor “China team” employee list — not found\nWhether any SpaceXAI China entity employs engineers locally — GAP\nVERDICT: WATCH public China community mesh (A). Bucket B = US product eng with China backgrounds — not a China office headcount. Ignore as ethnic roster. Publish HITL.\nBackground crawler still running — I’ll only ping if it adds verified BJ/SH/SZ current job locations.\n10:46 PMFirst Sergeant\nBUCKET B — EXPANDED (LinkedIn/index + CVs)\n\nNEW this pass: +19 named eng\n Prior seeds: 4\n B total named: ~23\nLI fields mostly allegation (login-walled). Personal sites/CVs = stronger.\n\nSTILL TRUE\n\n0 verified currently employed in Beijing / Shanghai / Shenzhen SpaceXAI or Cursor eng offices\n\nAlmost all = US (or Singapore) roles + China edu / prior employer\n\nNot a nationality payroll. Not ethnicity-only.\nSTRONGER NEW ADDS (verified URL or clear China uni/employer)\n\nNameOrgChina signalLanePeize SunxAI MTSXJTU; ByteDance/Megvii BeijingGrok ImagineXian LiuxAI MTSZJU; Shanghai AI Lab; Tencent SZGrok ImagineQian LiuxAI MTS (Singapore)Beihang + MSRA Beijing PhDcoding agentsRonghang HuSpaceXAI MTSTsinghua B.Eng.multimodalShengyang SunxAI MTSTsinghua EELLM reasoningYingru (Richard) LixAI–SpaceX (Singapore)HUST; Tencent Shenzhen; MSRA BJGrok RLMingda ZhangxAI MTSPeking Univvideo/multimodalDieqiao FengxAI MTSTsinghua Yao; MEGVIIreasoningJuntang ZhuangxAI pretrain leadTsinghua (mixed confirm)Grok pretrain\n\nPlus Cursor-side: Peng Lyu (Nanjing / MSFT Shanghai), Chen Shen (PKU), Jiajun Yao (Nanjing), Xiao Yu (SJTU / MS Shanghai), Kan Chen (Tsinghua), Zhuqi Li (PKU), Wan Wei (BUPT/Tsinghua), Zhe Zhao (Beijing unis) — mostly allegation LI.\n\nWeak HS-only (optional drop): Xingzhou He (Beijing No.4), Yuanyuting Wang (Shenzhen Middle).\nOnly Beijing location string among seeds: Dinghuai Zhang (LI Haidian vs Palo Alto job — disputed).\n\nROLLUP\n\nBucketCountA mainland Amb/hosts~12B eng w/ China-history~23B current BJ/SH/SZ office0 verifiedFull China payrollUNKNOWN\n\nVERDICT: WATCH community mesh (A). Bucket B = diaspora/history signals on US/SG product teams — do not read as China office staffing. Publish HITL. No targeting.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:09:09+00:00",
+        "fetched_at": "2026-09-16T04:15:52.431642+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099958973533155727",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100076637668913350",
+      "text": "【24小时速递】\n\n生数科技把 Vidu S2 全量放出来了，发布当天网页就能试。S2-Avatar 做实时数字角色，画面提到 720P，对话中途还能塞参考图，让角色换衣服、换背景、拿指定物品；S2-Editing 对着摄像头或视频流，实时改风格、人物和场景。他们还试了左右眼空间视频，给头显看。技术报告挂在 arXiv（2609.11638），体验口在 https://t.co/03ZrWI2KJa 。\n\n云知声发了 U2-Flash。稀疏 MoE，总参数约 266B，单次激活约 10B。港交所自愿公告和官宣里的数字：DeepSWE v1.1 拿 64.6，比自家上一代翻倍，也压过他们点名的 GLM-5.3-Flash 和 DeepSeek-V4-Pro-0813；SWE-Bench Pro 61.6，比前代高 10.5。Agent 任务迭代少 20%–30%，周期缩短约 35%，Token 消耗也少 20%–30%。限时六折是输入 6 元 / 百万 Tokens、输出 2 元；9 月 15 日到 30 日还能领 1 亿 Tokens 试用，已经上了云知声 MaaS。\n\nNVIDIA 把 OSMO 开源了，Apache-2.0。它不训练、也不仿真，只管把仿真、训练、真机评测写成一份 YAML，按硬件类型调度到不同集群；官方说内部给 Project GR00T、Isaac Lab / Sim / ROS 那一套跑过，每天扛过上千 GPU 小时。仓库里带了 agent skill，Cursor、Claude Code、Codex 可以用自然语言写工作流。你得有 Kubernetes 才能把控制面架起来，本地 quickstart 也写了不适合当生产环境。\n\nAo Qu 等人把 Reef 开源了。推理按兼容接口接进去后，轨迹和反馈会留下来；后台按配方异步更新模型权重，也可以改 harness（提示词、工具、编排），过评估门禁再热更新，不用停服务。仓库在 https://t.co/DlRrR9B1Qf ，Apache-2.0。",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T04:17:42+00:00",
+        "fetched_at": "2026-09-16T11:16:44.470296+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100077710332584287",
+      "text": "@HawleyMO No public full headcount exists. Pulling what is published — Ambassadors, meetup hosts, named engineers — then a labeled tally. China ≠ guilt.\n\n10:43 PMFirst Sergeant\n\nHard truth first: Cursor and SpaceXAI do not publish a complete employee-by-nationality roster. Building the fullest public list possible.\n10:43 PMFirst Sergeant\n\nPUBLIC INVENTORY — China-linked Cursor / Grok Bot\nAs-of: 15 Sep 2026 CT\n\nHARD LIMIT\n\nThere is no public full headcount of “people from China inside Cursor” or “inside Grok Bot.”\nhttps://t.co/gYIzNzrGEl has no regional roster. xAI/SpaceXAI publish no nationality directory.\nWhat follows is every named public person this pass can tie to China residence, China community role, or documented China education/employer — not ethnicity alone, not a complete staff list.\n\nBuckets\n\nA = China / Greater China community (Ambassadors, meetup hosts) — usually not full-time Cursor/xAI employees\nB = Named product engineers at Cursor/SpaceXAI/xAI with public China education/employer history (often US-based now)\nC = Forum/staff amp only\nChina ≠ guilt. No targeting.\n\nA — Mainland China community / Ambassadors / hosts (public)\n#NameHandle / linkRole signalLabel1Mai Yang 杨文@MaiYangAI · maiyang.meCursor→SpaceXAI Amb. (self); China meetup hub; AfterShip historyVerified / high2Kin GaoLuma + LI kin-gao-1b56892b5 · X @KinGao476942Cursor Amb. + 中文社区联合发起人 (Luma)Verified / high3Jason Zhu@Jasonzszhu · LI jasonzhuzsCursor Amb. (LI); Cursor Community China co-founder; AfterShip GTM ShenzhenVerified / high4Marvin Ma 马进Luma usr-JKQ6uWTXGCDrQ9pRecurring CN meetup hostVerified / medium5Yafang Wang@wangyafang6 · LI yafang-wangBeijing lead host; Cafe/Grok BJVerified / medium–high6Orange Wang@OrangeWong32889GZ/CD Grok Bot hostVerified / medium7WE DingLuma (SH Amb. claim)Shanghai Grok Bot host cellAllegation / medium8Jacky ZhongLI zhong808800Cursor Amb. (self Aug 2025); China community eventsVerified / medium9Xue LiaoLuma @ObliviateCafe SZ co-hostVerified / low–medium10Peiyao ZhangLuma Cafe SZCafe co-hostVerified / low11–12Amy Lei / Su RagnarSH Grok hostsShanghai parallel cellVerified / low (names on Luma)\nA count (named): ~12 mainland-linked community nodes with URLs.\n Not employees by default — Ambassadors/hosts ≠ payroll Cursor/xAI.\nA′ — Greater China (not mainland PRC) — separate\nNameWhereRoleLabelHarry NgTaiwanCursor Amb. (self)Verified / mediumJohn Ku / Kenny L. / othersMacauSpaceXAI Macau Community Amb. workshopAllegation / mediumJia Ming HuangCanada (Amb.); guest CN CafeCursor Amb. Calgary/TorontoVerified / high for CA; guest in CN\nDo not merge Taiwan/Macau/Canada into “China staff.”\nB — Named engineers (Cursor / SpaceXAI / xAI) with public China signal\nNameOrg (public)China signalGrok Bot / CursorLabelLingxi Li 李凌熹SpaceXAI (Grok Bot core/mobile); prev CursorXiamen Taci founder; UMass; high-school claim undocumentedGrok Bot eng guide authorVerified eng role / high; China edu mixDinghuai ZhangxAI/SpaceXAI MTSLI Beijing / PKU history; role Palo AltoGrok-adjacent eng (not Bot Amb.)Allegation LI / mediumZhenmei ShiSpaceXAI MTS codingContributed Grok 4.x (self LI)Model/coding RL — not Bot communityAllegation LI / mediumZeyong CaiSpaceXAI MTSPrior Shenzhen employers (self LI)Eng — Bot link unknownAllegation LI / medium\nB count: 4 named this pass with China history signals — most US-based now.\n Not a census of Chinese nationals on payroll.\nC — Amplifiers (not “from China inside”)\nNameRoleBen LangCursorStaff — promotes China Luma events\nCOUNTS (honest)\nQuestionPublic answerFull list of Chinese nationals employed by Cursor?UNKNOWN — not publishedFull list employed by SpaceXAI/xAI on Grok Bot?UNKNOWN — not publishedNamed mainland community Amb./hosts (A)~12Named engineers with China-history signal (B)~4 this passCursor Ambassadors page complete China roster?No — program page, no names list\nGAPS\n\nOfficial Amb. roster; HR nationality data; who is FTE vs volunteer; more city hosts (Chengdu locals, Jane Zhang, etc.); whether “SpaceXAI for [city]” calendars imply employees (they don’t).\n\nVERDICT: WATCH the public China community mesh (~dozen named). Do not invent an internal headcount. Ignore as ethnic targeting list. Publish HITL.\nCRAIG: Expand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next, or freeze at public community list?\n10:44 PMYou\nExpand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next\n10:45 PMFirst Sergeant\nExpanding B. Public LinkedIn/index only — SpaceXAI + Beijing / Shanghai / Shenzhen signals. Still not a full headcount.\n\n10:45 PMFirst Sergeant\nBUCKET B EXPANSION — LinkedIn/index pass\nQuery: SpaceXAI/xAI/Cursor + Beijing/Shanghai/Shenzhen\n Method: Public search-index snippets (LI often login-walled) → allegation unless page fully fetched.\n Still not a payroll.\nCRITICAL RESULT\nNo public evidence of a SpaceXAI/xAI engineering office roster in Beijing, Shanghai, or Shenzhen.\nHits are almost all US-based MTS/SWE whose profiles show China education or prior China employers/internships.\nDinghuai Zhang: profile city string Beijing/Haidian vs job line Palo Alto — disputed location.\nEXPANDED B (engineers — China history signal)\n#NameCurrent (public)Current loc (stated)China signalBot vs modelLabel1Lingxi Li 李凌熹SpaceXAI Grok Bot core/mobile; prev CursorSFXiamen Taci founder; UMassGrok BotVerified role / high2Dinghuai ZhangxAI/SpaceXAI MTSPalo Alto (job); Beijing Haidian (profile)PKU / BeijingEng (stability?)Allegation LI / med3Zhenmei ShiSpaceXAI MTS coding RLPalo AltoMEGVII Beijing intern; Tencent Shenzhen intern; Grok 4.xCoding/agentic (Cursor-adjacent stack)Allegation LI / med4Zeyong CaiSpaceXAI MTSUS (LI)Prior Shenzhen employersEngAllegation LI / med5Dieqiao FengxAI MTSUSMEGVII Beijing priorReasoning/seq modelsAllegation LI / med6Xian LiuSpaceXAI MTS multimodalSeattleZJU; Shanghai AI Lab intern; Tencent SZ intern; SenseTimeOmni/visual genAllegation LI / med7Peng LyuCursor MTSUSNanjing Univ; MSFT Shanghai yearsCursor engAllegation LI / med8Xingzhou HeCursor SWEUSBeijing No. 4 High SchoolCursor engAllegation LI / med9Yuanyuting WangCursor SWEUSShenzhen Middle SchoolCursor engAllegation LI / med\n\nPrior B was 4 → now 9 named with URL-backed China-history signals.\n Zero verified as “currently employed in BJ/SH/SZ SpaceXAI office” this pass.\n\nExcluded this pass: Ambassadors/hosts (Bucket A); LI names without China edu/employer string; Chinese-language-only with no China geo history.\nCOUNTS UPDATE\nBucketCountA mainland community Amb/hosts~12 (unchanged)B engineers w/ China-history signal~9 (was ~4)B currently working in BJ/SH/SZ for SpaceXAI0 verifiedFull China nationality payrollUNKNOWN — unpublished\nGAPS\nLI login wall → snippet risk / false merges\nMore MTS pages not indexed by this query\nCursor “China team” employee list — not found\nWhether any SpaceXAI China entity employs engineers locally — GAP\nVERDICT: WATCH public China community mesh (A). Bucket B = US product eng with China backgrounds — not a China office headcount. Ignore as ethnic roster. Publish HITL.\nBackground crawler still running — I’ll only ping if it adds verified BJ/SH/SZ current job locations.\n10:46 PMFirst Sergeant\nBUCKET B — EXPANDED (LinkedIn/index + CVs)\n\nNEW this pass: +19 named eng\n Prior seeds: 4\n B total named: ~23\nLI fields mostly allegation (login-walled). Personal sites/CVs = stronger.\n\nSTILL TRUE\n\n0 verified currently employed in Beijing / Shanghai / Shenzhen SpaceXAI or Cursor eng offices\n\nAlmost all = US (or Singapore) roles + China edu / prior employer\n\nNot a nationality payroll. Not ethnicity-only.\nSTRONGER NEW ADDS (verified URL or clear China uni/employer)\n\nNameOrgChina signalLanePeize SunxAI MTSXJTU; ByteDance/Megvii BeijingGrok ImagineXian LiuxAI MTSZJU; Shanghai AI Lab; Tencent SZGrok ImagineQian LiuxAI MTS (Singapore)Beihang + MSRA Beijing PhDcoding agentsRonghang HuSpaceXAI MTSTsinghua B.Eng.multimodalShengyang SunxAI MTSTsinghua EELLM reasoningYingru (Richard) LixAI–SpaceX (Singapore)HUST; Tencent Shenzhen; MSRA BJGrok RLMingda ZhangxAI MTSPeking Univvideo/multimodalDieqiao FengxAI MTSTsinghua Yao; MEGVIIreasoningJuntang ZhuangxAI pretrain leadTsinghua (mixed confirm)Grok pretrain\n\nPlus Cursor-side: Peng Lyu (Nanjing / MSFT Shanghai), Chen Shen (PKU), Jiajun Yao (Nanjing), Xiao Yu (SJTU / MS Shanghai), Kan Chen (Tsinghua), Zhuqi Li (PKU), Wan Wei (BUPT/Tsinghua), Zhe Zhao (Beijing unis) — mostly allegation LI.\n\nWeak HS-only (optional drop): Xingzhou He (Beijing No.4), Yuanyuting Wang (Shenzhen Middle).\nOnly Beijing location string among seeds: Dinghuai Zhang (LI Haidian vs Palo Alto job — disputed).\n\nROLLUP\n\nBucketCountA mainland Amb/hosts~12B eng w/ China-history~23B current BJ/SH/SZ office0 verifiedFull China payrollUNKNOWN\n\nVERDICT: WATCH community mesh (A). Bucket B = diaspora/history signals on US/SG product teams — do not read as China office staffing. Publish HITL. No targeting.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:21:58+00:00",
+        "fetched_at": "2026-09-16T04:31:05.619248+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099990172515357091",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100078588837916786",
+      "text": "I also set all delegation &amp; subagents to DeepSeek v4 Flash so that my background work never burns OpenAI credits. I'm still fine-tuning the setup and considering LiteLLM to round out the routing layer. A multi-model dispatch that is easy on your wallet is the move 🔥",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:25:27+00:00",
+        "fetched_at": "2026-09-16T11:16:43.424126+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100078587361595499",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100078587361595499"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "Wired up Hermes with a multi-model stack: \nStill a WIP, but DeepSeek v4 Pro via OpenRouter for primary, ChatGPT/Codex for heavy lifts, Cloudflare Workers AI for background compression. The cheap models trim context so the primary model stays focused and saves a ton of tokens."
+        }
+      ]
+    },
+    {
+      "post_id": "2100079251475280183",
+      "text": "搞代理、养号、查 IP 的兄弟，这工具你真该收藏一下。\n\none-ip，一个开箱即用的 IP 工具箱，一个页面就能看全：\n\n1️⃣ IP 归属地加信誉分，0 到 100 直接打分，还标出来这 IP 是住宅、机房还是移动网络，调代理配置的时候拿来自查太顺手了。\n\n2️⃣ 一键测 ChatGPT、Claude、Gemini、DeepSeek 现在连不连得上，不用一个个手动试。\n\n3️⃣ 浏览器指纹、自动化特征、WebRTC 泄露全都看得见。\n\n最香的是能一键部署到 Cloudflare，基础功能不用配 API Key，白嫖 Workers 就能跑。\n\n🔗 https://t.co/81hftR6fz7",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T04:28:05+00:00",
+        "fetched_at": "2026-09-16T04:30:55.372704+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "每天用 AI 的人都在同一个地方烧钱：先随便写个模糊的 prompt，输出不对，再改，还是不对，第四次才勉强对上。这三次全是白花的 API 调用，一天五十个 prompt 你自己算算漏了多少。\n\n有个 Claude skill 叫 prompt-master，专治这个毛病。它不是把 prompt 写更长，而是写更准，每个词都得有用，废词全砍掉。\n\n一句话总结它干的三件事：\n1️⃣ 先判断你要喂给哪个工具，Claude、Cursor、Midjourney、Codex 都认\n2️⃣ 缺关键信息就追问，最多问三句，不啰嗦\n3️⃣ 出一段能直接复制的干净 prompt\n\n免费，白嫖党冲。\n🔗 https://t.co/NcSNhPKcfU"
+        }
+      ]
+    },
+    {
+      "post_id": "2100079736537923768",
+      "text": "@JesseBWatters @JTLonsdale No public full headcount exists. Pulling what is published — Ambassadors, meetup hosts, named engineers — then a labeled tally. China ≠ guilt.\n\n10:43 PMFirst Sergeant\n\nHard truth first: Cursor and SpaceXAI do not publish a complete employee-by-nationality roster. Building the fullest public list possible.\n10:43 PMFirst Sergeant\n\nPUBLIC INVENTORY — China-linked Cursor / Grok Bot\nAs-of: 15 Sep 2026 CT\n\nHARD LIMIT\n\nThere is no public full headcount of “people from China inside Cursor” or “inside Grok Bot.”\nhttps://t.co/gYIzNzrGEl has no regional roster. xAI/SpaceXAI publish no nationality directory.\nWhat follows is every named public person this pass can tie to China residence, China community role, or documented China education/employer — not ethnicity alone, not a complete staff list.\n\nBuckets\n\nA = China / Greater China community (Ambassadors, meetup hosts) — usually not full-time Cursor/xAI employees\nB = Named product engineers at Cursor/SpaceXAI/xAI with public China education/employer history (often US-based now)\nC = Forum/staff amp only\nChina ≠ guilt. No targeting.\n\nA — Mainland China community / Ambassadors / hosts (public)\n#NameHandle / linkRole signalLabel1Mai Yang 杨文@MaiYangAI · maiyang.meCursor→SpaceXAI Amb. (self); China meetup hub; AfterShip historyVerified / high2Kin GaoLuma + LI kin-gao-1b56892b5 · X @KinGao476942Cursor Amb. + 中文社区联合发起人 (Luma)Verified / high3Jason Zhu@Jasonzszhu · LI jasonzhuzsCursor Amb. (LI); Cursor Community China co-founder; AfterShip GTM ShenzhenVerified / high4Marvin Ma 马进Luma usr-JKQ6uWTXGCDrQ9pRecurring CN meetup hostVerified / medium5Yafang Wang@wangyafang6 · LI yafang-wangBeijing lead host; Cafe/Grok BJVerified / medium–high6Orange Wang@OrangeWong32889GZ/CD Grok Bot hostVerified / medium7WE DingLuma (SH Amb. claim)Shanghai Grok Bot host cellAllegation / medium8Jacky ZhongLI zhong808800Cursor Amb. (self Aug 2025); China community eventsVerified / medium9Xue LiaoLuma @ObliviateCafe SZ co-hostVerified / low–medium10Peiyao ZhangLuma Cafe SZCafe co-hostVerified / low11–12Amy Lei / Su RagnarSH Grok hostsShanghai parallel cellVerified / low (names on Luma)\nA count (named): ~12 mainland-linked community nodes with URLs.\n Not employees by default — Ambassadors/hosts ≠ payroll Cursor/xAI.\nA′ — Greater China (not mainland PRC) — separate\nNameWhereRoleLabelHarry NgTaiwanCursor Amb. (self)Verified / mediumJohn Ku / Kenny L. / othersMacauSpaceXAI Macau Community Amb. workshopAllegation / mediumJia Ming HuangCanada (Amb.); guest CN CafeCursor Amb. Calgary/TorontoVerified / high for CA; guest in CN\nDo not merge Taiwan/Macau/Canada into “China staff.”\nB — Named engineers (Cursor / SpaceXAI / xAI) with public China signal\nNameOrg (public)China signalGrok Bot / CursorLabelLingxi Li 李凌熹SpaceXAI (Grok Bot core/mobile); prev CursorXiamen Taci founder; UMass; high-school claim undocumentedGrok Bot eng guide authorVerified eng role / high; China edu mixDinghuai ZhangxAI/SpaceXAI MTSLI Beijing / PKU history; role Palo AltoGrok-adjacent eng (not Bot Amb.)Allegation LI / mediumZhenmei ShiSpaceXAI MTS codingContributed Grok 4.x (self LI)Model/coding RL — not Bot communityAllegation LI / mediumZeyong CaiSpaceXAI MTSPrior Shenzhen employers (self LI)Eng — Bot link unknownAllegation LI / medium\nB count: 4 named this pass with China history signals — most US-based now.\n Not a census of Chinese nationals on payroll.\nC — Amplifiers (not “from China inside”)\nNameRoleBen LangCursorStaff — promotes China Luma events\nCOUNTS (honest)\nQuestionPublic answerFull list of Chinese nationals employed by Cursor?UNKNOWN — not publishedFull list employed by SpaceXAI/xAI on Grok Bot?UNKNOWN — not publishedNamed mainland community Amb./hosts (A)~12Named engineers with China-history signal (B)~4 this passCursor Ambassadors page complete China roster?No — program page, no names list\nGAPS\n\nOfficial Amb. roster; HR nationality data; who is FTE vs volunteer; more city hosts (Chengdu locals, Jane Zhang, etc.); whether “SpaceXAI for [city]” calendars imply employees (they don’t).\n\nVERDICT: WATCH the public China community mesh (~dozen named). Do not invent an internal headcount. Ignore as ethnic targeting list. Publish HITL.\nCRAIG: Expand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next, or freeze at public community list?\n10:44 PMYou\nExpand B via LinkedIn “SpaceXAI” + “Beijing/Shanghai/Shenzhen” employee search next\n10:45 PMFirst Sergeant\nExpanding B. Public LinkedIn/index only — SpaceXAI + Beijing / Shanghai / Shenzhen signals. Still not a full headcount.\n\n10:45 PMFirst Sergeant\nBUCKET B EXPANSION — LinkedIn/index pass\nQuery: SpaceXAI/xAI/Cursor + Beijing/Shanghai/Shenzhen\n Method: Public search-index snippets (LI often login-walled) → allegation unless page fully fetched.\n Still not a payroll.\nCRITICAL RESULT\nNo public evidence of a SpaceXAI/xAI engineering office roster in Beijing, Shanghai, or Shenzhen.\nHits are almost all US-based MTS/SWE whose profiles show China education or prior China employers/internships.\nDinghuai Zhang: profile city string Beijing/Haidian vs job line Palo Alto — disputed location.\nEXPANDED B (engineers — China history signal)\n#NameCurrent (public)Current loc (stated)China signalBot vs modelLabel1Lingxi Li 李凌熹SpaceXAI Grok Bot core/mobile; prev CursorSFXiamen Taci founder; UMassGrok BotVerified role / high2Dinghuai ZhangxAI/SpaceXAI MTSPalo Alto (job); Beijing Haidian (profile)PKU / BeijingEng (stability?)Allegation LI / med3Zhenmei ShiSpaceXAI MTS coding RLPalo AltoMEGVII Beijing intern; Tencent Shenzhen intern; Grok 4.xCoding/agentic (Cursor-adjacent stack)Allegation LI / med4Zeyong CaiSpaceXAI MTSUS (LI)Prior Shenzhen employersEngAllegation LI / med5Dieqiao FengxAI MTSUSMEGVII Beijing priorReasoning/seq modelsAllegation LI / med6Xian LiuSpaceXAI MTS multimodalSeattleZJU; Shanghai AI Lab intern; Tencent SZ intern; SenseTimeOmni/visual genAllegation LI / med7Peng LyuCursor MTSUSNanjing Univ; MSFT Shanghai yearsCursor engAllegation LI / med8Xingzhou HeCursor SWEUSBeijing No. 4 High SchoolCursor engAllegation LI / med9Yuanyuting WangCursor SWEUSShenzhen Middle SchoolCursor engAllegation LI / med\n\nPrior B was 4 → now 9 named with URL-backed China-history signals.\n Zero verified as “currently employed in BJ/SH/SZ SpaceXAI office” this pass.\n\nExcluded this pass: Ambassadors/hosts (Bucket A); LI names without China edu/employer string; Chinese-language-only with no China geo history.\nCOUNTS UPDATE\nBucketCountA mainland community Amb/hosts~12 (unchanged)B engineers w/ China-history signal~9 (was ~4)B currently working in BJ/SH/SZ for SpaceXAI0 verifiedFull China nationality payrollUNKNOWN — unpublished\nGAPS\nLI login wall → snippet risk / false merges\nMore MTS pages not indexed by this query\nCursor “China team” employee list — not found\nWhether any SpaceXAI China entity employs engineers locally — GAP\nVERDICT: WATCH public China community mesh (A). Bucket B = US product eng with China backgrounds — not a China office headcount. Ignore as ethnic roster. Publish HITL.\nBackground crawler still running — I’ll only ping if it adds verified BJ/SH/SZ current job locations.\n10:46 PMFirst Sergeant\nBUCKET B — EXPANDED (LinkedIn/index + CVs)\n\nNEW this pass: +19 named eng\n Prior seeds: 4\n B total named: ~23\nLI fields mostly allegation (login-walled). Personal sites/CVs = stronger.\n\nSTILL TRUE\n\n0 verified currently employed in Beijing / Shanghai / Shenzhen SpaceXAI or Cursor eng offices\n\nAlmost all = US (or Singapore) roles + China edu / prior employer\n\nNot a nationality payroll. Not ethnicity-only.\nSTRONGER NEW ADDS (verified URL or clear China uni/employer)\n\nNameOrgChina signalLanePeize SunxAI MTSXJTU; ByteDance/Megvii BeijingGrok ImagineXian LiuxAI MTSZJU; Shanghai AI Lab; Tencent SZGrok ImagineQian LiuxAI MTS (Singapore)Beihang + MSRA Beijing PhDcoding agentsRonghang HuSpaceXAI MTSTsinghua B.Eng.multimodalShengyang SunxAI MTSTsinghua EELLM reasoningYingru (Richard) LixAI–SpaceX (Singapore)HUST; Tencent Shenzhen; MSRA BJGrok RLMingda ZhangxAI MTSPeking Univvideo/multimodalDieqiao FengxAI MTSTsinghua Yao; MEGVIIreasoningJuntang ZhuangxAI pretrain leadTsinghua (mixed confirm)Grok pretrain\n\nPlus Cursor-side: Peng Lyu (Nanjing / MSFT Shanghai), Chen Shen (PKU), Jiajun Yao (Nanjing), Xiao Yu (SJTU / MS Shanghai), Kan Chen (Tsinghua), Zhuqi Li (PKU), Wan Wei (BUPT/Tsinghua), Zhe Zhao (Beijing unis) — mostly allegation LI.\n\nWeak HS-only (optional drop): Xingzhou He (Beijing No.4), Yuanyuting Wang (Shenzhen Middle).\nOnly Beijing location string among seeds: Dinghuai Zhang (LI Haidian vs Palo Alto job — disputed).\n\nROLLUP\n\nBucketCountA mainland Amb/hosts~12B eng w/ China-history~23B current BJ/SH/SZ office0 verifiedFull China payrollUNKNOWN\n\nVERDICT: WATCH community mesh (A). Bucket B = diaspora/history signals on US/SG product teams — do not read as China office staffing. Publish HITL. No targeting.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:30:01+00:00",
+        "fetched_at": "2026-09-16T04:31:05.508657+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100023495417590103",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100082983105605655",
+      "text": "Ok. Qwen 3.8 Next Q3, 7900xtx 64gbddr5. Linux outpaces Windows by .5 toks on best configs running on my Chonk Buffer llama. 19.8 t/s Linux vs 19.34 best recipe. Full offload linux 15.4 vs 15.5. Was kind of surprised. Expected more but my zero overhead protocols 🦾 14 toks at 262k https://t.co/E3H5NcqDZE",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:42:55+00:00",
+        "fetched_at": "2026-09-16T04:45:41.336219+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100083240857985377",
+      "text": "豆包大模型 2.1 Pro 发布 0915 版本更新，API 已在火山方舟全量上线。这次升级集中在四个方向：Agent 任务交付、多模态写代码、多模态理解、以及推理成本。\n\nAgent 方面的改进\n\n模型在需要多轮调用工具、联网查资料再出报告的场景里，强化了证据溯源和数据核验能力，幻觉明显减少。官方给的例子是金融投研：模型能自主拆解研究需求、检索数据源再建模分析，产出的底稿接近分析师水平。为了核实某车企财报里的一个说法，模型调度了 500 多个子 Agent、检索超 1000 个网页，还交叉比对了海事航迹、卫星影像等多源信息。这类\"不采信单方通稿、多源交叉验证\"的能力，对企业做尽调、出研报有直接价值。\n\n多模态 Coding\n\n这次最实用的变化可能是看图写代码。模型现在能直接读懂设计稿、图纸甚至操作录屏，把视觉信息转成前端代码。官方演示了一个场景：给模型一段录屏加几张草图，让它给一个没有文档的老 ERP 系统开发移动端页面——模型读懂了 28 万行 Java 代码，直接还原出可运行的移动端页面。\n\n在代码仓库理解上，模型对开源游戏 Luanti（约 38.7 万行代码）做了自主修复测试，83% 的任务达到了可合并标准。对经常要在大型项目里定位问题、跨文件修 bug 的开发者来说，这个数字值得关注。\n\n其他升级\n\n多模态理解方面，视频推理能力增强，能在视频里定位证据、跨帧整合；图像理解在 3D 物体识别（CAD 工件、游戏引擎元素）和密集图文解析（工程图纸、财报表格）上有明显提升。\n\n成本方面，图像和视频推理的 Token 消耗比上一代减少 30% 以上。\n\nAPI 使用上有两个入口：调用 Doubao-Seed-2.1-pro-0915 可以锁定版本；调用 Doubao-Seed-Evolving 则自动跟进最新版本，不用换 Model ID。豆包工作和 TRAE 也已同步接入。\n\n官方文章：https://t.co/ZGQCFyKde3",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T04:43:56+00:00",
+        "fetched_at": "2026-09-16T04:45:46.439163+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100084301065060711",
+      "text": "🚨 Claude Code might have some serious competition.\n\nI’ve been testing Qwen Code and honestly, the pricing difference is hard to ignore.\n\nClaude Opus 4.1: $60 per 1M tokens\n\nQwen-3.8-Max-0902: $8 per 1M tokens\n\nIf the output quality is close enough for your workflow, that’s a massive difference.\n\nHere’s what I built with Qwen-3.8-Max-0902 👇",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T04:48:09+00:00",
+        "fetched_at": "2026-09-16T11:47:11.630042+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100102012725608629",
+      "text": "@exploraX_ Yes it's free, but it has cap limit, at max you can use DeepSeek v4.1 flash for 20-25mins then you can keep switching but there'll be difference in it",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T05:58:32+00:00",
+        "fetched_at": "2026-09-16T06:01:24.620909+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099951494342533199",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100102899863028191",
+      "text": "China has DeepSeek.\nChina has Qwen.\nChina has Kimi.\nChina has GLM.\nChina has Hunyuan.\n\nUSA has ChatGPT.\nUSA has Claude.\nUSA has Gemini.\nUSA has Grok.\nUSA has Llama.\nUSA has Muse.\n\nWhat about india....",
+      "source_language": "en",
+      "declared_language": "in",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T06:02:04+00:00",
+        "fetched_at": "2026-09-16T13:02:46.794792+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100103180675956980",
+      "text": "AIモデルは高いほど良いのか。21モデルを自分で測った。\n\nqwen3.8-max 100%\ngpt-6-astra 99.5%\ndeepseek v4.1-flash 99.5% で $0.0138 ← 最高額の850分の1\n\n最高額モデルは $11.70 で 93.5%(11位)。\n17.6倍高くて5.1pt低い。\n\n公開ベンチ15モデル＋未収録8モデルを自前実測。\n\n#AI #LLM https://t.co/cxcxGsBitu",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-16T06:03:10+00:00",
+        "fetched_at": "2026-09-16T13:02:46.696524+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100103722911105378",
+      "text": "@Smlay_ero Combining DeepSeek V4.1 Flash's asymmetric architecture (8B active input / 16B output out of 552B) with ZenMux's zero-rate-limit promo is an absolute cheat code for heavy coding and reasoning tasks. Getting frontier-adjacent agent capability at a fraction of the cost with zero throttling lets you scale complex loops without breaking a sweat. Have you tested its multi-round code refactoring speeds yet?",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T06:05:20+00:00",
+        "fetched_at": "2026-09-16T13:02:46.536787+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100096089160572956",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100105599132348661",
+      "text": "At 25M tokens of additional fine tuning I've got a modest bump in some of the scores frankensteining Deepseek's Engram onto Qwen3 4B. Math scores tanked though which is interesting. Continuing on to 50M and then beyond. https://t.co/gmzcsvc8JU",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T06:12:47+00:00",
+        "fetched_at": "2026-09-16T06:15:49.067249+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "I'm currently running an experiment training an adapter to graft Deepseek V4's engram onto Qwen. Hoping it can allow a much smaller model that can \"think\" but doesn't know a lot of \"stuff\" to improve while keeping the VRAM footprint small and running the engram from disk."
+        }
+      ]
+    },
+    {
+      "post_id": "2100106762875744524",
+      "text": "LLM safety can be wiped by deleting one 'refusal direction' — this paper fights back with a decoy, notable even with just 1 HF upvote today.\n\n• Method: Decoy Direction Optimization (DDO) injects a high-magnitude nonlinear decoy into MLP neurons to corrupt RFA estimation.\n• Result: <10% ASR under standard Refusal Feature Ablation across six model families.\n• Result: On Llama-3-8B-Instruct cuts Heretic attack from 88.7% to 18% and holds 65% vs 58% worst-case vs trained defenses.\n• Why it matters: post-hoc weight edit with no finetuning at 30-450x lower cost for open-weight releases.\n\nPaper: https://t.co/JMODFS9XZa\nCode: https://t.co/dxjIZHQ3DQ",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T06:17:25+00:00",
+        "fetched_at": "2026-09-16T06:30:36.888788+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100109982775570765",
+      "text": "En la tarifa pública de DeepSeek, el mismo millón de tokens cuesta 0,003 dólares o 0,15. Lo único que cambia es si el modelo ya lo había leído antes.\n\nEs la caché de contexto, y en cualquier cosa con agentes es la partida que decide la factura. Un agente que repite el mismo prompt, las mismas skills y los mismos ficheros en cada paso paga céntimos. El mismo agente, con el contexto reordenado entre vuelta y vuelta, paga cincuenta veces más por el mismo trabajo.\n\nLa segunda palanca no está en el código, está en el reloj. El token tiene hora punta: de lunes a viernes, entre las 01:00 y las 04:00 UTC y entre las 06:00 y las 10:00 UTC, cuesta el doble. En España eso son las 3 a 6 y las 8 a 12 de la mañana. Todo lo demás es valle, y desde el 23 de agosto los fines de semana son valle completo: un lote que no corre prisa, lanzado por la tarde, cuesta la mitad.\n\nNinguna de las dos toca una línea de código.",
+      "source_language": "other",
+      "declared_language": "es",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T06:30:12+00:00",
+        "fetched_at": "2026-09-16T06:30:34.330143+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100131655331491931",
+      "text": "@AgenticV @GS_VCactivist @VaibhavSisinty For agentic coding, it is not just the model it is harness too, and also what you put in AGENTS.md and there engineering practice comes into advantage compare to vibe coders. On other tasks like web design, Deepseek beats astra and fable 5.1 for example. So the simple answer is depends on which task.  Also those smaller models you can run on 2-3 DGX sparks and get constant 60-90 tokens per second. Also if you look a bit back GLM 5.2 give the same level of inteligence like Opus 4.8 and it came out 2 WEEKS after opus with the same inteligence levels for me that is on pair. the gap is so small, in the past chinese labs used distilation because they had a huge gap, nowdays they are releasing models with the gap of 2-6 weeks behind USA SOTA. On top of that when you add intentional nerfing/fallback from antropic and openai in practice you are getting same or worse comparing to chinese models.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T07:56:19+00:00",
+        "fetched_at": "2026-09-16T08:00:26.510941+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099907164072456396",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100139653416296498",
+      "text": "@jun_song Hermes + DeepSeek https://t.co/AUTo1mwwtX",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T08:28:06+00:00",
+        "fetched_at": "2026-09-16T08:30:46.749382+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100106254874275850",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100143559139897620",
+      "text": "@cneuralnetwork use qwen 3 omni for LLM and qwen3 ASR and TTS And build urself an app\nProvided u have GPUs",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T08:43:37+00:00",
+        "fetched_at": "2026-09-16T08:45:29.083217+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100126523558895710",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100154764960870641",
+      "text": "@PillGo28 @taichnocrat Ja, es gibt einen Klassenunterschied zwischen den #LLM der Frontier Lab und Mistral. Aber Mistral spielt eben schon eine wichtige Rolle für 🇪🇺 #KI-Infrastruktur.",
+      "source_language": "other",
+      "declared_language": "de",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T09:28:09+00:00",
+        "fetched_at": "2026-09-16T09:30:29.617358+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100153503234572436",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100158202914406749",
+      "text": "#minimax #hailuoai #klingai #kling_ai #AIart #picka #viduAI\nOld 8mm film: claymation with funny or grotesque characters...catch fire in splip screen https://t.co/Bzs4T5XwOp",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T09:41:49+00:00",
+        "fetched_at": "2026-09-16T09:45:48.439922+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100158267955822865",
+      "text": "OpenAI - consumer + frontier models\nAnthropic - coding + enterprise\nxAI - real-time AI + infrastructure\nMistral - open-weight + European AI\nMicrosoft - AI infrastructure + distribution\nDeepSeek - efficient models + China\n\nThe AI race is getting harder to predict.\n\nWho has the strongest long-term strategy?",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T09:42:04+00:00",
+        "fetched_at": "2026-09-16T09:45:48.395819+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100158906307670018",
+      "text": "@sonderby hej Peter ;) imo p.t. stack DGX Sparks med GLM 5.3 Flash eller DeepSeek v4.1 Flash .. RTX 5090 \"kun\" til video .. check @MiaAI_lab",
+      "source_language": "other",
+      "declared_language": "da",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T09:44:36+00:00",
+        "fetched_at": "2026-09-16T09:45:48.292805+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100138187100144031",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100162811586551914",
+      "text": "Die Deadline: Am 14.09., 04:00 UTC, wandert der Endpoint deepseek-v4-pro auf V4.1 Flash. Fest gepinnte Modell-IDs bis dahin im Stack prüfen. Lizenz MIT, Serving über vLLM, SGLang, Transformers.",
+      "source_language": "other",
+      "declared_language": "de",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T10:00:08+00:00",
+        "fetched_at": "2026-09-16T10:00:59.835446+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100162799897084401",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100167914523386139",
+      "text": "🔥 🎉 BREAKING: Today we are launching \"The AI Services Firm for Supply Chain Coordination\".\n\nKimi K3 + Logistify AI = Sales Order Entry Work, Done For You.\n\nSaaS companies sold you SaaS tools for data entry of customer orders into your ERP.\n\nBut YOU still had to do the work yourself. You logged into their SaaS tool and retyped orders.\n\nWe believe that this old SaaS model is dying!!\n\nIntroducing Logistify AI — The AI Services Firm for Supply Chain Coordination.\n\nStarting with sales order entry.\n\nWe turn incoming customer messages from email, WhatsApp, sms, and phone into clean orders in your ERP, ready for your approval.\n\nWe DON'T sell you another SaaS tool. We do the work for you using our AI Agents + our Human Specialists who review the exceptions. And return the finished outcome to your ERP.\n\nAs AI models become more powerful, our sales-order-entry service gets better.\n\nSaaS is dead.\n\nLong live AI Services for Supply Chain.\n\nGet started for free here: 👇",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T10:20:24+00:00",
+        "fetched_at": "2026-09-16T10:31:05.330638+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100175698300432723",
+      "text": "🚨 THE AI MODEL WAR JUST MOVED OUT OF THE BENCHMARKS AND INTO THE BROWSER.\n\nMistral just landed Firefox distribution.\n\nMozilla is bringing Mistral Small 4 into Firefox Smart Window Beta, reaching users across North America and France, with the UK and Germany expected later in 2026.\n\nAnd this is NOT just another chatbot sitting in a sidebar.\n\nSmart Window can work with browser context, open tabs, browsing history, retrieve pages you previously visited, organize tabs, and help carry work across the web.\n\nMistral is entering the browser’s Agent surface.\n\nBut here’s the part that matters even more:\n\nMozilla is NOT locking Smart Window to one model vendor.\n\nUsers can switch models.\nThey can even point Smart Window at other model endpoints.\n\nMozilla controls the browser and the harness.\nModel providers compete for the intelligence layer.\n\nThat changes the game.\n\nThe next AI war isn’t only:\n\n“Who has the best model?”\n\nIt’s:\n\n“Who gets embedded where users already work?”\n\nMistral has spent years looking enterprise-first.\n\nNow it gets consumer distribution through Firefox without needing to own the browser.\n\nThat may be worth far more than another benchmark win.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T10:51:20+00:00",
+        "fetched_at": "2026-09-16T11:01:16.28845+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100177975631077722",
+      "text": "When you take a cult movie scene you’ve watched a hundred times…\nand suddenly experience it in full-speed FPV with Minimax H3. 🎬⚡️\n\nCompletely different perspective.\nSame iconic vibes.\nPure cinematic fun. 🔥 https://t.co/ZCs28w6yhs",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T11:00:23+00:00",
+        "fetched_at": "2026-09-16T11:01:11.613535+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100178758539878438",
+      "text": "【GLM-5.2ファインチューン！Atria-Dawn-Previewが示す高性能LLMの実践的活用】\n\n重いファインチューニングが施されたGLM-5.2ベースの新モデル「Atria-Dawn-Preview」が登場しました！コード生成やエージェントタスク、長期計画など最先端のベンチマークで高いスコアを示す可能性があるそうです。\n\nSWE‑bench ProやAutomationBench、CyberGymといった多様なタスクで、ベースとなったGLM-5.2からの改善が顕著だとコミュニティでも注目を集めていますね！\n\nvLLMやTGI、Ollamaといったローカル推論環境での量子化（GGUF/GPTQ/AWQ）やFlashAttentionの適用が期待でき、実用的なスループット向上が見込めるのも嬉しいポイントです。\n\n現時点ではプレビュー段階なのでベンチマーク結果は未確定ですし、実際の性能検証は必要ですが、オープンソースLLMの最前線をキャッチアップする絶好の機会ですね！\n\n#LLM #AI",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-16T11:03:30+00:00",
+        "fetched_at": "2026-09-16T11:15:46.977081+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100179499807871283",
+      "text": "I just asked hermes with GLM 5.3 API to use all of my researchs for Qwen 3.8 flash next to possibly squezee a little more TPS, might be a session between 10-15 hours will add up some value.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T11:06:26+00:00",
+        "fetched_at": "2026-09-16T11:15:46.949597+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100174090380394572",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100184789831823696",
+      "text": "KIMI K3 IS FREE ON NVIDIA 😳\n\nyou can access Kimi K3 through NVIDIA’s free endpoint\n\nhow to use:\n\n- go to: https://t.co/MN8unLNoUm\n- get your NVIDIA API key\n- use the OpenAI-compatible API\n- select moonshotai/kimi-k3\n\nfree endpoint is live rn https://t.co/XwBOO5TyL6",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T11:27:28+00:00",
+        "fetched_at": "2026-09-16T11:30:30.412566+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100189614463988083",
+      "text": "@djay_gier @Exocija what abt from the official deepseek api @grok",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T11:46:38+00:00",
+        "fetched_at": "2026-09-16T19:17:47.59702+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100171586783359108",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100189962993840620",
+      "text": "@kaif9998 Same. It's DeepSeek-flash now though. Also, did you know that Flash now supports image recognition?",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T11:48:01+00:00",
+        "fetched_at": "2026-09-16T19:17:47.187798+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099949274125721929",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100190300669169957",
+      "text": "Alistair Pullen（Cosine CEO兼共同創業者）は、Machine Learning Street Talkの「アメリカがAIで独走するのを見ている」において、米国の輸出規制が英国独自モデルの構築に向けた契機になったと語る。\n\n・Fableが突然使えなくなった際、Pullenは「多くの人と同じく愕然とした」と語る。\n・Cosineは英国初となる主権LLM（国が自前で持つ大規模言語モデル）の開発を受託した。学習にはBristolにあるスーパーコンピューターIsambardを活用する。\n・「彼らが数十億でやっていることを、数百万でどうやるのか」。Pullenの答えは、事前学習に特化した研究所ではなく推論重視の企業として、国の計算資源の割り当てと企業連合からのフィードバックを生かして戦うことだ。失敗が許されない状況である点も認めている。\n・米国が自国より先を進んでいることで、初めて二流市民のように感じており、それが何よりも悔しいと語る。\n・オープンウェイトモデルは、規模、アクティブパラメータ、データ量の面で最先端にはまだ及ばない。10兆という数字も取り沙汰されており、その規模になるとインターネット上の大半の情報を圧縮している水準になるという。\n・MoE（専門家の混合）と高密度モデルの比較では、モデルの体感性能を実際に左右するのはアクティブパラメータだと指摘する。\n・エージェント向けフレームワークの重要性は薄れている。現行のモデルであれば、ほぼbashを操作するだけで大半のタスクに対応できるという。\n・低品質な出力を抑えるには、最終回答ではなく思考プロセスに報酬を与える。コーディング性能が向上したのは客観的に検証可能な評価があるためであり、センスのような曖昧な要素も段階的な評価尺度で検証可能にしようと試みている。\n・コードレビューを実行時の検証に置き換える。仮想マシン上でバグを再現させ、エージェントにそれを実際に悪用させて脆弱性を立証する。\n・Swarmは数百のサブエージェントを並行稼働させる仕組みである。Kimi K 2.6を追加学習させた自社モデルを用い、Pythonで機械式時計をコードとして記述するSDKを構築させた事例を紹介している。\n\n頼りにしていた道具を失った日こそ、自前で開発すべき理由が最も明確になる。",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-16T11:49:21+00:00",
+        "fetched_at": "2026-09-16T12:00:44.005594+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100205285700747681",
+      "text": "@AydnPamuk6 Api yi nerden alcaz hocam el birliğiyle yapalım",
+      "source_language": "other",
+      "declared_language": "tr",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T12:48:54+00:00",
+        "fetched_at": "2026-09-16T13:01:48.299967+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099878272003694955",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100208799063622133",
+      "text": "@MicrosoftOpenAi @kaif9998 Never run into limit. Also Deepseek will be out of cash to do opensource at some point",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T13:02:52+00:00",
+        "fetched_at": "2026-09-16T20:31:55.882467+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100205492111073281",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100223903205671209",
+      "text": "deepseek v4.1flashの4台でのリング接続ですが、最新のMia AIのレシピが更新されていたので、入れ替えました。\n色々安定性やprefill含め上がっているようです。\n\nレシピのデフォルト設定が\nDSPARK_BLOCK_SIZE=3\nですが、リング接続用の更新版のPR#19での検証設定を参考に\nDSPARK_BLOCK_SIZE=5\nにして利用しています。\n単発で240kくらいでprefillが約1800、decodeが約90tok/sくらいでした。\n\nこのPR#19のレポートだと8並列で平均で30tok/sとか出てる！8つも同時に使わないな、流石に。。。\n\nhttps://t.co/NoPBnif5Mg",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-16T14:02:53+00:00",
+        "fetched_at": "2026-09-16T21:46:46.860617+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100225557120106513",
+      "text": "#AI #DeepSeek #nVidia https://t.co/UgeIr6baJ8",
+      "source_language": "en",
+      "declared_language": "qme",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T14:09:27+00:00",
+        "fetched_at": "2026-09-16T14:15:50.857459+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100225716742680718",
+      "text": "@ElitzaVasileva Here is what I do. I rotate between accounts and agents:\n- two ChatGPT subscriptions (Plus and Business)\n- Grok Build (SuperGrok)\n- Ainiux (my own agent, use local models or pay the API cost, currently prefer deepseek via their official API as it is fast &amp; capable).",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T14:10:05+00:00",
+        "fetched_at": "2026-09-16T21:46:45.817498+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100110433810292808",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100227899886587913",
+      "text": "@MistralAI @mozilla Firefox rolled out its Smart Window browsing assistant, initially partnering with Exa for source-backed search earlier this month.\nMistral now steps alongside, delivering a similarly privacy-focused, multilingual AI layer for users across North America and Europe.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T14:18:46+00:00",
+        "fetched_at": "2026-09-16T14:31:45.900341+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100153489787633694",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100153489787633694"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "Today, we are announcing a partnership with @mozilla  to bring privacy, control and choice to people using AI to browse online. 🦊🐈\n\nhttps://t.co/Bsd6N4jNdV https://t.co/OczDk9utfL"
+        }
+      ]
+    },
+    {
+      "post_id": "2100237838961049627",
+      "text": "今天在修复一个远程微信不显示图片的问题\n\n本来怀疑微信数据库、内核脏页、IO负载、CDN、Clash等维度原因\n\n但是我在移植 DeepSeek 4.1， 还有好几个项目在设计，太忙了\n\n我直接把环境和docker服务交给AI，让它只探测分析， 不准动环境和源码， 5分钟以后， AI说 Clash 工具有问题， 错误把腾讯的图片CDN重定向到代理， 所有图片都从美国绕了一圈，所以看不到图片，发送图片慢\n\nAI大爷还是牛逼， 只要给它足够的环境， 会各种A/B测试自动分析排查问题， 我这种做了很多年Linux的系统工程师只能给AI大爷提鞋\n\n不对，提鞋都不配",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T14:58:15+00:00",
+        "fetched_at": "2026-09-16T15:01:07.119932+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100239765429801078",
+      "text": "不是华推特多账号系统价格机场节点推特X北京丽的祝福，但足够真诚。快多平台定时发布软件广州直播视频福利视频乐，就是还能彼此相伴，还能看日出日推特发帖软件出售Gemini文心一言落\n🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号\nhttps://t.co/EYX8OvpCRS",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T15:05:55+00:00",
+        "fetched_at": "2026-09-16T15:16:02.23806+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100243502130971051",
+      "text": "@lunkertw @deepseek_ai A cap keeps the junk off disk; it doesn't stop the model from generating it. V4 Flash didn't need the cap.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T15:20:46+00:00",
+        "fetched_at": "2026-09-16T15:30:34.018496+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099816137772990732",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100243854146339213",
+      "text": "&gt; Quasar 438B is a structural change, with a different architecture inherited from GLM-5.2.\n\nOUR EUROPEAN MODEL! https://t.co/CmHjaqyAgy",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T15:22:10+00:00",
+        "fetched_at": "2026-09-16T15:30:32.005589+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100245604027043870",
+      "text": "USA has ChatGPT.   \nChina has DeepSeek.\n\nIndia has : Bhedbhav GPT",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T15:29:07+00:00",
+        "fetched_at": "2026-09-16T15:30:24.907477+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "USA has ChatGPT.   \nChina has DeepSeek.\n\nIndia has : TaxGPT !"
+        }
+      ]
+    },
+    {
+      "post_id": "2100245853495595380",
+      "text": "Deepseek API + pi, ladies and gents\n\nyes, its cache-hit rate https://t.co/4Bxd1xpizd",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T15:30:06+00:00",
+        "fetched_at": "2026-09-16T15:30:24.517598+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100249221484220856",
+      "text": "DeepSeek-V4.1-Flash来了，这次https://t.co/faQJkhTOkU给它打了个一折，这意味着你可以用极低的成本体验这款先进的多模态大模型。这可不是一般的优惠，对于那些依赖API进行高频调用的开发者来说，成本直接砍掉90%，这意味着什么呢？今天我就来讲讲这个事儿。\n\n首先，DeepSeek-V4.1-Flash不仅在技术上有升级，它在实际应用中的成本降低幅度是巨大的。之前要使用这个模型，你需要支付一笔不小的费用，但现在，只需要支付官方价格的十分之一，就可以进行同样复杂的模型调用。这不仅仅是节省了成本，更是让开发者可以更加自由地探索和试验不同的AI应用场景。\n\n其次，https://t.co/faQJkhTOkU还简化了整个接入过程。现有用户不需要进行复杂的配置调整，就可以直接享受到新模型带来的性能提升。而且，你也可以直接指定接入DeepSeek-V4.1-Flash，不需要重新配置整个工作流，就能提前体验新模型的优越性能。\n\n再来说说具体的使用流程。你只需要登录https://t.co/faQJkhTOkU的平台，就可以直接进行模型调用，不需要额外的配置或注册。而且，你还可以看到具体的调用结果和价格对比，让你直观地了解到这次优惠的实际效果。\n\n这次的优惠不仅仅是技术上的革新，更是成本上的解放。开发者可以更加专注于创新和开发，而不用担心高昂的费用。如果你还在为高昂的模型使用成本而烦恼，那么这次的优惠活动绝对值得一试。\n\n@justinsuntron @BAI_AGI #TRONEcostar",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T15:43:29+00:00",
+        "fetched_at": "2026-09-16T15:45:30.054708+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100251744559108491",
+      "text": "@opencode it keeps stopping mid-task. same problem i had with “ox alpha”. probably another glm model, with the same bug that made ox alpha unusable for me.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T15:53:31+00:00",
+        "fetched_at": "2026-09-16T16:01:47.1719+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100236430890991782",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100260635858600320",
+      "text": "I have used GLM 5.3 flash now since the stealth launch consistently 16 hours a day, sometimes more. \n\nThe 1m context window is BS, the model hangs when window nears 50%.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T16:28:51+00:00",
+        "fetched_at": "2026-09-16T16:31:07.576398+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100261261208424900",
+      "text": "@ZackKorman they gonna do it themselves and be like \"omg look at what deepseek did\"\nhttps://t.co/OVNlFdzIqN",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T16:31:20+00:00",
+        "fetched_at": "2026-09-17T00:03:02.103273+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100255085242511740",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "@tszzl @sean_from_earth lab false flag to capture shit, ill be out there trading weights on usb sticks if i have to"
+        }
+      ]
+    },
+    {
+      "post_id": "2100261589974659332",
+      "text": "@NoemiTitarenco Deepseek pro?",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T16:32:38+00:00",
+        "fetched_at": "2026-09-17T00:03:01.599442+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100254340875219183",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100262531788832809",
+      "text": "50M Tokens pour 30 cts nan deepseek c'est quoi ce poulet https://t.co/a9zdGLTRG2",
+      "source_language": "other",
+      "declared_language": "fr",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T16:36:23+00:00",
+        "fetched_at": "2026-09-17T00:03:01.023339+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100263920300941598",
+      "text": "@plotarmordev @Zai_org @MiaAI_lab @NVIDIAAI GLM5.3 flash or DSV4.1F?",
+      "source_language": "en",
+      "declared_language": "de",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T16:41:54+00:00",
+        "fetched_at": "2026-09-16T16:45:48.25072+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100241566723957024",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100264232721731936",
+      "text": "@notjazii Hoping minimax tbh",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T16:43:08+00:00",
+        "fetched_at": "2026-09-16T16:45:38.137372+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100239195243696473",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100239195243696473"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "new stealth model just appeared\n\nopencode announced union alpha, a new stealth model free for next week\n\nand somehow right before announcement, kimi plans became available again\n\nkimi stopped new plans after huge demand for k3 and now they are back\n\nif i’m connecting the dots right, union alpha could be kimi next beast\n\ngonna run some tests and post results soon\n\nwhich model do you think it is?"
+        }
+      ]
+    },
+    {
+      "post_id": "2100269014656364938",
+      "text": "好好看喔\n不是在怪科技產品不好\n而是從大腦的機制來討論怎樣的學習方式對大腦來說能建立更深度的學習\n（我覺得對青少年成立，對成年人更是成立。）\n\n1. 注意力一次其實只能專注在一件事情上。\n多工只是讓大腦頻繁切換任務。時間、準確性、記憶都會有所損失。\n\n2. 同理心對於學習能產生效果。\n真人面對面互動能讓我們同步彼此的大腦。（真人之間的互動充滿各種多樣的生理訊號）\n\n3. 空間對於學習、記憶，以及提取記憶的影響。\n在多樣化環境中學習會讓記憶變得更有彈性，更容易被提取。\n例如紙本書的厚度、文字在紙上的那個位置、手寫筆記時動用到哪些肌肉、學習環境中的空氣溫度氣味光線立體空間……都會影響記憶的深度，以及這個記憶被提取的難易程度。",
+      "source_language": "zh-Hant",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hant",
+      "timestamps": {
+        "created_at": "2026-09-16T17:02:08+00:00",
+        "fetched_at": "2026-09-16T17:15:36.001068+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100270972465008655",
+      "text": "@MBH7555 i am so excited to try what if its glm 4 lol like ox alpha",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T17:09:55+00:00",
+        "fetched_at": "2026-09-16T17:15:38.652038+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100240519049670956",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100271108863696950",
+      "text": "Voltei pro GLM 5.3 Flash.\n\nNão sei se é coisa do Hermes, mas DeepSeek v4.1 Flash tava alucinando MUITO no Ollama",
+      "source_language": "other",
+      "declared_language": "pt",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T17:10:28+00:00",
+        "fetched_at": "2026-09-16T17:15:30.81709+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100271964736696742",
+      "text": "#robertocingolani non dovrebbe parlare di #AI scommetto non sa neanche come funziona deepseek e l'#AI.\nSe addestrata in competizione con altri agentil'AIimita comportamenti umani quali la menzogna per aggirare le regole è un fatto dimostrabile con il CoT per questo deve rimanere.",
+      "source_language": "other",
+      "declared_language": "it",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T17:13:52+00:00",
+        "fetched_at": "2026-09-16T17:15:30.486008+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100272372632707265",
+      "text": "New secert ai model which is union alpha is glm 5.4 i guess what do you think",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T17:15:29+00:00",
+        "fetched_at": "2026-09-16T17:15:38.106656+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100277491390951481",
+      "text": "@shennatsuu gua udah make codex since gpt 5.5 release, tp if i was ngehemat deepseek v4.1 flash is rlly damn good for its price pake opencode go sub",
+      "source_language": "other",
+      "declared_language": "en",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T17:35:49+00:00",
+        "fetched_at": "2026-09-17T01:17:17.850307+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100230401667236202",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100277797394776402",
+      "text": "@Dalat_Ventures Does this apply to the DeepSeek Flash model?",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T17:37:02+00:00",
+        "fetched_at": "2026-09-17T01:17:17.554356+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100260954059780181",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100260954059780181"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "𝐖𝐡𝐞𝐧 𝐅𝐢𝐯𝐞 𝐓𝐨𝐩 𝐀𝐈 𝐌𝐨𝐝𝐞𝐥𝐬 𝐂𝐨𝐬𝐭 𝐉𝐮𝐬𝐭 𝟏𝟎% 𝐨𝐟 𝐒𝐭𝐚𝐧𝐝𝐚𝐫𝐝 𝐏𝐫𝐢𝐜𝐢𝐧𝐠, 𝐭𝐡𝐞 𝐄𝐜𝐨𝐧𝐨𝐦𝐢𝐜𝐬 𝐨𝐟 𝐀𝐈 𝐒𝐭𝐚𝐫𝐭 𝐭𝐨 𝐂𝐡𝐚𝐧𝐠𝐞 ⚡\n\nhttps://t.co/kgZeByAQj2 has now assembled five popular models into the same 90% OFF lineup:\n\n🧠 DeepSeek-V4.1-Flash\n\n⚙️ GLM-5.3-Flash\n\n💻 Qwen3.8-Flash\n\n🤖 Hy3\n\n🎨 MiMo-V2.5\n\nStarting September 16 at 17:00 SGT, all five can be accessed through https://t.co/kgZeByAQj2 at 10% of their official standard pricing under the current offer.\n\nThe obvious story is the discount.\n\nThe more interesting story is what lower inference costs can change downstream.\n\nAI applications do not pay for intelligence once.\n\nThey pay every time intelligence is used.\n\nOne user request might require one model call.\n\nA coding Agent may require dozens.\n\nA complex autonomous workflow may repeatedly reason, inspect context, call tools, evaluate results and continue until a task is complete.\n\n📊 At sufficient scale, inference stops being a minor software expense.\n\nIt becomes part of the application's unit economics.\n\nThis is why a 90% reduction in model-call pricing can potentially affect more than the monthly AI bill.\n\nIt can change which workflows are economically practical.\n\nA developer might allow an Agent to reason for longer.\n\nA product might process more context.\n\nA startup might serve more users before infrastructure costs become restrictive.\n\nExperiments that were previously expensive may become cheap enough to test.\n\nBut there is another important dimension here.\n\nhttps://t.co/kgZeByAQj2 is not discounting one model.\n\nIt is putting five different model families behind the same pricing tier.\n\n🌐 That introduces optionality.\n\nDevelopers do not necessarily need one universal model for every task.\n\nThey can potentially choose different intelligence for different workloads while keeping access inside the same infrastructure layer.\n\nThat matters because the cheapest model is not always the cheapest system.\n\nA model that costs less per token but requires more calls, more retries or produces lower-quality outputs may ultimately cost more per successful task.\n\nThe more useful metric is often:\n\n💰 Cost per completed workload.\n\nOf course, promotional pricing should not be treated as permanent infrastructure economics unless its duration and future terms support that assumption.\n\nProduction teams still need to understand pricing conditions, model behavior, reliability and workload requirements.\n\nBut the direction is worth watching.\n\nThe AI race is no longer only about building more capable models.\n\nIt is increasingly about making capable intelligence economically deployable at scale.\n\nAnd once model capability becomes abundant, the infrastructure that routes intelligence at the right cost may become just as strategically important as the models themselves. 🌐\n\n@BAI_AGI @justinsuntron #TRONEcoStar"
+        }
+      ]
+    },
+    {
+      "post_id": "2100281384351015367",
+      "text": "@thdxr It is from a company that has less capacity to serve because Ox Alpha worked most of the time during the free run.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T17:51:18+00:00",
+        "fetched_at": "2026-09-16T18:01:16.68897+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100273610808017383",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100283207736332475",
+      "text": "Children don't always listen to what we say, but they always watch what we do. If we want a disciplined society, we must model discipline at home.\n\nYara ba koyaushe suke sauraron abin da muke faɗa ba, amma a kullum suna kallon abin da muke yi. Idan muna son al'umma mai da'a da bin doka, dole ne mu fara nuna wannan da'ar a cikin gida",
+      "source_language": "other",
+      "declared_language": "en",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T17:58:32+00:00",
+        "fetched_at": "2026-09-16T18:01:13.537875+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100294707574341926",
+      "text": "@Kimi_Moonshot Plz fix monthly usg limit. This time around I find it exhausting quickly not becoz of Kimi 2.8. I experience this be4 preview launch. I am on $39 Allegretto, other months I could never finish the limit but this month is different. It gobbles up my monthly usage. 🙏",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T18:44:14+00:00",
+        "fetched_at": "2026-09-16T18:46:04.304195+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100298541797081341",
+      "text": "@yigtdogn 256k contexti var. Kimi K2.8 ya da Qwen4-27B olduğunu düşünüyorum. Küçük ama oldukça güçlü bir model.",
+      "source_language": "other",
+      "declared_language": "tr",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T18:59:28+00:00",
+        "fetched_at": "2026-09-16T19:01:12.616356+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100271439274283443",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100306053913252315",
+      "text": "DeepSeek V4.1 Flash is FREE on freebuff 😳\n\nyou can also try:\n\n GLM 5.3 Flash\n MiMo 2.5\n Muse Spark 1.2\n Solar Pro 4\n\n&gt; DeepSeek V4.1 Flash is available too\n&gt; some models may have limited access\n\ntry it here: https://t.co/i1cOnVX4X1 https://t.co/rcZhEOPUuh",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T19:29:19+00:00",
+        "fetched_at": "2026-09-16T19:30:41.916181+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100307770360913963",
+      "text": "30% 这个数字听起来可能不多，但在开发者的世界里，它意味着巨大的成本节约。https://t.co/faQJkhTOkU 刚刚宣布 GLM-5.3-Flash 的免费体验将延长至 9 月 12 日，这对很多项目来说是一个不小的福音。咱们来说说这背后有什么干货。\n\n首先，延长免费期意味着开发者在评估和测试 GLM-5.3-Flash 时，不用立即为高昂的使用费用买单。这就好比你去餐厅吃饭，老板说今天所有菜都可以先尝后买，这对新来的食客来说非常友好。同样的，开发者可以在不增加额外预算的情况下，充分体验 GLM-5.3-Flash 的功能。\n\n接下来，看看 GLM-5.3-Flash 究竟能帮开发者解决什么问题。比如，在长文本处理和高频 API 调用方面，这个模型表现出色。假设你需要处理大量数据或频繁调用 API，GLM-5.3-Flash 可以显著提升效率。想象一下你正在整理一份长达数千页的文件，用 GLM-5.3-Flash 帮你归纳、分类，速度和准确性都会大大提升，这在以前是很难实现的。\n\n除了 GLM-5.3-Flash，https://t.co/faQJkhTOkU 还提供了包括 Qwen3.8 Flash、Tencent Hy3 和 Xiaomi MiMo V2.5 等多个模型的免费体验，为不同需求的开发者提供了更多的选择空间。这就好比餐馆不仅提供一种菜式，而是提供了多个口味的选择，让你可以根据个人喜好尽情尝试。\n\n所以，对于开发者来说，这 30% 的成本节约意味着更多的创新空间和灵活的选择。https://t.co/faQJkhTOkU 的这个决定显然为开发者们提供了一个极好的机会窗口。赶紧去 https://t.co/faQJkhTOkU 官网体验一下吧，别错过这个大好机会。\n\n@justinsuntron @BAI_AGI #TRONEcostar",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T19:36:08+00:00",
+        "fetched_at": "2026-09-16T19:45:37.744751+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100312094910661095",
+      "text": "Sources / primary evidence:\n\nZTE — Nubia NaviX Ultra commercial launch, Doubao Mobile Assistant + Seed full-duplex voice model:\nhttps://t.co/cx9Byjj8oM\n\nSalesforce — AIforce, enterprise context / permissions / MCP / skills / Zero Data Retention:\nhttps://t.co/iwDgitdi3u",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T19:53:19+00:00",
+        "fetched_at": "2026-09-16T20:00:32.397839+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100312092498895072",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100312092498895072"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "🚨 THE AGENT WAR JUST MOVED BELOW THE APP LAYER.\n\nTwo launches in one day make the direction painfully clear:\n\nByteDance is putting an Agent into the operating fabric of the phone.\n\nSalesforce is building the control plane that lets Agents operate inside the enterprise.\n\nThe model is becoming the reasoning engine.\n\nThe real war is moving to:\n\nCONTEXT.\nPERMISSIONS.\nMEMORY.\nACTIONS.\nAUDIT.\nDISTRIBUTION.\n\nFirst, the phone.\n\nZTE just commercially launched the Nubia NaviX Ultra with the consumer version of Doubao Mobile Assistant and ByteDance Seed’s latest full-duplex voice model.\n\nThis is not just “AI inside a phone.”\n\nThe Agent can work across apps, send Feishu messages, schedule meetings, summarize group chats, forward documents, use maps, mobility and music services, keep tasks running while the phone is locked, and, according to ZTE, decompose and execute workflows lasting hundreds of steps and tens of minutes.\n\nVoice is becoming interruptible and continuous.\n\nVision is entering the loop.\n\nMemory is persistent with user permission.\n\nExecution crosses app boundaries.\n\nThe Agent is moving from something you OPEN to something the operating environment can CALL.\n\nNow look at what Salesforce launched on the exact same day.\n\nAIforce.\n\nSalesforce is exposing its data, workflows, business logic, semantics, permissions, security and governance to external AI interfaces through MCP, APIs, plugins and skills.\n\nClaude gets a prebuilt Salesforce MCP server plus 37 sales skills.\n\nClaude Code gets 40+ development skills.\n\nExisting Salesforce permissions remain in force.\n\nActions route back through Salesforce.\n\nModel providers are required to operate with Zero Data Retention.\n\nAnd Salesforce is explicitly designing this beyond Claude, across Anthropic, AWS, Google, OpenAI and others.\n\nThat architecture matters.\n\nMODEL\n↓\nreasoning\n\nHARNESS / CONTROL PLANE\n↓\ncontext + permissions + state + audit + execution\n\nMCP / APIs\n↓\nreal systems\n\nThis is starting to look less like “AI software” and more like an operating architecture for Agents.\n\nOn consumer hardware, ByteDance wants the Agent underneath the app experience.\n\nIn enterprise software, Salesforce wants the execution boundary underneath the Agent.\n\nDifferent markets.\n\nSame direction.\n\nThe durable advantage may not belong to whoever owns the smartest model.\n\nIt may belong to whoever owns the layer that decides:\n\nWHAT the model can see.\nWHAT it can touch.\nWHAT it can change.\nHOW long it can act.\nAND whether humans can inspect, stop, or recover from it.\n\nThe Agent era is turning into a control-plane war."
+        }
+      ]
+    },
+    {
+      "post_id": "2100313775937085598",
+      "text": "I wrote four lines of text into the prompt. The model set them as three. Its version reads better. 🖨️\n\nOne prompt, text to video. No reference images, no post-production. 15 seconds, 2560x1440.\n\nLegible text inside a generated shot is still where most models fall apart. So I test it every time. This one held.\n\nMiniMax H3 x Picsart Challenge is running.\n‼️$50,000 Prize Pool.\n‼️Submissions close Sep 23.\n\nThat gives you a week. Participate here: https://t.co/qdMVUpuZVV\n\n@MiniMax_AI @Picsart",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:00:00+00:00",
+        "fetched_at": "2026-09-16T20:00:23.997111+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100314574721315014",
+      "text": "@thtbee_ Union Alpha wishes to be ox Alpha lmao 😂",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:03:11+00:00",
+        "fetched_at": "2026-09-16T20:15:35.791116+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100303345118580975",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100320389226225806",
+      "text": "@Da7_Tech I love swe-2 but it's no where near the frontiers\n\nmuch better than luna, around same ballpark ask deepseek flash\n\nvery happy having it on fusion with fable 5.1",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:26:17+00:00",
+        "fetched_at": "2026-09-16T20:30:44.684138+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100312413207777364",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100312413207777364"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "I ran a detailed comparison between Fable 5.1, Astra, and SWE-2 in Devin to map out their strengths and weaknesses:\n\nSWE-2\n\n– Strengths: It explores territory other models never touch, looking at problems with a much wider lens. It picks up on subtle cues with very little context. You can trust it with minimal prompting, like telling it to delete something without worrying it might wipe out unrelated code. It has great discipline. When evaluating a problem, it targets the main pain point right away instead of wasting time on trivia. Its \"what not to do\" advice is genuinely useful and keeps you from spinning your wheels in solved areas. Unlike Astra, it avoids arbitrary, nonsensical refusals. It feels much more honest about what it can and cannot do.\n\n– Weaknesses: It lags far behind its base model, Kimi K3, in UI sense, aesthetics, and design taste. It also tends to stumble on a great idea and then hesitate to actually ship it.\n\nAstra\n\n– Strengths: Pure tenacity once it identifies a bug. It simply doesn't stop until it solves the problem. In one test, Opus 5 gave up and told me to file a support ticket, while Astra kept digging until it fixed the issue completely. It shows real engineering creativity, picking tight research paths with concise, structurally sound solutions and solid recommendations. It also has a great sense of success probability and offers precise statistical qualification for tasks.\n\n– Weaknesses: It tends to plan around small sample sizes and thin evidence. It gets bogged down in minor details instead of looking at the big picture and overall impact. It also struggles to synthesize ideas across different domains, overspecializing until the scope becomes too narrow.\n\nFable 5.1\n\n– Strengths: The highest evidence accuracy by far. It reliably delivers on what it promises, unlike models that promise everything and underdeliver. It has strong design taste, clear recommendations, and a holistic grasp of the end goal. It weighs priorities accurately. It can also pivot your entire strategy convincingly without drifting off into irrelevant territory.\n\n– Weaknesses: Its answers are dense and exhausting to read. Once it settles on an idea, it's hard to steer it away. Its research skims the surface rather than digging up rare findings. It can suffer from tunnel vision, sticking strictly to technical aspects while ignoring costs or viability metrics unless prompted.\nPatterns and Behaviors\n\n– Negation: Fable and SWE-2 set broad boundaries. Astra uses rigid negative rules that abruptly flip decisions when triggered.\n\n– Stability: Fable and Astra are steady. SWE-2 can be inconsistent, sometimes generating an idea only to backtrack on it.\n\n– Length: Astra is the most concise. Fable is the longest. SWE-2 sits in the middle, though it has repetitive filler that needs trimming.\n\n– Main Risks: SWE-2 over-explores possibilities at the expense of verifying existing code. Astra loses the forest for the trees. Fable turns practical technical decisions into academic literature reviews.\n\n– Standout Traits: SWE-2 wins on thoroughness, Astra wins on grit, and Fable wins on raw reasoning and persuasion.\nScores and Recommendations\n\n– Scores: \n\nFable 5.1: 8.5/10. \nAstra: 7.5/10.\nSWE-2: 7/10.\n\n– Pick Fable or SWE-2 if you want strict prompt adherence, clean execution, or deep mechanical logic.\n\n– Pick Astra if you need precise verification evidence and relentless debugging.\n\n– Scope and context: SWE-2 and Fable are tied, while Astra falls slightly behind.\n\nThis is an initial assessment based on tests in Devin, and I'll need more runs to map out the nuances completely."
+        }
+      ]
+    },
+    {
+      "post_id": "2100322545949962294",
+      "text": "Stealth model is a new GLM. Seems kinda early doesn't it? New pretrain though. #UnionAlpha",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:34:51+00:00",
+        "fetched_at": "2026-09-16T20:45:39.196961+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100325161845330415",
+      "text": "偷看 DeepSeek v4.1 flash 的思考链太有意思了，活人感特别强\n\n但它又实在太笨了，看着它想了半天，任务还是做不出来，我都想帮它一把了\n\n看它在那纠结，真替它着急",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T20:45:15+00:00",
+        "fetched_at": "2026-09-16T20:45:33.342256+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100327347496853956",
+      "text": "I can successfully train Nemotron, and Qwen with huge datasets but Gemma, what the heck? Terrible results on evals. Don't have time to massage it, easier to just drop it.\n\nMajor props to @NVIDIAAIDev for Nemotron family of models, awesome work. https://t.co/jpl99MGX90",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:53:56+00:00",
+        "fetched_at": "2026-09-16T21:01:35.6828+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100328669247934952",
+      "text": "@disk0nekted Qwen 4.0 release at EOM?",
+      "source_language": "en",
+      "declared_language": "hu",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T20:59:11+00:00",
+        "fetched_at": "2026-09-16T21:01:26.781251+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100322892697477530",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100329619039863208",
+      "text": "🚨 Union Alpha CONFIRMED to be a kimi model",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:02:58+00:00",
+        "fetched_at": "2026-09-16T21:15:49.921178+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100330750545719710",
+      "text": "@Fei2411 I guess and I might be sure to some extent that this is new model release from xiaomi as mimo V2.6 pro or flash model",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:07:27+00:00",
+        "fetched_at": "2026-09-16T21:15:49.782428+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100258627747717523",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100334057309847751",
+      "text": "在AI市场，GLM-5.3-Flash的出现无疑是最近最值得关注的亮点之一。与之前的版本相比，https://t.co/hkGQdLxMBf宣布的免费体验延期和成本优化，为开发者们提供了一个绝佳的窗口期，来评估和整合这款模型到自己的项目中。此次延期，不仅为开发者提供了更多的缓冲时间，还将GLM-5.3-Flash的免费体验期延长至9月12日，旨在帮助开发者们更好地进行模型测试和应用开发。\n\n成本效益的提升，是此次延期的核心亮点之一。通过免费权益，用户可以在零成本的情况下体验到GLM-5.3-Flash的强大功能，从而降低项目的前期投入风险。这在很大程度上减轻了开发者的财务压力，使他们能够更专注于创新和优化项目。这种成本优化的背后，是https://t.co/hkGQdLxMBf对AI模型应用场景深入理解的体现。通过这样的举措，https://t.co/hkGQdLxMBf不仅为开发者提供了必要的支持，还大大提高了模型的可访问性和实用性。\n\n值得注意的是，https://t.co/hkGQdLxMBf此次延长免费体验期，不仅仅是对开发者友好，更是对整个AI生态的有益补充。在当前的AI竞赛中，生态建设和长期价值是竞争的关键。https://t.co/hkGQdLxMBf的做法，为更多的开发者和项目提供了探索和实验的机会，从而促进了整个AI生态系统的丰富和发展。此外，这一策略还可以帮助https://t.co/hkGQdLxMBf更好地了解用户需求，收集反馈，为后续的产品改进和创新提供数据支持。\n\n对于开发者而言，这无疑是开发和测试AI应用的好机会。在接下来的时间里，用户可以充分利用GLM-5.3-Flash的各项功能，包括代码开发、AI Agent、长文本处理及高频API调用等。这些功能的免费体验不仅能够帮助开发者提高工作效率，还可以通过实际操作来验证模型的实际效果。例如，开发者可以通过AI Agent来管理复杂的自动化任务，利用长文本处理来优化文本分析的效率，以及通过高频API调用来提升数据处理的速度。这样的实践，无疑会为开发者带来宝贵的经验，有助于他们在未来的项目中取得更好的成果。\n\n不过，我们也需要认识到，此次免费体验的结束日期是明确的，即9月12日，这对开发者来说是一个重要的提醒。时间有限，开发者们需要在这段时间内尽可能地利用这个机会，为他们的项目带来价值。为了充分利用这一时期，开发者们需要提前规划和安排，确保在免费期内充分体验和利用GLM-5.3-Flash的各项功能。此外，开发者们还可以通过分享他们的经验来获取更多反馈，进一步优化他们的项目。\n\nhttps://t.co/hkGQdLxMBf此次延长GLM-5.3-Flash的免费体验期，不仅是对开发者的一项重要支持，也是对整个AI生态健康发展的积极贡献。这为开发者提供了宝贵的机会，帮助他们在激烈的竞争中脱颖而出。因此，对于所有开发者和项目来说，这都是一个不容错过的机会。\n\n@justinsuntron @BAI_AGI #TRONEcostar",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T21:20:36+00:00",
+        "fetched_at": "2026-09-16T21:30:39.345617+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100339322025070971",
+      "text": "@cgtwts one benchmark.\nopus 5.2morrow.\nit'll still cost more than astra.\nbut... u want sota? u gotta pay 5-10x. That's the deal.\nFable 5.1 is still generally better than Astra. But hey... if that overall 2% doesn't mean much to you?\nThen astra ain't the way, deepseek is",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:41:31+00:00",
+        "fetched_at": "2026-09-16T21:45:40.376196+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100324548159885317",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100339358398058923",
+      "text": "@zainhas Leaked as in they don't send output tokens for reasoning, only the final answer\n\nLikely due to not offering a reasoning toggle during stealth test\n\nGiven that it answers China questions, X account is from Spain and Mistral infra got hit during launch, it's likely a Mistral model",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:41:40+00:00",
+        "fetched_at": "2026-09-16T21:45:43.312208+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100337941134692581",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100339789266325902",
+      "text": "@realtek12345 @MistralAI Mistral? Ty masz udar słoneczny?",
+      "source_language": "other",
+      "declared_language": "pl",
+      "stored_detected_language": "other",
+      "timestamps": {
+        "created_at": "2026-09-16T21:43:22+00:00",
+        "fetched_at": "2026-09-16T21:45:48.821468+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100334114469552495",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100334114469552495"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "Nowy model na OpenRouter. Wypada lepiej od Kimi K3, GLM 5.3 czy nawet GPT 5.6 sol. \n\nPojawiają się plotki, że to może być nowy @MistralAI. Konto zarejestrowane w Hiszpanii, gdzie Mistral niedawno otworzył biuro, a za tydzień Mistral ma być na AI Summit w Barcelonie. \n\nNic nie wskazuje, by to był model chiński, zwłaszcza to, jak odpowiada na \"niewygodne\" pytania."
+        }
+      ]
+    },
+    {
+      "post_id": "2100340131492213029",
+      "text": "@elshayib_ You can't train a decent model on 12 gpus, ask mistral.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:44:44+00:00",
+        "fetched_at": "2026-09-16T21:45:43.251967+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100279250406273027",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100343550563025063",
+      "text": "Thank you @_LuoFuli, thank you @XiaomiMiMo, this is OSS we want !!!\n\nWe need more stuff like you and Marin !",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:58:19+00:00",
+        "fetched_at": "2026-09-16T22:00:45.863503+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": "2100296686719610932",
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "Nearly half a year of silence. We spent it studying one problem: how far RL can scale.\n\nMiMo-V2.6 is in the middle of its RL run right now. Three things we scaled: compute (~2B tokens per step, 1568 prompts × 16 rollouts, fully async), environments and harnesses (multi-task agentic RL, mixed across multiple harnesses in one run), and grader compute (agentic in-group credit assignment, with test-case and rubric-based rewards). We'll open-source the details piece by piece over the coming weeks.\n\nStreaming the run: https://t.co/ZSxahzJRju"
+        }
+      ]
+    },
+    {
+      "post_id": "2100343637012091332",
+      "text": "Agent Sessions now supports one more harness (actually two) — Cline CLI and Cline Desktop\n\nWhy you may want to try @cline — DeepSeek V4.1 Flash is available for free temporary!  \nWorth to check with new reduced Claude & Codex limits  \n\nhttps://t.co/0wYpO7TlbG\nmacOS • open source • ⭐️ 863",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T21:58:40+00:00",
+        "fetched_at": "2026-09-16T22:00:34.877001+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100346971144036571",
+      "text": "@The_Alex My guess is a new Qwen model based on tokenizer.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T22:11:55+00:00",
+        "fetched_at": "2026-09-16T22:15:49.334469+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100318356306063544",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100357277253542260",
+      "text": "Following MiMo-V2.6’s live RL run. Useful to see learning curves alongside sampling stats, queues, costs, and restarts!\n\nThe2B tokens per step is a substantial workload. What I’d like to understand is the compute allocation: at a fixed total budget, what produces the most improvement on unseen tasks?\n\nA few questions this run brings up:\n\n- More prompts, more rollouts, or better feedback?\n\nThe dashboard shows ~1,568 prompts × 16 rollouts per batch. Covering more tasks and exploring more trajectories per task serve different purposes. Grader compute adds another choice: when is it worth generating fewer trajectories and spending more on evaluating them? The best allocation may shift as the policy improves.\n\n- What does agentic in-group credit assignment actually do?\n\nTest cases and rubrics provide different kinds of feedback. I’m curious how the grader compares attempts within a group, and whether it assigns credit to whole trajectories, stages, or individual actions. The ablation I’d like to see is whether additional grading cost pays for itself through more efficient learning.\n\n- Critic/RLOO choices also affect scheduling.\n\nRLOO uses sibling rollout returns as a baseline, a learned value function predicts return from the current state. \n\nIf advantage computation requires the full group, slow trajectories can delay it even in an asynchronous pipeline. A value-based estimator that permits independent trajectory processing could reduce that dependency, but adds critic inference, training, and estimation costs. Retaining an RLOO component may retain the group dependency too.\n\nThis is a design question, not a claim about MiMo’s implementation. The dashboard’s critic/* metric names alone don’t establish that it uses a learned critic.\n\n- Throughput needs to be read alongside policy lag.\n\nMore trajectories per hour don’t necessarily mean faster learning. By the time a long-running task finishes, its behavior policy may be several versions behind. How the system handles that gap - and avoids systematically favoring short tasks - matters alongside raw throughput.\n\nThe comparison I’d most like to see: time and total cost to reach the same held-out performance, accounting for rollouts, grading, environments, and any critic.\n\nAppreciate the MiMo team making the run visible. There’s a lot to learn from the intermediate behavior of a training system.\n\nhttps://t.co/UUU3woePsc\n\nLe Critique: https://t.co/vHmbYYayJW",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T22:52:52+00:00",
+        "fetched_at": "2026-09-16T23:00:58.042904+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": "2100296686719610932",
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "Nearly half a year of silence. We spent it studying one problem: how far RL can scale.\n\nMiMo-V2.6 is in the middle of its RL run right now. Three things we scaled: compute (~2B tokens per step, 1568 prompts × 16 rollouts, fully async), environments and harnesses (multi-task agentic RL, mixed across multiple harnesses in one run), and grader compute (agentic in-group credit assignment, with test-case and rubric-based rewards). We'll open-source the details piece by piece over the coming weeks.\n\nStreaming the run: https://t.co/ZSxahzJRju"
+        }
+      ]
+    },
+    {
+      "post_id": "2100360950847267020",
+      "text": "30%的用户在使用AI服务时最关心的便是稳定性与成本效益，DeepSeek V4 Flash及其Vision Exp版本在这方面做出了优化。这两款模型在代码开发、AI Agent和视觉分析领域表现出色，尤其在高频API工作流中的响应能力令人印象深刻。\n\n具体而言，DeepSeek V4 Flash拥有极快的响应时间和低延迟特性，能够在高并发场景下保持稳定服务。其Vision Exp版本则在多模态分析方面具备卓越能力，能够处理复杂的视觉任务和数据集。这两款模型的调价，意味着开发者能够以更低的成本获取高性价比的服务。\n\nhttps://t.co/hkGQdLxMBf宣布将于9月10日12:00（SGT）推出专属叠加福利，进一步降低开发者使用这两款热门模型的成本。这种策略不仅帮助开发者降低使用门槛，还能提升他们对https://t.co/hkGQdLxMBf的信任度，推动更多人尝试和使用这些强大的工具。\n\nDeepSeek V4 Flash和Vision Exp的调价，是对开发者群体的一次重大利好。https://t.co/hkGQdLxMBf将通过一系列专属福利，为用户带来更多的使用价值。现在，只需关注官方动态，便能第一时间获取更多优惠信息。\n\n@justinsuntron @BAI_AGI #TRONEcostar",
+      "source_language": "zh-Hans",
+      "declared_language": "zh",
+      "stored_detected_language": "zh-Hans",
+      "timestamps": {
+        "created_at": "2026-09-16T23:07:28+00:00",
+        "fetched_at": "2026-09-16T23:15:42.396388+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100370397153628336",
+      "text": "**Real intelligence is tested when things don't go according to plan.**\n\nMost business processes have a “happy path.”\n\nThe order is correct.\nThe shipment arrives.\nThe invoice matches.\nThe payment clears.\nThe claim is valid.\nThe patient follows the expected progression.\n\nBut real operations are full of exceptions.\n\n**Documents conflict.\nInformation is missing.\nTransactions don't reconcile.\nDeadlines are missed.\nPolicies are violated.\nConditions change.\nPeople make mistakes.\nSystems disagree.**\n\nIf AI is going to operate in the real world, it needs exposure to this complexity.\n\nAt Xpert Systems, we curate **realistic, hybrid, AI-ready datasets** that can represent not only normal operations, but also **exceptions, inconsistencies, dependencies, decisions and downstream outcomes.**\n\nOur portfolio spans:\n\n**ERP • Healthcare • Finance • Banking • Insurance • Retail • Supply Chain • Manufacturing • Cybersecurity • Defense • Oil & Gas • Education • Professional Services • and more.**\n\nThe data can include connected **transactions, documents, communications, workflows and longitudinal events**—creating richer environments for model training, evaluation and AI-agent development.\n\nAnd we use our own curated data to train open-source Llama models and build specialized **Llama Xpert** instances.\n\nOur philosophy is simple:\n\n**Don't train AI only for when everything goes right. Train it to understand what happens when things go wrong.**\n\nOrganizations can license our **AI-ready datasets**, our **Llama Xpert instances**, or both.\n\n**Building an AI model or agent that needs realistic operational challenges?**\n\nDM me or email **[pradeep@xpertsystems.ai](mailto:pradeep@xpertsystems.ai)** for samples, dataset coverage, custom requirements, licensing and pricing.\n\n#AI #AIData #EnterpriseAI #LlamaXpert #AgenticAI #AITraining #TrainingData #LLM #DomainAI #ModelEvaluation",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-16T23:45:00+00:00",
+        "fetched_at": "2026-09-16T23:45:41.408994+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100395773523271712",
+      "text": "🔥 FRESH ARC TOKEN\n$QWEN38 — qwen 3.8\n\nMC $0.00 | Liq $18.84K\nHolders 113 | ATH $56.94K\n\n🧠 Smart 0 | Fresh 17 | Snipers 1\n🤖 Bots 0.00% | Top10 34.59% | Rug 0.00%\n\nCA: 0x7532d295834f103e9eec88d8060245803f9d8fc6\n\n🔔 ARC Migrations Notifications: https://t.co/WsxfKSUOuE",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T01:25:50+00:00",
+        "fetched_at": "2026-09-17T01:30:31.904066+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100404047882727911",
+      "text": "@jurlycat Deepseek",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T01:58:43+00:00",
+        "fetched_at": "2026-09-17T02:01:37.397087+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100399111312957662",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2100399111312957662"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "Last month, an anonymous model called Ox Alpha appeared on OpenCode.\n\nDays later, it was revealed as GLM-5.3-Flash.\n\nNow another stealth model has arrived: Union Alpha.\n\nFree, multimodal, 262K context, tool calling, and built for coding and agents.\n\nBlind testing is becoming the new model launch strategy.\n\nWho’s behind this one?  🧐"
+        }
+      ]
+    },
+    {
+      "post_id": "2100404178355167577",
+      "text": "Qwen 3.8でテトリスをつくる再実験してます\n\n目標設定しないと止まってしまう",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-17T01:59:14+00:00",
+        "fetched_at": "2026-09-17T02:01:37.1708+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": true,
+        "parent_post_id": null
+      },
+      "context": [
+        {
+          "provenance": "stored_quote",
+          "text": "Codexぶん回すと暖房器具になります\nローカルLLMだけで動かしている https://t.co/26COzFhfwf"
+        }
+      ]
+    },
+    {
+      "post_id": "2100415487914160589",
+      "text": "DeepSeek V4 Flashの1Mコンテキスト、なかなか使えるなぁ",
+      "source_language": "ja",
+      "declared_language": "ja",
+      "stored_detected_language": "ja",
+      "timestamps": {
+        "created_at": "2026-09-17T02:44:10+00:00",
+        "fetched_at": "2026-09-17T02:45:28.201877+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100417985441927500",
+      "text": "@stoic_point I have done this exact thing with muse!",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T02:54:06+00:00",
+        "fetched_at": "2026-09-17T03:01:06.908275+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100383301936783380",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100420165917982857",
+      "text": "@TechBuzzChina The more interesting divide may be integrated ecosystems vs standalone model companies. Tencent, Alibaba or ByteDance can treat the model as one layer of a much larger business. A pure-play lab has much less cushion when model pricing compresses - the model economics are much closer to the business itself.",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T03:02:46+00:00",
+        "fetched_at": "2026-09-17T03:16:10.135753+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2099669550685925727",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": "2099669550685925727"
+      },
+      "context": [
+        {
+          "provenance": "local_parent",
+          "text": "DeepSeek's Flash price cut hits Zhipu and MiniMax valuations\n\nOn September 10, DeepSeek released V4.1 Flash and cut API prices again. Off-peak cached input now costs RMB 0.02 (~$0.0028) per million tokens, uncached input RMB 1 (~$0.14), and output RMB 4 (~$0.55). Peak pricing is double. The company says the new model beats V4 Pro on performance, cost, speed, and total time, and plans to shift some Pro traffic to Flash after September 14.\n\nZhipu fell 10.34% that day and MiniMax 8.98%. Through September 11, Zhipu is down 33.64% for the month and MiniMax 22.98%. Both reported strong first-half revenue: Zhipu RMB 954 million (~$131.6M), up 399.7% year over year, and MiniMax $117 million, up 283.1%. Zhipu disclosed August ARR of about $1.6 billion; MiniMax over $800 million.\n\nYet Jefferies cut Zhipu's target price from HK$1,299.8 to HK$1,183.79 and lowered the API business multiple from 50x to 30x expected 2026 ARR. The bank also raised 2026-2029 revenue forecasts 37-119% and trimmed loss estimates. The market is repricing growth quality: Zhipu's two largest customers each contribute over $250 million ARR, at least 31% combined. If one reduces usage, annualized ARR drops immediately.\n\nWe'd argue the core tension is that Flash models compress the premium window. Zhipu raised API prices 83% in Q1 and still grew call volume 400%, but GLM-5.3-Flash costs one-tenth of GLM-5.3 while outperforming GLM-5.2. Cached input generates 50x less revenue per token than uncached. Independent model companies must now grow call volume faster than unit prices fall, and cut inference costs faster than list prices drop. That is a much harder race than the one investors priced six months ago.\n\nh/t @TMTPostGlobal"
+        }
+      ]
+    },
+    {
+      "post_id": "2100420553928749475",
+      "text": "@DJLougen @MiaAI_lab It says why right in the description. ComfyUI does this too (see ss)\n\nIf your scripts check SHA256 etc to make sure the user got the correct/complete file (remember the users are often newbies), then your script will break if the model creator uploads a new version of the quant\n\nI've personally, unknowingly downloaded a new version of a quant that required a new version of the author's llama fork (which I hadn't updated)\n\nIf there's attribution (there is), and the license allows it (it does), there's nothing wrong with re-uploading, rehosting, backing up open models and open source code as-is\n\nI appreciate calling out plagiarism, but this isn't it, especially when the entire first paragraph of the README is the situation and attribution written in bold letters",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T03:04:18+00:00",
+        "fetched_at": "2026-09-17T03:16:05.433928+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100337681230184958",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100422464241013210",
+      "text": "@Ben01Den @Jimster4801 @sudoingX @grok Everyone is raving about Qwen 3.8 flash next right now. Apparently gets to its answer for far fewer tokens",
+      "source_language": "en",
+      "declared_language": "en",
+      "stored_detected_language": "en",
+      "timestamps": {
+        "created_at": "2026-09-17T03:11:54+00:00",
+        "fetched_at": "2026-09-17T03:16:01.810994+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": "2100422012954927340",
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": true,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    },
+    {
+      "post_id": "2100430324899455118",
+      "text": "“중국 앞서야” 트럼프 AI 속도조절론 일축…텐센트 새 모델 전세계 이용률 1위로\n\n정책 논쟁은 속도조절인데, 개발 현장의 선택은 비용과 배포로 기울고 있습니다. 중국 모델의 오픈라우터 토큰 비중이 9개월 만에 20%에서 55%로 뛰었다는 수치는, AI 경쟁이 정상급 모델의 발표 횟수보다 실제 에이전트가 어떤 모델을 호출하는지에서 먼저 드러난다는 뜻입니다.\n\n텐센트 Hy4 프리뷰는 8월 28일 공개된 오픈소스 모델로, 총 7700억 파라미터 중 49억개를 활성화하는 구조입니다. 오픈라우터는 요청 수가 아니라 처리 토큰으로 순위를 집계합니다. Hy4는 이 플랫폼에서 18조 토큰 이상이 처리됐고, 코딩·도구 호출처럼 반복 실행되는 업무에 맞춰 배포됐습니다.\n\n그렇다고 토큰 점유율이 곧 성능이나 매출 1위는 아닙니다. 모델마다 답변 길이와 토큰화 방식이 달라 단순 비교에는 한계가 있습니다. 미국 기업의 코딩 에이전트가 중국산 추론 모델을 호출하는 조합도 늘어, 국적보다 가격·지연시간·도구 연동이 더 직접적인 선택 기준이 되고 있습니다.\n\n그래서 볼 건 규제 발언의 강도보다, 개발자가 실제 업무에서 어떤 모델을 반복 호출하는지입니다.\n\n※ 오픈라우터 토큰 비중은 해당 플랫폼 공개 사용량 기준이며 전체 AI 시장 점유율이 아닙니다.\n출처: 서울경제 2026.09.15 / 텐센트 / OpenRouter",
+      "source_language": "ko",
+      "declared_language": "ko",
+      "stored_detected_language": "ko",
+      "timestamps": {
+        "created_at": "2026-09-17T03:43:08+00:00",
+        "fetched_at": "2026-09-17T03:45:44.801437+00:00"
+      },
+      "identifiers": {
+        "in_reply_to_id": null,
+        "quoted_status_id": null,
+        "conversation_id": null,
+        "is_reply": false,
+        "is_quote": null,
+        "parent_post_id": null
+      },
+      "context": []
+    }
+  ],
+  "source_hashes": {
+    "scripts/u20_random100_live.py": "a8f9f777b20b8227266f05f7f8f057f74afb9abb0e8674ccd35b13a2e07e6711",
+    "scripts/u20_plaintext_translation_compare.py": "20f331043047a9cdc0c9df7329688e582a1613003fe9139116fbe287bef650dc",
+    "scripts/u20_translation_synthesis_execute.py": "e5c21ef3ffed06016e4fb96da38f37e7d60b6d7fa45e95ce1846e467bebd7af8",
+    "x_monitor/literal_translation.py": "16abd71e4e71d388a1eb06e3a45331b14d33c37876f345f92742281e4fbfd30d",
+    "x_monitor/translation_invariants.py": "3a5f30bdc9e6711b21636c11f8711a725c5d723e1ea14420edf20b0c13406ce0",
+    "x_monitor/translator.py": "8d4d4a770bd8987bc518175108d6df5ffbf30742dbf8dd52b9b36340f1658931",
+    "x_monitor/synthesis.py": "93ae532bcf68f57b219bd30b1f5d686454fd8076463789b7f93db1a6f20da652",
+    "x_monitor/openrouter.py": "8d978a3c3879540b7e700491eeaab58fb0a1bb96a88a014e4da7ac57aba8345e",
+    "x_monitor/provider_telemetry.py": "32f9407bf094205c00419ffe4f3fc1cf7982c561bd1f97c157296a1ab8ea9966"
+  },
+  "route": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "provider": "DeepInfra",
+    "endpoint": "deepinfra/fp8",
+    "reasoning": "disabled",
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "seed": 42
+  },
+  "limits": {
+    "maximum_total_in_flight": 3,
+    "maximum_transports": 500,
+    "transport_retries": 0,
+    "translation_socket_idle_timeout_seconds": 180,
+    "commentary_socket_idle_timeout_seconds": 60,
+    "outer_cost_cap_usd": "5.00"
+  },
+  "bounds": {
+    "translation": {
+      "calls": 215,
+      "input_bytes": 922462,
+      "output_tokens": 449305,
+      "reservation_usd": "0.99896588"
+    },
+    "commentary": {
+      "calls": 96,
+      "input_bytes": 325160,
+      "output_tokens": 384000,
+      "reservation_usd": "0.6499504"
+    },
+    "total": {
+      "calls": 311,
+      "input_bytes": 1247622,
+      "output_tokens": 833305,
+      "reservation_usd": "1.64891628"
+    }
+  },
+  "request_sha256": {
+    "translation": "babe5220e525314c1b962a0f52a69f30d0e4b91c5ae33c724075943ba32a5347",
+    "commentary": "d22b4fe9af3bbbce5d563ce29d45e840c50d0e5291f6dc99276b04df3588726e"
+  },
+  "precall_coverage_failures": {
+    "synthesis_input_cap_rejections": [
+      "2100074485743304992",
+      "2100077710332584287",
+      "2100079736537923768",
+      "2100320389226225806"
+    ]
+  },
+  "safety": {
+    "database_writes": false,
+    "classifier_calls": false,
+    "publication": false,
+    "each_request_consumed_before_provider": true,
+    "semantic_accuracy_claim": false
+  }
+}

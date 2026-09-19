@@ -1,0 +1,54 @@
+{
+  "schema_version": "u18-saved-response-replay/v1",
+  "frozen_at": "2026-09-13T23:20:00+09:00",
+  "reason": "A provider-free replay of the consumed v27 reviewer responses after correcting the selector invariant: exact evidence supports the complete corrected judgment and may support more than one derived change reason. This budget authorizes no transport, retries, new provider work, production activation, or release-quality claim.",
+  "selector_version": "stage1-selector-v27-owner-calibrated-evidence-reuse-v2",
+  "prompt_sha256": "fa50534968f5a5a27a02e71e0be98ed3ca785a67d69c45c211aa7a25dfa4c893",
+  "transport": {
+    "maximum_cost_usd": "0",
+    "maximum_input_tokens": 0,
+    "maximum_output_tokens": 0,
+    "maximum_requests": 0,
+    "maximum_transport_attempts": 0
+  },
+  "inputs": {
+    "cohort_sha256": "07690a807fa7d68f75db9ca8b943b875e06fd5ed59c500e11cafa194396c83c1",
+    "owner_reference_subset_sha256": "82ffc5c8f4ce131e068cdfa08ed3a41c7af9530998225c3c719623372531f93b",
+    "original_budget_path": "docs/analysis/2026-09-13-072242-u18-runtime-v27-deepseek-pro-review-pilot-budget.json",
+    "original_budget_sha256": "b8fd9abcf04c3f92424f0e0ed07eaf0b8af1b7fd58da84d1f1ed0ad778f2c84a",
+    "original_usage_path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/usage.json",
+    "original_usage_sha256": "08f51d1543aa6c5228277177c2a27de838dffc6f7bf245a8368844824885ca14"
+  },
+  "responses": [
+    {
+      "request_id": "review-2089623292722438206-2089975653370147229",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2089623292722438206-2089975653370147229-1.json",
+      "sha256": "3e5444a3632c717f974c6e999a673c6019361ca548e7a9240a7b13058fd0f6ae"
+    },
+    {
+      "request_id": "review-2088186895125602568-2077981204746588164",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2088186895125602568-2077981204746588164-2.json",
+      "sha256": "84feafca47e14c615372c68bb31cd22a8376843befaf728a31f7fe151a9b6836"
+    },
+    {
+      "request_id": "review-2081687339911536725-2081689929038680109",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2081687339911536725-2081689929038680109-1.json",
+      "sha256": "6216fdc1bf04673a95100f9755b110a2af9161447618340057891df0a7191f9f"
+    },
+    {
+      "request_id": "review-2092561644203438232-2087951553957356001",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2092561644203438232-2087951553957356001-1.json",
+      "sha256": "7b9e39974854bc3470d13423c1255365e43e106514059aec86fd09bc872a732b"
+    },
+    {
+      "request_id": "review-2097672725099663811-2088584334584500312",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2097672725099663811-2088584334584500312-1.json",
+      "sha256": "de133fd7c3b7cde0ce89b802f1190e2e179171e6d7c329ad7d649dc08d41409a"
+    },
+    {
+      "request_id": "review-2094965241201512884-2088168761018962048",
+      "path": ".context/u18/u18-owner-accepted-v27-pro-review-pilot-v1/responses/runtime_v27_deepseek_pro_owner_accepted_reviewer_pilot/review-2094965241201512884-2088168761018962048-1.json",
+      "sha256": "e01e8435cb991280ccf350692b4946b222a3aba8df0c8bc665ce9958875c598e"
+    }
+  ]
+}

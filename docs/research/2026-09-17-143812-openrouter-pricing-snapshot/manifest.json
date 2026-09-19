@@ -1,0 +1,212 @@
+{
+  "schema": "openrouter-price-snapshot/v1",
+  "started_at_utc": "2026-09-17T05:38:12.796504+00:00",
+  "finished_at_utc": "2026-09-17T05:38:13.338476+00:00",
+  "catalog_model_count": 444,
+  "candidate_model_count": 9,
+  "endpoint_count": 68,
+  "endpoint_price_tier_rows": 80,
+  "candidate_coverage": [
+    {
+      "model_id": "deepseek/deepseek-v4-flash-0731",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 29,
+      "error_type": null
+    },
+    {
+      "model_id": "deepseek/deepseek-v4.1-flash",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 19,
+      "error_type": null
+    },
+    {
+      "model_id": "qwen/qwen3.7-flash",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 1,
+      "error_type": null
+    },
+    {
+      "model_id": "google/gemini-2.5-flash-lite",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 5,
+      "error_type": null
+    },
+    {
+      "model_id": "qwen/qwen-2.5-7b-instruct",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 1,
+      "error_type": null
+    },
+    {
+      "model_id": "qwen/qwen-2.5-72b-instruct",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 2,
+      "error_type": null
+    },
+    {
+      "model_id": "meta-llama/llama-3.3-70b-instruct",
+      "in_catalog": true,
+      "http_status": 200,
+      "endpoint_count": 11,
+      "error_type": null
+    },
+    {
+      "model_id": "qwen/qwen2.5-32b-instruct",
+      "in_catalog": false,
+      "http_status": 200,
+      "endpoint_count": 0,
+      "error_type": null
+    },
+    {
+      "model_id": "deepseek/deepseek-r1-distill-llama-8b",
+      "in_catalog": false,
+      "http_status": 200,
+      "endpoint_count": 0,
+      "error_type": null
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://openrouter.ai/api/v1/models",
+      "started_at_utc": "2026-09-17T05:38:12.796840+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.014297+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:12 GMT",
+      "etag": null,
+      "cache_control": "public, max-age=120, stale-while-revalidate=3600, stale-if-error=3600",
+      "age": null,
+      "file": "raw/models.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v4-flash-0731/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.044139+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.189581+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-deepseek__deepseek-v4-flash-0731.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v4.1-flash/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.044508+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.188101+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-deepseek__deepseek-v4.1-flash.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/qwen/qwen3.7-flash/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.044724+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.186375+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-qwen__qwen3.7-flash.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/google/gemini-2.5-flash-lite/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.186645+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.246886+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-google__gemini-2.5-flash-lite.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/qwen/qwen-2.5-7b-instruct/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.188796+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.253858+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-qwen__qwen-2.5-7b-instruct.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/qwen/qwen-2.5-72b-instruct/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.190478+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.246264+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-qwen__qwen-2.5-72b-instruct.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/meta-llama/llama-3.3-70b-instruct/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.246530+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.317185+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-meta-llama__llama-3.3-70b-instruct.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/qwen/qwen2.5-32b-instruct/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.247210+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.323845+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-qwen__qwen2.5-32b-instruct.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/deepseek/deepseek-r1-distill-llama-8b/endpoints",
+      "started_at_utc": "2026-09-17T05:38:13.254043+00:00",
+      "retrieved_at_utc": "2026-09-17T05:38:13.323440+00:00",
+      "http_status": 200,
+      "http_date": "Thu, 17 Sep 2026 05:38:13 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-deepseek__deepseek-r1-distill-llama-8b.json"
+    }
+  ],
+  "units": "Raw prompt/completion prices: USD/token. CSV rate columns: USD/1,000,000 tokens. Other raw pricing fields preserve original units.",
+  "fees": "Funding/payment fees, tax, paid tools and actual billed reasoning/retry usage are not included.",
+  "scope": "Entire default /models catalog, plus all returned endpoints and price tiers for nine named candidate model IDs. Not every provider of every catalog model.",
+  "warnings": [
+    "Blank price is unknown/not applicable, never zero.",
+    "Explicit zero is a catalog price, not unlimited free capacity.",
+    "Catalog headline price is not guaranteed for a chosen provider or tier.",
+    "Direct DeepSeek prices are not sourced by this OpenRouter snapshot.",
+    "Provider pricing and availability may change after capture; recheck before a paid test."
+  ],
+  "sha256": {
+    "README.md": "d2996a2633283ce14fbea7e8ffbd656dbaffa510714baab4819297508d21e1f2",
+    "candidate-endpoints.csv": "533c0fbb62a69d92d0e5021cffa43629833db62e625b55ba4aaaf3912c1dcef9",
+    "capture.py": "6054c16ab3387bac0d9f7974e36956fdb83480510450e924627c0d724b534028",
+    "models.csv": "d26cfb0329a93cc0e8199ceca2108bf33aac6fb37c78a1ee401faa6f0ef171c4",
+    "raw/endpoints-deepseek__deepseek-r1-distill-llama-8b.json": "6705e7921a6b1bd089b9192d76f0247856082d15b0dfae28a24b528213353349",
+    "raw/endpoints-deepseek__deepseek-v4-flash-0731.json": "12084b3c8f6f1d28a05b6ae606ed7cb59011445406ecf43bacd98b29a9e73a35",
+    "raw/endpoints-deepseek__deepseek-v4.1-flash.json": "fd12681f55e36288a5e482d9fdba85771da61cad6e292ac260bcd6958d5814d8",
+    "raw/endpoints-google__gemini-2.5-flash-lite.json": "8334916097166d7d4d04a1ffc681ed58f953e0f971ddd70c0eea32fe3280c8d6",
+    "raw/endpoints-meta-llama__llama-3.3-70b-instruct.json": "41a3d1c0a7d87a2b360171f46cfd271f88e4841064986f1819d2e12b2a1b9fe3",
+    "raw/endpoints-qwen__qwen-2.5-72b-instruct.json": "9fd029949872a4930f3da6654431a761612f29abf2c7c4b18835f3aa4bc3cc12",
+    "raw/endpoints-qwen__qwen-2.5-7b-instruct.json": "c2412b41bc860797a7463b63f0da41acd8dfb3f19e247987177da8d4ddbe649c",
+    "raw/endpoints-qwen__qwen2.5-32b-instruct.json": "81aecf18f10dc0274eddd2c0e118b4d756935a3995b59bde06299ee314a9e4e6",
+    "raw/endpoints-qwen__qwen3.7-flash.json": "2c2fa0773e2ba90c29182c3c80ba340ffcf54e8e571255f0b909e5bbb137e569",
+    "raw/models.json": "18b2bf7dd44d37ff0da1a795e86cfb1fe413943ae1688e0092fb35bdea036f1d"
+  }
+}

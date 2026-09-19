@@ -1,0 +1,91 @@
+{
+  "schema_version": "u18-openrouter-two-role-pilot-results/v1",
+  "status": "blocked_no_passing_candidate",
+  "observed_at": "2026-09-14T19:45:29+09:00",
+  "budget": {
+    "path": "docs/analysis/2026-09-14-190649-u18-r97-two-role-pilot-contract.json",
+    "sha256": "87561d0ac7c8c2610c2a4785e1cb3b377876ebb3006f43c82ee00b0a59559ace",
+    "maximum_logical_requests": 18,
+    "maximum_transport_attempts": 36,
+    "maximum_spend_usd": "0.0421901750"
+  },
+  "cohort": {
+    "source_posts": 45,
+    "post_brand_rows": 45,
+    "languages": {"en": 15, "ja": 15, "zh-cn": 15},
+    "batch_sizes": [20, 20, 5],
+    "human_grounded": false,
+    "assessment": "owner_reference_agreement_only"
+  },
+  "observed_totals": {
+    "logical_requests": 10,
+    "transport_attempts": 12,
+    "spend_usd_observed_key_total": "0.009550375",
+    "spend_evidence": "evaluation-key cumulative usage immediately after the bounded run",
+    "within_frozen_caps": true
+  },
+  "candidates": [
+    {
+      "candidate_id": "qwen35_9b_deepinfra_bf16",
+      "model": "qwen/qwen3.5-9b",
+      "provider": "DeepInfra",
+      "quantization": "bf16",
+      "logical_requests": 2,
+      "transport_attempts": 2,
+      "failure": "openrouter_response_content_invalid",
+      "semantic_retries": 0,
+      "complete_pairs": 0,
+      "expected_pairs": 45,
+      "spend_usd_upper_bound": "0.0026834975",
+      "spend_reconciliation": "final evaluation-key total minus exact qwen235 spend; first post-failure key snapshot rounded to 0.0026835",
+      "usage_capture": "unavailable_due_pre_fix_runner_gap_fixed_after_failure",
+      "selected": false
+    },
+    {
+      "candidate_id": "gemma4_31b_google_ai_studio_free",
+      "model": "google/gemma-4-31b-it:free",
+      "provider": "Google AI Studio",
+      "quantization": "unknown_and_not_requested",
+      "logical_requests": 2,
+      "transport_attempts": 4,
+      "failure": "transport_failed_after_2_attempts_per_role",
+      "complete_pairs": 0,
+      "expected_pairs": 45,
+      "spend_usd": "0",
+      "selected": false
+    },
+    {
+      "candidate_id": "qwen3_235b_a22b_gmicloud_fp8",
+      "model": "qwen/qwen3-235b-a22b-2507",
+      "provider": "GMICloud",
+      "quantization": "fp8",
+      "logical_requests": 6,
+      "transport_attempts": 6,
+      "failure": "incomplete_role_row_sets",
+      "content_rows_by_batch": [19, 20, 5],
+      "brand_interpretation_rows_by_batch": [1, 1, 1],
+      "complete_pairs": 0,
+      "expected_pairs": 45,
+      "input_tokens": 47873,
+      "output_tokens": 7803,
+      "reasoning_tokens": 0,
+      "spend_usd": "0.0068668775",
+      "complete_result_latency_p95_ms": 79277,
+      "selected": false
+    }
+  ],
+  "selection": null,
+  "gate": {
+    "passed": false,
+    "reason": "no candidate achieved 100 percent complete role-pair coverage",
+    "classifier_activation_enabled": false,
+    "u18a_unblocked": false,
+    "staging_activation_unblocked": false,
+    "production_promotion_unblocked": false
+  },
+  "implementation_commits": {
+    "foundation": "ab938c8",
+    "frozen_runner": "ee7ab3a",
+    "failure_accounting": "1aa9257"
+  }
+}

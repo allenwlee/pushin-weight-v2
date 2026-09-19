@@ -11,7 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from scripts.staging_refresh.policy import load_policy
-from x_monitor.config import Config, SearchConfig
+from x_monitor.config import Config, LlmConfig, SearchConfig
 
 POLICY_PATH = "config/staging_refresh.yaml"
 
@@ -67,6 +67,16 @@ def _config() -> Config:
         daily_ceiling=333,
         search=SearchConfig(max_results=2_000, max_pages=100, max_per_page=20),
         x_monitor_list_id=123,
+        llm=LlmConfig(
+            translator_model="google/gemma-4-31B-it-turbo",
+            translator_base_url="https://api.deepinfra.com/v1/openai",
+            translator_provider="deepinfra",
+            translator_deepinfra_request_profile="gemma4_translation_v1",
+            classifier_model="deepseek-ai/DeepSeek-V4-Flash-0731",
+            classifier_base_url="https://api.deepinfra.com/v1/openai",
+            classifier_provider="deepinfra",
+            classifier_deepinfra_request_profile="deepseek_0731",
+        ),
     )
 
 
@@ -76,8 +86,9 @@ def _environment(**overrides) -> dict[str, str]:
         "X_MONITOR_DEPLOYMENT_ENVIRONMENT": "staging",
         "RENDER_SERVICE_NAME": "pushinweight-staging-harvest",
         "X_MONITOR_STAGING_ACCEPTANCE_SERVICE": "pushinweight-staging-harvest",
-        "TWITTERAPI_IO_SCHEDULED_API_KEY": "twitter-fixture",
-        "ANTHROPIC_API_KEY": "anthropic-fixture",
+        "TWITTERAPI_IO_ON_DEMAND_API_KEY": "twitter-fixture",
+        "DEEPSEEK_API_KEY": "deepseek-fixture",
+        "DEEPINFRA_API_KEY": "deepinfra-fixture",
     }
     values.update(overrides)
     return values
@@ -252,6 +263,64 @@ def test_acceptance_requires_exact_inserted_current_cycle_terminal_cohort():
     ]
 
 
+def test_acceptance_allows_bounded_truncation_after_coverage_is_durably_transferred():
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=42,
+        cursor_advanced=True,
+    )
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "accepted"
+    assert evaluation.reason_codes == ("terminal_complete",)
+    assert evaluation.selected_call["coverage_transfer"] == "transferred"
+    assert evaluation.selected_call["backlog_window_id"] == 42
+
+
+@pytest.mark.parametrize(
+    "missing_field", ["coverage_transfer", "backlog_window_id", "cursor_advanced"]
+)
+def test_acceptance_rejects_incomplete_truncation_transfer_proof(missing_field):
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=42,
+        cursor_advanced=True,
+    )
+    stats["calls"][0].pop(missing_field)
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "failed"
+    assert evaluation.reason_codes == ("pipeline_or_bound_failure",)
+
+
+@pytest.mark.parametrize("backlog_window_id", [None, "42", True, 0, -1])
+def test_acceptance_rejects_invalid_truncation_backlog_identity(backlog_window_id):
+    from monitor.staging_acceptance import evaluate_staging_acceptance
+
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=backlog_window_id,
+        cursor_advanced=True,
+    )
+
+    evaluation = evaluate_staging_acceptance(_prepared_acceptance(), stats)
+
+    assert evaluation.status == "failed"
+    assert evaluation.reason_codes == ("pipeline_or_bound_failure",)
+
+
 @pytest.mark.parametrize(
     ("case", "expected_status", "expected_reason"),
     [
@@ -384,11 +453,11 @@ def test_acceptance_fails_closed_for_independently_corrupted_evidence(
             "configured_service_identity_mismatch",
         ),
         (
-            {"TWITTERAPI_IO_SCHEDULED_API_KEY": ""},
+            {"TWITTERAPI_IO_ON_DEMAND_API_KEY": ""},
             None,
             "provider_credential_missing:twitter",
         ),
-        ({"ANTHROPIC_API_KEY": ""}, None, "provider_credential_missing:translator"),
+        ({"DEEPINFRA_API_KEY": ""}, None, "provider_credential_missing:translator"),
         ({}, _Connection(host="production.internal"), "database_host_mismatch"),
         ({}, _Connection(database="pushinweight"), "database_name_mismatch"),
         ({}, _Connection(role="pushinweight_prod"), "database_role_mismatch"),
@@ -630,7 +699,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
 ):
     from django.utils import timezone
 
-    from core.models import Post, PostEnrichmentState
+    from core.models import Post, PostEnrichmentState, PostTypeKey, SentimentKey
     from monitor.cycle import CycleRunner
     from monitor.harvest_summary import HARVEST_COHORT_PREFIX
     from monitor.post_enrichment import post_persisted_output_complete
@@ -660,6 +729,8 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         database=_Connection(),
         policy=load_policy(POLICY_PATH),
     )
+    PostTypeKey.objects.get_or_create(key="releases_updates")
+    SentimentKey.objects.get_or_create(key="positive")
     tweet_id = "999000000000001"
     now = timezone.now()
     provider_calls: list[dict] = []
@@ -688,14 +759,21 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
 
     api = Api()
     client = object()
-    monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env", lambda _purpose: api
-    )
+    credential_purposes = []
+
+    def fake_from_env(purpose):
+        credential_purposes.append(purpose)
+        return api
+
+    monkeypatch.setattr("monitor.cycle.TwitterApiClient.from_env", fake_from_env)
     monkeypatch.setattr(
         reattribute, "build_translator_client_from_env", lambda _cfg: client
     )
     monkeypatch.setattr(
-        reattribute, "build_anthropic_client_from_env", lambda _cfg: client
+        reattribute, "build_classifier_client_from_env", lambda _cfg: client
+    )
+    monkeypatch.setattr(
+        reattribute, "build_relevancy_client_from_env", lambda _cfg: client
     )
 
     def translate(tweets, _locales, _client, **_kwargs):
@@ -717,7 +795,20 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     def classify(tweets, _brands, _client, **_kwargs):
         classification_ids.extend(tweet["tweet_id"] for tweet in tweets)
         return [
-            {"by_brand": {}, "unsanctioned_flags": []}
+            {
+                "valid": True,
+                "by_brand": {
+                    "deepseek": {
+                        "outcome": "classified",
+                        "post_types": ["releases_updates"],
+                        "product_labels": [],
+                        "sentiment": "positive",
+                        "china_nationalism": None,
+                        "us_nationalism": None,
+                    }
+                },
+                "unsanctioned_flags": [],
+            }
             for _tweet in tweets
         ]
 
@@ -754,6 +845,9 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     post = Post.objects.get(tweet_id=tweet_id)
     state = PostEnrichmentState.objects.get(post=post)
     assert len(provider_calls) == 1
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+    assert credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
     assert translation_ids == [tweet_id]
     assert classification_ids == [tweet_id]
     assert stats["totals"]["n_inserted"] == 1
@@ -787,7 +881,7 @@ def test_command_refuses_before_writer_lock_or_provider_factory(monkeypatch):
     monkeypatch.setenv("X_MONITOR_STAGING_ACCEPTANCE_ENABLED", "false")
     monkeypatch.setattr("monitor.run_lock.harvest_writer_lock", forbidden_lock)
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         forbidden_client,
     )
 
@@ -875,7 +969,7 @@ def test_command_threads_profile_and_emits_secret_free_json(
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(
@@ -972,7 +1066,7 @@ def test_command_emits_structured_json_for_acceptance_failures(
         lambda **_kwargs: None,
     )
     monkeypatch.setattr(
-        "x_monitor.reattribute.build_anthropic_client_from_env",
+        "x_monitor.reattribute.build_relevancy_client_from_env",
         lambda _cfg: None,
     )
     monkeypatch.setattr(

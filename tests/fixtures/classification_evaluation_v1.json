@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "kind": "synthetic",
+    "gold": false,
+    "created_at": "2026-09-09T00:00:00Z",
+    "note": "Metric-arithmetic fixture only; not heldout truth and not semantic-quality evidence."
+  },
+  "candidate_provenance": {
+    "kind": "candidate_output",
+    "gold": false,
+    "cohort_id": "synthetic-r17-arithmetic-v1",
+    "contract_version": "stage1-v1",
+    "taxonomy_version": "stage1-taxonomy-v2",
+    "prompt_version": "stage1-prompt-v3",
+    "model": "synthetic-no-provider",
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "generated_at": "2026-09-09T00:00:00Z"
+  },
+  "gold_provenance": {
+    "kind": "heldout_gold",
+    "gold": true,
+    "cohort_id": "synthetic-r17-arithmetic-v1",
+    "contract_version": "stage1-v1",
+    "taxonomy_version": "stage1-taxonomy-v2",
+    "prompt_version": "stage1-prompt-v3",
+    "adjudicator": "synthetic-test-adjudicator",
+    "annotators": [
+      "synthetic-test-reviewer-a",
+      "synthetic-test-reviewer-b"
+    ],
+    "blind_to_candidate": true,
+    "adjudication_method": "synthetic_double_review_fixture",
+    "adjudication_version": "synthetic-gold-v1",
+    "adjudicated_at": "2026-09-09T00:00:00Z"
+  },
+  "cases": [
+    {
+      "example_id": "synthetic-en-multilabel",
+      "brand_id": "deepseek",
+      "source_language": "en",
+      "context_provenance": ["stored_quote"],
+      "input_context_fingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+      "gold": {
+        "outcome": "classified",
+        "post_types": ["hands_on_usage", "results_evaluations"],
+        "product_labels": ["bug", "complaint"],
+        "sentiment": "negative",
+        "china_nationalism": null,
+        "us_nationalism": "none"
+      },
+      "candidate": {
+        "outcome": "classified",
+        "post_types": ["hands_on_usage"],
+        "product_labels": ["bug"],
+        "sentiment": "negative",
+        "china_nationalism": null,
+        "us_nationalism": null
+      }
+    },
+    {
+      "example_id": "synthetic-zh-empty-products",
+      "brand_id": "qwen",
+      "source_language": "zh-Hans",
+      "context_provenance": ["local_parent"],
+      "input_context_fingerprint": "2222222222222222222222222222222222222222222222222222222222222222",
+      "gold": {
+        "outcome": "classified",
+        "post_types": ["other"],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": "none",
+        "us_nationalism": null
+      },
+      "candidate": {
+        "outcome": "classified",
+        "post_types": ["other"],
+        "product_labels": [],
+        "sentiment": "neutral",
+        "china_nationalism": "none",
+        "us_nationalism": null
+      }
+    },
+    {
+      "example_id": "synthetic-ja-context-missing",
+      "brand_id": "sakana_ai",
+      "source_language": "ja",
+      "context_provenance": [],
+      "input_context_fingerprint": "3333333333333333333333333333333333333333333333333333333333333333",
+      "gold": {
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "china_nationalism": null,
+        "us_nationalism": null
+      },
+      "candidate": {
+        "outcome": "context_missing",
+        "post_types": [],
+        "product_labels": [],
+        "sentiment": null,
+        "china_nationalism": null,
+        "us_nationalism": null
+      }
+    }
+  ]
+}

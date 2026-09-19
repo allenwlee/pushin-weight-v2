@@ -1,21 +1,198 @@
-"""Canonical English and Simplified-Chinese classification labels."""
+"""Canonical active labels plus legacy English/Chinese compatibility copy."""
 
 from __future__ import annotations
 
 POST_TYPE_LABELS: dict[str, dict[str, str]] = {
-    "buzz_releases": {"en": "Buzz & Releases", "zh-cn": "热点发布"},
-    "hands_on_usage": {"en": "Hands-On Usage", "zh-cn": "实际使用"},
-    "performance_comparisons": {"en": "Performance Comparisons", "zh-cn": "性能对比"},
-    "feedback_questions": {"en": "Feedback & Questions", "zh-cn": "反馈提问"},
-    "advertising_marketing": {"en": "Advertising & Marketing", "zh-cn": "广告营销"},
-    "event_announcement": {"en": "Event Announcement", "zh-cn": "活动公告"},
+    "releases_updates": {
+        "en": "Releases & Updates",
+        "zh-cn": "发布与更新",
+        "ja": "リリース・アップデート",
+    },
+    "buzz_releases": {"en": "Releases & Updates", "zh-cn": "发布与更新"},
+    "hands_on_usage": {
+        "en": "Hands-On Usage",
+        "zh-cn": "实际使用",
+        "ja": "使用体験",
+    },
+    "results_evaluations": {
+        "en": "Results and Evaluations",
+        "zh-cn": "结果与评测",
+        "ja": "結果・評価",
+    },
+    "results_analysis": {
+        "en": "Results Analysis",
+        "zh-cn": "结果分析",
+        "ja": "結果分析",
+    },
+    "performance_comparisons": {
+        "en": "Results and Evaluations",
+        "zh-cn": "结果与评测",
+    },
+    "questions_requests": {
+        "en": "Questions & Requests",
+        "zh-cn": "问题与请求",
+        "ja": "質問・要望",
+    },
+    "feedback_questions": {"en": "Questions & Requests", "zh-cn": "问题与请求"},
+    "advertising_marketing": {
+        "en": "Advertising & Marketing",
+        "zh-cn": "广告营销",
+        "ja": "広告・マーケティング",
+    },
+    "events_opportunities": {
+        "en": "Events & Opportunities",
+        "zh-cn": "活动与机会",
+        "ja": "イベント・機会",
+    },
+    "events": {
+        "en": "Events",
+        "zh-cn": "活动",
+        "ja": "イベント",
+    },
+    "opportunities": {
+        "en": "Opportunities",
+        "zh-cn": "机会",
+        "ja": "機会",
+    },
+    "job_listings": {
+        "en": "Job Listings",
+        "zh-cn": "招聘信息",
+        "ja": "求人情報",
+    },
+    "personnel_changes": {
+        "en": "Personnel Changes",
+        "zh-cn": "人事变动",
+        "ja": "人事異動",
+    },
+    "event_announcement": {"en": "Events & Opportunities", "zh-cn": "活动与机会"},
+    "opinions_reactions": {
+        "en": "Opinions & Reactions",
+        "zh-cn": "观点与反应",
+        "ja": "意見・反応",
+    },
+    "research_explanations": {
+        "en": "Research & Explanations",
+        "zh-cn": "研究与解释",
+        "ja": "研究・解説",
+    },
+    "business_finance": {
+        "en": "Business & Finance",
+        "zh-cn": "商业与金融",
+        "ja": "ビジネス・金融",
+    },
+    "news_reporting": {
+        "en": "News Reporting",
+        "zh-cn": "新闻报道",
+        "ja": "ニュース報道",
+    },
+    "other": {"en": "Other", "zh-cn": "其他", "ja": "その他"},
+}
+
+PRODUCT_LABEL_LABELS: dict[str, dict[str, str]] = {
+    "bug": {"en": "Bug", "zh-cn": "缺陷", "ja": "バグ"},
+    "complaint": {"en": "Complaint", "zh-cn": "投诉", "ja": "苦情"},
+    "testimonial": {
+        "en": "Testimonial",
+        "zh-cn": "推荐评价",
+        "ja": "推奨の声",
+    },
+    "ideas_requests": {
+        "en": "Ideas & requests",
+        "zh-cn": "想法与请求",
+        "ja": "アイデア・要望",
+    },
+    "product_request": {"en": "Ideas & requests", "zh-cn": "想法与请求"},
+    "misinformation": {
+        "en": "Misinformation",
+        "zh-cn": "可能误导的信息",
+        "ja": "誤情報の可能性",
+    },
+    "investigate_claim": {
+        "en": "Claim to Investigate",
+        "zh-cn": "待核实声明",
+        "ja": "要確認の主張",
+    },
+}
+
+AUDIENCE_TOPIC_LABELS: dict[str, dict[str, str]] = {
+    "local_inference": {
+        "en": "Local Inference",
+        "zh-cn": "本地推理",
+        "ja": "ローカル推論",
+    },
+    "cost_performance": {
+        "en": "Cost & Performance",
+        "zh-cn": "成本与性能",
+        "ja": "コスト・性能",
+    },
+    "model_distillation": {
+        "en": "Model Distillation",
+        "zh-cn": "模型蒸馏",
+        "ja": "モデル蒸留",
+    },
+    "evals_benchmarks": {
+        "en": "Evaluations & Benchmarks",
+        "zh-cn": "评测与基准",
+        "ja": "評価・ベンチマーク",
+    },
+    "openness_license": {
+        "en": "Openness & Licensing",
+        "zh-cn": "开放性与许可证",
+        "ja": "オープン性・ライセンス",
+    },
+    "agents_tools": {
+        "en": "Agents & Tools",
+        "zh-cn": "智能体与工具",
+        "ja": "エージェント・ツール",
+    },
+    "api_developer_surface": {
+        "en": "API & Developer Surface",
+        "zh-cn": "API 与开发者平台",
+        "ja": "API・開発者向け機能",
+    },
+}
+
+GEOPOLITICAL_MODE_LABELS: dict[str, dict[str, str]] = {
+    "reporting": {
+        "en": "Reporting",
+        "zh-cn": "地缘政治报道",
+        "ja": "地政学的報道",
+    },
+    "framework": {
+        "en": "Framework",
+        "zh-cn": "地缘政治框架",
+        "ja": "地政学的フレームワーク",
+    },
+    "nationalism": {
+        "en": "Nationalism",
+        "zh-cn": "民族主义",
+        "ja": "ナショナリズム",
+    },
+}
+
+UNTRACKED_BRAND_PROMOTION_LABELS: dict[str, dict[str, str]] = {
+    "general": {"en": "General", "zh-cn": "一般推广", "ja": "一般"},
+    "spam": {"en": "Spam", "zh-cn": "垃圾推广", "ja": "スパム"},
+    "scam": {"en": "Scam", "zh-cn": "欺诈", "ja": "詐欺"},
+    "crypto": {"en": "Crypto", "zh-cn": "加密货币", "ja": "暗号資産"},
+    "unauthorized": {
+        "en": "Unauthorized",
+        "zh-cn": "未经授权",
+        "ja": "無許可",
+    },
+}
+
+UNTRACKED_BRAND_PROMOTION_FAMILY_LABELS: dict[str, str] = {
+    "en": "Untracked Brand Promotions",
+    "zh-cn": "未跟踪品牌推广",
+    "ja": "未追跡ブランドのプロモーション",
 }
 
 SENTIMENT_LABELS: dict[str, dict[str, str]] = {
-    "positive": {"en": "Positive", "zh-cn": "正面"},
-    "negative": {"en": "Negative", "zh-cn": "负面"},
-    "neutral": {"en": "Neutral", "zh-cn": "中性"},
-    "mixed": {"en": "Mixed", "zh-cn": "混合"},
+    "positive": {"en": "Positive", "zh-cn": "正面", "ja": "ポジティブ"},
+    "negative": {"en": "Negative", "zh-cn": "负面", "ja": "ネガティブ"},
+    "neutral": {"en": "Neutral", "zh-cn": "中性", "ja": "中立"},
+    "mixed": {"en": "Mixed", "zh-cn": "混合", "ja": "賛否混在"},
 }
 
 DISCOURSE_LABELS: dict[str, dict[str, str]] = {
@@ -32,12 +209,16 @@ DISCOURSE_LABELS: dict[str, dict[str, str]] = {
 }
 
 NATIONALISM_LABELS: dict[str, dict[str, str]] = {
-    "none": {"en": "None", "zh-cn": "无"},
-    "mild_pro": {"en": "Mild Pro", "zh-cn": "温和支持"},
-    "pro": {"en": "Pro", "zh-cn": "支持"},
-    "constructive_critical": {"en": "Constructive Critical", "zh-cn": "建设性批评"},
-    "anti": {"en": "Anti", "zh-cn": "反对"},
-    "mixed": {"en": "Mixed", "zh-cn": "混合"},
+    "none": {"en": "None", "zh-cn": "无", "ja": "なし"},
+    "mild_pro": {"en": "Mild Pro", "zh-cn": "温和支持", "ja": "控えめな支持"},
+    "pro": {"en": "Pro", "zh-cn": "支持", "ja": "支持"},
+    "constructive_critical": {
+        "en": "Constructive Critical",
+        "zh-cn": "建设性批评",
+        "ja": "建設的な批判",
+    },
+    "anti": {"en": "Anti", "zh-cn": "反对", "ja": "反対"},
+    "mixed": {"en": "Mixed", "zh-cn": "混合", "ja": "賛否混在"},
 }
 
 ROLE_LABELS: dict[str, dict[str, str]] = {
@@ -48,8 +229,13 @@ ROLE_LABELS: dict[str, dict[str, str]] = {
 
 CLASSIFICATION_LABELS: dict[str, dict[str, dict[str, str]]] = {
     "post_type": POST_TYPE_LABELS,
+    "product_label": PRODUCT_LABEL_LABELS,
+    "audience_topic": AUDIENCE_TOPIC_LABELS,
+    "geopolitical_mode": GEOPOLITICAL_MODE_LABELS,
     "sentiment": SENTIMENT_LABELS,
     "discourse": DISCOURSE_LABELS,
     "nationalism": NATIONALISM_LABELS,
+    "national_stance": NATIONALISM_LABELS,
+    "untracked_brand_promotion": UNTRACKED_BRAND_PROMOTION_LABELS,
     "role": ROLE_LABELS,
 }

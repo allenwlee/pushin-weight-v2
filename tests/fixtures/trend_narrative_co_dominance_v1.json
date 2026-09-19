@@ -97,10 +97,10 @@
         {
           "candidate_id": "deepseek:episode-04",
           "brand_key": "deepseek",
-          "families": ["discourse"],
+          "families": ["product_label"],
           "selected_posts": 1500,
           "selected_authors": 1100,
-          "discourse_share_change_pp": 31
+          "product_label_share_change_pp": 31
         }
       ],
       "expected_selected_candidate_ids": [

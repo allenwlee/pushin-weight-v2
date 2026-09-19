@@ -1,0 +1,6 @@
+{
+  "post_id": "2100312094910661095",
+  "commentary_en": "The post argues that the AI competition is shifting from models to the infrastructure—context, permissions, memory, actions, audit, and distribution—that governs how agents operate. It contrasts ByteDance's consumer phone agent (ZTE Nubia NaviX Ultra) with Salesforce's enterprise AIforce platform, framing both as moves to control the 'control plane' beneath agents. The author matters this because it suggests durable advantage lies in the layer dictating what models can see, touch, change, and how long they act, not just in model intelligence. The post presents these as directional evidence without implying certainty, and treats the cited URLs as supporting sources.",
+  "commentary_zh_cn": "该帖认为，AI竞争正从模型本身转向决定代理如何运作的基础设施——即上下文、权限、记忆、行动、审计与分发。作者对比了字节跳动面向消费者的手机代理（中兴Nubia NaviX Ultra）与Salesforce面向企业的AIforce平台，将两者视为争夺代理下方‘控制层’的举措。其重要性在于，长期优势可能属于掌控模型能看什么、能碰什么、能改什么、能行动多久以及人类能否检查、停止或恢复的层面，而非仅拥有最聪明的模型。帖文将此视为方向性证据而非确定性结论，并将所附链接作为佐证。",
+  "commentary_ja": "この投稿は、AI競争がモデル自体から、エージェントの動作を左右する基盤（コンテキスト、権限、メモリ、アクション、監査、配布）へ移行していると主張する。ByteDanceの消費者向け携帯エージェント（ZTE Nubia NaviX Ultra）とSalesforceの企業向けAIforceを対比し、両者をエージェントの下にある『コントロールプレーン』掌握の動きと位置付ける。重要性は、持続的優位性が最も賢いモデルを所有することではなく、モデルが見えるもの、触れるもの、変更できるもの、行動できる時間、そして人間が検査・停止・回復できるかを決める層を所有することにあるかもしれない、という点だ。投稿はこれを確定的結論ではなく方向性の証拠として示し、リンクを根拠としている。"
+}

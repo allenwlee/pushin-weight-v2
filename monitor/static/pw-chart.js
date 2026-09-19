@@ -169,9 +169,9 @@
       typeof selection.summary === 'string';
   }
 
-  function colorVarFor(discourseKey) {
+  function colorVarFor(categoryKey) {
     return getComputedStyle(document.documentElement)
-      .getPropertyValue('--bar-' + discourseKey).trim() || '#9ca3af';
+      .getPropertyValue('--bar-' + categoryKey).trim() || '#9ca3af';
   }
 
   function fixedHourlyTicks(labels) {
@@ -583,16 +583,16 @@
         _brandIndex: brandIndex,
         _isTotalLine: true,
       });
-      Object.keys(stacked[brand] || {}).forEach(function (discourseKey) {
-        var values = stacked[brand][discourseKey];
+      Object.keys(stacked[brand] || {}).forEach(function (categoryKey) {
+        var values = stacked[brand][categoryKey];
         datasets.push({
-          label: brand + ' ' + discourseKey,
+          label: brand + ' ' + categoryKey,
           data: granularity === 'minute'
             ? values.map(function (value) { return value === 0 ? NaN : value; })
             : values,
           type: 'line',
           borderColor: 'transparent',
-          backgroundColor: colorVarFor(discourseKey),
+          backgroundColor: colorVarFor(categoryKey),
           borderWidth: 0,
           pointRadius: granularity === 'minute' ? 1.5 : 0,
           tension: granularity === 'minute' ? 0.3 : 0,

@@ -161,6 +161,17 @@ implementing or debugging in documented areas.
 status concepts). Relevant when orienting to the codebase or
 discussing domain concepts.
 
+`docs/reference/2026-09-09-112957-classification-analysis-contract.md` —
+agent-facing contract and copyable CLI examples for provenance-aware Stage 1
+analysis. Use it instead of inferring classification era from post dates or
+mixing exact Stage 1 counts with approximate unversioned dashboard rows.
+
+`docs/reference/2026-09-10-203138-stage1c-intelligence-analysis-contract.md` —
+agent-facing contract for taxonomy-v3, people, affiliation, job, event, and
+opportunity analysis. Use it to keep taxonomy-v2 combined event/opportunity
+history separate from taxonomy-v3 exact categories and to preserve observation
+time, effective-date precision, review state, and counting units.
+
 # pushin-weight-v2 Agent Rules
 
 ## ollija host authority

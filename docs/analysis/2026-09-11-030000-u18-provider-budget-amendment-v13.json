@@ -1,0 +1,48 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T03:00:00Z",
+  "reason": "the corrected Flash-only gold still contains source-verifiable contract violations and omitted the required evidence references; a candidate-blind DeepSeek V4 Pro audit now rechecks every row, including reviewer agreements, and must return exact source quotes before its judgment can enter gold",
+  "source_budgets": [
+    "2026-09-11-002632-u18-provider-budgets.json",
+    "2026-09-11-020000-u18-provider-budget-amendment-v10.json"
+  ],
+  "lanes": {
+    "contract_gold_auditor": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "batch_size": 5,
+      "maximum_examples": 500,
+      "maximum_requests": 100,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 200,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 4000000,
+      "maximum_output_tokens": 819200,
+      "maximum_cost_usd": "9.00",
+      "twitterapi_credits": 0
+    },
+    "contract_gold_auditor_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-pro-official-peak-cache-miss-2026-08-27",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "batch_size": 1,
+      "maximum_examples": 500,
+      "maximum_requests": 500,
+      "maximum_retries_per_request": 0,
+      "maximum_transport_attempts": 500,
+      "max_tokens_per_attempt": 1400,
+      "maximum_input_tokens": 4000000,
+      "maximum_output_tokens": 700000,
+      "maximum_cost_usd": "8.00",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The all-row gold audit and its fallback refuse the next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; evidence that is absent or not an exact source substring invalidates the audited row."
+}

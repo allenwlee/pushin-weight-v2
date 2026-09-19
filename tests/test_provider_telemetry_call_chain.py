@@ -22,6 +22,8 @@ USAGE_KEYS = {
     "cache_creation_input_tokens",
     "reasoning_tokens",
     "total_tokens",
+    "cost_usd",
+    "provider_request_id",
 }
 EVENT_KEYS = {
     "event_id",
@@ -100,6 +102,7 @@ def test_usage_normalizer_rejects_non_count_values_and_event_context_is_safe(cap
     assert normalize_usage({"input_tokens": True, "output_tokens": -1, "total_tokens": 1.5}) == {
         "input_tokens": None, "output_tokens": None, "cache_read_input_tokens": None,
         "cache_creation_input_tokens": None, "reasoning_tokens": None, "total_tokens": None,
+        "cost_usd": None, "provider_request_id": None,
     }
     caplog.set_level("INFO")
     emit_attempt(
@@ -120,6 +123,7 @@ def test_provider_host_class_is_allowlisted_and_hides_custom_hosts(caplog):
     from x_monitor.provider_telemetry import emit_attempt, provider_host_class
 
     assert provider_host_class("https://api.deepseek.com/anthropic") == "deepseek"
+    assert provider_host_class("https://api.deepinfra.com/v1/openai") == "deepinfra"
     assert provider_host_class("https://api.minimax.io/anthropic") == "minimax"
     assert provider_host_class("https://api.anthropic.com") == "anthropic"
     custom_url = "https://private-gateway.example/anthropic"
@@ -251,8 +255,17 @@ def test_translator_production_entry_emits_redacted_single_boundary_event(caplog
 @pytest.mark.django_db(transaction=True)
 def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkeypatch):
     """M18: persisted work reaches both real factories and HTTP extraction."""
-    from core.models import Brand, Post, PostBrand, PostEnrichmentState
+    from core.models import (
+        Brand,
+        NationalismKey,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostTypeKey,
+        SentimentKey,
+    )
     from monitor.cycle import CycleRunner
+    from x_monitor.config import Config, LlmConfig
 
     brand = Brand.objects.create(nickname="telemetry-brand", display_name="Telemetry")
     posts = [
@@ -261,6 +274,9 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     ]
     PostBrand.objects.bulk_create([PostBrand(post=post, brand=brand) for post in posts])
     PostEnrichmentState.objects.bulk_create([PostEnrichmentState(post=post) for post in posts])
+    SentimentKey.objects.get_or_create(key="neutral")
+    NationalismKey.objects.get_or_create(key="none")
+    PostTypeKey.objects.get_or_create(key="hands_on_usage")
 
     requests: list[dict] = []
 
@@ -291,13 +307,27 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
         def getresponse(self):
             prompt = self.body["messages"][0]["content"]
             ids = [post.tweet_id for post in posts if post.tweet_id in prompt]
-            if "unsanctioned_flags" in prompt:
+            system = self.body.get("system", "")
+            if "Content owns only" in system:
+                batch = json.loads(prompt)
                 payload = {
                     "results": [
-                        {"tweet_id": ident, "classifications": [], "unsanctioned_flags": []}
-                        for ident in ids
+                        {"tweet_id": row["tweet_id"], "input_context_fingerprint": row["input_context_fingerprint"], "role_revision": row["role_revision"], "classifications": [{
+                            "brand_id": "telemetry-brand", "outcome": "classified",
+                            "post_types": ["hands_on_usage"],
+                        }], "unsanctioned_flags": []}
+                        for row in batch
                     ]
                 }
+                usage = {"input_tokens": 7, "output_tokens": 5, "total_tokens": 12}
+            elif "Brand interpretation owns only" in system:
+                batch = json.loads(prompt)
+                payload = {"results": [
+                    {"tweet_id": row["tweet_id"], "input_context_fingerprint": row["input_context_fingerprint"], "role_revision": row["role_revision"], "classifications": [{
+                        "brand_id": "telemetry-brand", "product_labels": [], "sentiment": "neutral",
+                        "china_nationalism": "none", "us_nationalism": "none",
+                    }]} for row in batch
+                ]}
                 usage = {"input_tokens": 7, "output_tokens": 5, "total_tokens": 12}
             else:
                 payload = _translation_response([{"tweet_id": ident, "text": ""} for ident in ids])
@@ -312,23 +342,48 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     monkeypatch.setenv("X_MONITOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com/anthropic")
     monkeypatch.setattr("http.client.HTTPSConnection", FakeHttpsConnection)
     caplog.set_level("INFO")
-    counters = CycleRunner()._run_post_fetch([], run_id="telemetry-cycle")
+    legacy_route = Config(
+        enabled_models=["deepseek"],
+        daily_ceiling=100,
+        llm=LlmConfig(
+            translator_model="deepseek-v4-flash",
+            translator_base_url="https://api.deepseek.com/anthropic",
+            classifier_model="deepseek-v4-flash",
+            classifier_base_url="https://api.deepseek.com/anthropic",
+        ),
+    )
+    counters = CycleRunner(cfg=legacy_route)._run_post_fetch(
+        [], run_id="telemetry-cycle"
+    )
 
     states = list(PostEnrichmentState.objects.order_by("post_id"))
     assert counters["n_enrichment_claimed"] == 21
-    assert len(requests) == 4  # 20 + 1 batches through each real role factory
+    # Two translation calls plus exactly two role calls per 20/1 classifier batch.
+    assert len(requests) == 6
     assert {request["host"] for request in requests} == {"api.deepseek.com"}
     assert all(request["headers"]["x-api-key"] == "test-key" for request in requests)
     assert all(state.translation_status == "succeeded" for state in states)
     assert all(state.classification_status == "succeeded" for state in states)
     events = _events(caplog)
-    assert len(events) == 4  # 20 + 1, through max_workers=3 batching
+    assert len(events) == 6
     assert {event["run_id"] for event in events} == {"telemetry-cycle"}
-    assert {event["stage"] for event in events} == {"post_fetch"}
+    assert {event["stage"] for event in events} == {"post_fetch", "classification.content", "classification.brand_interpretation"}
     assert {event["batch_size"] for event in events} == {1, 20}
     assert {event["role"] for event in events} == {"post_translation_synthesis", "classification"}
     assert {event["provider_host_class"] for event in events} == {"deepseek"}
     assert all(event["model"] for event in events)
+    classifier_requests = [
+        request["body"]
+        for request in requests
+        if "Content owns only" in request["body"].get("system", "") or "Brand interpretation owns only" in request["body"].get("system", "")
+    ]
+    assert len(classifier_requests) == 4
+    assert all(
+        len(request["messages"]) == 1
+        and request["messages"][0]["role"] == "user"
+        and isinstance(json.loads(request["messages"][0]["content"]), list)
+        for request in classifier_requests
+    )
 
 
 def test_direct_http_wrapper_retains_usage_when_assistant_json_is_malformed(monkeypatch):

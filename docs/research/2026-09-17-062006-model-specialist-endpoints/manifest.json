@@ -1,0 +1,105 @@
+{
+  "schema": "openrouter-model-endpoint-snapshot/v1",
+  "started_at_utc": "2026-09-17T06:20:52.042264+00:00",
+  "finished_at_utc": "2026-09-17T06:20:52.241930+00:00",
+  "candidate_model_count": 4,
+  "endpoint_count": 30,
+  "candidate_coverage": [
+    {
+      "model_id": "tencent/hy-mt2-1.8b",
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-1.8b/endpoints",
+      "http_status": 200,
+      "endpoint_count": 1,
+      "error_type": null,
+      "raw_file": "raw/endpoints-tencent__hy-mt2-1.8b.json"
+    },
+    {
+      "model_id": "tencent/hy-mt2-7b",
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-7b/endpoints",
+      "http_status": 200,
+      "endpoint_count": 1,
+      "error_type": null,
+      "raw_file": "raw/endpoints-tencent__hy-mt2-7b.json"
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "url": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+      "http_status": 200,
+      "endpoint_count": 24,
+      "error_type": null,
+      "raw_file": "raw/endpoints-openai__gpt-oss-120b.json"
+    },
+    {
+      "model_id": "openai/gpt-5-nano",
+      "url": "https://openrouter.ai/api/v1/models/openai/gpt-5-nano/endpoints",
+      "http_status": 200,
+      "endpoint_count": 4,
+      "error_type": null,
+      "raw_file": "raw/endpoints-openai__gpt-5-nano.json"
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-1.8b/endpoints",
+      "started_at_utc": "2026-09-17T06:20:52.042490+00:00",
+      "retrieved_at_utc": "2026-09-17T06:20:52.183132+00:00",
+      "http_status": 200,
+      "http_version": 11,
+      "http_date": "Thu, 17 Sep 2026 06:20:52 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-tencent__hy-mt2-1.8b.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/tencent/hy-mt2-7b/endpoints",
+      "started_at_utc": "2026-09-17T06:20:52.042691+00:00",
+      "retrieved_at_utc": "2026-09-17T06:20:52.183363+00:00",
+      "http_status": 200,
+      "http_version": 11,
+      "http_date": "Thu, 17 Sep 2026 06:20:52 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-tencent__hy-mt2-7b.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+      "started_at_utc": "2026-09-17T06:20:52.042807+00:00",
+      "retrieved_at_utc": "2026-09-17T06:20:52.183792+00:00",
+      "http_status": 200,
+      "http_version": 11,
+      "http_date": "Thu, 17 Sep 2026 06:20:52 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-openai__gpt-oss-120b.json"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/models/openai/gpt-5-nano/endpoints",
+      "started_at_utc": "2026-09-17T06:20:52.183237+00:00",
+      "retrieved_at_utc": "2026-09-17T06:20:52.237511+00:00",
+      "http_status": 200,
+      "http_version": 11,
+      "http_date": "Thu, 17 Sep 2026 06:20:52 GMT",
+      "etag": null,
+      "cache_control": "private, no-store",
+      "age": null,
+      "file": "raw/endpoints-openai__gpt-5-nano.json"
+    }
+  ],
+  "scope": "Public GET endpoint metadata for four named model routes; no inference, credentials, or paid calls.",
+  "warnings": [
+    "Empty endpoint arrays indicate no endpoint returned by this API response at capture time.",
+    "Provider availability, tags, parameters and prices may change after capture."
+  ],
+  "sha256": {
+    "README.md": "755aaaf04ffbce39ee1427dc9b673266411cdfe9bf8f63b6d922f2449946944d",
+    "capture.py": "e9c7c4416b1b4fa532ea5932e138b58af45826f755d4f91ebab457c66866488f",
+    "endpoint-metadata.csv": "3934fe64b7784bfc24eb8293468d9fe38653e03f951897bdecd6d22d8a518420",
+    "raw/endpoints-openai__gpt-5-nano.json": "f5e14907246756b73f207af17154bc248fd15f8538aa417b4e598fcdec46cb51",
+    "raw/endpoints-openai__gpt-oss-120b.json": "9dad4bbe005c4dfac89589a5ff2ac3d7e05eaaef146e94f0e8b0ed0b16fb5ec4",
+    "raw/endpoints-tencent__hy-mt2-1.8b.json": "dc252b525d077429b5d65949013130548aa0728c69e5b7618878161961bc0197",
+    "raw/endpoints-tencent__hy-mt2-7b.json": "0bc173f93ddf0fe6eff2e6cf45d2743695cf776d1c6326c62d5feb8c2b4d18f1"
+  }
+}

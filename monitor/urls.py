@@ -20,6 +20,11 @@ urlpatterns = [
     path("feed/", views.home_feed_json, name="feed"),
     path("chart/", views.chart_json, name="chart"),
     path("brand-chart/<str:brand>/", views.brand_chart_json, name="brand_chart"),
+    path(
+        "api/v2/post-synthesis-demands/",
+        views.post_synthesis_demands,
+        name="post_synthesis_demands",
+    ),
 
     # HTML partials (htmx swap targets)
     path("chart.html", views.chart_html, name="chart_html"),

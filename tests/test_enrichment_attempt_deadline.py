@@ -39,7 +39,7 @@ def test_translator_stops_retrying_when_shared_attempt_deadline_expires():
     assert client.calls[0]["timeout"] == 45.0
 
 
-def test_classifier_does_not_start_per_post_fallback_after_deadline():
+def test_classifier_stops_after_shared_attempt_deadline_without_fallback():
     from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
 
     clock = [0.0]
@@ -58,16 +58,16 @@ def test_classifier_does_not_start_per_post_fallback_after_deadline():
         BrandRow("deepseek", "DeepSeek", "#000000", False),
     ]
 
-    with pytest.raises(TimeoutError, match="enrichment_attempt_deadline_exhausted"):
-        classify_batch_pragmatics_full(
-            tweets,
-            brands,
-            client,
-            deadline=deadline,
-        )
+    result = classify_batch_pragmatics_full(
+        tweets,
+        brands,
+        client,
+        deadline=deadline,
+    )
 
     assert len(client.calls) == 1
     assert client.calls[0]["timeout"] == 45.0
+    assert all(item["valid"] is False for item in result)
 
 
 def test_request_timeout_uses_only_remaining_attempt_budget():

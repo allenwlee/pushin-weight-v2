@@ -663,7 +663,7 @@ def cmd_reattribute(args, paths) -> int:
       --model BRAND    only reattribute posts attributed to BRAND
                        (joins posts_brands)
       --with-llm       enable per-brand signal classification via
-                       Claude Haiku (requires ANTHROPIC_API_KEY in env)
+                       the configured DeepSeek provider
 
     Returns 0 on success; 2 on config/env errors.
     """
@@ -682,8 +682,8 @@ def cmd_reattribute(args, paths) -> int:
         anthropic_client = build_anthropic_client_from_env()
         if anthropic_client is None:
             print(
-                "reattribute: --with-llm requested but ANTHROPIC_API_KEY "
-                "is not set or the anthropic SDK is missing; "
+                "reattribute: --with-llm requested but the configured "
+                "provider credential is unavailable; "
                 "running without signal classification",
                 file=sys.stderr,
             )
@@ -1313,8 +1313,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_reatt.add_argument(
         "--with-llm", action="store_true",
-        help="Enable per-brand signal classification via Claude Haiku "
-             "(requires ANTHROPIC_API_KEY in env)",
+        help="Enable per-brand signal classification through the configured "
+             "DeepSeek provider",
     )
     p_reatt.set_defaults(func=cmd_reattribute)
 

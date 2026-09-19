@@ -1,8 +1,8 @@
 # Per-brand trend narratives
 
-Current state as of 2026-09-02 JST.
+Current state as of 2026-09-11 JST.
 
-Push In Weight publishes a bilingual why-first trend narrative for every
+Push In Weight publishes a trilingual why-first trend narrative for every
 tracked, non-sentinel brand in each supported window. The default page shows
 the two highest-ranked narratives. A saved or explicit brand filter always
 selects that brand's stored narrative, even when the brand is not a default
@@ -28,8 +28,8 @@ worker. The production path is:
    alone is not rank authority. An invalid rank response falls back to the
    complete canonical brand order; it cannot drop a brand.
 4. Eligible brands are divided in that order into deterministic batches of at
-   most five. One editor call returns a bilingual headline and substantive
-   secondary paragraph for every brand in a batch.
+   most five. One editor call returns English, Simplified Chinese, and Japanese
+   headlines and substantive secondary paragraphs for every brand in a batch.
 5. One independent critic call receives the same closed packet, the raw editor
    response, and mechanical parse diagnostics. It approves, repairs, or holds
    each brand independently.
@@ -67,18 +67,18 @@ The provider route is pinned independently of translation and classification:
 | Thinking | disabled |
 | SDK retries | zero |
 | Rank output cap | 2,400 tokens |
-| Editor output cap | 8,000 tokens |
-| Critic output cap | 9,000 tokens |
+| Editor output cap | 10,000 tokens |
+| Critic output cap | 11,000 tokens |
 | Timeout | 60 seconds |
-| Editor prompt | `headline-editor-v6` |
-| Critic prompt | `headline-critic-v6` |
+| Editor prompt | `headline-editor-v7-ja` |
+| Critic prompt | `headline-critic-v7-ja` |
 | Editor batch | at most five brands |
 | Worker concurrency | one |
 
 The run ledger reserves call, input-token, output-token, and dollar capacity
 before each request. Completed provider usage replaces the reservation for
 later budget decisions. Current bounded defaults are 25 calls, 700,000 input
-tokens, 160,000 output tokens, and $1.50 per window run. The 2026-09-02
+tokens, 180,000 output tokens, and $1.50 per window run. The 2026-09-02
 pricing revision uses DeepSeek V4 Flash's conservative peak/cache-miss rates of
 $0.44 per million input tokens and $1.32 per million output tokens; off-peak or
 cache-hit billing can only reduce actual cost. Pricing is versioned in
@@ -114,7 +114,7 @@ families declare partial or unavailable coverage.
 
 Each dossier includes:
 
-- brand key and bilingual display names;
+- brand key and localized display names;
 - an `enrichment_coverage` block with total, translated, classified, and fully
   enriched counts plus the same counts for the newest 30 minutes of a one-day
   window;
@@ -187,8 +187,9 @@ first-party rows, dedupe, reservoir bounds, the per-brand target, excerpt
 limits, and the 128 KiB request limit prevent it from expanding the packet.
 
 Ordinary author identity remains opaque. A trusted first-party handle may be
-sent because its identity is product evidence. Original language, English and
-Chinese translations, and translation labels may be included when available.
+sent because its identity is product evidence. Original language plus
+normalized English, Simplified Chinese, and Japanese texts and translation
+labels may be included when available.
 Every evidence row declares its translation and classification status; pending
 translations remain null without removing the original text. A populated
 one-day dossier reserves at least one evidence slot for the newest 30 minutes,
@@ -204,12 +205,12 @@ internal ordering aid; public DTOs never expose position or score.
 
 ### Editor
 
-Each editor batch returns one complete bilingual object for every batch brand:
+Each editor batch returns one complete trilingual object for every batch brand:
 
 ```text
 brand_key
-headline_en / headline_zh_cn
-secondary_en / secondary_zh_cn
+headline_en / headline_zh_cn / headline_ja
+secondary_en / secondary_zh_cn / secondary_ja
 narrative_kind
 confidence
 headline_proposition_ids
@@ -220,8 +221,8 @@ events[]
 
 The secondary paragraph is never empty and never says only “insufficient
 data.” If no striking event is supported, it describes what the posts are
-mentioning. Propositions own their exact bilingual claim span and packet fact
-and evidence IDs. Event objects own their bilingual label, date, support kind,
+mentioning. Propositions own their exact trilingual claim span and packet fact
+and evidence IDs. Event objects own their trilingual label, date, support kind,
 evidence, and proposition IDs.
 
 The editor uses original text, timing, volume, language, account role, and
@@ -251,6 +252,8 @@ a supportable raw-content narrative.
 
 The durable tables are:
 
+- `TrendNarrativeDemand` — one coalesced request per brand/window with target
+  versions, priority, hot lifetime, material fingerprint, and decision state;
 - `TrendNarrativeRun` — one immutable window/cutoff snapshot and manifest;
 - `TrendNarrativeProviderCall` — one rank, editor, or critic transport with a
   stable identity, request hash, lease fence, raw response hash, usage, and
@@ -281,6 +284,30 @@ movement, then mix/content signals, then canonical key. A held result carries
 the same last approved row through consecutive held runs instead of losing the
 fallback after the first hold.
 
+## Demand and materiality
+
+A chart or brand-page read records demand and returns immediately. It never
+waits for a provider. Repeated reads update the same `(brand, window_days)` row.
+A post-harvest snapshot continues only for demand that is hot, pinned by an
+operator, or part of the configured bounded prewarm set.
+
+`headline-materiality-v2` hashes the parts of a dossier that can change the
+published explanation: semantic facts, evidence identity and text, topic
+signals, coverage state, and trend shape. Percentage and ratio values use the
+configured 5% bands, while post counts use a minimum one-post band that grows
+with the population. Evidence ranking counters, engagement changes, display
+formatting, and sliding bucket timestamps do not change the fingerprint by
+themselves. Facts crossing a band, changed source text or evidence identity,
+new topic signals, changed coverage, or a changed trend direction do.
+
+An unchanged fingerprint records a suppression decision and keeps the last
+approved narrative visible. An explicit operator refresh bypasses the
+material-change test once and remains subject to the existing call, token, and
+cost ledgers. Mechanically valid low-risk editor output can bypass the critic;
+causal wording, quotations, event-led claims, numeric facts, incomplete
+coverage, invalid editor output, and the deterministic audit sample still
+route through it.
+
 ## Public DTO and UI
 
 The browser receives DTO schema version 3. It contains at most two selected
@@ -293,11 +320,12 @@ packet fields.
 - More than two selected brands: show the first two in internal order and a
   localized neutral `2 of N selected` disclosure.
 
-Each item includes brand identity/link, state, bilingual headline and
+Each item includes brand identity/link, state, localized headline and
 secondary, attempted/verified timestamps, a prettified relative freshness
-label, and an exact UTC timestamp for the title and accessible label. English
-and Simplified Chinese use equivalent structures. A request never calls the
-provider; it reads one visible run from PostgreSQL.
+label, and an exact UTC timestamp for the title and accessible label. English,
+Simplified Chinese, and Japanese use the same persisted narrative and UI
+structure. A request never calls the provider; it reads one visible run from
+PostgreSQL.
 
 ## Controls and rollback
 
@@ -344,7 +372,7 @@ checked again immediately before its provider call.
 
 Execution artifacts retain the full immutable snapshots, exact provider
 envelopes and requests, raw responses, mechanical results, critic decisions,
-tokens, latency, cost, and a bilingual rubric for why-first relevance, factual
+tokens, latency, cost, and a trilingual rubric for why-first relevance, factual
 support, proportionality, translation equivalence, and secondary usefulness.
 Synthetic execution sends a supported gold draft plus mechanically valid
 unsupported event, causality, event-conflation, mistranslation,
@@ -353,7 +381,26 @@ production critic. Activation requires every control response to validate,
 zero unsupported false accepts, and zero supported false holds in that finite
 set. Real-data evaluation omits those controls and records calibration as
 `not_run`, so it must be reviewed alongside a green synthetic artifact. The
-injection-hardened critic prompt is versioned as `headline-critic-v2`.
+injection-hardened critic prompt is versioned as `headline-critic-v7-ja`.
+
+`replay_headline_demand` compares the saved historical call ledger with the
+current materiality and critic-routing policy. It reads immutable saved runs,
+makes no provider call, and writes no database row:
+
+```bash
+python manage.py replay_headline_demand \
+  --start 2026-09-03T00:00:00Z \
+  --end 2026-09-11T00:00:00Z \
+  --windows 1 7 \
+  --source-identity pushinweight-prod-20260910-165134.dump \
+  --candidate-revision <git-sha> \
+  --output /absolute/path/headline-demand-replay.json
+```
+
+The report freezes the source-run hash and separately shows historical work,
+an all-visible upper bound with a critic on every retained editor batch, and a
+risk-routed estimate. It also compares publication validity and last-good
+coverage so a token reduction cannot pass by silently withholding headlines.
 
 `headline_status --json` is provider-free. It reports per-window run
 completeness, missing and held brands, last-good availability, latest attempt,
@@ -371,8 +418,10 @@ packets, responses, evidence, or credentials.
 | Work-slot coalescing and 20-brand graph | `tests/test_trend_narrative_orchestration.py` |
 | Queue-only Celery entrypoint | `tests/test_trend_narrative_tasks.py` |
 | DTO v3 filters and freshness | `tests/test_trend_narrative_projection.py` |
-| Bilingual desktop/mobile cards | `tests/test_home_v22_browser.py`, `tests/test_pw_chart_filter.js` |
+| Trilingual desktop/mobile cards | `tests/test_home_v22_browser.py`, `tests/test_pw_chart_filter.js` |
 | Finite no-publication evaluation | `tests/test_trend_narrative_evaluation.py`, `tests/test_evaluate_trend_headlines_command.py` |
+| Material-change selection and critic routing | `tests/test_trend_narrative_demand.py` |
+| Read-only saved-run cost replay | `tests/test_headline_demand_replay.py` |
 | Provider-free operator status | `tests/test_headline_status.py` |
 
 Historical plans and dated analysis artifacts describe earlier experiments and

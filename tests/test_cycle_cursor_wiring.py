@@ -124,6 +124,11 @@ def test_backfill_cycle_requests_only_on_demand_credential(wired):
     assert api.credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
 
 
+def test_manual_cycle_requests_only_on_demand_credential(wired):
+    api, _ = wired(results=[], cycle_kind="manual")
+    assert api.credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
+
+
 def test_backfill_cycle_skips_unrelated_metrics_refresh(wired, monkeypatch):
     refresh_calls = []
     monkeypatch.setattr(

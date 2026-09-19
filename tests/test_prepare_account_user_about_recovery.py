@@ -10,15 +10,23 @@ from django.core.management import call_command
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Account
+from core.models import Account, Country
 from monitor.management.commands.backfill_account_based_in import (
     _parse_recovery_receipt,
 )
 
 pytestmark = [
     pytest.mark.requires_postgres,
-    pytest.mark.django_db(transaction=True, serialized_rollback=True),
+    pytest.mark.django_db(transaction=True),
 ]
+
+
+@pytest.fixture(autouse=True)
+def seed_referenced_countries():
+    Country.objects.bulk_create(
+        [Country(code="CN", m49_code="156"), Country(code="US", m49_code="840")],
+        ignore_conflicts=True,
+    )
 
 
 def test_recovery_snapshot_defaults_to_zero_write_dry_run():

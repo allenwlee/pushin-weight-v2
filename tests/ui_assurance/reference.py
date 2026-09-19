@@ -15,7 +15,8 @@ MULTI_CONTROLS = {
     "role": "role",
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
-    "discourse": "discourse",
+    "product_labels": "product_labels",
+    "audience_topics": "audience_topics",
 }
 
 
@@ -36,7 +37,8 @@ def initial_state() -> dict[str, Any]:
             "role": ALL,
             "nationalism_cn": ALL,
             "nationalism_us": ALL,
-            "discourse": ALL,
+            "product_labels": ALL,
+            "audience_topics": ALL,
             "unsanctioned": "off",
             "window": 1,
         },
@@ -63,7 +65,12 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
     """Apply one legal user intent without consulting browser/runtime code."""
 
     next_state = deepcopy(state)
-    if control in MULTI_CONTROLS:
+    if control == "untracked_brand_promotions":
+        if value in {"off", "only", "any"}:
+            next_state["filters"][control] = value
+        else:
+            next_state["filters"][control] = [str(value)]
+    elif control in MULTI_CONTROLS:
         if value == ALL:
             selected: str | list[str] = ALL
         elif isinstance(value, (list, tuple)):
@@ -144,7 +151,7 @@ def _matches_value(post: dict[str, Any], field: str, selected: Any) -> bool:
     if selected == ALL:
         return True
     selected_values = set(selected)
-    actual = post[field]
+    actual = post.get(field, [])
     if isinstance(actual, list):
         return bool(selected_values.intersection(actual))
     return actual in selected_values
@@ -164,6 +171,13 @@ def filter_posts(
             continue
         if filters["unsanctioned"] == "only" and not post["flagged"]:
             continue
+        promotions = filters.get("untracked_brand_promotions", "off")
+        if promotions != "off" and promotions != "any":
+            selected_promotions = promotions if isinstance(promotions, list) else [promotions]
+            if not set(selected_promotions).intersection(
+                post.get("untracked_brand_promotions", [])
+            ):
+                continue
         if not all(
             _matches_value(post, field, filters[control])
             for control, field in MULTI_CONTROLS.items()
@@ -244,6 +258,24 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "pulse_brands": list(state["pulse_brands"]),
         },
         "feed": [post["id"] for post in rows],
+        "classification_states": {
+            post["id"]: {
+                "status": post["classification_status"],
+                "source": post["scalar_source"],
+                "post_types": list(post["post_types"]),
+                "product_labels": list(post["product_labels"]),
+                "audience_topics": list(post.get("audience_topics", [])),
+                "geopolitical_modes": list(post.get("geopolitical_modes", [])),
+                "china_national_stance": post.get("china_national_stance"),
+                "us_national_stance": post.get("us_national_stance"),
+                "untracked_brand_promotions": list(
+                    post.get("untracked_brand_promotions", [])
+                ),
+                "cn_nationalism": post["cn_nationalism"],
+                "us_nationalism": post["us_nationalism"],
+            }
+            for post in rows
+        },
         "counts": len(rows),
         "chart": {
             "window": int(state["filters"]["window"]),

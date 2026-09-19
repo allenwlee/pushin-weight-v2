@@ -12,8 +12,10 @@ from scripts.database_lock import (
     DatabaseLockError,
     acquire_cluster_lock,
     acquire_harvest_coordination_lock,
+    acquire_synthesis_coordination_lock,
     admin_connection_parameters,
     harvest_coordination_lock_keys,
+    synthesis_coordination_lock_keys,
 )
 
 Operation = tuple[str, tuple[object, ...]] | str
@@ -138,6 +140,42 @@ def test_harvest_coordination_lock_refuses_concurrent_work() -> None:
     with (
         pytest.raises(DatabaseLockError, match="^harvest_lock_unavailable$"),
         acquire_harvest_coordination_lock(
+            "postgresql://reader:secret@cluster.example/application",
+            environment="staging",
+            connect=connect,
+        ),
+    ):
+        raise AssertionError("unreachable")
+
+
+def test_synthesis_coordination_lock_has_an_independent_namespace() -> None:
+    operations: list[Operation] = []
+    connect = FakeConnect(operations)
+    keys = synthesis_coordination_lock_keys("staging")
+
+    assert keys != harvest_coordination_lock_keys("staging")
+    with acquire_synthesis_coordination_lock(
+        "postgresql://reader:secret@cluster.example/application",
+        environment="staging",
+        connect=connect,
+    ):
+        operations.append("critical")
+
+    assert operations == [
+        "connect",
+        ("SELECT pg_try_advisory_lock(%s, %s)", keys),
+        "critical",
+        ("SELECT pg_advisory_unlock(%s, %s)", keys),
+        "close",
+    ]
+
+
+def test_synthesis_coordination_lock_refuses_an_active_worker() -> None:
+    connect = FakeConnect([], try_lock=False)
+
+    with (
+        pytest.raises(DatabaseLockError, match="^synthesis_lock_unavailable$"),
+        acquire_synthesis_coordination_lock(
             "postgresql://reader:secret@cluster.example/application",
             environment="staging",
             connect=connect,

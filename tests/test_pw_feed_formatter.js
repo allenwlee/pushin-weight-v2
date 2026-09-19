@@ -104,6 +104,18 @@ assertEq(pwIcon.isAllowed('icon-heart'), true, 'approved symbol is recognized');
 assertEq(pwIcon.isAllowed('not-approved'), false, 'unknown symbol is rejected');
 assertEq(pwIcon.semanticSymbol('sentiment', 'negative'), 'icon-sentiment-negative',
   'filter and feed sentiment share the semantic symbol registry');
+[
+  ['opportunities', 'a-opportunity'],
+  ['job_listings', 'a-jobs'],
+  ['personnel_changes', 'a-personnel'],
+  ['opinions_reactions', 'a-opinions'],
+  ['research_explanations', 'a-research'],
+  ['business_finance', 'a-finance'],
+  ['other', 'a-other'],
+].forEach(function (entry) {
+  assertEq(pwIcon.semanticSymbol('post_types', entry[0]), entry[1],
+    entry[0] + ' uses the locked Column A glyph');
+});
 assertEq(pwIcon.semanticClass('role', 'staff'), 'role-staff',
   'role filter colors share the semantic class registry');
 
@@ -411,7 +423,7 @@ console.log('\n--- server-owned tint and marker hydration ---');
 const serverTintRow = markerRow(
   {
     'data-sentiments': 'negative',
-    'data-post-types': 'buzz_releases',
+    'data-post-types': 'releases_updates',
     'data-nat-cn': 'mild_pro',
     'data-unsanctioned': '1',
   },
@@ -489,6 +501,17 @@ assertEq(
   layers.map((layer) => layer.key).join(','),
   'en,source',
   'blank commentary_en leaves the English cycle unchanged'
+);
+global.document.body = { getAttribute: (name) => name === 'data-pw-locale' ? 'ja' : null };
+layers = textLayers(textElement({
+  'data-commentary-ja': '日本語の分析',
+  'data-text-ja': '日本語の直訳',
+  'data-text-source': 'English source',
+}));
+assertEq(
+  layers.map((layer) => layer.key).join(','),
+  'synthesis,literal_ja,source',
+  'Japanese cycles synthesis, literal translation, then original source'
 );
 assertEq(
   isFeedPayload({ rows: [], next_cursor: { stale: true } }),

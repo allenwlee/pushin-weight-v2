@@ -159,6 +159,30 @@ def test_db_only_brand_projects_through_dashboard_and_both_feed_wire_shapes(
     assert detail_response.context["brand_obj"]["accent_color"] == "#0ea5e9"
 
 
+def test_brand_detail_locale_controls_include_japanese(client, django_user_model):
+    """The real brand route exposes every supported review locale."""
+    brand = Brand.objects.create(
+        nickname="ja-brand",
+        display_name="Japanese fixture brand",
+        is_sentinel=False,
+    )
+    user = django_user_model.objects.create_user(username="u7-brand-ja")
+    client.force_login(user)
+
+    for locale in ("en", "zh_cn", "ja"):
+        response = client.get(f"/brands/{brand.nickname}/?locale={locale}", secure=True)
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert 'data-pw-locale-btn="en"' in body
+        assert 'data-pw-locale-btn="zh_cn"' in body
+        assert 'data-pw-locale-btn="ja"' in body
+        assert 'data-pw-locale-btn="original"' in body
+
+    ja_response = client.get(f"/brands/{brand.nickname}/?locale=ja", secure=True)
+    ja_body = ja_response.content.decode("utf-8")
+    assert 'class="locale-btn is-active"\n              data-pw-locale-btn="ja"' in ja_body
+
+
 def test_db_brand_projection_falls_back_for_null_display_and_accent():
     brand = Brand.objects.create(
         nickname="fallback-brand",

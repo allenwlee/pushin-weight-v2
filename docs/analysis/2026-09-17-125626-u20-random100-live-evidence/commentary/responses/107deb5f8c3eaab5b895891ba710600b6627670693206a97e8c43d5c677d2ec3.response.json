@@ -1,0 +1,6 @@
+{
+  "post_id": "2100103180675956980",
+  "commentary_en": "The author reports their own benchmark results comparing 21 AI models, stating that a high price does not guarantee high performance. They note the best-scoring model (qwen3.8-max) achieves 100%, while the most expensive model ($11.70) scores 93.5% (ranked 11th), costing 17.6 times more but scoring 5.1 points lower. The post matters because it challenges the assumption that pricier models are superior, offering practical, self-measured data for cost-conscious users. The link suggests further detail, but the summary is self-contained. The tone is empirical and cautionary, relevant for AI procurement decisions. Uncertainty remains about the benchmark's methodology and generalizability beyond this sample.",
+  "commentary_zh_cn": "作者报告了自己对21个AI模型的基准测试结果，指出价格高并不保证性能好。他们提到得分最高的模型（qwen3.8-max）达到100%，而最贵的模型（$11.70）得分93.5%（排名第11），贵出17.6倍却低了5.1个百分点。这条帖子的意义在于挑战了价格越高模型越好的假设，为注重成本的用户提供了自行实测的数据。链接可能包含更多细节，但摘要已自足。语气是经验性的、具有警示作用，对AI采购决策有参考价值。关于基准测试的方法论及其适用性仍存在不确定性。",
+  "commentary_ja": "投稿者は21のAIモデルを自らベンチマークした結果を報告し、価格が高いほど性能が良いとは限らないと述べている。最高スコアのモデル（qwen3.8-max）は100%を記録し、最も高価なモデル（$11.70）は93.5%（11位）で、17.6倍高いのに5.1ポイント低いと指摘する。この投稿は、高価なモデルが優れているという前提に疑問を投げかけ、コスト意識の高いユーザーに実測データを提供する点で重要である。リンク先に詳細がある可能性があるが、要約だけで完結している。経験的で注意喚起的な口調であり、AI調達の意思決定に参考となる。ベンチマークの方法論や一般化可能性には不確実性が残る。"
+}

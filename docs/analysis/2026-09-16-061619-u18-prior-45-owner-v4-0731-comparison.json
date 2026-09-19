@@ -1,0 +1,2133 @@
+{
+  "schema_version": "u18-prior45-owner-v4-0731-comparison/v1",
+  "created_at": "2026-09-15T21:16:19.052609+00:00",
+  "owner_source_sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80",
+  "model_result_sha256": "1ad787356fab86393063d772b96dc645dc413bf47cef52749a5404cdb6b0caae",
+  "counts": {
+    "judgments": 270,
+    "matches": 180,
+    "differences": 90,
+    "complete_cases": 5
+  },
+  "field_counts": {
+    "outcome": {
+      "matches": 40,
+      "differences": 5
+    },
+    "post_types": {
+      "matches": 14,
+      "differences": 31
+    },
+    "product_labels": {
+      "matches": 28,
+      "differences": 17
+    },
+    "sentiment": {
+      "matches": 21,
+      "differences": 24
+    },
+    "china_nationalism": {
+      "matches": 37,
+      "differences": 8
+    },
+    "us_nationalism": {
+      "matches": 40,
+      "differences": 5
+    }
+  },
+  "label_metrics": {
+    "post_types": {
+      "precision": 0.7794117647058824,
+      "recall": 0.5578947368421052,
+      "f1": 0.6503067484662577,
+      "tp": 53,
+      "fp": 15,
+      "fn": 42,
+      "per_label": {
+        "releases_updates": {
+          "tp": 5,
+          "fp": 3,
+          "fn": 3
+        },
+        "hands_on_usage": {
+          "tp": 6,
+          "fp": 2,
+          "fn": 3
+        },
+        "results_evaluations": {
+          "tp": 10,
+          "fp": 1,
+          "fn": 6
+        },
+        "questions_requests": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3
+        },
+        "advertising_marketing": {
+          "tp": 4,
+          "fp": 1,
+          "fn": 1
+        },
+        "events": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 3
+        },
+        "opportunities": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 4
+        },
+        "job_listings": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0
+        },
+        "personnel_changes": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0
+        },
+        "opinions_reactions": {
+          "tp": 21,
+          "fp": 7,
+          "fn": 5
+        },
+        "research_explanations": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 11
+        },
+        "business_finance": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 3
+        },
+        "other": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0
+        }
+      }
+    },
+    "product_labels": {
+      "precision": 0.5,
+      "recall": 0.5882352941176471,
+      "f1": 0.5405405405405405,
+      "tp": 10,
+      "fp": 10,
+      "fn": 7,
+      "per_label": {
+        "bug": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0
+        },
+        "complaint": {
+          "tp": 1,
+          "fp": 4,
+          "fn": 0
+        },
+        "testimonial": {
+          "tp": 8,
+          "fp": 5,
+          "fn": 5
+        },
+        "ideas_requests": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 1
+        },
+        "misinformation": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1
+        }
+      }
+    }
+  },
+  "cases": {
+    "H0040D161174": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "anti",
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H0DEC6F537E0": {
+      "outcome": {
+        "owner": "classified",
+        "model": "context_missing",
+        "status": "different"
+      },
+      "post_types": {
+        "owner": [
+          "questions_requests",
+          "events"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "ideas_requests"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H1A3B3731E1C": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "events",
+          "research_explanations"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "testimonial"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "positive",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H1E48CCEEB2F": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "hands_on_usage",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H2B36BE298C6": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "research_explanations"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "misinformation"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "negative",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "mixed",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H3569508600E": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "results_evaluations",
+          "research_explanations"
+        ],
+        "model": [
+          "hands_on_usage"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H42DCD9324F4": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "advertising_marketing"
+        ],
+        "model": [
+          "releases_updates",
+          "advertising_marketing"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H4E3B98376E5": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "research_explanations"
+        ],
+        "model": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H4E55D967F4E": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H5024EDC82C6": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "hands_on_usage",
+          "research_explanations",
+          "advertising_marketing"
+        ],
+        "model": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H540717FEDF5": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H638DEDC4101": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "opinions_reactions",
+          "business_finance"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "negative",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H688781944AC": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "questions_requests",
+          "opportunities"
+        ],
+        "model": [
+          "questions_requests"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "ideas_requests"
+        ],
+        "model": [
+          "ideas_requests"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H696CC3BCE4C": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "hands_on_usage",
+          "results_evaluations",
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H69C877BE195": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "advertising_marketing",
+          "opportunities",
+          "releases_updates"
+        ],
+        "model": [
+          "advertising_marketing"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H7046A8A0689": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "testimonial"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H70A9986C432": {
+      "outcome": {
+        "owner": "context_missing",
+        "model": "classified",
+        "status": "different"
+      },
+      "post_types": {
+        "owner": [],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": null,
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H74C810FB007": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "complaint"
+        ],
+        "model": [
+          "complaint"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "mixed",
+        "model": "negative",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H7B628A24F88": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H7F29D6428BB": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "questions_requests",
+          "events",
+          "opportunities",
+          "opinions_reactions"
+        ],
+        "model": [
+          "releases_updates"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "testimonial"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H87229E54527": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions",
+          "hands_on_usage"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H8D074DCC4D3": {
+      "outcome": {
+        "owner": "context_missing",
+        "model": "classified",
+        "status": "different"
+      },
+      "post_types": {
+        "owner": [],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": null,
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H8FA9071508D": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "advertising_marketing",
+          "opportunities"
+        ],
+        "model": [
+          "advertising_marketing",
+          "releases_updates"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H92A808A114E": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H951CA2C2BF9": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H9920CC08778": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "negative",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "H9C7C731F3C3": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "business_finance",
+          "research_explanations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "business_finance",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "pro",
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HAF1D06FBEBA": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "opinions_reactions"
+        ],
+        "model": [
+          "hands_on_usage",
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial",
+          "bug"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "mixed",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HAF97A8DDDDE": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "results_evaluations",
+          "business_finance",
+          "opinions_reactions"
+        ],
+        "model": [
+          "releases_updates",
+          "results_evaluations"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HB4FB5810A09": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "testimonial"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HB94D1A5CA63": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "results_evaluations",
+          "research_explanations"
+        ],
+        "model": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HC63FABBF5A3": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "hands_on_usage"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HC9205DA00E5": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions",
+          "opportunities",
+          "advertising_marketing"
+        ],
+        "model": [
+          "hands_on_usage",
+          "results_evaluations",
+          "advertising_marketing",
+          "opportunities"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial",
+          "complaint"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "mixed",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HCA162EAEBE0": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions",
+          "results_evaluations"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HCC2BC2A1B6B": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [
+          "testimonial"
+        ],
+        "model": [
+          "testimonial"
+        ],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HCCC266D762E": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "results_evaluations",
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "model": [
+          "hands_on_usage",
+          "results_evaluations"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "complaint"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "mixed",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HDA7D2AEEC6F": {
+      "outcome": {
+        "owner": "context_missing",
+        "model": "classified",
+        "status": "different"
+      },
+      "post_types": {
+        "owner": [],
+        "model": [
+          "releases_updates",
+          "advertising_marketing"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": null,
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HE10CACEDD3F": {
+      "outcome": {
+        "owner": "context_missing",
+        "model": "context_missing",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": null,
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HE2CCD66B3DE": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "hands_on_usage",
+          "research_explanations"
+        ],
+        "model": [
+          "hands_on_usage"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HE6730DF39A2": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "questions_requests",
+          "opinions_reactions"
+        ],
+        "model": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "complaint"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "negative",
+        "model": "mixed",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HF3B55FD811B": {
+      "outcome": {
+        "owner": "classified",
+        "model": "context_missing",
+        "status": "different"
+      },
+      "post_types": {
+        "owner": [
+          "research_explanations",
+          "business_finance",
+          "results_evaluations"
+        ],
+        "model": [],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "neutral",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HF4987074B1F": {
+      "outcome": {
+        "owner": "context_missing",
+        "model": "context_missing",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": null,
+        "model": "neutral",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "us_nationalism": {
+        "owner": null,
+        "model": "none",
+        "status": "different"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HF5D74262E64": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "releases_updates",
+          "opinions_reactions"
+        ],
+        "model": [
+          "releases_updates",
+          "business_finance",
+          "opinions_reactions"
+        ],
+        "status": "different"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "complaint"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "negative",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HF7C5DFD8079": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "job_listings"
+        ],
+        "model": [
+          "job_listings"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [
+          "testimonial"
+        ],
+        "status": "different"
+      },
+      "sentiment": {
+        "owner": "neutral",
+        "model": "positive",
+        "status": "different"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    },
+    "HFD61C2DE5BD": {
+      "outcome": {
+        "owner": "classified",
+        "model": "classified",
+        "status": "match"
+      },
+      "post_types": {
+        "owner": [
+          "results_evaluations",
+          "opinions_reactions"
+        ],
+        "model": [
+          "opinions_reactions",
+          "results_evaluations"
+        ],
+        "status": "match"
+      },
+      "product_labels": {
+        "owner": [],
+        "model": [],
+        "status": "match"
+      },
+      "sentiment": {
+        "owner": "positive",
+        "model": "positive",
+        "status": "match"
+      },
+      "china_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "us_nationalism": {
+        "owner": "none",
+        "model": "none",
+        "status": "match"
+      },
+      "unsanctioned_flags": {
+        "owner": null,
+        "model": [],
+        "status": "unreviewed"
+      }
+    }
+  }
+}

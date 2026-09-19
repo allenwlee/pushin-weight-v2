@@ -13,10 +13,7 @@ the cron traceback pointing at `api.minimax.io/anthropic` socket timeouts.
 
 from __future__ import annotations
 
-import pytest
-
 from x_monitor.config import load_config
-
 
 REPO_ROOT = "/Users/fuchitalee/development/pushin-weight-v2"
 CONFIG_PATH = f"{REPO_ROOT}/config.yaml"
@@ -65,8 +62,8 @@ llm:
     )
 
 
-def test_no_env_no_yaml_returns_none(tmp_path, monkeypatch):
-    """With no env and no yaml value, translator_base_url is None (fallback path)."""
+def test_no_env_no_yaml_returns_deepseek_default(tmp_path, monkeypatch):
+    """With no override, translator_base_url uses the explicit DeepSeek default."""
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text("""\
 enabled_models: [minimax]
@@ -77,11 +74,11 @@ llm:
 """)
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     cfg = load_config(cfg_path)
-    assert cfg.llm.translator_base_url is None
+    assert cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic"
 
 
-def test_env_unset_yaml_null_returns_none(tmp_path, monkeypatch):
-    """With env unset and yaml null, translator_base_url is None (fallback)."""
+def test_env_unset_yaml_null_returns_deepseek_default(tmp_path, monkeypatch):
+    """A null field with no role override uses the DeepSeek default."""
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text("""\
 enabled_models: [minimax]
@@ -93,4 +90,4 @@ llm:
 """)
     monkeypatch.delenv("X_MONITOR_TRANSLATOR_BASE_URL", raising=False)
     cfg = load_config(cfg_path)
-    assert cfg.llm.translator_base_url is None
+    assert cfg.llm.translator_base_url == "https://api.deepseek.com/anthropic"

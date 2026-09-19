@@ -1,0 +1,35 @@
+{
+  "affiliation_extraction": {
+    "claim_precision": 0.75,
+    "claim_recall": 0.65,
+    "date_non_fabrication": 1.0,
+    "status_accuracy": 0.75
+  },
+  "classification": {
+    "per_type_precision": 0.65,
+    "per_type_recall": 0.6,
+    "prevalence_false_positive_rate_max": 0.15
+  },
+  "frozen_at": "2026-09-11T00:26:32Z",
+  "invariants": {
+    "duplicate_identity_rows": 0,
+    "invented_dates": 0,
+    "silent_brand_creation": 0,
+    "source_provenance_retention": 1.0
+  },
+  "job_discovery": {
+    "bounded_coverage": 0.5,
+    "post_precision": 0.6
+  },
+  "job_extraction": {
+    "field_completeness": 0.7,
+    "provenance_retention": 1.0,
+    "role_precision": 0.7,
+    "role_recall": 0.6
+  },
+  "personnel_discovery": {
+    "bounded_coverage": 0.5,
+    "post_precision": 0.6
+  },
+  "schema_version": "stage1c-quality-floors-v1"
+}

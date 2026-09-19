@@ -203,7 +203,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--max-llm-calls", type=int, default=None,
-            help="Hard cap on LLM classify batches per invocation (default: no cap).",
+            help="Hard cap on classifier transport requests per invocation (default: no cap).",
         )
 
     def handle(self, *args, **options) -> None:
@@ -434,15 +434,15 @@ class Command(BaseCommand):
         # --- execute batch ---
         from x_monitor.relevancy import build_binary_relevancy_llm_call
 
-        # U6 runtime wire-in: same as run_cycle — build the Anthropic
-        # llm_call for the binary relevancy gate. None when env is
-        # unconfigured; gate then runs as no-op (KEEP).
+        # U6 runtime wire-in: same as run_cycle — build the provider-specific
+        # client for the binary relevancy gate. None when unavailable; the
+        # gate then runs as no-op (KEEP).
         relevancy_client = None
         try:
             from x_monitor.reattribute import (
-                build_anthropic_client_from_env,
+                build_relevancy_client_from_env,
             )
-            relevancy_client = build_anthropic_client_from_env(cfg)
+            relevancy_client = build_relevancy_client_from_env(cfg)
         except Exception:
             pass
         relevancy_llm_call = build_binary_relevancy_llm_call(

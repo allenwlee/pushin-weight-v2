@@ -1,0 +1,63 @@
+{
+  "cohort": {
+    "bytes": 1240700,
+    "cohort_id": "u18-prod-dump-20260910-v1",
+    "development_only": true,
+    "rows": 500,
+    "sha256": "30ef30d3236984f6e6c00c8a427dcf4eeb25d32b1b7fdef4bf1f2c015fd0a12f"
+  },
+  "decision_rule": "Score the exact runtime output against the consumed, candidate-blind development gold and unchanged taxonomy-v3 floors. Proceed to a newly sampled zero-overlap final cohort only if every floor passes. This development result cannot approve release.",
+  "frozen_at": "2026-09-11T06:20:32Z",
+  "global_stop": "The client reserves the current request's conservative input estimate, full output allowance, transport attempt, and maximum price before network transport. It refuses the first operation that would exceed any cap. Cached successful responses replay without new reservations, and capacity cannot transfer to another cohort, model, prompt, or lane.",
+  "lane": "runtime_v11_development",
+  "lanes": {
+    "runtime_v11_development": {
+      "allowed_system_sha256": [
+        "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+        "c02f255898c2cdb01abbca4a9d7f1a2ed817c2efcba7af73f206bab45e707326",
+        "658b20e990c50ef693710860120e40aeb637a5d3c6b3bb2254130c3e8637021e",
+        "159a7777be4fe2c44ec82e7e65beb74860523bca3720d01396049ff7ece0b81c"
+      ],
+      "batch_size": 10,
+      "expected_cost_usd": "0.65",
+      "input_token_reservation": "ceil((UTF-8 system bytes + UTF-8 user bytes) / 2) per transport attempt",
+      "input_usd_per_million": "0.44",
+      "max_concurrent_transport_calls": 3,
+      "max_tokens_per_attempt": 4096,
+      "maximum_cost_usd": "2.35",
+      "maximum_examples": 500,
+      "maximum_input_tokens": 3000000,
+      "maximum_output_tokens": 778240,
+      "maximum_requests": 170,
+      "maximum_retries_per_request": 2,
+      "maximum_transport_attempts": 190,
+      "model": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "pricing_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "pricing_version": "deepseek-v4-flash-peak-2026-09-11",
+      "provider": "deepseek",
+      "temperature": 0,
+      "thinking": "disabled",
+      "twitterapi_credits": 0
+    }
+  },
+  "production_shape": {
+    "base_passes": 2,
+    "base_requests": 100,
+    "base_reserved_input_tokens": 1567974,
+    "base_reserved_output_tokens": 409600,
+    "batch_size": 10,
+    "maximum_shared_semantic_repairs": 20,
+    "rare_adjudication": "one request only for a batch containing a proposed personnel_changes or other pair",
+    "row_fallback": "only missing, duplicate, or schema-invalid rows"
+  },
+  "prompt": {
+    "primary_bytes": 11951,
+    "primary_sha256": "4ef2cc689470284f9d49fd7371db85fa10e4a9b2a63f7f3ab8a0005f4c254e89",
+    "rare_bytes": 1371,
+    "rare_sha256": "658b20e990c50ef693710860120e40aeb637a5d3c6b3bb2254130c3e8637021e",
+    "version": "stage1-prompt-v11"
+  },
+  "reason": "The first unseen final candidate established that one twenty-post pass omitted supported secondary labels. Two independent ten-post reviews recovered them, while a raw union overcalled rare personnel changes. This budget measures the implemented production path: two ten-post base judgments, deterministic general-label union, and narrow adjudication only when either pass proposes personnel_changes or other.",
+  "schema_version": "u18-runtime-development-budget/v1"
+}

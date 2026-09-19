@@ -1,0 +1,1357 @@
+{
+  "execution_directory": ".context/u20/translation-synthesis-repeat-20260916-183930",
+  "same_prepared_requests": true,
+  "translation_caps": [
+    32768,
+    32768,
+    8192
+  ],
+  "commentary_cap": 4000,
+  "automatic_retries": 0,
+  "results": {
+    "translation/0731": {
+      "previous": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 794.116,
+        "output_tokens": 46796,
+        "cost_usd": 0.00868044,
+        "cost_basis": "reported",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 209.888,
+            "output_tokens": 17757,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 526.39,
+            "output_tokens": 25939,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 57.825,
+            "output_tokens": 3100,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "repeat": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 875.535,
+        "output_tokens": 46394,
+        "cost_usd": 0.00926472,
+        "cost_basis": "reported",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 363.554,
+            "output_tokens": 18137,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 478.12,
+            "output_tokens": 25202,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 33.846,
+            "output_tokens": 3055,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "failed_again": [],
+      "recovered": [],
+      "new_failures": []
+    },
+    "translation/incumbent": {
+      "previous": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 194.049,
+        "output_tokens": 48011,
+        "cost_usd": 0.057892152,
+        "cost_basis": "estimated using previous report rates",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 77.328,
+            "output_tokens": 18886,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 104.191,
+            "output_tokens": 26045,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.515,
+            "output_tokens": 3080,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "repeat": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 3,
+        "elapsed_seconds": 188.846,
+        "output_tokens": 46806,
+        "cost_usd": 0.05644615199999999,
+        "cost_basis": "estimated using previous report rates",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 75.766,
+            "output_tokens": 18087,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 100.511,
+            "output_tokens": 25656,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.552,
+            "output_tokens": 3063,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "failed_again": [],
+      "recovered": [],
+      "new_failures": []
+    },
+    "synthesis/0731": {
+      "previous": {
+        "complete": 40,
+        "rows": 45,
+        "calls": 45,
+        "elapsed_seconds": 728.942,
+        "output_tokens": 26017,
+        "cost_usd": 0.00605142,
+        "cost_basis": "known reported subtotal",
+        "errors": {
+          "openrouter_response_content_invalid": 3,
+          "openrouter_http_status_429": 2
+        },
+        "validation_errors": [],
+        "failed_post_ids": [
+          "2079575705646465078",
+          "2095560256164098125",
+          "2095571537730363728",
+          "2097328541016743997",
+          "2083434397106327981"
+        ],
+        "calls_detail": [
+          {
+            "latency_seconds": 16.739,
+            "output_tokens": 607,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 23.026,
+            "output_tokens": 734,
+            "status": "error",
+            "error": "openrouter_response_content_invalid"
+          },
+          {
+            "latency_seconds": 11.704,
+            "output_tokens": 739,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.031,
+            "output_tokens": 343,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 14.151,
+            "output_tokens": 430,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 28.308,
+            "output_tokens": 758,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 20.48,
+            "output_tokens": 596,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.188,
+            "output_tokens": 331,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.133,
+            "output_tokens": 447,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 0.314,
+            "output_tokens": null,
+            "status": "error",
+            "error": "openrouter_http_status_429"
+          },
+          {
+            "latency_seconds": 0.246,
+            "output_tokens": null,
+            "status": "error",
+            "error": "openrouter_http_status_429"
+          },
+          {
+            "latency_seconds": 9.018,
+            "output_tokens": 514,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 20.055,
+            "output_tokens": 841,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.837,
+            "output_tokens": 364,
+            "status": "error",
+            "error": "openrouter_response_content_invalid"
+          },
+          {
+            "latency_seconds": 10.077,
+            "output_tokens": 408,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 19.003,
+            "output_tokens": 693,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.047,
+            "output_tokens": 528,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 25.667,
+            "output_tokens": 923,
+            "status": "error",
+            "error": "openrouter_response_content_invalid"
+          },
+          {
+            "latency_seconds": 12.677,
+            "output_tokens": 406,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 17.041,
+            "output_tokens": 629,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.525,
+            "output_tokens": 423,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 14.999,
+            "output_tokens": 457,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 27.109,
+            "output_tokens": 943,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.642,
+            "output_tokens": 441,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 13.734,
+            "output_tokens": 512,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.611,
+            "output_tokens": 569,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.274,
+            "output_tokens": 753,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 13.571,
+            "output_tokens": 489,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 18.779,
+            "output_tokens": 756,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 18.6,
+            "output_tokens": 615,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 41.924,
+            "output_tokens": 1723,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 14.535,
+            "output_tokens": 539,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 41.408,
+            "output_tokens": 1218,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 9.19,
+            "output_tokens": 289,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 15.713,
+            "output_tokens": 519,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 14.109,
+            "output_tokens": 501,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 27.987,
+            "output_tokens": 873,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 10.957,
+            "output_tokens": 354,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 15.567,
+            "output_tokens": 474,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.311,
+            "output_tokens": 370,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.782,
+            "output_tokens": 505,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 22.548,
+            "output_tokens": 698,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.79,
+            "output_tokens": 447,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 9.896,
+            "output_tokens": 417,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 22.468,
+            "output_tokens": 841,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "repeat": {
+        "complete": 44,
+        "rows": 45,
+        "calls": 45,
+        "elapsed_seconds": 532.559,
+        "output_tokens": 24923,
+        "cost_usd": 0.0058866,
+        "cost_basis": "reported",
+        "errors": {
+          "openrouter_response_content_invalid": 1
+        },
+        "validation_errors": [],
+        "failed_post_ids": [
+          "2097550594831470859"
+        ],
+        "calls_detail": [
+          {
+            "latency_seconds": 13.8,
+            "output_tokens": 497,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.341,
+            "output_tokens": 485,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 23.61,
+            "output_tokens": 896,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.786,
+            "output_tokens": 331,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.033,
+            "output_tokens": 369,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 15.224,
+            "output_tokens": 612,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.521,
+            "output_tokens": 401,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.823,
+            "output_tokens": 376,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 13.059,
+            "output_tokens": 388,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 10.572,
+            "output_tokens": 471,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 14.867,
+            "output_tokens": 583,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.328,
+            "output_tokens": 438,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 10.882,
+            "output_tokens": 766,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.855,
+            "output_tokens": 499,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 13.745,
+            "output_tokens": 604,
+            "status": "error",
+            "error": "openrouter_response_content_invalid"
+          },
+          {
+            "latency_seconds": 10.435,
+            "output_tokens": 708,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 13.032,
+            "output_tokens": 633,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 18.41,
+            "output_tokens": 830,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.877,
+            "output_tokens": 422,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.383,
+            "output_tokens": 530,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 11.696,
+            "output_tokens": 538,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.453,
+            "output_tokens": 493,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.069,
+            "output_tokens": 718,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 15.721,
+            "output_tokens": 698,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 17.151,
+            "output_tokens": 721,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.8,
+            "output_tokens": 635,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.459,
+            "output_tokens": 422,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 10.178,
+            "output_tokens": 484,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 20.203,
+            "output_tokens": 962,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 15.763,
+            "output_tokens": 595,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 20.522,
+            "output_tokens": 1509,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.394,
+            "output_tokens": 234,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 16.117,
+            "output_tokens": 826,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.164,
+            "output_tokens": 295,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.405,
+            "output_tokens": 409,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 10.668,
+            "output_tokens": 475,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.054,
+            "output_tokens": 510,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.263,
+            "output_tokens": 340,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.527,
+            "output_tokens": 379,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.45,
+            "output_tokens": 275,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 12.022,
+            "output_tokens": 382,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.541,
+            "output_tokens": 501,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.782,
+            "output_tokens": 483,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.29,
+            "output_tokens": 508,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 20.1,
+            "output_tokens": 692,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "failed_again": [],
+      "recovered": [
+        "2079575705646465078",
+        "2083434397106327981",
+        "2095560256164098125",
+        "2095571537730363728",
+        "2097328541016743997"
+      ],
+      "new_failures": [
+        "2097550594831470859"
+      ]
+    },
+    "synthesis/incumbent": {
+      "previous": {
+        "complete": 45,
+        "rows": 45,
+        "calls": 45,
+        "elapsed_seconds": 178.021,
+        "output_tokens": 28764,
+        "cost_usd": 0.037266684,
+        "cost_basis": "estimated using previous report rates",
+        "errors": {},
+        "validation_errors": [],
+        "failed_post_ids": [],
+        "calls_detail": [
+          {
+            "latency_seconds": 5.396,
+            "output_tokens": 743,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.652,
+            "output_tokens": 431,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.292,
+            "output_tokens": 882,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.206,
+            "output_tokens": 355,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.142,
+            "output_tokens": 295,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.549,
+            "output_tokens": 1522,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.029,
+            "output_tokens": 721,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.131,
+            "output_tokens": 391,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.079,
+            "output_tokens": 375,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.893,
+            "output_tokens": 263,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.672,
+            "output_tokens": 515,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.541,
+            "output_tokens": 783,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.666,
+            "output_tokens": 642,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.769,
+            "output_tokens": 384,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.466,
+            "output_tokens": 319,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.978,
+            "output_tokens": 885,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.186,
+            "output_tokens": 908,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.03,
+            "output_tokens": 880,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.656,
+            "output_tokens": 375,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.973,
+            "output_tokens": 581,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.005,
+            "output_tokens": 442,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.656,
+            "output_tokens": 489,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.127,
+            "output_tokens": 1081,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.784,
+            "output_tokens": 674,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.69,
+            "output_tokens": 631,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.671,
+            "output_tokens": 587,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.582,
+            "output_tokens": 328,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.799,
+            "output_tokens": 349,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.863,
+            "output_tokens": 798,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.526,
+            "output_tokens": 1126,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 9.342,
+            "output_tokens": 1752,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.274,
+            "output_tokens": 330,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.633,
+            "output_tokens": 983,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.224,
+            "output_tokens": 267,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.554,
+            "output_tokens": 511,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.741,
+            "output_tokens": 376,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.342,
+            "output_tokens": 594,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.387,
+            "output_tokens": 268,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.372,
+            "output_tokens": 530,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.969,
+            "output_tokens": 218,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.291,
+            "output_tokens": 688,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.66,
+            "output_tokens": 583,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.253,
+            "output_tokens": 842,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.15,
+            "output_tokens": 1253,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.664,
+            "output_tokens": 814,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "repeat": {
+        "complete": 42,
+        "rows": 45,
+        "calls": 45,
+        "elapsed_seconds": 174.677,
+        "output_tokens": 28627,
+        "cost_usd": 0.037102284,
+        "cost_basis": "estimated using previous report rates",
+        "errors": {},
+        "validation_errors": [
+          {
+            "post_id": "2091583113914618174",
+            "error": "synthesis_response_schema_invalid",
+            "keys": [
+              "post_id",
+              "commentary_en",
+              "commentary_zh_cn",
+              "commentary_ja",
+              "commentary_en_note"
+            ],
+            "parser_fallback_reason": null
+          },
+          {
+            "post_id": "2097328541016743997",
+            "error": "synthesis_response_schema_invalid",
+            "keys": [
+              "verdict",
+              "reason"
+            ],
+            "parser_fallback_reason": "llm_non_json_response"
+          },
+          {
+            "post_id": "2072636451452530811",
+            "error": "synthesis_response_schema_invalid",
+            "keys": [
+              "verdict",
+              "reason"
+            ],
+            "parser_fallback_reason": "llm_non_json_response"
+          }
+        ],
+        "failed_post_ids": [
+          "2091583113914618174",
+          "2097328541016743997",
+          "2072636451452530811"
+        ],
+        "calls_detail": [
+          {
+            "latency_seconds": 4.041,
+            "output_tokens": 580,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.98,
+            "output_tokens": 387,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.358,
+            "output_tokens": 925,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.466,
+            "output_tokens": 306,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.918,
+            "output_tokens": 323,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.814,
+            "output_tokens": 1139,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.957,
+            "output_tokens": 544,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.524,
+            "output_tokens": 322,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.383,
+            "output_tokens": 392,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.159,
+            "output_tokens": 619,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.17,
+            "output_tokens": 449,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.983,
+            "output_tokens": 710,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.067,
+            "output_tokens": 782,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.885,
+            "output_tokens": 376,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.445,
+            "output_tokens": 365,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.077,
+            "output_tokens": 816,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.7,
+            "output_tokens": 1072,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.653,
+            "output_tokens": 752,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.503,
+            "output_tokens": 370,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.187,
+            "output_tokens": 578,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.977,
+            "output_tokens": 485,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.927,
+            "output_tokens": 1010,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 6.709,
+            "output_tokens": 1168,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.77,
+            "output_tokens": 672,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.666,
+            "output_tokens": 677,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.077,
+            "output_tokens": 673,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.727,
+            "output_tokens": 387,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.57,
+            "output_tokens": 438,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.652,
+            "output_tokens": 940,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.483,
+            "output_tokens": 724,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 8.645,
+            "output_tokens": 1704,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.556,
+            "output_tokens": 339,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 5.957,
+            "output_tokens": 1077,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.991,
+            "output_tokens": 269,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.65,
+            "output_tokens": 589,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 3.618,
+            "output_tokens": 429,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.253,
+            "output_tokens": 259,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.804,
+            "output_tokens": 223,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 2.474,
+            "output_tokens": 356,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 1.85,
+            "output_tokens": 273,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.189,
+            "output_tokens": 651,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.346,
+            "output_tokens": 671,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.257,
+            "output_tokens": 687,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 7.264,
+            "output_tokens": 1255,
+            "status": "received",
+            "error": null
+          },
+          {
+            "latency_seconds": 4.805,
+            "output_tokens": 864,
+            "status": "received",
+            "error": null
+          }
+        ]
+      },
+      "failed_again": [],
+      "recovered": [],
+      "new_failures": [
+        "2072636451452530811",
+        "2091583113914618174",
+        "2097328541016743997"
+      ]
+    }
+  }
+}

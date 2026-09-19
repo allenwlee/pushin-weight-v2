@@ -1,9 +1,6 @@
 """
 Tests for x_monitor.relevance (v1.2 commit 1).
 """
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from x_monitor.relevance import (
@@ -17,10 +14,8 @@ from x_monitor.relevance import (
     casefold_eq,
     filter_posts,
     is_url_only,
-    load_filter,
     looks_like_ai_account,
 )
-
 
 # --- is_url_only ---------------------------------------------------------
 
@@ -304,48 +299,13 @@ class TestFilterMixed:
         assert drop_reasons[REASON_HARD_DROP_NO_SIGNAL] == 1
 
 
-# --- load_filter ---------------------------------------------------------
+# --- retired YAML loader -------------------------------------------------
 
 
-class TestLoadFilter:
-    def test_missing_file_returns_empty_config(self):
-        with tempfile.TemporaryDirectory() as d:
-            cfg = load_filter("minimax", Path(d))
-            assert isinstance(cfg, RelevanceConfig)
-            assert cfg.canonical_handles == []
+def test_per_brand_yaml_filter_loader_is_retired():
+    import x_monitor.relevance as relevance
 
-    def test_loads_real_yaml(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            (root / "filters").mkdir()
-            (root / "filters" / "minimax.yaml").write_text(
-                "canonical_handles: [MiniMaxAI]\n"
-                "must_have_any: [minimax, m3]\n"
-                "cjk_tokens: [海螺]\n"
-            )
-            cfg = load_filter("minimax", root)
-            assert cfg.canonical_handles == ["MiniMaxAI"]
-            assert cfg.must_have_any == ["minimax", "m3"]
-            assert cfg.cjk_tokens == ["海螺"]
-
-    def test_wrapped_filter_key_supported(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            (root / "filters").mkdir()
-            (root / "filters" / "x.yaml").write_text(
-                "filter:\n  canonical_handles: [Foo]\n  notes: hi\n"
-            )
-            cfg = load_filter("x", root)
-            assert cfg.canonical_handles == ["Foo"]
-            assert cfg.notes == "hi"
-
-    def test_invalid_yaml_raises(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            (root / "filters").mkdir()
-            (root / "filters" / "x.yaml").write_text("cjk_tokens: [X]\n")  # 1-char CJK
-            with pytest.raises(ValueError, match="too short"):
-                load_filter("x", root)
+    assert not hasattr(relevance, "load_filter")
 
 
 # --- looks_like_ai_account -----------------------------------------------

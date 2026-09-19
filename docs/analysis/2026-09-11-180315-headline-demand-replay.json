@@ -1,0 +1,118 @@
+{
+  "candidate": {
+    "critic_audit_percent": 5,
+    "critic_risk_routing_enabled": true,
+    "fingerprint_band_percent": 5,
+    "input_usd_per_million": "0.44",
+    "materiality_policy_version": "headline-materiality-v2",
+    "output_usd_per_million": "1.32",
+    "pricing_version": "deepseek-v4-flash-peak-2026-09-02",
+    "revision": "83064ad"
+  },
+  "decision": {
+    "passed": true,
+    "rule": "upper-bound completed calls and cost must fall while replayed last-good coverage is at least historical coverage"
+  },
+  "excluded_noncompleted_calls": {
+    "ambiguous": 2,
+    "failed": 5
+  },
+  "limitations": [
+    "This is a read-only counterfactual over saved production runs, not new provider output.",
+    "The all-brands-visible scenario intentionally claims no savings from cold demand.",
+    "The upper bound keeps full historical token counts even when selected packets are smaller.",
+    "Risk-routed batch composition is estimated from saved per-run editor risk rates."
+  ],
+  "method": {
+    "demand_scenario": "all snapshot brands remain visible for the full replay",
+    "historical_workload": "completed saved provider calls and reported tokens",
+    "provider_transport": "none",
+    "risk_routed": "the current deterministic critic policy is applied to saved editor responses; its per-run risk rate is applied to replayed batches",
+    "upper_bound": "selected dossiers are compacted with production batching; every replayed editor batch receives a critic; retained stages use the most expensive applicable saved calls from that run; any missing stage uses the most expensive comparable source call"
+  },
+  "output": {
+    "historical_approved_publications": 806,
+    "historical_last_good_coverage": 0.775947,
+    "last_good_coverage_delta": 0.0,
+    "replayed_approved_publications": 698,
+    "replayed_last_good_coverage": 0.775947,
+    "replayed_publication_validity": 1.0
+  },
+  "reductions": {
+    "risk_routed": {
+      "cost_pct": 3.38,
+      "input_tokens_pct": 3.01,
+      "output_tokens_pct": 4.75,
+      "provider_calls_pct": 7.98,
+      "total_tokens_pct": 3.15
+    },
+    "upper_bound": {
+      "cost_pct": 2.54,
+      "input_tokens_pct": 2.22,
+      "output_tokens_pct": 3.74,
+      "provider_calls_pct": 6.81,
+      "total_tokens_pct": 2.34
+    }
+  },
+  "schema_version": "headline-demand-replay/v1",
+  "selection": {
+    "dossiers": 5280,
+    "eligible_dossiers": 3470,
+    "historical_editor_batches": 737,
+    "replayed_editor_batches": 679,
+    "saved_editor_batches_requiring_critic": 712,
+    "selected_eligible_dossiers": 3112,
+    "selected_materially_changed": 3174,
+    "suppressed_unchanged": 2106,
+    "suppression_pct": 39.89
+  },
+  "source": {
+    "end_exclusive": "2026-09-11T00:00:00+00:00",
+    "identity": "pushinweight-prod-20260910-165134.dump",
+    "run_count": 160,
+    "source_sha256": "49e39d6d96134fe44df8a3c20477545cd4c97bbe93be649fa68da0a9835521db",
+    "start_inclusive": "2026-09-03T00:00:00+00:00",
+    "windows": [
+      1,
+      7
+    ]
+  },
+  "workloads": {
+    "historical": {
+      "calls_by_stage": {
+        "critic": 732,
+        "editor": 737,
+        "rank": 160
+      },
+      "cost_usd": "36.237169",
+      "input_tokens": 64864034,
+      "output_tokens": 5831056,
+      "provider_calls": 1629,
+      "total_tokens": 70695090
+    },
+    "new_policy_risk_routed": {
+      "calls_by_stage": {
+        "critic": 660,
+        "editor": 679,
+        "rank": 160
+      },
+      "cost_usd": "35.014001",
+      "input_tokens": 62914382,
+      "output_tokens": 5554298,
+      "provider_calls": 1499,
+      "total_tokens": 68468680
+    },
+    "new_policy_upper_bound": {
+      "calls_by_stage": {
+        "critic": 679,
+        "editor": 679,
+        "rank": 160
+      },
+      "cost_usd": "35.316878",
+      "input_tokens": 63427258,
+      "output_tokens": 5612791,
+      "provider_calls": 1518,
+      "total_tokens": 69040049
+    }
+  }
+}

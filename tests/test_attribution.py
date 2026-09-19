@@ -9,12 +9,12 @@ case-insensitive, unknown handles, NULL entities, etc.).
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
 
 from x_monitor.attribution import (
-    AnthropicClaudeClient,
     BrandRow,
     MentionRow,
     attribute_to_brands,
@@ -28,7 +28,6 @@ from x_monitor.attribution import (
     extract_user_mentions,
     validate_raw_token,
 )
-
 
 # --- Shared fixtures: 11-brand registry + 4 detection tables ------------
 
@@ -637,17 +636,17 @@ def test_resolve_signal_model_resolution_ladder(monkeypatch):
       1. ANTHROPIC_MODEL env wins always.
       2. else, MiniMax-M3.0 if ANTHROPIC_BASE_URL routes through minimax.io.
       3. else, deepseek-v4-flash if ANTHROPIC_BASE_URL routes through deepseek.com.
-      4. else, claude-haiku-4-5 (direct api.anthropic.com).
+      4. else, deepseek-v4-flash.
     """
     from x_monitor.attribution import _resolve_signal_model
 
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_MODEL", raising=False)
     monkeypatch.delenv("X_MONITOR_CLASSIFIER_BASE_URL", raising=False)
 
-    # (env unset, no proxy) -> claude-haiku-4-5
+    # (env unset, no explicit route) -> deepseek-v4-flash
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
-    assert _resolve_signal_model() == "claude-haiku-4-5"
+    assert _resolve_signal_model() == "deepseek-v4-flash"
 
     # (env unset, minimax proxy) -> MiniMax-M3.0 (the fix's default)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
@@ -776,6 +775,7 @@ def test_validate_deepseek_response_shape_missing_unsanctioned_flags(caplog):
     for non-list input).
     """
     import logging
+
     from x_monitor.attribution import _validate_deepseek_response_shape
 
     missing_flags = {
@@ -795,6 +795,7 @@ def test_validate_deepseek_response_shape_raises_on_drift():
     message), per plan U3 test scenario list.
     """
     import pytest
+
     from x_monitor.attribution import _validate_deepseek_response_shape
 
     # (a) count mismatch
@@ -855,6 +856,8 @@ def test_call_signal_with_retry_threads_thinking_through():
     captured = {}
 
     class FakeClient:
+        _base_url = ""
+
         def messages_create(self, **kwargs):
             captured.update(kwargs)
             return {"results": []}
@@ -866,6 +869,7 @@ def test_call_signal_with_retry_threads_thinking_through():
     captured.clear()
     _call_signal_with_retry(client, prompt, max_tokens=4096, thinking=None)
     assert "thinking" not in captured
+    assert "system" not in captured
     # The model is whatever _SIGNAL_MODEL resolved to at import time
     # (cached). The test doesn't pin the model — only the thinking
     # threading behavior.
@@ -905,6 +909,7 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
             }
 
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    FakeClient._base_url = "https://api.deepseek.com/anthropic"
     captured.clear()
     tweets = [{"tweet_id": f"t{i}", "text": f"tweet {i}", "brand_ids": ["minimax"]} for i in range(3)]
     classify_batch_pragmatics_full(
@@ -919,6 +924,7 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
 
     # M3 path: thinking=None, parameter omitted
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+    FakeClient._base_url = "https://api.minimax.io/anthropic"
     captured.clear()
     classify_batch_pragmatics_full(
         tweets=tweets,
@@ -931,13 +937,10 @@ def test_classify_batch_pragmatics_full_resolves_thinking_default(monkeypatch):
     )
 
 
-def test_classify_batch_pragmatics_full_shape_drift_emits_empty(monkeypatch):
-    """When the LLM returns a malformed response (drift), the new
-    _validate_deepseek_response_shape safety net catches the drift,
-    the per-batch path emits empty for the whole batch, and
-    on_batch_error is invoked with the ValueError. This is the same
-    fail-soft contract that pre-swap used for the count-mismatch case.
-    """
+def test_classify_batch_pragmatics_full_shape_drift_falls_back_fail_closed(
+    monkeypatch,
+):
+    """Malformed batch responses invoke fallback and remain unpublished."""
     from x_monitor.attribution import classify_batch_pragmatics_full
 
     class FakeClient:
@@ -956,12 +959,108 @@ def test_classify_batch_pragmatics_full_shape_drift_emits_empty(monkeypatch):
         on_batch_error=lambda batch, exc: captured_exc.append(exc),
         max_tokens=4096,
     )
-    # Whole batch emits empty
-    assert results == [{"by_brand": {}, "unsanctioned_flags": []}]
-    # on_batch_error was called with the shape-drift ValueError
-    assert len(captured_exc) == 1
-    assert isinstance(captured_exc[0], ValueError)
-    assert "shape drift" in str(captured_exc[0])
+    assert len(results) == 1
+    assert results[0]["valid"] is False
+    assert results[0]["by_brand"] == {}
+    assert "classification_trace" not in results[0]
+    # Shape rejection is a parser result, not a transport exception; no
+    # follow-up review or repair call is fabricated.
+    assert captured_exc == []
+    assert all(isinstance(exc, ValueError) for exc in captured_exc)
+    assert all("shape drift" in str(exc) for exc in captured_exc)
+
+
+def test_classify_batch_rejects_invalid_role_without_a_repair_call(monkeypatch):
+    """The locked two-role path fails closed instead of adding a third call."""
+    from x_monitor.attribution import (
+        _STAGE1_POST_TYPE_KEYS,
+        _STAGE1_PRODUCT_LABEL_KEYS,
+        classify_batch_pragmatics_full,
+    )
+
+    calls = []
+
+    class FakeClient:
+        def messages_create(self, **kwargs):
+            calls.append(kwargs)
+            payload = json.loads(kwargs["messages"][0]["content"])
+            if "source" in payload[0]:
+                packet = payload[0]
+                return {
+                    "results": [
+                        {
+                            "example_id": packet["example_id"],
+                            "brand_id": packet["brand_id"],
+                            "decision": "accept",
+                            "classification": packet["primary"],
+                            "post_type_verdicts": {
+                                key: key in packet["primary"]["post_types"]
+                                for key in _STAGE1_POST_TYPE_KEYS
+                            },
+                            "product_label_verdicts": {
+                                key: key in packet["primary"]["product_labels"]
+                                for key in _STAGE1_PRODUCT_LABEL_KEYS
+                            },
+                            "change_reasons": [],
+                            "evidence": [],
+                        }
+                    ]
+                }
+            if payload[0]["tweet_id"] == "_single_":
+                return {
+                    "results": [
+                        {
+                            "tweet_id": "_single_",
+                            "classifications": [
+                                {
+                                    "brand_id": "minimax",
+                                    "outcome": "classified",
+                                    "post_types": ["complaint"],
+                                    "product_labels": ["complaint"],
+                                    "sentiment": "negative",
+                                    "china_nationalism": "none",
+                                    "us_nationalism": "none",
+                                }
+                            ],
+                            "unsanctioned_flags": [],
+                        }
+                    ]
+                }
+            return {
+                "results": [
+                    {
+                        "tweet_id": "t1",
+                        "classifications": [
+                            {
+                                "brand_id": "minimax",
+                                "outcome": "classified",
+                                "post_types": (
+                                    ["complaint"]
+                                    if len(calls) == 1
+                                    else ["opinions_reactions"]
+                                ),
+                                "product_labels": ["complaint"],
+                                "sentiment": "negative",
+                                "china_nationalism": "none",
+                                "us_nationalism": "none",
+                            }
+                        ],
+                        "unsanctioned_flags": [],
+                    }
+                ]
+            }
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+    result = classify_batch_pragmatics_full(
+        tweets=[{"tweet_id": "t1", "text": "bad", "brand_ids": ["minimax"]}],
+        brand_registry=[],
+        anthropic_client=FakeClient(),
+        telemetry_context={"prompt_version": "stage1-prompt-v23"},
+    )
+
+    assert len(calls) == 2
+    assert result[0]["valid"] is False
+    assert result[0]["by_brand"] == {}
 
 
 def test_classify_batch_pragmatics_full_uses_max_tokens_helper_at_call_site(

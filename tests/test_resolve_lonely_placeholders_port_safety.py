@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
-
 
 # --- Re-entrancy ------------------------------------------------------
 
@@ -34,27 +32,55 @@ from django.core.management import call_command
 @pytest.mark.django_db(transaction=True)
 def test_skip_dead_lettered_excludes_already_logged(tmp_path, monkeypatch):
     """Pre-populated dead-letter log is loaded + applied during apply."""
-    # Live db is unreachable (port exhaustion); use sqlite test DB.
-    # Populate dead-letter log with 2 fake handles.
+    from core.models import Account
+    from monitor.management.commands import resolve_lonely_placeholders as cmd_mod
+
+    Account.objects.bulk_create(
+        [
+            Account(author_id="handle:skip1", handle="skip1"),
+            Account(author_id="handle:skip2", handle="skip2"),
+            Account(author_id="handle:keepme", handle="keepme"),
+        ]
+    )
+
     dl_log = tmp_path / "lonely-apply-dead-letter.log"
     dl_log.write_text(
         json.dumps({"handle": "skip1", "reason": "http_404", "ts": "x"}) + "\n"
         + json.dumps({"handle": "skip2", "reason": "not_found_200", "ts": "x"}) + "\n"
     )
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-    # Dry-run -- we just verify the candidate count excludes the dead-lettered.
     from io import StringIO
-    from django.db import connection
-    with connection.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM accounts WHERE author_id LIKE 'handle:%'")
-        # Insert a couple of placeholder rows so the query returns a count.
-        pass
+
+    captured = {}
+
+    def fake_run_apply_loop(**kwargs):
+        captured.update(kwargs)
+        return {
+            "dry_run": False,
+            "total_placeholders": len(kwargs["candidate_placeholders"]),
+            "looked_up": 0,
+            "resolved": 0,
+            "dead_lettered": 0,
+            "partial": False,
+        }
+
+    monkeypatch.setattr(cmd_mod, "run_apply_loop", fake_run_apply_loop)
+    monkeypatch.setattr(
+        cmd_mod,
+        "require_twitterapi_api_key",
+        lambda _purpose: "fixture-key",
+    )
+
     out = StringIO()
-    call_command("resolve_lonely_placeholders", stdout=out)
-    # The dry-run summary includes skipped_dead_lettered.
-    text = out.getvalue()
-    assert "skipped_dead_lettered: 2" in text or '"skipped_dead_lettered": 2' in text
+    call_command(
+        "resolve_lonely_placeholders",
+        "--apply",
+        "--apply-log",
+        str(tmp_path / "lonely-apply.log"),
+        "--dead-letter-log",
+        str(dl_log),
+        stdout=out,
+    )
+    assert captured["candidate_placeholders"] == [("keepme", "handle:keepme")]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -88,10 +114,17 @@ def test_partial_true_on_max_seconds_exceeded(monkeypatch, tmp_path):
         cmd_mod, "run_apply_loop",
         lambda **kwargs: fake_summary,
     )
+    monkeypatch.setattr(
+        cmd_mod,
+        "require_twitterapi_api_key",
+        lambda _purpose: "fixture-key",
+    )
 
     out = StringIO()
     call_command(
         "resolve_lonely_placeholders", "--apply", "--max-seconds", "1",
+        "--apply-log", str(tmp_path / "lonely-apply.log"),
+        "--dead-letter-log", str(tmp_path / "lonely-apply-dead-letter.log"),
         stdout=out,
     )
     text = out.getvalue()
@@ -108,7 +141,7 @@ def test_concurrency_default_is_two():
     cmd = Command()
     parser = cmd.create_parser("manage.py", "resolve_lonely_placeholders")
     opts = parser.parse_args([])
-    assert opts["concurrency"] == 2
+    assert opts.concurrency == 2
 
 
 @pytest.mark.django_db
@@ -118,7 +151,7 @@ def test_rate_qps_default_is_five():
     cmd = Command()
     parser = cmd.create_parser("manage.py", "resolve_lonely_placeholders")
     opts = parser.parse_args([])
-    assert opts["rate_qps"] == 5.0
+    assert opts.rate_qps == 5.0
 
 
 @pytest.mark.asyncio

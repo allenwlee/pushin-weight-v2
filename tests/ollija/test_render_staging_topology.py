@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGING_DATABASE = "pushinweight-staging-db"
 STAGING_BROKER = "pushinweight-staging-headlines-broker"
 DORMANT_SCHEDULE = "0 0 31 2 *"
-HEADLINE_CONTROL_REVISION = "staging-v23-per-brand-activation-20260831"
+HEADLINE_CONTROL_REVISION = "staging-v24-integrated-ja-demand-20260911"
 
 
 def _blueprint() -> dict:
@@ -35,7 +35,9 @@ def test_staging_blueprint_declares_one_resource_for_each_owned_role() -> None:
         STAGING_BROKER: "keyvalue",
         "pushinweight-staging-web": "web",
         "pushinweight-staging-headlines": "worker",
+        "pushinweight-staging-synthesis": "worker",
         "pushinweight-staging-harvest": "cron",
+        "pushinweight-staging-jobs": "cron",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         STAGING_DATABASE
@@ -55,9 +57,22 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     assert "XMONITOR_DRY_RUN" not in environment
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
     assert environment["X_MONITOR_HEADLINE_SERVING_ENABLED"]["value"] == "True"
-    assert environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
-    assert environment["X_MONITOR_HEADLINE_PUBLICATION_SOURCE"]["value"] == "prefer_per_brand"
-    assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"] == HEADLINE_CONTROL_REVISION
+    assert (
+        environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
+    )
+    assert (
+        environment["X_MONITOR_HEADLINE_PUBLICATION_SOURCE"]["value"]
+        == "prefer_per_brand"
+    )
+    assert (
+        environment["X_MONITOR_HEADLINE_CONTROL_REVISION"]["value"]
+        == HEADLINE_CONTROL_REVISION
+    )
+    assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED" not in environment
     assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
@@ -67,6 +82,7 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     }
     assert not {
         "DEEPSEEK_API_KEY",
+        "DEEPINFRA_API_KEY",
         "TWITTERAPI_IO_SCHEDULED_API_KEY",
         "TWITTERAPI_IO_ON_DEMAND_API_KEY",
     } & set(environment)
@@ -89,7 +105,13 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     assert (
         environment["X_MONITOR_STAGING_ACCEPTANCE_SERVICE"]["value"] == service["name"]
     )
-    assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "True"
+    assert environment["X_MONITOR_HEADLINE_ENQUEUE_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED"]["value"] == "True"
+    assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )
@@ -101,6 +123,7 @@ def test_staging_harvester_is_dormant_guarded_and_hard_scoped() -> None:
     assert "OLLIJA_STAGING_MODE" not in environment
     assert environment["TWITTERAPI_IO_SCHEDULED_API_KEY"]["sync"] is False
     assert environment["TWITTERAPI_IO_ON_DEMAND_API_KEY"]["sync"] is False
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
     assert not any("fromGroup" in entry for entry in service["envVars"])
 
 
@@ -116,7 +139,12 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
     assert "--prefetch-multiplier=1" in command
     assert " beat " not in f" {command} "
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
-    assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "True"
+    assert environment["X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_HEADLINE_DEMAND_SHAPING_ENABLED"]["value"] == "False"
+    assert (
+        environment["X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED"]["value"]
+        == "False"
+    )
     assert (
         environment["X_MONITOR_HEADLINE_ACTIVATION_STATE"]["value"] == "owner_override"
     )
@@ -126,8 +154,30 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
         == HEADLINE_CONTROL_REVISION
     )
     assert environment["DEEPSEEK_API_KEY"]["sync"] is False
+    assert "DEEPINFRA_API_KEY" not in environment
     assert "OLLIJA_STAGING_MODE" not in environment
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
+    assert not any("fromGroup" in entry for entry in service["envVars"])
+
+
+def test_staging_synthesis_worker_is_database_only_and_provider_scoped() -> None:
+    service = _service(_blueprint(), "pushinweight-staging-synthesis")
+    environment = _environment_by_key(service)
+
+    assert service["branch"] == "staging"
+    assert service["startCommand"] == "python manage.py run_synthesis_worker"
+    assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
+    assert environment["X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED"]["value"] == "False"
+    assert environment["X_MONITOR_SYNTHESIS_ACTIVATION_STATE"]["value"] == "pending"
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
+    assert "DEEPSEEK_API_KEY" not in environment
+    assert not {
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+        "TWITTERAPI_IO_SCHEDULED_API_KEY",
+        "TWITTERAPI_IO_ON_DEMAND_API_KEY",
+        "OLLIJA_STAGING_MODE",
+    } & set(environment)
     assert not any("fromGroup" in entry for entry in service["envVars"])
 
 
@@ -136,6 +186,7 @@ def test_every_stateful_runtime_binds_only_to_staging_database_and_broker() -> N
     for service_name in (
         "pushinweight-staging-web",
         "pushinweight-staging-headlines",
+        "pushinweight-staging-synthesis",
         "pushinweight-staging-harvest",
     ):
         environment = _environment_by_key(_service(blueprint, service_name))

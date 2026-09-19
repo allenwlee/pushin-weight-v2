@@ -426,14 +426,11 @@ def _build_client_for_base_url(
 
 
 def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaudeClient | None:
-    """Return an `AnthropicClaudeClient` for the classifier.
+    """Return an Anthropic-compatible client for the classifier.
 
-    The classifier's effective base URL is `X_MONITOR_CLASSIFIER_BASE_URL`
-    when set, otherwise `ANTHROPIC_BASE_URL`. This lets M3 stay as the
-    process-wide default while the classifier routes to DS V4 — set
-    `X_MONITOR_CLASSIFIER_BASE_URL=https://api.deepseek.com/anthropic`
-    in the shell to override just the classifier without flipping
-    other LLM callers in the same process.
+    The loaded config is authoritative. Role-specific environment overrides
+    remain available for config files that omit the field; a stale shared
+    `ANTHROPIC_BASE_URL` never redirects the scheduled classifier.
 
     The production caller passes `cfg.llm.classifier_model` explicitly
     (committed default `deepseek-v4-flash`).
@@ -445,38 +442,108 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
       * If the classifier base URL contains "deepseek.com", the operator is
         routing through DeepSeek V4's Anthropic-compatible endpoint.
         The endpoint accepts DEEPSEEK_API_KEY.
-      * Otherwise, talk to api.anthropic.com directly using
-        ANTHROPIC_API_KEY (the `sk-ant-api…` key from `~/.env.secrets`).
+      * An explicitly configured Anthropic URL uses ANTHROPIC_API_KEY.
 
     Used by the pipeline's classification stage. Returns None when no
     auth credential is available so classification falls back to no-LLM.
     """
     import os
-    # When cfg is None (v1 callers), this still works — the classifier's
-    # base URL comes from env vars only; the model name resolves at
-    # _call_signal_with_retry time via _resolve_signal_model(cfg) which
-    # also accepts cfg=None.
-    base_url = os.environ.get(
-        "X_MONITOR_CLASSIFIER_BASE_URL",
-        os.environ.get("ANTHROPIC_BASE_URL"),
+    from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL
+
+    base_url = (
+        getattr(getattr(cfg, "llm", None), "classifier_base_url", None)
+        or os.environ.get("X_MONITOR_CLASSIFIER_BASE_URL")
+        or DEEPSEEK_ANTHROPIC_BASE_URL
     )
     return _build_client_for_base_url(base_url, caller_label="classifier")
 
 
-def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClaudeClient | None:
+def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
+    """Build only the classifier's configured transport.
+
+    The generic Anthropic-compatible factory remains for legacy, relevancy, and
+    extraction callers. Direct DeepInfra and OpenRouter are deliberately
+    opt-in at this classifier seam and neither falls back to another provider
+    or credential.
+    """
+    if cfg is None:
+        from x_monitor.config import load_config
+
+        cfg = load_config(Path("config.yaml"))
+
+    provider_name = getattr(cfg.llm, "classifier_provider", "anthropic")
+    if provider_name == "deepinfra":
+        from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+        # The adapter obtains only DEEPINFRA_API_KEY.  This direct-provider
+        # route deliberately has no OpenRouter, DeepSeek, or Anthropic
+        # fallback: a missing dedicated key leaves classification pending.
+        return DeepInfraChatCompletionsClient.from_config(
+            model=cfg.llm.classifier_model,
+            base_url=cfg.llm.classifier_base_url,
+            request_profile=cfg.llm.classifier_deepinfra_request_profile,
+        )
+    if provider_name == "openrouter":
+        from x_monitor.openrouter import OpenRouterChatCompletionsClient
+
+        provider = getattr(cfg.llm, "classifier_openrouter_provider", None)
+        if not provider:
+            logger.warning("OpenRouter classifier has no pinned provider; skipping")
+            return None
+        # OPENROUTER_API_KEY is intentionally the only credential considered
+        # here.  Missing key, route mismatch, or policy rejection stays
+        # unavailable; it never falls through to Anthropic/DeepSeek.
+        return OpenRouterChatCompletionsClient.from_config(
+            model=cfg.llm.classifier_model,
+            provider=provider,
+            data_collection=cfg.llm.classifier_openrouter_data_collection,
+            max_input_price=(
+                float(cfg.llm.classifier_openrouter_max_input_price)
+                if cfg.llm.classifier_openrouter_max_input_price is not None else None
+            ),
+            max_output_price=(
+                float(cfg.llm.classifier_openrouter_max_output_price)
+                if cfg.llm.classifier_openrouter_max_output_price is not None else None
+            ),
+            response_provider=getattr(cfg.llm, "classifier_openrouter_response_provider", None),
+            response_model=getattr(cfg.llm, "classifier_openrouter_response_model", None),
+            zdr=bool(getattr(cfg.llm, "classifier_openrouter_zdr", False)),
+            endpoint_tag=getattr(cfg.llm, "classifier_openrouter_endpoint_tag", None),
+            reasoning_enabled=getattr(cfg.llm, "classifier_openrouter_reasoning_enabled", None),
+            quantizations=getattr(cfg.llm, "classifier_openrouter_quantizations", None),
+            request_profile=getattr(cfg.llm, "classifier_openrouter_request_profile", None),
+        )
+    return build_anthropic_client_from_env(cfg)
+
+
+def build_relevancy_client_from_env(cfg: Config | None = None) -> Any | None:
+    """Build the binary relevancy client without crossing provider protocols."""
+    if cfg is None:
+        from x_monitor.config import load_config
+
+        cfg = load_config(Path("config.yaml"))
+    if getattr(cfg.llm, "classifier_provider", "anthropic") == "deepinfra":
+        if cfg.llm.relevancy_model != cfg.llm.classifier_model:
+            logger.warning(
+                "DeepInfra relevancy model must match the configured classifier "
+                "route; relevancy disabled"
+            )
+            return None
+        return build_classifier_client_from_env(cfg)
+    return build_anthropic_client_from_env(cfg)
+
+
+def build_translator_client_from_env(cfg: Config | None = None) -> Any | None:
     """Return an `AnthropicClaudeClient` for the translation stage.
 
-    Reads the base URL from `cfg.llm.translator_base_url` when set,
-    otherwise falls back to the `ANTHROPIC_BASE_URL` env var. When
-    `ANTHROPIC_BASE_URL` is also unset, defaults to direct Anthropic.
+    Reads the base URL from `cfg.llm.translator_base_url`. When config is not
+    available, the role-specific environment value applies, followed by the
+    explicit DeepSeek default. Shared `ANTHROPIC_BASE_URL` is intentionally
+    ignored so an obsolete provider setting cannot redirect scheduled work.
     The model name comes from `cfg.llm.translator_model` (committed default
     `deepseek-v4-flash`).
 
-    Reads the translator's base URL NOT the classifier's
-    `X_MONITOR_CLASSIFIER_BASE_URL` override — the translator always
-    uses the process-wide default endpoint (typically the MiniMax
-    proxy via `api.minimax.io/anthropic`). The classifier can
-    independently route to DeepSeek.
+    The translator and classifier remain independently configurable.
 
     When `cfg is None`, falls back to `load_config(Path("config.yaml"))`
     — preserves backward compat with v1 callers (xrun.py, xmain.py,
@@ -487,7 +554,25 @@ def build_translator_client_from_env(cfg: Config | None = None) -> AnthropicClau
     """
     import os
     if cfg is None:
-        from x_monitor.config import load_config
+        from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL, load_config
         cfg = load_config(Path("config.yaml"))
-    base_url = cfg.llm.translator_base_url or os.environ.get("ANTHROPIC_BASE_URL")
+    else:
+        from x_monitor.config import DEEPSEEK_ANTHROPIC_BASE_URL
+    if getattr(cfg.llm, "translator_provider", "anthropic") == "deepinfra":
+        from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+        # The direct Gemma route accepts only DEEPINFRA_API_KEY.  Do not let a
+        # stale DeepSeek/Anthropic/OpenRouter credential turn this into a
+        # different scheduled translation provider.
+        return DeepInfraChatCompletionsClient.from_config(
+            model=cfg.llm.translator_model,
+            base_url=cfg.llm.translator_base_url,
+            request_profile=cfg.llm.translator_deepinfra_request_profile,
+        )
+
+    base_url = (
+        cfg.llm.translator_base_url
+        or os.environ.get("X_MONITOR_TRANSLATOR_BASE_URL")
+        or DEEPSEEK_ANTHROPIC_BASE_URL
+    )
     return _build_client_for_base_url(base_url, caller_label="translator")

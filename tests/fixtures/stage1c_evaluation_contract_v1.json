@@ -1,0 +1,56 @@
+{
+  "schema_version": "stage1c-evaluation-contract-v1",
+  "contract_status": "ready_for_measurement",
+  "classification_strata": [
+    {
+      "id": "prevalence",
+      "minimum_examples": 300,
+      "purpose": "Estimate false positives at the natural post distribution."
+    },
+    {
+      "id": "rare_positive",
+      "minimum_examples": 120,
+      "purpose": "Measure job-listing and personnel-change precision and recall."
+    },
+    {
+      "id": "event_opportunity_boundary",
+      "minimum_examples": 80,
+      "purpose": "Measure attendance versus bounded action-for-benefit decisions."
+    }
+  ],
+  "required_slices": {
+    "languages": ["en", "zh-cn", "ja"],
+    "sources": ["official", "staff", "named_person", "third_party"],
+    "personnel_statuses": ["current", "former", "future", "unknown"]
+  },
+  "assessment_floors": {
+    "classification": {
+      "metrics": ["per_type_precision", "per_type_recall", "prevalence_false_positive_rate"],
+      "values": "preregister_before_candidate_scoring"
+    },
+    "job_discovery": {
+      "metrics": ["post_precision", "coverage_estimate"],
+      "values": "preregister_before_candidate_scoring"
+    },
+    "personnel_discovery": {
+      "metrics": ["post_precision", "coverage_estimate"],
+      "values": "preregister_before_candidate_scoring"
+    },
+    "job_extraction": {
+      "metrics": ["role_precision", "role_recall", "field_completeness", "provenance_retention"],
+      "values": "preregister_before_candidate_scoring"
+    },
+    "affiliation_extraction": {
+      "metrics": ["claim_precision", "claim_recall", "status_accuracy", "date_non_fabrication"],
+      "values": "preregister_before_candidate_scoring"
+    }
+  },
+  "counting_units": {
+    "classification": "post_brand",
+    "discovery": "source_post",
+    "job_extraction": "listing_or_requisition",
+    "affiliation_extraction": "person_brand_claim",
+    "organizations": "review_candidate_or_known_brand"
+  },
+  "production_rule": "Every required slice needs support and every preregistered floor must pass."
+}

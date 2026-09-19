@@ -61,6 +61,7 @@ LANGUAGE_CODE = "zh-hans"
 LANGUAGES = [
     ("en", "English"),
     ("zh-hans", "简体中文"),
+    ("ja", "日本語"),
 ]
 
 LOCALE_PATHS = [BASE_DIR / "locale"]
@@ -174,7 +175,6 @@ OLLIJA_STAGING_ALLOWED_EMAILS = frozenset(
     for email in env.list("OLLIJA_STAGING_ALLOWED_EMAILS", default=[])
     if email.strip()
 )
-
 # ============================================================================
 # django-allauth — Google OAuth
 # ============================================================================

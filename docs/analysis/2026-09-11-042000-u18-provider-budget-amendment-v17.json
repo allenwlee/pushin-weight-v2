@@ -1,0 +1,47 @@
+{
+  "schema_version": "u18-provider-budget-amendment-v1",
+  "frozen_at": "2026-09-11T04:20:00Z",
+  "reason": "Flash prompt v9 improved post-type Jaccard and micro F1 at production batch size 20 but reduced product-label recall and repeated one namespace violation; v3r9 adds only an independent five-label pass and an explicit request/idea namespace rule while holding the model, taxonomy, temperature, strict parser, development cohort, and transport topology fixed",
+  "source_budgets": [
+    "2026-09-11-034500-u18-provider-budget-amendment-v15.json"
+  ],
+  "lanes": {
+    "candidate_v3r9": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 20,
+      "maximum_examples": 500,
+      "maximum_requests": 25,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 50,
+      "max_tokens_per_attempt": 4096,
+      "maximum_input_tokens": 2600000,
+      "maximum_output_tokens": 204800,
+      "maximum_cost_usd": "0.57",
+      "twitterapi_credits": 0
+    },
+    "candidate_v3r9_fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "temperature": 0,
+      "pricing_version": "deepseek-v4-flash-2026-09-11",
+      "input_usd_per_million": "0.14",
+      "output_usd_per_million": "0.28",
+      "batch_size": 1,
+      "maximum_examples": 100,
+      "maximum_requests": 100,
+      "maximum_retries_per_request": 1,
+      "maximum_transport_attempts": 200,
+      "max_tokens_per_attempt": 1200,
+      "maximum_input_tokens": 1200000,
+      "maximum_output_tokens": 240000,
+      "maximum_cost_usd": "0.24",
+      "twitterapi_credits": 0
+    }
+  },
+  "global_stop": "The final development prompt candidate and fallback refuse the next request when any logical-request, transport-attempt, per-request retry, token, or dollar cap would be exceeded; fallback is capped at 100 posts, unused capacity cannot move between lanes, and this tuned cohort cannot serve as the final unseen classification gate."
+}

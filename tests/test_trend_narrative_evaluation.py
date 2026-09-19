@@ -476,7 +476,7 @@ def _facts(window, value):
                         family: {"labels": [{"brand_change_pp": str(value + 2)}]}
                         for family in (
                             "post_type",
-                            "discourse",
+                            "product_label",
                             "sentiment",
                             "china_nationalism",
                             "us_nationalism",

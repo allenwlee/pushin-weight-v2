@@ -1,0 +1,146 @@
+{
+  "results": [
+    {
+      "schema": "parent-reconciled-translation-review-v1",
+      "created_at": "2026-09-17T13:42:40.031510+00:00",
+      "candidate": "HY-MT2-30B-A3B v3",
+      "method": "Parent reconciliation of full independent source-only reviews and direct checks of disputed output spans. Known errors accepted on source evidence; reviewer omissions superseded. Reviewers knew model identity. This is retained regression evidence, not new human adjudication or fresh qualification.",
+      "source_posts": 100,
+      "locale_status_counts": {
+        "pass": 279,
+        "coverage_error": 10,
+        "semantic_error": 11
+      },
+      "confirmed_source_errors": 14,
+      "coverage_error_sources": [
+        "2100072242595975471",
+        "2100074485743304992",
+        "2100175698300432723",
+        "2100177975631077722",
+        "2100223903205671209",
+        "2100249221484220856",
+        "2100307770360913963",
+        "2100360950847267020"
+      ],
+      "semantic_error_sources": [
+        "2100109982775570765",
+        "2100249221484220856",
+        "2100262531788832809",
+        "2100277491390951481",
+        "2100281384351015367",
+        "2100314574721315014",
+        "2100430324899455118"
+      ],
+      "additional_unknown_sources": [],
+      "observed_error_interval": [
+        14,
+        14
+      ],
+      "incumbent_error_interval": [
+        9,
+        10
+      ],
+      "paired_comparison": {
+        "shared_confirmed": [
+          "2100249221484220856",
+          "2100262531788832809",
+          "2100277491390951481",
+          "2100307770360913963"
+        ],
+        "candidate_only_confirmed": [
+          "2100072242595975471",
+          "2100074485743304992",
+          "2100109982775570765",
+          "2100175698300432723",
+          "2100177975631077722",
+          "2100223903205671209",
+          "2100281384351015367",
+          "2100314574721315014",
+          "2100360950847267020",
+          "2100430324899455118"
+        ],
+        "incumbent_only_confirmed": [
+          "2100205285700747681",
+          "2100270972465008655",
+          "2100283207736332475",
+          "2100320389226225806",
+          "2100339358398058923"
+        ],
+        "incumbent_unknown_only": [
+          "2100346971144036571"
+        ],
+        "candidate_error_overlaps_incumbent_unknown": []
+      },
+      "qualified": false,
+      "artifact": ".context/model-task-20260917/hy30-translation-v3-random100-20260917-220225/parent-reconciled-review.json"
+    },
+    {
+      "schema": "parent-reconciled-translation-review-v1",
+      "created_at": "2026-09-17T13:42:40.034973+00:00",
+      "candidate": "Gemma 4 31B v1",
+      "method": "Parent reconciliation of full independent source-only reviews and direct checks of disputed output spans. Known errors accepted on source evidence; reviewer omissions superseded. Reviewers knew model identity. This is retained regression evidence, not new human adjudication or fresh qualification.",
+      "source_posts": 100,
+      "locale_status_counts": {
+        "pass": 283,
+        "semantic_error": 7,
+        "coverage_error": 10
+      },
+      "confirmed_source_errors": 11,
+      "coverage_error_sources": [
+        "2100158906307670018",
+        "2100283207736332475",
+        "2100307770360913963",
+        "2100314574721315014",
+        "2100320389226225806",
+        "2100322545949962294",
+        "2100325161845330415"
+      ],
+      "semantic_error_sources": [
+        "2100109982775570765",
+        "2100190300669169957",
+        "2100262531788832809",
+        "2100357277253542260"
+      ],
+      "additional_unknown_sources": [],
+      "observed_error_interval": [
+        11,
+        11
+      ],
+      "incumbent_error_interval": [
+        9,
+        10
+      ],
+      "paired_comparison": {
+        "shared_confirmed": [
+          "2100262531788832809",
+          "2100283207736332475",
+          "2100307770360913963",
+          "2100320389226225806"
+        ],
+        "candidate_only_confirmed": [
+          "2100109982775570765",
+          "2100158906307670018",
+          "2100190300669169957",
+          "2100314574721315014",
+          "2100322545949962294",
+          "2100325161845330415",
+          "2100357277253542260"
+        ],
+        "incumbent_only_confirmed": [
+          "2100205285700747681",
+          "2100249221484220856",
+          "2100270972465008655",
+          "2100277491390951481",
+          "2100339358398058923"
+        ],
+        "incumbent_unknown_only": [
+          "2100346971144036571"
+        ],
+        "candidate_error_overlaps_incumbent_unknown": []
+      },
+      "qualified": false,
+      "artifact": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-20260917-220700/parent-reconciled-review.json"
+    }
+  ],
+  "receipt_inventory": "docs/research/2026-09-17-223734-expanded-translation-trial-receipts.json"
+}

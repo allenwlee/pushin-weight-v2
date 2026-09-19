@@ -348,18 +348,37 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
     assert status["backlog"]["active"] is True
     assert status["backlog"]["queued"] is True
     assert status["backlog"]["queued_source_cycle_id"] == "newer-cycle"
+
+    # Derive the throughput expectations from this fixture and the committed
+    # scheduling inputs so a changed denominator or batch shape is visible.
+    eligible_brands = 3
+    editor_batch_size = 5
+    expected_calls = 1 + 2 * (
+        (eligible_brands + editor_batch_size - 1) // editor_batch_size
+    )
+    cadence_minutes = (60, 1440, 10080, 43200)
+    expected_max_brands = 40
+    fleet_calls = 1 + 2 * (
+        (expected_max_brands + editor_batch_size - 1) // editor_batch_size
+    )
+    fleet_arrival_rate = sum(
+        fleet_calls * 60 / cadence for cadence in cadence_minutes
+    )
+    worker_capacity = 3600 * 1 / 45
     assert status["drain"] == {
-        "eligible_brand_count": 3,
-        "expected_call_count": 3,
+        "eligible_brand_count": eligible_brands,
+        "expected_call_count": expected_calls,
         "recorded_call_count": 2,
         "worker_concurrency": 1,
         "p95_latency_seconds": 45.0,
-        "estimated_run_drain_seconds": 135.0,
-        "window_expected_arrival_calls_per_hour": 6.0,
-        "fleet_expected_call_count_per_window": 17,
-        "fleet_expected_arrival_calls_per_hour": pytest.approx(54.5416666667),
-        "p95_capacity_calls_per_hour": 80.0,
-        "fleet_expected_utilization": pytest.approx(0.6817708333),
+        "estimated_run_drain_seconds": expected_calls * 45 / 1,
+        "window_expected_arrival_calls_per_hour": expected_calls * 60 / 60,
+        "fleet_expected_call_count_per_window": fleet_calls,
+        "fleet_expected_arrival_calls_per_hour": pytest.approx(fleet_arrival_rate),
+        "p95_capacity_calls_per_hour": worker_capacity,
+        "fleet_expected_utilization": pytest.approx(
+            fleet_arrival_rate / worker_capacity
+        ),
     }
     assert "private_packet_must_not_appear" not in stdout.getvalue()
     assert "do-not-expose" not in stdout.getvalue()

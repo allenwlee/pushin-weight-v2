@@ -1,0 +1,724 @@
+{
+  "acceptance_gates": {
+    "all_45_role_pairs_complete_and_valid": true,
+    "all_quality_floor_keys_measured_or_explicitly_unmeasured": true,
+    "all_required_context_slice_floors": true,
+    "baseline_composite_mean": "0.844444",
+    "capacity": "the selected route must meet the derived 960 role-calls/day shape during staging before production activation",
+    "composite_axes": [
+      "all.post_types.exact_set_accuracy.value",
+      "all.product_labels.exact_set_accuracy.value",
+      "all.outcome.accuracy",
+      "all.sentiment.accuracy",
+      "all.china_nationalism.accuracy",
+      "all.us_nationalism.accuracy"
+    ],
+    "composite_improvement": "minimum +0.02 over the baseline, as preregistered; six-axis baseline mean is derived from the recorded 45-row metrics",
+    "composite_mean_equation": "mean(the six composite_axes)",
+    "cost": "measured cost including failed attempts and duplicate retry input <= candidate hard cap and total trial hard cap",
+    "coverage": "100% complete role pairs; every invalid or missing row fails the candidate and stays in the denominator",
+    "failure": "retain every attempted report and keep activation disabled; do not raise caps, lower floors, add a judge/reviewer/repair, change batch shape, or substitute an unlisted model/provider",
+    "invariants": [
+      "stable ID join",
+      "role ownership exact",
+      "source/context/affiliation fingerprint exact",
+      "taxonomy and role revisions exact",
+      "closed vocabularies",
+      "context_missing legality",
+      "other exclusivity",
+      "no brand leakage",
+      "no partial publication"
+    ],
+    "latency": "p95 complete-result latency <=180 seconds; report n=2 batches per candidate as a pilot estimate",
+    "minimum_composite_mean": "0.864444",
+    "overall_and_each_language_floors": true,
+    "per_label_regression_tolerance": "for baseline-supported labels with support >=2, F1 may be at most 0.10 below its baseline while still passing its frozen floor; support=1 labels must pass the existing floor; support=0 remains unmeasured",
+    "selection": "evaluate the single direct control candidate; select it only if every frozen gate passes, otherwise select no candidate",
+    "top_level_axis_regression_tolerance": "no composite axis may fall by more than 1/45=0.022222 from its baseline value"
+  },
+  "baseline_metrics": {
+    "baseline_artifact": "candidate-v26-exhaustive-verdict-review.json",
+    "baseline_context_missing": {
+      "all": {
+        "precision": "4/5=0.800000",
+        "recall": "4/5=0.800000"
+      },
+      "en": {
+        "precision": "1/2=0.500000",
+        "recall": "1/1=1.000000"
+      },
+      "ja": {
+        "precision": "2/2=1.000000",
+        "recall": "2/2=1.000000"
+      },
+      "zh-cn": {
+        "precision": "1/1=1.000000",
+        "recall": "1/2=0.500000"
+      }
+    },
+    "by_context": {
+      "local_parent": {
+        "n": 2,
+        "outcome_accuracy": "2/2=1.000000",
+        "post_types_exact_set": "2/2=1.000000",
+        "product_labels_exact_set": "2/2=1.000000",
+        "sentiment_accuracy": "2/2=1.000000"
+      },
+      "none": {
+        "n": 31,
+        "outcome_accuracy": "29/31=0.935484",
+        "post_types_exact_set": "24/31=0.774194",
+        "product_labels_exact_set": "24/31=0.774194",
+        "sentiment_accuracy": "26/31=0.838710"
+      },
+      "stored_quote": {
+        "n": 12,
+        "outcome_accuracy": "12/12=1.000000",
+        "post_types_exact_set": "8/12=0.666667",
+        "product_labels_exact_set": "7/12=0.583333",
+        "sentiment_accuracy": "7/12=0.583333"
+      }
+    },
+    "by_language": {
+      "en": {
+        "n": 15,
+        "outcome_accuracy": "14/15=0.933333",
+        "post_types_exact_set": "9/15=0.600000",
+        "product_labels_exact_set": "10/15=0.666667",
+        "sentiment_accuracy": "12/15=0.800000"
+      },
+      "ja": {
+        "n": 15,
+        "outcome_accuracy": "15/15=1.000000",
+        "post_types_exact_set": "13/15=0.866667",
+        "product_labels_exact_set": "12/15=0.800000",
+        "sentiment_accuracy": "13/15=0.866667"
+      },
+      "zh-cn": {
+        "n": 15,
+        "outcome_accuracy": "14/15=0.933333",
+        "post_types_exact_set": "12/15=0.800000",
+        "product_labels_exact_set": "11/15=0.733333",
+        "sentiment_accuracy": "10/15=0.666667"
+      }
+    },
+    "nationalism_unknown_support_and_recall": {
+      "china_nationalism": [
+        5,
+        0.8
+      ],
+      "representation": "quality-floor class key unknown is represented by JSON null in the owner reference and is measured; it is not unsupported",
+      "us_nationalism": [
+        5,
+        0.8
+      ]
+    },
+    "overall": {
+      "china_nationalism_accuracy": "40/45=0.888889",
+      "outcome_accuracy": "43/45=0.955556",
+      "post_types_exact_set": "34/45=0.755556",
+      "post_types_micro_f1": "0.932642",
+      "product_labels_empty_set": "33/45=0.733333",
+      "product_labels_exact_set": "33/45=0.733333",
+      "product_labels_micro_f1": "0.648649",
+      "sentiment_accuracy": "35/45=0.777778",
+      "us_nationalism_accuracy": "43/45=0.955556"
+    },
+    "per_label_support_and_f1": {
+      "post_types": {
+        "advertising_marketing": [
+          5,
+          1.0
+        ],
+        "business_finance": [
+          4,
+          1.0
+        ],
+        "events": [
+          3,
+          0.8
+        ],
+        "hands_on_usage": [
+          9,
+          0.888889
+        ],
+        "job_listings": [
+          1,
+          1.0
+        ],
+        "opinions_reactions": [
+          26,
+          0.928571
+        ],
+        "opportunities": [
+          5,
+          0.75
+        ],
+        "other": [
+          0,
+          null
+        ],
+        "personnel_changes": [
+          0,
+          null
+        ],
+        "questions_requests": [
+          4,
+          0.857143
+        ],
+        "releases_updates": [
+          8,
+          0.941176
+        ],
+        "research_explanations": [
+          14,
+          1.0
+        ],
+        "results_evaluations": [
+          16,
+          0.941176
+        ]
+      },
+      "product_labels": {
+        "bug": [
+          0,
+          null
+        ],
+        "complaint": [
+          1,
+          0.666667
+        ],
+        "ideas_requests": [
+          2,
+          0.5
+        ],
+        "misinformation": [
+          1,
+          1.0
+        ],
+        "testimonial": [
+          13,
+          0.642857
+        ]
+      },
+      "unsupported": [
+        "all.post_types.labels.other.f1",
+        "all.post_types.labels.personnel_changes.f1",
+        "all.product_labels.labels.bug.f1"
+      ]
+    }
+  },
+  "batch_sizes": [
+    40,
+    5
+  ],
+  "candidates": [
+    {
+      "allow_fallbacks": false,
+      "candidate_id": "deepseek_v4_flash_direct_control_batch40",
+      "candidate_key": "deepseek_v4_flash_direct_control_batch40",
+      "combined_input_tokens_by_batch": [
+        122533,
+        38768
+      ],
+      "context_length": 1000000,
+      "data_collection": "direct_public_only",
+      "discount": "0",
+      "endpoint_aliases": [
+        "DeepSeek",
+        "deepseek"
+      ],
+      "endpoint_max_completion_tokens": 384000,
+      "endpoint_model_alias": "deepseek-v4-flash",
+      "endpoint_observed_at": "2026-09-15T07:17:53+09:00",
+      "endpoint_receipt": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "endpoint_tag": null,
+      "execution_role": "control",
+      "input_tokens_by_batch": [
+        122533,
+        38768
+      ],
+      "input_usd_per_million": "0.44",
+      "max_input_price": "0.44",
+      "max_output_price": "1.32",
+      "max_reasoning_tokens": 0,
+      "max_tokens": 8000,
+      "model": "deepseek-v4-flash",
+      "model_id": "deepseek-v4-flash",
+      "output_usd_per_million": "1.32",
+      "provider": "deepseek",
+      "provider_response_name": "deepseek",
+      "provider_slug": "deepseek",
+      "quantization": "provider_native",
+      "reasoning_enabled": false,
+      "reasoning_request": {
+        "enabled": false
+      },
+      "regular_input_usd_per_million": "0.44",
+      "regular_output_usd_per_million": "1.32",
+      "request_quantizations": null,
+      "response_model": "deepseek-v4-flash",
+      "response_provider": "deepseek",
+      "route": "https://api.deepseek.com/anthropic/v1/messages",
+      "service_tier": null,
+      "transport_kind": "direct_deepseek_anthropic",
+      "zdr": false
+    }
+  ],
+  "caps": {
+    "maximum_cost_per_1000_posts_usd": "5.03166400",
+    "maximum_input_tokens": 322602,
+    "maximum_logical_requests": 4,
+    "maximum_output_tokens": 64000,
+    "maximum_reasoning_tokens": 0,
+    "maximum_spend_usd": "0.22642488",
+    "maximum_transport_attempts": 8,
+    "maximum_transport_attempts_per_role": 2,
+    "per_model": {
+      "deepseek-v4-flash": {
+        "maximum_input_tokens": 322602,
+        "maximum_logical_requests": 4,
+        "maximum_output_tokens": 64000,
+        "maximum_reasoning_tokens": 0,
+        "maximum_spend_usd": "0.22642488",
+        "maximum_transport_attempts": 8
+      }
+    },
+    "pricing_ceiling_basis": "exact frozen direct DeepSeek route; no provider fallback; one identical retry envelope"
+  },
+  "common_request_parameters": {
+    "max_tokens_per_attempt": 8000,
+    "omitted_parameters": [
+      "seed",
+      "top_p",
+      "tools",
+      "tool_choice",
+      "structured_outputs"
+    ],
+    "provider": {
+      "allow_fallbacks": false,
+      "data_collection": "candidate data_collection",
+      "only": "candidate.provider_slug exact full slug",
+      "request_provider_slugs": [
+        "deepseek (direct client identity)"
+      ],
+      "require_parameters": true,
+      "zdr": "candidate zdr"
+    },
+    "reasoning": "candidate-specific; disabled or omitted",
+    "response_format": {
+      "type": "json_object"
+    },
+    "route": "direct DeepSeek Anthropic-compatible endpoint; no OpenRouter transport",
+    "schema_validation": "local deterministic validation is authoritative; no LLM repair",
+    "service_tier": "omitted for direct DeepSeek",
+    "strict_json_schema": false,
+    "temperature": 0
+  },
+  "deterministic_multibrand_fixture_gate": {
+    "acceptance": "all assertions pass without provider construction, owner-reference material, or provider identity in the fixture packet",
+    "fixture": "one source packet with exactly two attributed brands, distinct target-brand evidence, and reviewed per-brand affiliation facts",
+    "mode": "provider-free fake transport and local publication test",
+    "required_assertions": [
+      "both roles receive the same packet and fingerprint",
+      "content and brand roles return exactly one row per brand",
+      "the two brands receive intentionally different valid fields where source evidence differs",
+      "merge joins by tweet_id and brand_id rather than array position",
+      "both role outputs publish atomically as one complete pair",
+      "wrong-role fields, missing/duplicate IDs, fingerprint mismatch, and cross-brand transfer fail closed",
+      "shared concurrency never exceeds 3",
+      "exactly two logical requests for a 20-post batch and zero third semantic/reviewer/topic/repair requests"
+    ]
+  },
+  "frozen_at": "2026-09-15T07:17:53+09:00",
+  "inference_requests_made": 0,
+  "latency_capacity_gates": {
+    "complete_result_latency_p95_seconds_max": 180,
+    "derived_max_production_shape": {
+      "arrival_rate_role_calls_per_second": "0.0111111111",
+      "batches_per_cycle": 5,
+      "posts_per_cycle": 100,
+      "role_calls_per_cycle": 10,
+      "role_calls_per_day_at_15_minute_schedule": 960,
+      "theoretical_three_worker_timeout_service_rate": "0.0333333333"
+    },
+    "endpoint_catalog_uptime": "catalog uptime is recorded as attestation evidence only; latency and throughput fields were null and cannot establish capacity",
+    "existing_runtime_limits": {
+      "attempt_budget_seconds": 300,
+      "carryover_claim_per_cycle": 50,
+      "claim_per_cycle": 100,
+      "claim_ttl_seconds": 660,
+      "current_cycle_claim_per_cycle": 50,
+      "request_timeout_seconds": 90,
+      "schedule_minutes": 15
+    },
+    "latency_derivation": "existing request_timeout_seconds=90; one identical retry permits two 90-second request windows, while both roles run under one shared semaphore",
+    "latency_measurement": "ready-input timestamp through both valid role responses, deterministic merge, and validation",
+    "observed_stage0_telemetry_projection": {
+      "basis": "accepted passive Stage 0 telemetry; dated estimate, not a provider capacity measurement",
+      "derivation": "239*16=3824; ceil(239/20)*2*16=384; 384*2=768",
+      "observed_classifications": 239,
+      "projected_all_retry_transports_per_day": 768,
+      "projected_initial_role_calls_per_day": 384,
+      "projected_source_posts_per_day": 3824,
+      "window": "2026-09-08T13:51:00Z/2026-09-08T15:21:00Z",
+      "window_minutes": 90
+    },
+    "paid_capacity_gate": "staging-proven sustained capacity must cover 960 role calls/day at the same two-role, batch, retry, and concurrency caps, with p95 complete-result latency <=180 seconds and no queue growth",
+    "pilot_sample": "two batches per candidate; p95 is a pilot observation and not a reliable production tail estimate",
+    "production_capacity_gate": "the selected route must prove staging capacity for 960 role calls/day at the same two-role batch/retry/concurrency shape, with measured retry headroom and no queue growth; this follows candidate quality selection and cannot be inferred from catalog uptime",
+    "shared_max_concurrent_transport_calls": 3
+  },
+  "no_provider_call_or_secret": true,
+  "pilot_id": "u18-r99-deepseek-batch-size-pilot-v1",
+  "preflight_stop_conditions": [
+    "missing API secret",
+    "provider/model/route mismatch",
+    "provider display name or endpoint alias mismatch",
+    "unsupported required parameter",
+    "recorded promotional or Flex price changes",
+    "price exceeds pinned ceiling",
+    "ZDR/data-use policy mismatch",
+    "owner/reference material would enter packet",
+    "token reservation or spend reservation would exceed this artifact",
+    "selected provider quota/capacity cannot cover staging-proven volume for live activation (does not block this bounded quality pilot)"
+  ],
+  "quality_floors": {
+    "floors": {
+      "all.china_nationalism.accuracy": 0.75,
+      "all.china_nationalism.classes.none.recall": 0.5,
+      "all.china_nationalism.classes.unknown.recall": 0.5,
+      "all.outcome.accuracy": 0.9,
+      "all.outcome.classes.classified.recall": 0.5,
+      "all.outcome.classes.context_missing.recall": 0.5,
+      "all.post_types.exact_set_accuracy.value": 0.7,
+      "all.post_types.labels.advertising_marketing.f1": 0.55,
+      "all.post_types.labels.business_finance.f1": 0.55,
+      "all.post_types.labels.events.f1": 0.55,
+      "all.post_types.labels.hands_on_usage.f1": 0.55,
+      "all.post_types.labels.job_listings.f1": 0.55,
+      "all.post_types.labels.opinions_reactions.f1": 0.55,
+      "all.post_types.labels.opportunities.f1": 0.55,
+      "all.post_types.labels.other.f1": 0.55,
+      "all.post_types.labels.personnel_changes.f1": 0.55,
+      "all.post_types.labels.questions_requests.f1": 0.55,
+      "all.post_types.labels.releases_updates.f1": 0.55,
+      "all.post_types.labels.research_explanations.f1": 0.55,
+      "all.post_types.labels.results_evaluations.f1": 0.55,
+      "all.post_types.micro.f1": 0.7,
+      "all.product_labels.empty_set_accuracy.value": 0.65,
+      "all.product_labels.exact_set_accuracy.value": 0.7,
+      "all.product_labels.labels.bug.f1": 0.5,
+      "all.product_labels.labels.complaint.f1": 0.5,
+      "all.product_labels.labels.ideas_requests.f1": 0.5,
+      "all.product_labels.labels.misinformation.f1": 0.5,
+      "all.product_labels.labels.testimonial.f1": 0.5,
+      "all.product_labels.micro.f1": 0.7,
+      "all.sentiment.accuracy": 0.65,
+      "all.sentiment.classes.mixed.recall": 0.5,
+      "all.sentiment.classes.negative.recall": 0.5,
+      "all.sentiment.classes.neutral.recall": 0.5,
+      "all.sentiment.classes.positive.recall": 0.5,
+      "all.us_nationalism.accuracy": 0.75,
+      "all.us_nationalism.classes.none.recall": 0.5,
+      "all.us_nationalism.classes.unknown.recall": 0.5,
+      "by_context.local_parent.outcome.accuracy": 0.5,
+      "by_context.local_parent.post_types.exact_set_accuracy.value": 0.5,
+      "by_context.local_parent.product_labels.exact_set_accuracy.value": 0.5,
+      "by_context.local_parent.sentiment.accuracy": 0.5,
+      "by_context.none.outcome.accuracy": 0.5,
+      "by_context.none.post_types.exact_set_accuracy.value": 0.5,
+      "by_context.none.product_labels.exact_set_accuracy.value": 0.5,
+      "by_context.none.sentiment.accuracy": 0.5,
+      "by_context.stored_quote.outcome.accuracy": 0.5,
+      "by_context.stored_quote.post_types.exact_set_accuracy.value": 0.5,
+      "by_context.stored_quote.product_labels.exact_set_accuracy.value": 0.5,
+      "by_context.stored_quote.sentiment.accuracy": 0.5,
+      "by_language.en.outcome.accuracy": 0.9,
+      "by_language.en.post_types.exact_set_accuracy.value": 0.7,
+      "by_language.en.product_labels.exact_set_accuracy.value": 0.7,
+      "by_language.en.sentiment.accuracy": 0.65,
+      "by_language.ja.outcome.accuracy": 0.9,
+      "by_language.ja.post_types.exact_set_accuracy.value": 0.7,
+      "by_language.ja.product_labels.exact_set_accuracy.value": 0.7,
+      "by_language.ja.sentiment.accuracy": 0.65,
+      "by_language.zh-cn.outcome.accuracy": 0.9,
+      "by_language.zh-cn.post_types.exact_set_accuracy.value": 0.7,
+      "by_language.zh-cn.product_labels.exact_set_accuracy.value": 0.7,
+      "by_language.zh-cn.sentiment.accuracy": 0.65
+    },
+    "min_slice_support": 1,
+    "min_support": 1,
+    "policy_version": 1,
+    "required_contexts": [
+      "none",
+      "stored_quote",
+      "local_parent"
+    ],
+    "taxonomy_version": "stage1-taxonomy-v3"
+  },
+  "quality_scoring": {
+    "binary_label_f1": "2*TP / (2*TP + FP + FN), computed independently for each label",
+    "class_recall": "correct predictions for the class / owner-reference support for that class",
+    "context_slice_derivation": "selection_manifest.context_provenance; required slices retain all 45 rows (31+12+2)",
+    "context_slices": {
+      "local_parent": 2,
+      "none": 31,
+      "stored_quote": 12
+    },
+    "coverage": "valid complete pairs / 45; both role rows and every expected attributed brand must be present",
+    "denominator": "45 requested rows per candidate, 15 per language, preserving original order; invalid or missing rows are failures and are never removed",
+    "empty_set_accuracy": "sum(indicator(predicted_set is empty == owner_set is empty)) / n",
+    "exact_set_accuracy": "sum(indicator(predicted_set == owner_set)) / n",
+    "micro_f1": "2*sum(TP) / (2*sum(TP) + sum(FP) + sum(FN)) across labels",
+    "scalar_accuracy": "correct scalar judgments / n",
+    "unsupported_policy": "support < min_support=1 is unmeasured, not zero; it cannot be claimed as validated or silently omitted from the report"
+  },
+  "report_schema_version": "u18-r99-deepseek-batch-size-report-v1",
+  "request_schedule": {
+    "adaptive_stop": null,
+    "candidates_maximum": 1,
+    "empty_batch_requests": 0,
+    "execution_order": [
+      "deepseek_v4_flash_direct_control_batch40"
+    ],
+    "initial_logical_requests_maximum": 4,
+    "initial_logical_requests_per_candidate": 4,
+    "invalid_response_policy": "invalid, malformed, duplicate, missing, stale, or incomplete rows are scored failures; no semantic repair or per-post fallback",
+    "max_retries_per_logical_request": 1,
+    "maximum_transport_attempts_total": 8,
+    "ordered_batch_sizes": [
+      40,
+      5
+    ],
+    "reserve_pair_before_dispatch": true,
+    "retry_condition": "only one identical transport retry after timeout/transport failure with no usable response",
+    "roles_per_batch": 2,
+    "selection_order_by_hard_cap": [
+      "deepseek_v4_flash_direct_control_batch40"
+    ],
+    "selection_policy": "single candidate; select only on a complete passing report",
+    "shared_max_concurrent_transport_calls": 3
+  },
+  "role_contract": {
+    "brand_interpretation": {
+      "forbidden_fields": [
+        "outcome",
+        "post_types",
+        "unsanctioned_flags"
+      ],
+      "owns": [
+        "product_labels",
+        "sentiment",
+        "china_nationalism",
+        "us_nationalism"
+      ],
+      "prompt_bytes_utf8": 2470,
+      "prompt_sha256": "94eebd06fb4dc0b3a9c8333f89348dbadd4ad75802d186a50817eb5ca01ff49b",
+      "revision": "stage1-brand-interpretation-v2",
+      "role": "brand_interpretation"
+    },
+    "common_input": {
+      "affiliation_policy": "reviewed per-brand official/staff/third-party relationship evidence only",
+      "excluded": [
+        "owner answers",
+        "reviewer packets",
+        "private comments",
+        "private messages",
+        "credentials",
+        "cookies",
+        "tokens",
+        "DB-only personal or operational metadata"
+      ],
+      "fetch_links_media_parents": false,
+      "fields": [
+        "tweet_id",
+        "text",
+        "context",
+        "brand_ids",
+        "affiliations",
+        "source_language",
+        "input_context_fingerprint"
+      ],
+      "owner_answers_in_provider_packet": false,
+      "packet_boundary": "public-X-only source text and locally stored context/relationship fields that are present in the reviewed packet",
+      "provider_identity_in_provider_packet": false,
+      "source_id_policy": "tweet_id field retains the production schema name but carries sha256(public X tweet ID) in the provider packet; local mapping is one-way and secret-free",
+      "source_id_transport_is_opaque": true,
+      "untrusted_evidence": true
+    },
+    "content": {
+      "forbidden_fields": [
+        "product_labels",
+        "sentiment",
+        "china_nationalism",
+        "us_nationalism"
+      ],
+      "owns": [
+        "outcome",
+        "post_types",
+        "unsanctioned_flags"
+      ],
+      "prompt_bytes_utf8": 3415,
+      "prompt_sha256": "b63dd06ddd84893760a1d2e78cb4e5534d900ffb93aa488b32138d22af4ceb80",
+      "revision": "stage1-content-v2",
+      "role": "content"
+    },
+    "merge": {
+      "join_key": [
+        "tweet_id",
+        "brand_id"
+      ],
+      "per_post_fallback": false,
+      "provider_fallback": false,
+      "publication": "publish only a complete valid pair atomically; invalid or missing rows remain pending and preserve last-good state",
+      "revision": "stage1-two-role-merge-v2",
+      "revision_sha256": "0f3168c0f14d2100aa8655422efc1292999b46a6dc63cddeecb1cdb68da970c9",
+      "semantic_repair": false,
+      "third_semantic_call": false
+    }
+  },
+  "schema_version": "u18-r99-deepseek-batch-size-pilot-contract/v1",
+  "scope": {
+    "candidate_model_evaluations_per_candidate": 45,
+    "inference_requests_made": 0,
+    "intentional_r98_differences": [
+      "ordered batch sizes 40/5 instead of 20/20/5",
+      "max_tokens=8000 per role call; sufficient ceiling for the 40-row batch under production scaling"
+    ],
+    "owner_reference_is": "sole unblinded owner calibration reference; agreement with it is not human accuracy or a population estimate",
+    "post_brand_rows": 45,
+    "prior_contract": "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json",
+    "production_defaults_unchanged": true,
+    "purpose": "Provider-free design for the owner-authorized DeepSeek-only two-role batch-size test using the same 45 owner-reference rows and production role contract as R98.",
+    "role_evaluations_per_candidate": 90,
+    "source_posts": 45
+  },
+  "source_receipts": {
+    "baseline_candidate": {
+      "evaluation_path": ".context/u18/evaluation-v26-exhaustive-verdict-review.json",
+      "evaluation_sha256": "f2f3f4d2a9dac0ac6bd1b997beeef69bfef154e965163dbcdc355e3870d5e6c7",
+      "interpretation": "v26 rows selected by the manifest, rescored against the final owner reference; development agreement baseline only",
+      "path": ".context/u18/candidate-v26-exhaustive-verdict-review.json",
+      "sha256": "b06088b52bef44d9f8ac1bd836c305ad8770ef5f3ba4dc20e29b80b4e109ef2e"
+    },
+    "cohort_source": {
+      "path": ".context/u18/cohort-source.json",
+      "sha256": "30ef30d3236984f6e6c00c8a427dcf4eeb25d32b1b7fdef4bf1f2c015fd0a12f"
+    },
+    "owner_reference": {
+      "human_gate_status": "waived_by_owner",
+      "human_grounded": false,
+      "path": ".context/u18/human-ambiguity-study-v1/owner-accepted-reference.json",
+      "review_scope": "sole_owner_human_reference_for_45_case_consumed_development_cohort",
+      "sha256": "d1c390c0f689e5aae4648a60f5a8878a82e5471fda1c9d6bfe72cee4ab215f80"
+    },
+    "owner_review_decision": {
+      "path": "docs/analysis/2026-09-13-225451-u18-owner-review-decision-summary.md",
+      "sha256": "33341fa0983bae9b6a518f8d11d9ee9a8a13c4665771ce9780ef7c48a4695cd1"
+    },
+    "owner_review_source": {
+      "path": "docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md",
+      "sha256": "b0eb3d9c5e1be474e75498fad7e9b15c95cc3a9be5f2707f03e8b1b3fff91b9e"
+    },
+    "plan": "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md",
+    "prior_r97_terminal_evidence": {
+      "budget_path": "docs/analysis/2026-09-14-190649-u18-r97-two-role-pilot-contract.json",
+      "budget_sha256": "87561d0ac7c8c2610c2a4785e1cb3b377876ebb3006f43c82ee00b0a59559ace",
+      "policy": "immutable R97 terminal evidence; R99 must not replay R97 responses",
+      "result_path": "docs/analysis/2026-09-14-194529-u18-openrouter-two-role-pilot-results.json",
+      "result_sha256": "3dc7dd4a19373c7762df4b7be289521f33b6b8b0c95fa8a6724c7f3939c2c771"
+    },
+    "prior_r98_terminal_evidence": {
+      "budget_path": "docs/analysis/2026-09-14-213123-u18-r98-control-fallback-pilot-contract.json",
+      "budget_sha256": "b7eacdefbcf59c125fe796ef1585cbce2f2e3cbcb00193f0c23bf61bd531be6c",
+      "policy": "immutable R98 terminal evidence; R99 must not replay R98 responses; R99 uses a distinct request signature due to its frozen 40/5 batches and max_tokens=8000",
+      "receipt_path": "docs/research/2026-09-14-213123-u18-r98-control-fallback-receipt.md",
+      "receipt_sha256": "662b9421cf5b16dbe23f7605eb0b95aec6ae3820b80c85518f562bde4f5d4bf1",
+      "result_path": "docs/analysis/2026-09-14-221023-u18-r98-control-fallback-pilot-results.json",
+      "result_sha256": "be736ee1d1144cd917288009ab3f57aae6fc4577356797646a6efad437aba8c4"
+    },
+    "quality_floors": {
+      "path": "docs/analysis/2026-09-11-002632-classification-quality-floors-v3.json",
+      "sha256": "881a2e297bad803851a42d629b5519b5e0a200f38d055dd5951c194aefaf79ba"
+    },
+    "r99_batch_size_receipt": {
+      "path": "docs/research/2026-09-15-071753-u18-r99-deepseek-batch-size-pilot-receipt.md",
+      "sha256": "9f52b1da4cbf7fa005680387016bb6ee65e2228833d0506e42bf0da877452c56"
+    },
+    "selection_manifest": {
+      "context_provenance_counts": {
+        "local_parent": 2,
+        "none": 31,
+        "stored_quote": 12
+      },
+      "ordered_languages": [
+        "en",
+        "ja",
+        "zh-cn"
+      ],
+      "path": ".context/u18/human-ambiguity-study-v1/selection-manifest.json",
+      "rows": 45,
+      "rows_per_language": 15,
+      "sha256": "50f46d0d8583f91c316583704efe314ddf98c6306032d9dfd3e0543da1497c91",
+      "source_role_counts": {
+        "named_person": 1,
+        "official": 2,
+        "staff": 2,
+        "third_party": 40
+      },
+      "stratum_counts": {
+        "event_opportunity_boundary": 8,
+        "prevalence": 30,
+        "rare_positive": 7
+      }
+    }
+  },
+  "spend_budget": {
+    "adaptive_execution_can_only_reduce_maximum": false,
+    "cost_equation": "sum((input_tokens * input price + output_tokens * output price) / 1000000) across every transport attempt; duplicated retry input counts",
+    "global_per_1000_source_posts_hard_cap_usd": "5.03166400",
+    "openrouter_credit_purchase_fees": "not applicable; direct DeepSeek route",
+    "per_1000_source_posts_projection_usd": {
+      "deepseek_v4_flash_direct_control_batch40": {
+        "hard_cap": "5.03166400",
+        "no_retry": "2.51583200"
+      }
+    },
+    "per_candidate_hard_cap_usd_with_one_retry_each": {
+      "deepseek_v4_flash_direct_control_batch40": "0.22642488"
+    },
+    "per_candidate_no_retry_projection_usd": {
+      "deepseek_v4_flash_direct_control_batch40": "0.11321244"
+    },
+    "total_trial_hard_cap_usd": "0.22642488",
+    "unused_capacity_transfer": false
+  },
+  "status": "frozen_before_inference",
+  "token_budget": {
+    "batch_sizes": [
+      40,
+      5
+    ],
+    "conservative_bound": {
+      "bound_tokens_initial": 161301,
+      "bound_tokens_with_one_retry_each": 322602,
+      "combined_system_plus_user_bytes_by_batch": [
+        122501,
+        38736
+      ],
+      "combined_system_plus_user_bytes_initial": 161269,
+      "method": "UTF-8 bytes plus 16 framing tokens per role request; deliberate tokenizer-independent ceiling; two-byte safety margin retained from R98 measurement convention"
+    },
+    "max_tokens_per_role_call": 8000,
+    "output_calculation": "4 logical requests * 2 transport attempts * 8000 max_tokens = 64000 per candidate; reasoning zero",
+    "per_candidate_reserved_input_tokens": {
+      "deepseek_v4_flash_direct_control_batch40": 322602
+    },
+    "per_candidate_reserved_output_tokens": 64000,
+    "per_candidate_reserved_reasoning_tokens": 0,
+    "per_candidate_reserved_total_tokens": {
+      "deepseek_v4_flash_direct_control_batch40": 386602
+    }
+  }
+}

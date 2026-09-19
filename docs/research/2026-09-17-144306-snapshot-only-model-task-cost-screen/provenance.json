@@ -1,0 +1,25 @@
+{
+  "source_manifest": "docs/research/2026-09-17-143812-openrouter-pricing-snapshot/manifest.json",
+  "source_manifest_sha256": "28e5394ed2e9d15aca585d3c0556f8734720c14d7e970b83104ec251db839e52",
+  "model_rows": 444,
+  "workloads": {
+    "classification": [
+      "1137.8",
+      "138.45"
+    ],
+    "translation": [
+      "955.35",
+      "512.98"
+    ],
+    "commentary": [
+      "278.6145833333333333333333333",
+      "454.5625"
+    ]
+  },
+  "screen_counts": {
+    "classification": 66,
+    "translation": 65,
+    "commentary": 64
+  },
+  "price_source_exclusively_saved_snapshot": true
+}

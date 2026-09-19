@@ -11,8 +11,8 @@ from pydantic import ValidationError
 
 from x_monitor.queries import (
     QUERY_IDS,
-    Query,
     X_OPERATOR_CAP,
+    Query,
     assert_under_operator_cap,
     count_x_operators,
     estimated_cost,
@@ -76,6 +76,16 @@ def test_rejects_missing_query_string():
         Query(id="Q1")  # type: ignore[call-arg]
 
 
+def test_accepts_current_planner_call_ids():
+    for call_id in ("A", "B1", "B2", "B3", "C1", "C2", "C3"):
+        assert Query(id=call_id, query_string="model").id == call_id
+
+
+def test_rejects_unknown_call_id():
+    with pytest.raises(ValidationError):
+        Query(id="D1", query_string="model")
+
+
 def test_rejects_blank_query_string():
     with pytest.raises(ValidationError):
         Query(id="Q1", query_string="   ")
@@ -100,7 +110,7 @@ def test_validate_catches_stray_colon_in_from():
 
 def test_validate_catches_unknown_operator():
     q = Query(id="Q1", query_string="min_faves:notanumber")
-    errors = validate_query_syntax(q)
+    validate_query_syntax(q)
     # 'min_faves:' is a known operator, but the value 'notanumber' is not a
     # number — this is a runtime check Apify does, not a syntax check we
     # own. So this should NOT raise a syntax error.

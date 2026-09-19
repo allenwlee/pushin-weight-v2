@@ -9,45 +9,68 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
+from core.classification_contract import (
+    CANONICAL_POST_TYPE_KEYS,
+    CANONICAL_PRODUCT_LABEL_KEYS,
+    LEGACY_POST_TYPE_KEYS,
+    LEGACY_PRODUCT_LABEL_KEYS,
+    NATIONALISM_KEYS,
+    SENTIMENT_KEYS,
+)
 from core.classification_labels import (
+    AUDIENCE_TOPIC_LABELS,
     DISCOURSE_LABELS,
+    GEOPOLITICAL_MODE_LABELS,
     NATIONALISM_LABELS,
     POST_TYPE_LABELS,
+    PRODUCT_LABEL_LABELS,
     ROLE_LABELS,
     SENTIMENT_LABELS,
+    UNTRACKED_BRAND_PROMOTION_LABELS,
 )
 from core.models import (
+    AudienceTopicConcept,
+    AudienceTopicLabel,
+    AudienceTopicScheme,
     DiscourseKey,
     DiscourseLabel,
+    GeopoliticalModeKey,
+    GeopoliticalModeLabel,
     NationalismKey,
     NationalismLabel,
+    NationalStanceKey,
+    NationalStanceLabel,
     PostTypeKey,
     PostTypeLabel,
+    ProductLabelKey,
+    ProductLabelLabel,
     Role,
     RoleLabel,
     SentimentKey,
     SentimentLabel,
+    UntrackedBrandPromotionKey,
+    UntrackedBrandPromotionLabel,
 )
 
 # ---------------------------------------------------------------------------
 # Canonical taxonomy values (mirrors x_monitor/attribution.py constants)
 # ---------------------------------------------------------------------------
 
-_POST_TYPES: list[str] = [
-    "buzz_releases",
-    "hands_on_usage",
-    "performance_comparisons",
-    "feedback_questions",
-    "advertising_marketing",
-    "event_announcement",
-]
-
-_SENTIMENTS: list[str] = [
-    "positive",
-    "negative",
-    "neutral",
-    "mixed",
-]
+_V4_POST_TYPES = ("results_analysis", "news_reporting")
+_V4_PRODUCT_LABELS = ("investigate_claim",)
+_POST_TYPES = list(
+    dict.fromkeys((*LEGACY_POST_TYPE_KEYS, *CANONICAL_POST_TYPE_KEYS, *_V4_POST_TYPES))
+)
+_PRODUCT_LABELS = list(
+    dict.fromkeys(
+        (*LEGACY_PRODUCT_LABEL_KEYS, *CANONICAL_PRODUCT_LABEL_KEYS, *_V4_PRODUCT_LABELS)
+    )
+)
+_CANONICAL_POST_TYPES = frozenset((*CANONICAL_POST_TYPE_KEYS, *_V4_POST_TYPES))
+_CANONICAL_PRODUCT_LABELS = frozenset(
+    (*CANONICAL_PRODUCT_LABEL_KEYS, *_V4_PRODUCT_LABELS)
+)
+_SENTIMENTS = list(SENTIMENT_KEYS)
 
 _DISCOURSE: list[str] = [
     "genuine_hype",
@@ -62,14 +85,15 @@ _DISCOURSE: list[str] = [
     "advertising-marketing",
 ]
 
-_NATIONALISM: list[str] = [
-    "none",
-    "mild_pro",
-    "pro",
-    "constructive_critical",
-    "anti",
-    "mixed",
-]
+_NATIONALISM = list(NATIONALISM_KEYS)
+
+_AUDIENCE_TOPIC_SCHEME_KEY = "ai_audience_topics/v1"
+_AUDIENCE_TOPIC_MANIFEST_HASH = (
+    "a31f753183b4287b050e7ed8740cba0153ac79ab7ea6ff634a22c28713007a7d"
+)
+_AUDIENCE_TOPICS = list(AUDIENCE_TOPIC_LABELS)
+_GEOPOLITICAL_MODES = list(GEOPOLITICAL_MODE_LABELS)
+_UNTRACKED_BRAND_PROMOTIONS = list(UNTRACKED_BRAND_PROMOTION_LABELS)
 
 _ROLES: list[str] = [
     "official",
@@ -77,7 +101,8 @@ _ROLES: list[str] = [
     "community",
 ]
 
-_LOCALES = ["en", "zh-cn"]
+_ACTIVE_LOCALES = ["en", "zh-cn", "ja"]
+_LEGACY_LOCALES = ["en", "zh-cn"]
 
 # ---------------------------------------------------------------------------
 # Command
@@ -113,7 +138,10 @@ class Command(BaseCommand):
 
         # Post types
         for key in _POST_TYPES:
-            for lang in _LOCALES:
+            locales = (
+                _ACTIVE_LOCALES if key in _CANONICAL_POST_TYPES else _LEGACY_LOCALES
+            )
+            for lang in locales:
                 label = POST_TYPE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -128,7 +156,7 @@ class Command(BaseCommand):
 
         # Sentiments
         for key in _SENTIMENTS:
-            for lang in _LOCALES:
+            for lang in _ACTIVE_LOCALES:
                 label = SENTIMENT_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -141,9 +169,28 @@ class Command(BaseCommand):
                     }
                 )
 
+        # Product labels
+        for key in _PRODUCT_LABELS:
+            locales = (
+                _ACTIVE_LOCALES
+                if key in _CANONICAL_PRODUCT_LABELS
+                else _LEGACY_LOCALES
+            )
+            for lang in locales:
+                seeds.append(
+                    {
+                        "family": "product_label",
+                        "key_model": ProductLabelKey,
+                        "label_model": ProductLabelLabel,
+                        "key": key,
+                        "lang": lang,
+                        "label": PRODUCT_LABEL_LABELS.get(key, {}).get(lang, key),
+                    }
+                )
+
         # Discourse
         for key in _DISCOURSE:
-            for lang in _LOCALES:
+            for lang in _LEGACY_LOCALES:
                 label = DISCOURSE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -158,7 +205,7 @@ class Command(BaseCommand):
 
         # Nationalism
         for key in _NATIONALISM:
-            for lang in _LOCALES:
+            for lang in _ACTIVE_LOCALES:
                 label = NATIONALISM_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -173,7 +220,7 @@ class Command(BaseCommand):
 
         # Roles
         for key in _ROLES:
-            for lang in _LOCALES:
+            for lang in _LEGACY_LOCALES:
                 label = ROLE_LABELS.get(key, {}).get(lang, key)
                 seeds.append(
                     {
@@ -186,6 +233,53 @@ class Command(BaseCommand):
                     }
                 )
 
+        # Audience Topics are a normalized scheme/concept catalog rather than
+        # another enum family.  A label-only copy update creates a new label
+        # revision while retaining the same concept identity.
+        for key in _AUDIENCE_TOPICS:
+            for lang in _ACTIVE_LOCALES:
+                seeds.append(
+                    {
+                        "family": "audience_topic",
+                        "key": key,
+                        "lang": lang,
+                        "label": AUDIENCE_TOPIC_LABELS[key][lang],
+                    }
+                )
+
+        for family, key_model, label_model, labels in (
+            (
+                "geopolitical_mode",
+                GeopoliticalModeKey,
+                GeopoliticalModeLabel,
+                GEOPOLITICAL_MODE_LABELS,
+            ),
+            (
+                "national_stance",
+                NationalStanceKey,
+                NationalStanceLabel,
+                NATIONALISM_LABELS,
+            ),
+            (
+                "untracked_brand_promotion",
+                UntrackedBrandPromotionKey,
+                UntrackedBrandPromotionLabel,
+                UNTRACKED_BRAND_PROMOTION_LABELS,
+            ),
+        ):
+            for key, localized in labels.items():
+                for lang in _ACTIVE_LOCALES:
+                    seeds.append(
+                        {
+                            "family": family,
+                            "key_model": key_model,
+                            "label_model": label_model,
+                            "key": key,
+                            "lang": lang,
+                            "label": localized[lang],
+                        }
+                    )
+
         return seeds
 
     # -- apply ----------------------------------------------------------------
@@ -196,6 +290,40 @@ class Command(BaseCommand):
         label_inserted = 0
 
         for seed in seeds:
+            if seed["family"] == "audience_topic":
+                scheme, scheme_created = AudienceTopicScheme.objects.get_or_create(
+                    key=_AUDIENCE_TOPIC_SCHEME_KEY,
+                    defaults={
+                        "revision": 1,
+                        "manifest_hash": _AUDIENCE_TOPIC_MANIFEST_HASH,
+                    },
+                )
+                if scheme_created:
+                    key_inserted += 1
+                    self.stdout.write(
+                        f"  + audience_topic_scheme: {_AUDIENCE_TOPIC_SCHEME_KEY}"
+                    )
+                concept, created = AudienceTopicConcept.objects.get_or_create(
+                    scheme=scheme,
+                    key=seed["key"],
+                )
+                if created:
+                    key_inserted += 1
+                    self.stdout.write(f"  + audience_topic_concept: {seed['key']}")
+                _label, created = AudienceTopicLabel.objects.get_or_create(
+                    concept=concept,
+                    revision=scheme.revision,
+                    lang=seed["lang"],
+                    defaults={"label": seed["label"]},
+                )
+                if created:
+                    label_inserted += 1
+                    self.stdout.write(
+                        "  + audience_topic_label: "
+                        f"{seed['key']}/{seed['lang']} -> {seed['label']!r}"
+                    )
+                continue
+
             key_model = seed["key_model"]
             label_model = seed["label_model"]
             family = seed["family"]

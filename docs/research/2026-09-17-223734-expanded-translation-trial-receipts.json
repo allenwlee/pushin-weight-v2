@@ -1,0 +1,486 @@
+{
+  "schema": "expanded-translation-parent-receipts/v1",
+  "created_at": "2026-09-17T22:37:34.295883+09:00",
+  "price_authority": "docs/research/2026-09-17-143812-openrouter-pricing-snapshot",
+  "scope": "Three configurations each for Qwen235, HY30 and Gemma4; smoke8 and diagnostic24; best HY/Gemma configurations on matched random100; no deployment.",
+  "billing_note": "Provider-reported usage sums only; requests without usage do not establish a billing amount. Reservations are separate. No new external review API calls.",
+  "runs": [
+    {
+      "profile": "qwen235_translation_v1",
+      "model": "qwen/qwen3-235b-a22b-2507",
+      "provider": "GMICloud",
+      "endpoint_tag": "gmicloud/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 52,
+        "transport_error": 3
+      },
+      "missing_target_source_ids": [
+        "2100079736537923768",
+        "2100430324899455118"
+      ],
+      "reported_usage_cost_usd": "0.0038490025",
+      "responses_without_usage_cost": 3,
+      "input_tokens": 22443,
+      "output_tokens": 7556,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/qwen235-translation-v1-diagnostic24-20260917-122948/attempt-1.live/report.json",
+      "report_sha256": "f4cf14ef69bf72957c0bc4e06b3af1cf50000d3897c416e03d3a9af84a23a41e",
+      "contract": ".context/model-task-20260917/qwen235-translation-v1-diagnostic24-20260917-122948/contract.json",
+      "contract_sha256": "a2467d0718413c5e54bf2aa19e048e0944e31f1783bda5261c7373e472fe1df3",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "qwen235_translation_v1",
+      "model": "qwen/qwen3-235b-a22b-2507",
+      "provider": "GMICloud",
+      "endpoint_tag": "gmicloud/fp8",
+      "source_count": 8,
+      "source_rows_sha256": "829ca9c8c8d5502be35669f85cfbf1b00657a361495d174efed51c4864d1d19b",
+      "requests": 19,
+      "request_states": {
+        "received": 19
+      },
+      "missing_target_source_ids": [],
+      "reported_usage_cost_usd": "0.0014026425",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 8303,
+      "output_tokens": 2467,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/qwen235-translation-v1-smoke8-20260917-122745/attempt-1.live/report.json",
+      "report_sha256": "e6a0ff818dd8ff077220e73c337a512db492c83ba8c36f1ed47de6c8fd466b12",
+      "contract": ".context/model-task-20260917/qwen235-translation-v1-smoke8-20260917-122745/contract.json",
+      "contract_sha256": "136e6d81add80e7ccf20b4506caf84bcec8c02553c274a5ce0356186b2d375b4",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "qwen235_translation_v2",
+      "model": "qwen/qwen3-235b-a22b-2507",
+      "provider": "GMICloud",
+      "endpoint_tag": "gmicloud/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "transport_error": 35,
+        "received": 20
+      },
+      "missing_target_source_ids": [
+        "2099963285571297560",
+        "2100010148131746219",
+        "2100058309072199756",
+        "2100079736537923768",
+        "2100158202914406749",
+        "2100243502130971051",
+        "2100245604027043870",
+        "2100269014656364938",
+        "2100270972465008655",
+        "2100271964736696742",
+        "2100314574721315014",
+        "2100320389226225806",
+        "2100339358398058923",
+        "2100346971144036571",
+        "2100404178355167577",
+        "2100420165917982857",
+        "2100422464241013210",
+        "2100430324899455118"
+      ],
+      "reported_usage_cost_usd": "0.0015662325",
+      "responses_without_usage_cost": 35,
+      "input_tokens": 8879,
+      "output_tokens": 2787,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/qwen235-translation-v2-diagnostic24-20260917-124322/attempt-1.live/report.json",
+      "report_sha256": "24eaeea6a91bf293d82dcfde8b6b02f9127c1695c8b5b62b2d97be6437f0d6de",
+      "contract": ".context/model-task-20260917/qwen235-translation-v2-diagnostic24-20260917-124322/contract.json",
+      "contract_sha256": "32b56be8cf522cbb9c5e07f8588992d616f5e8d5909de30b7e018a005073c61c",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "qwen235_translation_v3",
+      "model": "qwen/qwen3-235b-a22b-2507",
+      "provider": "GMICloud",
+      "endpoint_tag": "gmicloud/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "transport_error": 26,
+        "received": 29
+      },
+      "missing_target_source_ids": [
+        "2099963285571297560",
+        "2100010148131746219",
+        "2100058309072199756",
+        "2100079736537923768",
+        "2100249221484220856",
+        "2100262531788832809",
+        "2100269014656364938",
+        "2100270972465008655",
+        "2100271964736696742",
+        "2100283207736332475",
+        "2100306053913252315",
+        "2100314574721315014",
+        "2100404178355167577",
+        "2100420165917982857",
+        "2100422464241013210"
+      ],
+      "reported_usage_cost_usd": "0.0032777150",
+      "responses_without_usage_cost": 26,
+      "input_tokens": 14518,
+      "output_tokens": 6046,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/qwen235-translation-v3-diagnostic24-20260917-125905/attempt-1.live/report.json",
+      "report_sha256": "8951109d2f0b5abee6807dcb4ac74ab48ed0d45b6cef1af2a2eeaffacf4b51d1",
+      "contract": ".context/model-task-20260917/qwen235-translation-v3-diagnostic24-20260917-125905/contract.json",
+      "contract_sha256": "232b3f70cd72cbcc249f35ceec6f44b001d35e8e95355e8a10157b9568c006ad",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "hy30_translation_v1",
+      "model": "tencent/hy-mt2-30b-a3b",
+      "provider": "Tencent",
+      "endpoint_tag": "tencent/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 50,
+        "transport_error": 5
+      },
+      "missing_target_source_ids": [
+        "2100079736537923768",
+        "2100262531788832809",
+        "2100270972465008655",
+        "2100277491390951481"
+      ],
+      "reported_usage_cost_usd": "0.005347684",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 17101,
+      "output_tokens": 13838,
+      "reasoning_tokens": 197,
+      "report": ".context/model-task-20260917/hy30-translation-v1-diagnostic24-20260917-212807/attempt-1.live/report.json",
+      "report_sha256": "ac10800fb6708591e336a57ade219e8d2f8e58db868f209e1464cce58af7142e",
+      "contract": ".context/model-task-20260917/hy30-translation-v1-diagnostic24-20260917-212807/contract.json",
+      "contract_sha256": "60436937a5e34b4b9ca22b82a1303aea540876677857e770ddd56291b769bbfb",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "hy30_translation_v1",
+      "model": "tencent/hy-mt2-30b-a3b",
+      "provider": "Tencent",
+      "endpoint_tag": "tencent/fp8",
+      "source_count": 8,
+      "source_rows_sha256": "829ca9c8c8d5502be35669f85cfbf1b00657a361495d174efed51c4864d1d19b",
+      "requests": 19,
+      "request_states": {
+        "received": 15,
+        "transport_error": 4
+      },
+      "missing_target_source_ids": [
+        "2100262531788832809",
+        "2100270972465008655",
+        "2100277491390951481"
+      ],
+      "reported_usage_cost_usd": "0.001176595",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 4375,
+      "output_tokens": 2891,
+      "reasoning_tokens": 192,
+      "report": ".context/model-task-20260917/hy30-translation-v1-smoke8-20260917-212807/attempt-1.live/report.json",
+      "report_sha256": "5d7ed0c37ad186e11e109ff05fbf75afe1d15d25376643e915bc6a4d694fab66",
+      "contract": ".context/model-task-20260917/hy30-translation-v1-smoke8-20260917-212807/contract.json",
+      "contract_sha256": "551662a23e53420d888f736f19459e5771096d004d2af7b7c60da0bf4ce0306a",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "hy30_translation_v2",
+      "model": "tencent/hy-mt2-30b-a3b",
+      "provider": "Tencent",
+      "endpoint_tag": "tencent/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 53,
+        "transport_error": 2
+      },
+      "missing_target_source_ids": [
+        "2100079736537923768",
+        "2100270972465008655"
+      ],
+      "reported_usage_cost_usd": "0.005370665",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 16985,
+      "output_tokens": 13945,
+      "reasoning_tokens": 25,
+      "report": ".context/model-task-20260917/hy30-translation-v2-diagnostic24-20260917-214317/attempt-1.live/report.json",
+      "report_sha256": "de7a47ea5290631a7c3c4d8c697f82b35dd8a65a8f8fd3ab3e800fd57d2d876d",
+      "contract": ".context/model-task-20260917/hy30-translation-v2-diagnostic24-20260917-214317/contract.json",
+      "contract_sha256": "17816d200d85802957f63814f8460ff79ace36918a9a62574d73e47b5e9e09b1",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "hy30_translation_v3",
+      "model": "tencent/hy-mt2-30b-a3b",
+      "provider": "Tencent",
+      "endpoint_tag": "tencent/fp8",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 55
+      },
+      "missing_target_source_ids": [
+        "2100249221484220856"
+      ],
+      "reported_usage_cost_usd": "0.005762573",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 27312,
+      "output_tokens": 12683,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/hy30-translation-v3-diagnostic24-20260917-215842/attempt-1.live/report.json",
+      "report_sha256": "ae5eb1e62c01fe87005fd36749b66a5aff88ca28b9a199e1b9c2c2fc2337801c",
+      "contract": ".context/model-task-20260917/hy30-translation-v3-diagnostic24-20260917-215842/contract.json",
+      "contract_sha256": "6e291739bc7ab7e3576e532a83cee94b8ea602590c73849351e4f0e44f46edb7",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "hy30_translation_v3",
+      "model": "tencent/hy-mt2-30b-a3b",
+      "provider": "Tencent",
+      "endpoint_tag": "tencent/fp8",
+      "source_count": 100,
+      "source_rows_sha256": "61cd2421f0c5bf8c17cbd73cc6ae231bb406a6c64f3c8b293d74f70cab4a2d0a",
+      "requests": 215,
+      "request_states": {
+        "received": 215
+      },
+      "missing_target_source_ids": [
+        "2100072242595975471",
+        "2100074485743304992",
+        "2100175698300432723",
+        "2100177975631077722",
+        "2100223903205671209",
+        "2100249221484220856",
+        "2100307770360913963",
+        "2100360950847267020"
+      ],
+      "reported_usage_cost_usd": "0.022907190",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 105600,
+      "output_tokens": 51162,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/hy30-translation-v3-random100-20260917-220225/attempt-1.live/report.json",
+      "report_sha256": "b4a4b58010d33e91e521653cc2e08a86dc47b705f4768bfbfe1b8b7eecd1c38b",
+      "contract": ".context/model-task-20260917/hy30-translation-v3-random100-20260917-220225/contract.json",
+      "contract_sha256": "376a319b64d837e04564c0ee17a1d856c9b9a74c29b9d70d4db6626b73748689",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "gemma4_translation_v1",
+      "model": "google/gemma-4-31b-it",
+      "provider": "DeepInfra",
+      "endpoint_tag": "deepinfra/turbo",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 55
+      },
+      "missing_target_source_ids": [],
+      "reported_usage_cost_usd": "0.00682690",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 28440,
+      "output_tokens": 13285,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/gemma4-translation-v1-diagnostic24-20260917-212808/attempt-1.live/report.json",
+      "report_sha256": "5e0355071ff94eed05d81117a58de702386dc572f1e2c432302c0d2deb592e32",
+      "contract": ".context/model-task-20260917/gemma4-translation-v1-diagnostic24-20260917-212808/contract.json",
+      "contract_sha256": "0fbaa2203d8a805e606ab4f3e3fdfae3284d764bf9d1d2191f1f8b93832d6822",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "gemma4_translation_v1",
+      "model": "google/gemma-4-31b-it",
+      "provider": "DeepInfra",
+      "endpoint_tag": "deepinfra/turbo",
+      "source_count": 100,
+      "source_rows_sha256": "61cd2421f0c5bf8c17cbd73cc6ae231bb406a6c64f3c8b293d74f70cab4a2d0a",
+      "requests": 215,
+      "request_states": {
+        "received": 208,
+        "transport_error": 7
+      },
+      "missing_target_source_ids": [
+        "2100158906307670018",
+        "2100307770360913963",
+        "2100314574721315014",
+        "2100320389226225806",
+        "2100322545949962294",
+        "2100325161845330415"
+      ],
+      "reported_usage_cost_usd": "0.02688823",
+      "responses_without_usage_cost": 7,
+      "input_tokens": 109123,
+      "output_tokens": 52878,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-20260917-220700/attempt-1.live/report.json",
+      "report_sha256": "5a398b6af1a0dd545eaad863e85322390a7a2490edbf04741d850dda5bbffdc1",
+      "contract": ".context/model-task-20260917/gemma4-translation-v1-r113-random100-20260917-220700/contract.json",
+      "contract_sha256": "de342f5c639f189bb60a556dffa8d4b234082c328b6e4981cc9cd2ae66aed3f1",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "gemma4_translation_v1",
+      "model": "google/gemma-4-31b-it",
+      "provider": "DeepInfra",
+      "endpoint_tag": "deepinfra/turbo",
+      "source_count": 8,
+      "source_rows_sha256": "829ca9c8c8d5502be35669f85cfbf1b00657a361495d174efed51c4864d1d19b",
+      "requests": 19,
+      "request_states": {
+        "received": 19
+      },
+      "missing_target_source_ids": [],
+      "reported_usage_cost_usd": "0.00154045",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 7851,
+      "output_tokens": 2637,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/gemma4-translation-v1-smoke8-20260917-212808/attempt-1.live/report.json",
+      "report_sha256": "458ffad26a166f4c35552d95edfb7465ee6f594547539585c4fc6a0eab4e4523",
+      "contract": ".context/model-task-20260917/gemma4-translation-v1-smoke8-20260917-212808/contract.json",
+      "contract_sha256": "b3060b0a3970be620cf981f3501648f3683740173202ec264fc336e2ac0c522f",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "gemma4_translation_v2",
+      "model": "google/gemma-4-31b-it",
+      "provider": "DeepInfra",
+      "endpoint_tag": "deepinfra/turbo",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 55
+      },
+      "missing_target_source_ids": [
+        "2100158202914406749",
+        "2100271964736696742",
+        "2100283207736332475",
+        "2100404178355167577"
+      ],
+      "reported_usage_cost_usd": "0.00640821",
+      "responses_without_usage_cost": 0,
+      "input_tokens": 22199,
+      "output_tokens": 13619,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/gemma4-translation-v2-sourcebound-diagnostic24-20260917-225000/attempt-1.live/report.json",
+      "report_sha256": "09afe5e833b2dca79d0adb307fb9670ef40963c06df01509a6128f475b0599d1",
+      "contract": ".context/model-task-20260917/gemma4-translation-v2-sourcebound-diagnostic24-20260917-225000/contract.json",
+      "contract_sha256": "bb14ef283cb9cd1e2d843150c9e6e0c22c5bf54b82c7c68efbc97c30dbe62c7d",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    },
+    {
+      "profile": "gemma4_translation_v3",
+      "model": "google/gemma-4-31b-it",
+      "provider": "DeepInfra",
+      "endpoint_tag": "deepinfra/turbo",
+      "source_count": 24,
+      "source_rows_sha256": "74219a66999da3ddf98ae32ca501f5084047821a74390f1aa7b48bc0b75542db",
+      "requests": 55,
+      "request_states": {
+        "received": 47,
+        "transport_error": 8
+      },
+      "missing_target_source_ids": [
+        "2100079736537923768",
+        "2100271964736696742",
+        "2100283207736332475",
+        "2100306053913252315",
+        "2100314574721315014",
+        "2100320389226225806"
+      ],
+      "reported_usage_cost_usd": "0.00519439",
+      "responses_without_usage_cost": 8,
+      "input_tokens": 23779,
+      "output_tokens": 10474,
+      "reasoning_tokens": 0,
+      "report": ".context/model-task-20260917/gemma4-translation-v3-structured-diagnostic24-20260917-215700/attempt-1.live/report.json",
+      "report_sha256": "f5df6df2e671933d44098c635ad88a2fc259627c01e08ccbd2513ea2e8f1a6da",
+      "contract": ".context/model-task-20260917/gemma4-translation-v3-structured-diagnostic24-20260917-215700/contract.json",
+      "contract_sha256": "af0585d00c980c101b1e87935d893dc5b920b83bd616b80f54e06f1445292a35",
+      "safety": {
+        "retries": 0,
+        "fallbacks": 0,
+        "database_touched": false
+      }
+    }
+  ],
+  "totals": {
+    "runs": 14,
+    "frozen_requests": 982,
+    "reported_usage_cost_usd": "0.0975184795",
+    "portfolio_reserved_usd": 7.1749335725000005
+  },
+  "test_verification": {
+    "focused_profile_experiment_tests": 37,
+    "classifier_experiment_regression_tests": 21,
+    "all_passed": true
+  }
+}

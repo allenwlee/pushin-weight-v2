@@ -203,9 +203,9 @@ def test_deduplicated_signal_inspection_retains_every_brand() -> None:
     ("family", "key", "locale", "expected"),
     (
         ("sentiment", "positive", "en", "Positive"),
-        ("post_type", "buzz_releases", "en", "Buzz & Releases"),
+        ("post_type", "buzz_releases", "en", "Releases & Updates"),
         ("sentiment", "positive", "zh_cn", "正面"),
-        ("post_type", "buzz_releases", "zh_cn", "热点发布"),
+        ("post_type", "buzz_releases", "zh_cn", "发布与更新"),
     ),
 )
 def test_signal_copy_has_canonical_fallback_when_seed_rows_are_missing(

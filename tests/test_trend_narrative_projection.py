@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from html import unescape
 
 import pytest
+from django.test import override_settings
 
 from core.models import (
     Brand,
@@ -86,8 +87,10 @@ def _per_brand_outcome(
     verified_at: datetime | None = NOW,
     headline_en: str | None = None,
     headline_zh_cn: str | None = None,
+    headline_ja: str | None = None,
     secondary_en: str | None = None,
     secondary_zh_cn: str | None = None,
+    secondary_ja: str | None = None,
     error_code: str = "",
 ) -> BrandTrendNarrative:
     publishable = status == BrandTrendNarrative.Status.APPROVED
@@ -109,6 +112,12 @@ def _per_brand_outcome(
         if publishable
         else "",
         secondary_zh_cn=(secondary_zh_cn or "帖子详细讨论了这一变化。")
+        if publishable
+        else "",
+        headline_ja=(headline_ja or f"{brand.display_name_en}の話題が変化しました。")
+        if publishable
+        else "",
+        secondary_ja=(secondary_ja or "投稿ではこの変化が詳しく議論されました。")
         if publishable
         else "",
         critic_decision=(
@@ -479,7 +488,7 @@ def test_stale_uses_last_good_body_and_deleted_brand_loses_only_link():
     payload = project_trend_narrative(
         1,
         locale="en",
-        now=NOW + timedelta(hours=2),
+        now=NOW + timedelta(hours=2, seconds=2),
         config=_config(),
     )
 
@@ -705,6 +714,7 @@ def test_chart_payload_has_one_identity_for_chart_pulse_narrative_and_voices(
     assert payload["computed_at"] == payload["top_voices"]["computed_at"]
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 def test_ten_window_requests_are_database_only_and_apply_only_brand_selection(
     client,
     monkeypatch,
@@ -1085,7 +1095,8 @@ def test_u5_query_count_is_bounded_for_twenty_brands(django_assert_num_queries):
         _per_brand_outcome(run, brand)
     assert activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
 
-    with django_assert_num_queries(2):
+    # One extra bounded prefetch loads normalized EN/ZH-CN/JA child text.
+    with django_assert_num_queries(3):
         payload = project_trend_narrative(
             1,
             locale="en",
@@ -1094,6 +1105,34 @@ def test_u5_query_count_is_bounded_for_twenty_brands(django_assert_num_queries):
         )
 
     assert len(payload["items"]) == 2
+
+
+def test_japanese_projection_uses_persisted_japanese_text_without_english_fallback():
+    brand = _brand("ja-brand", "JA Brand")
+    run = _per_brand_run([brand], cycle="ja-projection")
+    _per_brand_outcome(
+        run,
+        brand,
+        headline_en="English headline must not leak.",
+        headline_ja="JA Brandの新モデルが注目を集めています。",
+        secondary_ja="投稿では公開された機能と利用例が議論されています。",
+    )
+    assert activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
+
+    payload = project_trend_narrative(
+        1,
+        locale="ja",
+        now=NOW + timedelta(minutes=5),
+        config=_config(),
+    )
+
+    assert payload["items"][0]["headline"] == (
+        "JA Brandの新モデルが注目を集めています。"
+    )
+    assert payload["items"][0]["secondary"] == (
+        "投稿では公開された機能と利用例が議論されています。"
+    )
+    assert "English headline" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_u5_chart_view_threads_only_normalized_brand_selection(monkeypatch):
@@ -1135,6 +1174,7 @@ def test_u5_chart_view_threads_only_normalized_brand_selection(monkeypatch):
     assert changed_brand["items"][0]["brand"]["key"] == "deepseek"
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 def test_u5_chart_endpoint_threads_brand_filter_to_dto_v3(client, monkeypatch):
     deepseek = _brand("deepseek", "DeepSeek")
     minimax = _brand("minimax", "MiniMax")
