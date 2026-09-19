@@ -175,6 +175,9 @@ OLLIJA_STAGING_ALLOWED_EMAILS = frozenset(
     for email in env.list("OLLIJA_STAGING_ALLOWED_EMAILS", default=[])
     if email.strip()
 )
+STAGING_REVIEW_DATA_CLOCK_ENABLED = env.bool(
+    "STAGING_REVIEW_DATA_CLOCK_ENABLED", default=False
+)
 
 # ============================================================================
 # django-allauth — Google OAuth

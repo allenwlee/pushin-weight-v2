@@ -133,7 +133,9 @@
   }
 
   function renderFeedStamps(copy) {
-    var now = Date.now();
+    var reviewNow = document.body && document.body.getAttribute('data-pw-feed-now');
+    var parsedReviewNow = reviewNow ? new Date(reviewNow).getTime() : NaN;
+    var now = Number.isNaN(parsedReviewNow) ? Date.now() : parsedReviewNow;
     var timezone = activeTimezone();
     document.querySelectorAll('.feed-row[data-created-at-iso]').forEach(function (row) {
       var createdAt = new Date(row.getAttribute('data-created-at-iso') || '');

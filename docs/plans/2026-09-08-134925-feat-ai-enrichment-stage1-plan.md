@@ -5414,3 +5414,30 @@ which now records the clean aggregate (3,231 passed, 25 documented
 deselections, 783 PostgreSQL-required executed, zero skips/errors) and two
 stable normal-equivalent 15-minute intervals. Update PR 41. U24 remains
 excluded until the owner separately chooses production after review.
+
+### September 19 — Historical-data review clock for staging
+
+The owner found that wall-clock `window:1d` had aged past the production-shaped
+staging snapshot, making the locale-switched feed and graph look empty even
+though the copied data was intact. On staging only, anchor every dashboard
+window, chart, feed, pulse, top-voices projection, brand view, and relative-time
+label to one review horizon: one microsecond after the copied dataset's
+`posts.created_at` cutoff recorded in the guarded refresh receipt. Sparse posts
+from later bounded staging probes must not move that horizon. A staging database
+without a receipt may fall back to its newest stored post. The current snapshot
+therefore treats
+`2026-09-18T14:45:49.000001Z` as “now.” Cache that aggregate briefly, expose
+the exact horizon to browser rendering, and clear it with the existing home
+projection caches. Locale changes must retain the same ordered row identities.
+
+Keep production on wall time even if the feature flag is accidentally present,
+and never rewrite a post or job timestamp. The five official Chinese-lab job
+sources remain enabled in the staged product and their 655 copied listings keep
+their actual source/observation dates. They use the same historical calendar:
+an older listing belongs in a wider 7/30/90/365-day window rather than being
+made artificially current in `1d`. The staging jobs cron and harvest cron stay
+on the impossible manual-only schedule, so this review aid performs no crawl,
+provider call, or database mutation. Verify the staging-only/production-off
+boundary, English/Japanese row parity, exact graph cutoff, relative labels,
+official-job window behavior, JavaScript formatting, topology, and an
+authenticated hosted-browser pass before replacing the staging candidate.

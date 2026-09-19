@@ -25,13 +25,15 @@ from time import monotonic
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.signing import salted_hmac
-from django.db import transaction
+from django.db import DatabaseError, connection, transaction
 from django.db.models import (
     Count,
     Exists,
     IntegerField,
+    Max,
     OuterRef,
     Prefetch,
     Q,
@@ -96,6 +98,7 @@ from core.models import (
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
+from scripts.staging_refresh.receipt import ReceiptError, decode_database_comment
 
 log = logging.getLogger(__name__)
 
@@ -379,6 +382,64 @@ _HOME_TOP_VOICES_CACHE: dict[
     tuple[int, int], tuple[float, list[dict[str, Any]]]
 ] = {}
 _HOME_PULSE_CACHE_LOCK = Lock()
+_STAGING_REVIEW_CLOCK_CACHE: tuple[float, datetime] | None = None
+_STAGING_REFRESH_RECEIPT_MARKER = "staging-refresh/v1"
+_STAGING_REFRESH_POST_HORIZON = "posts.created_at"
+
+
+def _staging_refresh_review_horizon() -> datetime | None:
+    """Read the full-data cutoff recorded by the guarded staging refresh."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT shobj_description(oid, 'pg_database') "
+                "FROM pg_database WHERE datname = current_database()"
+            )
+            row = cursor.fetchone()
+        comment = decode_database_comment(
+            row[0] if row else None,
+            marker_prefix=_STAGING_REFRESH_RECEIPT_MARKER,
+        )
+        raw_horizon = comment.receipt.latest_timestamps.get(
+            _STAGING_REFRESH_POST_HORIZON
+        )
+        if raw_horizon is None:
+            return None
+        horizon = datetime.fromisoformat(raw_horizon)
+        if horizon.tzinfo is None:
+            return None
+        return horizon + timedelta(microseconds=1)
+    except (DatabaseError, ReceiptError, TypeError, ValueError):
+        return None
+
+
+def _dashboard_now() -> datetime:
+    """Return wall time, or the copied-snapshot horizon for staging review."""
+    if not (
+        settings.OLLIJA_STAGING_MODE
+        and getattr(settings, "STAGING_REVIEW_DATA_CLOCK_ENABLED", False)
+    ):
+        return django_timezone.now()
+
+    global _STAGING_REVIEW_CLOCK_CACHE
+    cache_now = monotonic()
+    with _HOME_PULSE_CACHE_LOCK:
+        cached = _STAGING_REVIEW_CLOCK_CACHE
+        if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
+            return cached[1]
+
+    review_now = _staging_refresh_review_horizon()
+    if review_now is None:
+        latest = Post.objects.aggregate(latest=Max("created_at"))["latest"]
+        # Local and pre-refresh staging databases have no durable receipt.
+        review_now = (
+            latest + timedelta(microseconds=1)
+            if latest is not None
+            else django_timezone.now()
+        )
+    with _HOME_PULSE_CACHE_LOCK:
+        _STAGING_REVIEW_CLOCK_CACHE = (cache_now, review_now)
+    return review_now
 
 
 # ============================================================================
@@ -775,7 +836,7 @@ def _get_posts_for_brand(
     """
     cutoff = None
     if window_days:
-        cutoff = django_timezone.now() - timedelta(days=window_days)
+        cutoff = _dashboard_now() - timedelta(days=window_days)
 
     qs = Post.objects.filter(
         brands__brand__nickname=brand_nickname,
@@ -794,6 +855,7 @@ def _get_feed_posts(
     limit: int = FEED_DEFAULT_LIMIT,
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
+    now: datetime | None = None,
 ) -> QuerySet:
     """Return a QuerySet of Posts for the feed view, with brand and account prefetching.
 
@@ -806,7 +868,7 @@ def _get_feed_posts(
     """
     cutoff = None
     if window_days:
-        cutoff = django_timezone.now() - timedelta(days=window_days)
+        cutoff = (now or _dashboard_now()) - timedelta(days=window_days)
 
     qs = (
         Post.objects.select_related("author")
@@ -927,7 +989,11 @@ def _feed_relative_age(when, now=None) -> str:
     return when.strftime("%b %-d %Y") if hasattr(when, "strftime") else when.strftime("%b %d %Y")
 
 
-def _feed_abs_stamp(when, tz_mode: str = "local") -> str:
+def _feed_abs_stamp(
+    when,
+    tz_mode: str = "local",
+    now: datetime | None = None,
+) -> str:
     """Absolute HH:MM stamp for the meta line. Empty when >= 24h old.
 
     Mockup pattern: <24h → "(10:21 本地)" or "(10:21 CA)"; >=24h → "".
@@ -942,8 +1008,8 @@ def _feed_abs_stamp(when, tz_mode: str = "local") -> str:
             return ""
     if not isinstance(when, _dt):
         return ""
-    now = _dt.now(when.tzinfo) if when.tzinfo else _dt.now()
-    delta = int((now - when).total_seconds())
+    current = now or (_dt.now(when.tzinfo) if when.tzinfo else _dt.now())
+    delta = int((current - when).total_seconds())
     if delta >= 60 * 60 * 24:
         return ""
     if tz_mode == "ca":
@@ -1531,6 +1597,7 @@ def _v22_feed_display_fields(
     retweet_count: int | None = None,
     reply_count: int | None = None,
     author_handle: str | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build the V22 display fields shared by SSR and feed-refresh rows."""
     _, post_type_keys, product_label_keys, nat_cn, nat_us = _feed_signal_keys(classifications)
@@ -1609,6 +1676,7 @@ def _v22_feed_display_fields(
         retweet_count or 0,
         reply_count or 0,
     )
+    display_now = now or _dashboard_now()
     return {
         "sentiment_keys": sentiment_keys,
         "post_type_keys": post_type_keys,
@@ -1629,8 +1697,8 @@ def _v22_feed_display_fields(
         "legacy_nat_cn": legacy_nat_cn,
         "legacy_nat_us": legacy_nat_us,
         "tint_class": _feed_tint_class(sentiment_keys),
-        "meta_text": _feed_relative_age(created_at),
-        "ts_abs_text": _feed_abs_stamp(created_at),
+        "meta_text": _feed_relative_age(created_at, now=display_now),
+        "ts_abs_text": _feed_abs_stamp(created_at, now=display_now),
         "avatar_initials": _avatar_initials(handle),
         "avatar_color": _avatar_color(handle),
         "follower_bin": _follower_bin(followers_count),
@@ -2447,7 +2515,7 @@ def _parse_hover_freeze_range(
     if duration <= timedelta(0) or duration > _HOVER_FREEZE_MAX_DURATION:
         raise ValueError("invalid hover-freeze range")
 
-    current = (now or django_timezone.now()).astimezone(UTC)
+    current = (now or _dashboard_now()).astimezone(UTC)
     horizon_start = current - timedelta(days=1) - _HOVER_FREEZE_HORIZON_TOLERANCE
     horizon_end = current + _HOVER_FREEZE_HORIZON_TOLERANCE
     if start < horizon_start or end > horizon_end:
@@ -3120,7 +3188,7 @@ def _build_home_chart_payload(
 
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
-    requested_at = now or django_timezone.now()
+    requested_at = now or _dashboard_now()
     normalized_filters = _normalize_home_filters(filters)
     cache_key = None
     cached_payload = None
@@ -3384,10 +3452,12 @@ def _round_pulse_percent(current: int, prior: int) -> int | None:
 
 def _clear_home_pulse_cache() -> None:
     """Clear bounded shared home projections (used by deterministic tests)."""
+    global _STAGING_REVIEW_CLOCK_CACHE
     with _HOME_PULSE_CACHE_LOCK:
         _HOME_CHART_CACHE.clear()
         _HOME_PULSE_CACHE.clear()
         _HOME_TOP_VOICES_CACHE.clear()
+        _STAGING_REVIEW_CLOCK_CACHE = None
 
 
 def _build_home_pulse_payload(
@@ -3398,7 +3468,7 @@ def _build_home_pulse_payload(
     """Aggregate equal windows for every non-sentinel DB brand in one query."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
-    now = now or django_timezone.now()
+    now = now or _dashboard_now()
     cache_now = monotonic()
     with _HOME_PULSE_CACHE_LOCK:
         cached = _HOME_PULSE_CACHE.get(window_days)
@@ -3501,7 +3571,7 @@ def _multi_top_voices(
         if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
             return deepcopy(cached[1])
 
-    cutoff = (now or django_timezone.now()) - timedelta(days=window_days)
+    cutoff = (now or _dashboard_now()) - timedelta(days=window_days)
     qs = (
         Post.objects.filter(created_at__gte=cutoff, author__isnull=False)
         .values("author__handle", "author__author_id", "author__followers_count")
@@ -3703,6 +3773,7 @@ def home(request: HttpRequest) -> HttpResponse:
         "is_zh_chrome": _is_zh_locale(locale),
         "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
+        "feed_now_iso": initial_chart_payload["computed_at"],
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
@@ -3775,6 +3846,7 @@ def home_internal(request: HttpRequest) -> HttpResponse:
         "is_zh_chrome": _is_zh_locale(locale),
         "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
+        "feed_now_iso": initial_chart_payload["computed_at"],
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
@@ -3842,6 +3914,7 @@ def brand_home(
         "is_zh_chrome": _is_zh_locale(locale),
         "is_ja_chrome": _is_ja_locale(locale),
         "home_window_days": window_days,
+        "feed_now_iso": initial_brand_chart_payload["fetched_at"],
         "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
         "app_name_zh": APP_DISPLAY_NAME_ZH,
         "app_name_en": APP_DISPLAY_NAME_EN,
@@ -3888,6 +3961,7 @@ def _serialize_feed_row(
     *,
     active_brand_scope: str | list[str] | tuple[str, ...] | set[str] | None = "__all__",
     include_geography: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     '''Serialize one enriched post dict to the feed wire shape.
 
@@ -4000,6 +4074,7 @@ def _serialize_feed_row(
         retweet_count=post.get("retweet_count"),
         reply_count=post.get("reply_count"),
         author_handle=post.get("author_handle"),
+        now=now,
     )
     unsanctioned = post.get("unsanctioned", False)
     signal_inspections = _feed_signal_inspections(
@@ -4222,7 +4297,7 @@ def _feed_page_posts(
     normalized = _normalize_home_filters(filters)
     if brand_nickname:
         normalized["brands"] = [brand_nickname]
-    current = now or django_timezone.now()
+    current = now or _dashboard_now()
     queryset = _filter_home_posts_queryset(
         window_days,
         normalized,
@@ -4327,7 +4402,12 @@ def _direct_jobs_queryset(
     return queryset
 
 
-def _serialize_direct_job(job: JobListing, locale: str) -> dict[str, Any]:
+def _serialize_direct_job(
+    job: JobListing,
+    locale: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     created_at = job._feed_created_at
     created_at_iso = created_at.isoformat() if created_at else None
     brand = _brand_projection_fields(job.brand, locale)
@@ -4363,6 +4443,7 @@ def _serialize_direct_job(job: JobListing, locale: str) -> dict[str, Any]:
         active_brand_scope=[job.brand_id],
         created_at=created_at,
         account=account,
+        now=now,
     )
     signal_inspections = _feed_signal_inspections(
         classifications, [brand], locale, unsanctioned=False
@@ -4456,7 +4537,7 @@ def _feed_page_wire(
     created_at_end: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, bool, dict[str, Any]]:
     bounded = max(1, min(int(limit), FEED_REQUEST_MAX))
-    current = django_timezone.now()
+    current = _dashboard_now()
     posts, _post_cursor, post_has_more, normalized = _feed_page_posts(
         window_days=window_days,
         filters=filters,
@@ -4482,6 +4563,7 @@ def _feed_page_wire(
             locale,
             active_brand_scope=normalized.get("brands", "__all__"),
             include_geography=include_geography,
+            now=current,
         )
         row["row_key"] = _feed_row_key("x_post", post.tweet_id)
         row["source_kind"] = "x_post"
@@ -4529,7 +4611,7 @@ def _feed_page_wire(
             )[: bounded + 1]
         )
         for job in jobs:
-            row = _serialize_direct_job(job, locale)
+            row = _serialize_direct_job(job, locale, now=current)
             row["_sort_value"] = 0 if sort == "like_count" else job._feed_created_at
             rows.append(row)
 
@@ -4855,7 +4937,7 @@ def _build_brand_chart_payload(
 
     Returns the full payload dict (not rendered HTML).
     """
-    now = django_timezone.now()
+    now = _dashboard_now()
 
     brand_obj = Brand.objects.filter(nickname=brand_nickname).first()
     if brand_obj is not None and brand_obj.is_sentinel:
@@ -4865,6 +4947,7 @@ def _build_brand_chart_payload(
         window_days=window_days,
         brand_nickname=brand_nickname,
         limit=BRAND_CHART_ROW_LIMIT,
+        now=now,
     )
     enriched = _enrich_posts_with_classifications(posts, brand_nickname=brand_nickname)
     filtered = [p for p in enriched if _post_matches_filter(p, filters)]

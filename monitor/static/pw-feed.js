@@ -290,6 +290,12 @@
     }
   }
 
+  function feedNow() {
+    var raw = document.body && document.body.getAttribute('data-pw-feed-now');
+    var anchored = raw ? new Date(raw) : null;
+    return anchored && !isNaN(anchored.getTime()) ? anchored : new Date();
+  }
+
   function renderRow(row) {
     var div = document.createElement('div');
     var tint = row.tint_class || 'tint-neutral';
@@ -1083,7 +1089,7 @@
   }
 
   function hydrateRows(rows) {
-    var now = new Date();
+    var now = feedNow();
     rows.forEach(function (row) {
       paintSignals(row);
       attachCellClickHandlers(row);

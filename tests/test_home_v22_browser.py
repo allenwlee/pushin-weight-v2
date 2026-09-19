@@ -517,6 +517,80 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         context.add_cookies(cookies)
         return context
 
+    @override_settings(
+        OLLIJA_STAGING_MODE=True,
+        STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
+        OLLIJA_STAGING_ALLOWED_EMAILS=frozenset({V22_TEST_USER_EMAIL}),
+        # StaticLiveServerTestCase serves HTTP; hosted staging still redirects
+        # to HTTPS under its normal Render settings.
+        SECURE_SSL_REDIRECT=False,
+    )
+    def test_staging_one_day_feed_survives_locale_reload_at_dataset_cutoff(self) -> None:
+        anchor = datetime(2026, 9, 18, 14, 45, 49, tzinfo=UTC)
+        Post.objects.update(created_at=anchor - timedelta(hours=2))
+        newest = Post.objects.order_by("tweet_id").first()
+        self.assertIsNotNone(newest)
+        Post.objects.filter(pk=newest.pk).update(created_at=anchor)
+        _clear_home_pulse_cache()
+
+        cookies = self._authenticated_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(
+                    browser,
+                    cookies,
+                    VIEWPORTS["desktop"],
+                )
+                context.route(
+                    "https://unpkg.com/**",
+                    lambda route: route.fulfill(
+                        status=200,
+                        content_type="application/javascript",
+                        body="window.htmx = window.htmx || {};",
+                    ),
+                )
+                page = context.new_page()
+                try:
+                    response = page.goto(
+                        f"{self.live_server_url}/?window=1&locale=en",
+                        wait_until="commit",
+                    )
+                    self.assertIsNotNone(response)
+                    self.assertEqual(response.status, 200)
+                    page.locator("[data-pw-feed-row]").first.wait_for()
+                    before = page.locator("[data-pw-feed-row]").evaluate_all(
+                        "rows => rows.map(row => row.dataset.tweetId)"
+                    )
+                    self.assertIn(newest.tweet_id, before)
+                    self.assertEqual(
+                        page.locator("body").get_attribute("data-pw-feed-now"),
+                        (anchor + timedelta(microseconds=1)).isoformat(),
+                    )
+                    self.assertIn(
+                        "just now",
+                        page.locator(
+                            f'[data-pw-feed-row][data-tweet-id="{newest.tweet_id}"] '
+                            ".meta"
+                        ).inner_text(),
+                    )
+
+                    with page.expect_navigation(wait_until="commit"):
+                        page.locator('[data-pw-locale-btn="ja"]').click()
+                    page.locator("[data-pw-feed-row]").first.wait_for()
+                    after = page.locator("[data-pw-feed-row]").evaluate_all(
+                        "rows => rows.map(row => row.dataset.tweetId)"
+                    )
+                    self.assertEqual(after, before)
+                    self.assertEqual(
+                        page.locator("body").get_attribute("data-pw-locale"),
+                        "ja",
+                    )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_single_brand_chart_has_valid_htmx_refresh_trigger(self) -> None:
         cookies = self._authenticated_cookies("en")
         with sync_playwright() as playwright:

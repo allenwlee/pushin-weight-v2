@@ -499,3 +499,41 @@ zero errors in 493.16 seconds. The JUnit receipt is
 An earlier attempt encountered a PostgreSQL deadlock while a live-browser test
 was releasing its fixture; the two affected tests passed in isolation on a
 fresh database before this complete clean rerun.
+
+## Historical staging review clock follow-up
+
+The production-shaped snapshot ends at X-post timestamp
+`2026-09-18T14:45:49Z`. By September 19, dashboard queries still used the real
+wall clock, so `window:1d` legitimately selected no copied rows. Changing the
+locale reloaded that same empty interval. This was a review-environment clock
+mismatch, not a locale data-loss defect.
+
+The follow-up candidate adds a staging-web-only feature flag. When both that
+flag and the existing staging profile are active, the dashboard reads the
+guarded refresh receipt's `posts.created_at` cutoff and uses
+`2026-09-18T14:45:49.000001Z` as its review horizon. Sparse posts inserted by
+later bounded staging probes cannot move it. A pre-refresh or local staging
+database without a receipt falls back to its newest post. The extra microsecond
+preserves the existing half-open database interval while including the newest
+copied post. Feed rows, graphs, pulse, top voices, brand pages, hover ranges,
+server relative labels, and browser relative labels now receive the same horizon.
+Changing EN to JA therefore retains the same ordered post identities. In
+production, or whenever the staging flag is absent, all paths continue to use
+wall time.
+
+No stored timestamps are changed. Official recruiting-site listings remain
+source-dated and use the same historical calendar. A listing five days before
+the copied-post horizon is absent from `1d`, present in `7d`, and unchanged in
+the database. The existing Qwen, DeepSeek, MiniMax, Zhipu, and Kimi crawler and
+its 655 staged listings remain part of the product; its Render cron remains
+manual-only on `0 0 31 2 *`.
+
+The focused PostgreSQL run passed 21 tests covering the review clock, official
+job feed behavior, and staging/production Blueprint separation. The JavaScript
+feed/timezone suites passed 104 checks, and Django's system check was clean.
+The new browser regression reached its expected application assertions once
+before the host exhausted its local TCP ephemeral-port pool; the latest rerun
+could not connect Chromium to the local live server and is not represented as
+a passing candidate-browser gate. The final evidence below must be amended
+with the committed SHA, exact staging deployment, and authenticated hosted
+browser result before this follow-up is called complete.

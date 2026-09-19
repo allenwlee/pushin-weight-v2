@@ -14,7 +14,7 @@
   <script src="{% static 'pw-filter-store.js' %}" defer></script>
   <script src="{% static 'pw-chart.js' %}" defer></script>
   <script src="{% static 'pw-brand-chart.js' %}" defer></script>
-  <script src="{% static 'pw-feed.js' %}" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=staging-clock1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}" defer></script>
   <script src="{% static 'dashboard.js' %}" defer></script>
 </head>
@@ -22,6 +22,7 @@
 <body data-pw-filters='{{ applied_filters_json }}'
       data-pw-brands='{{ brand_nicknames_json|safe }}'
       data-pw-locale="{{ active_locale }}"
+      data-pw-feed-now="{{ feed_now_iso }}"
       data-pw-window="{{ home_window_days }}"
       data-pw-page="multi">
   <header class="topbar">

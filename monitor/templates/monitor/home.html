@@ -12,10 +12,10 @@
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
   <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
-  <script src="{% static 'pw-tz.js' %}?v=cyber-quan1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=staging-clock1" defer></script>
   <script src="{% static 'pw-filter-pills.js' %}?v=preferences1" defer></script>
   <script src="{% static 'pw-chart.js' %}?v=feed-inspection1" defer></script>
-  <script src="{% static 'pw-feed.js' %}?v=feed-inspection1" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=staging-clock1" defer></script>
   <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
 </head>
 {% csrf_token %}
@@ -25,6 +25,7 @@
       data-pw-canonical-url="{{ canonical_home_url|default:'' }}"
       data-pw-brands='{{ brand_nicknames_json }}'
       data-pw-locale="{{ active_locale }}"
+      data-pw-feed-now="{{ feed_now_iso }}"
       data-pw-preferences-namespace="{{ home_preferences_namespace }}"
       data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
       data-pw-country-flag-codes='{{ country_flag_codes_json }}'
