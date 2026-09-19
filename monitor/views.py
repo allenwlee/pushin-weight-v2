@@ -98,7 +98,6 @@ from core.models import (
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
-from scripts.staging_refresh.receipt import ReceiptError, decode_database_comment
 
 log = logging.getLogger(__name__)
 
@@ -396,20 +395,30 @@ def _staging_refresh_review_horizon() -> datetime | None:
                 "FROM pg_database WHERE datname = current_database()"
             )
             row = cursor.fetchone()
-        comment = decode_database_comment(
-            row[0] if row else None,
-            marker_prefix=_STAGING_REFRESH_RECEIPT_MARKER,
-        )
-        raw_horizon = comment.receipt.latest_timestamps.get(
-            _STAGING_REFRESH_POST_HORIZON
-        )
+        raw_comment = row[0] if row else None
+        prefix = f"{_STAGING_REFRESH_RECEIPT_MARKER}:"
+        if not isinstance(raw_comment, str) or not raw_comment.startswith(prefix):
+            return None
+        payload = json.loads(raw_comment.removeprefix(prefix))
+        if not isinstance(payload, dict) or not (
+            payload.get("kind") == "staging-refresh-receipt"
+            and payload.get("state") == "active"
+        ):
+            return None
+        receipt = payload.get("receipt")
+        if not isinstance(receipt, dict):
+            return None
+        latest_timestamps = receipt.get("latest_timestamps")
+        if not isinstance(latest_timestamps, dict):
+            return None
+        raw_horizon = latest_timestamps.get(_STAGING_REFRESH_POST_HORIZON)
         if raw_horizon is None:
             return None
         horizon = datetime.fromisoformat(raw_horizon)
         if horizon.tzinfo is None:
             return None
         return horizon + timedelta(microseconds=1)
-    except (DatabaseError, ReceiptError, TypeError, ValueError):
+    except (DatabaseError, json.JSONDecodeError, TypeError, ValueError):
         return None
 
 
