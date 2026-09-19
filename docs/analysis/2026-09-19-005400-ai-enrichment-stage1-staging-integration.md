@@ -346,3 +346,57 @@ The follow-up candidate therefore also unwraps only an exact one-key
 all other shapes remain invalid. This is the same bounded mechanical
 normalization class as the already accepted scalar-to-singleton-array rule; it
 does not infer a promotion or change taxonomy semantics.
+
+### Final bounded-probe result
+
+The completed candidate is `45532f72c1e3f3baa62f8facfe7ad926950dd749`.
+During the continuation, the probe found and corrected two additional
+representation defects without changing taxonomy semantics. First, tracked
+brand aliases such as `Grok` and `grok` had been sorted only by their folded
+case. Their tied order could change during catalog reconstruction and produce a
+different catalog revision before any classifier call. Catalog text is now
+ordered by folded value and original value, and the case-variant regression is
+covered directly. Second, Gemma consistently preserved commentary identity,
+locale order, and text while sometimes using the next locale's closing tag as
+the field boundary. The parser now accepts only that ordered single-line Gemma
+grammar, while continuing to reject wrong post IDs, reordered fields, tag text
+inside values, duplicate locale content, multiline values, and trailing text.
+
+The final persisted probe passed over the same fixed five existing posts: three
+English, one Simplified-Chinese, and one Japanese. It produced five current
+Gemma literal-translation artifacts, seven 0731 post-brand classifications,
+and five current Gemma synthesis artifacts. Every translation and synthesis
+artifact contains `en`, `zh-cn`, and `ja`; every enrichment state and synthesis
+demand is `succeeded`. The seven classifications cover Llama, Yi, StepFun,
+DeepSeek, GLM, MiniMax, and Qwen. The Qwen row also persisted `local_inference`
+and the still-shadowed `cost_performance` audience topics. The Chinese
+three-brand synthesis required one normal persisted retry after its first
+response failed the old tag parser; its final demand has two attempts and no
+error. No TwitterAPI request was made.
+
+The persisted classifier pass used exactly the two locked direct-DeepInfra
+0731 roles and succeeded on the first transport attempt for each role. It used
+19,483 input and 672 output tokens in total; response-reported cost was
+`$0.00085218`, including provider cache discounts. Four of the five synthesis
+rows persisted in the initial batch, and the one pending row then passed its
+targeted retry under the bounded parser correction. Earlier rollback-only and
+failed-parser calls remain diagnostic spend and are not presented as part of
+the persisted-pass cost.
+
+The completed SHA passed 61 focused classifier tests with all 13
+PostgreSQL-required cases executed and 26 focused synthesis tests with all 14
+PostgreSQL-required cases executed. An earlier combined classifier/synthesis
+candidate also passed 85 tests with all 27 required PostgreSQL cases executed.
+Every gate had zero required skips and zero errors. A final read-only database
+audit (`job-damuncijnfac73enmmr0`) proved five posts, seven post-brand
+decisions, complete three-locale artifacts, succeeded enrichment/demand state,
+and zero TwitterAPI calls.
+
+At runtime verification, the feature and staging refs both resolved to the
+completed candidate. The staging web, harvest, synthesis, and jobs services
+were verified live at that SHA. A superseded intermediate headline build was
+canceled so the queued completed candidate could deploy; the final headline
+deployment became live at the same SHA at `2026-09-19T02:01:32Z`. The staging
+harvest cron was re-suspended at
+`2026-09-19T01:56:50Z`, and its impossible schedule remains `0 0 31 2 *`.
+Production was not modified.

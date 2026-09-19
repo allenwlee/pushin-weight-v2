@@ -5338,3 +5338,36 @@ required singleton array. Normalize only an exact one-key `promotion` object
 whose value is in the allowlist; preserve fail-closed behavior for extra keys,
 unknown values, and every other shape. Rerun the same exact-SHA gate after this
 follow-up candidate deploys.
+
+### September 19 — Bounded existing-data staging gate passed
+
+The bounded five-post staging gate is complete at candidate
+`45532f72c1e3f3baa62f8facfe7ad926950dd749`. The same fixed cohort of three
+English, one Simplified-Chinese, and one Japanese post now has five complete
+EN/ZH-CN/JA literal-translation artifacts, seven persisted post-brand
+classifications, and five complete EN/ZH-CN/JA synthesis artifacts. All five
+enrichment states and synthesis demands are succeeded. The probe used direct
+DeepInfra 0731 for the two classifier roles and direct DeepInfra Gemma 4 31B
+for translation and synthesis. It made zero TwitterAPI requests.
+
+Three deterministic transport normalizations were required after the prior
+entry. Catalog strings now use a total ordering so case variants such as
+`Grok`/`grok` cannot produce a revision mismatch during reconstruction. The
+selected classifier continues to normalize only the locked stance implication
+and exact one-key promotion wrapper already recorded above. The Gemma tagged
+synthesis parser accepts a narrowly bounded ordered grammar in which the next
+locale's closing tag may delimit the preceding value, with or without the next
+opening tag. Identity, locale order, single-line values, distinctness, and
+no-extra-text checks remain strict.
+
+The completed SHA passed 61 classifier tests with 13 PostgreSQL-required cases
+and 26 synthesis tests with 14 required cases. The earlier combined
+classifier/synthesis candidate passed 85 tests with 27 required cases. All gates
+had zero required skips and zero errors. Final database audit job
+`job-damuncijnfac73enmmr0` proved five posts, seven decisions, complete locale
+sets, succeeded state, and zero TwitterAPI calls. The staging harvester was
+re-suspended after the audit and retains schedule `0 0 31 2 *`. Production
+remains untouched. All five staging services were then verified live at the
+same candidate SHA; a superseded intermediate headline build was canceled to
+unblock that final deployment. Update PR 41 and then continue to the remaining
+staging-only roadmap; this gate does not authorize production promotion.
