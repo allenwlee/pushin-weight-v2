@@ -5292,3 +5292,22 @@ therefore not authorized for production, and no retry is permitted under this
 acceptance record. Preserve all earlier failed runs and this inconclusive run
 as immutable evidence. Full details are in
 `docs/analysis/2026-09-19-005400-ai-enrichment-stage1-staging-integration.md`.
+
+### September 19 — Owner-authorized on-demand credential retry
+
+The owner separately authorized one retry after the preceding inconclusive
+staging attempt, specifically requiring the manual staging lane to use the
+on-demand TwitterAPI credential. Manual and backfill cycles now select
+`ON_DEMAND`; scheduled cycles select `SCHEDULED`. The correction passed its
+focused PostgreSQL gate: 80 passed, 26 PostgreSQL-required executed, zero
+skips/errors. It was deployed and verified at exact SHA
+`554449c6965286dbcfec6f220e72614d2a1c1020` across all staging services.
+
+The retry was Render run `20260919T002539_0000-1ce111b6`, cron run ID
+`crn-da7vrdqd0e5s739uvcs0-1789777507`. It made one Call A/search request and
+received one result; relevancy succeeded, one LLM drop followed, and zero
+posts were kept, inserted, or attributed. There were zero recorded errors and
+the final acceptance reason was `no_inserted_posts`, so the outcome remains
+inconclusive. The staging harvester was suspended immediately after the run;
+production was untouched. This confirms the credential lane but does not
+provide a live classification/enrichment result or authorize production.

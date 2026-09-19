@@ -254,17 +254,42 @@ main `*/15 * * * *` schedule and was not touched.
 
 This exact live attempt does not pass the Stage 1 acceptance gate. It provides
 no live classification or enrichment result from which to assess the corrected
-pipeline, so Stage 1 is not authorized for production. No retry is permitted
-under this acceptance record. The earlier failed runs and this inconclusive
-run remain immutable historical evidence.
+pipeline, so Stage 1 is not authorized for production. The earlier failed run
+and this inconclusive run remain immutable historical evidence.
+
+## Owner-authorized on-demand retry
+
+After the preceding inconclusive run, the owner separately authorized one
+retry specifically to test the manual staging lane with the on-demand
+TwitterAPI credential. This is a distinct acceptance attempt and does not
+rewrite the prior result. Manual and backfill cycles select `ON_DEMAND`; only
+scheduled cycles select `SCHEDULED`. The retry ran at exact candidate SHA
+`554449c6965286dbcfec6f220e72614d2a1c1020`, and all staging services were
+verified at that SHA.
+
+The Render run was `20260919T002539_0000-1ce111b6`, with cron run ID
+`crn-da7vrdqd0e5s739uvcs0-1789777507`. It made one Call A/search request and
+received one result. The relevancy model succeeded, followed by one LLM drop;
+no post was kept, inserted, or attributed, and there were zero recorded
+errors. The final acceptance outcome is **inconclusive**, with reason
+`no_inserted_posts`. The staging harvester was suspended immediately after
+the retry. Production remained untouched.
+
+The focused PostgreSQL gate for this routing correction passed: 80 tests
+passed, 26 PostgreSQL-required tests executed, with zero skips and zero
+errors. This confirms that the manual staging test used the intended
+on-demand credential lane, but it still does not provide a live classified
+post and does not pass the Stage 1 live acceptance gate.
 
 ## Remaining staging gate
 
-The final exact-SHA attempt has been consumed and is inconclusive because the
-selected call returned no results. The corrected candidate is deployed and
-verified, but the Stage 1 live acceptance gate is not passed. No further
-Twitter/provider-backed Trigger Run is permitted under this evidence record;
-the staging cron remains suspended.
+The final exact-SHA attempt and the separately owner-authorized on-demand
+retry have both been consumed. Both are inconclusive for live acceptance: the
+first returned no results, and the retry received one result but inserted none
+after the relevancy drop. The routing correction is covered by the focused
+gate, but the Stage 1 live acceptance gate is not passed. The staging cron
+remains suspended, and no further Twitter/provider-backed Trigger Run is
+permitted under this evidence record.
 
 Headline enqueueing and headline provider calls remain disabled and have a
 required zero-call delta; no headline budget authorization is needed while
