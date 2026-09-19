@@ -5442,3 +5442,13 @@ provider call, or database mutation. Verify the staging-only/production-off
 boundary, English/Japanese row parity, exact graph cutoff, relative labels,
 official-job window behavior, JavaScript formatting, topology, and an
 authenticated hosted-browser pass before replacing the staging candidate.
+
+The replacement staging product candidate is
+`3456f2fdc1529f3f5eec87a56a7df6ae3c575375`. All five Render staging services
+report that SHA live; harvest was re-suspended after its guarded deployment and
+both cron schedules remain impossible. Provider-free deployed job
+`job-dan7lvjbc2fs73f9prig` proved the receipt-derived cutoff, identical ordered
+EN/JA first-page identities, and the unchanged 655-listing census. The owner's
+authenticated Chrome is open on the staged one-day review surface. Retain the
+local live-browser TCP exhaustion as an explicit coverage limit rather than
+claiming a scripted hosted-DOM pass.

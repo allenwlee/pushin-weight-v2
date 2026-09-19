@@ -2,7 +2,7 @@
 title: AI Enrichment Stage 1 staging integration evidence
 date: 2026-09-19
 status: staging-review-ready
-candidate_sha: 36fb513aac1ce4e9345ba8f798d29ac2e9f9a20d
+candidate_sha: 3456f2fdc1529f3f5eec87a56a7df6ae3c575375
 delivery_target: staging
 ---
 
@@ -533,6 +533,22 @@ feed/timezone suites passed 104 checks, and Django's system check was clean.
 The new browser regression reached its expected application assertions once
 before the host exhausted its local TCP ephemeral-port pool; the latest rerun
 could not connect Chromium to the local live server and is not represented as
-a passing candidate-browser gate. The final evidence below must be amended
-with the committed SHA, exact staging deployment, and authenticated hosted
-browser result before this follow-up is called complete.
+a passing candidate-browser gate.
+
+The final product candidate is
+`3456f2fdc1529f3f5eec87a56a7df6ae3c575375`. The first deployment attempt
+exposed that Render excludes the operational `scripts` tree from its web build;
+the candidate now reads the small fixed receipt projection locally without that
+runtime import. Web, headline, synthesis, harvest, and official-jobs services
+all report the exact candidate live. Harvest was resumed only to deploy, then
+returned to user-suspended state on schedule `0 0 31 2 *`; official jobs retain
+the same impossible schedule.
+
+Provider-free one-off job `job-dan7lvjbc2fs73f9prig` ran against the deployed
+web image and staging database. It reported review horizon
+`2026-09-18T14:45:49.000001Z`, identical ordered EN and JA identities for the
+first 20 `window:1d` rows, and 655 job listings. The owner's authenticated
+Chrome window is open at the English one-day staging URL and renders the normal
+PushinWeight page title. Chrome disallows JavaScript inspection through Apple
+Events, so this receipt records the deployed server assertion and owner-visible
+page without overstating it as a scripted hosted-DOM browser pass.
