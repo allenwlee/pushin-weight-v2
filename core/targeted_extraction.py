@@ -747,6 +747,18 @@ def _organization_candidate(
     return row, created
 
 
+def _organization_label(record: Mapping[str, Any]) -> str:
+    """Return source-visible organization text without inventing a name."""
+
+    name = _text(record.get("organization_name"))
+    if name is not None:
+        return name
+    handle = _text(record.get("organization_handle"), maximum=64)
+    if handle is not None:
+        return handle
+    raise ValueError("organization name or handle is required")
+
+
 def _brand_or_candidate(
     post: Post,
     record: Mapping[str, Any],
@@ -755,7 +767,7 @@ def _brand_or_candidate(
     brand = _known_brand(brand_context, record.get("brand_id"))
     if brand is not None:
         return brand, None, 0
-    organization = _text(record.get("organization_name"), required=True) or ""
+    organization = _organization_label(record)
     candidate, created = _organization_candidate(
         post=post,
         name=organization,
@@ -781,7 +793,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
     source_urls = _source_urls(post)
     brand_context = _brand_evidence_context(post)
     for record in records:
-        organization = _text(record.get("organization_name"), required=True) or ""
+        organization = _organization_label(record)
         title = _text(record.get("title"), required=True) or ""
         brand, candidate, candidate_created = _brand_or_candidate(
             post, record, brand_context

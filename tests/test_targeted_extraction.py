@@ -258,6 +258,49 @@ def test_one_post_can_create_23_jobs_once_with_source_evidence():
     assert not hasattr(attempt, "source_text")
 
 
+def test_untracked_job_uses_source_visible_handle_when_name_is_absent():
+    post = _post(
+        "untracked-job-handle-only",
+        text="Hiring for an AI Data Annotator. Apply via @gulfcareerhunt.",
+        brand_ids=(),
+        author_handle="gulfcareerhunt",
+    )
+
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"job_listings"},
+        config=_config(),
+        calls={
+            "job_listing_extraction": lambda *_args: {
+                "records": [
+                    {
+                        "brand_id": "_unattributed",
+                        "organization_name": None,
+                        "organization_handle": "gulfcareerhunt",
+                        "title": "AI Data Annotator",
+                        "application_route_kind": "direct_message",
+                        "status": "open",
+                        "locations": [],
+                        "confidence": 0.7,
+                    }
+                ]
+            }
+        },
+        max_calls=1,
+    )
+
+    assert result.failed_roles == ()
+    assert result.records_written == 1
+    assert result.organization_candidates_written == 1
+    candidate = BrandDiscoveryCandidate.objects.get()
+    listing = JobListing.objects.get()
+    assert candidate.observed_name == "gulfcareerhunt"
+    assert candidate.candidate_handles == ["gulfcareerhunt"]
+    assert listing.hiring_organization == "gulfcareerhunt"
+    assert listing.brand_id is None
+    assert listing.brand_discovery_candidate == candidate
+
+
 def test_later_job_evidence_converges_on_listing_and_advances_last_seen():
     canonical_url = "https://example.com/jobs/researcher"
     first = _post(
