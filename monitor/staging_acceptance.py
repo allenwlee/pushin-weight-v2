@@ -22,7 +22,7 @@ from monitor.post_enrichment import (
 from scripts.staging_refresh.policy import RefreshPolicy
 from x_monitor.config import Config
 from x_monitor.twitterapi_credentials import (
-    TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
+    TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
     TwitterApiCredentialPurpose,
 )
 
@@ -518,7 +518,7 @@ def prepare_staging_acceptance(
     if call_id not in _configured_call_ids(cfg):
         raise StagingAcceptanceError("call_id_not_configured")
 
-    if not environ.get(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV):
+    if not environ.get(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV):
         raise StagingAcceptanceError("provider_credential_missing:twitter")
 
     translator_base_url = cfg.llm.translator_base_url

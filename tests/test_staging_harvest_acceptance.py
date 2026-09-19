@@ -86,7 +86,7 @@ def _environment(**overrides) -> dict[str, str]:
         "X_MONITOR_DEPLOYMENT_ENVIRONMENT": "staging",
         "RENDER_SERVICE_NAME": "pushinweight-staging-harvest",
         "X_MONITOR_STAGING_ACCEPTANCE_SERVICE": "pushinweight-staging-harvest",
-        "TWITTERAPI_IO_SCHEDULED_API_KEY": "twitter-fixture",
+        "TWITTERAPI_IO_ON_DEMAND_API_KEY": "twitter-fixture",
         "DEEPSEEK_API_KEY": "deepseek-fixture",
         "DEEPINFRA_API_KEY": "deepinfra-fixture",
     }
@@ -453,7 +453,7 @@ def test_acceptance_fails_closed_for_independently_corrupted_evidence(
             "configured_service_identity_mismatch",
         ),
         (
-            {"TWITTERAPI_IO_SCHEDULED_API_KEY": ""},
+            {"TWITTERAPI_IO_ON_DEMAND_API_KEY": ""},
             None,
             "provider_credential_missing:twitter",
         ),
@@ -759,9 +759,13 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
 
     api = Api()
     client = object()
-    monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env", lambda _purpose: api
-    )
+    credential_purposes = []
+
+    def fake_from_env(purpose):
+        credential_purposes.append(purpose)
+        return api
+
+    monkeypatch.setattr("monitor.cycle.TwitterApiClient.from_env", fake_from_env)
     monkeypatch.setattr(
         reattribute, "build_translator_client_from_env", lambda _cfg: client
     )
@@ -841,6 +845,9 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     post = Post.objects.get(tweet_id=tweet_id)
     state = PostEnrichmentState.objects.get(post=post)
     assert len(provider_calls) == 1
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+    assert credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
     assert translation_ids == [tweet_id]
     assert classification_ids == [tweet_id]
     assert stats["totals"]["n_inserted"] == 1

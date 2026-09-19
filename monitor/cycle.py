@@ -2398,9 +2398,9 @@ class CycleRunner:
     def twitterapi_credential_purpose(self) -> TwitterApiCredentialPurpose:
         """Resolve the credential lane without a permissive default."""
 
-        if self.cycle_kind in {"scheduled", "manual"}:
+        if self.cycle_kind == "scheduled":
             return TwitterApiCredentialPurpose.SCHEDULED
-        if self.cycle_kind == "backfill":
+        if self.cycle_kind in {"manual", "backfill"}:
             return TwitterApiCredentialPurpose.ON_DEMAND
         raise ValueError(f"unsupported cycle kind: {self.cycle_kind!r}")
 

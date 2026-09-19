@@ -36,8 +36,9 @@ pass and suspend it again as soon as that one run reaches a terminal state.
 Configure service-scoped secrets in the Render Dashboard without printing or
 copying their values into a terminal transcript:
 
-- harvester: `TWITTERAPI_IO_SCHEDULED_API_KEY` for the acceptance cycle,
-  `TWITTERAPI_IO_ON_DEMAND_API_KEY` for explicitly launched management jobs,
+- harvester: `TWITTERAPI_IO_ON_DEMAND_API_KEY` for the explicitly launched
+  acceptance cycle and other management jobs, `TWITTERAPI_IO_SCHEDULED_API_KEY`
+  for recurring scheduled collection,
   plus `DEEPINFRA_API_KEY` for the locked direct-provider translator and
   classifier routes;
 - headline worker: `DEEPSEEK_API_KEY`;
