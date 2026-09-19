@@ -192,6 +192,18 @@ _TAGGED_RESPONSE_RE = re.compile(
     r"\Z"
 )
 
+# Gemma can preserve the requested field order and values while collapsing the
+# two middle opening tags into the next field's closing tag.  The resulting
+# boundaries remain unambiguous, so accept only this exact alternate shape.
+_TAGGED_RESPONSE_COLLAPSED_BOUNDARY_RE = re.compile(
+    r"\A"
+    r"\[\[POST_ID\]\]([^\r\n]+)\[\[/POST_ID\]\]\n"
+    r"\[\[EN\]\]([^\r\n]+)\[\[/ZH_CN\]\]"
+    r"([^\r\n]+)\[\[/JA\]\]"
+    r"([^\r\n]+)\[\[/JA\]\]"
+    r"\Z"
+)
+
 
 def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[str, str]:
     text = getattr(response, "text", None)
@@ -199,7 +211,9 @@ def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[st
         raise ValueError("synthesis_response_tagged_text_invalid")
     match = _TAGGED_RESPONSE_RE.fullmatch(text)
     if match is None:
-        raise ValueError("synthesis_response_tagged_text_invalid")
+        match = _TAGGED_RESPONSE_COLLAPSED_BOUNDARY_RE.fullmatch(text)
+        if match is None:
+            raise ValueError("synthesis_response_tagged_text_invalid")
     values = match.groups()
     if any("[[" in value or "]]" in value for value in values):
         raise ValueError("synthesis_response_tagged_text_invalid")
