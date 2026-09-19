@@ -3823,10 +3823,11 @@ def _normalize_0731_fixed_slot_response(
 
     The selected checkpoint sometimes preserves positional order while
     returning the fixed decision map as a list.  It also emits a singleton
-    enum as a scalar, occasionally copies the sole post type into ``outcome``,
-    and can omit the mechanically implied ``nationalism`` mode after choosing
-    a national stance.  These changes restore deterministic consequences of
-    the supplied answer before the strict parser validates every field.
+    enum as a scalar or a one-key ``promotion`` object, occasionally copies
+    the sole post type into ``outcome``, and can omit the mechanically implied
+    ``nationalism`` mode after choosing a national stance.  These changes
+    restore deterministic consequences of the supplied answer before the
+    strict parser validates every field.
     """
     if not isinstance(response, dict):
         return response
@@ -3855,13 +3856,20 @@ def _normalize_0731_fixed_slot_response(
         normalized["decisions"] = normalized_decisions
         promotions = normalized.get("post_promotions")
         if isinstance(promotions, dict) and set(promotions) == set(post_slots):
-            normalized["post_promotions"] = {
-                slot: [value]
-                if isinstance(value, str)
-                and value in {*_UNTRACKED_BRAND_PROMOTION_KEYS, "none"}
-                else value
-                for slot, value in promotions.items()
-            }
+            normalized_promotions: dict[str, Any] = {}
+            allowed_promotions = {*_UNTRACKED_BRAND_PROMOTION_KEYS, "none"}
+            for slot, value in promotions.items():
+                if isinstance(value, str) and value in allowed_promotions:
+                    normalized_promotions[slot] = [value]
+                elif (
+                    isinstance(value, dict)
+                    and set(value) == {"promotion"}
+                    and value.get("promotion") in allowed_promotions
+                ):
+                    normalized_promotions[slot] = [value["promotion"]]
+                else:
+                    normalized_promotions[slot] = value
+            normalized["post_promotions"] = normalized_promotions
     elif role == "brand_interpretation" and isinstance(decisions, dict):
         normalized_decisions = {}
         for slot, value in decisions.items():

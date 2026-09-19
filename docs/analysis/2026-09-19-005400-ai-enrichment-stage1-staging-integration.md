@@ -331,3 +331,18 @@ is absent. Contradictory `none` or `unavailable` mode answers still fail
 closed. The focused selected-route suite passes 41 tests; seven PostgreSQL-only
 tests remain to be rerun in the staging gate. No production resource was
 touched, and the staging harvester remains suspended.
+
+The first repaired candidate, `04d1eb7d247b2e018e8b5615173e4f8fb94447fc`,
+then passed 59 focused tests on staging with 13 PostgreSQL-required tests
+executed and zero skips/errors. Its exact-SHA five-post rerun again completed
+all four translation calls and both classifier roles, but failed closed before
+synthesis. A second rollback-only raw capture found a different observed 0731
+representation: every explicit `none` promotion was returned as
+`{"promotion":"none"}` instead of `["none"]`. This made all five content rows
+invalid even though the enum itself was explicit and allowlisted.
+
+The follow-up candidate therefore also unwraps only an exact one-key
+`promotion` object whose value is allowlisted. Extra keys, unknown values, and
+all other shapes remain invalid. This is the same bounded mechanical
+normalization class as the already accepted scalar-to-singleton-array rule; it
+does not infer a promotion or change taxonomy semantics.

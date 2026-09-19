@@ -305,6 +305,23 @@ def test_selected_runtime_adds_nationalism_mode_implied_by_national_stance():
     )
 
 
+def test_selected_runtime_unwraps_explicit_singleton_promotion_object():
+    """The selected model sometimes wraps one promotion enum in an object."""
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    class WrappedPromotion(FixedSlotTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            if "CONTENT ROLE:" in kwargs["system"]:
+                response["post_promotions"]["P01"] = {"promotion": "none"}
+            return response
+
+    rows = classify_batch_pragmatics_full(_tweets(1), [], WrappedPromotion())
+
+    assert rows[0]["valid"] is True
+    assert rows[0]["untracked_brand_promotions"] == []
+
+
 @pytest.mark.parametrize("fault", ["other_overlap", "unknown_type", "invalid_sentiment", "invalid_flag"])
 def test_selected_runtime_isolates_invalid_values_to_the_entire_affected_post(fault):
     """One bad brand answer used to discard all twenty independent posts."""

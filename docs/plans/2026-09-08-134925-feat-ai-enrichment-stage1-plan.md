@@ -5330,3 +5330,11 @@ contradictions. After the focused and PostgreSQL gates pass, deploy the exact
 candidate to staging and rerun the same five-post, zero-TwitterAPI probe through
 translation, both classifier roles, persistence, and synthesis. Production
 remains outside the selected delivery target.
+
+The first repaired staging SHA passed its focused PostgreSQL gate but exposed
+a second representation-only deviation on the exact five-post rerun: 0731
+wrapped each explicit post promotion as `{"promotion":"none"}` instead of the
+required singleton array. Normalize only an exact one-key `promotion` object
+whose value is in the allowlist; preserve fail-closed behavior for extra keys,
+unknown values, and every other shape. Rerun the same exact-SHA gate after this
+follow-up candidate deploys.
