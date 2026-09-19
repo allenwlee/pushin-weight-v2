@@ -296,3 +296,38 @@ required zero-call delta; no headline budget authorization is needed while
 that lane stays disabled. Update this report and
 [PR 41](https://github.com/allenwlee/pushin-weight-v2/pull/41) with the final
 staging result. Production remains outside this LFG delivery target.
+
+## Five-post existing-data staging probe
+
+The owner next authorized a bounded probe over five posts already present in
+staging, with no TwitterAPI request. The fixed cohort contained three English,
+one Simplified-Chinese, and one Japanese post and seven total post-brand
+decisions. The locked routes were direct DeepInfra 0731 for classification and
+direct DeepInfra Gemma 4 31B for literal translation and synthesis.
+
+Two initial harness defects were kept as failed evidence. A web-service job had
+no DeepInfra credential and made zero provider calls. The first harvest-service
+probe capped the classifier below its six-request two-role retry reservation;
+translation ran, classification did not, and the enclosing transaction rolled
+back. One Gemma request also timed out after 90 seconds during that attempt.
+After the cap was corrected, all four required translation requests and both
+five-post classifier-role requests returned successfully, but strict
+classification validation rejected the cohort and synthesis was not called.
+The transaction again rolled back, leaving staging data unchanged.
+
+A classifier-only, rollback-only diagnostic isolated the rejection. Four of
+the five posts parsed successfully. The three-brand Chinese post was withheld
+because 0731 selected `china_national_stance=constructive_critical` with
+`geopolitical_modes=[framework]` and omitted the mechanically required
+`nationalism` mode. This directly violates the locked invariant that every
+non-`none` U.S. or China national stance entails the nationalism mode. The
+parser correctly failed the affected post closed rather than persisting a
+contradictory row.
+
+The candidate correction adds only that deterministic implication before the
+existing strict validation: when a recognized non-`none` national stance is
+present alongside non-sentinel geopolitical modes, append `nationalism` if it
+is absent. Contradictory `none` or `unavailable` mode answers still fail
+closed. The focused selected-route suite passes 41 tests; seven PostgreSQL-only
+tests remain to be rerun in the staging gate. No production resource was
+touched, and the staging harvester remains suspended.

@@ -278,6 +278,33 @@ def test_selected_runtime_makes_other_axes_unavailable_for_context_missing():
     }
 
 
+def test_selected_runtime_adds_nationalism_mode_implied_by_national_stance():
+    """A stance answer deterministically entails the nationalism mode."""
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    class OmittedImpliedMode(FixedSlotTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            if "CONTENT ROLE:" not in kwargs["system"]:
+                response["decisions"]["D01"].update(
+                    geopolitical_modes=["framework"],
+                    china_national_stance="constructive_critical",
+                )
+            return response
+
+    rows = classify_batch_pragmatics_full(_tweets(1), [], OmittedImpliedMode())
+
+    assert rows[0]["valid"] is True
+    assert rows[0]["by_brand"]["deepseek"]["geopolitical_modes"] == [
+        "framework",
+        "nationalism",
+    ]
+    assert (
+        rows[0]["by_brand"]["deepseek"]["china_national_stance"]
+        == "constructive_critical"
+    )
+
+
 @pytest.mark.parametrize("fault", ["other_overlap", "unknown_type", "invalid_sentiment", "invalid_flag"])
 def test_selected_runtime_isolates_invalid_values_to_the_entire_affected_post(fault):
     """One bad brand answer used to discard all twenty independent posts."""

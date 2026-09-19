@@ -5311,3 +5311,22 @@ the final acceptance reason was `no_inserted_posts`, so the outcome remains
 inconclusive. The staging harvester was suspended immediately after the run;
 production was untouched. This confirms the credential lane but does not
 provide a live classification/enrichment result or authorize production.
+
+### September 19 — Bounded existing-data probe and deterministic stance repair
+
+The owner authorized a five-post staging probe over existing rows, with no
+TwitterAPI request. The final integrated attempt completed all four required
+Gemma literal-translation requests and both 0731 classifier roles, then failed
+closed before synthesis because one three-brand post contained a cross-field
+inconsistency: a non-`none` China national stance without the mechanically
+entailed `nationalism` geopolitical mode. All probe writes rolled back and the
+staging harvester remained suspended.
+
+Treat this as a deterministic wire-normalization defect, not a new taxonomy
+decision. For the selected 0731 route, append `nationalism` when a recognized
+non-`none` U.S. or China national stance accompanies non-sentinel geopolitical
+modes and nationalism is absent. Continue rejecting `none`/`unavailable`
+contradictions. After the focused and PostgreSQL gates pass, deploy the exact
+candidate to staging and rerun the same five-post, zero-TwitterAPI probe through
+translation, both classifier roles, persistence, and synthesis. Production
+remains outside the selected delivery target.

@@ -3823,10 +3823,10 @@ def _normalize_0731_fixed_slot_response(
 
     The selected checkpoint sometimes preserves positional order while
     returning the fixed decision map as a list.  It also emits a singleton
-    enum as a scalar and occasionally copies the sole post type into
-    ``outcome``.  These changes do not infer a label or repair omitted data;
-    they only restore the prompt's deterministic wire representation before
-    the strict parser validates every field.
+    enum as a scalar, occasionally copies the sole post type into ``outcome``,
+    and can omit the mechanically implied ``nationalism`` mode after choosing
+    a national stance.  These changes restore deterministic consequences of
+    the supplied answer before the strict parser validates every field.
     """
     if not isinstance(response, dict):
         return response
@@ -3862,6 +3862,29 @@ def _normalize_0731_fixed_slot_response(
                 else value
                 for slot, value in promotions.items()
             }
+    elif role == "brand_interpretation" and isinstance(decisions, dict):
+        normalized_decisions = {}
+        for slot, value in decisions.items():
+            if not isinstance(value, dict):
+                normalized_decisions[slot] = value
+                continue
+            item = dict(value)
+            modes = item.get("geopolitical_modes")
+            has_national_stance = any(
+                item.get(field) in _V4_NATIONAL_STANCE_KEYS
+                and item.get(field) != "none"
+                for field in ("china_national_stance", "us_national_stance")
+            )
+            if (
+                has_national_stance
+                and isinstance(modes, list)
+                and modes
+                and not set(modes) & {"none", "unavailable"}
+                and "nationalism" not in modes
+            ):
+                item["geopolitical_modes"] = [*modes, "nationalism"]
+            normalized_decisions[slot] = item
+        normalized["decisions"] = normalized_decisions
     return normalized
 
 
