@@ -610,9 +610,11 @@ def _persist_two_role_classification_trace(
         strict=True,
     ))
     expected_merge_revision = expected_revisions["final"]
+    content_rows = _trace_stage_rows("content", stages["content"])
     expected_taxonomy_version = (
         TAXONOMY_VERSION
-        if "-v4" in expected_merge_revision
+        if content_rows
+        and all("audience_topics" in row for row in content_rows.values())
         else STAGE1_TAXONOMY_V3_VERSION
     )
     for stage, payload in stages.items():
@@ -641,7 +643,6 @@ def _persist_two_role_classification_trace(
         rows = _trace_stage_rows(stage, payload)
         if set(rows) != brand_ids:
             raise ValueError(f"classification_trace_{stage}_brands_mismatch")
-    content_rows = _trace_stage_rows("content", stages["content"])
     brand_rows = _trace_stage_rows("brand_interpretation", stages["brand_interpretation"])
     final_rows = _trace_stage_rows("final", stages["final"])
     for brand_id in brand_ids:

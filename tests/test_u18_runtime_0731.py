@@ -180,9 +180,9 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
     assert [rows[0]["classification_trace"][stage]["role_revision"] for stage in (
         "content", "brand_interpretation", "final"
     )] == [
-        "stage1-content-0731-v4",
-        "stage1-brand-interpretation-0731-v4",
-        "stage1-two-role-merge-0731-v4",
+        "stage1-content-0731-v5",
+        "stage1-brand-interpretation-0731-v5",
+        "stage1-two-role-merge-0731-v5",
     ]
     for call in transport.calls:
         request = call["request"]

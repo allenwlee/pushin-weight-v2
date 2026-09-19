@@ -3503,9 +3503,9 @@ def _merge_stage1_selector_passes(
 _TWO_ROLE_CONTENT_REVISION = "stage1-content-v2"
 _TWO_ROLE_BRAND_REVISION = "stage1-brand-interpretation-v2"
 _TWO_ROLE_MERGE_REVISION = "stage1-two-role-merge-v2"
-_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v4"
-_TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v4"
-_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v4"
+_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v5"
+_TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v5"
+_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
 _TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
     (
         _TWO_ROLE_CONTENT_REVISION,

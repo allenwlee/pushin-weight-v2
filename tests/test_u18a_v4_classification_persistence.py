@@ -289,7 +289,7 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
     promotion = PostUntrackedBrandPromotion.objects.get(post=post)
     assert promotion.promotion_keys == ["general"]
     assert promotion.provider_role == "content"
-    assert promotion.prompt_version == "stage1-content-0731-v4"
+    assert promotion.prompt_version == "stage1-content-0731-v5"
     evidence = UntrackedBrandPromotionEvidence.objects.get(promotion=promotion)
     assert evidence.exact_matched_account_id == author.pk
     assert evidence.handles == ["@example_promoter", "@exampleharness"]

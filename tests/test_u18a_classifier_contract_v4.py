@@ -213,6 +213,81 @@ def test_selected_parser_accepts_promotion_evidence_from_translation_and_context
     assert set(parsed) == {"p1"}
 
 
+def test_selected_prompt_disambiguates_outcome_and_unattributed_discovery():
+    from x_monitor.classifier_0731_prompts import selected_system_prompt
+
+    content = selected_system_prompt(
+        "content", decision_slots=["D01"], post_slots=["P01"]
+    )
+    brand = selected_system_prompt(
+        "brand_interpretation", decision_slots=["D01"], post_slots=["P01"]
+    )
+
+    assert "other is a POST TYPE, never an outcome" in content
+    assert "exact verbatim substring" in content
+    assert "_unattributed is a discovery sentinel" in content
+    assert "without requiring a tracked-brand connection" in content
+    assert 'sentiment="neutral"' in brand
+
+
+def test_selected_runtime_classifies_unattributed_discovery_content():
+    from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
+
+    class UnattributedDiscoveryTransport(_SelectedTransport):
+        def messages_create(self, **kwargs):
+            payload = json.loads(kwargs["messages"][0]["content"])
+            is_content = "CONTENT ROLE:" in kwargs["system"]
+            decisions = {}
+            for case in payload["cases"].values():
+                for slot in case["brand_decision_slots"]:
+                    decisions[slot] = (
+                        {
+                            "outcome": "classified",
+                            "post_types": ["job_listings"],
+                            "audience_topics": ["none"],
+                        }
+                        if is_content
+                        else {
+                            "product_labels": ["none"],
+                            "sentiment": "neutral",
+                            "geopolitical_modes": ["none"],
+                            "china_national_stance": "none",
+                            "us_national_stance": "none",
+                        }
+                    )
+            if not is_content:
+                return {"decisions": decisions}
+            return {
+                "decisions": decisions,
+                "post_promotions": {"P01": ["general"]},
+                "promoted_subjects": {"P01": [{
+                    "name": "Example Hiring",
+                    "handle": None,
+                    "domain": "example.test",
+                    "account_handle": None,
+                    "evidence": "Apply for the AI role",
+                }]},
+            }
+
+    rows = classify_batch_pragmatics_full(
+        [{
+            "tweet_id": "job-1",
+            "text": "Apply for the AI role today.",
+            "brand_ids": ["_unattributed"],
+            "context": [],
+            "source_language": "en",
+        }],
+        [BrandRow("_unattributed", "Unattributed", "#6b7280", True)],
+        UnattributedDiscoveryTransport(),
+    )
+
+    assert rows[0]["valid"] is True
+    assert rows[0]["by_brand"]["_unattributed"]["post_types"] == [
+        "job_listings"
+    ]
+    assert rows[0]["untracked_brand_promotions"] == ["general"]
+
+
 def test_selected_parser_normalizes_only_observed_0731_wire_variants():
     from x_monitor.attribution import (
         _two_role_fixed_slot_payload,
