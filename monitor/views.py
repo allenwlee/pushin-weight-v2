@@ -415,10 +415,7 @@ def _staging_refresh_review_horizon() -> datetime | None:
 
 def _dashboard_now() -> datetime:
     """Return wall time, or the copied-snapshot horizon for staging review."""
-    if not (
-        settings.OLLIJA_STAGING_MODE
-        and getattr(settings, "STAGING_REVIEW_DATA_CLOCK_ENABLED", False)
-    ):
+    if not settings.OLLIJA_STAGING_MODE:
         return django_timezone.now()
 
     global _STAGING_REVIEW_CLOCK_CACHE

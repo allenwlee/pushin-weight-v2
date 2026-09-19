@@ -76,7 +76,6 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED" not in environment
     assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
-    assert environment["STAGING_REVIEW_DATA_CLOCK_ENABLED"]["value"] == "True"
     assert environment["STAGING_REFRESH_SOURCE_DATABASE_URL"] == {
         "key": "STAGING_REFRESH_SOURCE_DATABASE_URL",
         "sync": False,
@@ -254,5 +253,4 @@ def test_staging_and_production_blueprints_claim_disjoint_resource_names() -> No
             "X_MONITOR_STAGING_ACCEPTANCE_SERVICE",
             "STAGING_DATA_REFRESH_ENABLED",
             "STAGING_REFRESH_SOURCE_DATABASE_URL",
-            "STAGING_REVIEW_DATA_CLOCK_ENABLED",
         } & set(environment)

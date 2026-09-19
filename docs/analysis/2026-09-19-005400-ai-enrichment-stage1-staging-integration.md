@@ -508,9 +508,8 @@ wall clock, so `window:1d` legitimately selected no copied rows. Changing the
 locale reloaded that same empty interval. This was a review-environment clock
 mismatch, not a locale data-loss defect.
 
-The follow-up candidate adds a staging-web-only feature flag. When both that
-flag and the existing staging profile are active, the dashboard reads the
-guarded refresh receipt's `posts.created_at` cutoff and uses
+When the existing owner-only staging profile is active, the dashboard reads
+the guarded refresh receipt's `posts.created_at` cutoff and uses
 `2026-09-18T14:45:49.000001Z` as its review horizon. Sparse posts inserted by
 later bounded staging probes cannot move it. A pre-refresh or local staging
 database without a receipt falls back to its newest post. The extra microsecond
@@ -518,8 +517,8 @@ preserves the existing half-open database interval while including the newest
 copied post. Feed rows, graphs, pulse, top voices, brand pages, hover ranges,
 server relative labels, and browser relative labels now receive the same horizon.
 Changing EN to JA therefore retains the same ordered post identities. In
-production, or whenever the staging flag is absent, all paths continue to use
-wall time.
+production, where the staging profile is absent, all paths continue to use wall
+time.
 
 No stored timestamps are changed. Official recruiting-site listings remain
 source-dated and use the same historical calendar. A listing five days before

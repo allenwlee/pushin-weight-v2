@@ -519,7 +519,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     @override_settings(
         OLLIJA_STAGING_MODE=True,
-        STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
         OLLIJA_STAGING_ALLOWED_EMAILS=frozenset({V22_TEST_USER_EMAIL}),
         # StaticLiveServerTestCase serves HTTP; hosted staging still redirects
         # to HTTPS under its normal Render settings.

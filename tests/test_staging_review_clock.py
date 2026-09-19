@@ -36,7 +36,6 @@ def _stale_post(*, tweet_id: str, created_at: datetime) -> None:
 
 @override_settings(
     OLLIJA_STAGING_MODE=True,
-    STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
     OLLIJA_STAGING_ALLOWED_EMAILS=frozenset({"owner@example.com"}),
 )
 def test_staging_one_day_feed_and_chart_follow_latest_post_across_locales():
@@ -78,7 +77,6 @@ def test_staging_one_day_feed_and_chart_follow_latest_post_across_locales():
 
 @override_settings(
     OLLIJA_STAGING_MODE=True,
-    STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
 )
 def test_staging_receipt_cutoff_ignores_later_sparse_probe_posts(monkeypatch):
     copied_latest = datetime(2026, 9, 18, 14, 45, 49, tzinfo=UTC)
@@ -101,7 +99,6 @@ def test_staging_receipt_cutoff_ignores_later_sparse_probe_posts(monkeypatch):
 
 @override_settings(
     OLLIJA_STAGING_MODE=True,
-    STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
 )
 def test_staging_review_clock_preserves_official_job_source_dates():
     latest = datetime(2026, 9, 18, 14, 45, 49, tzinfo=UTC)
@@ -144,7 +141,6 @@ def test_staging_review_clock_preserves_official_job_source_dates():
 
 @override_settings(
     OLLIJA_STAGING_MODE=False,
-    STAGING_REVIEW_DATA_CLOCK_ENABLED=True,
 )
 def test_production_never_uses_the_staging_review_clock(monkeypatch):
     wall_now = datetime(2026, 9, 19, 18, 0, tzinfo=UTC)

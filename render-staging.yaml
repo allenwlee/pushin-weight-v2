@@ -53,8 +53,6 @@ services:
         sync: false
       - key: STAGING_DATA_REFRESH_ENABLED
         value: "True"
-      - key: STAGING_REVIEW_DATA_CLOCK_ENABLED
-        value: "True"
       - key: STAGING_REFRESH_SOURCE_DATABASE_URL
         sync: false
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED

@@ -5430,10 +5430,11 @@ therefore treats
 the exact horizon to browser rendering, and clear it with the existing home
 projection caches. Locale changes must retain the same ordered row identities.
 
-Keep production on wall time even if the feature flag is accidentally present,
-and never rewrite a post or job timestamp. The five official Chinese-lab job
-sources remain enabled in the staged product and their 655 copied listings keep
-their actual source/observation dates. They use the same historical calendar:
+Keep production on wall time by requiring the existing owner-only staging
+profile, and never rewrite a post or job timestamp. The five official
+Chinese-lab job sources remain enabled in the staged product, and their 655
+copied listings keep their actual source/observation dates. They use the same
+historical calendar:
 an older listing belongs in a wider 7/30/90/365-day window rather than being
 made artificially current in `1d`. The staging jobs cron and harvest cron stay
 on the impossible manual-only schedule, so this review aid performs no crawl,
