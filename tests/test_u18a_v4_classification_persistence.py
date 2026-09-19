@@ -103,6 +103,37 @@ def test_selected_v4_rejects_a_stale_catalog_snapshot_before_provider_call():
     assert errors == ["classification_catalog_snapshot_revision_mismatch"]
 
 
+def test_selected_v4_catalog_revision_is_stable_for_case_variant_aliases():
+    from x_monitor.attribution import (
+        _tracked_brand_catalog,
+        _validated_tracked_brand_catalog_snapshot,
+    )
+
+    catalog = _tracked_brand_catalog(
+        [],
+        [
+            {
+                "brand_ids": ["grok"],
+                "tracked_brand_catalog": [
+                    {
+                        "brand_id": "grok",
+                        "aliases": ["grok", "Grok"],
+                        "handles": [],
+                        "domains": [],
+                        "products": [],
+                        "keywords": [],
+                        "hashtags": [],
+                        "accounts": [],
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert catalog["brands"][0]["aliases"] == ["Grok", "grok"]
+    assert _validated_tracked_brand_catalog_snapshot(catalog) == catalog
+
+
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
 def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_legacy_flags():

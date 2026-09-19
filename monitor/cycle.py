@@ -153,7 +153,10 @@ def _classification_tracked_brand_catalog() -> list[dict[str, Any]]:
         }
         rows[brand_id] = {
             "brand_id": brand_id,
-            "aliases": sorted({value for value in aliases if value}, key=str.casefold),
+            "aliases": sorted(
+                {value for value in aliases if value},
+                key=lambda value: (value.casefold(), value),
+            ),
             "handles": [],
             "domains": [],
             "products": [],
@@ -206,12 +209,12 @@ def _classification_tracked_brand_catalog() -> list[dict[str, Any]]:
                 row["products"].append(cleaned)
 
     catalog: list[dict[str, Any]] = []
-    for brand_id in sorted(rows, key=str.casefold):
+    for brand_id in sorted(rows, key=lambda value: (value.casefold(), value)):
         row = rows[brand_id]
         for field in ("aliases", "handles", "domains", "products", "keywords", "hashtags"):
             row[field] = sorted(
                 {str(value).strip() for value in row[field] if str(value).strip()},
-                key=str.casefold,
+                key=lambda value: (value.casefold(), value),
             )
         row["accounts"] = sorted(
             {

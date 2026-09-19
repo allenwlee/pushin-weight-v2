@@ -3575,7 +3575,9 @@ def _tracked_brand_catalog(
             aliases.append(display_name.strip())
         rows[brand_id] = {
             "brand_id": brand_id,
-            "aliases": sorted(set(aliases), key=str.casefold),
+            "aliases": sorted(
+                set(aliases), key=lambda value: (value.casefold(), value)
+            ),
             "handles": [], "domains": [], "products": [],
             "keywords": [], "hashtags": [], "accounts": [],
         }
@@ -3586,8 +3588,15 @@ def _tracked_brand_catalog(
             brand_id = supplied["brand_id"].strip()
             if not brand_id:
                 continue
-            def strings(key: str) -> list[str]:
-                return sorted({value.strip() for value in supplied.get(key, []) if isinstance(value, str) and value.strip()}, key=str.casefold)
+            def strings(key: str, supplied_row: dict[str, Any] = supplied) -> list[str]:
+                return sorted(
+                    {
+                        value.strip()
+                        for value in supplied_row.get(key, [])
+                        if isinstance(value, str) and value.strip()
+                    },
+                    key=lambda value: (value.casefold(), value),
+                )
             accounts = sorted(
                 {
                     (
@@ -3623,7 +3632,10 @@ def _tracked_brand_catalog(
                     "handles": [], "domains": [], "products": [],
                     "keywords": [], "hashtags": [], "accounts": [],
                 }
-    brands = [rows[brand_id] for brand_id in sorted(rows, key=str.casefold)]
+    brands = [
+        rows[brand_id]
+        for brand_id in sorted(rows, key=lambda value: (value.casefold(), value))
+    ]
     revision = hashlib.sha256(
         json.dumps(brands, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
