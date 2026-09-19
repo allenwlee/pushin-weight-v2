@@ -281,6 +281,7 @@ def test_untracked_job_uses_source_visible_handle_when_name_is_absent():
                         "application_route_kind": "direct_message",
                         "status": "open",
                         "locations": [],
+                        "extraction_method": "llm_extraction",
                         "confidence": 0.7,
                     }
                 ]
@@ -299,6 +300,7 @@ def test_untracked_job_uses_source_visible_handle_when_name_is_absent():
     assert listing.hiring_organization == "gulfcareerhunt"
     assert listing.brand_id is None
     assert listing.brand_discovery_candidate == candidate
+    assert listing.evidence.get().extraction_method == "structured_text"
 
 
 def test_later_job_evidence_converges_on_listing_and_advances_last_seen():

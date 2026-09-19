@@ -121,7 +121,7 @@ timestamps with timezone or null), campaign_openings, role_openings, skills,
 responsibilities, qualifications, education_requirements,
 experience_requirements, benefits, eligibility, source_language,
 organization_ai_relationship, role_ai_relationship, linked_urls, media_url,
-extraction_method, and confidence.
+and confidence. The server records the extraction method; do not return one.
 """,
     "personnel_change_extraction": """
 Return one record per named person's joining, leaving, appointment, or explicit
@@ -980,12 +980,6 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             raise ValueError(
                 "image-derived fields require an enabled vision capability"
             )
-        extraction_method = _choice(
-            record.get("extraction_method"),
-            allowed={"structured_text"},
-            default="structured_text",
-            field="extraction method",
-        )
         _row, evidence_created = JobListingEvidence.objects.get_or_create(
             listing=listing,
             evidence_hash=evidence_hash,
@@ -1002,7 +996,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
                     source_urls=source_urls,
                     field="media",
                 ),
-                "extraction_method": extraction_method,
+                "extraction_method": "structured_text",
                 "image_derived_fields": image_derived_fields,
                 "confidence": _confidence(record.get("confidence")),
                 "raw_evidence": {
