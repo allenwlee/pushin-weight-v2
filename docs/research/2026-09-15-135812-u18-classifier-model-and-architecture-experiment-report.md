@@ -1,16 +1,17 @@
 ---
 title: AI enrichment model, provider, endpoint, and configuration experiment report
 date: 2026-09-15
-updated_at: 2026-09-18T19:30:00+09:00
-status: living report; owner route selection locked; staging delivery ongoing
+updated_at: 2026-09-19T09:30:00+09:00
+status: living report; owner route selection locked; testing and staging delivery ongoing
 scope: offline classification, translation, and commentary model/provider/configuration experiments; no production activation
 ---
 
 # AI enrichment model, provider, endpoint, and configuration experiment report
 
-> **Living-report snapshot — September 18, 19:30 JST:** Model-route testing is
-> complete for the owner's current execution decision. Staging integration and
-> end-to-end verification remain.
+> **Living-report snapshot — September 19, 09:30 JST:** The bounded Jev full-
+> classifier and combination-query trials are closed without changing the
+> owner's current route selection. Testing remains ongoing overall; staging
+> integration and end-to-end verification remain.
 > This file is the single narrative index for completed classification,
 > translation, and commentary experiments in this worktree. Historical results
 > remain in place, while the tables near the top summarize current decisions.
@@ -24,7 +25,9 @@ then use the [historical classifier summary](#historical-classifier-summary-r97r
 [local Hillary comparison](#supplemental-local-inference-on-hillary-mxfp4-0731),
 [September 16–17 language-task evidence](#september-16--translation-role-request-shape-separate-from-classifier),
 [September 17 cross-model register](#september-17--model-task-trial-register-historical-r113-snapshot),
-and the [latest direct-DeepInfra snapshot](#september-18--direct-deepinfra-follow-ups-and-living-snapshot).
+the [latest direct-DeepInfra snapshot](#september-18--direct-deepinfra-follow-ups-and-living-snapshot),
+the [Jev/OpenRouter Decisions diagnostic](#september-19--jevopenrouter-decisions-classifier-diagnostic),
+and the [focused Jev combination-query probe](#september-19--jev-combination-query-architecture-probe).
 
 ## Owner execution decision — September 18
 
@@ -43,7 +46,9 @@ decision does not convert a failed or unresolved experiment into a quality
 pass, and it does not change any historical score below. Direct Gemma
 commentary independently passed its retained comparison. Runtime activation
 still requires implementation, staging tests, and the original plan's release
-checks.
+checks. The later Jev/OpenRouter Decisions classifier and focused
+combination-query trials did not establish a replacement and do not change
+this execution decision.
 
 ## Current decision dashboard
 
@@ -53,7 +58,7 @@ or translation, and a provider-delivery result is not a semantic-quality result.
 
 | Task | Current position | Strongest current evidence | What remains open |
 | --- | --- | --- | --- |
-| Classification | **Owner-selected execution route: DeepSeek V4 Flash 0731 directly through DeepInfra FP8.** | Historical OpenRouter-pinned 0731 matched 249/358 reviewed fields versus 231/358 for V4.1, but the exact direct R122 replay returned 45/45 content rows and only 25/45 brand rows. | Owner override; direct classification did not pass its experimental gate. Implement the direct route, then verify schema completeness and retry/failure handling in staging. |
+| Classification | **Owner-selected execution route: DeepSeek V4 Flash 0731 directly through DeepInfra FP8.** | Historical OpenRouter-pinned 0731 matched 249/358 reviewed fields versus 231/358 for V4.1, but the exact direct R122 replay returned 45/45 content rows and only 25/45 brand rows. Jev's best diagnostic24 profile reached 118/209 versus V4.1's 130/209. | Owner override; direct classification did not pass its experimental gate, and the bounded Jev alternative is closed. Implement the direct route, then verify schema completeness and retry/failure handling in staging. |
 | Translation | **Owner-selected execution route: Gemma 4 31B directly through DeepInfra FP4.** | On retained random100, direct Gemma and V4.1 both had conservative `[10,11]` affected-source intervals; Gemma delivered 215/215 provider responses. | Owner override of the unresolved parity boundary. Integrate and run staging translation regressions. |
 | Commentary | **Owner-selected execution route: Gemma 4 31B directly through DeepInfra FP4.** | Direct Gemma passed the retained comparison: `[4,5]` affected sources versus V4.1's `[9,10]`, with 100/100 provider responses and 99 application-complete sources. | Integrate and complete staging and regression checks. |
 
@@ -72,6 +77,7 @@ chronological sections later in this report.
 | DeepSeek V4 Flash 0731, direct DeepInfra FP8 | Exact R122 replay completed but schema-incomplete; owner selected this route by override | Random100 delivered and reconciled; tied V4.1 at `[10,11]`, not selected | Random100 delivered and reconciled; 14 confirmed affected sources, not selected | Locked for classification by owner decision despite the failed direct replay; not selected for translation or commentary. |
 | Gemma 4 31B, OpenRouter → DeepInfra FP4 | Early free-route block only | Diagnostic24, random100, and recovery-aware runs | Not used for the retained commentary comparison | OpenRouter shared-pool overload dominated later delivery; semantic defects remained after retries. |
 | Gemma 4 31B, direct DeepInfra FP4 | Three diagnostic24 configurations; not selected | Random100 tied the incumbent interval; owner selected by override | Tagged random100 passed; owner selected | Locked for translation and commentary by owner decision; the translation choice does not retroactively pass the conservative gate. |
+| TypeSafe Jev 1.13; historical OpenRouter Decisions → TypeSafe, future tests direct TypeSafe | Three completed full-classifier diagnostic24 profiles, a focused nine-label combination-query probe, and one direct-connectivity probe | Not tested | Not tested | Historical quality conclusions remain unchanged. The direct TypeSafe route is verified for future Jev experiments, but it has no full comparison score and is not selected for runtime. |
 | Qwen variants: 3.5 9B, 3.7 Flash, 235B | Multiple blocked, malformed, smoke, and diagnostic runs | Qwen3.7 and Qwen235 multi-profile trials | Qwen3.7 smoke/configuration trials | Cheap routes and structural adaptations did not establish task parity; provider-specific failures must not be generalized to all hosts. |
 | Gemini 2.5 Flash-Lite Flex | Smoke8 only; follow-up cancelled unspent | Smoke, diagnostic24, old45, and random100 | Smoke, diagnostic24, old45, and random100 with reasoning-on/off control | Did not qualify. Disabling reasoning cut cost materially but worsened the paired commentary review. |
 | Hy-MT2 1.8B, 7B, and 30B | Not tested | Multiple specialist profiles through Tencent FP8 | Not tested | Fast and inexpensive, but repeated meaning and coverage defects prevented parity. |
@@ -87,6 +93,8 @@ chronological sections later in this report.
 | Classification, exact R122 direct-route replay | Direct DeepInfra 0731: 45/45 content rows, 25/45 brand rows; 148/358 consumed-control fields | Historical OpenRouter→DeepInfra R122: 249/358 consumed-control fields | One direct 20-row brand response collapsed required fields and was not safely normalizable | Failed experiment gate; direct route selected later by explicit owner override. |
 | Classification, expanded diagnostic24 singleton roles | Direct 0731: 100/193 exact reviewed fields (51.8%); 22 error sources | Direct V4.1: 117/193 (60.6%); 20 error sources | Candidate −17 exact fields; one candidate role excluded after an identity mismatch | Direct diagnostic does not equal or beat V4.1; not a reversal of the differently shaped fresh45 selection. |
 | Classification, expanded diagnostic24 | Direct Gemma v3: [19,21] confirmed-or-uncertain error sources | Direct V4.1: [18,20] | Intervals overlap, but Gemma has the worse confirmed floor | No classifier parity; 0731 selection unchanged. |
+| Classification, diagnostic24 consumed owner controls | Jev v3 via OpenRouter Decisions: 118/209 (56.5%) | Direct V4.1: 130/209 (62.2%); saved direct 0731: 101/209 raw and 110/209 after bounded representation normalization | Jev trails V4.1 by 12 exact fields while exceeding normalized direct 0731 by eight | Fails the replacement bar; bounded full-classifier trial closed without activation. |
+| Classification architecture, focused nine-label Diagnostic24 groups | Detailed eight-option Choice: 61/82 exact groups; 14/28 exact among groups with positives | Independent Nouls: 54/82 and 8/28; always-none baseline: 54/82 | Detailed Choice repaired eight independent misses and regressed one at 1.46% more cost | Narrow architecture result only; no complete-classifier or production-replacement conclusion. |
 | Translation, retained random100 | Direct Gemma v1: [10,11] affected sources | Direct V4.1: [10,11] | Same paired interval, with different error sets | Experimental boundary unresolved; owner selected Gemma by explicit override. |
 | Commentary, retained random100 | Direct Gemma tagged v2: [4,5] affected sources | Direct V4.1: [9,10] | Candidate upper bound below comparator lower bound | Passes R113; owner selected Gemma for staging implementation. |
 
@@ -112,7 +120,7 @@ chronological sections later in this report.
 | Finding | Evidence across the experiments | Practical consequence |
 | --- | --- | --- |
 | The route is part of the result. | OpenRouter→DeepInfra, direct DeepInfra, direct DeepSeek, Alibaba, Tencent, Google Flex, OpenAI Flex, GMICloud, OpenInference, and local `llama.cpp` differed in supported parameters, delivery, latency, pricing, or output behavior. | Name model, provider, gateway, precision/tier, and fallback policy together; never carry a score or availability claim to another host silently. |
-| Valid structure does not establish correct meaning. | Strict schemas repaired output shape for several candidates while product labels, secondary post types, attribution, translation relations, or grounded commentary remained wrong. Direct Gemma classification delivered 48/48 in every configuration and still failed parity. | Keep transport, parsing, semantic review, and activation as separate gates. |
+| Valid structure does not establish correct meaning. | Strict schemas repaired output shape for several candidates while product labels, secondary post types, attribution, translation relations, or grounded commentary remained wrong. Direct Gemma classification delivered 48/48 in every configuration and still failed parity; Jev delivered all 79 typed calls without provider/schema failure and also failed the classifier bar. | Keep transport, parsing, semantic review, and activation as separate gates. |
 | Native structured-output modes can be model/route sensitive. | 0731 frequently performed better with fixed-slot plain JSON and bounded local parsing than with native `response_format`; Gemma commentary's strict-schema probe malformed JSON while tagged text completed 99/100 application records. | Test the exact response interface. Prefer the smallest deterministic adapter that preserves labels and exposes every normalization. |
 | More reasoning is not automatically better. | Sol xhigh was slower, costlier, and worse than Sol low; 0731 low/high exhausted 6,000-token ceilings without answers; Qwen translation reasoning profiles did not resolve the main defects; Gemini commentary no-reasoning was cheaper but semantically worse. | Treat reasoning mode/budget as a measured configuration, not a quality guarantee or universal default. |
 | Batch size and role decomposition change outputs. | DeepSeek and 0731 results moved across 40-, 20-, five-, two-, and singleton-case shapes; three-role and sequential-reviewer variants changed precision, recall, cost, and latency rather than merely transport efficiency. | A batch or role change requires a paired quality run; token fit alone does not establish equivalence. |
@@ -1292,3 +1300,213 @@ per-family activation policy to the selected runtime.
 Evidence:
 `docs/analysis/2026-09-18-212500-u18a-r94a-direct-0731-normalized-candidate-comparison.json`
 and its Markdown sibling.
+
+## September 19 — Jev/OpenRouter Decisions classifier diagnostic
+
+This bounded trial tested whether TypeSafe's Jev 1.13 decision model could
+replace the generative classifier for the frozen diagnostic24 workload. It was
+classification only: 24 posts, 31 tracked-brand decisions, the current
+expanded taxonomy, and 1,112 typed questions per profile. It was **not** a
+random100 translation or commentary test. Owner answers were withheld from
+requests; scoring used only nonblank consumed owner controls, so these results
+are development comparisons rather than production-accuracy estimates.
+
+The request model was `typesafe/jev-1.13`, sent with authenticated `POST`
+requests to `https://openrouter.ai/api/alpha/decisions`. Every response
+attested model `typesafe/jev-1.13-20260917` and provider `TypeSafe`.
+Unauthenticated endpoint-shape probes that combined the Decisions path with
+`/api/v1` returned 404; they were not model-inference results. V1's first
+successful response required only local acceptance of OpenRouter's dated
+pinned identity, with no additional inference or semantic normalization.
+
+The endpoint and model assumptions came from the official
+[OpenRouter Jev listing](https://openrouter.ai/typesafe/jev-1.13), which listed
+32K context and $0.042 per million input tokens with free output, and the
+[OpenRouter Decisions request reference](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request).
+The retry policy followed OpenRouter's
+[error and `Retry-After` guidance](https://openrouter.ai/docs/api_reference/errors-and-debugging),
+although no retry was needed. TypeSafe documents that one state may be tested
+against independently evaluated questions and that CJK input is accepted with
+lower current accuracy in its [state guide](https://docs.typesafe.ai/concepts/state).
+Its [Jev 1.13 limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13)
+also warn about literal interpretation, indirection/context rot, and text
+generation; TypeSafe's [direct model limits](https://docs.typesafe.ai/models)
+are supporting model documentation, not authority for the routed OpenRouter
+context or price.
+
+| Profile | Request shape and material change | Delivery and usage | Consumed-control result | Provider latency / reported cost |
+| --- | --- | --- | ---: | ---: |
+| V1 | One source post per state; all applicable brand and post-level questions evaluated together; untuned Noul threshold 0.5 | 24/24 complete first attempts; 181,965 input + 33,042 output tokens | 117/209 (56.0%) | 10.294s / $0.00764253 |
+| V2 | One source post and one target brand per state; same 1,112 logical typed questions; at most 37 questions in one request | 31/31 complete first attempts; 189,560 input + 33,063 output tokens | 117/209 (56.0%) | 13.017s / $0.00796152 |
+| V3 | Returned to one post per state and refined the questions for independent labels, inclusive evidence, and brand binding | 24/24 complete first attempts; 242,043 input + 33,042 output tokens | **118/209 (56.5%)** | 12.331s / $0.010165806 |
+
+Across the three profiles, all 79 calls completed on the first attempt with
+zero access, transport, or provider-schema failures and zero retries. Total
+reported cost was **$0.025769856**. V2's brand isolation did not improve the
+aggregate result: it remained **117/209**, while the error-source count moved
+from 22 to 23. V3 gained four post-type exact sets over V1/V2, but lost one
+Audience Topic set and two sentiment fields; every other scored axis was
+unchanged, for a net gain of one field. This is a semantic result for these
+tested configurations rather than an access or delivery problem; it does not
+establish a model-wide ceiling for other question architectures.
+
+| Diagnostic24 exact field axis | Jev v3 | Direct V4.1 control |
+| --- | ---: | ---: |
+| Outcome | 23/31 | 27/31 |
+| Post types | **7/30** | 5/30 |
+| Audience Topics | **5/10** | 3/10 |
+| Product labels | 13/22 | **16/22** |
+| Sentiment | 8/30 | **13/30** |
+| Geopolitical modes | 11/18 | **14/18** |
+| China stance | 20/29 | **21/29** |
+| U.S. stance | 21/29 | **22/29** |
+| Untracked Brand Promotions | **10/10** | 9/10 |
+| **All reviewed fields** | **118/209** | **130/209** |
+
+The same comparison retained the saved direct-0731 result at 101/209 before
+representation normalization and 110/209 after the bounded normalization used
+for the corresponding saved output. Jev v3 therefore beat normalized direct
+0731 by eight fields (raw by 17) but trailed the V4.1 control by 12. Its
+relative post-type, Audience Topic, and promotion
+strengths did not offset worse outcome, product-label, sentiment,
+geopolitical-mode, and national-stance agreement. More importantly, the
+required hard cases—simultaneous multi-label assignment, implied praise or
+testimonial recognition, and sentiment scoped independently to the named
+brand—were not reliably solved. Jev therefore fails the classifier replacement
+bar.
+
+The 10/10 post-promotion score also does not establish either broad promotion
+quality or runtime compatibility: nine reviewed controls were `none` and only
+one was positive.
+The runtime needs promoted-subject identity/evidence, while Jev is a typed
+decision model and is not trained to generate text. A separate generative or
+deterministic extraction path would be required, which was outside this
+bounded trial and would change the architecture being compared.
+
+The full-classifier trial is closed without staging, runtime, database,
+deployment, or production changes. The owner subsequently reopened a separate,
+focused combination-query architecture question; that follow-up is reported
+below and does not change this full-classifier result. Overall testing remains
+ongoing, and the owner's selected direct-DeepInfra 0731 classifier route is
+unchanged. Primary artifacts are:
+
+- `.context/model-task-20260919/2026-09-19-jev-classifier-diagnostic24-openrouter-v1/`
+- `.context/model-task-20260919/2026-09-19-jev-classifier-diagnostic24-openrouter-v2-one-brand/`
+- `.context/model-task-20260919/2026-09-19-jev-classifier-diagnostic24-openrouter-v3-refined/`
+
+Within each directory, `manifest.json` freezes the route and request shape,
+`delivery-summary.json` controls delivery/usage/cost, and
+`owner-control-score.json` controls the comparison. `parsed-output.json`
+retains the projected classifier decisions; `results.json` retains the
+attempts and attested response identity.
+
+## September 19 — Jev combination-query architecture probe
+
+After the full-classifier trial closed, the owner authorized a separate,
+focused test of whether Jev performs better when three related binary labels
+are represented as one eight-option `Choice`. This probe reused the consumed
+Diagnostic24 source material: 24 posts, 31 post-brand cases, and 93 inferred
+groups. Only 82 groups had owner review and were scored, covering 246 binary
+labels with 39 positives. This was a nine-label architecture experiment, not
+a rerun of the complete 209-field classifier score and not unseen gold.
+
+| Group | Three labels tested | Reviewed groups |
+| --- | --- | ---: |
+| Usage | `hands_on_usage`, `results_analysis`, `opinions_reactions` | 30 |
+| Actionable | `events`, `opportunities`, `job_listings` | 30 |
+| Feedback | `bug`, `complaint`, `ideas_requests` | 22 |
+
+All arms used the same frozen state, definitions, label order, concurrency of
+one, and attested `typesafe/jev-1.13-20260917/TypeSafe` response through
+`POST https://openrouter.ai/api/alpha/decisions`. Only question
+representation or the predeclared adaptive screen changed. The primary Choice
+decoder selected the single highest-probability option; independent labels
+used the predeclared 0.5 threshold. The adaptive arm skipped a group when its
+screen probability was at most 0.1, then asked the original independent
+questions for groups that passed.
+
+| Arm | Primary owner-control result | TP / FP / FN | Questions / calls | Input / output tokens | Request latency / execution wall | Reported cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Independent Nouls | 54/82 exact | 28 / 19 / 11 | 279 / 24 | 54,548 / 6,669 | 6.780s / 7.302s | $0.002291016 |
+| Detailed eight-option Choice | **61/82 exact** | 28 / 14 / 11 | 93 / 24 | 55,343 / 10,827 | 7.221s / 7.717s | $0.002324406 |
+| Compact eight-option Choice | 59/82 exact | 26 / 15 / 13 | 93 / 24 | 49,639 / 10,827 | 8.173s / 8.690s | $0.002084838 |
+| Adaptive independent, screen then follow-up | 58/82 exact | **30** / 18 / **9** | 270 / 47 | 74,716 / 6,143 | 12.662s / 13.565s | $0.003138072 |
+
+All **119** requests completed on the first attempt, with no access,
+transport, response-schema, or provider failures and no retries. Total usage
+was 234,246 input and 34,466 output tokens for **$0.009838332**. The timing is
+one sequential execution per profile and includes network and routing, so it
+is useful as this run's delivery record rather than a rigorous model-speed
+benchmark.
+
+The detailed Choice arm was the best primary result. Relative to independent
+Nouls, it repaired eight wrong groups and regressed one, reduced false
+positives from 19 to 14 without changing true positives or false negatives,
+and cost 1.46% more. Its gains were concentrated in actionable labels
+(26/30 versus 21/30 exact) and feedback labels (20/22 versus 18/22). Usage
+remained 15/30 exact while its binary-correct count fell from 73 to 71, so the
+probe does not show a broad multi-label improvement across all three groups.
+
+The cohort was negative-heavy: 54 of 82 reviewed groups had no positive label,
+so an always-none baseline also scored 54/82 exact and 207/246 binary labels.
+The Choice improvement was not only an all-none effect, however. Among the 28
+groups that contained at least one positive label, detailed Choice scored
+14/28 exact versus 8/28 for independent Nouls; compact Choice scored 12/28 and
+adaptive independent scored 10/28.
+
+Compact Choice was added only after the detailed arm exposed its menu token
+cost. It saved 9.00% relative to independent Nouls, but missed two additional
+positives and fell two exact groups behind detailed Choice; it is not an
+unqualified quality-and-cost win. The adaptive arm skipped 34 of 93 inferred
+groups, including 29 reviewed groups and one false-negative group. It improved
+true-positive and false-negative counts but cost 36.97% more than independent,
+took longer, and trailed detailed Choice on exact groups. Its fresh follow-up
+calls also contained fewer surrounding questions than the one-pass arm, so
+the observed quality difference cannot be attributed to gating alone.
+
+A no-inference, post-hoc replay also tested marginal decoding for the two
+Choice arms by summing the four option probabilities containing each label
+and selecting labels at 0.5. This untuned replay left detailed Choice at 61/82
+exact while moving to 29 TP, 14 FP, and 10 FN; compact moved to 60/82 with 27
+TP, 14 FP, and 12 FN. These exploratory values do not replace the predeclared
+argmax results above.
+
+The focused result is useful evidence that detailed combination questions can
+reduce false positives for these three sparse label groups, but it does not
+establish a general multi-label solution or reverse the full-classifier
+replacement decision. There was no new 0731 or V4.1 inference, no unseen
+holdout, and no staging, runtime, database, deployment, or production change.
+This bounded architecture trial is closed; broader model testing remains
+ongoing. Primary artifacts are under:
+
+- `.context/model-task-20260919/2026-09-19-092343-jev-combination-probe/`
+
+`specification.json` freezes scope and arms; `comparison.json` and
+`compact-supplement.json` hold the primary scores and compact-arm rationale;
+`routing.json` records adaptive decisions; each arm's manifest, requests, and
+`delivery-summary.json` preserve the request and delivery evidence. The
+sibling harness preserves the experiment logic, and `audit-summary.json`
+records the independent reconciliation of request hashes, state equality,
+question identity, response identity and probabilities, cost receipts, and
+recomputed scores.
+
+### September 19 — direct TypeSafe connectivity switch
+
+The owner replaced OpenRouter with TypeSafe's native route for **future Jev
+tests**. A dedicated runner sent one real saved post state with nine
+independent and three combination questions to
+`POST https://api.typesafe.ai/v1/systemone`; it has no OpenRouter credential,
+network path, or fallback. The call returned HTTP 200 on its first attempt,
+all 12 typed answers, and pinned response model `jev-1.13.0`: 3,564 input and
+562 output tokens, 742ms request latency, and zero retries. The API returned no
+cost, so **$0.000149688** is a separately labeled list-price estimate using
+TypeSafe's published $0.042 per million input tokens and free output. The
+[native API reference](https://docs.typesafe.ai/api) confirms the endpoint and
+typed response shape; the [model reference](https://docs.typesafe.ai/models)
+confirms the pinned ID and price. This is connectivity evidence only: no full
+comparison was rerun and it creates no new quality, classifier-replacement, or
+production-accuracy conclusion. Historical OpenRouter results and attested
+identities above remain valid provenance; the owner's direct-DeepInfra 0731
+runtime choice is unchanged. Artifacts are in
+`.context/model-task-20260919/2026-09-19-093952-typesafe-direct-connectivity-probe/`;
+the runner is `.context/model-task-20260919/jev_typesafe_direct.py`.
