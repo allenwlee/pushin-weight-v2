@@ -204,6 +204,15 @@ _TAGGED_RESPONSE_COLLAPSED_BOUNDARY_RE = re.compile(
     r"\Z"
 )
 
+_TAGGED_RESPONSE_WRONG_EN_CLOSER_RE = re.compile(
+    r"\A"
+    r"\[\[POST_ID\]\]([^\r\n]+)\[\[/POST_ID\]\]\n"
+    r"\[\[EN\]\]([^\r\n]+)\[\[/ZH_CN\]\]\n"
+    r"\[\[ZH_CN\]\]([^\r\n]+)\[\[/ZH_CN\]\]\n"
+    r"\[\[JA\]\]([^\r\n]+)\[\[/JA\]\]"
+    r"\Z"
+)
+
 
 def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[str, str]:
     text = getattr(response, "text", None)
@@ -212,8 +221,10 @@ def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[st
     match = _TAGGED_RESPONSE_RE.fullmatch(text)
     if match is None:
         match = _TAGGED_RESPONSE_COLLAPSED_BOUNDARY_RE.fullmatch(text)
-        if match is None:
-            raise ValueError("synthesis_response_tagged_text_invalid")
+    if match is None:
+        match = _TAGGED_RESPONSE_WRONG_EN_CLOSER_RE.fullmatch(text)
+    if match is None:
+        raise ValueError("synthesis_response_tagged_text_invalid")
     values = match.groups()
     if any("[[" in value or "]]" in value for value in values):
         raise ValueError("synthesis_response_tagged_text_invalid")

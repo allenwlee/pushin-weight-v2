@@ -90,6 +90,25 @@ def test_tagged_parser_accepts_gemma_collapsed_middle_boundaries():
     }
 
 
+def test_tagged_parser_accepts_gemma_wrong_english_closer():
+    answer = (
+        "[[POST_ID]]p1[[/POST_ID]]\n"
+        "[[EN]]English explanation.[[/ZH_CN]]\n"
+        "[[ZH_CN]]中文解释。[[/ZH_CN]]\n"
+        "[[JA]]日本語の説明。[[/JA]]"
+    )
+
+    result = synthesize_post(
+        post_id="p1", context={"post": "x"}, client=_TextClient(answer), config=_config()
+    )
+
+    assert result.texts == {
+        "en": "English explanation.",
+        "zh-cn": "中文解释。",
+        "ja": "日本語の説明。",
+    }
+
+
 @pytest.mark.parametrize(
     "answer,error",
     [
