@@ -1,8 +1,8 @@
 ---
 title: AI Enrichment Stage 1 staging integration evidence
 date: 2026-09-19
-status: staging-inconclusive
-candidate_sha: 8c80ee1809e44c5dafc88d379e59c8dec8affb21
+status: staging-review-ready
+candidate_sha: 36fb513aac1ce4e9345ba8f798d29ac2e9f9a20d
 delivery_target: staging
 ---
 
@@ -10,21 +10,20 @@ delivery_target: staging
 
 ## Plain-English Summary
 
-The integrated Stage 1 candidate is deployed to the refreshed staging stack at
-one exact Git commit. The database migration, production-shaped refresh,
-direct-DeepInfra model routing, and one real Gemma commentary call have been
-proved on staging. The commentary call completed and published English,
-Simplified Chinese, and Japanese output while the persistent worker remained
-disabled before and after the test.
+The integrated Stage 1 candidate is available on the real Render staging site
+at one exact product commit. It now includes the versioned classifier, direct
+DeepInfra model routes, English/Simplified-Chinese/Japanese presentation,
+demand-driven commentary, 655 official job listings, reviewed profile-history
+ingestion, and the new filters and glyphs on production-shaped data.
 
-The first bounded harvester acceptance attempt stopped before Twitter search or
-model use because the staging harvester did not yet have `DEEPINFRA_API_KEY`.
-The owner then authorized one replacement run. It exercised the real Twitter,
-translation, relevancy, and two-role classification path and exposed four
-integration defects described below. The replacement has been consumed and is
-retained as a failed acceptance attempt. A later exact-SHA staging attempt is
-also retained below as inconclusive because it produced no results. The
-staging harvest cron is suspended. Production has not been changed.
+The bounded live path is also proved without another TwitterAPI request. Four
+posts already collected by the authorized on-demand discovery run completed
+translation and both classifier roles. Targeted job extraction completed on
+the job-board post and correctly wrote no listing because the source did not
+name the employer. One pending organization candidate remains visible for
+human review rather than being promoted automatically. Persistent paid-call
+controls remain off, the staging harvest cron is suspended, and production has
+not been changed.
 
 ## Locked runtime
 
@@ -44,7 +43,7 @@ A provider-free one-off check inside the deployed harvester
 `deepinfra` / `api.deepinfra.com` with Gemma 4 31B for translation and 0731 for
 classification. It constructed no client and made no provider call.
 
-## Candidate and automated verification
+## Initial candidate and automated verification
 
 - Candidate SHA: `6a24eecc7242f6cc2dc870a21ee78dc0a9b1fa8a`.
 - Staging web, harvester, headline worker, jobs cron, and synthesis worker were
@@ -281,21 +280,21 @@ errors. This confirms that the manual staging test used the intended
 on-demand credential lane, but it still does not provide a live classified
 post and does not pass the Stage 1 live acceptance gate.
 
-## Remaining staging gate
+## Historical gate before existing-data probes
 
-The final exact-SHA attempt and the separately owner-authorized on-demand
-retry have both been consumed. Both are inconclusive for live acceptance: the
+At this checkpoint, the final exact-SHA attempt and the separately
+owner-authorized on-demand retry had both been consumed. Both were inconclusive
+for live acceptance: the
 first returned no results, and the retry received one result but inserted none
 after the relevancy drop. The routing correction is covered by the focused
 gate, but the Stage 1 live acceptance gate is not passed. The staging cron
 remains suspended, and no further Twitter/provider-backed Trigger Run is
 permitted under this evidence record.
 
-Headline enqueueing and headline provider calls remain disabled and have a
-required zero-call delta; no headline budget authorization is needed while
-that lane stays disabled. Update this report and
-[PR 41](https://github.com/allenwlee/pushin-weight-v2/pull/41) with the final
-staging result. Production remains outside this LFG delivery target.
+Headline enqueueing and headline provider calls remained disabled and had a
+required zero-call delta. The later existing-data probes below superseded this
+checkpoint without consuming another TwitterAPI request. Production remains
+outside this LFG delivery target.
 
 ## Five-post existing-data staging probe
 
@@ -400,3 +399,103 @@ deployment became live at the same SHA at `2026-09-19T02:01:32Z`. The staging
 harvest cron was re-suspended at
 `2026-09-19T01:56:50Z`, and its impossible schedule remains `0 0 31 2 *`.
 Production was not modified.
+
+## Final integrated staging candidate
+
+The product candidate deployed for owner review is
+`36fb513aac1ce4e9345ba8f798d29ac2e9f9a20d`. The feature and staging refs
+resolved to that commit, and Render independently reported it live on the web,
+headline, synthesis, harvest, and official-jobs services. The harvest service
+was re-suspended after deployment and retains the impossible schedule
+`0 0 31 2 *`. The jobs cron uses the same impossible schedule. Headline
+enqueueing/provider calls, synthesis provider calls, discovery, targeted
+extraction, and synthesis prewarming are all disabled at rest.
+
+### Existing-data classifier and extraction proof
+
+The final bounded classifier retry used four posts already present in staging:
+`2101217602865356884`, `2101218361439121481`, `2101227418791072101`, and
+`2101235748636651958`. It made no TwitterAPI request. All four ended with
+successful translation and classification under direct DeepInfra Gemma 4 31B
+and the two direct DeepInfra 0731 roles. The five classifier invocations used
+in the four-post pass plus its one-post retry cost `$0.00194826` in total.
+
+The first targeted job extraction exposed two server-boundary defects. A source
+may give an exact organization handle without a separate display name, and the
+model had been allowed to choose the evidence extraction method. The writer now
+uses an exact source-visible name or, when absent, an exact source-visible
+handle, while the server always records the extraction method as
+`structured_text`. The model no longer supplies that provenance. The final
+retry succeeded and wrote zero job listings because the post was a generic
+job-board claim with no named employer. This is the intended fail-closed result
+under the locked extraction prompt.
+
+One pending `BrandDiscoveryCandidate` remains from the untracked-promotion
+path. It observed `AI Data Annotator` from the source text and is linked to one
+promotion-evidence row and no job listing. It is deliberately pending human
+review. This is useful evidence of the current limit: author account metadata
+is not yet part of the classifier payload, so generic job-title language can be
+proposed as a candidate. Nothing promoted this candidate into the tracked-brand
+catalog.
+
+### Other integrated data paths
+
+- Official recruiting-source sync succeeded for Qwen (270), DeepSeek (34),
+  MiniMax (101), Zhipu (146), and Kimi (104), for 655 current staging listings.
+- The bounded profile-history pass reviewed 100 accounts and recorded 324
+  observations and 244 snapshots: 144 changed, 80 unchanged, and two unknown
+  affiliation candidates.
+- The bounded synthesis pass claimed and completed three demands. The final
+  staging census contains nine succeeded and six cancelled demands, nine
+  current artifacts, and no pending, processing, or failed demand.
+- The final enrichment census contains 17 fully succeeded rows and four older
+  untouched pending rows. Targeted extraction contains one succeeded row and
+  no pending or failed row.
+
+### Hosted owner-review surface
+
+The authenticated browser pass ran against
+`https://pushinweight-staging-web.onrender.com/` on the exact candidate. The
+home view rendered 655 official job cards, the new post types and owner-locked
+Column A glyphs, Audience Topic controls, graph and feed content, and working
+English/Japanese locale switching. The DeepSeek brand page rendered its
+official jobs and all current filter families, including Results Analysis,
+Job Listings, Personnel Changes, News Reporting, and Audience Topics. The
+same URL has been opened in the owner's Chrome; that browser is at the ordinary
+Google sign-in wall because its staging-domain session was not already logged
+in. No authentication bypass was added.
+
+Final hosted screenshots are retained under
+`.context/u23-hosted-browser-20260919-final/` for the English home, Japanese
+home, expanded Japanese filters, and English/Japanese DeepSeek brand views.
+
+### Final idle-interval observation
+
+The deployed candidate was observed at `2026-09-19T10:07:08Z`,
+`2026-09-19T10:22:46Z`, and `2026-09-19T10:37:25Z`, covering two complete
+normal-equivalent 15-minute staging intervals. The first and second interval
+checks returned the same database census: 17 succeeded/succeeded enrichment
+rows, four pending/pending historical rows, nine succeeded and six cancelled
+synthesis demands, one succeeded targeted-extraction state, 655 job listings,
+and one pending brand candidate. There was no pending, processing, or failed
+synthesis work and no pending or failed targeted extraction.
+
+All five Render services remained live at product commit
+`36fb513aac1ce4e9345ba8f798d29ac2e9f9a20d`. The harvest cron remained
+suspended, and Render returned zero error-level log bytes across the web,
+headline, synthesis, harvest, and jobs services from the initial observation
+through `2026-09-19T10:38:00Z`. The actual headline worker reported provider
+calls, demand shaping, and critic routing false; `headline_status` also reported
+serving, enqueueing, and provider calls inactive. No TwitterAPI or model call
+occurred during the observation window.
+
+### Final automated gate
+
+The exact candidate passed the established aggregate command on a freshly
+recreated PostgreSQL test database: 3,231 passed, 25 documented deselections,
+83 warnings, 783 PostgreSQL-required tests executed, zero required skips, and
+zero errors in 493.16 seconds. The JUnit receipt is
+`/Users/fuchitalee/.local/state/pushinweight-stage1-u5-tests/resume-u23-final-36fb513-r4-junit.xml`.
+An earlier attempt encountered a PostgreSQL deadlock while a live-browser test
+was releasing its fixture; the two affected tests passed in isolation on a
+fresh database before this complete clean rerun.

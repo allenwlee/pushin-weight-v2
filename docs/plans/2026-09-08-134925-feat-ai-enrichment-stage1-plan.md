@@ -5371,3 +5371,46 @@ remains untouched. All five staging services were then verified live at the
 same candidate SHA; a superseded intermediate headline build was canceled to
 unblock that final deployment. Update PR 41 and then continue to the remaining
 staging-only roadmap; this gate does not authorize production promotion.
+
+### September 19 — Integrated staging candidate ready for owner review
+
+The final U23 product candidate is
+`36fb513aac1ce4e9345ba8f798d29ac2e9f9a20d`. The feature and staging refs and
+all five Render staging services resolve to that exact commit. The authenticated
+hosted browser pass now covers the real home and DeepSeek brand pages in
+English and Japanese, including production-shaped graph/feed content, 655
+official job listings, current post-type and Audience Topic filters, and the
+seven owner-locked Column A glyphs. The owner-review URL is
+`https://pushinweight-staging-web.onrender.com/`; the owner's Chrome is open at
+its normal Google sign-in wall.
+
+The remaining bounded data paths also completed without another TwitterAPI
+request. Four existing discovered posts now have successful literal translation
+and two-role 0731 classification. A targeted job extraction retry succeeded and
+correctly wrote no listing for a generic job-board post that did not name the
+employer. Its preceding failures produced two bounded server-side corrections:
+exact source-visible organization handles are valid when a separate display
+name is absent, and extraction provenance is always recorded by the server as
+`structured_text` rather than accepted from model output. Focused targeted-
+extraction/discovery tests pass 50/50 with all 50 PostgreSQL-required tests
+executed.
+
+The final database census contains 17 fully succeeded enrichment rows, four
+older untouched pending rows, nine succeeded and six cancelled synthesis
+demands, nine current synthesis artifacts, one succeeded targeted-extraction
+state, 655 job listings, and one unpromoted pending brand-discovery candidate.
+The candidate observed `AI Data Annotator` from promotion text and has no job
+listing; retaining it for human review proves that noisy candidates cannot enter
+the tracked-brand catalog automatically. Author account metadata is not yet in
+the classifier payload, so this remains a documented candidate-quality limit.
+
+At rest, harvest is suspended on schedule `0 0 31 2 *`; official jobs use the
+same impossible schedule; headline enqueue/provider calls, synthesis provider
+calls, discovery, targeted extraction, and synthesis prewarming are disabled.
+Production was not touched. Preserve the exact-SHA browser screenshots and the
+full staging receipt in
+`docs/analysis/2026-09-19-005400-ai-enrichment-stage1-staging-integration.md`,
+which now records the clean aggregate (3,231 passed, 25 documented
+deselections, 783 PostgreSQL-required executed, zero skips/errors) and two
+stable normal-equivalent 15-minute intervals. Update PR 41. U24 remains
+excluded until the owner separately chooses production after review.
