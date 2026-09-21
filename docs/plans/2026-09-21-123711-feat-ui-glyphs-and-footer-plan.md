@@ -98,7 +98,7 @@ None.
 
 Replace the new taxonomy items' temporary or missing markers with the selected custom SVG glyphs, align the Role filter's `Other` label with its glyph-bearing neighbors, give each classification filter consistent All/Clear/Other-only controls, keep locale-button names stable in their own languages while removing Original, show the unfinished final day of multi-day charts with a dotted incoming segment, then add an unobtrusive version footer to every PushinWeight-rendered page. Additional UI changes will be appended to this same plan before implementation.
 
-Product Contract changed: R13–R14 add residual-only category filtering while preserving the difference between real classifier labels and missing data; R15–R16 fix the three locale labels and remove the Original locale option; R17 distinguishes today's partial count in multi-day charts.
+Product Contract changed: R13–R14 add residual-only category filtering while preserving the difference between real classifier labels and missing data; R15–R16 fix the three locale labels and remove the Original locale option; R17 distinguishes today's partial count in multi-day charts; R18 makes “today” follow the browser's local calendar rather than the server's UTC date.
 
 ### Problem Frame
 
@@ -179,6 +179,7 @@ The expanded audience-topic and product-label taxonomies need a coherent visual 
 **Multi-day chart**
 
 - R17. For every chart window longer than one day, the final line segment leading from the latest completed day into today's partial count shall be dotted for every visible brand-total line. All earlier completed-day segments shall remain solid. The one-day chart shall retain its existing intraday treatment.
+- R18. For every chart window longer than one day, daily labels, aggregation, and the lower window boundary shall use the browser's valid IANA timezone. A 7-day chart shall contain the six preceding local calendar days plus the current partial local day beginning at 00:00. Invalid or absent timezone input shall fall back safely to UTC, and the one-day rolling 24-hour chart shall remain unchanged.
 
 ### Acceptance Examples
 
@@ -193,6 +194,7 @@ The expanded audience-topic and product-label taxonomies need a coherent visual 
 - AE9. **Covers R15.** Given any of `en`, `zh_cn`, or `ja` is active, when the locale selector renders or updates, then its three button labels remain exactly `en`, `中文`, and `日本語`, with only the active locale marked selected.
 - AE10. **Covers R16.** Given a new visitor or a returning visitor with a legacy `original` preference, when the page resolves its locale, then no Original button is rendered and the legacy value resolves to `en` without producing a fourth or invisible active locale.
 - AE11. **Covers R17.** Given a 7-, 30-, or 365-day chart whose final bucket is today, when the chart renders initially or after a refresh/filter/window change, then each visible brand-total line is solid through the completed days and only its final segment into today is dotted; the same series in the 1-day view has no partial-day segment override.
+- AE12. **Covers R18.** Given the browser timezone is `Asia/Tokyo` and the server clock is `2026-09-21T22:11:04Z`, when a 7-day chart settles, then its labels run from `2026-09-16` through local today `2026-09-22`, posts are counted by those Tokyo calendar boundaries, and only the segment entering `2026-09-22` is dotted.
 
 ### Production Baseline Evidence
 
@@ -425,6 +427,20 @@ Begin U7's target/declaration characterization before changing U1–U6, so the e
   - A dependency-pin or candidate-SHA change invalidates prior evidence and requires a new attempt.
 - **Verification:** The target performance gate records clean, immutable, lab-labeled evidence for the exact candidate and Bridgewright runtime; the result grants no release authority and is consumed alongside the stateful UI gate and normal staging checks.
 
+### U9. Repair the partial-day chart's local-calendar boundary
+
+- **Goal:** Make the bucket styled as today's incomplete day actually be today for the viewer, including when their local date is ahead of or behind UTC.
+- **Requirements:** R8, R17–R18; KTD8.
+- **Dependencies:** U6's final-segment styling remains the single visual treatment.
+- **Files:** `monitor/views.py`, `monitor/static/pw-chart.js`, `tests/test_home_chart_pulse.py`, `tests/test_pw_chart_filter.js`, and `tests/test_home_v22_browser.py`.
+- **Approach:** Send `Intl.DateTimeFormat().resolvedOptions().timeZone` with chart fragment requests, validate it with Python's IANA `zoneinfo` database, include it in the chart cache identity, and use that zone for multi-day local-midnight bounds and database date truncation. When a server-rendered multi-day payload was built without the browser zone, immediately replace it through the existing atomic chart refresh path; do not change the one-day rolling 24-hour path.
+- **Test scenarios:**
+  - Covers AE12. Freeze at the Tokyo/UTC date crossover and prove the final label is Tokyo's current date, the first label is six local midnights earlier, and posts on either side of local 00:00 land in different expected buckets.
+  - Verify the chart request carries the browser's IANA timezone and the server rejects malformed/unknown zones by falling back to UTC rather than erroring.
+  - Verify timezone is part of the complete chart cache key so one viewer cannot receive another viewer's calendar buckets.
+  - Verify 1-day labels, 24-hour cutoff, totals, and timezone comparison-axis behavior remain unchanged.
+- **Verification:** Focused PostgreSQL, JavaScript, and real-browser tests prove the calendar boundary and final dotted segment agree for Tokyo while existing UTC and one-day behavior remains stable.
+
 ## Verification Contract
 
 - Run focused Django response and template coverage for the version context and all full-page templates.
@@ -434,6 +450,7 @@ Begin U7's target/declaration characterization before changing U1–U6, so the e
 - Verify all five classification dropdowns expose atomic `All`, `Clear`, and `Other only` actions, preserve distinct residual rows, emit one filter-state change per activation, and apply the same result to feed and chart requests; verify Brand and Language retain their existing All/Clear behavior.
 - Verify the locale selector shows exactly `en`, `中文`, and `日本語` in every active locale, and exercise a stale `original` preference through the production-equivalent cookie-and-reload path.
 - Verify 7-, 30-, and 365-day charts dot only the segment leading into today's partial bucket on every visible brand-total line, including after filter and window refreshes; verify the 1-day chart is unchanged.
+- At a UTC/local-date crossover, verify every multi-day chart ends on the browser's local date and starts at the matching local 00:00 calendar boundary; verify invalid timezone input falls back safely and cache entries remain timezone-specific.
 - Run the pinned Bridgewright stateful workflow: `uv run --extra dev bridgewright assurance-validate --project-root .`, `uv run --extra dev bridgewright assurance-prescribe --project-root .`, the affected target gate during implementation, and the candidate target gate against the exact product SHA before handoff.
 - Run the PushinWeight-owned performance gate backed by Bridgewright `performance.validate`, `performance.prepare`, `performance.run`, and `performance.result`; require complete Lighthouse and Web Vitals evidence, exact candidate/build/fixture identity, and every blocking structural, network, and cache expectation to close.
 - Run `python manage.py check --deploy` and the repository's normal regression suite before delivery.

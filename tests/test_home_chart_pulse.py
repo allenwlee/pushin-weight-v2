@@ -265,6 +265,43 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertNotIn("ORDER BY", chart_queries[0].upper())
         self.assertEqual(payload["window_days"], 30)
 
+    def test_multi_day_chart_uses_browser_local_midnight_boundaries(self):
+        now = datetime(2026, 9, 21, 22, 11, 4, tzinfo=UTC)
+        brand = Brand.objects.get(nickname="up")
+        for tweet_id, created_at in (
+            ("before-tokyo-window", datetime(2026, 9, 15, 14, 59, tzinfo=UTC)),
+            ("tokyo-window-start", datetime(2026, 9, 15, 15, 0, tzinfo=UTC)),
+            ("tokyo-today", datetime(2026, 9, 21, 15, 1, tzinfo=UTC)),
+        ):
+            post = Post.objects.create(tweet_id=tweet_id, created_at=created_at)
+            PostBrand.objects.create(post=post, brand=brand)
+
+        payload = _build_home_chart_payload(
+            7,
+            {"brands": ["up"]},
+            now=now,
+            bucket_timezone="Asia/Tokyo",
+        )
+
+        self.assertEqual(payload["bucket_timezone"], "Asia/Tokyo")
+        self.assertEqual(payload["days"], [
+            "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19",
+            "2026-09-20", "2026-09-21", "2026-09-22",
+        ])
+        self.assertEqual(payload["series"]["up"], [1, 0, 0, 0, 0, 0, 1])
+        self.assertEqual(payload["totals"]["up"], 2)
+
+    def test_invalid_chart_timezone_falls_back_to_utc(self):
+        payload = _build_home_chart_payload(
+            7,
+            {"brands": ["up"]},
+            now=datetime(2026, 9, 21, 22, 11, 4, tzinfo=UTC),
+            bucket_timezone="Mars/Olympus",
+        )
+
+        self.assertEqual(payload["bucket_timezone"], "UTC")
+        self.assertEqual(payload["days"][-1], "2026-09-21")
+
     @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
     def test_complete_chart_projection_cache_is_canonical_and_isolated(self, _now):
         first_filters = {"brands": ["up", "down"], "unsanctioned": "off"}
@@ -293,9 +330,14 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
 
         with CaptureQueriesContext(connection) as locale_miss:
             _build_home_chart_payload(30, first_filters, locale="zh_cn")
+        with CaptureQueriesContext(connection) as timezone_miss:
+            _build_home_chart_payload(
+                30, first_filters, bucket_timezone="Asia/Tokyo"
+            )
         with CaptureQueriesContext(connection) as filter_miss:
             _build_home_chart_payload(30, {"brands": ["up"], "unsanctioned": "off"})
         self.assertGreater(len(locale_miss), 0)
+        self.assertGreater(len(timezone_miss), 0)
         self.assertGreater(len(filter_miss), 0)
 
     def test_complete_chart_projection_cache_has_a_fixed_entry_cap(self):
