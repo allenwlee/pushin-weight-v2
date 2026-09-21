@@ -1,9 +1,11 @@
 ---
 title: Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis - Plan
 type: feat
+status: completed
 date: 2026-09-08
 deepened: 2026-09-08
-amended: 2026-09-19
+amended: 2026-09-21
+delivered: 2026-09-21
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
@@ -324,6 +326,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     topics in canonical order through the existing filter path, update the
     stateful UI declaration, and verify the same candidate in staging before
     promoting it to production.
+
+44. On September 21, after production deployment and verification, the owner
+    directed: “let's consider this plan complete.” Treat the integrated plan
+    as delivered at production candidate
+    `98dee23eda0e5c47b5a39f9c4a384c981285a1e1`. The normal enrichment retry
+    queue remains operational state rather than unfinished implementation:
+    the first two natural post-deploy cycles recovered most carryover work
+    while retaining provider timeouts and invalid model responses for bounded
+    later retries. Do not convert those observations into a claim of zero
+    provider errors or zero pending rows.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
@@ -5484,3 +5496,28 @@ EN/JA first-page identities, and the unchanged 655-listing census. The owner's
 authenticated Chrome is open on the staged one-day review surface. Retain the
 local live-browser TCP exhaustion as an explicit coverage limit rather than
 claiming a scripted hosted-DOM pass.
+
+### September 21 — Production delivery complete
+
+The owner declared this plan complete after the integrated system and the
+seven-topic dropdown shipped to production. The final production candidate is
+`98dee23eda0e5c47b5a39f9c4a384c981285a1e1`; `main`, `staging`, and
+`feat/ai-enrichment-stage1` all resolved to that exact commit at verification
+time. The production web, harvest, headline, synthesis, and jobs services all
+reported the same live revision.
+
+The final guarded candidate gate passed 211 tests, including 82 tests that
+required PostgreSQL and 64 browser subtests. The stateful UI contract passed
+all 4,311 obligations with zero failures, skips, errors, missing results, or
+unknown results. Authenticated production browser checks confirmed that the
+Audience Topics dropdown opens and shows all seven canonical topics in the
+same order with exact English, Simplified-Chinese, and Japanese labels.
+
+The synthesis worker's rolling-deploy lock collision cleared after one guarded
+restart and did not recur. Natural scheduled harvest cycles remained the only
+production acceptance path. The first cycle exposed retryable translation
+transport failures and one invalid classifier batch; the following cycle
+completed 41 of 50 carryover rows. At close, six older translations and three
+older classifications remained queued under the existing bounded retry policy,
+alongside newly collected work. These are recorded operational limitations,
+not hidden successes or evidence of lost posts.
