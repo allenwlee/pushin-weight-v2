@@ -1909,7 +1909,7 @@ class PostSynthesisDemand(models.Model):
 
 
 class PostSynthesisDailyBudget(models.Model):
-    """Conservative per-day reservations for synthesis provider transport."""
+    """Per-day synthesis request and token usage accounting."""
 
     usage_date = models.DateField()
     control_revision = models.CharField(max_length=64)

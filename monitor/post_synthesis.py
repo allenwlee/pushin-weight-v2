@@ -202,24 +202,7 @@ def claim_synthesis_demands(*, config, owner: str | None = None, now=None):
             model=config.model,
         )
         budget = PostSynthesisDailyBudget.objects.select_for_update().get(pk=budget.pk)
-        capacity = min(
-            config.batch_size,
-            max(0, config.daily_request_cap - budget.reserved_requests),
-            max(
-                0,
-                (
-                    config.daily_input_token_cap - budget.reserved_input_tokens
-                )
-                // config.max_input_tokens_per_post,
-            ),
-            max(
-                0,
-                (
-                    config.daily_output_token_cap - budget.reserved_output_tokens
-                )
-                // config.max_output_tokens_per_post,
-            ),
-        )
+        capacity = config.batch_size
         claimed = list(due.order_by("-priority", "first_requested_at", "pk")[:capacity])
         for demand in claimed:
             demand.state = PostSynthesisDemand.State.PROCESSING

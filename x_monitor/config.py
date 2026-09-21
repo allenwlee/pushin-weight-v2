@@ -764,12 +764,8 @@ class SynthesisConfig(BaseModel):
     max_attempts: int = Field(default=3, ge=1, le=5)
     max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
     max_output_tokens_per_post: int = Field(default=1_024, ge=256, le=8_192)
-    daily_request_cap: int = Field(default=200, ge=1, le=10_000)
-    daily_input_token_cap: int = Field(default=800_000, ge=1_000)
-    daily_output_token_cap: int = Field(default=240_000, ge=1_000)
     input_usd_per_million: Decimal = Field(default=Decimal("0.09"), ge=0)
     output_usd_per_million: Decimal = Field(default=Decimal("0.34"), ge=0)
-    daily_cost_cap_usd: Decimal = Field(default=Decimal("0.70"), gt=0)
     pricing_version: str = Field(
         default="deepinfra-gemma4-31b-standard-2026-09-18", min_length=1, max_length=96
     )
@@ -802,14 +798,6 @@ class SynthesisConfig(BaseModel):
         if self.lease_seconds < self.timeout_seconds + 60:
             raise ValueError(
                 "synthesis lease must exceed provider timeout by at least 60 seconds"
-            )
-        maximum_cost = (
-            Decimal(self.daily_input_token_cap) * self.input_usd_per_million
-            + Decimal(self.daily_output_token_cap) * self.output_usd_per_million
-        ) / Decimal(1_000_000)
-        if maximum_cost > self.daily_cost_cap_usd:
-            raise ValueError(
-                "synthesis token caps must fit inside the daily dollar cap"
             )
         return self
 
@@ -1117,10 +1105,6 @@ def load_config(path: Path) -> Config:
         "control_revision": "X_MONITOR_SYNTHESIS_CONTROL_REVISION",
         "prewarm_enabled": "X_MONITOR_SYNTHESIS_PREWARM_ENABLED",
         "prewarm_per_cycle": "X_MONITOR_SYNTHESIS_PREWARM_PER_CYCLE",
-        "daily_request_cap": "X_MONITOR_SYNTHESIS_DAILY_REQUEST_CAP",
-        "daily_input_token_cap": "X_MONITOR_SYNTHESIS_DAILY_INPUT_TOKEN_CAP",
-        "daily_output_token_cap": "X_MONITOR_SYNTHESIS_DAILY_OUTPUT_TOKEN_CAP",
-        "daily_cost_cap_usd": "X_MONITOR_SYNTHESIS_DAILY_COST_CAP_USD",
     }
     env_synthesis_overrides = {
         field: os.environ[env_name]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
@@ -48,6 +49,12 @@ class Command(BaseCommand):
             provider=config.provider,
             model=config.model,
         ).first()
+        observed_input = budget.observed_input_tokens if budget else 0
+        observed_output = budget.observed_output_tokens if budget else 0
+        estimated_cost = (
+            Decimal(observed_input) * config.input_usd_per_million
+            + Decimal(observed_output) * config.output_usd_per_million
+        ) / Decimal(1_000_000)
         payload = {
             "control_revision": config.control_revision,
             "activation_state": config.activation_state,
@@ -68,25 +75,18 @@ class Command(BaseCommand):
                 "input": usage["input_tokens"] or 0,
                 "output": usage["output_tokens"] or 0,
             },
-            "daily_budget": {
-                "request_cap": config.daily_request_cap,
-                "reserved_requests": budget.reserved_requests if budget else 0,
-                "input_token_cap": config.daily_input_token_cap,
+            "daily_usage": {
+                "requested_calls": budget.reserved_requests if budget else 0,
                 "reserved_input_tokens": (
                     budget.reserved_input_tokens if budget else 0
                 ),
-                "observed_input_tokens": (
-                    budget.observed_input_tokens if budget else 0
-                ),
-                "output_token_cap": config.daily_output_token_cap,
+                "observed_input_tokens": observed_input,
                 "reserved_output_tokens": (
                     budget.reserved_output_tokens if budget else 0
                 ),
-                "observed_output_tokens": (
-                    budget.observed_output_tokens if budget else 0
-                ),
+                "observed_output_tokens": observed_output,
                 "pricing_version": config.pricing_version,
-                "maximum_cost_usd": str(config.daily_cost_cap_usd),
+                "estimated_observed_cost_usd": str(estimated_cost),
             },
         }
         if options["as_json"]:

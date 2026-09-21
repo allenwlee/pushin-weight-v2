@@ -113,9 +113,17 @@
       var dd = dropdownFor(p);
       var boxes = dd ? dd.querySelectorAll("input[type=checkbox]") : [];
       var changed = false;
-      boxes.forEach(function (b) {
-        if (b.checked !== b.defaultChecked) changed = true;
-      });
+      var group = p.getAttribute("data-group");
+      var state = window.pwFilter && window.pwFilter.get
+        ? window.pwFilter.get()
+        : null;
+      if (group === "brands" && state && state.brands === "__all__") {
+        changed = false;
+      } else {
+        boxes.forEach(function (b) {
+          if (b.checked !== b.defaultChecked) changed = true;
+        });
+      }
       var dot = p.querySelector(".status-dot");
       if (dot) {
         dot.classList.toggle("is-changed", changed);

@@ -2730,6 +2730,21 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertIsInstance(open_selection, list)
                     self.assertIn("qwen", open_selection)
                     self.assertNotIn("anthropic", open_selection)
+                    dropdown.locator('[data-lens="closed"]').click()
+                    act(dropdown.locator('[data-dd-action="all"][data-dd-scope="visible"]').click)
+                    self.assertEqual(
+                        page.evaluate("() => window.pwFilter.get().brands"),
+                        "__all__",
+                    )
+                    self.assertEqual(
+                        dropdown.locator('input[data-pw-filter-group="brands"]:checked').count(),
+                        dropdown.locator('input[data-pw-filter-group="brands"]').count(),
+                    )
+                    self.assertFalse(
+                        brands_pill.locator(".status-dot").evaluate(
+                            "element => element.classList.contains('is-changed')"
+                        )
+                    )
                     brands_pill.press("Escape")
 
                     sentiment_pill = page.locator('[data-group="sentiment"]')

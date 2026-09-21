@@ -379,12 +379,8 @@ synthesis:
   # Production's first 48 successful Gemma calls used 143-317 output tokens.
   # Keep more than 3x headroom without reserving 16x the observed maximum.
   max_output_tokens_per_post: 1024
-  daily_request_cap: 200
-  daily_input_token_cap: 800000
-  daily_output_token_cap: 240000
   input_usd_per_million: "0.09"
   output_usd_per_million: "0.34"
-  daily_cost_cap_usd: "0.70"
   pricing_version: "deepinfra-gemma4-31b-standard-2026-09-18"
   demand_batch_limit: 20
   visible_expiry_minutes: 120

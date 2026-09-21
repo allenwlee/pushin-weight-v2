@@ -5,6 +5,7 @@ from io import StringIO
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.core.signing import salted_hmac
@@ -22,18 +23,9 @@ def _user():
     )
 
 
-def test_synthesis_demand_api_requires_authentication_and_csrf():
+def test_synthesis_demand_api_allows_public_home_csrf_and_rejects_missing_token():
     post = Post.objects.create(tweet_id="api-auth", text="Post")
-    anonymous = Client().post(
-        "/api/v2/post-synthesis-demands/",
-        data=json.dumps({"post_ids": [post.pk], "reason": "visible"}),
-        content_type="application/json",
-        secure=True,
-    )
-    assert anonymous.status_code == 302
-
     client = Client(enforce_csrf_checks=True)
-    client.force_login(_user())
     rejected = client.post(
         "/api/v2/post-synthesis-demands/",
         data=json.dumps({"post_ids": [post.pk], "reason": "visible"}),
@@ -41,6 +33,20 @@ def test_synthesis_demand_api_requires_authentication_and_csrf():
         secure=True,
     )
     assert rejected.status_code == 403
+
+    home = client.get("/?locale=en", secure=True)
+    accepted = client.post(
+        "/api/v2/post-synthesis-demands/",
+        data=json.dumps({"post_ids": [post.pk], "reason": "visible"}),
+        content_type="application/json",
+        secure=True,
+        HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
+        HTTP_REFERER="https://testserver/?locale=en",
+    )
+
+    assert home.status_code == 200
+    assert accepted.status_code == 200
+    assert PostSynthesisDemand.objects.get(post=post).request_count == 1
 
 
 def test_synthesis_demand_api_creates_once_and_poll_only_does_not_mutate():
@@ -119,6 +125,23 @@ def test_database_rate_limit_is_atomic_per_identity_bucket():
         ).hexdigest()
         for identity in (f"user:{user.pk}", "ip:127.0.0.1")
     }
+
+
+def test_database_rate_limit_uses_only_ip_for_anonymous_visitors():
+    request = RequestFactory().post("/api/v2/post-synthesis-demands/")
+    request.user = AnonymousUser()
+    request.META["REMOTE_ADDR"] = "127.0.0.2"
+
+    assert _accept_synthesis_rate(request, cost=1)
+    assert list(
+        PostSynthesisRateLimitBucket.objects.values_list("scope_hash", flat=True)
+    ) == [
+        salted_hmac(
+            "post-synthesis-rate-limit",
+            "ip:127.0.0.2",
+            algorithm="sha256",
+        ).hexdigest()
+    ]
 
 
 def test_management_command_uses_the_shared_demand_and_poll_shape():

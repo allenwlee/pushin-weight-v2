@@ -88,10 +88,11 @@ the lease, calls the provider outside the transaction, then publishes only if
 the lease owner, fence, expiry, and context still match. Expired speculation is
 cancelled before transport. Retry exhaustion becomes terminal `failed` state.
 
-`post_synthesis_daily_budgets` reserves the full configured request and token
-maximum before transport. A crashed call keeps that conservative reservation.
-`post_synthesis_rate_limit_buckets` enforces the authenticated API limit in
-PostgreSQL across web processes.
+`post_synthesis_daily_budgets` records requested calls, conservative token
+reservations, and observed token usage. It is usage telemetry, not a throughput
+ceiling. A crashed call keeps its reservation in that accounting row.
+`post_synthesis_rate_limit_buckets` enforces the API limit in PostgreSQL across
+web processes.
 
 ## Browser and agent contract
 
@@ -101,11 +102,12 @@ The endpoint is:
 POST /api/v2/post-synthesis-demands/
 ```
 
-It requires the existing signed-in owner session and Cross-Site Request
-Forgery (CSRF) token. The JSON body accepts at most 20 visible post IDs, one of
+It requires the homepage's Cross-Site Request Forgery (CSRF) token. The JSON
+body accepts at most 20 visible post IDs, one of
 `visible`, `expanded`, or `lookahead`, and optional `poll_only=true`. Every ID
-must already be visible to the same user through the feed authorization path.
-Polling reads state without creating demand.
+must exist within the public feed's current visibility scope. Polling reads
+state without creating demand. Anonymous requests are throttled per IP;
+authenticated requests are throttled per user and IP.
 
 The response returns each requested post's synthesis status and any completed
 locale bundle. The browser requests at most 20 visible rows plus 10 lookahead

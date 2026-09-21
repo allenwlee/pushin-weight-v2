@@ -4949,7 +4949,6 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
     })
 
 
-@login_required
 @require_POST
 def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     """Create/read shared synthesis demand for feed-visible post IDs."""
@@ -4989,9 +4988,9 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     if not _accept_synthesis_rate(request, cost=rate_cost):
         return JsonResponse({"error": "rate limit exceeded"}, status=429)
 
-    # The owner-only feed has one visibility scope today. Keep this query as
-    # the explicit authorization boundary so a future scoped feed cannot
-    # accidentally expose demand or content for an unseen row.
+    # The public feed has one visibility scope today. Keep this query as the
+    # explicit boundary so a future scoped feed cannot accidentally expose
+    # demand or content for an unseen row.
     posts = list(Post.objects.filter(pk__in=unique_ids).order_by("pk"))
     allowed = {str(post.pk) for post in posts}
     if allowed != set(unique_ids):
@@ -5022,7 +5021,9 @@ def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
     now = django_timezone.now()
     bucket_start = now.replace(second=0, microsecond=0)
     address = str(request.META.get("REMOTE_ADDR") or "-")
-    identities = (f"user:{request.user.pk}", f"ip:{address}")
+    identities = [f"ip:{address}"]
+    if request.user.is_authenticated:
+        identities.insert(0, f"user:{request.user.pk}")
     scope_hashes = [
         salted_hmac(
             "post-synthesis-rate-limit", identity, algorithm="sha256"

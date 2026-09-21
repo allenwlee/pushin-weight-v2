@@ -166,8 +166,8 @@ python manage.py run_synthesis_worker
 ```
 
 The web request creates or polls shared demand; it never calls the model.
-`synthesis_status --json` reports queue, artifact, usage, and cap state from
-PostgreSQL. Keep prewarm disabled until its separate budget has passed.
+`synthesis_status --json` reports queue, artifact, and usage accounting from
+PostgreSQL. Keep prewarm disabled until its separate review has passed.
 
 ## Controls and credentials
 

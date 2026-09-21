@@ -287,12 +287,21 @@ def test_repeated_demand_coalesces_and_upgrades_priority():
     assert second.request_count == 2
 
 
-def test_claim_reserves_daily_budget_and_hard_stops_at_request_cap():
+def test_claim_stays_batch_bounded_without_stopping_at_historical_daily_totals():
     posts = [
         Post.objects.create(tweet_id=f"budget-{index}", text=f"post {index}")
         for index in range(2)
     ]
-    config = _config(daily_request_cap=1)
+    config = _config(batch_size=1)
+    PostSynthesisDailyBudget.objects.create(
+        usage_date=timezone.now().date(),
+        control_revision=config.control_revision,
+        provider=config.provider,
+        model=config.model,
+        reserved_requests=200,
+        reserved_input_tokens=800_000,
+        reserved_output_tokens=240_000,
+    )
     request_post_synthesis(
         post_ids=[post.pk for post in posts], reason="visible", config=config
     )
@@ -302,10 +311,15 @@ def test_claim_reserves_daily_budget_and_hard_stops_at_request_cap():
     budget = PostSynthesisDailyBudget.objects.get()
 
     assert len(claimed) == 1
-    assert second_claim == []
-    assert budget.reserved_requests == 1
-    assert budget.reserved_input_tokens == config.max_input_tokens_per_post
-    assert budget.reserved_output_tokens == config.max_output_tokens_per_post
+    assert len(second_claim) == 1
+    assert claimed[0].pk != second_claim[0].pk
+    assert budget.reserved_requests == 202
+    assert budget.reserved_input_tokens == 800_000 + (
+        2 * config.max_input_tokens_per_post
+    )
+    assert budget.reserved_output_tokens == 240_000 + (
+        2 * config.max_output_tokens_per_post
+    )
 
 
 def test_two_workers_claim_disjoint_rows():
