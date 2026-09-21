@@ -68,7 +68,7 @@ services:
       - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
         value: "False"
       - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
-        value: staging-v1-demand-ja-20260911
+        value: staging-v2-demand-ja-output1024-20260921
 
   - type: worker
     name: pushinweight-staging-headlines
@@ -148,7 +148,7 @@ services:
       - key: X_MONITOR_SYNTHESIS_ACTIVATION_STATE
         value: pending
       - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
-        value: staging-v1-demand-ja-20260911
+        value: staging-v2-demand-ja-output1024-20260921
 
   - type: cron
     name: pushinweight-staging-harvest
