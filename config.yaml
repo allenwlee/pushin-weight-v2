@@ -376,7 +376,9 @@ synthesis:
   timeout_seconds: 300
   max_attempts: 3
   max_input_tokens_per_post: 4000
-  max_output_tokens_per_post: 4096
+  # Production's first 48 successful Gemma calls used 143-317 output tokens.
+  # Keep more than 3x headroom without reserving 16x the observed maximum.
+  max_output_tokens_per_post: 1024
   daily_request_cap: 200
   daily_input_token_cap: 800000
   daily_output_token_cap: 240000

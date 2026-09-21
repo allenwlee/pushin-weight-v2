@@ -3926,14 +3926,14 @@ def _two_role_parse_fixed_slots(
         or not isinstance(response, dict)
         or set(response) != expected_root
         or not isinstance(response.get("decisions"), dict)
-        or list(response["decisions"]) != list(decision_slots)
+        or set(response["decisions"]) != set(decision_slots)
     ):
         return {}
     if role == "content" and (
         not isinstance(response.get("post_promotions"), dict)
         or not isinstance(response.get("promoted_subjects"), dict)
-        or list(response["post_promotions"]) != list(post_slots)
-        or list(response["promoted_subjects"]) != list(post_slots)
+        or set(response["post_promotions"]) != set(post_slots)
+        or set(response["promoted_subjects"]) != set(post_slots)
     ):
         return {}
     content_fields = {"outcome", "post_types", "audience_topics"}

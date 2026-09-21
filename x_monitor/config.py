@@ -763,7 +763,7 @@ class SynthesisConfig(BaseModel):
     timeout_seconds: int = Field(default=300, ge=5, le=300)
     max_attempts: int = Field(default=3, ge=1, le=5)
     max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
-    max_output_tokens_per_post: int = Field(default=4_096, ge=256, le=8_192)
+    max_output_tokens_per_post: int = Field(default=1_024, ge=256, le=8_192)
     daily_request_cap: int = Field(default=200, ge=1, le=10_000)
     daily_input_token_cap: int = Field(default=800_000, ge=1_000)
     daily_output_token_cap: int = Field(default=240_000, ge=1_000)

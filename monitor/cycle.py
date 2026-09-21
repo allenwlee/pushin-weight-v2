@@ -674,7 +674,21 @@ def _persist_two_role_classification_trace(
             raise ValueError("classification_trace_content_invalid")
         if set(brand) != expected_brand_fields:
             raise ValueError("classification_trace_brand_interpretation_invalid")
-        merged = {**content, **brand}
+        brand_for_merge = brand
+        if is_v4 and content.get("outcome") == "context_missing":
+            # The selected classifier keeps each provider role verbatim in
+            # the trace, then makes every brand-owned axis unavailable when
+            # the content role says the supplied context cannot be judged.
+            # Reproduce that deterministic merge here before comparing the
+            # raw role stages with the canonical final stage.
+            brand_for_merge = {
+                "product_labels": ["none"],
+                "sentiment": "unknown",
+                "geopolitical_modes": ["unavailable"],
+                "china_national_stance": "unknown",
+                "us_national_stance": "unknown",
+            }
+        merged = {**content, **brand_for_merge}
         parsed = parse_stage1_classifications([{"brand_id": brand_id, **merged}], [brand_id])
         if parsed is None or parsed[brand_id] != final_rows[brand_id]:
             raise ValueError("classification_trace_final_mismatch")

@@ -19,6 +19,7 @@ def test_synthesis_worker_builds_locked_direct_gemma_client(monkeypatch):
     assert client._base_url == (
         "https://api.deepinfra.com/v1/openai/chat/completions"
     )
+    assert config.max_output_tokens_per_post == 1024
 
 
 def test_synthesis_worker_does_not_fall_back_to_another_provider_key(monkeypatch):

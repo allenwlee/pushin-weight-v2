@@ -355,6 +355,81 @@ def test_trace_final_mismatch_rejects_before_any_projection_write():
     assert not PostBrandClassificationState.objects.filter(post=post).exists()
 
 
+def test_two_role_v4_trace_preserves_raw_brand_answer_when_content_is_context_missing():
+    from core.classification_contract import parse_stage1_v4_classifications
+    from core.models import PostBrandClassificationJudgment
+    from monitor.cycle import _persist_two_role_classification_trace
+    from x_monitor.attribution import _two_role_trace
+
+    post, brand = _publish_setup("v4-context-missing-trace")
+    content = {
+        "by_brand": {
+            brand.pk: {
+                "outcome": "context_missing",
+                "post_types": [],
+                "audience_topics": ["unavailable"],
+            }
+        }
+    }
+    raw_brand = {
+        "by_brand": {
+            brand.pk: {
+                "product_labels": ["testimonial"],
+                "sentiment": "positive",
+                "geopolitical_modes": ["none"],
+                "china_national_stance": "none",
+                "us_national_stance": "none",
+            }
+        }
+    }
+    final = parse_stage1_v4_classifications(
+        [
+            {
+                "brand_id": brand.pk,
+                "outcome": "context_missing",
+                "post_types": [],
+                "audience_topics": ["unavailable"],
+                "product_labels": ["none"],
+                "sentiment": "unknown",
+                "geopolitical_modes": ["unavailable"],
+                "china_national_stance": "unknown",
+                "us_national_stance": "unknown",
+            }
+        ],
+        [brand.pk],
+    )
+    assert final is not None
+    trace = _two_role_trace(
+        content=content,
+        brand=raw_brand,
+        final=final,
+        fingerprint="v4-context-missing-fingerprint",
+        model="deepseek-ai/DeepSeek-V4-Flash-0731",
+        request_identity="deepinfra-direct:deepseek_0731",
+        request_profile="deepseek_0731",
+    )
+
+    ids = _persist_two_role_classification_trace(
+        post_id=post.pk,
+        brand_ids={brand.pk},
+        trace=trace,
+        final_by_brand=final,
+        model="deepseek-ai/DeepSeek-V4-Flash-0731",
+        run_id="provenance-run-v4-context-missing-trace",
+        fingerprint="v4-context-missing-fingerprint",
+    )
+
+    assert set(ids) == {brand.pk}
+    stored_brand = PostBrandClassificationJudgment.objects.get(
+        post=post, brand=brand, stage="brand_interpretation"
+    )
+    stored_final = PostBrandClassificationJudgment.objects.get(
+        post=post, brand=brand, stage="final"
+    )
+    assert stored_brand.canonical_judgment["product_labels"] == ["testimonial"]
+    assert stored_final.canonical_judgment == final[brand.pk]
+
+
 def test_trace_requires_the_same_nonblank_selector_on_every_stage():
     from core.models import (
         PostBrandClassificationJudgment,

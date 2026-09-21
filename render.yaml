@@ -52,7 +52,7 @@ services:
       - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
         value: "True"
       - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
-        value: v1-demand-ja-20260911
+        value: v2-demand-ja-output1024-20260921
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
@@ -151,7 +151,7 @@ services:
       - key: X_MONITOR_SYNTHESIS_ACTIVATION_STATE
         value: owner_override
       - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
-        value: v1-demand-ja-20260911
+        value: v2-demand-ja-output1024-20260921
 
   # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)

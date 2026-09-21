@@ -238,6 +238,28 @@ def test_selected_runtime_rejects_missing_duplicate_or_extra_slot_and_does_not_r
     assert rows == [{"by_brand": {}, "unsanctioned_flags": [], "valid": False}]
 
 
+def test_selected_runtime_accepts_fixed_slot_maps_in_any_json_object_order():
+    from x_monitor.attribution import classify_batch_pragmatics_full
+
+    class ReorderedSlots(FixedSlotTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            response["decisions"] = dict(reversed(list(response["decisions"].items())))
+            if "CONTENT ROLE:" in kwargs["system"]:
+                response["post_promotions"] = dict(
+                    reversed(list(response["post_promotions"].items()))
+                )
+                response["promoted_subjects"] = dict(
+                    reversed(list(response["promoted_subjects"].items()))
+                )
+            return response
+
+    rows = classify_batch_pragmatics_full(_tweets(20), [], ReorderedSlots())
+
+    assert len(rows) == 20
+    assert all(row["valid"] is True for row in rows)
+
+
 def test_selected_runtime_makes_other_axes_unavailable_for_context_missing():
     from x_monitor.attribution import classify_batch_pragmatics_full
 
