@@ -6,6 +6,8 @@ date: 2026-09-08
 deepened: 2026-09-08
 amended: 2026-09-21
 delivered: 2026-09-21
+release_version: 0.2.0b1
+release_tag: v0.2.0-beta.1
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
@@ -5504,7 +5506,9 @@ seven-topic dropdown shipped to production. The final production candidate is
 `98dee23eda0e5c47b5a39f9c4a384c981285a1e1`; `main`, `staging`, and
 `feat/ai-enrichment-stage1` all resolved to that exact commit at verification
 time. The production web, harvest, headline, synthesis, and jobs services all
-reported the same live revision.
+reported the same live revision. This release is package version `0.2.0b1`,
+published as the annotated Git tag `v0.2.0-beta.1` on that exact deployed
+candidate under the repository's existing PEP 440-to-tag mapping.
 
 The final guarded candidate gate passed 211 tests, including 82 tests that
 required PostgreSQL and 64 browser subtests. The stateful UI contract passed
