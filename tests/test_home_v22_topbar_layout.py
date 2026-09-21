@@ -49,6 +49,7 @@ CHART_PAYLOAD = {
     "granularity": "day",
     "stacked": True,
     "window_days": 1,
+    "computed_at": datetime.now(UTC).isoformat(),
     "fetched_at": datetime.now(UTC).isoformat(),
     "applied_filters": {},
     "pulse": {"entries": [], "window_days": 1, "computed_at": ""},
