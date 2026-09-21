@@ -99,6 +99,6 @@ Last updated: 2026-09-21 12:39:30 JST
 (((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR ("Ox Alpha" OR OxAlpha OR ox-alpha)) min_faves:0
 ```
 
-Last reviewed: 2026-09-21 12:39:30 JST — Generated from the current harvest
-policy and config for the v0.2.0-beta.1 snapshot. Query strings and enabled
-models are current configuration, not a historical change record.
+Last reviewed: 2026-09-21 12:39:30 JST — Generated from current harvest policy
+and config for the v0.2.0-beta.1 snapshot. Query strings and enabled models
+describe current runtime configuration.

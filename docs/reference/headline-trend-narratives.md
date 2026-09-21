@@ -121,8 +121,8 @@ Each dossier includes:
   window;
 - brand-local comparison availability and suppression reasons;
 - compact summaries for volume, post type, sentiment, discourse, geopolitical
-  modes and national stance, language, Untracked Brand Promotions, account
-  role, and corpus phrases;
+  mode, national stance, language, Untracked Brand Promotions, account role,
+  and corpus phrases;
 - bounded citable facts with exact English and Chinese display values;
 - a compact shape summary, including direction, peak/trough, and the dominant
   transition rather than the full time series;
@@ -427,7 +427,7 @@ packets, responses, evidence, or credentials.
 | Read-only saved-run cost replay | `tests/test_headline_demand_replay.py` |
 | Provider-free operator status | `tests/test_headline_status.py` |
 
-Last reviewed: 2026-09-21 12:39:30 JST — Snapshot reconciled with the current
-headline configuration, narrative source modules, migrations, and Render
-topology. Historical plans remain outside this current production contract;
-provider queue state and live credit usage remain runtime-only.
+Last reviewed: 2026-09-21 12:39:30 JST — Detailed headline reference reconciled
+with the current trend narrative modules, prompt versions, migration tables,
+Render topology, DTO projection, and queue controls. Historical plans are not
+part of this snapshot; provider queue and credit state remain runtime-only.
