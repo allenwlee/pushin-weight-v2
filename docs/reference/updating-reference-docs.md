@@ -6,7 +6,8 @@ description: Review and refresh the seven maintained runtime reference documents
 
 Use this procedure whenever an operator asks to update, refresh, or verify the
 runtime reference documentation. It covers six focused files under
-`docs/reference/` and the repository overview in `x-monitoring/README.md`.
+`docs/reference/` and the repository overview in the repository-root
+`README.md`.
 
 The legacy `docs/reference/schema.dot` and
 `docs/reference/images/xmonitor-schema-post-batch.png` artifacts are retired.
@@ -23,7 +24,7 @@ only repository sources of truth for the production PostgreSQL schema.
 | `docs/reference/lookup-tables.md` | Lookup keys, labels, seed ownership, and usage | Django models, seed commands/data, and attribution code |
 | `docs/reference/classifier-prompts.md` | Literal classifier prompts, model route, input/output contracts, and validation | `x_monitor/attribution.py`, `x_monitor/config.py`, `config.yaml`, and focused tests |
 | `docs/reference/headline-trend-narratives.md` | All-brand dossier math, evidence selection, literal rank/editor/critic prompts, DeepSeek route, mechanical and semantic validation ownership, run/call/brand ledger, public DTO, rollout controls, and follow-ups | `monitor/trend_narrative_*.py`, `monitor/tasks.py`, `core/models.py`, current migrations, `x_monitor/config.py`, `config.yaml`, `render.yaml`, `docs/deploy/render.md`, and focused tests |
-| `x-monitoring/README.md` | High-level v2 system overview and links to the six focused references | The six reviewed reference files plus current application and deployment code |
+| `README.md` | High-level v2 system overview and links to the six focused references | The six reviewed reference files plus current application and deployment code |
 
 ## Procedure
 
@@ -92,7 +93,7 @@ For `headline-trend-narratives.md`, also perform these exact checks:
 
 ### 3. Review the overview last
 
-Review `x-monitoring/README.md` only after the six focused references settle.
+Review the repository-root `README.md` only after the six focused references settle.
 The README is a synthesis layer. Its system overview, deployment description,
 brand/query summary, and "where to look next" links must agree with the focused
 documents and current v2 code.

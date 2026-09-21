@@ -1,6 +1,7 @@
 # Per-brand trend narratives
 
-Current state as of 2026-09-11 JST.
+Version: v0.2.0-beta.1
+Last updated: 2026-09-21 12:39:30 JST
 
 Push In Weight publishes a trilingual why-first trend narrative for every
 tracked, non-sentinel brand in each supported window. The default page shows
@@ -9,8 +10,8 @@ selects that brand's stored narrative, even when the brand is not a default
 leader.
 
 The live design is not a stock-ticker summary. A notable conversation may be a
-change in volume, rate, sentiment, discourse, post type, nationalism,
-first-party activity, language, unsanctioned flags, or the content of the
+change in volume, rate, sentiment, discourse, post type, geopolitical mode,
+first-party activity, language, Untracked Brand Promotions, or the content of the
 posts. The post content supplies the explanation; quantitative facts supply
 context and support.
 
@@ -119,9 +120,9 @@ Each dossier includes:
   enriched counts plus the same counts for the newest 30 minutes of a one-day
   window;
 - brand-local comparison availability and suppression reasons;
-- compact summaries for volume, post type, sentiment, discourse, Chinese and
-  US nationalism, language, unsanctioned flags, account role, and corpus
-  phrases;
+- compact summaries for volume, post type, sentiment, discourse, geopolitical
+  modes and national stance, language, Untracked Brand Promotions, account
+  role, and corpus phrases;
 - bounded citable facts with exact English and Chinese display values;
 - a compact shape summary, including direction, peak/trough, and the dominant
   transition rather than the full time series;
@@ -136,8 +137,9 @@ the immutable database snapshot for audit and future recomputation.
 ### Facts
 
 Facts are stable packet-owned objects. They may cover volume, engagement,
-post type, sentiment, discourse, nationalism, language, unsanctioned flags,
-official/staff post count, and corpus phrase document count. Each fact records:
+post type, sentiment, discourse, geopolitical mode, national stance, language,
+Untracked Brand Promotions, official/staff post count, and corpus phrase
+document count. Each fact records:
 
 ```text
 fact_id
@@ -228,7 +230,8 @@ evidence, and proposition IDs.
 The editor uses original text, timing, volume, language, account role, and
 corpus signals even when every post is pending enrichment. Partial classifier
 claims must name their covered subset. Unavailable sentiment, post-type,
-discourse, nationalism, or unsanctioned families cannot support a claim.
+discourse, geopolitical, or Untracked Brand Promotions families cannot support
+a claim.
 
 ### Critic
 
@@ -424,5 +427,7 @@ packets, responses, evidence, or credentials.
 | Read-only saved-run cost replay | `tests/test_headline_demand_replay.py` |
 | Provider-free operator status | `tests/test_headline_status.py` |
 
-Historical plans and dated analysis artifacts describe earlier experiments and
-remain historical evidence. This reference is the current production contract.
+Last reviewed: 2026-09-21 12:39:30 JST — Snapshot reconciled with the current
+headline configuration, narrative source modules, migrations, and Render
+topology. Historical plans remain outside this current production contract;
+provider queue state and live credit usage remain runtime-only.
