@@ -5719,3 +5719,434 @@ class TargetedExtractionAttempt(models.Model):
                 name="ck_target_attempt_outcome",
             )
         ]
+
+
+# ============================================================================
+# Rare-type extra-search durable ledgers
+# ============================================================================
+
+
+class RareTypeSearchDailyBudget(models.Model):
+    """One locked accounting row for a rare-search lane and UTC day."""
+
+    usage_date = models.DateField()
+    lane = models.CharField(max_length=64)
+    search_credits_reserved = models.PositiveIntegerField(default=0)
+    search_credits_accounted = models.PositiveIntegerField(default=0)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_daily_budgets"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usage_date", "lane"], name="uq_rare_budget_day_lane"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_budget_dec_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_budget_dec_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_budget_dec_confirmed",
+            ),
+        ]
+
+
+class RareTypeSearchRun(models.Model):
+    """Irreversible entitlement for one paid rare-search time slot."""
+
+    class Status(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        DISPATCHED = "dispatched", "Dispatched"
+        RETURNED = "returned", "Returned"
+        EMPTY = "empty", "Empty"
+        FAILED = "failed", "Failed"
+        USAGE_UNKNOWN = "usage_unknown", "Usage unknown"
+
+    lane = models.CharField(max_length=64)
+    slot_start = models.DateTimeField()
+    daily_budget = models.ForeignKey(
+        RareTypeSearchDailyBudget,
+        on_delete=models.PROTECT,
+        related_name="search_runs",
+    )
+    source_query = models.ForeignKey(
+        SearchQuery,
+        on_delete=models.PROTECT,
+        related_name="rare_type_search_runs",
+    )
+    query_string = models.TextField()
+    query_hash = models.CharField(max_length=64)
+    query_version = models.CharField(max_length=128)
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    attempted_start = models.DateTimeField()
+    attempted_end = models.DateTimeField()
+    complete_start = models.DateTimeField(blank=True, null=True)
+    complete_end = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.RESERVED
+    )
+    request_count = models.PositiveSmallIntegerField(default=0)
+    raw_result_count = models.PositiveIntegerField(blank=True, null=True)
+    normalized_result_count = models.PositiveIntegerField(blank=True, null=True)
+    reserved_credits = models.PositiveIntegerField(default=300)
+    estimated_credits = models.PositiveIntegerField(blank=True, null=True)
+    confirmed_credits = models.PositiveIntegerField(blank=True, null=True)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    has_coverage_gap = models.BooleanField(default=False)
+    gap_start = models.DateTimeField(blank=True, null=True)
+    gap_end = models.DateTimeField(blank=True, null=True)
+    gap_reason = models.CharField(max_length=128, blank=True, default="")
+    truncated = models.BooleanField(default=False)
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    error_detail = models.TextField(blank=True, default="")
+    environment = models.CharField(max_length=64)
+    release_sha = models.CharField(max_length=64)
+    reserved_at = models.DateTimeField()
+    dispatched_at = models.DateTimeField(blank=True, null=True)
+    returned_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_runs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lane", "slot_start"], name="uq_rare_run_lane_slot"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "reserved",
+                        "dispatched",
+                        "returned",
+                        "empty",
+                        "failed",
+                        "usage_unknown",
+                    ]
+                ),
+                name="ck_rare_run_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_end__gt=models.F("window_start")),
+                name="ck_rare_run_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempted_end__gt=models.F("attempted_start")),
+                name="ck_rare_run_attempted_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(complete_start__isnull=True, complete_end__isnull=True)
+                    | models.Q(
+                        complete_start__isnull=False,
+                        complete_end__isnull=False,
+                        complete_end__gt=models.F("complete_start"),
+                    )
+                ),
+                name="ck_rare_run_complete_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        has_coverage_gap=False,
+                        gap_start__isnull=True,
+                        gap_end__isnull=True,
+                        gap_reason="",
+                    )
+                    | models.Q(
+                        has_coverage_gap=True,
+                        gap_start__isnull=False,
+                        gap_end__isnull=False,
+                        gap_end__gt=models.F("gap_start"),
+                        gap_reason__gt="",
+                    )
+                ),
+                name="ck_rare_run_gap_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="reserved", dispatched_at__isnull=True, request_count=0)
+                    | models.Q(
+                        status__in=["dispatched", "returned", "empty", "usage_unknown"],
+                        dispatched_at__isnull=False,
+                        request_count=1,
+                    )
+                    | models.Q(status="failed", request_count__in=[0, 1])
+                ),
+                name="ck_rare_run_dispatch_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status__in=["reserved", "dispatched"],
+                        raw_result_count__isnull=True,
+                        normalized_result_count__isnull=True,
+                        estimated_credits__isnull=True,
+                        confirmed_credits__isnull=True,
+                        returned_at__isnull=True,
+                    )
+                    | models.Q(
+                        status="returned",
+                        raw_result_count__isnull=False,
+                        raw_result_count__gt=0,
+                        normalized_result_count__isnull=False,
+                        normalized_result_count__lte=models.F("raw_result_count"),
+                        estimated_credits__isnull=False,
+                        returned_at__isnull=False,
+                    )
+                    | models.Q(
+                        status="empty",
+                        raw_result_count__isnull=False,
+                        raw_result_count=0,
+                        normalized_result_count=0,
+                        estimated_credits__isnull=False,
+                        returned_at__isnull=False,
+                    )
+                    | models.Q(status__in=["failed", "usage_unknown"])
+                ),
+                name="ck_rare_run_result_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_run_dec_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_run_dec_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_run_dec_confirmed",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["lane", "-attempted_end"], name="idx_rare_run_attempted"),
+            models.Index(fields=["status", "slot_start"], name="idx_rare_run_status_slot"),
+        ]
+
+
+class RareTypeDecision(models.Model):
+    """Versioned, reusable Jev interpretation identity and claim state."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CLAIMED = "claimed", "Claimed"
+        COMPLETED = "completed", "Completed"
+        REVIEW_NEEDED = "review_needed", "Review needed"
+        FAILED = "failed", "Failed"
+
+    provider_post_id = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    model = models.CharField(max_length=255)
+    question_version = models.CharField(max_length=128)
+    threshold_version = models.CharField(max_length=128)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    response_id = models.CharField(max_length=255, blank=True, default="")
+    probabilities = models.JSONField(default=dict)
+    derived_types = models.JSONField(default=list)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    cost_usd = models.DecimalField(max_digits=16, decimal_places=9, default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decisions"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "provider_post_id",
+                    "content_hash",
+                    "model",
+                    "question_version",
+                    "threshold_version",
+                ],
+                name="uq_rare_decision_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "pending",
+                        "claimed",
+                        "completed",
+                        "review_needed",
+                        "failed",
+                    ]
+                ),
+                name="ck_rare_decision_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempts__lte=2),
+                name="ck_rare_decision_attempts",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status="claimed",
+                        claim_owner__gt="",
+                        claim_fence__gt=0,
+                        claimed_at__isnull=False,
+                        claim_expires_at__isnull=False,
+                        claim_expires_at__gt=models.F("claimed_at"),
+                    )
+                    | (
+                        ~models.Q(status="claimed")
+                        & models.Q(
+                            claim_owner="",
+                            claimed_at__isnull=True,
+                            claim_expires_at__isnull=True,
+                        )
+                    )
+                ),
+                name="ck_rare_decision_claim_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status="completed",
+                        completed_at__isnull=False,
+                        response_id__gt="",
+                    )
+                    | (~models.Q(status="completed") & models.Q(completed_at__isnull=True))
+                ),
+                name="ck_rare_decision_complete_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(cost_usd__gte=0),
+                name="ck_rare_decision_cost",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "next_attempt_at"], name="idx_rare_decision_due"
+            ),
+            models.Index(
+                fields=["provider_post_id"], name="idx_rare_decision_post"
+            ),
+        ]
+
+
+class RareTypeSearchHit(models.Model):
+    """Durable inbox row for one already-paid provider result."""
+
+    class GateState(models.TextChoices):
+        DECISION_PENDING = "decision_pending", "Decision pending"
+        KEPT = "kept", "Kept"
+        JUNK = "junk", "Junk"
+        REVIEW_NEEDED = "review_needed", "Review needed"
+        PROVIDER_FAILED = "provider_failed", "Provider failed"
+        EXPIRED_UNPROCESSED = "expired_unprocessed", "Expired unprocessed"
+
+    run = models.ForeignKey(
+        RareTypeSearchRun, on_delete=models.PROTECT, related_name="hits"
+    )
+    provider_post_id = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    original_text = models.TextField(blank=True, default="")
+    public_payload = models.JSONField(default=dict)
+    payload_expires_at = models.DateTimeField()
+    payload_expired_at = models.DateTimeField(blank=True, null=True)
+    source_query_hash = models.CharField(max_length=64)
+    source_query_version = models.CharField(max_length=128)
+    source_window_start = models.DateTimeField()
+    source_window_end = models.DateTimeField()
+    gate_state = models.CharField(
+        max_length=24, choices=GateState.choices, default=GateState.DECISION_PENDING
+    )
+    decision = models.ForeignKey(
+        RareTypeDecision,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="hits",
+    )
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="rare_type_search_hits",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    fetched_at = models.DateTimeField()
+    gate_completed_at = models.DateTimeField(blank=True, null=True)
+    post_persisted_at = models.DateTimeField(blank=True, null=True)
+    classified_at = models.DateTimeField(blank=True, null=True)
+    extracted_at = models.DateTimeField(blank=True, null=True)
+    first_visible_at = models.DateTimeField(blank=True, null=True)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_hits"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "provider_post_id"], name="uq_rare_hit_run_post"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    gate_state__in=[
+                        "decision_pending",
+                        "kept",
+                        "junk",
+                        "review_needed",
+                        "provider_failed",
+                        "expired_unprocessed",
+                    ]
+                ),
+                name="ck_rare_hit_gate_state",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_window_end__gt=models.F("source_window_start")
+                ),
+                name="ck_rare_hit_source_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(payload_expires_at__gt=models.F("fetched_at")),
+                name="ck_rare_hit_payload_expiry",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["gate_state", "fetched_at"], name="idx_rare_hit_gate_due"),
+            models.Index(fields=["provider_post_id"], name="idx_rare_hit_post"),
+            models.Index(fields=["payload_expires_at"], name="idx_rare_hit_expiry"),
+        ]
