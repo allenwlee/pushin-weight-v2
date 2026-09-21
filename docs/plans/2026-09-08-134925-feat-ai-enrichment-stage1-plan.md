@@ -314,6 +314,17 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
     does not include an ad hoc paid harvest, a production pause, destructive
     data edits, or public MCP/API activation.
 
+43. On September 21 the owner directed that all seven canonical Audience
+    Topics appear in the homepage filter dropdown and be deployed. This owner
+    activation supersedes the R94A shadow-only display decisions for
+    `cost_performance`, `evals_benchmarks`, `openness_license`, and
+    `agents_tools`; it does not activate `news_reporting`,
+    `investigate_claim`, Geopolitical, or Untracked Brand Promotions. Preserve
+    the stored v4 judgments and existing EN/ZH-CN/JA labels, expose the seven
+    topics in canonical order through the existing filter path, update the
+    stateful UI declaration, and verify the same candidate in staging before
+    promoting it to production.
+
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
 ## Plain-English Summary

@@ -1,7 +1,7 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "1b3d73e6a36c5e053c70942fc7e9c786d2de8d8f",
+  "source_revision": "2f7a5bf938ce8b1bd34ea240249f6ee996a0e4e0",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/data.json",
     "sha256": "0d45d13925beaddc04c128314a2bc1b6b063571347ba2b6b8f6655545c981cf6"
@@ -16,7 +16,7 @@
     {"id":"nationalism_cn","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
     {"id":"nationalism_us","kind":"multi_select","values":["__all__","none","mild_pro","pro","constructive_critical","anti","mixed"],"initial_value":"__all__","reversible":true},
     {"id":"product_labels","kind":"multi_select","values":["__all__","bug","complaint","testimonial","ideas_requests"],"initial_value":"__all__","reversible":true},
-    {"id":"audience_topics","kind":"multi_select","values":["__all__","local_inference","model_distillation","api_developer_surface"],"initial_value":"__all__","reversible":true},
+    {"id":"audience_topics","kind":"multi_select","values":["__all__","local_inference","cost_performance","model_distillation","evals_benchmarks","openness_license","agents_tools","api_developer_surface"],"initial_value":"__all__","reversible":true},
     {"id":"unsanctioned","kind":"toggle","values":["off","only"],"initial_value":"off","reversible":true},
     {"id":"locale","kind":"single_select","values":["en","zh_cn","ja","original"],"initial_value":"en","reversible":true},
     {"id":"window","kind":"single_select","values":["1","7","30","365"],"initial_value":"1","reversible":true},
