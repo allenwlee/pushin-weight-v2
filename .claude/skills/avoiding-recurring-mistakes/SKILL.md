@@ -283,48 +283,55 @@ From repo memory: `feedback_dont_delete_unrelated_dirs.md`.
 
 ---
 
-## M17 — Halt-first, then diagnose, then add a regression pin
+## M17 — Production pauses require current explicit authorization
 
-**Pattern the user kept correcting.** User reports "harvester not running" / "fetched vs inserted" / "credits too high" / "the cron is doing weird things" — and the agent's first instinct is to start reading code, propose a fix, or run a probe. The user explicitly said on 2026-08-06: *"first, halt the harvester. read our /.claude/skills in the project repo file, there may be directions there."*
+**Pattern that caused an outage.** A task-specific 2026-08-06 instruction to
+halt before diagnosing one incident was generalized into a standing rule. On
+2026-08-31, a read-only question about one false-positive tweet was incorrectly
+treated as permission to suspend the production harvest cron.
 
-**Rule.** When the user reports a harvester anomaly (low insert count, missing posts, 402 errors, cursor drift, any data discrepancy), **halt the cron FIRST** before investigating. Then look at the project's `.claude/skills/` for project-specific guidance. Then diagnose. Then add a regression pin. Then resume.
+**Rule.** A report, question, investigation request, or request to diagnose/fix
+a harvester anomaly does **not** authorize a production mutation. Default to
+read-only inspection.
 
-The pause procedure for the v2 cron is NOT the v1 launchd pause sentinel in `CONCEPTS.md` — that doc describes a macOS-only mechanism that doesn't apply to Render cron. The v2 pause is the Render REST API:
+Pause or resume production only when either:
 
-```bash
-SVC_ID="crn-d9gv94o4n6ts739tqaug"   # pushinweight-harvest
-curl -X POST -H "Authorization: Bearer $RND_KEY" \
-     -H "Content-Type: application/json" \
-     "https://api.render.com/v1/services/$SVC_ID/suspend" \
-     -d '{"suspend":"yes"}'
-# Verify: curl -sS -H "Authorization: Bearer $RND_KEY" \
-#         "https://api.render.com/v1/services/$SVC_ID" | grep suspended
-```
+1. the owner's current request explicitly orders that exact action for the
+   exact service; or
+2. the active plan contains explicit owner authorization for that bounded
+   pause/resume operation.
 
-The full procedure is in `docs/operations/pause-and-resume-harvest-cron.md`. For the end-to-end harvest change contract (scope, reproduce, regression pins, post-deploy DoD), see `.claude/skills/change-harvester/SKILL.md`. **Important caveats from prior incidents (2026-07-30):** the API `POST /suspend` with `{"suspend":"no"}` returns HTTP 200 but does NOT clear the suspended state. Resume is sometimes dashboard-only. Verify with `GET /v1/services/$SVC_ID` — `"suspended": null` means running, `"suspended": "suspended"` means still paused.
+Historical instructions and prior incident logs are context, not reusable
+authorization. Urgency, possible credit burn, and cleaner evidence are reasons
+to recommend a pause and ask the owner; they are not permission to act.
 
-**Why halt first:**
-- The cron fires every 15 min. If left running during diagnosis, the harvester may overwrite the very state you're trying to inspect (cursor rows, `last_completed_at`, `INSERT OR IGNORE` semantics).
-- A 4xx-class failure (402 credits, 429 rate limit) loops every 15 min and burns the same failure path forward, hiding the underlying cause.
-- Anomaly-state reads are cleaner when the cycle is paused — no need to reason about half-written cycle state.
+When a pause is explicitly authorized:
 
-**Why add a regression pin:**
-- The 989-fetched vs 86-inserted discrepancy on 2026-08-06 was a live bug, not an estimation error. A regression pin that checks the post-fetch-to-insert ratio (e.g., 0.05-0.20 for 20 enabled brands at 15 credits/tweet) would have caught the drift at the next deploy. Format: `tests/test_*.py` asserting both the cursor-floor semantics AND the dedup ratio.
+- Read `docs/operations/pause-and-resume-harvest-cron.md` for the current
+  service ID and API procedure; do not copy stale commands from this skill.
+- Resolve and report the exact target and current state before mutation.
+- Mutate only the authorized service, verify the resulting state, and append
+  the pause/resume event to the runbook.
+- Resume only within the owner's explicit scope. If the requested operation
+  was pause-only, leave it paused until the owner says otherwise.
+
+If an unauthorized production mutation occurs, restore the prior state
+immediately, tell the owner exactly what happened, and verify restoration.
+
+**Why an authorized pause can still be useful:**
+- The 15-minute cron can rewrite cursors while state is being inspected.
+- Repeating 402/429 failures can waste cycles or credits.
+- Stable state can simplify a cursor or fetch-vs-insert investigation.
+
+These benefits never override the authorization gate.
+
+**Regression scope.** When the owner requests a code or policy fix, add a
+production-call-chain regression pin for the diagnosed failure. A diagnostic
+question alone does not authorize implementation.
 
 **Two hypotheses worth pre-flighting when the user says "fetched vs inserted looks wrong":**
 1. **Cursor/date drift** — `_read_cursor_since` in `monitor/cycle.py:259` returns a `since_time` floor; if it's stuck at the floor (cold start) or way in the future (NTP rollback), the cycle re-fetches the same window or returns nothing. `INSERT OR IGNORE` in `x_monitor/store.py:608` then discards the duplicates, producing a low insert count vs. high fetch count.
 2. **Unintended post-fetch filter** — `_run_post_fetch` in `monitor/cycle.py:1245` runs translate + classify after insert. An aggressive classify step that drops all-but-a-few posts would explain the 86 figure. Verify by running `manage.py run_cycle --debug-fetch` and counting the kept_posts list.
-
-**The user-mandated procedure**
-1. Halt the cron via Render REST API (above).
-2. Read `.claude/skills/` in the project repo for project-specific guidance (e.g., `avoiding-recurring-mistakes/SKILL.md` M-rules).
-3. Read `docs/operations/pause-and-resume-harvest-cron.md` for the canonical pause/resume procedure and prior incident notes.
-4. Diagnose using `monitor/cycle.py:_read_cursor_since` and `x_monitor/run.py:_run_post_fetch` as the first two investigation surfaces.
-5. Land the fix + a regression pin (test ratio like `n_inserted / n_fetched >= 0.05` for typical traffic).
-6. Resume via Render dashboard (not just the API — see prior incident notes).
-7. Append a new entry to `docs/operations/pause-and-resume-harvest-cron.md` with the pause/resume events.
-
----
 
 ---
 
@@ -414,7 +421,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 | M14 | Off-convention plan filename | `docs/plans/YYYY-MM-DD-NNN-slug.md` |
 | M15 | Unrelated-dir deletion | "Looks empty" ≠ authorization to `rm -rf` |
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
-| M17 | Diagnose-then-fix without halting | Halt the cron first, then read `.claude/skills/`, then pin a regression |
+| M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |
 | M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
 
 ---

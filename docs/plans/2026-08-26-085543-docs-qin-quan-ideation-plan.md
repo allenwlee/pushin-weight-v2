@@ -82,8 +82,8 @@ inventory as ideation instead of leaving them in active plan/reference paths.
 
 ### Requirements
 
-- Keep the visual-direction overview at
-  `docs/ideation/2026-08-24-162101-qin-quan-visual-design-template.md`.
+- Keep the active visual-design contract at
+  `docs/plans/2026-08-24-162101-qin-quan-visual-design-template.md`.
 - Keep the three standalone HTML studies under
   `docs/ideation/mockups/qin-quan/` and retain their entry in the mockup index.
 - Move the former SVG icon implementation plan to

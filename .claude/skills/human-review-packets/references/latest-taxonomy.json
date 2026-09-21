@@ -1,0 +1,179 @@
+{
+  "schema": "pushinweight.human_review_taxonomy/v1",
+  "taxonomy_id": "stage1-u18a-nationalism-2026-09-16",
+  "storage_namespace": "pushinweight-u18-tabbed-owner-review-v3",
+  "source": "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md R83, R87-R94, R107-R108",
+  "per_brand_fields": [
+    {
+      "key": "outcome",
+      "label": "Outcome / enough context",
+      "control": "radio",
+      "span": "half",
+      "choices": [
+        {"value": "classified", "label": "Classified", "help": "Visible source and stored context are enough."},
+        {"value": "context_missing", "label": "Context missing", "help": "The brand-specific judgment is not supported."}
+      ],
+      "explanation": "Optional evidence or uncertainty"
+    },
+    {
+      "key": "sentiment",
+      "label": "Sentiment toward this brand",
+      "control": "radio",
+      "span": "half",
+      "choices": [
+        {"value": "positive", "label": "Positive"},
+        {"value": "neutral", "label": "Neutral"},
+        {"value": "negative", "label": "Negative"},
+        {"value": "mixed", "label": "Mixed"},
+        {"value": "unknown", "label": "Unknown / unavailable", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation"
+    },
+    {
+      "key": "post_types",
+      "label": "Post types — all that apply to this brand",
+      "control": "checkbox",
+      "span": "full",
+      "exclusive_values": ["other"],
+      "choices": [
+        {"value": "releases_updates", "label": "Releases & updates"},
+        {"value": "hands_on_usage", "label": "Hands-on usage"},
+        {"value": "results_analysis", "label": "Results analysis", "help": "Visible product performance, quality, benchmark, comparison, or substantive evaluation."},
+        {"value": "questions_requests", "label": "Questions & requests"},
+        {"value": "advertising_marketing", "label": "Advertising & marketing"},
+        {"value": "events", "label": "Events", "help": "Requires attendance."},
+        {"value": "opportunities", "label": "Opportunities", "help": "Time-limited action for a benefit."},
+        {"value": "job_listings", "label": "Job listings", "help": "Concrete role plus an application route."},
+        {"value": "personnel_changes", "label": "Personnel changes", "help": "Named joining, leaving, or employment transition."},
+        {"value": "opinions_reactions", "label": "Opinions & reactions"},
+        {"value": "research_explanations", "label": "Research & explanations", "help": "Technical product, model, or system knowledge; excludes company organization and strategy."},
+        {"value": "business_finance", "label": "Business & finance", "help": "Company-value signals relevant to a financial analyst, including strategy, competition, organization, and key personnel."},
+        {"value": "news_reporting", "label": "News reporting", "help": "Broad factual or attributed reporting; may overlap product, company, personnel, research, or finance subjects."},
+        {"value": "other", "label": "Other", "help": "Exclusive confident residual."}
+      ],
+      "explanation": "Optional explanation"
+    },
+    {
+      "key": "product_labels",
+      "label": "Product labels — all that apply to this brand",
+      "control": "checkbox",
+      "span": "half",
+      "exclusive_values": ["none"],
+      "choices": [
+        {"value": "bug", "label": "Bug"},
+        {"value": "complaint", "label": "Complaint"},
+        {"value": "testimonial", "label": "Testimonial"},
+        {"value": "ideas_requests", "label": "Ideas & requests"},
+        {"value": "investigate_claim", "label": "Claim to investigate", "help": "Material brand claim; not a truth finding."},
+        {"value": "none", "label": "No product labels", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation"
+    },
+    {
+      "key": "audience_topics",
+      "label": "Audience Topics — all that apply",
+      "control": "checkbox",
+      "span": "half",
+      "exclusive_values": ["none", "unavailable"],
+      "choices": [
+        {"value": "local_inference", "label": "Local inference"},
+        {"value": "cost_performance", "label": "Cost / performance"},
+        {"value": "model_distillation", "label": "Model distillation"},
+        {"value": "evals_benchmarks", "label": "Evaluations & benchmarks"},
+        {"value": "openness_license", "label": "Openness & licensing"},
+        {"value": "agents_tools", "label": "Agents & tools"},
+        {"value": "api_developer_surface", "label": "APIs & developer surface"},
+        {"value": "none", "label": "No listed topic", "ui_sentinel": true},
+        {"value": "unavailable", "label": "Unknown / unavailable", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation or another topic to consider"
+    },
+    {
+      "key": "geopolitical_modes",
+      "label": "Geopolitical modes — modes may coexist",
+      "control": "checkbox",
+      "span": "full",
+      "exclusive_values": ["none", "unavailable"],
+      "choices": [
+        {"value": "reporting", "label": "Reporting", "help": "Attributes a geopolitical claim without adopting it."},
+        {"value": "framework", "label": "Framework", "help": "Explains or predicts state, policy, market, security, or national-system relationships."},
+        {"value": "nationalism", "label": "Nationalism", "help": "The author evaluates a nation or national system, or extends an evaluation through national origin; superiority is not required."},
+        {"value": "none", "label": "Assessed non-geopolitical", "ui_sentinel": true},
+        {"value": "unavailable", "label": "Unknown / unavailable", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation, including countries involved"
+    },
+    {
+      "key": "china_national_stance",
+      "label": "China national stance",
+      "control": "radio",
+      "span": "half",
+      "choices": [
+        {"value": "none", "label": "None"},
+        {"value": "mild_pro", "label": "Mild support"},
+        {"value": "pro", "label": "Support"},
+        {"value": "constructive_critical", "label": "Constructive criticism"},
+        {"value": "anti", "label": "Opposition"},
+        {"value": "mixed", "label": "Mixed"},
+        {"value": "unknown", "label": "Unknown / unavailable", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation"
+    },
+    {
+      "key": "us_national_stance",
+      "label": "U.S. national stance",
+      "control": "radio",
+      "span": "half",
+      "choices": [
+        {"value": "none", "label": "None"},
+        {"value": "mild_pro", "label": "Mild support"},
+        {"value": "pro", "label": "Support"},
+        {"value": "constructive_critical", "label": "Constructive criticism"},
+        {"value": "anti", "label": "Opposition"},
+        {"value": "mixed", "label": "Mixed"},
+        {"value": "unknown", "label": "Unknown / unavailable", "ui_sentinel": true}
+      ],
+      "explanation": "Optional explanation"
+    },
+    {
+      "key": "timing_people_employer",
+      "label": "Timing / people / employer details",
+      "control": "textarea",
+      "span": "half",
+      "placeholder": "Dates, person, employer, role, attendance, reward, or application route (optional)"
+    },
+    {
+      "key": "comments",
+      "label": "Comments / uncertainty",
+      "control": "textarea",
+      "span": "half",
+      "placeholder": "Anything else to preserve for this brand (optional)"
+    }
+  ],
+  "post_level_fields": [
+    {
+      "key": "untracked_brand_promotions",
+      "label": "Post-level Untracked Brand Promotions",
+      "description": "These describe promotion of an untracked subject and are never properties of a tracked brand.",
+      "control": "checkbox",
+      "span": "full",
+      "exclusive_values": ["general", "none"],
+      "choices": [
+        {"value": "general", "label": "General", "help": "Exclusive fallback when no narrower key applies."},
+        {"value": "spam", "label": "Spam", "help": "Requires repeated or substantially duplicated promotion."},
+        {"value": "scam", "label": "Scam"},
+        {"value": "crypto", "label": "Crypto"},
+        {"value": "unauthorized", "label": "Unauthorized"},
+        {"value": "none", "label": "No untracked-brand promotion", "ui_sentinel": true}
+      ],
+      "explanation": "Name the untracked brand and cite repetition or other evidence (optional)"
+    },
+    {
+      "key": "post_comments",
+      "label": "Post-level comments",
+      "control": "textarea",
+      "span": "full",
+      "placeholder": "Context that applies to the post as a whole (optional)"
+    }
+  ]
+}

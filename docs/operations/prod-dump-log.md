@@ -57,3 +57,13 @@ Per plan `2026-07-30-002-feat-hybrid-funnel-then-reconcile-accounts-plan.md` U0,
 The 1.9 MB compressed size is normal for this sparse shadow DB. The 40 MB number in `project_pushinweight_2026-07-29_recovery_state.md` referred to the **2026-07-28 incident dump** which carried the full v1 SQLite → Django port and a different schema density. Don't compare those sizes.
 
 Custom format (`--format=custom`) is gzip-compressed internally. To inspect raw content, use `pg_restore -t <table> -f <out.sql> <dump>` which writes a plain-SQL file ~5x larger than the dump.
+
+### 2026-09-10 16:51 JST — Local analytics snapshot for bio-handle affiliation audit
+
+- **Operator/reason**: Codex, at owner request, to run exhaustive read-only analysis locally without repeatedly scanning production.
+- **Source/capture**: `pushinweight-db-shadow` (`dpg-d9koekqjobas73fvjqng-a`), database `pushinweight_shadow`; PostgreSQL 18.4 custom-format `pg_dump --no-owner --no-privileges`. No production writes.
+- **File**: `/Users/fuchitalee/Downloads/pushinweight-dumps/pushinweight-prod-20260910-165134.dump`; 672,072,895 bytes; mode `0600`; SHA-256 `618f31498b94a42e54940c4e5bf90d7bb09a122b72f1406181b4e029f9b25e06`; MD5 `96dc117c3bb3a33cb379fc96057c9f81`.
+- **Archive verification**: `pg_restore --list` parsed successfully; archive declares 539 TOC entries and lists 534 object entries, including 65 public table definitions and 65 table-data entries. An accounts/brands extraction produced two `COPY` blocks.
+- **Restore verification**: full `pg_restore --no-owner --no-privileges --exit-on-error --jobs=4` succeeded in fresh PostgreSQL 18 container `pushinweight-audit-20260910-172555`, database `pushinweight_audit_20260910_172555`, bound only to `127.0.0.1:32768`. Restored counts: accounts 68,689; posts 211,245; brands 34; brands_accounts 98; companies 31; companies_accounts 0; roles 3; public tables 65.
+- **Analysis artifacts**: mode-`0600` manifest `pushinweight-prod-20260910-165134.dump.manifest.json`, report `bio-handle-audit-20260910-165134.md`, and candidate rows `bio-handle-affiliation-candidates-20260910-165134.csv`, all beside the dump.
+- **Verdict**: dump, archive, and round-trip restore verified. Local analysis can use this internally consistent 2026-09-10 16:51:35 JST snapshot.

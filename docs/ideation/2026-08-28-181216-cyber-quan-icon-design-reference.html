@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cyber-Quan Icon System — Production-matched ideation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --up: #10b981;
+      --down: #f87171;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { width: min(1240px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 64px; }
+    h1, h2, h3 { line-height: 1.18; color: var(--text); }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 46px); letter-spacing: -0.035em; }
+    h2 { margin: 40px 0 12px; padding-top: 8px; border-top: 2px solid var(--border); font-size: 23px; }
+    h3 { margin: 28px 0 8px; font-size: 17px; }
+    p, li, td, th { line-height: 1.5; }
+    p { max-width: 78ch; }
+    a { color: inherit; text-underline-offset: 3px; }
+    code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; color: #e5e7eb; }
+    .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+    .lede { margin: 12px 0 0; max-width: 72ch; font-size: 18px; color: #e5e7eb; }
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+    .facts li { padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; background: var(--card); color: var(--muted); }
+    .scope-note { margin: 24px 0; padding: 14px 16px; border-left: 4px solid var(--accent); background: var(--card); color: var(--text); }
+    .scope-note strong { display: block; margin-bottom: 4px; }
+    nav ul, .compact { padding-left: 20px; }
+    nav li, .compact li { margin: 4px 0; }
+    .principles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; list-style: none; }
+    .principles li { padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+    .principles strong { display: block; margin-bottom: 4px; }
+    .inventory-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bg); }
+    th { text-align: left; vertical-align: bottom; background: var(--card); color: var(--muted); }
+    th, td { padding: 10px; border: 1px solid var(--border); vertical-align: top; }
+    tbody tr { break-inside: avoid; }
+    .preview-cell { width: 76px; text-align: center; vertical-align: middle; background: var(--bg); }
+    .prod-cell { width: 148px; text-align: center; vertical-align: middle; background: var(--bg); }
+    .specimen-well {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      background: var(--bg);
+    }
+    .specimen { display: block; width: 44px; height: 44px; overflow: visible; color: inherit; }
+    .well-ca {
+      background: linear-gradient(145deg, #f59e0b 0%, #b45309 100%);
+      border-radius: 8px;
+      color: #111827;
+    }
+    .well-bj {
+      background: linear-gradient(145deg, #ef4444 0%, #991b1b 100%);
+      border-radius: 8px;
+      color: #fde047;
+    }
+    .prod-cell .prod-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 6px 0;
+    }
+    .prod-cell .prod-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .prod-cell svg { display: block; overflow: visible; color: inherit; }
+    .prod-meta {
+      display: block;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    .place-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+    .place-badge.ca {
+      background: linear-gradient(145deg, #f59e0b 0%, #b45309 100%);
+      color: #111827;
+    }
+    .place-badge.bj {
+      background: linear-gradient(145deg, #ef4444 0%, #991b1b 100%);
+      color: #fde047;
+    }
+    .place-badge.feed { width: 11px; height: 11px; }
+    .place-badge svg { display: block; }
+    .symbol-id { white-space: nowrap; font-weight: 650; }
+    .group-row td { padding: 7px 10px; background: var(--card); color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .source-list { padding: 14px 18px 14px 34px; border: 1px solid var(--border); background: var(--card); }
+    .runtime-sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+    .checklist { columns: 2; column-gap: 28px; padding-left: 20px; }
+    .checklist li { break-inside: avoid; margin: 6px 0; }
+    .legend {
+      margin: 16px 0 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      max-width: 92ch;
+    }
+    .legend strong { display: block; margin-bottom: 4px; }
+    footer { margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 20px, 1240px); padding-top: 24px; }
+      .principles { grid-template-columns: 1fr; }
+      .checklist { columns: 1; }
+      th, td { padding: 8px; }
+    }
+    @media print {
+      @page { size: A4 landscape; margin: 12mm; }
+      main { width: auto; padding: 0; }
+      nav { display: none; }
+      h2 { break-after: avoid; }
+      a { text-decoration: none; }
+      .inventory-wrap { overflow: visible; }
+      table { font-size: 8.7pt; }
+      th, td { padding: 5px; }
+      .specimen { width: 32px; height: 32px; }
+      .scope-note, .principles li, .source-list, .legend, .place-badge, .well-ca, .well-bj {
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      }
+    }
+    tr[data-symbol="mark-quiet"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-heart"] .specimen { color: #f87171; }
+    tr[data-symbol="icon-reply"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-repost"] .specimen { color: #10b981; }
+    tr[data-symbol="icon-rise"] .specimen { color: #10b981; }
+    tr[data-symbol="icon-flat"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-fall"] .specimen { color: #f87171; }
+    tr[data-symbol="icon-followers-1"] .specimen { color: #64748b; }
+    tr[data-symbol="icon-followers-2"] .specimen { color: #8492a6; }
+    tr[data-symbol="icon-followers-3"] .specimen { color: #cbd5e1; }
+    tr[data-symbol="icon-followers-4"] .specimen { color: #f8fafc; }
+    tr[data-symbol="icon-role-badge"] .specimen { color: #fbbf24; }
+    tr[data-symbol="icon-sentiment"] .specimen { color: #10b981; }
+    tr[data-symbol="icon-sentiment-neutral"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-sentiment-negative"] .specimen { color: #f87171; }
+    tr[data-symbol="icon-sentiment-mixed"] .specimen { color: #fbbf24; }
+    tr[data-symbol="icon-hands-on-hammer"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-compare"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-announce"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-question"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-marketing"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-event"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-discourse"] .specimen { color: #f3f4f6; }
+    tr[data-symbol="icon-nationalism"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-unsanctioned"] .specimen { color: #f87171; }
+    tr[data-symbol="icon-star"] .specimen { color: #fbbf24; }
+    tr[data-symbol="icon-caret"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-sunrise"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-day"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-dusk"] .specimen { color: #94a3b8; }
+    tr[data-symbol="icon-night"] .specimen { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <!--
+    Base inventory and production placements were audited from release
+    e2d48a2c642ccbf03407a7a1ecfd36161ab0f018. Owner-selected geometry for
+    rise, fall, follower bins 1 and 3, neutral sentiment, and California is
+    copied exactly from 2026-08-29-161106-cyber-quan-icon-alts.html.
+    Production sizes and colors below remain those from origin/main
+    monitor/static/home-v20.css at the audited SHA. This ideation copy is not
+    a production source of truth.
+  -->
+  <svg class="runtime-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="mark-quiet" viewBox="0 0 24 24">
+        <path fill="currentColor" fill-rule="evenodd" d="M11.82 2.35c-3.03.04-4.78 2.08-4.95 5.71L5.6 8.9 4.24 21.17c2.42.32 5.02.47 7.72.45 2.69-.01 5.34-.19 7.83-.54L18.2 8.82l-1.16-.76c-.28-3.63-2.2-5.75-5.22-5.71Zm.02 2.26c1.7-.02 2.59 1.13 2.82 3.78l-5.47.06c.13-2.6.98-3.82 2.65-3.84ZM7.66 10.54l8.59-.09 1.06 8.63c-1.68.18-3.47.27-5.35.28-1.84.02-3.59-.06-5.24-.22l.94-8.6Z"/>
+      </symbol>
+      <symbol id="icon-heart" viewBox="0 0 24 24">
+        <path d="M12.04 20.05S4.35 15.3 3.75 10.4c-.43-3.49 1.63-5.94 4.67-5.88 1.65.03 2.88.93 3.57 2.19.87-1.42 2.15-2.27 3.86-2.3 3.09-.05 5.08 2.49 4.42 5.84-.87 4.44-8.23 9.8-8.23 9.8Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-reply" viewBox="0 0 24 24">
+        <path d="M5.1 17.73c-1.22-1.37-1.86-3.1-1.76-5.05.23-4.5 3.84-7.64 8.65-7.63 4.88.02 8.3 2.94 8.42 7.23.12 4.13-3.52 7.14-8.35 7.08-1.25-.01-2.42-.22-3.47-.62l-4.22 1.78.73-2.79Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8.28 12.26h.01m3.54 0h.01m3.53 0h.01" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-repost" viewBox="0 0 24 24">
+        <path d="m7.65 5.15-3.2 3.1 3.2 2.92M4.72 8.26h9.36c3.48 0 5.4 1.65 5.46 4.67" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="m16.35 18.84 3.2-3.1-3.2-2.92m2.93 2.91H9.92c-3.48 0-5.4-1.65-5.46-4.67" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-rise" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M12.15 6.05 2.85 17.35l18.45-.4Z"/>
+      </symbol>
+      <symbol id="icon-flat" viewBox="0 0 24 24">
+        <path d="M4.55 12.45c3.12-.2 5.2-.19 7.42-.05 2.42.14 4.56.06 7.38-.22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-fall" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M12.1 17.95 2.8 6.7l18.5.35Z"/>
+      </symbol>
+      <symbol id="icon-followers-1" viewBox="0 0 24 24">
+        <circle cx="11.78" cy="6.7" r="2.82" fill="none" stroke="currentColor" stroke-width="1.55"/>
+        <path d="M6.53 19.65c.32-4.72 2.05-6.9 5.22-7.01 3.15-.11 4.84 2.02 5.25 6.73" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-followers-2" viewBox="0 0 24 24">
+        <circle cx="7.72" cy="7.15" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <circle cx="16.36" cy="6.92" r="2.28" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M3.3 19.18c.28-4.08 1.72-5.98 4.39-6.07 2.54-.08 3.92 1.55 4.3 5.34m-.33.15c.35-3.84 1.74-5.55 4.39-5.64 2.68-.09 4.14 1.8 4.47 5.88" fill="none" stroke="currentColor" stroke-width="1.48" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-followers-3" viewBox="0 0 24 24">
+        <circle cx="5.12" cy="7.85" r="1.72" fill="none" stroke="currentColor" stroke-width="1.28"/>
+        <circle cx="11.94" cy="6.45" r="2.02" fill="none" stroke="currentColor" stroke-width="1.32"/>
+        <circle cx="18.88" cy="7.55" r="1.74" fill="none" stroke="currentColor" stroke-width="1.28"/>
+        <path d="M1.48 19.12c.23-3.36 1.43-4.95 3.65-5.02 2.13-.07 3.28 1.31 3.6 4.43M7.96 18.5c.27-4.05 1.64-5.91 4.15-6 2.5-.08 3.84 1.72 4.17 5.74m-.07-.04c.28-3.41 1.45-4.97 3.62-5.05 2.21-.07 3.41 1.49 3.69 4.85" fill="none" stroke="currentColor" stroke-width="1.36" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-followers-4" viewBox="0 0 24 24">
+        <circle cx="4.14" cy="7.96" r="1.38" fill="none" stroke="currentColor" stroke-width="1.14"/>
+        <circle cx="9.55" cy="6.66" r="1.56" fill="none" stroke="currentColor" stroke-width="1.18"/>
+        <circle cx="14.86" cy="6.46" r="1.58" fill="none" stroke="currentColor" stroke-width="1.18"/>
+        <circle cx="19.94" cy="7.62" r="1.4" fill="none" stroke="currentColor" stroke-width="1.14"/>
+        <path d="M.98 18.93c.2-2.96 1.21-4.35 3.1-4.42 1.82-.06 2.8 1.17 3.06 3.92M6.05 18.4c.23-3.43 1.36-5.01 3.44-5.08 2.06-.07 3.17 1.46 3.44 4.87m-1.38-.03c.24-3.44 1.37-5.01 3.45-5.08 2.05-.07 3.16 1.44 3.43 4.81M16.8 17.87c.24-2.99 1.23-4.35 3.06-4.41 1.88-.07 2.91 1.27 3.13 4.26" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-role-badge" viewBox="0 0 24 24">
+        <path d="M11.83 3.18c1.1-.88 2.2-.83 3.08.18.63.73 1.3 1.01 2.25.91 1.38-.14 2.19.62 2.2 2.04.01.98.34 1.62 1.12 2.22 1.13.86 1.2 1.99.22 3.02-.67.7-.89 1.41-.7 2.36.28 1.39-.41 2.28-1.83 2.43-.96.1-1.58.49-2.1 1.31-.77 1.2-1.88 1.36-3 .46-.76-.61-1.49-.76-2.42-.48-1.36.41-2.32-.19-2.59-1.59-.19-.95-.63-1.53-1.5-1.98-1.27-.66-1.52-1.75-.72-2.91.54-.8.63-1.53.27-2.44-.52-1.32 0-2.32 1.37-2.7.94-.27 1.49-.75 1.86-1.65.53-1.32 1.59-1.65 2.83-1.18Z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+        <path d="M15.65 10.72c.08 2.16-1.45 3.8-3.65 3.9-2.18.1-3.81-1.39-3.9-3.54-.1-2.21 1.42-3.87 3.66-3.97 2.23-.1 3.8 1.39 3.89 3.61Z" fill="none" stroke="currentColor" stroke-width="1.35"/>
+      </symbol>
+      <symbol id="icon-sentiment-neutral" viewBox="0 0 24 24">
+        <path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8.75 10.02h.01m6.46-.19h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-sentiment-negative" viewBox="0 0 24 24">
+        <path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8.75 10.02h.01m6.46-.19h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.47 15.73c.88-1.12 2.05-1.68 3.51-1.7 1.49-.02 2.67.49 3.5 1.56" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-sentiment-mixed" viewBox="0 0 24 24">
+        <path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8.65 9.71h.01m6.6.42h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.35 14.76c1.22-.94 2.35-.9 3.51.06 1.17.95 2.39.96 3.75-.12" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-hands-on-hammer" viewBox="0 0 24 24">
+        <path d="M11.94 4.33c2.59-.73 5.27-.66 8.07.2l-.2 2.91c-2.7-.7-5.3-.76-7.8-.18l-.07-2.93Z" fill="none" stroke="currentColor" stroke-width="1.46" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="m15.02 7.23-4.13 8.69 1.82.87 4.08-9.43" fill="none" stroke="currentColor" stroke-width="1.46" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="m11.22 12.98-1.94-1.86c-.6-.58-1.31-.56-1.77-.08-.45.48-.36 1.14.19 1.68l.72.7-.91-.86c-.6-.56-1.32-.53-1.77-.04-.44.48-.34 1.15.21 1.68l.96.91-.56-.5c-.51-.46-1.18-.39-1.57.06-.39.45-.29 1.1.21 1.57l2.88 2.71c1.23 1.16 3.07 1.29 4.39.31l1.69-1.28-3.01-3.06" fill="none" stroke="currentColor" stroke-width="1.42" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-compare" viewBox="0 0 24 24">
+        <path d="M4.38 19.28V13.2l3.55-.08.08 6.07m2.14-.03-.08-10.78 3.72-.13.12 10.87m2.06-.05-.07-14.23 3.62-.16.13 14.33" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3.24 19.43c5.33-.18 11.16-.22 17.55-.13" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-question" viewBox="0 0 24 24">
+        <path d="M5.1 17.73c-1.22-1.37-1.86-3.1-1.76-5.05.23-4.5 3.84-7.64 8.65-7.63 4.88.02 8.3 2.94 8.42 7.23.12 4.13-3.52 7.14-8.35 7.08-1.25-.01-2.42-.22-3.47-.62l-4.22 1.78.73-2.79Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9.52 10.02c.12-1.38 1.08-2.2 2.55-2.22 1.5-.02 2.46.79 2.4 1.98-.05 1.03-.61 1.55-1.8 2.19-.79.43-1.08.92-1.05 1.75m.18 2.47h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-marketing" viewBox="0 0 24 24">
+        <path d="M5.32 12.17c.04 1.25.95 2.1 2.22 2.06 1.29-.04 2.13-.95 2.08-2.23-.04-1.26-.94-2.07-2.24-2.03-1.25.04-2.1.93-2.06 2.2Z" fill="none" stroke="currentColor" stroke-width="1.55"/>
+        <path d="M12.47 9.24c1.58 1.58 1.61 4.03.07 5.66m2.52-8.3c3.03 3.06 3.08 7.65.12 10.76" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+        <path d="m7.18 14.28-.65 5.23m1.12-5.25 2.34 4.77" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-event" viewBox="0 0 24 24">
+        <path d="M4.25 6.64c4.78-.29 9.95-.36 15.48-.2l.16 13.19c-5.1.18-10.29.24-15.57.16l-.07-13.15Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+        <path d="M4.39 10.09c4.97-.25 10.1-.28 15.38-.1M8.15 3.24l.06 4.68m7.56-4.79.07 4.67" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+        <path d="m9.21 14.76 1.58 1.54 3.98-3.59" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-discourse" viewBox="0 0 24 24">
+        <path d="M3.27 15.35c-.91-1.04-1.38-2.34-1.3-3.81.17-3.4 2.9-5.77 6.54-5.76 3.68.01 6.27 2.22 6.36 5.46.09 3.12-2.66 5.39-6.31 5.35-.95-.01-1.83-.17-2.63-.47l-3.19 1.34.53-2.11Z" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M11.42 17.9c.79.3 1.68.46 2.64.47.91.01 1.76-.11 2.53-.36l3.5 1.41-.61-2.31c1.01-1.07 1.56-2.43 1.51-3.98-.06-2.24-1.36-4.02-3.45-4.96" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-nationalism" viewBox="0 0 24 24">
+        <path d="M5.3 20.46 5.13 3.53" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
+        <path d="M5.23 5.07c3.13-1.44 5.49-1.19 7.23-.29 1.72.89 3.55 1.01 5.91-.19l.09 8.39c-2.33 1.13-4.32 1-6.07.1-1.77-.9-4.06-1.12-7.07.32l-.09-8.33Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-unsanctioned" viewBox="0 0 24 24">
+        <path d="M18.21 5.59c2.98 3.25 2.86 8.37-.37 11.56-3.3 3.26-8.5 3.33-11.72.19-3.26-3.2-3.37-8.34-.25-11.6 3.18-3.32 8.41-3.4 11.73-.31" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="m6.42 17.54 11.19-11.3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-california" viewBox="0 0 24 24">
+        <path d="M5.08 1.88 12.72 2l-.08 5.18 2.4 3.26 2.52 2.55 3.76 3.72-.82 3.7-3.26 1.46-1.96-2.28-2.72-1.3-1.83-2.38-1.83-1.02-.72-2.18-1.4-1.22.72-.86-.94-.68-.4-2.16-1.25-2.57-.13-2.48-1.1-1.54Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-beijing" viewBox="0 0 24 24">
+        <path d="m12.2 2.48-.22 1.77M4.08 5.88c5.17-.27 10.45-.24 15.84.09M7.58 8.42c2.94-.17 5.88-.15 8.82.04l-.15 5.2c-2.83-.11-5.64-.09-8.45.06l-.22-5.3Zm4.46 5.56.04 7.3m-3.14-4.83-3.1 4.01m9.35-4.08 3.24 3.72" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sentiment" viewBox="0 0 24 24">
+        <path d="M20.24 11.88c.12 4.57-3.27 8.01-8.08 8.18-4.74.18-8.28-2.97-8.4-7.52-.13-4.66 3.19-8.23 8.05-8.42 4.9-.19 8.31 3.04 8.43 7.76Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8.75 10.02h.01m6.46-.19h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.45 14.16c.93 1.14 2.1 1.65 3.55 1.58 1.5-.08 2.68-.66 3.48-1.77" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-announce" viewBox="0 0 24 24">
+        <path d="m4.15 10.02 10.24-4.41.7 12.05-10.7-3.3-.24-4.34Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/>
+        <path d="m15.02 8.2 3.54-.44.49 7.45-3.63-.07M7.03 15.18l.7 3.72 3.1-.17-.67-2.62" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-star" viewBox="0 0 24 24">
+        <path d="m11.67 3.61 2.59 5.12 5.68.68-4.07 4.02.98 5.66-5.16-2.59-5.03 2.76.77-5.71-4.22-3.87 5.65-.89 2.81-5.18Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-caret" viewBox="0 0 24 24">
+        <path d="m5.21 8.78 6.71 6.5 6.87-6.83" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="icon-sunrise" viewBox="0 0 24 24">
+        <path d="M4.02 17.83h15.96M7.02 15.69a5.07 5.07 0 0 1 4.83-4.12 5.06 5.06 0 0 1 5.11 3.95M11.67 4.22l.06 3.07M5.71 7.07l2.12 2.16m10.52-2.31-2.08 2.23" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-day" viewBox="0 0 24 24">
+        <path d="M17.28 11.65c.12 3.04-2.04 5.35-5.13 5.49-3.07.14-5.36-1.96-5.49-4.99-.14-3.11 2-5.45 5.15-5.59 3.14-.14 5.34 1.95 5.47 5.09ZM11.72 2.63l.06 2.05m.39 14.62.07 2.07M2.9 12.17l2.03-.05m14.12-.41 2.05-.06M5.25 5.51l1.46 1.43m10.5 10.1 1.48 1.45m-.31-13.23-1.41 1.47M6.99 17.06l-1.43 1.48" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-dusk" viewBox="0 0 24 24">
+        <path d="M4.05 17.9h15.9M7.08 15.58a5.06 5.06 0 0 1 4.86-4.01 5.04 5.04 0 0 1 5.04 3.93M5.62 8.16l2.21 1.62m10.56-1.82-2.16 1.77" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+        <path d="m11.8 4.34.06 3.09" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="icon-night" viewBox="0 0 24 24">
+        <path d="M17.65 16.82c-1.06 1.7-2.85 2.78-5.14 2.84-4.02.11-7.24-2.71-7.36-6.61-.12-4.06 2.94-7.23 7.26-7.31.39-.01.78.01 1.15.06a6.18 6.18 0 0 0-1.12 3.77c.09 3.43 2.26 6.05 5.21 7.25Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="m17.54 5.06.28 1.04 1.04.26-1 .41-.15 1.06-.42-.98-1.06-.19 1-.47.31-1.13Z" fill="currentColor"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <main>
+    <header>
+      <p class="eyebrow">走个量Pushin'Weight · ideation working copy</p>
+      <h1>Cyber-Quan Icon System</h1>
+      <p class="lede">The same 33-symbol runtime inventory as the production handoff, with owner-selected replacement geometry shown on the production ground and at the CSS pixel sizes the homepage actually uses.</p>
+      <ul class="facts" aria-label="Document facts">
+        <li>Working copy of <code>docs/reference/2026-08-28-173113-cyber-quan-icon-design-reference.html</code></li>
+        <li>Runtime/CSS audit source: <code>e2d48a2c642c</code></li>
+        <li>Selected geometry: <code>2026-08-29-161106-cyber-quan-icon-alts.html</code></li>
+        <li>Page ground <code>#0b1220</code> · text <code>#f3f4f6</code></li>
+        <li>33 runtime symbols at exact production boxes</li>
+        <li>Updated 2026-08-29</li>
+      </ul>
+    </header>
+
+    <div class="scope-note">
+      <strong>Icon-only ideation.</strong>
+      This file is a working design copy for the next production-icon pass. It is not a palette, typography, page-layout, spacing, or component-design specification, and it does not replace the runtime sprite.
+    </div>
+
+    <nav aria-label="Contents">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#intent">Historical inspiration and intent</a></li>
+        <li><a href="#results">What the icon system achieves</a></li>
+        <li><a href="#grammar">Form and extension grammar</a></li>
+        <li><a href="#runtime">Runtime and accessibility contract</a></li>
+        <li><a href="#inventory">Complete candidate inventory</a></li>
+        <li><a href="#workflow">Continuation checklist</a></li>
+      </ul>
+    </nav>
+    <section id="intent">
+
+      <h2>Historical inspiration and intent</h2>
+      <p>The family takes its character from the physical presence of a Qin <em>quan</em>: a compact cast weight whose authority comes from mass, proportion, and an object made by hand. The system does not copy inscriptions or ask a user to understand historical Chinese writing. With the narrow exception of the intentionally recognizable <code>京</code> locale symbol, meaning comes from familiar contemporary silhouettes.</p>
+      <p>The historical influence enters through form: shoulders are slightly uneven, circles are not mechanically perfect, baselines drift, paired sides do not mirror exactly, and terminals feel blunt and rounded. These controlled irregularities suggest cast and worked material without adding corrosion, texture filters, decorative cracks, or imitation calligraphy.</p>
+      <p>The goal is useful recognition at phone size first, then distinctive character on a second look. A heart must still read as a heart; a reply bubble as a reply; a hammer in a working hand as hands-on use. Cyber-Quan succeeds when the user understands the signal before noticing the historical reference.</p>
+    </section>
+
+    <section id="results">
+      <h2>What the icon system achieves</h2>
+      <ul class="compact">
+        <li>Replaced the public dashboard's emoji and generic glyph vocabulary with one coherent 33-symbol SVG runtime family.</li>
+        <li>Kept icon geometry separate from application presentation: every production symbol inherits <code>currentColor</code>, while the surrounding state owns any semantic tone.</li>
+        <li>Created redundant at-a-glance magnitude cues for followers: one through four human figures, progressively larger display, a luminance progression, and the exact follower count together.</li>
+        <li>Made trend direction explicit with blunt solid triangles: point-up for rising and point-down for falling.</li>
+        <li>Made operational post types pictorial and literal: a working hand with a Qin-era hammer, comparison bars, a question bubble, a separated emitter and waves, a dated event card, and a hand-held announcer.</li>
+        <li>Integrated the same semantic symbols in feed rows and matching filter options instead of maintaining separate emoji and SVG vocabularies.</li>
+        <li>Established one locked company mark, compact locale/place symbols, four time-of-day symbols, and shared control/score symbols.</li>
+        <li>Made runtime symbol selection fail closed: unknown or data-derived IDs do not render.</li>
+      </ul>
+    </section>
+
+    <section id="grammar">
+      <h2>Form and extension grammar</h2>
+      <ul class="principles">
+        <li><strong>Universal silhouette first.</strong> Sketch the simplest recognizable object or action before adding Cyber-Quan character. Do not make Chinese-script knowledge a prerequisite.</li>
+        <li><strong>Controlled irregularity.</strong> Use small asymmetries, off-axis balance, bowed horizontals, uneven shoulders, and non-identical repeated elements. The object should feel worked, not broken.</li>
+        <li><strong>Roughness in geometry.</strong> Build character into paths and proportions. Do not use noise, texture masks, faux corrosion, distress filters, or random wobble.</li>
+        <li><strong>Blunt, humane strokes.</strong> Prefer rounded line caps and joins for open strokes. Stroke weight usually sits near the current family's compact range; verify optical weight rather than copying one number blindly.</li>
+        <li><strong>Small-size clarity.</strong> Judge at the production placement, not only in a large artboard. Keep major negative spaces open and avoid interior detail that closes at approximately 10–15 px.</li>
+        <li><strong>Redundant direction and magnitude.</strong> When a signal expresses order, movement, or scale, let silhouette reinforce the text rather than replace it.</li>
+        <li><strong>Family resemblance, not cloning.</strong> Reuse the stroke temperament and proportion logic. Do not repeat the weight silhouette inside every icon or force unrelated objects into the same outline.</li>
+        <li><strong>No embedded application state.</strong> Geometry uses <code>currentColor</code>. Selected, sentiment, role, magnitude, and warning presentation remain owned by the parent UI.</li>
+      </ul>
+
+      <h3>Composition patterns already established</h3>
+      <ul class="compact">
+        <li><strong>Shared outer form, changed interior:</strong> the four sentiment faces reuse one slightly irregular face contour; positive, negative, and mixed change the mouth/eye expression, while neutral deliberately omits the mouth.</li>
+        <li><strong>Progressive population:</strong> follower magnitude grows from one to four human forms while preserving the count as the precise value.</li>
+        <li><strong>Shared symbol, changed contextual meaning:</strong> one credential-badge geometry represents official, staff, and community; label and parent presentation distinguish the roles.</li>
+        <li><strong>Paired directional forms:</strong> rise and fall use slightly irregular solid triangles pointing in opposite directions; flat remains a gently irregular horizontal.</li>
+        <li><strong>Related environmental set:</strong> sunrise, day, dusk, and night share a sky/daypart vocabulary but remain individually recognizable.</li>
+      </ul>
+    </section>
+
+    <section id="runtime">
+      <h2>Runtime and accessibility contract</h2>
+      <ul class="compact">
+        <li>Keep each symbol on <code>viewBox="0 0 24 24"</code>. Preserve the symbol ID when refining existing geometry; changing an ID is an application migration, not an art-only edit.</li>
+        <li>Use <code>stroke="currentColor"</code> and/or <code>fill="currentColor"</code>. Do not hard-code UI colors in the symbol.</li>
+        <li>Add runtime symbols to both the inline sprite allowlist and <code>pw-icons.js</code>. Add a semantic mapping only when the symbol is selected from a controlled application key.</li>
+        <li>Never construct a fragment ID directly from feed, API, or user data. The renderer must continue to return an empty string for unknown symbols and sanitize CSS class names.</li>
+        <li>Decorative SVG instances remain <code>aria-hidden="true"</code> and <code>focusable="false"</code>. The containing control, text label, or semantic wrapper owns the accessible name and state.</li>
+        <li>Follower magnitude and account role are separate semantics: each has its own label-bearing wrapper. An absent role retains its reserved visual slot without exposing a meaningless accessible object.</li>
+        <li>Server-rendered rows and asynchronous feed/chart refreshes must resolve to the same symbol, order, presentation class, and accessible label.</li>
+        <li>Do not enlarge production controls to accommodate a new drawing. Refine the geometry until it resolves within the established placement.</li>
+        <li>Render place/character forms as paths, not font-dependent <code>&lt;text&gt;</code>, so shape and metrics remain stable across devices.</li>
+      </ul>
+      <p><strong>Shipped source of truth:</strong> <code>monitor/templates/monitor/_cyber_quan_sprite.html</code> contains runtime geometry; <code>monitor/static/pw-icons.js</code> contains the allowlist and semantic maps. This working reference keeps those IDs and placements while incorporating the owner-selected round-5 replacements for rise, fall, follower bins 1 and 3, neutral sentiment, and California. It does not modify the runtime files.</p>
+    </section>
+
+        <section id="inventory">
+      <h2>Complete candidate inventory</h2>
+      <p>Every one of the 33 allowlisted runtime symbols is shown twice. Rise, fall, follower bins 1 and 3, neutral sentiment, and California use the selected round-5 geometry; all other symbols retain the audited production geometry. The study specimen is a 44×44 inspection size on the production page ground. The production-size column uses the homepage CSS box and inherited color from <code>monitor/static/home-v20.css</code> at <code>e2d48a2c642c</code>. Every symbol keeps the shared <code>0 0 24 24</code> viewBox, so optical weight changes with the CSS box — judge both columns before changing a path.</p>
+      <div class="legend">
+        <strong>How to read the new column.</strong>
+        Pixel values are the production CSS <code>width</code> × <code>height</code>, including the fractional crops used for engagement, pulse, star, and caret. Colors are the parent-owned <code>currentColor</code> at that placement. California and Beijing keep their production badge fills because those icons are never drawn as bare strokes on the page ground. Where a symbol has two live boxes, both are shown.
+      </div>
+      <div class="inventory-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Study specimen</th>
+              <th scope="col">Production size</th>
+              <th scope="col">Symbol ID and meaning</th>
+              <th scope="col">Current UI placements</th>
+              <th scope="col">Construction/form notes</th>
+              <th scope="col">Extension cautions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="group-row"><td colspan="6">Identity and engagement</td></tr>
+            
+            <tr data-symbol="mark-quiet">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Quiet Cast company mark"><use href="#mark-quiet"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><use href="#mark-quiet"></use></svg><span class="prod-meta">18×18 masthead<br>#f3f4f6</span></div><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><use href="#mark-quiet"></use></svg><span class="prod-meta">14×14 at ≤340px</span></div></td>
+              <td><code class="symbol-id">mark-quiet</code><br>Locked mark A / Quiet Cast company weight</td>
+              <td>Public masthead before the locked bilingual company-name unit.</td>
+              <td>The family's only literal <em>quan</em> silhouette: compact arched handle, broad cast body, irregular lower edge, and solid cutout construction.</td>
+              <td>Do not reuse this weight silhouette as a generic badge. Preserve its space-saving relationship to the masthead wordmark.</td>
+            </tr>
+            
+            <tr data-symbol="icon-heart">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Likes"><use href="#icon-heart"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f87171"><svg viewBox="0 0 24 24" width="10.125" height="10" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg><span class="prod-meta">10.125×10 likes<br>#f87171</span></div></td>
+              <td><code class="symbol-id">icon-heart</code><br>Likes</td>
+              <td>Feed engagement row, both server-rendered and asynchronously appended posts.</td>
+              <td>Familiar heart outline with unequal lobes, a slightly drifting point, and rounded cast-like stroke.</td>
+              <td>Keep the silhouette immediate at the production's approximately 10 px height. Do not add interior detail or convert it to a filled reaction glyph.</td>
+            </tr>
+            
+            <tr data-symbol="icon-reply">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Replies"><use href="#icon-reply"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="12.828125" height="10" aria-hidden="true" focusable="false"><use href="#icon-reply"></use></svg><span class="prod-meta">12.828×10 replies<br>#94a3b8</span></div></td>
+              <td><code class="symbol-id">icon-reply</code><br>Replies</td>
+              <td>Feed engagement row, both initial and refreshed rows.</td>
+              <td>Uneven speech bubble with a low tail and three blunt dot strokes.</td>
+              <td>Maintain the bubble reading at narrow sizes; it also supplies the outer-form precedent for <code>icon-question</code>.</td>
+            </tr>
+            
+            <tr data-symbol="icon-repost">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Reposts"><use href="#icon-repost"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#10b981"><svg viewBox="0 0 24 24" width="8.734375" height="10" aria-hidden="true" focusable="false"><use href="#icon-repost"></use></svg><span class="prod-meta">8.734×10 reposts<br>#10b981</span></div></td>
+              <td><code class="symbol-id">icon-repost</code><br>Reposts</td>
+              <td>Feed engagement row, both initial and refreshed rows.</td>
+              <td>Two offset return paths with blunt open arrowheads; deliberately not a perfect rectangular loop.</td>
+              <td>Preserve both directions and open spacing. At the current compact width, extra bends or enclosed corners would collapse.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Trend direction</td></tr>
+            
+            <tr data-symbol="icon-rise">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Rising"><use href="#icon-rise"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#10b981"><svg viewBox="0 0 24 24" width="10.78125" height="10" aria-hidden="true" focusable="false"><use href="#icon-rise"></use></svg><span class="prod-meta">10.781×10 pulse<br>#10b981</span></div></td>
+              <td><code class="symbol-id">icon-rise</code><br>Rising trend</td>
+              <td>Pulse chips on initial page render and dynamic chart/pulse refresh.</td>
+              <td>Wide, slightly irregular solid triangle with an unmistakable upward point.</td>
+              <td>Preserve the blunt point and broad base at 10 px. Direction remains redundant with the green tone, adjacent percentage, and accessible label.</td>
+            </tr>
+            
+            <tr data-symbol="icon-flat">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Flat"><use href="#icon-flat"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="10.78125" height="10" aria-hidden="true" focusable="false"><use href="#icon-flat"></use></svg><span class="prod-meta">10.781×10 pulse<br>#94a3b8</span></div></td>
+              <td><code class="symbol-id">icon-flat</code><br>Flat trend</td>
+              <td>Pulse chips on initial render and dynamic refresh.</td>
+              <td>Single gently bowed, uneven horizontal stroke rather than a mechanically straight minus sign.</td>
+              <td>Do not add an arrowhead or make the curve steep enough to imply movement.</td>
+            </tr>
+            
+            <tr data-symbol="icon-fall">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Falling"><use href="#icon-fall"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f87171"><svg viewBox="0 0 24 24" width="10.78125" height="10" aria-hidden="true" focusable="false"><use href="#icon-fall"></use></svg><span class="prod-meta">10.781×10 pulse<br>#f87171</span></div></td>
+              <td><code class="symbol-id">icon-fall</code><br>Falling trend</td>
+              <td>Pulse chips on initial render and dynamic refresh.</td>
+              <td>Wide, slightly irregular solid triangle with an unmistakable downward point.</td>
+              <td>Retain clear downward direction and visual kinship with rise without regularizing both into mechanically perfect triangles.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Account magnitude and role</td></tr>
+            
+            <tr data-symbol="icon-followers-1">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="One-person follower magnitude"><use href="#icon-followers-1"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#64748b"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><use href="#icon-followers-1"></use></svg><span class="prod-meta">12×12 · 0–1k<br>#64748b</span></div></td>
+              <td><code class="symbol-id">icon-followers-1</code><br>Lowest follower bin: one person</td>
+              <td>Follower lead column for <code>0-1k</code> accounts, above the exact count.</td>
+              <td>One broad human form with an offset circular head and an open irregular shoulder/body arc.</td>
+              <td>Keep the torso open with no floor line. It is a magnitude cue, not an avatar; retain the exact count and accessible follower label.</td>
+            </tr>
+            
+            <tr data-symbol="icon-followers-2">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Two-person follower magnitude"><use href="#icon-followers-2"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#8492a6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-followers-2"></use></svg><span class="prod-meta">15×15 · 1k–10k<br>#8492a6</span></div></td>
+              <td><code class="symbol-id">icon-followers-2</code><br>Second follower bin: two people</td>
+              <td>Follower lead column for <code>1k-10k</code> accounts.</td>
+              <td>Two intentionally non-identical heads and rising body strokes, maintaining open space at the center.</td>
+              <td>Do not regularize the pair into identical mirrored figures. Preserve ordinal progression from one to four.</td>
+            </tr>
+            
+            <tr data-symbol="icon-followers-3">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Three-person follower magnitude"><use href="#icon-followers-3"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#cbd5e1"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><use href="#icon-followers-3"></use></svg><span class="prod-meta">19×19 · 10k–50k<br>#cbd5e1</span></div></td>
+              <td><code class="symbol-id">icon-followers-3</code><br>Third follower bin: three people</td>
+              <td>Follower lead column for <code>10k-50k</code> accounts.</td>
+              <td>A larger center figure with smaller flank figures and three open, overlapping body arcs.</td>
+              <td>Keep the three heads separable and the lower contours open at production size; do not add a shared floor line or fill the crowd mass.</td>
+            </tr>
+            
+            <tr data-symbol="icon-followers-4">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Four-person follower magnitude"><use href="#icon-followers-4"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f8fafc"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><use href="#icon-followers-4"></use></svg><span class="prod-meta">22×22 · 50k+<br>#f8fafc</span></div></td>
+              <td><code class="symbol-id">icon-followers-4</code><br>Highest follower bin: four people</td>
+              <td>Follower lead column for <code>50k-plus</code> accounts.</td>
+              <td>Four compact, individually varied figures spanning nearly the full viewBox width.</td>
+              <td>This is the current maximum magnitude state. More bins need a first-principles redesign; do not keep shrinking heads to add people indefinitely.</td>
+            </tr>
+            
+            <tr data-symbol="icon-role-badge">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Account role badge"><use href="#icon-role-badge"></use></svg></span></td><td class="prod-cell"><div class="prod-unit"><div class="prod-row"><span style="color:#fbbf24"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span><span style="color:#c4b5fd"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span><span style="color:#86efac"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg></span></div><span class="prod-meta">12×12 feed<br>official / staff / community</span></div><div class="prod-unit" style="color:#fbbf24"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-role-badge"></use></svg><span class="prod-meta">15×15 filter<br>#fbbf24</span></div></td>
+              <td><code class="symbol-id">icon-role-badge</code><br>Official, staff, or community credential</td>
+              <td>Reserved slot under follower magnitude; role filter options. One geometry serves all three roles.</td>
+              <td>Irregular credential/seal perimeter around a displaced circular center, drawn as two open outlines.</td>
+              <td>Role identity comes from the localized wrapper label and application presentation, not shape alone. Keep follower and role semantics independent; do not add role initials inside the badge.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Sentiment</td></tr>
+            
+            <tr data-symbol="icon-sentiment">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Positive sentiment"><use href="#icon-sentiment"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#10b981"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-sentiment"></use></svg><span class="prod-meta">15×15 feed+filter<br>#10b981</span></div></td>
+              <td><code class="symbol-id">icon-sentiment</code><br>Positive sentiment</td>
+              <td>Feed signal column and positive sentiment filter option.</td>
+              <td>Shared irregular face contour, blunt dot eyes, and an asymmetric rising smile.</td>
+              <td>Keep the expression legible without its contextual tone. New sentiment variants should reuse the face grammar rather than invent a new head shape.</td>
+            </tr>
+            
+            <tr data-symbol="icon-sentiment-neutral">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Neutral sentiment"><use href="#icon-sentiment-neutral"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-sentiment-neutral"></use></svg><span class="prod-meta">15×15 feed+filter<br>#94a3b8</span></div></td>
+              <td><code class="symbol-id">icon-sentiment-neutral</code><br>Neutral sentiment</td>
+              <td>Feed signal column and neutral sentiment filter option.</td>
+              <td>Shared irregular face contour and blunt dot eyes with the mouth deliberately absent.</td>
+              <td>Keep the expression blank rather than adding a flat, smiling, or frowning mouth. The label and neutral tone distinguish its meaning.</td>
+            </tr>
+            
+            <tr data-symbol="icon-sentiment-negative">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Negative sentiment"><use href="#icon-sentiment-negative"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f87171"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-sentiment-negative"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f87171</span></div></td>
+              <td><code class="symbol-id">icon-sentiment-negative</code><br>Negative sentiment</td>
+              <td>Feed signal column and negative sentiment filter option.</td>
+              <td>Shared face with a shallow uneven frown, retaining generous interior space.</td>
+              <td>Avoid exaggerated anger marks; the icon encodes negative sentiment, not abuse, crisis, or prohibition.</td>
+            </tr>
+            
+            <tr data-symbol="icon-sentiment-mixed">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Mixed sentiment"><use href="#icon-sentiment-mixed"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#fbbf24"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-sentiment-mixed"></use></svg><span class="prod-meta">15×15 feed+filter<br>#fbbf24</span></div></td>
+              <td><code class="symbol-id">icon-sentiment-mixed</code><br>Mixed sentiment</td>
+              <td>Feed signal column and mixed sentiment filter option.</td>
+              <td>Shared face with uneven eyes and a two-wave mouth that changes direction.</td>
+              <td>Preserve the visibly ambivalent mouth. Do not collapse mixed into neutral; they are separate filter states.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Post types</td></tr>
+            
+            <tr data-symbol="icon-hands-on-hammer">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Hands-on use"><use href="#icon-hands-on-hammer"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-hands-on-hammer"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-hands-on-hammer</code><br>Hands-on usage</td>
+              <td>Feed post-type signals and hands-on filter option.</td>
+              <td>An actively gripping hand around a diagonal Qin-era hammer; curved hammer head and three finger contours make the action explicit.</td>
+              <td>The active grip is essential. Preserve the locked hammer form and do not simplify away the hand/tool relationship.</td>
+            </tr>
+            
+            <tr data-symbol="icon-compare">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Performance comparison"><use href="#icon-compare"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-compare"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-compare</code><br>Performance comparisons</td>
+              <td>Feed post-type signals and comparison filter option.</td>
+              <td>Three increasing, uneven open bars on a slightly bowed shared baseline.</td>
+              <td>It means comparative performance, not generic analytics or trend direction; keep it distinct from rise/fall.</td>
+            </tr>
+            
+            <tr data-symbol="icon-announce">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Buzz or release announcement"><use href="#icon-announce"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-announce"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-announce</code><br>Buzz and releases</td>
+              <td>Feed post-type signals and buzz/releases filter option.</td>
+              <td>Hand-held announcer/megaphone silhouette with separated handle and rear hardware.</td>
+              <td>Keep it a concrete announcement instrument; it must not be confused with marketing's emitter-and-waves form.</td>
+            </tr>
+            
+            <tr data-symbol="icon-question">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Feedback question"><use href="#icon-question"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-question"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-question</code><br>Feedback and questions</td>
+              <td>Feed post-type signals and feedback/questions filter option.</td>
+              <td>Reply-bubble outer form containing a rough question-mark path and dot.</td>
+              <td>Preserve kinship with reply while keeping the question mark unmistakable at 15 px.</td>
+            </tr>
+            
+            <tr data-symbol="icon-marketing">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Advertising and marketing"><use href="#icon-marketing"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-marketing"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-marketing</code><br>Advertising and marketing</td>
+              <td>Feed post-type signals and advertising/marketing filter option.</td>
+              <td>Small center emitter with two clearly separated right-hand wave arcs and a simple stand.</td>
+              <td>Protect the negative space between emitter and waves. Keep it clearly distinct from the announcer symbol.</td>
+            </tr>
+            
+            <tr data-symbol="icon-event">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Event announcement"><use href="#icon-event"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-event"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-event</code><br>Event announcement</td>
+              <td>Feed post-type signals and event-announcement filter option.</td>
+              <td>Uneven calendar outline, offset binding strokes, bowed divider, and compact check mark.</td>
+              <td>Retain both calendar and confirmation cues. Avoid tiny date numerals or text-dependent interior content.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Discourse and policy signals</td></tr>
+            
+            <tr data-symbol="icon-discourse">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Discourse"><use href="#icon-discourse"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-discourse"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-discourse</code><br>Discourse / exchange</td>
+              <td>Discourse filter options; prefix before regional nationalism signals in feed rows.</td>
+              <td>Two overlapping, differently sized conversation bubbles with separate tails.</td>
+              <td>Keep it broader than reply: two bubbles are the distinguishing feature. It may precede regional flag symbols but does not itself name a region.</td>
+            </tr>
+            
+            <tr data-symbol="icon-nationalism">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Nationalism"><use href="#icon-nationalism"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><use href="#icon-nationalism"></use></svg><span class="prod-meta">14×14 feed region<br>#94a3b8</span></div><div class="prod-unit" style="color:#f3f4f6"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-nationalism"></use></svg><span class="prod-meta">15×15 filter<br>#f3f4f6</span></div></td>
+              <td><code class="symbol-id">icon-nationalism</code><br>Nationalism region</td>
+              <td>US/China nationalism filter options and regional feed signals paired with visible 中 or 美 text.</td>
+              <td>Single irregular flag on a blunt pole, with a bowed free edge.</td>
+              <td>The generic flag does not distinguish regions by itself. Keep the adjacent localized/region character and accessible context.</td>
+            </tr>
+            
+            <tr data-symbol="icon-unsanctioned">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Unsanctioned"><use href="#icon-unsanctioned"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#f87171"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><use href="#icon-unsanctioned"></use></svg><span class="prod-meta">15×15 feed+filter<br>#f87171</span></div></td>
+              <td><code class="symbol-id">icon-unsanctioned</code><br>Unsanctioned-state flag</td>
+              <td>Flagged feed signal and “show only flagged posts” filter option.</td>
+              <td>Open, uneven prohibition ring crossed by a decisive diagonal stroke.</td>
+              <td>Reserve this for the unsanctioned semantic. It is not a generic close, delete, error, or disabled icon.</td>
+            </tr>
+
+            
+            <tr class="group-row"><td colspan="6">Locale, time, controls, and ranking</td></tr>
+            
+            <tr data-symbol="icon-california">
+              <td class="preview-cell"><span class="specimen-well well-ca"><svg class="specimen" viewBox="0 0 24 24" aria-label="California"><use href="#icon-california"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#111827"><span class="place-badge ca"><svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true" focusable="false"><use href="#icon-california"></use></svg></span><span class="prod-meta">10×10 in 14×14 toggle badge<br>#111827 on amber</span></div><div class="prod-unit" style="color:#111827"><span class="place-badge ca feed"><svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true" focusable="false"><use href="#icon-california"></use></svg></span><span class="prod-meta">10×10 in 11×11 feed stamp</span></div></td>
+              <td><code class="symbol-id">icon-california</code><br>California comparison locale/timezone</td>
+              <td>Timezone toggle and recent feed timestamp when California is the comparison zone.</td>
+              <td>Taller, narrower California outline with a short north edge, long Nevada diagonal, Bay Area notch, and clear Southern California hook.</td>
+              <td>Preserve the corrected proportions and readable black line at 10 px. Do not replace it with “CA” letters or over-detail the coastline.</td>
+            </tr>
+            
+            <tr data-symbol="icon-beijing">
+              <td class="preview-cell"><span class="specimen-well well-bj"><svg class="specimen" viewBox="0 0 24 24" aria-label="Beijing"><use href="#icon-beijing"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#fde047"><span class="place-badge bj"><svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true" focusable="false"><use href="#icon-beijing"></use></svg></span><span class="prod-meta">10×10 in 14×14 toggle badge<br>#fde047 on red</span></div><div class="prod-unit" style="color:#fde047"><span class="place-badge bj feed"><svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true" focusable="false"><use href="#icon-beijing"></use></svg></span><span class="prod-meta">10×10 in 11×11 feed stamp</span></div></td>
+              <td><code class="symbol-id">icon-beijing</code><br>Beijing comparison locale/timezone</td>
+              <td>Timezone toggle and recent feed timestamp when the browser's local zone is California.</td>
+              <td>The recognizable modern character 京 redrawn as uneven paths rather than a font glyph.</td>
+              <td>This is the intentional character-form exception. Preserve legibility as 京 and path-based rendering; do not generalize it into script-dependent operational icons.</td>
+            </tr>
+            
+            <tr data-symbol="icon-star">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Top voice score"><use href="#icon-star"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#fbbf24"><svg viewBox="0 0 24 24" width="9.984375" height="11" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg><span class="prod-meta">9.984×11 voice score<br>#fbbf24</span></div><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="11.234375" height="11" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg><span class="prod-meta">11.234×11 “by followers”<br>#94a3b8</span></div></td>
+              <td><code class="symbol-id">icon-star</code><br>Top-voice follower score</td>
+              <td>Headline “by followers” label and each top-voice score, including dynamic headline refresh.</td>
+              <td>Five-point outline with deliberately uneven arms and an off-axis center.</td>
+              <td>It qualifies the adjacent numeric score; do not use it as a generic favorite control without a separate approved meaning.</td>
+            </tr>
+            
+            <tr data-symbol="icon-caret">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Dropdown caret"><use href="#icon-caret"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="7" height="9" aria-hidden="true" focusable="false"><use href="#icon-caret"></use></svg><span class="prod-meta">7×9 filter pill<br>#94a3b8</span></div></td>
+              <td><code class="symbol-id">icon-caret</code><br>Filter dropdown disclosure</td>
+              <td>Every filter pill; parent CSS rotates it when open.</td>
+              <td>Wide, slightly asymmetric open chevron with rounded corners.</td>
+              <td>Keep it decorative inside the already named control. Rotation belongs to control state, not a second “up-caret” symbol.</td>
+            </tr>
+            
+            <tr data-symbol="icon-sunrise">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Sunrise"><use href="#icon-sunrise"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-sunrise"></use></svg><span class="prod-meta">14×12 unselected<br>#94a3b8</span></div><div class="prod-unit" style="color:#ffffff"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-sunrise"></use></svg><span class="prod-meta">14×12 selected<br>#ffffff</span></div></td>
+              <td><code class="symbol-id">icon-sunrise</code><br>Time of day: 05:00–07:59</td>
+              <td>Local and comparison clocks in the timezone toggle, selected dynamically by hour.</td>
+              <td>Half sun above an uneven horizon with three sparse rays.</td>
+              <td>Keep it distinct from dusk through the ray placement; the time text remains authoritative.</td>
+            </tr>
+            
+            <tr data-symbol="icon-day">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Day"><use href="#icon-day"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-day"></use></svg><span class="prod-meta">14×12 unselected<br>#94a3b8</span></div><div class="prod-unit" style="color:#ffffff"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-day"></use></svg><span class="prod-meta">14×12 selected<br>#ffffff</span></div></td>
+              <td><code class="symbol-id">icon-day</code><br>Time of day: 08:00–16:59</td>
+              <td>Local and comparison clocks; also the server-rendered local-clock placeholder.</td>
+              <td>Offset circular sun surrounded by eight irregular, rounded rays.</td>
+              <td>Maintain open gaps between disk and rays at the 14×12 px clock placement.</td>
+            </tr>
+            
+            <tr data-symbol="icon-dusk">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Dusk"><use href="#icon-dusk"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-dusk"></use></svg><span class="prod-meta">14×12 unselected<br>#94a3b8</span></div><div class="prod-unit" style="color:#ffffff"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-dusk"></use></svg><span class="prod-meta">14×12 selected<br>#ffffff</span></div></td>
+              <td><code class="symbol-id">icon-dusk</code><br>Time of day: 17:00–19:59</td>
+              <td>Local and comparison clocks, selected dynamically by hour.</td>
+              <td>Lowering half sun, horizon, short upper ray, and outward side rays.</td>
+              <td>Do not collapse it into sunrise; preserve the different ray posture while keeping family resemblance.</td>
+            </tr>
+            
+            <tr data-symbol="icon-night">
+              <td class="preview-cell"><span class="specimen-well"><svg class="specimen" viewBox="0 0 24 24" aria-label="Night"><use href="#icon-night"></use></svg></span></td><td class="prod-cell"><div class="prod-unit" style="color:#94a3b8"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-night"></use></svg><span class="prod-meta">14×12 unselected<br>#94a3b8</span></div><div class="prod-unit" style="color:#ffffff"><svg viewBox="0 0 24 24" width="14" height="12" aria-hidden="true" focusable="false"><use href="#icon-night"></use></svg><span class="prod-meta">14×12 selected<br>#ffffff</span></div></td>
+              <td><code class="symbol-id">icon-night</code><br>Time of day: 20:00–04:59</td>
+              <td>Local and comparison clocks; also the server-rendered comparison-clock placeholder.</td>
+              <td>Open crescent formed by a single irregular contour plus one small solid star.</td>
+              <td>Preserve the crescent's broad negative space. The small filled star is intentional and still inherits <code>currentColor</code>.</td>
+            </tr>
+          
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="workflow">
+
+      <h2>Continuation checklist for future agents</h2>
+      <ol class="checklist">
+        <li>Confirm the signal has a stable, user-facing meaning and that an icon materially improves scanning.</li>
+        <li>Start from first principles and familiar iconography; do not start from an emoji or a historical character.</li>
+        <li>Draw in <code>0 0 24 24</code> with clear negative space and <code>currentColor</code>.</li>
+        <li>Apply controlled unevenness only after the silhouette reads instantly.</li>
+        <li>Review beside related production symbols at both large specimen size and the actual UI size.</li>
+        <li>Check narrow-phone, desktop, English, Simplified Chinese, server-rendered, and asynchronous paths.</li>
+        <li>Add the exact geometry to the production sprite and the constant-only allowlist; never accept data-derived fragment IDs.</li>
+        <li>Add or update semantic mapping only where a stable application key selects the icon.</li>
+        <li>Keep the SVG decorative and place the localized accessible name on its text/control wrapper.</li>
+        <li>Update the icon contract to assert exact inventory, nonempty geometry, common viewBox, fail-closed rendering, and real browser geometry.</li>
+        <li>Verify that replacing or adding an icon does not alter control geometry, overflow, content order, or unrelated interactions.</li>
+        <li>Record a new owner decision before replacing a locked symbol or extending the system into a new semantic category.</li>
+      </ol>
+
+      <h3>Current regression boundary</h3>
+      <p>The production contract asserts an exact 33-symbol runtime inventory, unique IDs, a shared viewBox, nonempty shape geometry, a constant-only fail-closed renderer, approved runtime/source relationships, semantic follower and sentiment behavior, and real browser rendering across desktop and narrow phone widths. Any extension should strengthen that same boundary rather than create a parallel icon registry.</p>
+
+      <h3>Audited source files</h3>
+      <ul class="source-list">
+        <li><code>docs/plans/2026-08-24-162101-qin-quan-visual-design-template.md</code> — active intent and locked choices.</li>
+        <li><code>monitor/templates/monitor/_cyber_quan_sprite.html</code> — exact runtime geometry; production SHA-256 <code>8228c9313b36638ff5791868ae4537c50c832fd9f10ce126150ca911488dd6ed</code>.</li>
+        <li><code>monitor/static/pw-icons.js</code> — allowlist, safe renderer, semantic mappings, and filter hydration.</li>
+        <li><code>monitor/templates/monitor/home.html</code> and <code>_feed_initial_v22.html</code> — server-rendered placements.</li>
+        <li><code>monitor/static/pw-feed.js</code>, <code>pw-chart.js</code>, and <code>pw-tz.js</code> — asynchronous and conditional placements.</li>
+        <li><code>monitor/static/home-v20.css</code> — production sizing and parent-owned presentation.</li>
+        <li><code>tests/test_cyber_quan_icon_contract.py</code>, browser tests, formatter tests, and timezone tests — regression evidence.</li>
+      </ul>
+    </section>
+
+        <footer>
+      Ideation working copy, updated 2026-08-29. Base runtime audit: <code>e2d48a2c642ccbf03407a7a1ecfd36161ab0f018</code>. Selected replacements: <code>2026-08-29-161106-cyber-quan-icon-alts.html</code>. Production sizes and colors remain from <code>home-v20.css</code> at the audited SHA; the runtime sprite and allowlist remain authoritative for shipped behavior.
+    </footer>
+  </main>
+</body>
+</html>
