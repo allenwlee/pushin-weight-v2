@@ -11,7 +11,7 @@ ollija:
   change_id: feat-ai-enrichment-stage1-2026-09-08-134925
   branch: feat/ai-enrichment-stage1
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -40,7 +40,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -51,6 +51,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the Render deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the Render deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/ai-enrichment-stage1` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -292,6 +299,20 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 38. Exception 37's first paid probe returned the exact model with HTTP 200 and `finish_reason: stop`, but the supposedly strict schema response omitted the closing quote on its final locale value and failed JSON parsing. Preserve that consumed probe as configuration v1 and do not retry it. Under Exception 34's existing three-configuration allowance, authorize configuration v2 on the same cohort and semantic prompt using four explicit tagged text fields instead of provider JSON mode; mechanically parse, validate and wrap those values into the application object. Keep the same model, direct route, reasoning disabled, temperature, source/context, timeouts, retry rules, budgets and review method. Raise the output ceiling to 4,096 because the paired incumbent reached 1,840 tokens, and use one request at a time to isolate direct-route quality from provider-load effects. A new paid probe must prove exact tag multiplicity/order, no extra text, copied post identity, three nonempty distinct locales, exact model, `stop` and usage/cost before the remaining 99 requests run. This correction addresses only serialization and cannot repair or retry semantic output.
 
 39. On September 18 the owner reopened one alternative classifier test and instructed: “let's test gemma4/deepinfra on classification.” Authorize up to three evidence-linked Gemma classifier configurations on the frozen expanded-taxonomy diagnostic24 cohort, paired with the retained direct V4.1 two-role singleton control. Use DeepInfra's direct standard endpoint, exact model `google/gemma-4-31B-it-turbo`, and the saved $0.09/M input plus $0.34/M output ceiling. Preserve the current semantic definitions, source/context, tracked-brand catalog, two roles and one-post-per-request shape; adapt the serialization and model-specific controls when a consumed attempt exposes a mechanical failure. Start with reasoning disabled, temperature 0.2, a 4,096-token ceiling, serial requests, and a strict parser that never invents omitted labels. Send one retained request as a paid probe and reuse it only after exact model identity, `stop`, required slot coverage, taxonomy validity and usage/cost validation pass. Retry only HTTP 429 or 503 at most three transport attempts, honoring provider cooldowns; never retry timeouts, ambiguous transport outcomes, structural or semantic defects. Reserve worst-case spend under the existing $3 model/task and $30 portfolio caps, retain sanitized requests and response-reported charges, and expose no credential. If the first configuration does not deliver the complete two-role contract, diagnose and spend the next allowed configuration without pausing for owner approval. Review every delivered source against visible evidence under R113 and compare paired confirmed failures, uncertainty, coverage, latency and actual charges with the retained V4.1 control. This narrow exception supersedes Exception 31 only for this Gemma diagnostic; it does not change the selected 0731 route or activate any runtime, database, staging or production setting.
+
+42. On September 21 the owner explicitly directed “deploy to production.”
+    This authorizes U24 and supersedes Delivery Exception 26 and the
+    staging-only boundary in Delivery Exception 41. Promote the exact passing
+    staging product candidate
+    `3456f2fdc1529f3f5eec87a56a7df6ae3c575375` to `main`; the later
+    documentation-only commit is not part of the production product SHA.
+    Preserve the current production harvest schedule and single-scheduler
+    topology, use only natural scheduled cycles for post-deploy evidence, keep
+    discovery and targeted-extraction lanes at the checked-in fail-closed
+    production settings, and apply the owner-selected direct DeepInfra routes
+    and existing production controls from `render.yaml`. This authorization
+    does not include an ad hoc paid harvest, a production pause, destructive
+    data edits, or public MCP/API activation.
 
 # Integrated AI Enrichment Taxonomy and Demand-Shaped Synthesis
 
