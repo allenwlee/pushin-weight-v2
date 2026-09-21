@@ -130,11 +130,11 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
 ):
     """The live caller sends the policy exhibit and persists aliases.
 
-    This drives ``CycleRunner.run`` through its real planner, fetch loop, and
-    DB attribution seam. The provider is fake and captures the query kwargs;
-    no TwitterAPI request is made. We assert seven *logical* planned calls,
-    while allowing the provider client to make additional pagination requests
-    in a real run.
+    This drives ``CycleRunner.run`` through its real planner, fetch loop, DB
+    attribution seam, and enrichment handoff. The provider is fake and
+    captures the query kwargs; no TwitterAPI request is made. We assert seven
+    *logical* planned calls, while allowing the provider client to make
+    additional pagination requests in a real run.
     """
     from django.test import override_settings
 
@@ -194,12 +194,25 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
             ], False
 
     api = FakeApi()
+    enrichment_input: list[tuple[str, str, bool]] = []
+
+    def capture_post_fetch(_runner, items, **_kwargs):
+        enrichment_input.extend(
+            (
+                str(item["id"]),
+                str(item["_persisted_post_id"]),
+                bool(item["_db_inserted"]),
+            )
+            for item in items
+        )
+        return {}
+
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",
         classmethod(lambda cls, _purpose: api),
     )
-    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {})
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", capture_post_fetch)
     monkeypatch.setattr(
         "monitor.metrics_refresh.run_metrics_refresh",
         lambda *args, **kwargs: {},
@@ -235,3 +248,9 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
     assert PostBrand.objects.filter(
         post_id="2094999721551225267", brand_id="moonshot_kimi"
     ).exists()
+    assert enrichment_input == [
+        ("u5-dots", "u5-dots", True),
+        ("u5-hy", "u5-hy", True),
+        ("u5-ox", "u5-ox", True),
+        ("2094999721551225267", "2094999721551225267", True),
+    ]
