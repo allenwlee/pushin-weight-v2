@@ -873,6 +873,73 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_all_audience_topics_are_visible_and_localized(self) -> None:
+        """The real root dropdown exposes every active topic in all product locales."""
+        expected = {
+            "en": (
+                "Local Inference", "Cost & Performance", "Model Distillation",
+                "Evaluations & Benchmarks", "Openness & Licensing", "Agents & Tools",
+                "API & Developer Surface",
+            ),
+            "zh_hans": (
+                "本地推理", "成本与性能", "模型蒸馏", "评测与基准", "开放性与许可证",
+                "智能体与工具", "API 与开发者平台",
+            ),
+            "ja": (
+                "ローカル推論", "コスト・性能", "モデル蒸留", "評価・ベンチマーク",
+                "オープン性・ライセンス", "エージェント・ツール", "API・開発者向け機能",
+            ),
+        }
+        expected_keys = [
+            "local_inference", "cost_performance", "model_distillation",
+            "evals_benchmarks", "openness_license", "agents_tools",
+            "api_developer_surface",
+        ]
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, expected_labels in expected.items():
+                    with self.subTest(locale=locale):
+                        context = browser.new_context(
+                            viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo"
+                        )
+                        _freeze_clock(context)
+                        page = context.new_page()
+                        try:
+                            response = page.goto(
+                                f"{self.live_server_url}/?locale={locale}",
+                                wait_until="networkidle",
+                            )
+                            self.assertIsNotNone(response)
+                            self.assertEqual(response.status, 200)
+                            page.wait_for_function("() => window.pwFilter")
+                            pill = page.locator('[data-group="audience_topics"]')
+                            self.assertEqual(pill.count(), 1)
+                            pill.click()
+                            dropdown = page.locator("body > .filter-dropdown.is-portaled")
+                            self.assertTrue(dropdown.is_visible())
+                            box = dropdown.bounding_box()
+                            self.assertIsNotNone(box)
+                            self.assertGreater(box["width"], 0)
+                            self.assertGreater(box["height"], 0)
+                            controls = dropdown.locator(
+                                '[data-pw-filter-group="audience_topics"]'
+                            )
+                            self.assertEqual(controls.count(), 7)
+                            self.assertEqual(
+                                controls.evaluate_all("nodes => nodes.map(node => node.value)"),
+                                expected_keys,
+                            )
+                            self.assertEqual(
+                                dropdown.locator(".filter-option-text").all_inner_texts(),
+                                list(expected_labels),
+                            )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_mobile_touchend_fallback_opens_brand_dropdown(self) -> None:
         """An iOS touch with no synthetic click still opens Brands."""
         with sync_playwright() as playwright:

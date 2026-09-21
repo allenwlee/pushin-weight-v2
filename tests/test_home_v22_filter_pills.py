@@ -232,12 +232,12 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         audience = body.split('data-group="audience_topics"', 1)[1].split(
             'data-group="product_labels"', 1
         )[0]
-        for key in ("local_inference", "model_distillation", "api_developer_surface"):
-            self.assertIn(f'value="{key}"', audience)
         for key in (
-            "cost_performance", "evals_benchmarks", "openness_license", "agents_tools",
+            "local_inference", "cost_performance", "model_distillation",
+            "evals_benchmarks", "openness_license", "agents_tools",
+            "api_developer_surface",
         ):
-            self.assertNotIn(f'value="{key}"', audience)
+            self.assertIn(f'value="{key}"', audience)
         self.assertNotIn('data-group="geopolitical_modes"', body)
         self.assertNotIn('data-group="untracked_brand_promotions"', body)
 

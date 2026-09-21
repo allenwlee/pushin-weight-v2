@@ -1,9 +1,9 @@
 """Frozen U18A user-facing activation decisions.
 
 The classifier may persist every v4 field for shadow analysis.  Readers and
-filters expose only families that passed the independently scored R94A gate.
-Changing a decision requires a new frozen evaluator/candidate receipt and a
-new revision; missing keys fail closed as ``shadow_only``.
+filters expose the seven Audience Topics selected by the owner after reviewing
+the independently scored R94A evidence. Other families still require their own
+activation decision; missing keys fail closed as ``shadow_only``.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Final, Literal
 
 ActivationState = Literal["enabled", "shadow_only"]
 
-ACTIVATION_REVISION: Final = "u18a-r94a-direct-0731-normalized-20260918-v1"
+ACTIVATION_REVISION: Final = "u18a-owner-all-audience-topics-20260921-v1"
 EVALUATOR_SHA256: Final = (
     "cf1ec56b963fe687eb0abb6a5d5e23d88ebf6475adc48b5b0818617cb4ac9678"
 )
@@ -26,11 +26,11 @@ CANDIDATE_REPORT_SHA256: Final = (
 
 FAMILY_DECISIONS: Final[dict[str, ActivationState]] = {
     "local_inference": "enabled",
-    "cost_performance": "shadow_only",
+    "cost_performance": "enabled",
     "model_distillation": "enabled",
-    "evals_benchmarks": "shadow_only",
-    "openness_license": "shadow_only",
-    "agents_tools": "shadow_only",
+    "evals_benchmarks": "enabled",
+    "openness_license": "enabled",
+    "agents_tools": "enabled",
     "api_developer_surface": "enabled",
     "news_reporting": "shadow_only",
     "investigate_claim": "shadow_only",
