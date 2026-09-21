@@ -1088,8 +1088,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                       .data.datasets.filter(dataset => dataset._isTotalLine)
                       .every(dataset => !dataset.segment)"""
                 ))
-                with page.expect_response(lambda response: "/chart.html?" in response.url):
+                with page.expect_response(lambda response: "/chart.html?" in response.url) as response_info:
                     page.locator('[data-pw-window-btn="7"]').click()
+                self.assertEqual(
+                    parse_qs(urlparse(response_info.value.url).query)["timezone"],
+                    ["Asia/Tokyo"],
+                )
                 page.wait_for_function(
                     "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 7"
                 )
@@ -1097,15 +1101,28 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     """() => {
                       const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
                       const last = chart.data.labels.length - 1;
-                      return chart.data.datasets.filter(dataset => dataset._isTotalLine).map(dataset => ({
-                        final: dataset.segment.borderDash({p1DataIndex: last}),
-                        prior: dataset.segment.borderDash({p1DataIndex: last - 1}) || null,
-                      }));
+                      const parts = new Intl.DateTimeFormat('en-US', {
+                        timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+                      }).formatToParts(new Date(chart.canvas.dataset.home
+                        ? JSON.parse(chart.canvas.dataset.home).computed_at
+                        : Date.now()));
+                      const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+                      return {
+                        timezone: JSON.parse(chart.canvas.dataset.home).bucket_timezone,
+                        finalLabel: chart.data.labels[last],
+                        expectedToday: `${values.year}-${values.month}-${values.day}`,
+                        segments: chart.data.datasets.filter(dataset => dataset._isTotalLine).map(dataset => ({
+                          final: dataset.segment.borderDash({p1DataIndex: last}),
+                          prior: dataset.segment.borderDash({p1DataIndex: last - 1}) || null,
+                        })),
+                      };
                     }"""
                 )
-                self.assertGreater(len(result), 0)
-                self.assertTrue(all(row["final"] == [4, 4] for row in result))
-                self.assertTrue(all(row["prior"] is None for row in result))
+                self.assertEqual(result["timezone"], "Asia/Tokyo")
+                self.assertEqual(result["finalLabel"], result["expectedToday"])
+                self.assertGreater(len(result["segments"]), 0)
+                self.assertTrue(all(row["final"] == [4, 4] for row in result["segments"]))
+                self.assertTrue(all(row["prior"] is None for row in result["segments"]))
             finally:
                 context.close()
                 browser.close()

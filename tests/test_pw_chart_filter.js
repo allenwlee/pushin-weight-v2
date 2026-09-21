@@ -41,6 +41,7 @@ function payload(windowDays, count, pulseName) {
     granularity: windowDays === 1 ? 'minute' : 'day',
     window_days: windowDays,
     computed_at: computedAt,
+    bucket_timezone: 'Asia/Tokyo',
     pulse: {
       window_days: windowDays,
       computed_at: computedAt,
@@ -799,6 +800,8 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'chart serializes the immutable event filter snapshot, not a divergent DOM read');
   assert(baseQuery.get('window') === '7', 'chart sends the active window explicitly');
   assert(baseQuery.get('locale') === 'en', 'chart sends the active locale explicitly');
+  assert(baseQuery.get('timezone') === 'Asia/Tokyo',
+    'chart sends the browser IANA timezone explicitly');
   assert(!base.fetchCalls[0].url.includes('renderer='), 'request has no renderer parameter');
   assert(base.region.currentPayload.window_days === 7, 'chart commits the returned window');
   assert(base.pulseBar.getAttribute('data-pw-window') === '7', 'pulse commits the same window atomically');

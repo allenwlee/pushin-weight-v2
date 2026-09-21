@@ -11,6 +11,15 @@
   var fallbackComparisonHourFormatter = null;
   var chartRefreshTimer = null;
   var frozenPoint = null;
+  var BROWSER_TIMEZONE = resolveBrowserTimezone();
+
+  function resolveBrowserTimezone() {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch (error) {
+      return 'UTC';
+    }
+  }
 
   var BRAND_NAMES = {
     moonshot_kimi: 'Kimi',
@@ -1097,7 +1106,8 @@
     var filters = filtersForEvent(event);
     var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) +
       '&window=' + encodeURIComponent(filters.window || 1) +
-      '&locale=' + encodeURIComponent(currentLocale(region));
+      '&locale=' + encodeURIComponent(currentLocale(region)) +
+      '&timezone=' + encodeURIComponent(BROWSER_TIMEZONE);
     return fetch(url, {
       credentials: 'same-origin',
       signal: activeController ? activeController.signal : undefined,
@@ -1151,6 +1161,10 @@
         renderPulse(region, payload.pulse);
         renderHeadline(payload.trend_narrative, payload.top_voices);
         updateProjectionStates(region, payload, false);
+        if ((payload.granularity || 'day') === 'day' &&
+            payload.bucket_timezone !== BROWSER_TIMEZONE) {
+          requestChart();
+        }
       }
       startChartRefresh();
     }

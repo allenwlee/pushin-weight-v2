@@ -24,6 +24,7 @@ from threading import Lock
 from time import monotonic
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -2735,6 +2736,7 @@ def _home_chart_cache_key(
     window_days: int,
     normalized_filters: dict[str, Any],
     locale: str,
+    bucket_timezone: str = "UTC",
 ) -> tuple[Any, ...]:
     """Return a bounded semantic key for one complete home projection."""
     normalized_locale = _normalize_locale(locale)
@@ -2745,7 +2747,16 @@ def _home_chart_cache_key(
             continue
         canonical_value = tuple(sorted(value)) if isinstance(value, list) else value
         filter_key.append((key, canonical_value))
-    return (window_days, locale_key, tuple(filter_key))
+    return (window_days, locale_key, bucket_timezone, tuple(filter_key))
+
+
+def _resolve_chart_timezone(value: str | None) -> tuple[str, ZoneInfo]:
+    """Return one validated IANA timezone for daily chart buckets."""
+    candidate = (value or "UTC").strip()
+    try:
+        return candidate, ZoneInfo(candidate)
+    except (ZoneInfoNotFoundError, ValueError):
+        return "UTC", ZoneInfo("UTC")
 
 
 def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
@@ -3356,6 +3367,7 @@ def _build_home_chart_payload(
     now: datetime | None = None,
     locale: str = "en",
     brand_projection: list[dict[str, Any]] | None = None,
+    bucket_timezone: str = "UTC",
 ) -> dict[str, Any]:
     """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
@@ -3366,12 +3378,17 @@ def _build_home_chart_payload(
 
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
+    bucket_timezone, bucket_tzinfo = _resolve_chart_timezone(
+        bucket_timezone if window_days > 1 else "UTC"
+    )
     requested_at = now or _dashboard_now()
     normalized_filters = _normalize_home_filters(filters)
     cache_key = None
     cached_payload = None
     if now is None:
-        cache_key = _home_chart_cache_key(window_days, normalized_filters, locale)
+        cache_key = _home_chart_cache_key(
+            window_days, normalized_filters, locale, bucket_timezone
+        )
         cache_now = monotonic()
         with _HOME_PULSE_CACHE_LOCK:
             cached = _HOME_CHART_CACHE.get(cache_key)
@@ -3385,6 +3402,17 @@ def _build_home_chart_payload(
 
     pulse = _build_home_pulse_payload(window_days, now=requested_at)
     now = datetime.fromisoformat(pulse["computed_at"])
+    local_today = now.astimezone(bucket_tzinfo).date()
+    if window_days == 1:
+        window_start = now - timedelta(days=1)
+    else:
+        first_day = local_today - timedelta(days=window_days - 1)
+        window_start = datetime(
+            first_day.year,
+            first_day.month,
+            first_day.day,
+            tzinfo=bucket_tzinfo,
+        ).astimezone(UTC)
 
     if brand_projection is None:
         brand_projection = _live_brand_projection()
@@ -3417,6 +3445,8 @@ def _build_home_chart_payload(
             window_days,
             normalized_filters,
             now=now,
+            created_at_start=window_start,
+            created_at_end=now,
         ).values("tweet_id")
         links = PostBrand.objects.filter(
             brand_id__in=brand_nicknames,
@@ -3425,7 +3455,7 @@ def _build_home_chart_payload(
     else:
         links = PostBrand.objects.filter(
             brand_id__in=brand_nicknames,
-            post__created_at__gte=now - timedelta(days=window_days),
+            post__created_at__gte=window_start,
             post__created_at__lt=now,
         )
         legacy_mode = normalized_filters.get("unsanctioned")
@@ -3487,7 +3517,7 @@ def _build_home_chart_payload(
         # Day granularity (oldest-first labels)
         granularity = "day"
         days = [
-            (now.date() - timedelta(days=i)).isoformat()
+            (local_today - timedelta(days=i)).isoformat()
             for i in range(window_days - 1, -1, -1)
         ]
         day_index: dict[str, int] = {d: i for i, d in enumerate(days)}
@@ -3497,7 +3527,7 @@ def _build_home_chart_payload(
 
         agg_rows = (
             links
-            .annotate(day=TruncDate("post__created_at"))
+            .annotate(day=TruncDate("post__created_at", tzinfo=bucket_tzinfo))
             .values("brand_id", "day")
             .annotate(count=Count("pk"))
         )
@@ -3516,6 +3546,8 @@ def _build_home_chart_payload(
             window_days=window_days,
             normalized=normalized_filters,
             now=now,
+            created_at_start=window_start,
+            created_at_end=now,
         )
         if window_days == 1:
             job_aggregates = (
@@ -3534,7 +3566,7 @@ def _build_home_chart_payload(
                     totals[brand] += row["count"]
         else:
             job_aggregates = (
-                job_rows.annotate(day=TruncDate("_feed_created_at"))
+                job_rows.annotate(day=TruncDate("_feed_created_at", tzinfo=bucket_tzinfo))
                 .values("brand_id", "day")
                 .annotate(count=Count("pk"))
             )
@@ -3592,6 +3624,7 @@ def _build_home_chart_payload(
         "granularity": granularity,
         "stacked": stacked,
         "window_days": window_days,
+        "bucket_timezone": bucket_timezone,
         "computed_at": computed_at,
         "fetched_at": computed_at,
         "pulse": pulse,
@@ -5066,7 +5099,12 @@ def chart_json(request: HttpRequest) -> JsonResponse:
     requested_filters = _parse_filters_from_request(request)
     filters = _normalize_home_filters(requested_filters)
     locale = _resolve_locale(request)
-    payload = _build_home_chart_payload(window_days, filters, locale=locale)
+    payload = _build_home_chart_payload(
+        window_days,
+        filters,
+        locale=locale,
+        bucket_timezone=request.GET.get("timezone", "UTC"),
+    )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     payload["classification_unavailable"] = {
         "fields": filters.get("_unavailable_filters", []),
@@ -5087,7 +5125,12 @@ def chart_html(request: HttpRequest) -> HttpResponse:
     locale = _resolve_locale(request)
     requested_filters = _parse_filters_from_request(request)
     filters = _normalize_home_filters(requested_filters)
-    payload = _build_home_chart_payload(window_days, filters, locale=locale)
+    payload = _build_home_chart_payload(
+        window_days,
+        filters,
+        locale=locale,
+        bucket_timezone=request.GET.get("timezone", "UTC"),
+    )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     payload["classification_unavailable"] = {
         "fields": filters.get("_unavailable_filters", []),
