@@ -30,6 +30,56 @@ committed route. The prompt blocks below are copied directly from the source
 constants; deterministic slot names are inserted immediately before each
 request.
 
+## Runtime topology and input envelope
+
+For each at-most-20-post batch, the caller builds a tracked-brand catalog
+snapshot and sends two disjoint packets concurrently. The content role owns
+outcome, post types, Audience Topics, and post-level Untracked Brand
+Promotions. The brand-interpretation role owns product labels, sentiment,
+geopolitical modes, and China/US national stance. The responses are parsed,
+validated, and merged by post and attributed brand only after both siblings
+are present.
+
+The input envelope contains the tweet ID, source text, creation time, source
+language, stored English translation, supplied parent/quote context, attributed
+brand IDs, reviewed author affiliations, and the tracked-brand catalog. The
+catalog includes aliases, handles, domains, products, keywords, hashtags, and
+reviewed account roles. The input fingerprint includes visible text, context,
+translation, affiliations, attributed brands, source language, and catalog
+revision, so changing reviewed context creates a new trace.
+
+This route deliberately has no reviewer, repair, consensus, language-selector,
+topic-only, or per-post retry call. A missing or invalid sibling leaves the
+post pending rather than using a primary fallback. Context-missing is a
+whole-row state: brand-specific labels become unavailable rather than being
+invented from the other role.
+
+## Current output contract
+
+Post types are releases/updates, hands-on usage, results analysis,
+questions/requests, advertising/marketing, events, opportunities, job
+listings, personnel changes, opinions/reactions, research explanations,
+business/finance, news reporting, and other. A hackathon can be both an event
+and an opportunity. Personnel changes include named employment, internship,
+executive/research appointment, and formally announced adviser/ambassador
+transitions; static biographies are excluded.
+
+The seven Audience Topics are local inference, cost/performance, model
+distillation, evaluations/benchmarks, openness/licensing, agents/tools, and
+API/developer surface. Product labels are bug, complaint, testimonial,
+ideas/requests, and investigate claim.
+
+Untracked Brand Promotions are post-level and use general, spam, scam, crypto,
+and unauthorized. General is exclusive when a promotion outside the tracked
+catalog has no narrower key. Spam requires repetition or substantial
+duplication. Promoted-subject evidence must be an exact visible substring;
+comparison foils cannot inherit another brand's promotion.
+
+All brand interpretation is target-specific. A brand being mentioned is not
+proof that the post's advertising, praise, criticism, results, or sentiment
+belongs to it. Reviewed staff/official affiliation is authorship evidence, not
+a content predicate.
+
 ## Content-role prompt
 
 ```text
@@ -64,7 +114,6 @@ AUDIENCE TOPICS: local_inference=local/on-device/self-hosted/constrained-hardwar
 POST-LEVEL UNTRACKED BRAND PROMOTIONS: detect promotion of a company/product/service/project outside tracked_brands. general is an exclusive fallback when promotion exists but no narrower key applies. spam requires repetition or substantial duplication; one CTA is insufficient. scam requires visible scam/deceptive-fraud evidence. crypto is a crypto/token/blockchain asset promotion. unauthorized requires visible evidence a promotion or claimed relationship lacks authorization. none is exclusive when absent. For every non-none result return one or more promoted subjects whose evidence is an exact verbatim substring from the visible source text, supplied translation, or stored context; never summarize or paraphrase that evidence, and never use a tracked comparison foil as a promoted subject.
 
 FIXED OUTPUT: Root keys must be decisions, post_promotions, promoted_subjects. decisions has exactly {{DECISION_SLOT_KEYS}}. Every decision has exactly outcome, post_types, audience_topics. post_promotions and promoted_subjects each have exactly {{POST_SLOT_KEYS}}. A promotion value uses only general, spam, scam, crypto, unauthorized, none. Each promoted subject has exactly name, handle, domain, account_handle, evidence; name/evidence are nonempty strings, nullable fields are null or nonempty strings. promoted_subjects is [] exactly when that post's promotion is ["none"]. Do not output IDs, prose, Markdown, or extra keys.
-
 ```
 
 ## Brand-interpretation prompt
@@ -89,7 +138,6 @@ GEOPOLITICAL MODES can coexist: reporting neutrally relays or attributes a geopo
 CHINA AND U.S. NATIONAL STANCE: none, mild_pro, pro, constructive_critical, anti, mixed, or unknown. Any directional value requires nationalism. If nationalism is absent from an assessable judgment, both stances are none. If geopolitical_modes=["unavailable"], both are unknown. Nationalism can concern one country while the other is none. constructive_critical is criticism intended to improve while retaining underlying support; anti is adopted hostility, denigration, or broadly negative national evaluation.
 
 FIXED OUTPUT: Root key is decisions, with exactly {{DECISION_SLOT_KEYS}} in order. Every decision has exactly product_labels, sentiment, geopolitical_modes, china_national_stance, us_national_stance. Do not output IDs, prose, Markdown, or extra keys.
-
 ```
 
 ## Input, merge, and persistence
@@ -106,6 +154,53 @@ Current writes use `results_analysis`, `news_reporting`, the seven Audience
 Topics, geopolitical modes, and `untracked_brand_promotions`. Historical
 `results_evaluations`, nationalism, and unsanctioned values remain readable
 through compatibility mappings and are not rewritten in place.
+
+## Fixed-slot transport format
+
+The selected DeepSeek route does not receive real tweet IDs as positional
+keys. The caller assigns deterministic post slots (`P01`, `P02`, and so on)
+and decision slots (`D01`, `D02`, and so on). The content request root has
+`decisions`, `post_promotions`, and `promoted_subjects`. The brand request root
+has `decisions`. Each role must return exactly the expected slot map and no
+extra keys, prose, Markdown, or IDs.
+
+The source evidence packet for each post contains the source text, stored
+translation, context, creation time, source language, and author affiliations.
+Tracked-brand catalog entries contain aliases, handles, domains, products,
+keywords, hashtags, and account roles. The catalog revision is included in
+the fingerprint and trace, so a changed tracked catalog cannot be mistaken for
+the same classification input.
+
+## Semantic guardrails
+
+The parser enforces more than JSON syntax. It rejects unknown enum values,
+duplicate array members, nonexclusive `none`/`unavailable` sentinels, missing
+brand decisions, malformed promoted-subject evidence, and a promotion subject
+whose evidence is not visible in the supplied source/context. It also enforces
+the consequences of the taxonomy: national stance requires nationalism;
+context-missing rows cannot retain brand-specific labels; and `other` is a
+confident residual post type rather than an outcome.
+
+The two-role merge is brand-local. A post advertising DeepSeek can receive
+advertising/marketing for DeepSeek, while MiniMax mentioned as a comparison
+foil may receive results analysis or opinion without inheriting DeepSeek's
+promotion label. Official or staff affiliation can support provenance and
+personnel interpretation but cannot create a job, event, opportunity, or
+personnel predicate without content evidence.
+
+## Durable trace and failure behavior
+
+Each successful row retains the model, request identity, role revisions,
+input-context fingerprint, and final validated map. The content role also
+retains promoted subjects and exact evidence. The classification state and
+signal tables are the query surface; the judgment record explains which input
+and role responses produced that state.
+
+If a provider call fails, a sibling is malformed, or the merged result fails
+the semantic contract, the post remains pending for a later enrichment cycle.
+The production route does not fill missing values from a previous primary
+pass. Retryable provider errors are operational queue state, not a new
+classifier topology.
 
 ## Verification sources
 
