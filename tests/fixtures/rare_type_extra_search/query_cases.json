@@ -1,0 +1,23 @@
+{
+  "query_version": "rare-types-v2-2026-09-22",
+  "positive_shapes": [
+    {"id": "personnel-en", "query_fragment": "\"I've joined\""},
+    {"id": "appendix-openai-context", "query_fragment": "OpenAI"},
+    {"id": "appendix-anthropic-context", "query_fragment": "Anthropic"},
+    {"id": "personnel-zh-cn", "query_fragment": "\"我加入了\""},
+    {"id": "appendix-zh-cn-leave", "query_fragment": "\"我离开了\""},
+    {"id": "personnel-ja", "query_fragment": "\"に入社\""},
+    {"id": "unknown-ai-employer-context", "query_fragment": "(AI OR LLM OR \"machine learning\" OR OpenAI OR Anthropic)"},
+    {"id": "catalog-handle-only", "query_fragment": "\"I've joined @deepseek_ai\""},
+    {"id": "narrow-ml-job", "query_fragment": "\"ML engineer\""},
+    {"id": "bounded-event", "query_fragment": "\"AI conference\""},
+    {"id": "bounded-opportunity", "query_fragment": "\"applications close\""},
+    {"id": "ai-bounded-opportunity", "query_fragment": "(hackathon OR fellowship) (AI OR LLM)"},
+    {"id": "unbranded-release", "query_fragment": "\"step 5 preview\""}
+  ],
+  "forbidden_broad_alternatives": [
+    {"id": "bare-job-firehose", "query_fragment": "jobs OR careers OR opening OR apply"},
+    {"id": "bare-brand-join-chain", "query_fragment": "joined Qwen"},
+    {"id": "unsupported-brand-exclusion", "query_fragment": "-DeepSeek"}
+  ]
+}
