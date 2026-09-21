@@ -216,8 +216,7 @@ def first_authored_difference(spec: MockupSpec, rendered_html: str, *, locale: s
                 for index, child in enumerate(node.get("children", []))
                 if child.get("attrs", {}).get("data-pw-locale-btn") == "original"
             )
-            node["children"].insert(
-                original_index,
+            node["children"][original_index] = (
                 {
                     "tag": "button",
                     "attrs": {
@@ -227,22 +226,31 @@ def first_authored_difference(spec: MockupSpec, rendered_html: str, *, locale: s
                         "data-label-zh": "日文",
                     },
                     "children": [{"tag": "#text", "text": "ja"}],
-                },
+                }
             )
         if attrs.get("data-i18n") in chrome:
             node["children"] = [{"tag": "#text", "text": chrome[attrs["data-i18n"]]}]
         aria_key = attrs.get("data-i18n-aria")
         if aria_key and f"{aria_key}_aria" in chrome:
             attrs["aria-label"] = chrome[f"{aria_key}_aria"]
-        label = attrs.get("data-label-zh" if use_zh_labels else "data-label-en")
-        if label:
+        locale_key = attrs.get("data-pw-locale-btn")
+        if locale_key:
+            attrs.pop("data-label-en", None)
+            attrs.pop("data-label-zh", None)
+            node["children"] = [{
+                "tag": "#text",
+                "text": {"en": "en", "zh_cn": "中文", "ja": "日本語"}[locale_key],
+            }]
+        else:
+            label = attrs.get("data-label-zh" if use_zh_labels else "data-label-en")
+        if not locale_key and label:
             node["children"] = [{"tag": "#text", "text": label}]
         if "data-tz-widget" in attrs:
             attrs["title"] = chrome["tz_title"]
             attrs["aria-label"] = chrome["tz_title"]
-        if attrs.get("data-pw-locale-btn"):
+        if locale_key:
             attrs.pop("class", None)
-            if attrs["data-pw-locale-btn"] == locale:
+            if locale_key == locale:
                 attrs["class"] = "is-active"
         for index, child in enumerate(node.get("children", [])):
             if child.get("tag") != "#text":

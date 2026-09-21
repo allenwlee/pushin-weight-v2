@@ -127,6 +127,44 @@ def test_home_chart_counts_direct_jobs_with_the_same_filter_contract():
     assert excluded["totals"]["qwen"] == 0
 
 
+@pytest.mark.parametrize(
+    "audience_topics",
+    [
+        ["__unclassified__"],
+        ["__no_audience_topic__"],
+        ["local_inference"],
+    ],
+)
+def test_audience_topic_filters_exclude_classified_direct_jobs_from_feed_and_chart(
+    audience_topics,
+):
+    now = timezone.now()
+    brand = Brand.objects.create(nickname="qwen", display_name="Qwen")
+    _job(brand=brand, title="Audience-filtered role", seen_at=now - timedelta(minutes=2))
+    filters = {"audience_topics": audience_topics}
+
+    rows, _, _, _ = _feed_page_wire(
+        locale="en", window_days=1, filters=filters
+    )
+    payload = _build_home_chart_payload(
+        1,
+        filters,
+        now=now,
+        brand_projection=[
+            {
+                "nickname": "qwen",
+                "display_name": "Qwen",
+                "display_name_en": "Qwen",
+                "display_name_zh_cn": "通义千问",
+                "accent_color": "#000000",
+            }
+        ],
+    )
+
+    assert rows == []
+    assert payload["totals"]["qwen"] == 0
+
+
 def test_mixed_cursor_paginates_posts_and_jobs_without_duplicates():
     now = timezone.now()
     brand = Brand.objects.create(nickname="qwen", display_name="Qwen")

@@ -38,6 +38,17 @@
     'a-research': true,
     'a-finance': true,
     'a-other': true,
+    'distillation-a': true,
+    'licensing-b': true,
+    'api-a': true,
+    'agents-b': true,
+    'local-b': true,
+    'evaluation-a': true,
+    'cost-a': true,
+    'bug-a': true,
+    'complaint-a': true,
+    'testimony-a': true,
+    'idea-a': true,
     'icon-caret': true,
     'icon-sunrise': true,
     'icon-day': true,
@@ -70,13 +81,13 @@
       other: 'a-other'
     }),
     audience_topics: Object.freeze({
-      local_inference: 'icon-hands-on-hammer',
-      cost_performance: 'icon-compare',
-      model_distillation: 'icon-discourse',
-      evals_benchmarks: 'icon-compare',
-      openness_license: 'icon-announce',
-      agents_tools: 'a-opportunity',
-      api_developer_surface: 'a-research'
+      local_inference: 'local-b',
+      cost_performance: 'cost-a',
+      model_distillation: 'distillation-a',
+      evals_benchmarks: 'evaluation-a',
+      openness_license: 'licensing-b',
+      agents_tools: 'agents-b',
+      api_developer_surface: 'api-a'
     }),
     geopolitical_modes: Object.freeze({
       reporting: 'icon-discourse',
@@ -84,10 +95,10 @@
       nationalism: 'icon-nationalism'
     }),
     product_labels: Object.freeze({
-      bug: 'icon-question',
-      complaint: 'icon-sentiment-negative',
-      testimonial: 'icon-star',
-      ideas_requests: 'icon-event',
+      bug: 'bug-a',
+      complaint: 'complaint-a',
+      testimonial: 'testimony-a',
+      ideas_requests: 'idea-a',
       investigate_claim: 'icon-unsanctioned',
       misinformation: 'icon-unsanctioned'
     }),

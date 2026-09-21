@@ -168,7 +168,7 @@ def test_stateful_filter_actions_keep_browser_and_reference_model_aligned() -> N
                 )
                 self.expected = set_control(self.expected, "unsanctioned", mode)
 
-            @rule(locale=st.sampled_from(["en", "zh_cn", "original"]))
+            @rule(locale=st.sampled_from(["en", "zh_cn", "ja"]))
             def locale(self, locale: str) -> None:
                 self.page.evaluate("value => window.pwFilter.setPreference('locale', value)", locale)
                 self.expected = set_control(self.expected, "locale", locale)

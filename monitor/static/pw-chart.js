@@ -580,6 +580,13 @@
         pointHitRadius: granularity === 'minute' ? 8 : 0,
         tension: granularity === 'minute' ? 0.3 : 0,
         fill: false,
+        segment: granularity === 'day' && Number(payload.window_days) > 1
+          ? {
+              borderDash: function (context) {
+                return context.p1DataIndex === days.length - 1 ? [4, 4] : undefined;
+              },
+            }
+          : undefined,
         _brandIndex: brandIndex,
         _isTotalLine: true,
       });

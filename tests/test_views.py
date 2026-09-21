@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.test import override_settings
 
 from monitor.views import (
     _decode_cursor,
@@ -633,6 +634,40 @@ class TestFeedViewIntegration:
         assert "hx-trigger" not in chart_region
         assert "hx-swap" not in chart_region
         assert '<canvas class="home-chart"' in chart_region
+
+    @pytest.mark.requires_postgres
+    @override_settings(APP_VERSION="9.9.9")
+    def test_owned_full_pages_share_the_runtime_version_footer(
+        self, client, django_user_model
+    ):
+        from core.models import Brand
+
+        user = django_user_model.objects.create_user(
+            username="footer-user", password="pass"
+        )
+        Brand.objects.get_or_create(
+            nickname="footer-brand", defaults={"display_name": "Footer Brand"}
+        )
+        client.force_login(user)
+        expected = "Made with ❤️ in Yokohama. v9.9.9."
+        for route in ("/", "/internal/", "/brands/footer-brand/"):
+            response = client.get(route, secure=True)
+            assert response.status_code == 200
+            html = response.content.decode("utf-8")
+            assert html.count(expected) == 1
+            assert '<footer class="site-footer">' in html
+
+    @pytest.mark.requires_postgres
+    def test_legacy_original_locale_normalizes_to_english(self, client):
+        response = client.get("/?locale=original", secure=True)
+        assert response.status_code == 200
+        html = response.content.decode("utf-8")
+        assert 'data-pw-locale="en"' in html
+        assert 'data-pw-locale-btn="original"' not in html
+
+        response = client.post("/locale/original/", secure=True)
+        assert response.status_code == 302
+        assert response.cookies["locale"].value == "en"
 
     def test_feed_accepts_sort_params(self, client, django_user_model):
         user = django_user_model.objects.create_user(

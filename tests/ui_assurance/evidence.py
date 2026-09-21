@@ -14,6 +14,7 @@ from tests.ui_assurance.covering import covered_tuples, covering_rows, required_
 from tests.ui_assurance.reference import (
     ALL,
     MULTI_CONTROLS,
+    RESIDUAL_VALUES,
     begin_request,
     bulk_action,
     filter_posts,
@@ -42,7 +43,8 @@ def _apply_control(state: dict[str, Any], control: str, value: str) -> dict[str,
     if control == "bulk_action":
         if value == "idle":
             return state
-        for target in MULTI_CONTROLS:
+        targets = RESIDUAL_VALUES if value == "other_only" else MULTI_CONTROLS
+        for target in targets:
             state = bulk_action(state, target, value)
         return state
     return set_control(state, control, value)
@@ -82,6 +84,11 @@ def _check_transition(
     elif value in {"all", "clear"}:
         expected = ALL if value == "all" else []
         assert all(state["filters"][target] == expected for target in MULTI_CONTROLS)
+    elif value == "other_only":
+        assert all(
+            state["filters"][target] == residuals
+            for target, residuals in RESIDUAL_VALUES.items()
+        )
     assert any(item.id == control for item in declaration.controls)
 
 
@@ -321,6 +328,40 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         explicit_other = next(post for post in fixture["posts"] if post["id"] == "p06")
         assert explicit_other["classification_status"] == "classified"
         assert explicit_other["post_types"] == ["other"]
+    elif invariant_id == "residual-filter-partitions-stay-distinct":
+        state = set_control(initial_state(), "window", 365)
+
+        def complete_feed(control: str, value: str) -> set[str]:
+            selected = set_control(state, control, value)
+            return {
+                *projection(
+                    fixture, set_control(selected, "unsanctioned", "off")
+                )["feed"],
+                *projection(
+                    fixture, set_control(selected, "unsanctioned", "only")
+                )["feed"],
+            }
+
+        assert complete_feed("post_type", "other") == {"p06"}
+        assert complete_feed("post_type", "__unclassified__") == {
+            "p02", "p03", "p04", "p05",
+        }
+        no_product = complete_feed("product_labels", "__no_product_signal__")
+        assert "p11" in no_product and "p02" not in no_product
+        assert complete_feed("product_labels", "__unclassified__") == {
+            "p02", "p03", "p04", "p05",
+        }
+    elif invariant_id == "ui-polish-contract-agrees":
+        one_day = projection(fixture, initial_state())
+        seven_day = projection(
+            fixture, set_control(initial_state(), "window", 7)
+        )
+        assert one_day["accessibility"]["locale_labels"] == ["en", "中文", "日本語"]
+        assert one_day["accessibility"]["role_other_icon_slot"] == "empty-aligned"
+        assert len(one_day["accessibility"]["taxonomy_glyphs"]) == 11
+        assert one_day["accessibility"]["footer"] == "runtime-package-version"
+        assert one_day["chart"]["final_segment"] == "solid"
+        assert seven_day["chart"]["final_segment"] == "dotted-current-day"
     else:
         raise AssertionError(f"unimplemented invariant: {invariant_id}")
 
@@ -382,6 +423,7 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         assert projection(fixture, state)["chart"] == {
             "window": 1,
             "series": {"mimo": 1},
+            "final_segment": "solid",
         }
     elif seed_id == "unsanctioned-only-off-partition":
         _check_invariant(fixture, "flagged-partition-is-exact")
@@ -444,6 +486,12 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
             set_control(initial_state(), "product_labels", "bug"),
         )["feed"]
         assert with_products == ["p01", "p09"]
+    elif seed_id == "other-only-keeps-residual-states-distinct":
+        state = initial_state()
+        for control in RESIDUAL_VALUES:
+            state = bulk_action(state, control, "other_only")
+            assert state["filters"][control] == RESIDUAL_VALUES[control]
+        _check_invariant(fixture, "residual-filter-partitions-stay-distinct")
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 

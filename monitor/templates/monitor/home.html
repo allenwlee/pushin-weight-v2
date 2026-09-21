@@ -8,6 +8,7 @@
   <title>{{ app_name_zh }} {{ app_name_en }}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=feed-inspection1">
+  <link rel="stylesheet" href="{% static 'site-footer.css' %}">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
@@ -49,17 +50,11 @@
       </h1>
       <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% elif is_ja_chrome %}表示言語{% else %}Display language{% endif %}" data-i18n-aria="locale">
         <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
-                data-pw-locale-btn="en"
-                data-label-en="en" data-label-zh="英文" data-label-ja="英語">{% if is_zh_chrome %}英文{% elif active_locale == 'ja' %}英語{% else %}en{% endif %}</button>
+                data-pw-locale-btn="en">en</button>
         <button type="button"{% if is_zh_chrome %} class="is-active"{% endif %}
-                data-pw-locale-btn="zh_cn"
-                data-label-en="zh-cn" data-label-zh="中文" data-label-ja="中国語">{% if is_zh_chrome %}中文{% elif active_locale == 'ja' %}中国語{% else %}zh-cn{% endif %}</button>
+                data-pw-locale-btn="zh_cn">中文</button>
         <button type="button"{% if active_locale == 'ja' %} class="is-active"{% endif %}
-                data-pw-locale-btn="ja"
-                data-label-en="ja" data-label-zh="日文" data-label-ja="日本語">{% if is_zh_chrome %}日文{% elif active_locale == 'ja' %}日本語{% else %}ja{% endif %}</button>
-        <button type="button"{% if active_locale == 'original' %} class="is-active"{% endif %}
-                data-pw-locale-btn="original"
-                data-label-en="original" data-label-zh="原文" data-label-ja="原文">{% if is_zh_chrome or active_locale == 'ja' %}原文{% else %}original{% endif %}</button>
+                data-pw-locale-btn="ja">日本語</button>
       </nav>
     </div>
     <div class="topbar-controls">
@@ -69,7 +64,7 @@
                   {% if home_window_days == n %}class="is-active"{% endif %}
                   data-pw-window-btn="{{ n }}" data-window="{{ n }}"
                   {% if n == 1 %}data-label-en="1d" data-label-zh="1天" data-label-ja="1日"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天" data-label-ja="7日"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天" data-label-ja="30日"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天" data-label-ja="365日"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d" data-label-ja="{{ n }}日"{% endif %}>
-            {% if active_locale == 'en' or active_locale == 'original' %}
+            {% if active_locale == 'en' %}
               {% if n == 1 %}1d{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
             {% elif active_locale == 'ja' %}
               {% if n == 1 %}1日{% elif n == 7 %}7日{% elif n == 30 %}30日{% elif n == 365 %}365日{% else %}{{ n }}日{% endif %}
@@ -159,9 +154,10 @@
         <span class="title" data-i18n="pill_sentiment">{% if is_zh_chrome %}情绪{% elif is_ja_chrome %}感情{% else %}Sentiment{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}情绪{% elif is_ja_chrome %}感情{% else %}Sentiment{% endif %}">
+          {% include "monitor/_filter_bulk_actions.html" %}
           <div class="dd-grid cols-2">
             {% for entry in sentiment_entries %}
-              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="sentiment" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="sentiment" value="{{ entry.key }}" checked{% if entry.residual %} data-pw-residual{% endif %}><span data-pw-semantic-icon data-pw-semantic-family="sentiment" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -172,9 +168,10 @@
         <span class="title" data-i18n="pill_post_type">{% if is_zh_chrome %}帖子类型{% elif is_ja_chrome %}投稿タイプ{% else %}Post Type{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}帖子类型{% elif is_ja_chrome %}投稿タイプ{% else %}Post Type{% endif %}">
+          {% include "monitor/_filter_bulk_actions.html" %}
           <div class="dd-grid cols-3">
             {% for entry in post_type_entries %}
-              <label><input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="post_types" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="post_types" value="{{ entry.key }}" checked{% if entry.residual %} data-pw-residual{% endif %}><span data-pw-semantic-icon data-pw-semantic-family="post_types" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -202,9 +199,10 @@
         <span class="title" data-i18n="pill_role">{% if is_zh_chrome %}角色{% elif is_ja_chrome %}役割{% else %}Role{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}角色{% elif is_ja_chrome %}役割{% else %}Role{% endif %}">
+          {% include "monitor/_filter_bulk_actions.html" %}
           <div class="dd-grid cols-2">
             {% for entry in role_entries %}
-              <label><input type="checkbox" data-pw-filter-group="role" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="role" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="role" value="{{ entry.key }}" checked{% if entry.residual %} data-pw-residual{% endif %}><span data-pw-semantic-icon data-pw-semantic-family="role" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -215,9 +213,10 @@
         <span class="title" data-i18n="pill_audience_topics">{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}">
+          {% include "monitor/_filter_bulk_actions.html" %}
           <div class="dd-grid cols-3">
             {% for entry in audience_topic_entries %}
-              <label><input type="checkbox" data-pw-filter-group="audience_topics" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
+              <label><input type="checkbox" data-pw-filter-group="audience_topics" value="{{ entry.key }}" checked{% if entry.residual %} data-pw-residual{% endif %}><span data-pw-semantic-icon data-pw-semantic-family="audience_topics" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -253,9 +252,10 @@
         <span class="title" data-i18n="pill_product_labels">{% if is_zh_chrome %}产品{% elif is_ja_chrome %}製品{% else %}Products{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}产品信号{% elif is_ja_chrome %}製品シグナル{% else %}Product signals{% endif %}">
+          {% include "monitor/_filter_bulk_actions.html" %}
           <div class="dd-grid cols-3">
             {% for entry in product_label_entries %}
-              <label{% if entry.help %} title="{{ entry.help }}"{% endif %}><input type="checkbox" data-pw-filter-group="product_labels" value="{{ entry.key }}" checked><span data-pw-semantic-icon data-pw-semantic-family="product_labels" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
+              <label{% if entry.help %} title="{{ entry.help }}"{% endif %}><input type="checkbox" data-pw-filter-group="product_labels" value="{{ entry.key }}" checked{% if entry.residual %} data-pw-residual{% endif %}><span data-pw-semantic-icon data-pw-semantic-family="product_labels" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
         </div>
@@ -376,6 +376,7 @@
     </div>
   </div>
 
+  {% include "monitor/_site_footer.html" %}
 </div>
 </body>
 </html>

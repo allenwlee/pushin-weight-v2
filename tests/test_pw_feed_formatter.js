@@ -118,6 +118,22 @@ assertEq(pwIcon.semanticSymbol('sentiment', 'negative'), 'icon-sentiment-negativ
 });
 assertEq(pwIcon.semanticClass('role', 'staff'), 'role-staff',
   'role filter colors share the semantic class registry');
+[
+  ['audience_topics', 'local_inference', 'local-b'],
+  ['audience_topics', 'cost_performance', 'cost-a'],
+  ['audience_topics', 'model_distillation', 'distillation-a'],
+  ['audience_topics', 'evals_benchmarks', 'evaluation-a'],
+  ['audience_topics', 'openness_license', 'licensing-b'],
+  ['audience_topics', 'agents_tools', 'agents-b'],
+  ['audience_topics', 'api_developer_surface', 'api-a'],
+  ['product_labels', 'bug', 'bug-a'],
+  ['product_labels', 'complaint', 'complaint-a'],
+  ['product_labels', 'testimonial', 'testimony-a'],
+  ['product_labels', 'ideas_requests', 'idea-a'],
+].forEach(function (entry) {
+  assertEq(pwIcon.semanticSymbol(entry[0], entry[1]), entry[2],
+    entry[0] + ' ' + entry[1] + ' uses the owner-selected glyph');
+});
 
 // Anchor `now` so the tests are deterministic.
 const now = new Date('2026-07-15T21:00:00+00:00');

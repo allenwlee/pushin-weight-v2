@@ -32,6 +32,7 @@
       lens_closed: '闭源',
       btn_all: '全选',
       btn_clear: '清空',
+      btn_other: '仅其他',
       feed_title: '本窗口最新',
       tz_local: '本地',
       tz_title: '切换 本地 ⇄ 加州时间'
@@ -53,6 +54,7 @@
       lens_closed: 'Closed',
       btn_all: 'all',
       btn_clear: 'clear',
+      btn_other: 'other only',
       feed_title: 'Latest in window',
       tz_local: 'local',
       tz_title: 'Toggle local ⇄ California time'
@@ -74,6 +76,7 @@
       lens_closed: 'クローズド',
       btn_all: 'すべて',
       btn_clear: 'クリア',
+      btn_other: 'その他のみ',
       feed_title: 'この期間の最新投稿',
       tz_local: '現地',
       tz_title: '現地時間 ⇄ カリフォルニア時間'
@@ -88,7 +91,7 @@
   function selectedLocale(locale) {
     if (chromeLocale(locale) === 'zh_cn') return 'zh_cn';
     if (chromeLocale(locale) === 'ja') return 'ja';
-    return locale === 'original' ? 'original' : 'en';
+    return 'en';
   }
 
   function applyChrome(locale) {
@@ -110,7 +113,6 @@
     if (localeNav) {
       localeNav.setAttribute('aria-label', dict.locale_aria);
       localeNav.querySelectorAll('[data-pw-locale-btn]').forEach(function (button) {
-        button.textContent = button.getAttribute(useZh ? 'data-label-zh' : useJa ? 'data-label-ja' : 'data-label-en') || button.textContent;
         button.classList.toggle(
           'is-active',
           selectedLocale(button.getAttribute('data-pw-locale-btn')) === activeLocale
@@ -197,6 +199,12 @@
 
   function init() {
     var authored = document.body.getAttribute('data-pw-locale') || 'zh_cn';
+    if (window.pwFilter && window.pwFilter.needsLegacyLocaleMigration &&
+        window.pwFilter.needsLegacyLocaleMigration()) {
+      window.pwFilter.setPreference('locale', 'en');
+      postAndReload('/locale/en/');
+      return;
+    }
     if (window.pwFilter && window.pwFilter.getPreference && window.pwFilter.setPreference &&
         window.pwFilter.getPreference('locale') !== authored) {
       window.pwFilter.setPreference('locale', authored);

@@ -8,6 +8,7 @@ from pathlib import Path
 from tests.ui_assurance.reference import (
     ALL,
     MULTI_CONTROLS,
+    RESIDUAL_VALUES,
     begin_request,
     bulk_action,
     filter_posts,
@@ -53,6 +54,7 @@ def test_mimo_seven_to_one_race_commits_only_the_latest_generation() -> None:
     assert projection(FIXTURE, state)["chart"] == {
         "window": 1,
         "series": {"mimo": 1},
+        "final_segment": "solid",
     }
 
 
@@ -123,6 +125,34 @@ def test_every_multi_select_bulk_clear_and_all_is_reversible() -> None:
         restored = bulk_action(cleared, control, "all")
         assert cleared["filters"][control] == []
         assert restored["filters"][control] == ALL
+
+
+def test_other_only_selects_exact_residual_values() -> None:
+    for control, residuals in RESIDUAL_VALUES.items():
+        selected = bulk_action(initial_state(), control, "other_only")
+        assert selected["filters"][control] == residuals
+
+
+def test_residual_filter_partitions_distinguish_empty_from_unclassified() -> None:
+    state = set_control(initial_state(), "window", 365)
+
+    def complete_feed(control: str, value: str) -> set[str]:
+        selected = set_control(state, control, value)
+        return {
+            *projection(FIXTURE, set_control(selected, "unsanctioned", "off"))["feed"],
+            *projection(FIXTURE, set_control(selected, "unsanctioned", "only"))["feed"],
+        }
+
+    explicit_other = complete_feed("post_type", "other")
+    unclassified = complete_feed("post_type", "__unclassified__")
+    no_product = complete_feed("product_labels", "__no_product_signal__")
+    product_unclassified = complete_feed("product_labels", "__unclassified__")
+
+    assert explicit_other == {"p06"}
+    assert unclassified == {"p02", "p03", "p04", "p05"}
+    assert "p11" in no_product
+    assert "p02" not in no_product
+    assert product_unclassified == {"p02", "p03", "p04", "p05"}
 
 
 def test_hover_freeze_is_transient_brand_only_and_one_day_only() -> None:

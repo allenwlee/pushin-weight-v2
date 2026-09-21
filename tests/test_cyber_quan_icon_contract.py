@@ -17,6 +17,7 @@ FULL_SPRITE_SHA256 = "9a5fd90add8e5d60baf87796054b0211fbb94d9ad92e952fc5133465eb
 ALTERNATE_SOURCE = REPO_ROOT / "docs/ideation/2026-08-29-161106-cyber-quan-icon-alts.html"
 ALTERNATE_SOURCE_SHA256 = "dae29084a247656169dd3e076f0d616390c4fe6f791c697a38a7f8076ad55d81"
 SPRITE = REPO_ROOT / "monitor/templates/monitor/_cyber_quan_sprite.html"
+SELECTED_SOURCE = REPO_ROOT / "docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg"
 HELPER = REPO_ROOT / "monitor/static/pw-icons.js"
 HOME_CSS = REPO_ROOT / "monitor/static/home-v20.css"
 
@@ -61,7 +62,22 @@ SOURCE_SYMBOLS = (
     "icon-night",
 )
 
+SELECTED_SYMBOLS = (
+    "distillation-a",
+    "licensing-b",
+    "api-a",
+    "agents-b",
+    "local-b",
+    "evaluation-a",
+    "cost-a",
+    "bug-a",
+    "complaint-a",
+    "testimony-a",
+    "idea-a",
+)
+
 RUNTIME_SYMBOLS = (
+    *SELECTED_SYMBOLS,
     "mark-quiet",
     "icon-heart",
     "icon-reply",
@@ -166,7 +182,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     view_boxes = {symbol_id: view_box for symbol_id, view_box, _ in symbols}
 
     assert tuple(symbol_id for symbol_id, _, _ in symbols) == RUNTIME_SYMBOLS
-    assert len(set(RUNTIME_SYMBOLS)) == 40
+    assert len(set(RUNTIME_SYMBOLS)) == 51
     assert view_boxes["mark-quiet"] == "4.24 2.3494 15.55 19.2724"
     assert all(
         view_box == "0 0 24 24"
@@ -190,7 +206,9 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     dossier_runtime_symbols = tuple(
         symbol_id
         for symbol_id in RUNTIME_SYMBOLS
-        if symbol_id != "icon-role-badge" and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
+        if symbol_id != "icon-role-badge"
+        and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
+        and symbol_id not in SELECTED_SYMBOLS
     )
     expected_runtime_symbols = {
         symbol_id: re.sub(
@@ -205,7 +223,9 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     assert {
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, _, body in symbols
-        if symbol_id != "icon-role-badge" and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
+        if symbol_id != "icon-role-badge"
+        and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
+        and symbol_id not in SELECTED_SYMBOLS
     } == expected_runtime_symbols
     runtime_bodies = {
         symbol_id: re.sub(r"\s+", "", body) for symbol_id, _, body in symbols
@@ -216,6 +236,13 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, body in LOCKED_COLUMN_A_SYMBOLS.items()
     }
+    selected_bodies = {
+        symbol_id: re.sub(r"\s+", "", body)
+        for symbol_id, _, body in _symbols(SELECTED_SOURCE.read_text(encoding="utf-8"))
+    }
+    assert {
+        symbol_id: runtime_bodies[symbol_id] for symbol_id in SELECTED_SYMBOLS
+    } == selected_bodies
     assert not any(symbol_id.startswith("b-") for symbol_id in runtime_bodies)
     assert set(APPROVED_ALTERNATE_SYMBOLS) == {
         "icon-rise",

@@ -128,13 +128,21 @@ class HomeV22TopbarLayoutTests(PostgreSQLV22TestCase):
         self.assertIn('class="window-toggle locale-toggle"', body,
                       "locale nav must carry both classes per mockup L848")
 
-    def test_locale_buttons_have_mockup_labels(self):
-        """Mockup labels: 英文 / 中文 / 原文 (data-label-zh attrs)."""
+    def test_locale_buttons_keep_fixed_autonyms(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        for label in ("英文", "中文", "原文"):
-            self.assertIn(f'data-label-zh="{label}"', body,
-                          f"locale button label {label} missing")
+        for locale, label in (("en", "en"), ("zh_cn", "中文"), ("ja", "日本語")):
+            self.assertRegex(
+                body,
+                rf'data-pw-locale-btn="{locale}"[^>]*>{label}</button>',
+            )
+        self.assertNotIn('data-pw-locale-btn="original"', body)
+        import re
+        locale_nav = re.search(
+            r'<nav class="window-toggle locale-toggle".*?</nav>', body, re.DOTALL
+        )
+        self.assertIsNotNone(locale_nav)
+        self.assertNotIn("data-label-zh", locale_nav.group(0))
 
     def test_window_toggle_in_topbar_controls(self):
         """Window toggle stays in .topbar-controls (separate from locale)."""

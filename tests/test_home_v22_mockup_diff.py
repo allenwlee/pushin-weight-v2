@@ -62,7 +62,9 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
     def test_root_route_matches_authored_shell_or_reports_first_difference(self):
         spec = load_spec()
         allowlist = validate_allowlist(json.loads(ALLOWLIST.read_text(encoding="utf-8")))
-        for locale in ("zh_cn", "en", "original"):
+        # The authored mockup is bilingual; Japanese product copy is covered
+        # by the dedicated locale browser contract.
+        for locale in ("zh_cn", "en"):
             with self.subTest(locale=locale):
                 rendered = self._render(locale)
                 assert_data_shape(spec, self.fixture, rendered, locale=locale, viewport=VIEWPORT)

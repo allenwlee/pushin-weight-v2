@@ -16,6 +16,7 @@ FEED_HEADLINE_CONTRACT = "docs/reference/2026-08-28-164425-feed-headline-usabili
 HOVER_FREEZE_CONTRACT = "docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
 GEOGRAPHY_CONTRACT = "docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
 FEED_INSPECTION_CONTRACT = "docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
+UI_POLISH_CONTRACT = "docs/reference/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md"
 STAGE1_PLAN = "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md"
 
 
@@ -25,7 +26,8 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == FEED_INSPECTION_CONTRACT
+    assert authorities["last_approved_contract"] == UI_POLISH_CONTRACT
+    assert UI_POLISH_CONTRACT in authorities["approved_product_intent"]
     assert FEED_INSPECTION_CONTRACT in authorities["approved_product_intent"]
     assert GEOGRAPHY_CONTRACT in authorities["approved_product_intent"]
     assert HOVER_FREEZE_CONTRACT in authorities["approved_product_intent"]
@@ -83,6 +85,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "staging.home.ai-enrichment-stage1",
             "description": "Owner-approved Stage 1 replacement of active discourse UI with ten post types and five independent product labels.",
+        },
+        {
+            "key": "production.home.ui-glyphs-footer-filters-locale-chart",
+            "description": "Owner-approved taxonomy glyphs, runtime footer, residual filter actions, locale autonyms, and incomplete-day chart delta.",
         },
         {
             "key": "trend.headline",
@@ -178,6 +184,13 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     ).read_text(encoding="utf-8")
     assert "Approval status: APPROVED" in feed_inspection_contract
     assert "staging delivery only" in feed_inspection_contract
+
+    ui_polish_contract = (REPO_ROOT / UI_POLISH_CONTRACT).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in ui_polish_contract
+    assert "authorizes delivery through production" in ui_polish_contract
+    assert "Made with ❤️ in Yokohama" in ui_polish_contract
+    assert "classified-but-empty" in ui_polish_contract
+    assert "Lighthouse, web-vitals" in ui_polish_contract
     assert "only control that opens the exact original post" in feed_inspection_contract
     assert "no cumulative 500-row ceiling" in feed_inspection_contract
     assert "stroke `4 / 3`" in feed_inspection_contract

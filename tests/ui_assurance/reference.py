@@ -18,6 +18,16 @@ MULTI_CONTROLS = {
     "product_labels": "product_labels",
     "audience_topics": "audience_topics",
 }
+RESIDUAL_VALUES = {
+    "sentiment": ["__unclassified__"],
+    "post_type": ["other", "__unclassified__"],
+    "role": ["other"],
+    "product_labels": ["__no_product_signal__", "__unclassified__"],
+    "audience_topics": ["__no_audience_topic__", "__unclassified__"],
+}
+VIRTUAL_RESIDUAL_VALUES = {
+    "__unclassified__", "__no_product_signal__", "__no_audience_topic__"
+}
 
 
 @dataclass(frozen=True)
@@ -121,6 +131,8 @@ def bulk_action(state: dict[str, Any], control: str, action: str) -> dict[str, A
         return set_control(state, control, ALL)
     if action == "clear":
         return set_control(state, control, [])
+    if action == "other_only" and control in RESIDUAL_VALUES:
+        return set_control(state, control, RESIDUAL_VALUES[control])
     raise ValueError(f"unknown bulk action: {action}")
 
 
@@ -147,11 +159,34 @@ def settle_request(
     )
 
 
-def _matches_value(post: dict[str, Any], field: str, selected: Any) -> bool:
+def _matches_value(
+    post: dict[str, Any], control: str, field: str, selected: Any
+) -> bool:
     if selected == ALL:
         return True
     selected_values = set(selected)
     actual = post.get(field, [])
+    classified = post.get("classification_status") == "classified"
+    if control == "post_type":
+        if "__unclassified__" in selected_values and not classified:
+            return True
+    elif control == "product_labels":
+        if "__unclassified__" in selected_values and not classified:
+            return True
+        if "__no_product_signal__" in selected_values and classified and not actual:
+            return True
+    elif control == "audience_topics":
+        if "__unclassified__" in selected_values and not classified:
+            return True
+        if "__no_audience_topic__" in selected_values and classified and not actual:
+            return True
+    elif (
+        control == "sentiment"
+        and "__unclassified__" in selected_values
+        and not classified
+    ):
+        return True
+    selected_values.difference_update(VIRTUAL_RESIDUAL_VALUES)
     if isinstance(actual, list):
         return bool(selected_values.intersection(actual))
     return actual in selected_values
@@ -179,7 +214,7 @@ def filter_posts(
             ):
                 continue
         if not all(
-            _matches_value(post, field, filters[control])
+            _matches_value(post, control, field, filters[control])
             for control, field in MULTI_CONTROLS.items()
         ):
             continue
@@ -248,6 +283,14 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "freeze_point": state["freeze_point"],
             "locale_selected": [] if hover_freeze_active else [state["locale"]],
             "feed_title": "bucket_datetime" if hover_freeze_active else "default",
+            "locale_labels": ["en", "中文", "日本語"],
+            "role_other_icon_slot": "empty-aligned",
+            "taxonomy_glyphs": [
+                "local-b", "cost-a", "distillation-a", "evaluation-a",
+                "licensing-b", "agents-b", "api-a", "bug-a", "complaint-a",
+                "testimony-a", "idea-a",
+            ],
+            "footer": "runtime-package-version",
         },
         "persistence": {
             "locale": state["locale"],
@@ -280,6 +323,11 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
         "chart": {
             "window": int(state["filters"]["window"]),
             "series": series,
+            "final_segment": (
+                "dotted-current-day"
+                if int(state["filters"]["window"]) > 1
+                else "solid"
+            ),
         },
         "network": {
             "latest_generation": state["latest_generation"],

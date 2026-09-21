@@ -81,9 +81,11 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     ]
     assert "test_brand" not in controls["brands"]["values"]
     assert controls["sentiment"]["values"] == [
-        "__all__", "mixed", "negative", "neutral", "positive"
+        "__all__", "mixed", "negative", "neutral", "positive", "__unclassified__"
     ]
-    assert controls["post_type"]["values"] == ["__all__", *_DASHBOARD_POST_TYPE_KEYS]
+    assert controls["post_type"]["values"] == [
+        "__all__", *_DASHBOARD_POST_TYPE_KEYS, "__unclassified__"
+    ]
     assert controls["lang"]["values"] == ["__all__", *_DASHBOARD_LANG_FILTER_KEYS]
     assert controls["role"]["values"] == ["__all__", *_DASHBOARD_ROLE_FILTER_KEYS]
     assert controls["nationalism_cn"]["values"] == [
@@ -93,10 +95,12 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
         "__all__", *_DASHBOARD_NATIONALISM_KEYS
     ]
     assert controls["product_labels"]["values"] == [
-        "__all__", *_DASHBOARD_PRODUCT_LABEL_KEYS
+        "__all__", *_DASHBOARD_PRODUCT_LABEL_KEYS,
+        "__no_product_signal__", "__unclassified__",
     ]
     assert controls["audience_topics"]["values"] == [
         "__all__", *_DASHBOARD_AUDIENCE_TOPIC_KEYS,
+        "__no_audience_topic__", "__unclassified__",
     ]
     for control in (
         "geopolitical_modes", "china_national_stance",
@@ -104,12 +108,14 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     ):
         assert control not in controls
     assert controls["unsanctioned"]["values"] == ["off", "only"]
-    assert controls["locale"]["values"] == ["en", "zh_cn", "ja", "original"]
+    assert controls["locale"]["values"] == ["en", "zh_cn", "ja"]
     assert controls["window"]["values"] == ["1", "7", "30", "365"]
     assert controls["timezone"]["values"] == ["local", "ca"]
     assert controls["brand_lens"]["values"] == ["open", "closed"]
     assert controls["nationalism_lens"]["values"] == ["us", "cn"]
-    assert controls["bulk_action"]["values"] == ["idle", "all", "clear"]
+    assert controls["bulk_action"]["values"] == [
+        "idle", "all", "clear", "other_only"
+    ]
     assert controls["account_geography"]["values"] == [
         "none", "country", "hierarchy", "taiwan", "region"
     ]
@@ -156,4 +162,5 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "inspection-transfer-keeps-x-exclusive",
         "pagination-crosses-500-and-exhausts",
         "stage1-empty-products-and-statuses-remain-visible",
+        "other-only-keeps-residual-states-distinct",
     }

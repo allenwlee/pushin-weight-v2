@@ -8,6 +8,7 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
   {# CSS — served from x_monitor/static/ via Flask dev server for now; U8 moves to WhiteNoise. #}
   <link rel="stylesheet" href="{% static 'dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'site-footer.css' %}">
   {# JS — CDN for htmx + Chart.js; custom scripts loaded from static (will 404 until U8). #}
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
@@ -39,12 +40,12 @@
 
     <nav class="locale-toggle" aria-label="Display language">
       <span class="locale-toggle-label">{% trans "lang:" %}</span>
-      <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' %} is-active{% endif %}"
-              data-pw-locale-btn="zh_cn">中文</button>
       <button class="locale-btn{% if active_locale == 'en' %} is-active{% endif %}"
-              data-pw-locale-btn="en">EN</button>
-      <button class="locale-btn{% if active_locale == 'original' %} is-active{% endif %}"
-              data-pw-locale-btn="original">orig</button>
+              data-pw-locale-btn="en">en</button>
+      <button class="locale-btn{% if active_locale == 'zh_cn' or active_locale == 'zh-CN' or active_locale == 'zh_hans' %} is-active{% endif %}"
+              data-pw-locale-btn="zh_cn">中文</button>
+      <button class="locale-btn{% if active_locale == 'ja' or active_locale == 'ja-JP' %} is-active{% endif %}"
+              data-pw-locale-btn="ja">日本語</button>
     </nav>
   </header>
 
@@ -176,5 +177,6 @@
       {% trans "Spend panel — stubbed for U7." %} API endpoint not yet available.
     </div>
   </aside>
+  {% include "monitor/_site_footer.html" %}
 </body>
 </html>

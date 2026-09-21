@@ -638,6 +638,12 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'non-one-day total-series stroke and point radius remain unchanged');
   assert(JSON.stringify(Object.keys(sevenDay.charts[0].config.options.scales).sort()) === JSON.stringify(['x', 'y']),
     'non-1d config keeps the existing single date axis');
+  assert(typeof sevenDayTotal.segment.borderDash === 'function' &&
+    JSON.stringify(sevenDayTotal.segment.borderDash({ p1DataIndex: 6 })) === JSON.stringify([4, 4]) &&
+    sevenDayTotal.segment.borderDash({ p1DataIndex: 5 }) === undefined,
+    'multi-day totals dot only the final segment into today');
+  assert(!oneDayTotal.segment,
+    'one-day totals keep the existing intraday line treatment');
 
   console.log('--- one-day hover freeze lifecycle ---');
   const freezePayload = payload(1, 9, 'qwen');

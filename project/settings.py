@@ -12,6 +12,7 @@ WhiteNoise for static in production.
 """
 from __future__ import annotations
 
+from importlib.metadata import version as distribution_version
 from pathlib import Path
 
 import environ
@@ -23,6 +24,7 @@ from project.staging import validate_staging_environment
 # ============================================================================
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+APP_VERSION = distribution_version("x-monitor")
 
 # ============================================================================
 # Environment

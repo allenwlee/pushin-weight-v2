@@ -32,7 +32,7 @@ except ImportError:
 # Pinned assertions from docs/iterations/002-scenario-a
 EXPECTED_TIME_WINDOWS_EN = ["1d", "7d", "30d", "365d"]
 EXPECTED_TIME_WINDOWS_ZH = ["1天", "7天", "30天", "365天"]
-EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "original"}
+EXPECTED_LOCALE_TOGGLE = {"zh_cn", "en", "ja"}
 EXPECTED_POST_TYPE_KEYS = (
     "releases_updates", "hands_on_usage", "results_evaluations",
     "questions_requests", "advertising_marketing", "events", "opportunities",
@@ -285,7 +285,7 @@ class RegressionNet:
         # Check for the 3 locale buttons
         button_locales = re.findall(r'data-pw-locale-btn="(\w+)"', nav_html)
         actual = set(button_locales)
-        self.assert_("locale-toggle has 3 buttons (zh_cn/en/original)",
+        self.assert_("locale-toggle has 3 buttons (zh_cn/en/ja)",
                      actual == EXPECTED_LOCALE_TOGGLE,
                      f"got {actual}")
         # iter 15: locale nav must live inside .topbar-title-row (mockup L846-849).
@@ -293,12 +293,11 @@ class RegressionNet:
                      re.search(r'<div class="topbar-title-row"[^>]*>.*?locale-toggle.*?</div>\s*<div class="topbar-controls"',
                                html, re.DOTALL) is not None,
                      "locale-toggle not in .topbar-title-row (mockup-canon layout)")
-        # iter 15: labels carry mockup data-label-zh attrs (英文/中文/原文).
-        self.assert_("locale-toggle buttons carry data-label-zh attrs (mockup-canon)",
-                     'data-label-zh="英文"' in html
-                     and 'data-label-zh="中文"' in html
-                     and 'data-label-zh="原文"' in html,
-                     "mockup labels 英文/中文/原文 missing from locale buttons")
+        self.assert_("locale-toggle buttons use fixed autonyms",
+                     re.search(r'data-pw-locale-btn="en"[^>]*>en<', html) is not None
+                     and re.search(r'data-pw-locale-btn="zh_cn"[^>]*>中文<', html) is not None
+                     and re.search(r'data-pw-locale-btn="ja"[^>]*>日本語<', html) is not None,
+                     "expected en / 中文 / 日本語")
 
     def _check_defaults(self):
         """Net B (U2) — Defaults: window=1, locale=zh_cn, no cookie required.
@@ -759,11 +758,11 @@ class RegressionNet:
             en_ok,
             "English app name missing in HTML",
         )
-        # Locale toggle exposes 3 buttons (zh_cn / en / original)
+        # Locale toggle exposes fixed autonyms for English, Chinese, Japanese.
         locale_btns = re.findall(r'data-pw-locale-btn="(\w+)"', html)
         self.assert_(
-            "locale toggle exposes 3 buttons (zh_cn/en/original)",
-            set(locale_btns) == {"zh_cn", "en", "original"},
+            "locale toggle exposes 3 buttons (zh_cn/en/ja)",
+            set(locale_btns) == {"zh_cn", "en", "ja"},
             f"got {set(locale_btns)}",
         )
 

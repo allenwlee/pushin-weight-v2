@@ -116,7 +116,6 @@ SUPPORTED_LOCALES: tuple[str, ...] = (
     "ja",
     "ja-JP",
     "en",
-    "original",
 )
 
 _LOCALE_TO_COLUMN: dict[str, str] = {
@@ -173,6 +172,35 @@ _DASHBOARD_NATIONAL_STANCE_KEYS: tuple[str, ...] = (
 _DASHBOARD_UNTRACKED_PROMOTION_KEYS: tuple[str, ...] = (
     "general", "spam", "scam", "crypto", "unauthorized",
 ) if u18a_enabled("untracked_brand_promotions") else ()
+
+_FILTER_UNCLASSIFIED = "__unclassified__"
+_FILTER_NO_PRODUCT_SIGNAL = "__no_product_signal__"
+_FILTER_NO_AUDIENCE_TOPIC = "__no_audience_topic__"
+_HOME_RESIDUAL_KEYS: dict[str, frozenset[str]] = {
+    "post_types": frozenset({"other", _FILTER_UNCLASSIFIED}),
+    "role": frozenset({"other"}),
+    "product_labels": frozenset({_FILTER_NO_PRODUCT_SIGNAL, _FILTER_UNCLASSIFIED}),
+    "audience_topics": frozenset({_FILTER_NO_AUDIENCE_TOPIC, _FILTER_UNCLASSIFIED}),
+    "sentiment": frozenset({_FILTER_UNCLASSIFIED}),
+}
+_HOME_FILTER_TAXONOMY_FAMILIES: dict[str, str] = {
+    "post_types": "post_type",
+    "product_labels": "product_label",
+    "audience_topics": "audience_topic",
+    "geopolitical_modes": "geopolitical_mode",
+    "china_national_stance": "national_stance",
+    "us_national_stance": "national_stance",
+}
+_HOME_TAXONOMY_FILTER_KEYS: dict[str, str] = {
+    family: filter_key
+    for filter_key, family in _HOME_FILTER_TAXONOMY_FAMILIES.items()
+    if filter_key in {"post_types", "product_labels", "audience_topics"}
+}
+_HOME_RESIDUAL_LABELS: dict[str, tuple[str, str, str]] = {
+    _FILTER_UNCLASSIFIED: ("Unclassified", "未分类", "未分類"),
+    _FILTER_NO_PRODUCT_SIGNAL: ("No product signal", "无产品信号", "製品シグナルなし"),
+    _FILTER_NO_AUDIENCE_TOPIC: ("No assigned topic", "未分配主题", "トピック未割当"),
+}
 
 _DASHBOARD_POST_TYPE_ALIASES: dict[str, str] = {
     "buzz_releases": "releases_updates",
@@ -458,7 +486,7 @@ def _normalize_locale(locale: str | None) -> str:
     if not locale:
         return "zh_cn"
     if locale.casefold() == "original":
-        return "original"
+        return "en"
     if locale.casefold() == "zh-hans":
         return "zh_hans"
     if locale.casefold() in {"ja-jp", "ja_jp"}:
@@ -683,7 +711,7 @@ def _build_label_cache(
 def _dashboard_filter_entries(
     locale: str,
     sentiment_keys: list[str],
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Project stable filter keys to request-localized display labels."""
     keys_by_family = {
         "product_label": set(_DASHBOARD_PRODUCT_LABEL_KEYS),
@@ -698,18 +726,34 @@ def _dashboard_filter_entries(
     }
     label_cache = _build_label_cache(keys_by_family, locale)
     use_zh = _is_zh_locale(locale)
+    use_ja = _is_ja_locale(locale)
 
-    def localized(family: str, keys: tuple[str, ...] | list[str]) -> list[dict[str, str]]:
-        entries: list[dict[str, str]] = []
+    def localized(family: str, keys: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
         for key in keys:
             if family == "role" and key == "other":
-                label = "其他" if use_zh else "Other"
+                label = "其他" if use_zh else "その他" if use_ja else "Other"
             else:
                 label = _localize_classification_value(
                     family, key, locale, label_cache
                 ) or key
-            entries.append({"key": key, "label": label})
+            entries.append({
+                "key": key,
+                "label": label,
+                "residual": key in _HOME_RESIDUAL_KEYS.get(
+                    _HOME_TAXONOMY_FILTER_KEYS.get(family, family),
+                    frozenset(),
+                ),
+            })
         return entries
+
+    def residual_entry(key: str) -> dict[str, Any]:
+        en, zh, ja = _HOME_RESIDUAL_LABELS[key]
+        return {
+            "key": key,
+            "label": zh if use_zh else ja if use_ja else en,
+            "residual": True,
+        }
 
     lang_names = (
         _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN
@@ -729,11 +773,19 @@ def _dashboard_filter_entries(
                 ),
             }
             for entry in localized("product_label", _DASHBOARD_PRODUCT_LABEL_KEYS)
+        ] + [
+            residual_entry(_FILTER_NO_PRODUCT_SIGNAL),
+            residual_entry(_FILTER_UNCLASSIFIED),
         ],
-        "post_type_entries": localized("post_type", _DASHBOARD_POST_TYPE_KEYS),
+        "post_type_entries": localized("post_type", _DASHBOARD_POST_TYPE_KEYS) + [
+            residual_entry(_FILTER_UNCLASSIFIED),
+        ],
         "audience_topic_entries": localized(
             "audience_topic", _DASHBOARD_AUDIENCE_TOPIC_KEYS
-        ),
+        ) + [
+            residual_entry(_FILTER_NO_AUDIENCE_TOPIC),
+            residual_entry(_FILTER_UNCLASSIFIED),
+        ],
         "geopolitical_mode_entries": localized(
             "geopolitical_mode", _DASHBOARD_GEOPOLITICAL_MODE_KEYS
         ),
@@ -748,7 +800,9 @@ def _dashboard_filter_entries(
             {"key": key, "label": lang_names.get(key, key)}
             for key in _DASHBOARD_LANG_FILTER_KEYS
         ],
-        "sentiment_entries": localized("sentiment", sentiment_keys),
+        "sentiment_entries": localized("sentiment", sentiment_keys) + [
+            residual_entry(_FILTER_UNCLASSIFIED),
+        ],
         "nationalism_entries": localized(
             "nationalism", _DASHBOARD_NATIONALISM_KEYS
         ),
@@ -780,7 +834,6 @@ def _resolve_locale(request: HttpRequest) -> str:
         "en": "en",
         "ja": "ja",
         "ja-JP": "ja",
-        "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
     if hasattr(request, "session"):
@@ -2586,18 +2639,14 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             normalized[key] = "__all__"
             continue
         values = _bounded_filter_values(value)
-        family = {
-            "post_types": "post_type",
-            "product_labels": "product_label",
-            "audience_topics": "audience_topic",
-            "geopolitical_modes": "geopolitical_mode",
-            "china_national_stance": "national_stance",
-            "us_national_stance": "national_stance",
-        }.get(key)
+        family = _HOME_FILTER_TAXONOMY_FAMILIES.get(key)
         if family is not None:
             canonical_values: list[str] = []
             for item in values:
-                canonical = _dashboard_canonical_key(family, item)
+                if item in _HOME_RESIDUAL_KEYS.get(key, frozenset()):
+                    canonical = item
+                else:
+                    canonical = _dashboard_canonical_key(family, item)
                 if canonical is None:
                     unavailable.append(key)
                 elif canonical not in canonical_values:
@@ -2723,6 +2772,15 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             for nickname, classification in classifications_by_brand.items()
             if nickname in brands
         ]
+    classified = [
+        classification
+        for classification in scoped_classifications
+        if classification.get("classification_status") == "classified"
+    ]
+    has_unclassified = not scoped_classifications or any(
+        classification.get("classification_status") != "classified"
+        for classification in scoped_classifications
+    )
 
     # Independent product labels retain their post-brand provenance. Empty
     # product sets stay discoverable whenever the product control is at all.
@@ -2730,6 +2788,7 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     if product_labels is not None and product_labels != "__all__":
         if not product_labels:
             return False
+        selected_products = set(product_labels) - _HOME_RESIDUAL_KEYS["product_labels"]
         scoped_products = {
             value
             for classification in scoped_classifications
@@ -2737,7 +2796,15 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
         }
         if not classifications_by_brand:
             scoped_products = set(post.get("product_labels") or [])
-        if not scoped_products.intersection(product_labels):
+        product_match = bool(scoped_products.intersection(selected_products))
+        if _FILTER_NO_PRODUCT_SIGNAL in product_labels:
+            product_match = product_match or any(
+                not classification.get("product_labels")
+                for classification in classified
+            )
+        if _FILTER_UNCLASSIFIED in product_labels:
+            product_match = product_match or has_unclassified
+        if not product_match:
             return False
 
     # Post types
@@ -2752,7 +2819,10 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
         ]
         if not classifications_by_brand:
             post_pts = post.get("post_types") or []
-        if not any(p in post_types for p in post_pts):
+        type_match = any(p in post_types for p in post_pts)
+        if _FILTER_UNCLASSIFIED in post_types:
+            type_match = type_match or has_unclassified
+        if not type_match:
             return False
 
     # Sentiment
@@ -2769,7 +2839,10 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             post_sentiments = (
                 post.get("sentiments") or post.get("sentiment_keys") or []
             )
-        if not any(value in sentiment for value in post_sentiments):
+        sentiment_match = any(value in sentiment for value in post_sentiments)
+        if _FILTER_UNCLASSIFIED in sentiment:
+            sentiment_match = sentiment_match or has_unclassified
+        if not sentiment_match:
             return False
 
     # Role
@@ -2822,6 +2895,9 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             continue
         if not active:
             return False
+        selected_active = set(active) - _HOME_RESIDUAL_KEYS.get(
+            filter_key, frozenset()
+        )
         if filter_key.endswith("_stance"):
             values = {
                 classification.get(classification_key)
@@ -2844,7 +2920,18 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
                 values = set(post.get(classification_key) or []) if post.get(
                     f"{classification_key}_status"
                 ) == "available" else set()
-        if not values.intersection(active):
+        value_match = bool(values.intersection(selected_active))
+        if filter_key == "audience_topics":
+            if _FILTER_NO_AUDIENCE_TOPIC in active:
+                value_match = value_match or any(
+                    classification.get("classification_status") == "classified"
+                    and classification.get("audience_topics_status") == "available"
+                    and not classification.get("audience_topics")
+                    for classification in scoped_classifications
+                )
+            if _FILTER_UNCLASSIFIED in active:
+                value_match = value_match or has_unclassified
+        if not value_match:
             return False
 
     # Lang
@@ -2894,6 +2981,21 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
             return False
 
     return True
+
+
+def _scoped_classification_pairs(brand_scope: Any) -> QuerySet:
+    """Return post-brand pairs annotated with current classification state."""
+    pairs = PostBrand.objects.filter(post_id=OuterRef("tweet_id"))
+    if brand_scope not in (None, "__all__"):
+        pairs = pairs.filter(brand_id__in=brand_scope)
+    classified_state = PostBrandClassificationState.objects.filter(
+        post_id=OuterRef("post_id"),
+        brand_id=OuterRef("brand_id"),
+        contract_version=CONTRACT_VERSION,
+        taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+        outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+    )
+    return pairs.annotate(_is_classified=Exists(classified_state))
 
 
 def _filter_home_posts_queryset(
@@ -2948,6 +3050,7 @@ def _filter_home_posts_queryset(
             queryset = queryset.filter(**{lookup: active})
 
     brand_scope = normalized_filters.get("brands")
+    scoped_classification_pairs = _scoped_classification_pairs(brand_scope)
 
     active_types = normalized_filters.get("post_types")
     if active_types is not None and active_types != "__all__":
@@ -2960,13 +3063,25 @@ def _filter_home_posts_queryset(
             taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
-        stored_types = _dashboard_storage_keys("post_type", active_types)
-        matching_types = PostBrandSignal.objects.filter(
-            post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
-        ).filter(Exists(current_classified_edge))
-        if brand_scope not in (None, "__all__"):
-            matching_types = matching_types.filter(brand_id__in=brand_scope)
-        queryset = queryset.filter(Exists(matching_types))
+        selected_types = [
+            value for value in active_types if value != _FILTER_UNCLASSIFIED
+        ]
+        type_condition = Q()
+        if selected_types:
+            stored_types = _dashboard_storage_keys("post_type", selected_types)
+            matching_types = PostBrandSignal.objects.filter(
+                post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
+            ).filter(Exists(current_classified_edge))
+            if brand_scope not in (None, "__all__"):
+                matching_types = matching_types.filter(brand_id__in=brand_scope)
+            type_condition |= Q(Exists(matching_types))
+        if _FILTER_UNCLASSIFIED in active_types:
+            type_condition |= Q(Exists(
+                scoped_classification_pairs.filter(
+                    _is_classified=False
+                )
+            ))
+        queryset = queryset.filter(type_condition)
 
     active_products = normalized_filters.get("product_labels")
     if active_products is not None and active_products != "__all__":
@@ -2979,13 +3094,37 @@ def _filter_home_posts_queryset(
             taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
             outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
         )
-        stored_products = _dashboard_storage_keys("product_label", active_products)
-        matching_products = PostBrandProductLabel.objects.filter(
-            post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
-        ).filter(Exists(current_classified_edge))
-        if brand_scope not in (None, "__all__"):
-            matching_products = matching_products.filter(brand_id__in=brand_scope)
-        queryset = queryset.filter(Exists(matching_products))
+        selected_products = [
+            value for value in active_products
+            if value not in _HOME_RESIDUAL_KEYS["product_labels"]
+        ]
+        product_condition = Q()
+        if selected_products:
+            stored_products = _dashboard_storage_keys(
+                "product_label", selected_products
+            )
+            matching_products = PostBrandProductLabel.objects.filter(
+                post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
+            ).filter(Exists(current_classified_edge))
+            if brand_scope not in (None, "__all__"):
+                matching_products = matching_products.filter(brand_id__in=brand_scope)
+            product_condition |= Q(Exists(matching_products))
+        if _FILTER_NO_PRODUCT_SIGNAL in active_products:
+            no_product_pairs = scoped_classification_pairs.filter(
+                _is_classified=True
+            ).annotate(
+                _has_product=Exists(PostBrandProductLabel.objects.filter(
+                    post_id=OuterRef("post_id"), brand_id=OuterRef("brand_id")
+                ))
+            ).filter(_has_product=False)
+            product_condition |= Q(Exists(no_product_pairs))
+        if _FILTER_UNCLASSIFIED in active_products:
+            product_condition |= Q(Exists(
+                scoped_classification_pairs.filter(
+                    _is_classified=False
+                )
+            ))
+        queryset = queryset.filter(product_condition)
 
     active_topics = normalized_filters.get("audience_topics")
     if active_topics is not None and active_topics != "__all__":
@@ -2994,17 +3133,40 @@ def _filter_home_posts_queryset(
         audience_revision = AudienceTopicScheme.objects.filter(
             key="ai_audience_topics/v1"
         ).values_list("revision", flat=True).first()
-        if audience_revision is None:
-            return queryset.none()
-        matching_topics = PostBrandAudienceTopic.objects.filter(
-            post_id=OuterRef("tweet_id"),
-            concept__key__in=active_topics,
-            scheme_id="ai_audience_topics/v1",
-            scheme_revision=audience_revision,
-        )
-        if brand_scope not in (None, "__all__"):
-            matching_topics = matching_topics.filter(brand_id__in=brand_scope)
-        queryset = queryset.filter(Exists(matching_topics))
+        selected_topics = [
+            value for value in active_topics
+            if value not in _HOME_RESIDUAL_KEYS["audience_topics"]
+        ]
+        topic_condition = Q()
+        if selected_topics and audience_revision is not None:
+            matching_topics = PostBrandAudienceTopic.objects.filter(
+                post_id=OuterRef("tweet_id"),
+                concept__key__in=selected_topics,
+                scheme_id="ai_audience_topics/v1",
+                scheme_revision=audience_revision,
+            )
+            if brand_scope not in (None, "__all__"):
+                matching_topics = matching_topics.filter(brand_id__in=brand_scope)
+            topic_condition |= Q(Exists(matching_topics))
+        if _FILTER_NO_AUDIENCE_TOPIC in active_topics:
+            topic_edges = PostBrandAudienceTopic.objects.filter(
+                post_id=OuterRef("post_id"),
+                brand_id=OuterRef("brand_id"),
+                scheme_id="ai_audience_topics/v1",
+            )
+            if audience_revision is not None:
+                topic_edges = topic_edges.filter(scheme_revision=audience_revision)
+            no_topic_pairs = scoped_classification_pairs.filter(
+                _is_classified=True
+            ).annotate(_has_topic=Exists(topic_edges)).filter(_has_topic=False)
+            topic_condition |= Q(Exists(no_topic_pairs))
+        if _FILTER_UNCLASSIFIED in active_topics:
+            topic_condition |= Q(Exists(
+                scoped_classification_pairs.filter(
+                    _is_classified=False
+                )
+            ))
+        queryset = queryset.filter(topic_condition)
 
     active_geo = normalized_filters.get("geopolitical_modes")
     if active_geo is not None and active_geo != "__all__":
@@ -3075,42 +3237,52 @@ def _filter_home_posts_queryset(
             continue
         if not active:
             return queryset.none()
-        current_rows = PostBrandClassificationState.objects.filter(
-            post_id=OuterRef("tweet_id"),
-            contract_version=CONTRACT_VERSION,
-            taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
-            **{f"{current_field}__in": active},
-        )
-        if brand_scope not in (None, "__all__"):
-            current_rows = current_rows.filter(brand_id__in=brand_scope)
-
-        current_pair = PostBrandClassificationState.objects.filter(
-            post_id=OuterRef("post_id"),
-            brand_id=OuterRef("brand_id"),
-        )
-        historical_rows = (
-            legacy_model.objects.filter(post_id=OuterRef("tweet_id"))
-            .exclude(**{f"{legacy_field}__isnull": True})
-            .annotate(_has_current=Exists(current_pair))
-            .filter(_has_current=False)
-        )
-        if brand_scope not in (None, "__all__"):
-            historical_rows = historical_rows.filter(brand_id__in=brand_scope)
-        historical_rows = (
-            historical_rows.values("post_id", "brand_id")
-            .annotate(
-                _distinct_values=Count(legacy_field, distinct=True),
-                _selected_values=Count(
-                    legacy_field,
-                    distinct=True,
-                    filter=Q(**{f"{legacy_field}__in": active}),
-                ),
+        selected_values = [
+            value for value in active if value != _FILTER_UNCLASSIFIED
+        ]
+        axis_condition = Q()
+        if selected_values:
+            current_rows = PostBrandClassificationState.objects.filter(
+                post_id=OuterRef("tweet_id"),
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
+                **{f"{current_field}__in": selected_values},
             )
-            .filter(_distinct_values=1, _selected_values=1)
-        )
-        queryset = queryset.filter(
-            Q(Exists(current_rows)) | Q(Exists(historical_rows))
-        )
+            if brand_scope not in (None, "__all__"):
+                current_rows = current_rows.filter(brand_id__in=brand_scope)
+
+            current_pair = PostBrandClassificationState.objects.filter(
+                post_id=OuterRef("post_id"),
+                brand_id=OuterRef("brand_id"),
+            )
+            historical_rows = (
+                legacy_model.objects.filter(post_id=OuterRef("tweet_id"))
+                .exclude(**{f"{legacy_field}__isnull": True})
+                .annotate(_has_current=Exists(current_pair))
+                .filter(_has_current=False)
+            )
+            if brand_scope not in (None, "__all__"):
+                historical_rows = historical_rows.filter(brand_id__in=brand_scope)
+            historical_rows = (
+                historical_rows.values("post_id", "brand_id")
+                .annotate(
+                    _distinct_values=Count(legacy_field, distinct=True),
+                    _selected_values=Count(
+                        legacy_field,
+                        distinct=True,
+                        filter=Q(**{f"{legacy_field}__in": selected_values}),
+                    ),
+                )
+                .filter(_distinct_values=1, _selected_values=1)
+            )
+            axis_condition |= Q(Exists(current_rows)) | Q(Exists(historical_rows))
+        if axis == "sentiment" and _FILTER_UNCLASSIFIED in active:
+            axis_condition |= Q(Exists(
+                scoped_classification_pairs.filter(
+                    _is_classified=False
+                )
+            ))
+        queryset = queryset.filter(axis_condition)
 
     active_roles = normalized_filters.get("role")
     if active_roles is not None and active_roles != "__all__":
@@ -4367,6 +4539,7 @@ def _direct_jobs_enabled(normalized: dict[str, Any]) -> bool:
     if languages not in (None, "__all__") and "zh-hans" not in languages:
         return False
     for axis in (
+        "audience_topics",
         "product_labels",
         "sentiment",
         "cn_nationalism",
@@ -5189,7 +5362,6 @@ def set_locale(request: HttpRequest, locale: str) -> HttpResponse:
         "en": "en",
         "ja": "ja",
         "ja-JP": "ja",
-        "original": "en",
     }.get(normalized, "en")
     translation.activate(django_code)
     response = redirect(_safe_home_redirect(request, drop_query_keys=("locale",)))

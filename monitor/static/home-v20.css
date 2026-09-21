@@ -430,6 +430,9 @@
     justify-content: center;
   }
   .filter-dropdown .filter-option-icon:empty { display: none; }
+  .filter-dropdown [data-pw-semantic-family="role"][data-pw-semantic-key="other"]:empty {
+    display: inline-flex;
+  }
   .filter-dropdown .filter-choice-icon { width: 15px; height: 15px; }
   .filter-dropdown .filter-option-text { min-width: 0; }
   .filter-dropdown .tone-positive { color: var(--up); }

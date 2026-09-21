@@ -176,7 +176,7 @@ def test_brand_detail_locale_controls_include_japanese(client, django_user_model
         assert 'data-pw-locale-btn="en"' in body
         assert 'data-pw-locale-btn="zh_cn"' in body
         assert 'data-pw-locale-btn="ja"' in body
-        assert 'data-pw-locale-btn="original"' in body
+        assert 'data-pw-locale-btn="original"' not in body
 
     ja_response = client.get(f"/brands/{brand.nickname}/?locale=ja", secure=True)
     ja_body = ja_response.content.decode("utf-8")

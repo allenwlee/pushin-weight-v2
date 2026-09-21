@@ -15,7 +15,25 @@ from unittest.mock import patch
 import pytest
 from django.core.management import call_command
 
-from core.models import Post, PostUntrackedBrandPromotion, SentimentKey
+from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.models import (
+    Account,
+    AudienceTopicConcept,
+    AudienceTopicScheme,
+    Brand,
+    BrandAccount,
+    Post,
+    PostBrand,
+    PostBrandAudienceTopic,
+    PostBrandClassificationState,
+    PostBrandProductLabel,
+    PostBrandSignal,
+    PostTypeKey,
+    PostUntrackedBrandPromotion,
+    ProductLabelKey,
+    Role,
+    SentimentKey,
+)
 from monitor.views import (
     _display_role_key,
     _display_role_label,
@@ -199,6 +217,42 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertGreaterEqual(body.count('data-dd-scope="visible"'), 2,
                                 "expected scoped all/clear actions on brand lens")
 
+    def test_classification_filters_expose_atomic_bulk_actions_and_residual_rows(self):
+        body = self._get_home().content.decode("utf-8")
+        residuals = {
+            "sentiment": ("__unclassified__",),
+            "post_types": ("other", "__unclassified__"),
+            "role": ("other",),
+            "audience_topics": ("__no_audience_topic__", "__unclassified__"),
+            "product_labels": ("__no_product_signal__", "__unclassified__"),
+        }
+        ordered_groups = list(residuals)
+        for index, (group, values) in enumerate(residuals.items()):
+            start = body.index(f'data-group="{group}"')
+            following = [
+                body.find(f'data-group="{candidate}"', start + 1)
+                for candidate in ordered_groups[index + 1:]
+            ]
+            following = [position for position in following if position != -1]
+            section = body[start:min(following) if following else len(body)]
+            self.assertIn('data-dd-action="all"', section)
+            self.assertIn('data-dd-action="clear"', section)
+            self.assertIn('data-dd-action="other-only"', section)
+            for value in values:
+                self.assertRegex(
+                    section,
+                    rf'value="{value}"[^>]*data-pw-residual',
+                )
+
+    def test_role_other_keeps_an_empty_icon_alignment_slot(self):
+        body = self._get_home().content.decode("utf-8")
+        role = body.split('data-group="role"', 1)[1].split(
+            'data-group="audience_topics"', 1
+        )[0]
+        self.assertIn(
+            'data-pw-semantic-family="role" data-pw-semantic-key="other"', role
+        )
+
     def test_pw_filter_pills_js_loaded(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
@@ -211,6 +265,19 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         body = r.content.decode("utf-8")
         # The filter-bar nav has aria-label (used by screen readers)
         self.assertIn('aria-label="Filter groups"', body)
+
+    def test_locale_selector_uses_fixed_autonyms_and_has_no_original(self):
+        for locale in ("en", "zh_hans", "ja"):
+            with self.subTest(locale=locale):
+                body = self._get_home(locale).content.decode("utf-8")
+                locale_nav = body.split('class="window-toggle locale-toggle"', 1)[1].split(
+                    "</nav>", 1
+                )[0]
+                self.assertEqual(locale_nav.count("data-pw-locale-btn="), 3)
+                self.assertIn('data-pw-locale-btn="en">en</button>', locale_nav)
+                self.assertIn('data-pw-locale-btn="zh_cn">中文</button>', locale_nav)
+                self.assertIn('data-pw-locale-btn="ja">日本語</button>', locale_nav)
+                self.assertNotIn('data-pw-locale-btn="original"', locale_nav)
 
     def test_stage1_filter_pills_replace_discourse_in_preserved_order(self):
         r = self._get_home()
@@ -385,6 +452,240 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
 
         self.assertFalse(_post_matches_filter(sample, {"product_labels": ["bug"]}))
         self.assertTrue(_post_matches_filter(sample, {"product_labels": "__all__"}))
+
+    def test_residual_filter_matrix_keeps_empty_and_unclassified_distinct(self):
+        classified_empty = {
+            "brand_nicknames": ["qwen"],
+            "classifications_by_brand": {
+                "qwen": {
+                    "classification_status": "classified",
+                    "post_types": ["releases_updates"],
+                    "product_labels": [],
+                    "sentiments": ["positive"],
+                    "audience_topics": [],
+                    "audience_topics_status": "available",
+                },
+            },
+        }
+        unclassified = {
+            "brand_nicknames": ["qwen"],
+            "classifications_by_brand": {
+                "qwen": {
+                    "classification_status": "pending",
+                    "post_types": [],
+                    "product_labels": [],
+                    "sentiments": [],
+                    "audience_topics": [],
+                    "audience_topics_status": "unavailable",
+                },
+            },
+        }
+        self.assertTrue(_post_matches_filter(
+            classified_empty, {"product_labels": ["__no_product_signal__"]}
+        ))
+        self.assertFalse(_post_matches_filter(
+            classified_empty, {"product_labels": ["__unclassified__"]}
+        ))
+        self.assertTrue(_post_matches_filter(
+            classified_empty, {"audience_topics": ["__no_audience_topic__"]}
+        ))
+        self.assertTrue(_post_matches_filter(
+            unclassified, {"post_types": ["__unclassified__"]}
+        ))
+        self.assertTrue(_post_matches_filter(
+            unclassified, {"sentiment": ["__unclassified__"]}
+        ))
+
+    def test_queryset_residuals_keep_explicit_other_empty_and_unclassified_distinct(self):
+        now = datetime.now(timezone.utc)
+        brand = Brand.objects.create(nickname="residual-brand")
+        sentiment = SentimentKey.objects.get(key="positive")
+        other_type, _ = PostTypeKey.objects.get_or_create(key="other")
+        release_type, _ = PostTypeKey.objects.get_or_create(key="releases_updates")
+        bug, _ = ProductLabelKey.objects.get_or_create(key="bug")
+
+        explicit_other = Post.objects.create(
+            tweet_id="residual-explicit-other", text="other", created_at=now
+        )
+        classified_empty = Post.objects.create(
+            tweet_id="residual-classified-empty", text="empty", created_at=now
+        )
+        unclassified = Post.objects.create(
+            tweet_id="residual-unclassified", text="pending", created_at=now
+        )
+        for post in (explicit_other, classified_empty, unclassified):
+            PostBrand.objects.create(post=post, brand=brand)
+        for post in (explicit_other, classified_empty):
+            PostBrandClassificationState.objects.create(
+                post=post,
+                brand=brand,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                prompt_version="test",
+                model="test",
+                input_context_fingerprint=post.tweet_id,
+                outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+                sentiment=sentiment,
+            )
+        PostBrandSignal.objects.create(
+            post=explicit_other,
+            brand=brand,
+            post_type=other_type,
+            sentiment=sentiment,
+        )
+        PostBrandSignal.objects.create(
+            post=classified_empty,
+            brand=brand,
+            post_type=release_type,
+            sentiment=sentiment,
+        )
+        PostBrandProductLabel.objects.create(
+            post=explicit_other, brand=brand, product_label=bug
+        )
+
+        def ids(filters):
+            normalized = _normalize_home_filters({
+                "brands": [brand.nickname],
+                **filters,
+            })
+            return set(_filter_home_posts_queryset(
+                1, normalized, now=now + timedelta(seconds=1)
+            ).values_list("tweet_id", flat=True))
+
+        self.assertEqual(
+            ids({"post_types": ["other", "__unclassified__"]}),
+            {explicit_other.tweet_id, unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"product_labels": ["__no_product_signal__"]}),
+            {classified_empty.tweet_id},
+        )
+        self.assertEqual(
+            ids({"product_labels": ["__unclassified__"]}),
+            {unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"sentiment": ["__unclassified__"]}),
+            {unclassified.tweet_id},
+        )
+
+    def test_queryset_residuals_cover_audience_and_role_by_brand_scope(self):
+        now = datetime.now(timezone.utc)
+        brand_a = Brand.objects.create(nickname="residual-brand-a")
+        brand_b = Brand.objects.create(nickname="residual-brand-b")
+        official = Role.objects.get_or_create(key="official")[0]
+        official_account = Account.objects.create(
+            author_id="residual-official", handle="residualofficial"
+        )
+        other_account = Account.objects.create(
+            author_id="residual-other", handle="residualother"
+        )
+        BrandAccount.objects.create(
+            brand=brand_a, account=official_account, role=official
+        )
+        scheme = AudienceTopicScheme.objects.get(key="ai_audience_topics/v1")
+        topic = AudienceTopicConcept.objects.get(
+            scheme=scheme, key="local_inference"
+        )
+
+        mixed_topic = Post.objects.create(
+            tweet_id="residual-mixed-topic",
+            author=official_account,
+            text="topic",
+            created_at=now,
+        )
+        partial_unclassified = Post.objects.create(
+            tweet_id="residual-partial-unclassified",
+            author=other_account,
+            text="unclassified",
+            created_at=now,
+        )
+        for post in (mixed_topic, partial_unclassified):
+            for brand in (brand_a, brand_b):
+                PostBrand.objects.create(post=post, brand=brand)
+        for post, brand in (
+            (mixed_topic, brand_a),
+            (mixed_topic, brand_b),
+            (partial_unclassified, brand_b),
+        ):
+            PostBrandClassificationState.objects.create(
+                post=post,
+                brand=brand,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                prompt_version="test",
+                model="test",
+                input_context_fingerprint=f"{post.tweet_id}:{brand.nickname}",
+                outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
+                sentiment_id="positive",
+            )
+        PostBrandAudienceTopic.objects.create(
+            post=mixed_topic,
+            brand=brand_b,
+            concept=topic,
+            scheme=scheme,
+            scheme_revision=scheme.revision,
+            evidence={"fixture": True},
+            prompt_version="test",
+            model="test",
+            provider_role="classifier",
+        )
+
+        def ids(filters, brand_scope="__all__"):
+            normalized = _normalize_home_filters({
+                "brands": brand_scope,
+                **filters,
+            })
+            return set(_filter_home_posts_queryset(
+                1, normalized, now=now + timedelta(seconds=1)
+            ).values_list("tweet_id", flat=True))
+
+        self.assertEqual(
+            ids({"audience_topics": ["__no_audience_topic__"]}),
+            {mixed_topic.tweet_id, partial_unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids(
+                {"audience_topics": ["__no_audience_topic__"]},
+                [brand_a.nickname],
+            ),
+            {mixed_topic.tweet_id},
+        )
+        self.assertEqual(
+            ids(
+                {"audience_topics": ["__no_audience_topic__"]},
+                [brand_b.nickname],
+            ),
+            {partial_unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"audience_topics": ["__unclassified__"]}),
+            {partial_unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"audience_topics": ["local_inference"]}, [brand_b.nickname]),
+            {mixed_topic.tweet_id},
+        )
+        self.assertEqual(
+            ids({"audience_topics": ["local_inference"]}, [brand_a.nickname]),
+            set(),
+        )
+        self.assertEqual(
+            ids({"role": ["other"]}),
+            {partial_unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"role": ["other"]}, [brand_b.nickname]),
+            {mixed_topic.tweet_id, partial_unclassified.tweet_id},
+        )
+        self.assertEqual(
+            ids({"role": ["official"]}, [brand_a.nickname]),
+            {mixed_topic.tweet_id},
+        )
+        self.assertEqual(
+            ids({"role": ["official"]}, [brand_b.nickname]),
+            set(),
+        )
 
     def test_product_label_filter_keeps_brand_provenance(self):
         sample = {

@@ -28,6 +28,7 @@ def i18n_context(request: Any) -> dict[str, Any]:
     current_lang_name = lang_map.get(current_lang_code, current_lang_code)
 
     ctx: dict[str, Any] = {
+        "app_version": settings.APP_VERSION,
         "LANGUAGES": settings.LANGUAGES,
         "current_lang_code": current_lang_code,
         "current_lang_name": current_lang_name,

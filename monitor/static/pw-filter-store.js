@@ -23,6 +23,7 @@
     : 'anonymous';
   var storageKey = STORAGE_PREFIX + namespace;
   var legacyStorageKey = LEGACY_STORAGE_PREFIX + namespace;
+  var legacyOriginalLocale = false;
 
   function defaultFilters() {
     return {
@@ -116,6 +117,7 @@
     }
     try {
       if (parsed && parsed.version === STORAGE_VERSION && typeof parsed === 'object') {
+        legacyOriginalLocale = parsed.locale === 'original';
         window.localStorage.removeItem(legacyStorageKey);
         return parsed;
       }
@@ -123,6 +125,7 @@
       if (!legacyRaw) return null;
       var legacy = JSON.parse(legacyRaw);
       if (!legacy || legacy.version !== 1 || typeof legacy !== 'object') return null;
+      legacyOriginalLocale = legacy.locale === 'original';
       var migrated = {
         version: STORAGE_VERSION,
         locale: normalizeLocale(legacy.locale, 'zh_cn'),
@@ -222,7 +225,8 @@
   }
 
   function normalizeLocale(value, fallback) {
-    if (['zh_cn', 'zh-CN', 'zh_hans', 'ja', 'ja-JP', 'en', 'original'].indexOf(value) !== -1) return value;
+    if (value === 'original') return 'en';
+    if (['zh_cn', 'zh-CN', 'zh_hans', 'ja', 'ja-JP', 'en'].indexOf(value) !== -1) return value;
     return fallback;
   }
 
@@ -360,7 +364,7 @@
 
   function setPreference(key, value) {
     if (key === 'locale' && ['en', 'zh_cn', 'zh_hans', 'zh-CN', 'ja', 'ja-JP', 'original'].indexOf(value) !== -1) {
-      preferenceLocale = value;
+      preferenceLocale = value === 'original' ? 'en' : value;
     } else if (key === 'timezone') {
       preferenceTimezone = value === 'ca' ? 'ca' : 'local';
     } else {
@@ -438,6 +442,9 @@
     getPulseBrands: function () { return clone(pulseBrands); },
     getPreferences: function () { return preferencePayload(); },
     getPreference: function (key) { return preferencePayload()[key]; },
+    needsLegacyLocaleMigration: function () {
+      return legacyOriginalLocale && !explicitLocale;
+    },
     set: setFilter,
     setPreference: setPreference,
     setLens: setLens,

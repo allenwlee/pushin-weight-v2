@@ -189,10 +189,11 @@ def _release_a_mask(page: Page) -> bytes:
           // Stage 1 and U18A replace, add, and activation-gate taxonomy
           // controls. Removed controls leave no current DOM box to mask, so
           // the filter row is the smallest complete intentional surface.
-          // U20 adds Japanese as an equal product locale. The added control
-          // changes the width and positions of the existing locale buttons,
-          // so the complete locale switcher is the intentional surface.
-          document.querySelectorAll('.locale-toggle')
+          // Fixed locale autonyms and the Japanese replacement change the
+          // switcher's width and therefore reposition its sibling controls.
+          // Mask the containing title row so both newly occupied and vacated
+          // pixels are covered when the sibling controls move.
+          document.querySelectorAll('.topbar-title-row')
             .forEach(node => paint(node));
           // Preserve the same known Chromium rounded-edge seam allowance as
           // the reviewed icon mask above. This is a two-pixel raster boundary,

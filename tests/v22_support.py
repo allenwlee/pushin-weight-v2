@@ -23,12 +23,15 @@ from core.classification_contract import (
 )
 from core.models import (
     Account,
+    AudienceTopicConcept,
+    AudienceTopicScheme,
     Brand,
     BrandAccount,
     DiscourseKey,
     NationalismKey,
     Post,
     PostBrand,
+    PostBrandAudienceTopic,
     PostBrandClassificationState,
     PostBrandDiscourse,
     PostBrandProductLabel,
@@ -212,6 +215,25 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
     DiscourseKey.objects.get_or_create(key="genuine_hype")
     for key in ("none", "mild_pro", "pro"):
         NationalismKey.objects.get_or_create(key=key)
+    audience_scheme, _ = AudienceTopicScheme.objects.get_or_create(
+        key="ai_audience_topics/v1",
+        defaults={"revision": 1, "manifest_hash": "0" * 64},
+    )
+    selected_audience_topics = (
+        "local_inference",
+        "cost_performance",
+        "model_distillation",
+        "evals_benchmarks",
+        "openness_license",
+        "agents_tools",
+        "api_developer_surface",
+    )
+    audience_concepts = {
+        key: AudienceTopicConcept.objects.get_or_create(
+            scheme=audience_scheme, key=key
+        )[0]
+        for key in selected_audience_topics
+    }
 
     now = timezone.now()
     replacement_id = "v22-metadata-replacement"
@@ -381,6 +403,30 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
                 brand_id="minimax",
                 product_label_id="complaint",
             )
+        elif index == 9:
+            for product_label in (
+                "bug",
+                "complaint",
+                "testimonial",
+                "ideas_requests",
+            ):
+                PostBrandProductLabel.objects.create(
+                    post=post,
+                    brand=primary,
+                    product_label_id=product_label,
+                )
+            for topic, concept in audience_concepts.items():
+                PostBrandAudienceTopic.objects.create(
+                    post=post,
+                    brand=primary,
+                    concept=concept,
+                    scheme=audience_scheme,
+                    scheme_revision=audience_scheme.revision,
+                    evidence={"fixture": topic},
+                    prompt_version=PROMPT_VERSION,
+                    model="fixture-stage1",
+                    provider_role="classifier",
+                )
         if index == 1:
             PostUnsanctionedFlag.objects.create(post=post, flags="marketing_spam")
 
@@ -423,6 +469,7 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
         "replacement_id": replacement_id,
         "page_two_id": page_two_id,
         "brand_scope_id": brand_scope_id,
+        "selected_taxonomy_id": "v22-metadata-009",
         "pulse_expectations": {
             "order": [
                 "moonshot_kimi",

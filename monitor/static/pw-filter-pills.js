@@ -283,8 +283,10 @@
     if (dd.getAttribute("data-idea") === "a" || dd.getAttribute("data-idea") === "b") return;
     var boxes = dd.querySelectorAll(".dd-grid input[type=checkbox]");
     var action = btn.getAttribute("data-dd-action");
-    var on = action === "all";
-    boxes.forEach(function (b) { b.checked = on; });
+    boxes.forEach(function (b) {
+      b.checked = action === "all" ||
+        (action === "other-only" && b.hasAttribute("data-pw-residual"));
+    });
     refreshDots();
     commitToolbarGroup(boxes);
     e.preventDefault();

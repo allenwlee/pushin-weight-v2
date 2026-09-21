@@ -96,8 +96,10 @@ VIEWPORTS = {
     "desktop": {"width": 1440, "height": 960},
     "mobile": {"width": 390, "height": 844},
 }
-LOCALES = ("zh_cn", "en", "original")
-PRODUCT_LOCALES = ("zh_cn", "en", "ja", "original")
+# The authored visual oracle is bilingual. Product-locale tests separately
+# cover the complete three-locale selector.
+LOCALES = ("zh_cn", "en")
+PRODUCT_LOCALES = ("zh_cn", "en", "ja")
 REGION_SELECTORS = dict(AUTHORED_REGIONS)
 STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 # The threshold is intentionally below a wholly unrelated frame.  It is not a
@@ -827,11 +829,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 page.locator(
                                     '[data-pw-filter-group="product_labels"]'
                                 ).count(),
-                                4,
+                                6,
                             )
                             self.assertEqual(
                                 page.locator('[data-pw-filter-group="post_types"]').count(),
-                                13,
+                                14,
                             )
                             self.assertGreater(
                                 page.locator('[data-group="audience_topics"]').count(), 0
@@ -924,7 +926,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertGreater(box["width"], 0)
                             self.assertGreater(box["height"], 0)
                             controls = dropdown.locator(
-                                '[data-pw-filter-group="audience_topics"]'
+                                '[data-pw-filter-group="audience_topics"]:not([data-pw-residual])'
                             )
                             self.assertEqual(controls.count(), 7)
                             self.assertEqual(
@@ -932,12 +934,180 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 expected_keys,
                             )
                             self.assertEqual(
-                                dropdown.locator(".filter-option-text").all_inner_texts(),
+                                controls.evaluate_all(
+                                    "nodes => nodes.map(node => node.parentElement.querySelector('.filter-option-text').textContent.trim())"
+                                ),
                                 list(expected_labels),
                             )
                         finally:
                             context.close()
             finally:
+                browser.close()
+
+    def test_locale_autonyms_footer_and_legacy_original_normalization(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport in (VIEWPORTS["desktop"], VIEWPORTS["mobile"]):
+                    for locale in ("en", "zh_hans", "ja", "original"):
+                        with self.subTest(viewport=viewport, locale=locale):
+                            context = browser.new_context(
+                                viewport=viewport, timezone_id="Asia/Tokyo"
+                            )
+                            _freeze_clock(context)
+                            page = context.new_page()
+                            try:
+                                page.goto(
+                                    f"{self.live_server_url}/?locale={locale}",
+                                    wait_until="networkidle",
+                                )
+                                buttons = page.locator("[data-pw-locale-btn]")
+                                self.assertEqual(buttons.count(), 3)
+                                self.assertEqual(
+                                    buttons.all_inner_texts(), ["en", "中文", "日本語"]
+                                )
+                                expected_active = "en" if locale == "original" else (
+                                    "zh_cn" if locale == "zh_hans" else locale
+                                )
+                                self.assertEqual(
+                                    page.locator("[data-pw-locale-btn].is-active").get_attribute(
+                                        "data-pw-locale-btn"
+                                    ),
+                                    expected_active,
+                                )
+                                self.assertEqual(
+                                    page.locator("body").get_attribute("data-pw-locale"),
+                                    "en" if locale == "original" else locale,
+                                )
+                                footer = page.locator(".site-footer")
+                                self.assertEqual(
+                                    footer.inner_text(),
+                                    "Made with ❤️ in Yokohama. v0.2.0b1.",
+                                )
+                                footer.scroll_into_view_if_needed()
+                                box = footer.bounding_box()
+                                self.assertIsNotNone(box)
+                                self.assertGreater(box["width"], 0)
+                                self.assertGreater(box["height"], 0)
+                                self.assertEqual(
+                                    footer.evaluate("node => getComputedStyle(node).position"),
+                                    "static",
+                                )
+                            finally:
+                                context.close()
+            finally:
+                browser.close()
+
+    def test_classification_bulk_actions_are_atomic_and_residual_specific(self) -> None:
+        expected = {
+            "sentiment": ["__unclassified__"],
+            "post_types": ["other", "__unclassified__"],
+            "role": ["other"],
+            "audience_topics": ["__no_audience_topic__", "__unclassified__"],
+            "product_labels": ["__no_product_signal__", "__unclassified__"],
+        }
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport in (VIEWPORTS["desktop"], VIEWPORTS["mobile"]):
+                    context = browser.new_context(
+                        viewport=viewport, timezone_id="Asia/Tokyo"
+                    )
+                    _freeze_clock(context)
+                    page = context.new_page()
+                    try:
+                        page.goto(
+                            f"{self.live_server_url}/?locale=en",
+                            wait_until="networkidle",
+                        )
+                        page.wait_for_function("() => window.pwFilter")
+                        page.evaluate(
+                            """() => {
+                              window.__pwFilterEventCount = 0;
+                              document.addEventListener('pw:filter-change', () => {
+                                window.__pwFilterEventCount += 1;
+                              });
+                            }"""
+                        )
+                        for group, residuals in expected.items():
+                            with self.subTest(viewport=viewport, group=group):
+                                page.locator(f'[data-group="{group}"]').click()
+                                dropdown = page.locator("body > .filter-dropdown.is-portaled")
+                                self.assertTrue(dropdown.is_visible())
+                                page.evaluate("window.__pwFilterEventCount = 0")
+                                dropdown.locator('[data-dd-action="other-only"]').click()
+                                checked = dropdown.locator(
+                                    f'[data-pw-filter-group="{group}"]:checked'
+                                ).evaluate_all("nodes => nodes.map(node => node.value)")
+                                self.assertEqual(checked, residuals)
+                                self.assertEqual(
+                                    page.evaluate("window.__pwFilterEventCount"), 1
+                                )
+                                page.evaluate("window.__pwFilterEventCount = 0")
+                                dropdown.locator('[data-dd-action="all"]').click()
+                                self.assertEqual(
+                                    dropdown.locator(
+                                        f'[data-pw-filter-group="{group}"]:not(:checked)'
+                                    ).count(),
+                                    0,
+                                )
+                                self.assertEqual(
+                                    page.evaluate("window.__pwFilterEventCount"), 1
+                                )
+                                page.evaluate("window.__pwFilterEventCount = 0")
+                                dropdown.locator('[data-dd-action="clear"]').click()
+                                self.assertEqual(
+                                    dropdown.locator(
+                                        f'[data-pw-filter-group="{group}"]:checked'
+                                    ).count(),
+                                    0,
+                                )
+                                self.assertEqual(
+                                    page.evaluate("window.__pwFilterEventCount"), 1
+                                )
+                    finally:
+                        context.close()
+            finally:
+                browser.close()
+
+    def test_multi_day_chart_dots_only_the_segment_entering_today(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(
+                viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo"
+            )
+            _freeze_clock(context)
+            page = context.new_page()
+            try:
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                page.wait_for_function(
+                    "() => Chart.getChart(document.querySelector('canvas.home-chart'))"
+                )
+                self.assertTrue(page.evaluate(
+                    """() => Chart.getChart(document.querySelector('canvas.home-chart'))
+                      .data.datasets.filter(dataset => dataset._isTotalLine)
+                      .every(dataset => !dataset.segment)"""
+                ))
+                with page.expect_response(lambda response: "/chart.html?" in response.url):
+                    page.locator('[data-pw-window-btn="7"]').click()
+                page.wait_for_function(
+                    "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 7"
+                )
+                result = page.evaluate(
+                    """() => {
+                      const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                      const last = chart.data.labels.length - 1;
+                      return chart.data.datasets.filter(dataset => dataset._isTotalLine).map(dataset => ({
+                        final: dataset.segment.borderDash({p1DataIndex: last}),
+                        prior: dataset.segment.borderDash({p1DataIndex: last - 1}) || null,
+                      }));
+                    }"""
+                )
+                self.assertGreater(len(result), 0)
+                self.assertTrue(all(row["final"] == [4, 4] for row in result))
+                self.assertTrue(all(row["prior"] is None for row in result))
+            finally:
+                context.close()
                 browser.close()
 
     def test_mobile_touchend_fallback_opens_brand_dropdown(self) -> None:
@@ -2584,6 +2754,40 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "fixture feed IDs and chart totals must change together",
                     )
 
+                    sentiment_pill.press("Escape")
+                    residuals_by_group = {
+                        "sentiment": ["__unclassified__"],
+                        "post_types": ["other", "__unclassified__"],
+                        "role": ["other"],
+                        "audience_topics": [
+                            "__no_audience_topic__",
+                            "__unclassified__",
+                        ],
+                        "product_labels": [
+                            "__no_product_signal__",
+                            "__unclassified__",
+                        ],
+                    }
+                    for group, residuals in residuals_by_group.items():
+                        page.locator(f'[data-group="{group}"]').press("Enter")
+                        self.assertTrue(dropdown.is_visible())
+                        feed_response, _ = act(
+                            dropdown.locator('[data-dd-action="other-only"]').click
+                        )
+                        selected, _ = request_state(feed_response.url)
+                        self.assertEqual(selected[group], residuals)
+                        feed_response, _ = act(
+                            dropdown.locator('[data-dd-action="all"]').click
+                        )
+                        selected, _ = request_state(feed_response.url)
+                        self.assertEqual(selected[group], "__all__")
+                        feed_response, _ = act(
+                            dropdown.locator('[data-dd-action="clear"]').click
+                        )
+                        selected, _ = request_state(feed_response.url)
+                        self.assertEqual(selected[group], [])
+                        page.locator(f'[data-group="{group}"]').press("Escape")
+
                     pulse = page.locator("[data-pw-pulse-entry]").first
                     self.assertEqual(pulse.evaluate("element => element.parentElement.tagName"), "LI")
                     self.assertEqual(pulse.get_attribute("aria-pressed"), "false")
@@ -2634,7 +2838,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             "en": ["1d", "7d", "30d", "365d"],
             "zh_cn": ["1天", "7天", "30天", "365天"],
             "ja": ["1日", "7日", "30日", "365日"],
-            "original": ["1d", "7d", "30d", "365d"],
         }
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -2886,6 +3089,82 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         next_page.close()
                 finally:
                     context.close()
+            finally:
+                browser.close()
+
+    def test_saved_original_locale_migrates_to_english_for_v1_and_v2_storage(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for version in (1, 2):
+                    with self.subTest(version=version):
+                        context = browser.new_context(
+                            viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo"
+                        )
+                        _freeze_clock(context)
+                        storage_key = (
+                            f"pushinweight.home.preferences.v{version}:anonymous"
+                        )
+                        stored = {
+                            "version": version,
+                            "locale": "original",
+                            "timezone": "ca",
+                            "lens": {"brands": "closed", "nationalism": "cn"},
+                        }
+                        context.add_init_script(
+                            "if (!sessionStorage.getItem('original-locale-seeded')) {"
+                            f"localStorage.setItem({json.dumps(storage_key)}, "
+                            f"JSON.stringify({json.dumps(stored)}));"
+                            "sessionStorage.setItem('original-locale-seeded', '1');"
+                            "}"
+                        )
+                        page = context.new_page()
+                        locale_posts: list[str] = []
+                        page.on(
+                            "request",
+                            lambda request, posts=locale_posts: posts.append(request.url)
+                            if request.method == "POST" and "/locale/en/" in request.url
+                            else None,
+                        )
+                        try:
+                            page.goto(
+                                f"{self.live_server_url}/", wait_until="networkidle"
+                            )
+                            page.wait_for_function(
+                                "() => document.body.dataset.pwLocale === 'en' && "
+                                "window.pwFilter?.getPreferences().locale === 'en'"
+                            )
+                            state = page.evaluate(
+                                """() => ({
+                                  locale: document.body.dataset.pwLocale,
+                                  active: document.querySelector('[data-pw-locale-btn].is-active')?.dataset.pwLocaleBtn,
+                                  preferences: window.pwFilter.getPreferences(),
+                                  storage: Object.fromEntries(Object.keys(localStorage).map(key => [key, JSON.parse(localStorage.getItem(key))])),
+                                })"""
+                            )
+                            self.assertEqual(state["locale"], "en")
+                            self.assertEqual(state["active"], "en")
+                            self.assertEqual(state["preferences"]["locale"], "en")
+                            self.assertEqual(state["preferences"]["timezone"], "ca")
+                            self.assertEqual(
+                                state["preferences"]["lens"],
+                                {"brands": "closed", "nationalism": "cn"},
+                            )
+                            self.assertEqual(
+                                state["storage"][
+                                    "pushinweight.home.preferences.v2:anonymous"
+                                ]["locale"],
+                                "en",
+                            )
+                            self.assertEqual(len(locale_posts), 1)
+                            self.assertEqual(
+                                {cookie["name"]: cookie["value"] for cookie in context.cookies()}[
+                                    "locale"
+                                ],
+                                "en",
+                            )
+                        finally:
+                            context.close()
             finally:
                 browser.close()
 
@@ -3747,7 +4026,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 product_icons.locator("use").evaluate_all(
                                     "nodes => nodes.map(node => node.getAttribute('href'))"
                                 ),
-                                ["#icon-event"],
+                                ["#idea-a"],
                             )
                             for icon in (type_icons, product_icons):
                                 for index in range(icon.count()):
@@ -4679,6 +4958,43 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertGreater(box["height"], 0, f"marker has zero height: {selector}")
             self.assertGreater(marker.locator("use").count(), 0, f"marker has no symbol: {selector}")
 
+    def _assert_selected_taxonomy_glyphs(self, page: Page) -> None:
+        row = page.locator(
+            f".feed-row[data-tweet-id='{self.fixture['selected_taxonomy_id']}']"
+        )
+        self.assertEqual(row.count(), 1)
+        expected = {
+            "[data-sig-audience]": {
+                "#local-b",
+                "#cost-a",
+                "#distillation-a",
+                "#evaluation-a",
+                "#licensing-b",
+                "#agents-b",
+                "#api-a",
+            },
+            "[data-sig-product]": {
+                "#bug-a",
+                "#complaint-a",
+                "#testimony-a",
+                "#idea-a",
+            },
+        }
+        for selector, symbols in expected.items():
+            icons = row.locator(f"{selector} svg.signal-icon")
+            self.assertEqual(
+                set(icons.locator("use").evaluate_all(
+                    "nodes => nodes.map(node => node.getAttribute('href'))"
+                )),
+                symbols,
+            )
+            self.assertTrue(
+                icons.evaluate_all(
+                    "nodes => nodes.every(node => getComputedStyle(node).width === '15px' "
+                    "&& getComputedStyle(node).height === '15px')"
+                )
+            )
+
     def test_account_geography_matches_initial_and_replacement_feed_in_both_locales(
         self,
     ) -> None:
@@ -5188,6 +5504,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             "icon-unsanctioned", "icon-caret", "icon-star",
             "a-opportunity", "a-jobs", "a-personnel", "a-opinions",
             "a-research", "a-finance", "a-other",
+            "distillation-a", "licensing-b", "api-a", "agents-b",
+            "local-b", "evaluation-a", "cost-a", "bug-a",
+            "complaint-a", "testimony-a", "idea-a",
             "icon-sunrise", "icon-day", "icon-dusk", "icon-night",
             "icon-california", "icon-beijing",
         }
@@ -5303,6 +5622,40 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                     ),
                                     {"width": "15px", "height": "15px"},
                                 )
+                            selected_taxonomy_symbols = {
+                                "audience_topics": {
+                                    "local_inference": "#local-b",
+                                    "cost_performance": "#cost-a",
+                                    "model_distillation": "#distillation-a",
+                                    "evals_benchmarks": "#evaluation-a",
+                                    "openness_license": "#licensing-b",
+                                    "agents_tools": "#agents-b",
+                                    "api_developer_surface": "#api-a",
+                                },
+                                "product_labels": {
+                                    "bug": "#bug-a",
+                                    "complaint": "#complaint-a",
+                                    "testimonial": "#testimony-a",
+                                    "ideas_requests": "#idea-a",
+                                },
+                            }
+                            for family, symbols in selected_taxonomy_symbols.items():
+                                page.locator(f'[data-group="{family}"]').click()
+                                for key, symbol in symbols.items():
+                                    icon = page.locator(
+                                        f'[data-pw-semantic-family="{family}"]'
+                                        f'[data-pw-semantic-key="{key}"] svg'
+                                    )
+                                    self.assertEqual(
+                                        icon.locator("use").get_attribute("href"), symbol
+                                    )
+                                    self.assertEqual(
+                                        icon.evaluate(
+                                            "node => ({ width: getComputedStyle(node).width, "
+                                            "height: getComputedStyle(node).height })"
+                                        ),
+                                        {"width": "15px", "height": "15px"},
+                                    )
                             sentiment_pill = page.locator('[data-group="sentiment"]')
                             sentiment_pill.click()
                             visible_sentiment_icons = page.locator(
@@ -5320,6 +5673,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertTrue(visible_role_icons.evaluate_all(
                                 "nodes => nodes.every(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)"
                             ))
+                            role_options = page.locator(
+                                '[data-pw-filter-group="role"]'
+                            ).locator("xpath=..")
+                            label_offsets = role_options.evaluate_all(
+                                """nodes => nodes.map(node =>
+                                  node.querySelector('.filter-option-text').getBoundingClientRect().left -
+                                  node.getBoundingClientRect().left)"""
+                            )
+                            self.assertEqual(len(label_offsets), 4)
+                            self.assertLessEqual(max(label_offsets) - min(label_offsets), 1)
 
                             direction_symbols = {"up": "#icon-rise", "down": "#icon-fall", "flat": "#icon-flat"}
                             for direction, symbol in direction_symbols.items():
@@ -5395,7 +5758,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     page.evaluate("window.pwApplyChrome('original')")
                     self.assertEqual(
                         page.locator("[data-pw-locale-btn].is-active").all_inner_texts(),
-                        ["original"],
+                        ["en"],
                     )
                     page.evaluate("window.pwApplyChrome('zh_cn')")
 
@@ -5891,17 +6254,20 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     page.goto(f"{self.live_server_url}/", wait_until="networkidle")
                     page.wait_for_function("() => window.pwFilter && document.querySelector('[data-pw-feed-body]')")
                     self._assert_visible_metadata(page, self.fixture["replacement_id"], "tint-pos-mixed")
+                    self._assert_selected_taxonomy_glyphs(page)
 
                     with page.expect_response(lambda response: "/feed/?" in response.url and response.status == 200):
                         page.evaluate("() => document.dispatchEvent(new CustomEvent('pw:locale-change'))")
                     page.locator(f".feed-row[data-tweet-id='{self.fixture['replacement_id']}']").wait_for()
                     self._assert_visible_metadata(page, self.fixture["replacement_id"], "tint-pos-mixed")
+                    self._assert_selected_taxonomy_glyphs(page)
 
                     sentinel = page.locator("[data-pw-feed-sentinel]")
                     with page.expect_response(lambda response: "/feed/?" in response.url and response.status == 200):
                         sentinel.scroll_into_view_if_needed()
                     page.locator(f".feed-row[data-tweet-id='{self.fixture['page_two_id']}']").wait_for()
                     self._assert_visible_metadata(page, self.fixture["page_two_id"], "tint-neg-mixed")
+                    self._assert_selected_taxonomy_glyphs(page)
                 finally:
                     context.close()
             finally:
