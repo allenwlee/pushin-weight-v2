@@ -16,8 +16,8 @@ values with active en/zh-cn/ja labels for post types, product labels, Audience T
 sentiments, geopolitical modes, national stance, and roles. Discourse,
 nationalism, and unsanctioned families remain compatibility data.
 
-**i18n label pattern.** The post type, product-label, sentiment, discourse,
-nationalism, and role key tables have corresponding `*Label` models with a
+**i18n label pattern.** The post type, product-label, Audience Topic,
+geopolitical, national-stance, and role key tables have corresponding `*Label` models with a
 composite primary key of `(key, lang)`. `UnsanctionedFlagKey` is the documented
 unlabeled exception. Labels are seeded with:
 
@@ -99,11 +99,13 @@ The retained `product_request` key is a v1 compatibility alias for
 
 ---
 
-## 3. Discourse -- `DiscourseKey` + `DiscourseLabel`
+## 3. Legacy Discourse compatibility -- `DiscourseKey` + `DiscourseLabel`
 
 **Model:** `core.models.DiscourseKey` (table `discourse_keys`), `core.models.DiscourseLabel` (table `discourse_labels`)
 
-**Referenced by:** `PostBrandDiscourse.discourse` (FK to `DiscourseKey`)
+**Referenced by:** legacy `PostBrandDiscourse.discourse` (FK to `DiscourseKey`).
+New classifier writes use Audience Topics; these rows remain readable for older
+classifications and legacy narrative queries.
 
 **Dashboard constant:** `monitor/views.py:_DASHBOARD_DISCOURSE_KEYS`
 
@@ -304,8 +306,8 @@ no flat files to update.
 
 ## i18n label pattern
 
-Post type, product-label, sentiment, discourse, nationalism, and role key
-tables have corresponding `*Label` models. `UnsanctionedFlagKey` is the
+Post type, product-label, Audience Topic, geopolitical, national-stance, and
+role key tables have corresponding `*Label` models. `UnsanctionedFlagKey` is the
 unlabeled exception described in §6. Each label table uses a composite primary
 key of `(key, lang)` via `django.db.models.CompositePrimaryKey`. Active post
 type, product label, sentiment, and nationalism rows have `en`, `zh-cn`, and
@@ -319,7 +321,7 @@ Example Django ORM usage:
 label = PostTypeLabel.objects.get(post_type_id="releases_updates", lang="ja")
 print(label.label)  # "リリース・アップデート"
 
-# Get all labels for a discourse key
+# Read legacy labels for a discourse key
 for lbl in DiscourseKey.objects.get(key="genuine_hype").labels.all():
     print(f"{lbl.lang}: {lbl.label}")
 # en: Genuine Hype

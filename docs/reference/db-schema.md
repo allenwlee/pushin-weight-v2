@@ -295,9 +295,11 @@ Composite PK: `(post, brand, post_type)`.
 Indexes: `idx_pb_sig_b_p_type (brand_id, post_type_key)`,
 `idx_pb_sig_b_sent (brand_id, sentiment)`
 
-### PostBrandDiscourse (`posts_brands_discourse`)
+### Legacy PostBrandDiscourse (`posts_brands_discourse`)
 
-Per-act pragmatics. Composite PK: `(post, brand, discourse, act_id)`.
+Legacy per-act pragmatics. Composite PK: `(post, brand, discourse, act_id)`.
+New classifier writes use the v4 Audience Topic and geopolitical tables below;
+this table remains for historical rows and compatibility readers.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -455,7 +457,7 @@ Composite PK: `(sentiment, lang)`. FK sentiment -> `SentimentKey`.
 | lang | `TextField` | |
 | label | `TextField` | |
 
-### DiscourseKey (`discourse_keys`)
+### Legacy DiscourseKey (`discourse_keys`)
 
 9-way pragmatic-register vocabulary.
 
@@ -464,7 +466,7 @@ Composite PK: `(sentiment, lang)`. FK sentiment -> `SentimentKey`.
 | key | `CharField(max_length=64, pk)` | case_insensitive; e.g. "genuine_hype", "sarcasm", "dunk" |
 | created_at | `DateTimeField(auto_now_add)` | |
 
-### DiscourseLabel (`discourse_labels`)
+### Legacy DiscourseLabel (`discourse_labels`)
 
 Composite PK: `(discourse, lang)`. FK discourse -> `DiscourseKey`.
 
