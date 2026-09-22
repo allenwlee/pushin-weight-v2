@@ -5923,6 +5923,7 @@ class RareTypeSearchRun(models.Model):
                         status="empty",
                         raw_result_count__isnull=False,
                         raw_result_count=0,
+                        normalized_result_count__isnull=False,
                         normalized_result_count=0,
                         estimated_credits__isnull=False,
                         returned_at__isnull=False,
@@ -5950,6 +5951,71 @@ class RareTypeSearchRun(models.Model):
         ]
 
 
+class RareTypeDecisionProcessingCycle(models.Model):
+    """Current 15-minute processing slot that funds Jev attempts."""
+
+    lane = models.CharField(max_length=64)
+    environment = models.CharField(max_length=16)
+    slot_start = models.DateTimeField()
+    usage_date = models.DateField()
+    daily_budget = models.ForeignKey(
+        RareTypeSearchDailyBudget,
+        on_delete=models.PROTECT,
+        related_name="decision_processing_cycles",
+    )
+    attempts_reserved = models.PositiveSmallIntegerField(default=0)
+    attempts_accounted = models.PositiveSmallIntegerField(default=0)
+    attempts_in_flight = models.PositiveSmallIntegerField(default=0)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    allocation_started_at = models.DateTimeField()
+    allocation_deadline = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decision_processing_cycles"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lane", "environment", "slot_start"],
+                name="uq_rare_dec_cycle_slot",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(environment__in=["normal", "staging"]),
+                name="ck_rare_dec_cycle_environment",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_dec_cycle_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_dec_cycle_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_dec_cycle_confirmed",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempts_in_flight__lte=2),
+                name="ck_rare_dec_cycle_inflight",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    allocation_deadline__gt=models.F("allocation_started_at")
+                ),
+                name="ck_rare_dec_cycle_allocation",
+            ),
+        ]
+
+
 class RareTypeDecision(models.Model):
     """Versioned, reusable Jev interpretation identity and claim state."""
 
@@ -5959,6 +6025,11 @@ class RareTypeDecision(models.Model):
         COMPLETED = "completed", "Completed"
         REVIEW_NEEDED = "review_needed", "Review needed"
         FAILED = "failed", "Failed"
+
+    class GateOutcome(models.TextChoices):
+        KEPT = "kept", "Kept"
+        JUNK = "junk", "Junk"
+        REVIEW_NEEDED = "review_needed", "Review needed"
 
     provider_post_id = models.TextField()
     content_hash = models.CharField(max_length=64)
@@ -5971,6 +6042,9 @@ class RareTypeDecision(models.Model):
     response_id = models.CharField(max_length=255, blank=True, default="")
     probabilities = models.JSONField(default=dict)
     derived_types = models.JSONField(default=list)
+    gate_outcome = models.CharField(
+        max_length=16, choices=GateOutcome.choices, blank=True, default=""
+    )
     input_tokens = models.PositiveIntegerField(default=0)
     output_tokens = models.PositiveIntegerField(default=0)
     cost_usd = models.DecimalField(max_digits=16, decimal_places=9, default=0)
@@ -6058,6 +6132,91 @@ class RareTypeDecision(models.Model):
             ),
             models.Index(
                 fields=["provider_post_id"], name="idx_rare_decision_post"
+            ),
+        ]
+
+
+class RareTypeDecisionAttempt(models.Model):
+    """Fenced, one-settlement funding record for a physical Jev attempt."""
+
+    class State(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        SENT = "sent", "Sent"
+        SETTLED = "settled", "Settled"
+        RETAINED = "retained", "Retained"
+
+    decision = models.ForeignKey(
+        RareTypeDecision, on_delete=models.PROTECT, related_name="attempt_events"
+    )
+    processing_cycle = models.ForeignKey(
+        RareTypeDecisionProcessingCycle,
+        on_delete=models.PROTECT,
+        related_name="attempt_events",
+    )
+    fence = models.PositiveIntegerField()
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.RESERVED
+    )
+    reserved_usd = models.DecimalField(max_digits=16, decimal_places=9)
+    accounted_usd = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    confirmed_usd = models.DecimalField(
+        max_digits=16, decimal_places=9, blank=True, null=True
+    )
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    response_id = models.CharField(max_length=255, blank=True, default="")
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    reserved_at = models.DateTimeField()
+    sent_at = models.DateTimeField(blank=True, null=True)
+    settled_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decision_attempts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["decision", "fence"], name="uq_rare_dec_attempt_fence"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    state__in=["reserved", "sent", "settled", "retained"]
+                ),
+                name="ck_rare_dec_attempt_state",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_usd__gt=0),
+                name="ck_rare_dec_attempt_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(accounted_usd__gte=0),
+                name="ck_rare_dec_attempt_accounted",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confirmed_usd__isnull=True)
+                    | models.Q(confirmed_usd__gte=0)
+                ),
+                name="ck_rare_dec_attempt_confirmed",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(state="reserved", sent_at__isnull=True)
+                    | models.Q(
+                        state__in=["sent", "settled", "retained"],
+                        sent_at__isnull=False,
+                    )
+                ),
+                name="ck_rare_dec_attempt_send_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(state="settled", settled_at__isnull=False)
+                    | (~models.Q(state="settled") & models.Q(settled_at__isnull=True))
+                ),
+                name="ck_rare_dec_attempt_settle_shape",
             ),
         ]
 

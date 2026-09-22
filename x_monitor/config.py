@@ -207,6 +207,60 @@ class DiscoveryLaneConfig(BaseModel):
         return self
 
 
+class JevDecisionsConfig(BaseModel):
+    """Pinned Decisions API, identity, pricing, and resource limits."""
+
+    endpoint: Literal["https://openrouter.ai/api/alpha/decisions"] = (
+        "https://openrouter.ai/api/alpha/decisions"
+    )
+    model: Literal["typesafe/jev-1.13-20260917"] = (
+        "typesafe/jev-1.13-20260917"
+    )
+    provider: Literal["TypeSafe"] = "TypeSafe"
+    question_set_version: str = Field(
+        default="rare-types-jev-questions-v1", min_length=1, max_length=63
+    )
+    question_content_sha256: str = Field(
+        default="2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    threshold_version: str = Field(
+        default="rare-types-jev-thresholds-v1", min_length=1, max_length=63
+    )
+    threshold_values_sha256: str = Field(
+        default="9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    yes_threshold: Decimal = Field(default=Decimal("0.80"), ge=0, le=1)
+    no_threshold: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    input_price_per_million_usd: Decimal = Field(default=Decimal("0.042"), gt=0)
+    output_price_per_million_usd: Decimal = Field(default=Decimal(0), ge=0)
+    request_timeout_seconds: float = Field(default=10, gt=0, le=10)
+    max_concurrency: int = Field(default=2, ge=1, le=2)
+    gate_allocation_seconds: int = Field(default=60, ge=1, le=60)
+    normal_decisions_per_cycle: int = Field(default=20, ge=1, le=20)
+    staging_decisions_per_cycle: int = Field(default=5, ge=1, le=5)
+    cycle_budget_usd: Decimal = Field(default=Decimal("0.02"), gt=0, le=Decimal("0.02"))
+    daily_budget_usd: Decimal = Field(default=Decimal("0.50"), gt=0, le=Decimal("0.50"))
+    max_request_bytes: int = Field(default=32_000, ge=1, le=32_000)
+    max_response_bytes: int = Field(default=65_536, ge=1, le=65_536)
+
+    @model_validator(mode="after")
+    def _validate_thresholds(self) -> JevDecisionsConfig:
+        if self.no_threshold >= self.yes_threshold:
+            raise ValueError("Jev no threshold must be below yes threshold")
+        if self.output_price_per_million_usd != 0:
+            raise ValueError("pinned Jev output pricing must remain zero")
+        return self
+
+
+class RareTypeSearchConfig(BaseModel):
+    """Disabled-by-default combined rare-type lane; U6 adds search wiring."""
+
+    enabled: bool = False
+    jev: JevDecisionsConfig = JevDecisionsConfig()
+
+
 class DiscoveryConfig(BaseModel):
     jobs: DiscoveryLaneConfig = DiscoveryLaneConfig(
         query_pack_version="jobs-discovery-v1"
@@ -214,6 +268,7 @@ class DiscoveryConfig(BaseModel):
     personnel: DiscoveryLaneConfig = DiscoveryLaneConfig(
         query_pack_version="personnel-discovery-v1"
     )
+    rare_types: RareTypeSearchConfig = RareTypeSearchConfig()
 
     @model_validator(mode="after")
     def _validate_global_query_ids(self) -> DiscoveryConfig:

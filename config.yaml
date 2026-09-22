@@ -67,6 +67,29 @@ daily_ceiling: 333
 # persistence, and post-fetch classifier. Both lanes stay disabled until a
 # separate owner-approved provider trial establishes quality and cost.
 discovery:
+  rare_types:
+    enabled: false
+    jev:
+      endpoint: https://openrouter.ai/api/alpha/decisions
+      model: typesafe/jev-1.13-20260917
+      provider: TypeSafe
+      question_set_version: rare-types-jev-questions-v1
+      question_content_sha256: 2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df
+      threshold_version: rare-types-jev-thresholds-v1
+      threshold_values_sha256: 9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a
+      yes_threshold: '0.80'
+      no_threshold: '0.20'
+      input_price_per_million_usd: '0.042'
+      output_price_per_million_usd: '0'
+      request_timeout_seconds: 10
+      max_concurrency: 2
+      gate_allocation_seconds: 60
+      normal_decisions_per_cycle: 20
+      staging_decisions_per_cycle: 5
+      cycle_budget_usd: '0.02'
+      daily_budget_usd: '0.50'
+      max_request_bytes: 32000
+      max_response_bytes: 65536
   jobs:
     enabled: false
     query_pack_version: jobs-discovery-v1

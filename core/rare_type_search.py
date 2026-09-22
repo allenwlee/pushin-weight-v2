@@ -21,6 +21,8 @@ from django.db.models import Case, F, Value, When
 
 from core.models import (
     RareTypeDecision,
+    RareTypeDecisionAttempt,
+    RareTypeDecisionProcessingCycle,
     RareTypeSearchDailyBudget,
     RareTypeSearchHit,
     RareTypeSearchRun,
@@ -38,6 +40,10 @@ MAX_DECISION_ATTEMPTS = 2
 MAX_TEXT_LENGTH = 50_000
 MAX_BIO_LENGTH = 5_000
 MAX_PAYLOAD_BYTES = 128_000
+NORMAL_DECISION_LIMIT = 20
+STAGING_DECISION_LIMIT = 5
+DECISION_CYCLE_USD_LIMIT = Decimal("0.020000000")
+DECISION_DAILY_USD_LIMIT = Decimal("0.500000000")
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,15 @@ class SearchRunReservation:
 @dataclass(frozen=True)
 class DecisionClaim:
     decision: RareTypeDecision
+    claimed: bool
+    reused: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class FundedDecisionClaim:
+    decision: RareTypeDecision
+    attempt: RareTypeDecisionAttempt | None
     claimed: bool
     reused: bool
     reason: str
@@ -829,6 +844,550 @@ def expire_hit_payloads(*, now: datetime) -> int:
     )
 
 
+def _ensure_decision_processing_cycle(
+    *,
+    lane: str,
+    environment: str,
+    slot_start: datetime,
+    daily_budget: RareTypeSearchDailyBudget,
+    allocation_started_at: datetime,
+    allocation_seconds: int,
+) -> RareTypeDecisionProcessingCycle:
+    RareTypeDecisionProcessingCycle.objects.bulk_create(
+        [
+            RareTypeDecisionProcessingCycle(
+                lane=lane,
+                environment=environment,
+                slot_start=slot_start,
+                usage_date=_utc_date(slot_start),
+                daily_budget=daily_budget,
+                allocation_started_at=allocation_started_at,
+                allocation_deadline=allocation_started_at
+                + timedelta(seconds=allocation_seconds),
+            )
+        ],
+        ignore_conflicts=True,
+    )
+    return RareTypeDecisionProcessingCycle.objects.select_for_update().get(
+        lane=lane, environment=environment, slot_start=slot_start
+    )
+
+
+def claim_funded_decision(
+    *,
+    hit_id: int,
+    model: str,
+    question_version: str,
+    threshold_version: str,
+    owner: str,
+    lane: str,
+    environment: str,
+    reserved_usd: Decimal,
+    now: datetime,
+    lease_seconds: int = 60,
+    decision_limit: int | None = None,
+    cycle_limit_usd: Decimal = DECISION_CYCLE_USD_LIMIT,
+    daily_limit_usd: Decimal = DECISION_DAILY_USD_LIMIT,
+    concurrency_limit: int = 2,
+    allocation_seconds: int = 60,
+) -> FundedDecisionClaim:
+    """Claim and fund one Jev attempt in the current processing slot.
+
+    The processing slot comes from ``now`` rather than the hit's source run, so
+    replay spends against the current cycle/day without inventing a search run.
+    """
+
+    if environment not in {"normal", "staging"}:
+        raise ValueError("decision environment must be normal or staging")
+    hard_limit = (
+        STAGING_DECISION_LIMIT if environment == "staging" else NORMAL_DECISION_LIMIT
+    )
+    effective_limit = hard_limit if decision_limit is None else decision_limit
+    if effective_limit <= 0 or effective_limit > hard_limit:
+        raise ValueError("decision limit cannot exceed the environment hard cap")
+    if concurrency_limit <= 0 or concurrency_limit > 2:
+        raise ValueError("decision concurrency cannot exceed two")
+    if allocation_seconds <= 0 or allocation_seconds > 60:
+        raise ValueError("decision allocation cannot exceed 60 seconds")
+    if (
+        reserved_usd <= 0
+        or cycle_limit_usd <= 0
+        or cycle_limit_usd > DECISION_CYCLE_USD_LIMIT
+        or daily_limit_usd <= 0
+        or daily_limit_usd > DECISION_DAILY_USD_LIMIT
+    ):
+        raise ValueError("decision funding limits are invalid")
+    if not all([model, question_version, threshold_version, owner, lane]):
+        raise ValueError("decision identity, owner, and lane are required")
+    if len(model) > 255 or len(question_version) > 128 or len(threshold_version) > 128:
+        raise ValueError("decision identity exceeds its durable field bound")
+
+    slot_start = _slot_floor(now)
+    usage_date = _utc_date(now)
+    hit_ref = RareTypeSearchHit.objects.only(
+        "provider_post_id", "content_hash", "payload_expires_at", "payload_expired_at"
+    ).get(pk=hit_id)
+    identity = {
+        "provider_post_id": hit_ref.provider_post_id,
+        "content_hash": hit_ref.content_hash,
+        "model": model,
+        "question_version": question_version,
+        "threshold_version": threshold_version,
+    }
+    with transaction.atomic():
+        daily_budget = _ensure_daily_budget(lane=lane, usage_date=usage_date)
+        cycle = _ensure_decision_processing_cycle(
+            lane=lane,
+            environment=environment,
+            slot_start=slot_start,
+            daily_budget=daily_budget,
+            allocation_started_at=now,
+            allocation_seconds=allocation_seconds,
+        )
+        RareTypeDecision.objects.bulk_create(
+            [RareTypeDecision(**identity)], ignore_conflicts=True
+        )
+        decision = RareTypeDecision.objects.select_for_update().get(**identity)
+        hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit_id)
+        if (
+            hit.provider_post_id != identity["provider_post_id"]
+            or hit.content_hash != identity["content_hash"]
+        ):
+            raise ValueError("hit decision identity changed during claim")
+        if hit.payload_expired_at is not None or hit.payload_expires_at <= now:
+            return FundedDecisionClaim(
+                decision, None, False, False, "payload_expired"
+            )
+        if decision.status == RareTypeDecision.Status.COMPLETED:
+            hit.decision = decision
+            hit.gate_state = decision.gate_outcome
+            hit.gate_completed_at = decision.completed_at
+            hit.last_error_code = ""
+            hit.save(
+                update_fields=[
+                    "decision",
+                    "gate_state",
+                    "gate_completed_at",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+            return FundedDecisionClaim(decision, None, False, True, "completed_reuse")
+        if decision.status == RareTypeDecision.Status.REVIEW_NEEDED:
+            hit.decision = decision
+            hit.gate_state = RareTypeSearchHit.GateState.REVIEW_NEEDED
+            hit.last_error_code = decision.last_error_code
+            hit.save(
+                update_fields=[
+                    "decision",
+                    "gate_state",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+            return FundedDecisionClaim(decision, None, False, False, "review_needed")
+        if (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claim_expires_at
+            and decision.claim_expires_at > now
+        ):
+            return FundedDecisionClaim(decision, None, False, False, "already_claimed")
+        if (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claimed_at
+            and decision.claimed_at + DECISION_RETRY_DELAY > now
+        ):
+            return FundedDecisionClaim(decision, None, False, False, "retry_not_due")
+        if decision.next_attempt_at and decision.next_attempt_at > now:
+            return FundedDecisionClaim(decision, None, False, False, "retry_not_due")
+        if decision.attempts >= MAX_DECISION_ATTEMPTS:
+            decision.status = RareTypeDecision.Status.REVIEW_NEEDED
+            decision.claim_owner = ""
+            decision.claimed_at = None
+            decision.claim_expires_at = None
+            decision.save()
+            hit.decision = decision
+            hit.gate_state = RareTypeSearchHit.GateState.REVIEW_NEEDED
+            hit.save(update_fields=["decision", "gate_state", "updated_at"])
+            return FundedDecisionClaim(
+                decision, None, False, False, "attempts_exhausted"
+            )
+
+        cycle_attempts = cycle.attempts_reserved + cycle.attempts_accounted
+        cycle_charged = cycle.decision_usd_reserved + cycle.decision_usd_accounted
+        daily_charged = (
+            daily_budget.decision_usd_reserved
+            + daily_budget.decision_usd_accounted
+        )
+        if now >= cycle.allocation_deadline:
+            return FundedDecisionClaim(
+                decision, None, False, False, "allocation_exhausted"
+            )
+        if cycle.attempts_in_flight >= concurrency_limit:
+            return FundedDecisionClaim(
+                decision, None, False, False, "concurrency_exhausted"
+            )
+        if cycle_attempts + 1 > effective_limit:
+            return FundedDecisionClaim(
+                decision, None, False, False, "cycle_decision_limit"
+            )
+        if cycle_charged + reserved_usd > cycle_limit_usd:
+            return FundedDecisionClaim(
+                decision, None, False, False, "cycle_budget_exhausted"
+            )
+        if daily_charged + reserved_usd > daily_limit_usd:
+            return FundedDecisionClaim(
+                decision, None, False, False, "daily_budget_exhausted"
+            )
+
+        decision.status = RareTypeDecision.Status.CLAIMED
+        decision.attempts += 1
+        decision.claim_owner = owner[:128]
+        decision.claim_fence += 1
+        decision.claimed_at = now
+        decision.claim_expires_at = now + timedelta(seconds=lease_seconds)
+        decision.next_attempt_at = None
+        decision.save()
+        attempt = RareTypeDecisionAttempt.objects.create(
+            decision=decision,
+            processing_cycle=cycle,
+            fence=decision.claim_fence,
+            reserved_usd=reserved_usd,
+            reserved_at=now,
+        )
+        cycle.attempts_reserved += 1
+        cycle.attempts_in_flight += 1
+        cycle.decision_usd_reserved += reserved_usd
+        cycle.save(
+            update_fields=[
+                "attempts_reserved",
+                "attempts_in_flight",
+                "decision_usd_reserved",
+                "updated_at",
+            ]
+        )
+        daily_budget.decision_usd_reserved += reserved_usd
+        daily_budget.save(update_fields=["decision_usd_reserved", "updated_at"])
+        hit.decision = decision
+        hit.gate_state = RareTypeSearchHit.GateState.DECISION_PENDING
+        hit.last_error_code = ""
+        hit.save(
+            update_fields=["decision", "gate_state", "last_error_code", "updated_at"]
+        )
+        return FundedDecisionClaim(decision, attempt, True, False, "claimed")
+
+
+def mark_decision_request_sent(
+    decision_id: int, *, owner: str, fence: int, now: datetime
+) -> bool:
+    """Persist the physical-request boundary before transport is attempted."""
+
+    with transaction.atomic():
+        decision = RareTypeDecision.objects.select_for_update().get(pk=decision_id)
+        if not (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claim_owner == owner
+            and decision.claim_fence == fence
+        ):
+            return False
+        attempt = RareTypeDecisionAttempt.objects.select_for_update().get(
+            decision=decision, fence=fence
+        )
+        if attempt.state != RareTypeDecisionAttempt.State.RESERVED:
+            return False
+        attempt.state = RareTypeDecisionAttempt.State.SENT
+        attempt.sent_at = now
+        attempt.save(update_fields=["state", "sent_at", "updated_at"])
+        return True
+
+
+def cancel_funded_decision_claim(
+    *,
+    hit_id: int,
+    decision_id: int,
+    owner: str,
+    fence: int,
+) -> bool:
+    """Release a local pre-dispatch claim without consuming an attempt."""
+
+    attempt_ref = RareTypeDecisionAttempt.objects.select_related(
+        "processing_cycle"
+    ).get(decision_id=decision_id, fence=fence)
+    cycle_id = attempt_ref.processing_cycle_id
+    daily_budget_id = attempt_ref.processing_cycle.daily_budget_id
+    with transaction.atomic():
+        daily_budget = RareTypeSearchDailyBudget.objects.select_for_update().get(
+            pk=daily_budget_id
+        )
+        cycle = RareTypeDecisionProcessingCycle.objects.select_for_update().get(
+            pk=cycle_id
+        )
+        decision = RareTypeDecision.objects.select_for_update().get(pk=decision_id)
+        attempt = RareTypeDecisionAttempt.objects.select_for_update().get(
+            decision=decision, fence=fence
+        )
+        hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit_id)
+        if not (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claim_owner == owner
+            and decision.claim_fence == fence
+            and attempt.state == RareTypeDecisionAttempt.State.RESERVED
+            and cycle.attempts_reserved > 0
+            and cycle.attempts_in_flight > 0
+            and cycle.decision_usd_reserved >= attempt.reserved_usd
+            and daily_budget.decision_usd_reserved >= attempt.reserved_usd
+        ):
+            return False
+        cycle.attempts_reserved -= 1
+        cycle.attempts_in_flight -= 1
+        cycle.decision_usd_reserved -= attempt.reserved_usd
+        cycle.save()
+        daily_budget.decision_usd_reserved -= attempt.reserved_usd
+        daily_budget.save(update_fields=["decision_usd_reserved", "updated_at"])
+        decision.status = RareTypeDecision.Status.PENDING
+        decision.attempts -= 1
+        decision.claim_owner = ""
+        decision.claimed_at = None
+        decision.claim_expires_at = None
+        decision.next_attempt_at = None
+        decision.save()
+        attempt.delete()
+        hit.gate_state = RareTypeSearchHit.GateState.DECISION_PENDING
+        hit.last_error_code = ""
+        hit.save(update_fields=["gate_state", "last_error_code", "updated_at"])
+        return True
+
+
+def complete_funded_decision(
+    *,
+    hit_id: int,
+    decision_id: int,
+    owner: str,
+    fence: int,
+    response_id: str,
+    probabilities: Mapping[str, float],
+    derived_types: Sequence[str],
+    gate_outcome: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: Decimal,
+    latency_ms: int,
+    now: datetime,
+) -> bool:
+    """Atomically settle one funded attempt and publish its durable hit gate."""
+
+    if not response_id or not _valid_probabilities(probabilities):
+        return False
+    if any(not isinstance(value, str) or not value for value in derived_types):
+        return False
+    if gate_outcome not in RareTypeDecision.GateOutcome.values:
+        return False
+    if (
+        gate_outcome == RareTypeDecision.GateOutcome.KEPT
+        and not derived_types
+    ) or (
+        gate_outcome != RareTypeDecision.GateOutcome.KEPT and derived_types
+    ):
+        return False
+    if min(input_tokens, output_tokens, latency_ms) < 0 or cost_usd < 0:
+        return False
+    attempt_ref = RareTypeDecisionAttempt.objects.select_related(
+        "processing_cycle"
+    ).get(decision_id=decision_id, fence=fence)
+    cycle_id = attempt_ref.processing_cycle_id
+    daily_budget_id = attempt_ref.processing_cycle.daily_budget_id
+    with transaction.atomic():
+        daily_budget = RareTypeSearchDailyBudget.objects.select_for_update().get(
+            pk=daily_budget_id
+        )
+        cycle = RareTypeDecisionProcessingCycle.objects.select_for_update().get(
+            pk=cycle_id
+        )
+        decision = RareTypeDecision.objects.select_for_update().get(pk=decision_id)
+        attempt = RareTypeDecisionAttempt.objects.select_for_update().get(
+            decision=decision, fence=fence
+        )
+        hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit_id)
+        if attempt.state == RareTypeDecisionAttempt.State.SETTLED:
+            return decision.status == RareTypeDecision.Status.COMPLETED
+        if not (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claim_owner == owner
+            and decision.claim_fence == fence
+            and attempt.state == RareTypeDecisionAttempt.State.SENT
+            and cost_usd <= attempt.reserved_usd
+        ):
+            return False
+        if (
+            cycle.attempts_reserved < 1
+            or cycle.decision_usd_reserved < attempt.reserved_usd
+            or daily_budget.decision_usd_reserved < attempt.reserved_usd
+            or cycle.attempts_in_flight < 1
+        ):
+            return False
+
+        cycle.attempts_reserved -= 1
+        cycle.attempts_accounted += 1
+        cycle.attempts_in_flight -= 1
+        cycle.decision_usd_reserved -= attempt.reserved_usd
+        cycle.decision_usd_accounted += cost_usd
+        cycle.decision_usd_confirmed += cost_usd
+        cycle.save()
+        daily_budget.decision_usd_reserved -= attempt.reserved_usd
+        daily_budget.decision_usd_accounted += cost_usd
+        daily_budget.decision_usd_confirmed += cost_usd
+        daily_budget.save()
+
+        attempt.state = RareTypeDecisionAttempt.State.SETTLED
+        attempt.accounted_usd = cost_usd
+        attempt.confirmed_usd = cost_usd
+        attempt.response_id = response_id[:255]
+        attempt.input_tokens = input_tokens
+        attempt.output_tokens = output_tokens
+        attempt.settled_at = now
+        attempt.error_code = ""
+        attempt.save()
+
+        decision.status = RareTypeDecision.Status.COMPLETED
+        decision.response_id = response_id[:255]
+        decision.probabilities = dict(probabilities)
+        decision.derived_types = list(dict.fromkeys(derived_types))
+        decision.gate_outcome = gate_outcome
+        decision.input_tokens = input_tokens
+        decision.output_tokens = output_tokens
+        decision.cost_usd = cost_usd
+        decision.latency_ms = latency_ms
+        decision.completed_at = now
+        decision.last_error_code = ""
+        decision.claim_owner = ""
+        decision.claimed_at = None
+        decision.claim_expires_at = None
+        decision.save()
+
+        hit.decision = decision
+        hit.gate_state = gate_outcome
+        hit.gate_completed_at = now
+        hit.last_error_code = ""
+        hit.save()
+        return True
+
+
+def fail_funded_decision(
+    *,
+    hit_id: int,
+    decision_id: int,
+    owner: str,
+    fence: int,
+    error_code: str,
+    now: datetime,
+    response_id: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cost_usd: Decimal | None = None,
+) -> bool:
+    """Record a failed call, settling known usage or retaining unknown spend."""
+
+    known_usage = all(
+        value is not None
+        for value in (response_id, input_tokens, output_tokens, cost_usd)
+    )
+    if any(
+        value is not None
+        for value in (response_id, input_tokens, output_tokens, cost_usd)
+    ) and not known_usage:
+        raise ValueError("known failed usage must be supplied as one complete group")
+    if known_usage and (
+        not response_id
+        or input_tokens < 0
+        or output_tokens < 0
+        or cost_usd < 0
+    ):
+        raise ValueError("known failed usage is invalid")
+
+    attempt_ref = RareTypeDecisionAttempt.objects.select_related(
+        "processing_cycle"
+    ).get(decision_id=decision_id, fence=fence)
+    cycle_id = attempt_ref.processing_cycle_id
+    daily_budget_id = attempt_ref.processing_cycle.daily_budget_id
+    with transaction.atomic():
+        daily_budget = RareTypeSearchDailyBudget.objects.select_for_update().get(
+            pk=daily_budget_id
+        )
+        cycle = RareTypeDecisionProcessingCycle.objects.select_for_update().get(
+            pk=cycle_id
+        )
+        decision = RareTypeDecision.objects.select_for_update().get(pk=decision_id)
+        attempt = RareTypeDecisionAttempt.objects.select_for_update().get(
+            decision=decision, fence=fence
+        )
+        hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit_id)
+        if not (
+            decision.status == RareTypeDecision.Status.CLAIMED
+            and decision.claim_owner == owner
+            and decision.claim_fence == fence
+            and attempt.state == RareTypeDecisionAttempt.State.SENT
+            and cycle.attempts_in_flight > 0
+        ):
+            return False
+        cycle.attempts_in_flight -= 1
+        if known_usage:
+            if (
+                cycle.attempts_reserved < 1
+                or cycle.decision_usd_reserved < attempt.reserved_usd
+                or daily_budget.decision_usd_reserved < attempt.reserved_usd
+            ):
+                return False
+            cycle.attempts_reserved -= 1
+            cycle.attempts_accounted += 1
+            cycle.decision_usd_reserved -= attempt.reserved_usd
+            cycle.decision_usd_accounted += cost_usd
+            cycle.decision_usd_confirmed += cost_usd
+            daily_budget.decision_usd_reserved -= attempt.reserved_usd
+            daily_budget.decision_usd_accounted += cost_usd
+            daily_budget.decision_usd_confirmed += cost_usd
+            daily_budget.save()
+            attempt.state = RareTypeDecisionAttempt.State.SETTLED
+            attempt.accounted_usd = cost_usd
+            attempt.confirmed_usd = cost_usd
+            attempt.response_id = response_id[:255]
+            attempt.input_tokens = input_tokens
+            attempt.output_tokens = output_tokens
+            attempt.settled_at = now
+            decision.response_id = response_id[:255]
+            decision.input_tokens = input_tokens
+            decision.output_tokens = output_tokens
+            decision.cost_usd = cost_usd
+        else:
+            attempt.state = RareTypeDecisionAttempt.State.RETAINED
+        cycle.save()
+        attempt.error_code = error_code[:128]
+        attempt.save()
+        decision.last_error_code = error_code[:128]
+        decision.claim_owner = ""
+        decision.claimed_at = None
+        decision.claim_expires_at = None
+        if decision.attempts >= MAX_DECISION_ATTEMPTS:
+            decision.status = RareTypeDecision.Status.REVIEW_NEEDED
+            decision.next_attempt_at = None
+            hit.gate_state = RareTypeSearchHit.GateState.REVIEW_NEEDED
+        else:
+            decision.status = RareTypeDecision.Status.PENDING
+            decision.next_attempt_at = now + DECISION_RETRY_DELAY
+            hit.gate_state = RareTypeSearchHit.GateState.PROVIDER_FAILED
+        decision.save()
+        hit.decision = decision
+        hit.last_error_code = error_code[:128]
+        hit.save(
+            update_fields=[
+                "decision",
+                "gate_state",
+                "last_error_code",
+                "updated_at",
+            ]
+        )
+        return True
+
+
 def claim_decision(
     *,
     provider_post_id: str,
@@ -948,6 +1507,11 @@ def complete_decision(
         decision.response_id = response_id[:255]
         decision.probabilities = dict(probabilities)
         decision.derived_types = list(dict.fromkeys(derived_types))
+        decision.gate_outcome = (
+            RareTypeDecision.GateOutcome.KEPT
+            if decision.derived_types
+            else RareTypeDecision.GateOutcome.JUNK
+        )
         decision.input_tokens = input_tokens
         decision.output_tokens = output_tokens
         decision.cost_usd = cost_usd
