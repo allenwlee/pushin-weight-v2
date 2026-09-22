@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-21T23:08:23Z",
+  "purpose": "phrase_calibration_only",
+  "pass_state": "research_only_not_enablement",
+  "query_version": "rare-types-v2-2026-09-22",
+  "planner_query_sha256": "44644e94a74f347af0994ba199ced3d1fc52777b2b92edb530f82748e1a4dc7c",
+  "provider": "xAI official SDK",
+  "model": "grok-4.7",
+  "response_id": "943f1f5d-ebdd-9bad-bbd4-73c6e50be151",
+  "actual_search_calls": 4,
+  "actual_tool_names": [
+    "x_keyword_search"
+  ],
+  "reported_cost_usd": "0.092542",
+  "usage": {
+    "prompt_tokens": 35884,
+    "completion_tokens": 2637,
+    "reasoning_tokens": 3764,
+    "total_tokens": 42285,
+    "cached_prompt_text_tokens": 25088
+  },
+  "request_bounds": {
+    "max_turns": 4,
+    "parallel_tool_calls": false,
+    "max_tokens": 7000,
+    "client_timeout_seconds": 180,
+    "tool_from_date": "2026-08-23",
+    "tool_to_date": "2026-09-22",
+    "requested_posts_per_search": 5,
+    "post_limit_enforcement": "Prompt/tool arguments, not an API-level monetary cap"
+  },
+  "calls": [
+    {
+      "index": 0,
+      "query": "(\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入了\" OR \"我离开了\" OR \"に入社\" OR \"を退職\") (AI OR LLM OR \"machine learning\" OR OpenAI OR Anthropic) since:2026-08-23 until:2026-09-23 min_faves:0",
+      "limit": "5",
+      "mode": "Latest",
+      "cited_post_ids": [
+        "2102170542287544326",
+        "2102164848620499028",
+        "2102157224013345003",
+        "2102154526149013574",
+        "2102153373797736502"
+      ]
+    },
+    {
+      "index": 1,
+      "query": "(\"apply by\" OR \"applications close\") (hackathon OR fellowship) (AI OR LLM) since:2026-08-23 until:2026-09-23",
+      "limit": "5",
+      "mode": "Latest",
+      "cited_post_ids": [
+        "2102093101695172781",
+        "2102074088478957576",
+        "2102011980810735643",
+        "2101931248058876209",
+        "2101926665563824586"
+      ]
+    },
+    {
+      "index": 2,
+      "query": "(\"I've joined OpenAI\" OR \"I left Anthropic\" OR \"我离开了OpenAI\" OR \"OpenAIに入社\" OR \"I've joined @deepseek_ai\") since:2026-08-23 until:2026-09-23",
+      "limit": "5",
+      "mode": "Latest",
+      "cited_post_ids": [
+        "2101053202674421900",
+        "2100318673088995333",
+        "2100299862839603398",
+        "2098958918449811806",
+        "2098906392140612062"
+      ]
+    },
+    {
+      "index": 3,
+      "query": "((\"we're hiring\" (\"research scientist\" OR \"ML engineer\")) OR ((\"we'll be at\" OR \"tickets are live\") (\"AI conference\" OR \"AI summit\")) OR \"step 5 preview\") since:2026-08-23 until:2026-09-23",
+      "limit": "5",
+      "mode": "Latest",
+      "cited_post_ids": [
+        "2102170795946496184",
+        "2102168341159055651",
+        "2102160491472998895",
+        "2102158428856529401"
+      ]
+    }
+  ],
+  "researcher_assessment": {
+    "new_personnel": {
+      "reported_genuine": 1,
+      "reported_irrelevant": 4,
+      "example_url": "https://x.com/sloppenheimer/status/2102154526149013574",
+      "example_summary": "Research model identified an Arcee AI Head of Compute join announcement outside the historical employer-specific phrases."
+    },
+    "historical_personnel": {
+      "reported_genuine": 1,
+      "reported_ambiguous": 1,
+      "reported_irrelevant": 3,
+      "genuine_example_url": "https://x.com/alexzhaoisreal/status/2100299862839603398"
+    },
+    "opportunity": {
+      "reported_ai_qualified": 5,
+      "reported_crypto_hackathon_promotions": 2,
+      "examples": [
+        "https://x.com/yAuditDAO/status/2102093101695172781",
+        "https://x.com/AACR/status/2102074088478957576"
+      ]
+    },
+    "other_clauses": {
+      "reported_step5_discussion": 4,
+      "reported_hiring": 0,
+      "reported_events": 0
+    },
+    "language_evidence": "English personnel/opportunity results; Chinese and Japanese only in Step-5 discussion. No Chinese or Japanese personnel phrase observed in these capped latest samples."
+  },
+  "limitations": [
+    "These are the research model's summaries and citation identities, not independent labels or full-text quality fixtures.",
+    "SDK tool bodies were opaque encrypted content; the durable artifact deliberately omits those bodies and preserves visible call arguments and citations.",
+    "Do not reject a source merely for being outside EN/ZH/JA. The research model incorrectly used that argument for a Hebrew report.",
+    "A third-party report may establish a model release if source-grounded. The model's blanket recap labels are not a substitute for the product contract.",
+    "Grok matching does not prove TwitterAPI.io advanced_search syntax, overlap, paid yield, or Boolean semantics.",
+    "The full candidate query was not run as one query here; four bounded clause comparisons are research only.",
+    "The @deepseek_ai clause overlaps current B2 coverage; no zero-overlap claim is made.",
+    "At most five latest hits per comparison cannot establish recall or coverage; do not buy more pages merely to force a passing result.",
+    "TwitterAPI calls, Jev calls, Post/domain writes, staging mutations, and production mutations: zero."
+  ],
+  "preceding_cli_attempt": {
+    "model": "grok-4.7-build",
+    "session_id": "01a0c62b-2d8a-72a1-bc6c-9d8562d7020e",
+    "request_id": "b8ee1d9f-82d3-447e-88d9-6f0403dfe5c7",
+    "search_calls": 0,
+    "reported_cost_usd": "0.03743128",
+    "outcome": "CLI had no X-search tools; absence is not zero query yield."
+  },
+  "pricing_reference": "https://docs.x.ai/developers/tools/x-search",
+  "pricing_note": "Official docs announce post/profile-based X Search billing from 2026-09-21 noon PT. Recorded cost is API-reported usage, not a reconstructed invoice."
+}

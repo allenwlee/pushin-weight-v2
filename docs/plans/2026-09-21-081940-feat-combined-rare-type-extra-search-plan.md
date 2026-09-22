@@ -101,6 +101,23 @@ Completion requires evidence that a returned post reaches the correct record and
 - **Stop conditions:** Stop if mill or conference-spam fills extra-search pages so personnel/job keepers are not returned. Stop if a bio observation time is treated as an employment start date.
 - **Release stop conditions:** Failed quality gate, unresolved query overflow, unsafe credential routing, or a staging identity mismatch prevents enablement/delivery. Provider-limited recall is measured, never presented as complete coverage.
 
+## Execution Checkpoint — 2026-09-22
+
+**Status: blocked at U3 quality acceptance; feature disabled; nothing pushed or deployed.** The full U1–U14 scope below remains the completion contract. This checkpoint does not reduce the feature to query tooling.
+
+| Unit | Local state | Evidence |
+| --- | --- | --- |
+| U4 | Implemented, `e116b93` | Existing harvest regression: 108 passed, 39 required PostgreSQL tests executed, no skips; profile/feed checks separately passed |
+| U1 / U2 | Implemented, `0163ad9` | Versioned query and bounded trial: 40 passed, eight required PostgreSQL tests executed, no skips |
+| U5 | Implemented, `7661464` | Durable ledgers: host suite 132 passed, 63 required PostgreSQL tests executed, no skips/errors |
+| U7 | Implemented, `c69e6d0` | Bounded Jev adapter and accounting: host suite 149 passed, 80 required PostgreSQL tests executed, no skips/errors |
+| U3 | Tooling committed, `b20e1af`; quality acceptance failed | 25 scorer tests passed; final combined suite 174 passed with 80 required PostgreSQL tests and no skips/errors. Live query 5/20 keepers (25%, requires 60%); partial captured Jev evidence bounds best possible recall at 50% (requires 90%) |
+| U6, U8–U14 | Not implemented | No scheduled lane, canonical-record pipeline, registry/bio integration, end-to-end reader/recovery proof, or staging delivery |
+
+Read [the quality-stop assessment](../analysis/harvester/2026-09-22-095250-rare-type-quality-stop.md) before resuming. It links full live-query source texts, exact-ID production overlap, real Jev responses, spend evidence, and the terminal-capture limitation (37/56 responses retained). No full-corpus precision/recall or passing assessment is claimed. The schema-only smoke is not quality evidence.
+
+Resume in this same authoritative checkout and branch. Keep failed evidence frozen, correct the query and Jev question/routing design under the existing scope, and use a newly versioned, independently evaluated, durably captured assessment before enablement. Do not lower KTD8 thresholds or purchase more pages to turn this failed sample into a pass. Owner yield acceptance, all remaining implementation units, final review, and exact-SHA staging proof are still required. Production remains unauthorized.
+
 ---
 
 ## Product Contract
