@@ -1,0 +1,120 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ active_locale|default:'en'|slice:':2' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ copy.title }} · Pushin' Weight</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #0a0d12; color: #e8edf5; }
+    main { width: min(1100px, calc(100% - 32px)); margin: 40px auto; }
+    h1, h2 { letter-spacing: -.02em; }
+    a { color: #8cc8ff; }
+    .layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 24px; }
+    .panel { border: 1px solid #293342; border-radius: 12px; background: #111722; padding: 20px; }
+    .proposal { display: block; padding: 12px 0; border-bottom: 1px solid #293342; }
+    .proposal:last-child { border-bottom: 0; }
+    .muted, dt { color: #9eacbd; }
+    dl { display: grid; grid-template-columns: 180px 1fr; gap: 8px 16px; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #090d13; padding: 12px; border-radius: 8px; }
+    label { display: grid; gap: 6px; margin: 14px 0; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { padding: 10px; color: #eef3fa; background: #090d13; border: 1px solid #3a4658; border-radius: 7px; }
+    textarea { min-height: 84px; resize: vertical; }
+    .actions { display: flex; gap: 10px; }
+    button { padding: 10px 16px; border: 0; border-radius: 7px; cursor: pointer; }
+    .approve { background: #50d890; color: #07130c; }
+    .reject { background: #ed6b75; color: #190608; }
+    @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } dl { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>{{ copy.title }}</h1>
+  <div class="layout">
+    <section class="panel" aria-labelledby="queue-title">
+      <h2 id="queue-title">{{ copy.queue }}</h2>
+      {% for item in proposals %}
+        <a class="proposal" href="{% url 'product_review_detail' item.pk %}">
+          <strong>{{ item.observed_name }}</strong><br>
+          <span class="muted">{{ item.account_handle_snapshot|default:item.account_id }} · {{ item.hf_outcome }}</span>
+        </a>
+      {% empty %}
+        <p>{{ copy.empty }}</p>
+      {% endfor %}
+    </section>
+
+    <section class="panel" aria-live="polite">
+      {% if proposal %}
+        <p><a href="{% url 'product_review' %}">← {{ copy.back }}</a></p>
+        <h2>{{ proposal.observed_name }}</h2>
+        <dl>
+          <dt>Post ID</dt><dd>{{ proposal.source_post_id }}</dd>
+          <dt>X account ID</dt><dd>{{ proposal.account_id }}</dd>
+          <dt>X handle</dt><dd>{{ proposal.account_handle_snapshot|default:'—' }}</dd>
+          <dt>HF outcome</dt><dd>{{ proposal.hf_outcome }}</dd>
+          <dt>HF repository</dt><dd>{{ proposal.candidate_repo_id|default:'—' }}</dd>
+          <dt>Proposed Brand</dt><dd>{{ proposal.proposed_brand_id|default:'—' }}</dd>
+          <dt>Candidate</dt><dd>{{ proposal.proposed_candidate.observed_name|default:'—' }}</dd>
+          <dt>Review state</dt><dd>{{ proposal.review_status }}</dd>
+        </dl>
+
+        <h3>{{ copy.source }}</h3>
+        <p>{{ proposal.source_post.text }}</p>
+        <pre>{{ proposal.rule_trace|pprint }}</pre>
+        <pre>{{ proposal.hf_evidence|pprint }}</pre>
+
+        {% if proposal.review_status == 'pending' %}
+          <h3>{{ copy.decision }}</h3>
+          <form method="post">
+            {% csrf_token %}
+            <label>{{ copy.brand }}
+              <select name="brand_id">
+                <option value="">—</option>
+                {% for brand in brands %}
+                  <option value="{{ brand.pk }}"{% if proposal.proposed_brand_id == brand.pk %} selected{% endif %}>{{ brand.display_name|default:brand.pk }} ({{ brand.pk }})</option>
+                {% endfor %}
+              </select>
+            </label>
+            {% if proposal.proposed_candidate_id %}
+              <label>New Brand nickname
+                <input name="new_brand_id" autocomplete="off" pattern="[a-z0-9][a-z0-9_]{1,62}">
+              </label>
+              <label>Company (optional)
+                <select name="company_id">
+                  <option value="">—</option>
+                  {% for company in companies %}<option value="{{ company.pk }}">{{ company.display_name|default:company.pk }}</option>{% endfor %}
+                </select>
+              </label>
+            {% endif %}
+            <label>{{ copy.type }}
+              <select name="product_type">
+                {% for value, label in product_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>{{ copy.mode }}
+              <select name="catalog_mode">
+                <option value="x_only">{{ copy.x_only }}</option>
+                {% if proposal.hf_outcome == 'matched' %}<option value="hf">{{ copy.hf }}</option>{% endif %}
+              </select>
+            </label>
+            <label>{{ copy.reason }}
+              <textarea name="reason" required maxlength="2000"></textarea>
+            </label>
+            <div class="actions">
+              <button class="approve" type="submit" name="action" value="approve">{{ copy.approve }}</button>
+              <button class="reject" type="submit" name="action" value="reject">{{ copy.reject }}</button>
+            </div>
+          </form>
+        {% endif %}
+      {% else %}
+        <p class="muted">{{ copy.queue }}</p>
+      {% endif %}
+    </section>
+  </div>
+</main>
+</body>
+</html>

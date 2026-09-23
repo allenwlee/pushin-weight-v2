@@ -23,7 +23,10 @@ from core.models import (
     Brand,
     BrandAccount,
     BrandCompany,
+    BrandDiscoveryCandidate,
+    Company,
     HFOrg,
+    ModelRelease,
     Post,
     PostBrandProduct,
     Product,
@@ -67,6 +70,196 @@ class VerificationDrainResult:
     attempted: int
     resolved: int
     deferred: int
+
+
+class ProductReviewError(ValueError):
+    """A fail-closed owner review validation or stale-decision error."""
+
+
+@transaction.atomic
+def decide_product_proposal(
+    *,
+    proposal_id: int,
+    action: str,
+    reviewer: str,
+    reason: str,
+    brand_id: str = "",
+    product_type: str = "",
+    catalog_mode: str = "x_only",
+    new_brand_id: str = "",
+    company_id: str = "",
+) -> ProductVerificationProposal:
+    """Apply one owner decision without provider calls or harvest mutations."""
+    reviewer = reviewer.strip()
+    reason = reason.strip()
+    if not reviewer or not reason:
+        raise ProductReviewError("reviewer and reason are required")
+    if action not in {"approve", "reject"}:
+        raise ProductReviewError("invalid review action")
+    proposal = ProductVerificationProposal.objects.select_for_update().get(
+        pk=proposal_id
+    )
+    if proposal.review_status != "pending":
+        if action == "reject" and proposal.review_status == "rejected":
+            return proposal
+        if action == "approve" and proposal.review_status == "approved":
+            product = proposal.resolved_product
+            submitted_brand = brand_id or new_brand_id
+            submitted_mode = "hf" if product and product.repo_id else "x_only"
+            if (
+                product
+                and product.brand_id == submitted_brand
+                and product.type == product_type
+                and submitted_mode == catalog_mode
+            ):
+                return proposal
+        raise ProductReviewError("proposal already decided")
+
+    # An explicit owner decision fences any in-flight automatic verifier. Its
+    # finalizer rechecks both this state and the cleared token before writing.
+    proposal.verification_claim_token = None
+    proposal.verification_claim_expires_at = None
+    proposal.reviewer = reviewer
+    proposal.review_reason = reason
+    proposal.reviewed_at = timezone.now()
+    if action == "reject":
+        proposal.review_status = "rejected"
+        proposal.save()
+        return proposal
+
+    if product_type not in {value for value, _label in Product.TYPES}:
+        raise ProductReviewError("invalid product type")
+    new_brand_id = new_brand_id.strip()
+    company_id = company_id.strip()
+    if brand_id and new_brand_id:
+        raise ProductReviewError("choose an existing or new Brand, not both")
+    if new_brand_id:
+        if proposal.proposed_candidate_id is None:
+            raise ProductReviewError("only candidate proposals can create a Brand")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_]{1,62}", new_brand_id):
+            raise ProductReviewError("invalid new Brand nickname")
+        try:
+            with transaction.atomic():
+                brand = Brand.objects.create(
+                    nickname=new_brand_id,
+                    display_name=proposal.proposed_candidate.observed_name,
+                )
+        except IntegrityError as exc:
+            raise ProductReviewError(
+                "new Brand nickname already exists; select the existing Brand instead"
+            ) from exc
+        if company_id:
+            try:
+                company = Company.objects.get(pk=company_id)
+            except Company.DoesNotExist as exc:
+                raise ProductReviewError("unknown Company") from exc
+            BrandCompany.objects.get_or_create(brand=brand, company=company)
+        candidate = BrandDiscoveryCandidate.objects.select_for_update().get(
+            pk=proposal.proposed_candidate_id
+        )
+        if candidate.reviewed_brand_id not in (None, brand.pk):
+            raise ProductReviewError("candidate already resolved to another Brand")
+        candidate.reviewed_brand = brand
+        candidate.verification_status = "confirmed"
+        candidate.reviewer = reviewer
+        candidate.review_note = reason
+        candidate.reviewed_at = timezone.now()
+        candidate.save()
+    else:
+        try:
+            brand = Brand.objects.get(pk=brand_id, is_sentinel=False)
+        except Brand.DoesNotExist as exc:
+            raise ProductReviewError("unknown product brand") from exc
+    if catalog_mode not in {"x_only", "hf"}:
+        raise ProductReviewError("invalid catalog mode")
+    repo_id = None
+    if catalog_mode == "hf":
+        if (
+            proposal.hf_outcome != ProductVerificationProposal.HFOutcome.MATCHED
+            or not _REPO_ID.fullmatch(proposal.candidate_repo_id)
+        ):
+            raise ProductReviewError("HF approval requires matched exact metadata")
+        repo_id = proposal.candidate_repo_id
+
+    product = None
+    if proposal.source_release_id:
+        ModelRelease.objects.select_for_update().get(pk=proposal.source_release_id)
+        prior_product_id = (
+            ProductVerificationProposal.objects.filter(
+                source_release_id=proposal.source_release_id,
+                review_status="approved",
+                proposed_brand=brand,
+                resolved_product__isnull=False,
+            )
+            .values_list("resolved_product_id", flat=True)
+            .first()
+        )
+        if prior_product_id is not None:
+            product = Product.objects.select_for_update().get(pk=prior_product_id)
+    if repo_id:
+        repo_product = (
+            Product.objects.select_for_update().filter(repo_id=repo_id).first()
+        )
+        if product is not None:
+            if repo_product is not None and repo_product.pk != product.pk:
+                raise ProductReviewError(
+                    "repository already resolves to another Product"
+                )
+            if product.repo_id not in (None, repo_id):
+                raise ProductReviewError(
+                    "release already resolves to another repository"
+                )
+            product.repo_id = repo_id
+            product.raw = proposal.hf_evidence
+            product.save(update_fields=["repo_id", "raw", "updated_at"])
+        else:
+            product, _created = Product.objects.get_or_create(
+                repo_id=repo_id,
+                defaults={
+                    "brand": brand,
+                    "display_name": proposal.observed_name,
+                    "type": product_type,
+                    "raw": proposal.hf_evidence,
+                },
+            )
+            product = Product.objects.select_for_update().get(pk=product.pk)
+        if product.brand_id not in (None, brand.pk):
+            raise ProductReviewError("repository belongs to another Brand")
+    if product is None:
+        product = Product.objects.create(
+            repo_id=repo_id,
+            brand=brand,
+            display_name=proposal.observed_name,
+            type=product_type,
+            raw=proposal.hf_evidence if repo_id else None,
+        )
+    else:
+        product.brand = brand
+        product.type = product_type
+        if not product.display_name:
+            product.display_name = proposal.observed_name
+        product.save(update_fields=["brand", "type", "display_name", "updated_at"])
+
+    PostBrandProduct.objects.get_or_create(
+        post=proposal.source_post,
+        brand=brand,
+        product=product,
+        defaults={
+            "observed_name": proposal.observed_name,
+            "source_evidence": {
+                "proposal_key": proposal.proposal_key,
+                "decision": "owner_approved",
+            },
+            "verification_policy_version": proposal.policy_version,
+        },
+    )
+    proposal.proposed_brand = brand
+    proposal.proposed_candidate = None
+    proposal.resolved_product = product
+    proposal.review_status = "approved"
+    proposal.rule_trace = [*proposal.rule_trace, "owner_override:catalog_identity"]
+    proposal.save()
+    return proposal
 
 
 def evaluate_known_publisher(

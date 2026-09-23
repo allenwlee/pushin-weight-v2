@@ -177,6 +177,11 @@ OLLIJA_STAGING_ALLOWED_EMAILS = frozenset(
     for email in env.list("OLLIJA_STAGING_ALLOWED_EMAILS", default=[])
     if email.strip()
 )
+PRODUCT_REVIEW_OWNER_EMAILS = frozenset(
+    email.strip().casefold()
+    for email in env.list("PRODUCT_REVIEW_OWNER_EMAILS", default=[])
+    if email.strip()
+)
 # ============================================================================
 # django-allauth — Google OAuth
 # ============================================================================
