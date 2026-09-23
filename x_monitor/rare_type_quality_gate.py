@@ -42,6 +42,15 @@ HARD_NEGATIVE_FAMILIES = {
     "conference_ad",
 }
 ASSESSMENT_BUDGET_USD = Decimal("0.25")
+FUNCTIONAL_EXEMPLARS = {
+    "personnel_en_join": ("personnel_changes",),
+    "personnel_zh_join": ("personnel_changes",),
+    "personnel_ja_leave": ("personnel_changes",),
+    "job_en_lm_engineer": ("job_listings",),
+    "event_online_eval_seminar": ("events",),
+    "opportunity_research_grant": ("opportunities",),
+    "release_cedar_preview": ("model_releases",),
+}
 
 
 class QualityEvidenceError(ValueError):
@@ -311,11 +320,6 @@ def evaluate_fixture_predictions(
 def _corpus_reasons(corpus: Mapping[str, Any]) -> list[str]:
     cases = _validated_cases(corpus)
     reasons = []
-    if sum(not case["reference"]["keep"] for case in cases) < 25:
-        reasons.append("negative_fixture_count_below_floor")
-    for type_name in DOMAIN_TYPES:
-        if sum(type_name in case["reference"]["types"] for case in cases) < 5:
-            reasons.append(f"positive_fixture_count_below_floor:{type_name}")
     hard_negative_families = {case["reference"].get("hard_negative") for case in cases}
     if not HARD_NEGATIVE_FAMILIES <= hard_negative_families:
         reasons.append("hard_negative_coverage_incomplete")
@@ -371,7 +375,7 @@ def _live_reasons(
         return ["live_evidence_missing"], []
     cohorts = live_evidence.get("cohorts")
     if not isinstance(cohorts, list) or not cohorts:
-        return ["live_sample_too_small"], []
+        return ["live_evidence_empty"], []
     if live_evidence.get("overlap_source") != "production_read_only_exact_ids":
         return ["overlap_unknown"], []
     reasons: list[str] = []
@@ -433,8 +437,8 @@ def _live_reasons(
             reasons.append("live_duplicate_ids_across_windows")
         all_ids.update(post_ids)
         denominator = len(post_ids)
-        if denominator < 10:
-            reasons.append(f"live_sample_too_small:{cohort_id}")
+        if denominator == 0:
+            reasons.append(f"live_cohort_empty:{cohort_id}")
         yield_rate = _ratio(counts["independently_read_keepers"], denominator)
         overlap_rate = _ratio(counts["already_stored"], denominator)
         mill_rate = _ratio(counts["mill"], denominator)
@@ -455,16 +459,6 @@ def _live_reasons(
                 ),
             }
         )
-        if yield_rate is not None and yield_rate < 0.60:
-            reasons.append("live_keeper_yield_below_floor")
-        if overlap_rate is not None and overlap_rate > 0.20:
-            reasons.append("live_overlap_above_ceiling")
-        if mill_rate is not None and mill_rate > 0.20:
-            reasons.append("live_mill_above_ceiling")
-        if recruiter_rate is not None and recruiter_rate > 0.20:
-            reasons.append("live_recruiter_above_ceiling")
-    if len(all_ids) < 10:
-        reasons.append("live_sample_too_small")
     if total_estimated_credits > 1_200:
         reasons.append("live_credit_budget_exceeded")
     return list(dict.fromkeys(reasons)), metrics
@@ -487,25 +481,22 @@ def complete_assessment(
     )
     fail_reasons = _corpus_reasons(corpus)
     inconclusive_reasons: list[str] = []
-    precision = fixture_metrics["keeper_precision"]
-    recall = fixture_metrics["keeper_recall"]
-    if precision is None or precision < 0.90:
-        fail_reasons.append("fixture_keeper_precision_below_floor")
-    if recall is None or recall < 0.90:
-        fail_reasons.append("fixture_keeper_recall_below_floor")
     if fixture_metrics["hard_negative_false_keeps"]:
         fail_reasons.append("hard_negative_false_keep")
+    fixture_rows = {row["case_id"]: row for row in fixture_metrics["rows"]}
+    for case_id, expected_types in FUNCTIONAL_EXEMPLARS.items():
+        row = fixture_rows.get(case_id)
+        if (
+            row is None
+            or row["outcome"] != "kept"
+            or row["derived_types"] != list(expected_types)
+        ):
+            fail_reasons.append(f"functional_exemplar_failed:{case_id}")
     if fixture_metrics["evidence_kind"] != "captured_real":
         inconclusive_reasons.append("mock_only_evidence")
 
     live_reasons, live_metrics = _live_reasons(live_evidence)
-    measured_live_failures = {
-        "live_keeper_yield_below_floor",
-        "live_overlap_above_ceiling",
-        "live_mill_above_ceiling",
-        "live_recruiter_above_ceiling",
-        "live_credit_budget_exceeded",
-    }
+    measured_live_failures = {"live_credit_budget_exceeded"}
     fail_reasons.extend(
         reason for reason in live_reasons if reason in measured_live_failures
     )

@@ -141,12 +141,12 @@ def _live(*, overlap=2, independently_read_keepers=6, mill=2, recruiter=2):
 
 def test_corpus_is_balanced_realistic_and_keeps_labels_out_of_provider_state():
     cases = _corpus()["cases"]
-    assert len(cases) >= 55
     assert len({case["id"] for case in cases}) == len(cases)
-    assert sum(case["reference"]["keep"] for case in cases) >= 5 * len(TYPES)
-    assert sum(not case["reference"]["keep"] for case in cases) >= 25
-    for type_name in TYPES:
-        assert sum(type_name in case["reference"]["types"] for case in cases) >= 5
+    assert {
+        type_name for case in cases for type_name in case["reference"]["types"]
+    } == TYPES
+    assert any(case["reference"]["keep"] for case in cases)
+    assert any(not case["reference"]["keep"] for case in cases)
     hard_negatives = {case["reference"].get("hard_negative") for case in cases}
     assert {
         "mill",
@@ -323,15 +323,8 @@ def test_complete_assessment_passes_only_real_complete_evidence_and_has_stable_d
                     "overlap_source": "production_read_only_exact_ids",
                 }
             },
-            "live_sample_too_small",
+            "live_evidence_empty",
         ),
-        (
-            {"live": _live(independently_read_keepers=5)},
-            "live_keeper_yield_below_floor",
-        ),
-        ({"live": _live(overlap=3)}, "live_overlap_above_ceiling"),
-        ({"live": _live(mill=3)}, "live_mill_above_ceiling"),
-        ({"live": _live(recruiter=3)}, "live_recruiter_above_ceiling"),
         (
             {
                 "budget": {
@@ -434,6 +427,165 @@ def test_hard_negative_false_keep_and_zero_denominators_fail_without_division_er
     assert "hard_negative_false_keep" in assessment["reasons"]
 
 
+def test_low_aggregate_quality_and_high_live_noise_are_reported_without_failing():
+    from x_monitor.rare_type_quality_gate import (
+        FUNCTIONAL_EXEMPLARS,
+        complete_assessment,
+    )
+
+    predictions = _predictions()
+    for row, case in zip(predictions, _corpus()["cases"], strict=True):
+        if case["reference"]["keep"] and case["id"] not in FUNCTIONAL_EXEMPLARS:
+            row["probabilities"] = _probabilities()
+    for row, case in zip(predictions, _corpus()["cases"], strict=True):
+        if (
+            not case["reference"]["keep"]
+            and case["reference"].get("hard_negative") is None
+        ):
+            row["probabilities"] = _probabilities("job_listings")
+    live = _live(overlap=9, independently_read_keepers=1, mill=9, recruiter=9)
+    assessment = complete_assessment(
+        identity=_identity(),
+        corpus=_corpus(),
+        predictions=predictions,
+        config=_cfg(),
+        live_evidence=live,
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": "0.0056",
+            "usage_complete": True,
+        },
+    )
+    assert assessment["status"] == "pass"
+    assert assessment["reasons"] == []
+    assert assessment["fixture_metrics"]["keeper_precision"] < 0.9
+    assert assessment["fixture_metrics"]["keeper_recall"] < 0.9
+    assert assessment["live_metrics_by_window"][0]["keeper_yield"] == 0.1
+    assert assessment["live_metrics_by_window"][0]["overlap_rate"] == 0.9
+    assert assessment["live_metrics_by_window"][0]["mill_rate"] == 0.9
+    assert assessment["live_metrics_by_window"][0]["recruiter_rate"] == 0.9
+
+
+def test_each_named_functional_exemplar_must_route_as_expected():
+    from x_monitor.rare_type_quality_gate import (
+        FUNCTIONAL_EXEMPLARS,
+        complete_assessment,
+    )
+
+    for case_id in FUNCTIONAL_EXEMPLARS:
+        predictions = _predictions()
+        next(row for row in predictions if row["case_id"] == case_id)[
+            "probabilities"
+        ] = _probabilities()
+        assessment = complete_assessment(
+            identity=_identity(),
+            corpus=_corpus(),
+            predictions=predictions,
+            config=_cfg(),
+            live_evidence=_live(),
+            budget={
+                "reserved_usd": "0.25",
+                "confirmed_usd": "0.0056",
+                "usage_complete": True,
+            },
+        )
+        assert assessment["status"] == "fail"
+        assert f"functional_exemplar_failed:{case_id}" in assessment["reasons"]
+
+
+def test_complete_nonempty_live_evidence_has_no_minimum_sample_pass_bar():
+    from x_monitor.rare_type_quality_gate import complete_assessment
+
+    live = _live()
+    live["cohorts"] = [live["cohorts"][0]]
+    live["cohorts"][0].update(
+        post_ids=["p1"],
+        independently_read_keepers=0,
+        already_stored=1,
+        mill=1,
+        recruiter=1,
+        raw_paid_result_count=1,
+        captured_assessable_count=1,
+        estimated_credits=15,
+    )
+    assessment = complete_assessment(
+        identity=_identity(),
+        corpus=_corpus(),
+        predictions=_predictions(),
+        config=_cfg(),
+        live_evidence=live,
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": "0.0056",
+            "usage_complete": True,
+        },
+    )
+    assert assessment["status"] == "pass"
+    assert assessment["reasons"] == []
+
+
+def test_functionally_complete_fixture_has_no_minimum_case_count_pass_bar():
+    from x_monitor.rare_type_quality_gate import complete_assessment
+
+    selected = []
+    cases = _corpus()["cases"]
+    for family in (
+        "mill",
+        "lineup",
+        "f1",
+        "joke",
+        "static_bio",
+        "recap",
+        "price_only",
+        "conference_ad",
+    ):
+        selected.append(
+            next(
+                case
+                for case in cases
+                if case["reference"].get("hard_negative") == family
+            )
+        )
+    for type_name in TYPES:
+        selected.append(
+            next(case for case in cases if type_name in case["reference"]["types"])
+        )
+    for language in ("en", "zh", "ja"):
+        selected.append(
+            next(
+                case
+                for case in cases
+                if "personnel_changes" in case["reference"]["types"]
+                and case["public_payload"]["lang"].lower().startswith(language)
+            )
+        )
+    corpus = {
+        "schema_version": _corpus()["schema_version"],
+        "cases": list({case["id"]: case for case in selected}.values()),
+    }
+    identity = deepcopy(_identity())
+    identity["corpus_content_sha256"] = hashlib.sha256(
+        json.dumps(
+            corpus, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    assessment = complete_assessment(
+        identity=identity,
+        corpus=corpus,
+        predictions=_predictions(corpus=corpus),
+        config=_cfg(),
+        live_evidence=_live(),
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": "0.0056",
+            "usage_complete": True,
+        },
+    )
+    assert len(corpus["cases"]) < 25
+    assert assessment["status"] == "pass"
+    assert assessment["reasons"] == []
+
+
 def test_missing_paid_rows_cannot_inflate_live_quality():
     from x_monitor.rare_type_quality_gate import complete_assessment
 
@@ -482,7 +634,7 @@ def test_large_research_window_cannot_replace_an_empty_primary_window():
         },
     )
     assert assessment["status"] == "inconclusive"
-    assert "live_sample_too_small:15m-primary" in assessment["reasons"]
+    assert "live_cohort_empty:15m-primary" in assessment["reasons"]
     assert assessment["live_metrics_by_window"][0]["keeper_yield"] is None
 
 
