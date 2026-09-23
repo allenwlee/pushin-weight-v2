@@ -69,6 +69,11 @@ daily_ceiling: 333
 discovery:
   rare_types:
     enabled: false
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    daily_credit_ceiling: 6000
+    reserved_credits_per_call: 300
     jev:
       endpoint: https://openrouter.ai/api/alpha/decisions
       model: typesafe/jev-1.13-20260917

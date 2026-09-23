@@ -64,6 +64,9 @@ def _configured_call_ids(cfg) -> set[str]:
         if call_id:
             known.add(str(call_id).upper())
     discovery = getattr(cfg, "discovery", None)
+    rare_types = getattr(discovery, "rare_types", None)
+    if rare_types is not None:
+        known.add("RARE_EXTRA")
     for lane_name in ("jobs", "personnel"):
         lane = getattr(discovery, lane_name, None)
         for query in getattr(lane, "queries", []) or []:

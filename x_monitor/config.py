@@ -258,7 +258,22 @@ class RareTypeSearchConfig(BaseModel):
     """Disabled-by-default combined rare-type lane; U6 adds search wiring."""
 
     enabled: bool = False
+    assessment_path: str = ""
+    assessment_digest: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    max_results: Literal[20] = 20
+    max_pages: Literal[1] = 1
+    max_per_page: Literal[20] = 20
+    daily_credit_ceiling: Literal[6000] = 6000
+    reserved_credits_per_call: Literal[300] = 300
     jev: JevDecisionsConfig = JevDecisionsConfig()
+
+    @model_validator(mode="after")
+    def _validate_enablement_evidence(self) -> RareTypeSearchConfig:
+        if self.enabled and (not self.assessment_path or not self.assessment_digest):
+            raise ValueError(
+                "enabled rare-types lane requires pinned assessment evidence"
+            )
+        return self
 
 
 class DiscoveryConfig(BaseModel):

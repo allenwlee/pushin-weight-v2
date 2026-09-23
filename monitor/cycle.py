@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -79,12 +80,19 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    SearchQuery,
     SentimentKey,
 )
 from core.profile_snapshots import (
     build_account_affiliation_contexts,
     build_brand_reference_index,
     capture_post_profile_snapshot,
+)
+from core.rare_type_search import (
+    mark_search_dispatched,
+    mark_search_failed,
+    persist_hit_batch,
+    reserve_search_run,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
 from monitor.harvest_summary import summarize_latency
@@ -2831,6 +2839,110 @@ class CycleRunner:
             return all_items, "truncated"
         return all_items, "ok"
 
+    def _run_rare_type_search(
+        self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
+    ) -> dict[str, Any]:
+        """Reserve and execute the one-page RARE_EXTRA slot exactly once."""
+
+        query_hash = hashlib.sha256(call.query_string.encode()).hexdigest()
+        source_query, _ = SearchQuery.objects.get_or_create(
+            query_id=f"{call.call_id}:{call.query_pack_version}:{query_hash}",
+            defaults={
+                "keywords": {
+                    "lane": "rare_types",
+                    "query": call.query_string,
+                    "query_version": call.query_pack_version,
+                },
+                "plan_calls_run_id": "rare-type-scheduled",
+            },
+        )
+        slot_start = now.replace(
+            minute=(now.minute // 15) * 15, second=0, microsecond=0
+        )
+        reservation = reserve_search_run(
+            lane="rare_types",
+            slot_start=slot_start,
+            source_query=source_query,
+            query_string=call.query_string,
+            query_hash=query_hash,
+            query_version=call.query_pack_version or "unknown",
+            environment=os.environ.get("RENDER_SERVICE_NAME", "local")[:64],
+            release_sha=os.environ.get("RENDER_GIT_COMMIT", "unknown")[:64],
+            now=now,
+            reserved_credits=self.cfg.discovery.rare_types.reserved_credits_per_call,
+            daily_credit_limit=int(call.daily_credit_ceiling or 0),
+        )
+        if not reservation.created or reservation.run is None:
+            return {"status": reservation.reason, "provider_called": False}
+        run = reservation.run
+        effective_query = TwitterApiClient._effective_search_query(
+            call.query_string,
+            since=None,
+            since_time=int(run.attempted_start.timestamp()),
+            until_time=int(run.attempted_end.timestamp()),
+        )
+        try:
+            assert_under_length_cap(effective_query)
+        except ValueError:
+            mark_search_failed(
+                run.pk, error_code="length_cap_exceeded", now=self._wall_now()
+            )
+            return {"status": "length_cap_exceeded", "provider_called": False}
+        if not mark_search_dispatched(run.pk, now=self._wall_now()):
+            mark_search_failed(
+                run.pk, error_code="dispatch_state_invalid", now=self._wall_now()
+            )
+            return {"status": "dispatch_state_invalid", "provider_called": False}
+        prior_retries = api.max_retries
+        api.max_retries = 0
+        try:
+            # U5's allowlisted hit batch is the durable response evidence. If
+            # the process dies after dispatch but before this transaction,
+            # the DISPATCHED row retains the full reservation and the unique
+            # slot prevents an automatic paid retry.
+            _body, raw, normalized, continuation, normalization_errors = (
+                api.run_search_page_with_raw(
+                    call.query_string,
+                    max_results=20,
+                    max_pages=1,
+                    max_per_page=20,
+                    since_time=int(run.attempted_start.timestamp()),
+                    until_time=int(run.attempted_end.timestamp()),
+                )
+            )
+            raw_items = raw.get("tweets") or raw.get("data") or []
+            if not isinstance(raw_items, list) or len(raw_items) > 20:
+                raise ValueError("rare-type provider page violated 20-slot envelope")
+            persist_hit_batch(
+                run.pk,
+                normalized,
+                now=self._wall_now(),
+                raw_count=len(raw_items),
+                normalized_count=len(normalized),
+                truncated=continuation,
+            )
+            return {
+                "status": (
+                    "truncated"
+                    if continuation
+                    else ("no_results" if not raw_items else "stored")
+                ),
+                "provider_called": True,
+                "raw_count": len(raw_items),
+                "normalized_count": len(normalized),
+                "normalization_errors": normalization_errors,
+                "run_id": run.pk,
+                "query_version": call.query_pack_version,
+            }
+        except Exception as exc:
+            mark_search_failed(
+                run.pk, error_code=type(exc).__name__[:128], now=self._wall_now()
+            )
+            self._errors.append(f"fetch.{call.call_id}: {exc}")
+            return {"status": "error", "provider_called": True, "run_id": run.pk}
+        finally:
+            api.max_retries = prior_retries
+
 
     def _prepare_call_a_roles(
         self, items: list[dict[str, Any]], *, list_id: int
@@ -4315,6 +4427,24 @@ class CycleRunner:
                     "max_pages": call.max_pages,
                     "daily_credit_ceiling": call.daily_credit_ceiling,
                 }
+
+            if call.call_id == "RARE_EXTRA":
+                rare_result = self._run_rare_type_search(
+                    call, api, now=self._wall_now()
+                )
+                call_entry.update(rare_result)
+                call_entry["n_results"] = rare_result.get("raw_count", 0)
+                call_entry["fetch_n"] = rare_result.get("raw_count", 0)
+                call_entry["cursor_advanced"] = False
+                call_entry["wall_clock_ms"] = round(
+                    (self._monotonic() - call_t0) * 1000
+                )
+                summary["calls"].append(call_entry)
+                summary["totals"]["n_calls_run"] += int(
+                    rare_result.get("provider_called", False)
+                )
+                summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                continue
 
             # Resolve this call's time window from its cursor (or the
             # operator-supplied override) BEFORE fetching, so the value we
