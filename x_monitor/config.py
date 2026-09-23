@@ -304,6 +304,7 @@ TARGETED_EXTRACTION_ROLES = frozenset(
         "job_listing_extraction",
         "personnel_change_extraction",
         "profile_affiliation_extraction",
+        "model_release_extraction",
     }
 )
 

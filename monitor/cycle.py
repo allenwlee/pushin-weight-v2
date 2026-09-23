@@ -3947,6 +3947,16 @@ class CycleRunner:
                         "post_type_id", flat=True
                     )
                 )
+                eligible_rare_types: set[str] = set()
+                if self.cfg.discovery.rare_types.enabled:
+                    eligible_rare_types = set(
+                        RareTypeSearchHit.objects.filter(
+                            post_id=tid,
+                            gate_state=RareTypeSearchHit.GateState.KEPT,
+                            decision__derived_types__contains=["model_releases"],
+                        ).values_list("decision__derived_types", flat=True).first()
+                        or []
+                    )
                 targeted = run_targeted_extractions(
                     post=Post.objects.get(pk=tid),
                     post_types=post_types,
@@ -3954,6 +3964,7 @@ class CycleRunner:
                     calls=getattr(self, "_targeted_extraction_calls", {}),
                     max_calls=targeted_calls_remaining,
                     deadline=deadline,
+                    eligible_rare_types=eligible_rare_types,
                 )
                 targeted_calls_remaining -= targeted.calls_made
                 counters["n_targeted_extraction_calls"] += targeted.calls_made

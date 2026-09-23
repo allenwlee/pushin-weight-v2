@@ -224,6 +224,10 @@ targeted_extraction:
       model: deepseek-ai/DeepSeek-V4-Flash-0731
       prompt_version: profile-affiliation-extraction-v2
       max_tokens: 2000
+    model_release_extraction:
+      model: deepseek-ai/DeepSeek-V4-Flash-0731
+      prompt_version: model-release-extraction-v1
+      max_tokens: 2500
 
 # Reply-chain cluster threshold. Tune via PR.
 clustering:
