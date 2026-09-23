@@ -38,12 +38,14 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     PersonnelDiscoveryRun,
     Post,
+    ProfileMovementCandidate,
     RareTypeCategoryAssignment,
     SearchQuery,
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
 from core.profile_snapshots import person_id_for_account, person_id_for_handle
+from core.rare_type_search import record_unknown_name_tokens_from_movement
 from x_monitor.config import TargetedExtractionConfig
 from x_monitor.provider_telemetry import (
     ProviderResponse,
@@ -679,11 +681,10 @@ def _known_brand(context: _BrandEvidenceContext, value: Any) -> Brand | None:
     source_text = context.source_text
     names = {
         brand.nickname.replace("_", " "),
-        brand.display_name,
-        brand.display_name_en,
-        brand.display_name_zh_cn,
-        brand.display_name_ja,
-    }
+            brand.display_name,
+            brand.display_name_en,
+            brand.display_name_zh_cn,
+        }
     for name in names:
         normalized = unicodedata.normalize("NFKC", str(name or "")).casefold().strip()
         if not normalized:
@@ -1041,6 +1042,26 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             post, record, brand_context
         )
         candidates += candidate_created
+        if candidate is not None:
+            movement = ProfileMovementCandidate.objects.filter(
+                source_post=post, status__in=["pending", "failed"]
+            ).order_by("id").first()
+            if movement is not None:
+                organization = _organization_label(record)
+                handle = _text(record.get("organization_handle"), maximum=64)
+                tokens = [{
+                    "form": organization,
+                    "kind": "spelling",
+                    "script": (
+                        "han" if any("\u4e00" <= char <= "\u9fff" for char in organization)
+                        else "latn"
+                    ),
+                }]
+                if handle and handle != organization:
+                    tokens.append({"form": handle, "kind": "handle", "script": "latn"})
+                record_unknown_name_tokens_from_movement(
+                    movement=movement, candidate=candidate, tokens=tokens
+                )
         person_handle = _text(record.get("person_handle"), maximum=64)
         normalized_handle = (person_handle or "").removeprefix("@").casefold()
         self_authored = bool(
@@ -1769,6 +1790,15 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             "affiliate_display_type",
         )
         payload["profile_observations"] = list(snapshots)
+        payload["profile_movements"] = [
+            {
+                "id": movement.pk,
+                "prior_description": movement.prior_description,
+                "new_description": movement.new_description,
+                "observed_at": movement.observed_at.isoformat(),
+            }
+            for movement in post.profile_movement_candidates.order_by("id")
+        ]
     user = json.dumps(
         payload,
         ensure_ascii=False,
@@ -1844,7 +1874,10 @@ def run_targeted_extractions(
         source_profile_snapshot__first_source_post=post,
         extracted_claim_data__candidate_role="unknown",
     ).exists()
-    if has_ambiguous_profile:
+    has_profile_movement = ProfileMovementCandidate.objects.filter(
+        source_post=post, status__in=["pending", "failed"]
+    ).exists()
+    if has_ambiguous_profile or has_profile_movement:
         roles.append("profile_affiliation_extraction")
     calls_made = records_written = evidence_written = candidates_written = 0
     failed: list[str] = []
@@ -1926,6 +1959,12 @@ def run_targeted_extractions(
         state.last_attempted_at = attempted_at
         state.completed_at = attempted_at if outcome == "succeeded" else None
         state.save()
+        if role == "profile_affiliation_extraction":
+            ProfileMovementCandidate.objects.filter(source_post=post).update(
+                status=outcome,
+                attempts=F("attempts") + 1,
+                last_error_code=error_code,
+            )
         TargetedExtractionAttempt.objects.create(
             state=state,
             attempt_identity=_hash(

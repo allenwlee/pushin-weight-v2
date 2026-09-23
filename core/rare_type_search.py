@@ -26,6 +26,7 @@ from core.models import (
     Post,
     PostBrandSignal,
     PostEnrichmentState,
+    ProfileMovementCandidate,
     RareTypeDecision,
     RareTypeDecisionAttempt,
     RareTypeDecisionProcessingCycle,
@@ -189,6 +190,56 @@ def record_unknown_name_tokens(
                 defaults={"observed_at": seen_at},
             )
     return candidate
+
+
+@transaction.atomic
+def record_unknown_name_tokens_from_movement(
+    *,
+    movement: ProfileMovementCandidate,
+    candidate: BrandDiscoveryCandidate,
+    tokens: Sequence[Mapping[str, str]],
+) -> None:
+    """Attach exact unknown-organization forms to durable bio-change evidence."""
+
+    movement = ProfileMovementCandidate.objects.select_for_update().get(pk=movement.pk)
+    if movement.source_post_id is None:
+        raise ValueError("movement token evidence requires an active source")
+    allowed_kinds = {value for value, _ in BrandDiscoveryCandidateToken.TOKEN_KINDS}
+    for value in tokens:
+        form, kind, script = value.get("form"), value.get("kind"), value.get("script")
+        if not isinstance(form, str) or not form or kind not in allowed_kinds:
+            raise ValueError("movement token form and kind must be valid")
+        if not isinstance(script, str) or not script:
+            raise ValueError("movement token script is required")
+        token, created = BrandDiscoveryCandidateToken.objects.get_or_create(
+            candidate=candidate,
+            form=form,
+            kind=kind,
+            defaults={
+                "script": script,
+                "first_observed_at": movement.observed_at,
+                "last_observed_at": movement.observed_at,
+            },
+        )
+        if not created:
+            if token.script != script:
+                raise ValueError("an exact token cannot change script on replay")
+            updates: list[str] = []
+            if movement.observed_at < token.first_observed_at:
+                token.first_observed_at = movement.observed_at
+                updates.append("first_observed_at")
+            if movement.observed_at > token.last_observed_at:
+                token.last_observed_at = movement.observed_at
+                updates.append("last_observed_at")
+            if updates:
+                token.save(update_fields=updates)
+        BrandDiscoveryCandidateTokenEvidence.objects.get_or_create(
+            token=token,
+            source_profile_movement=movement,
+            source_post_id=movement.source_post_id,
+            rare_type="personnel_changes",
+            defaults={"observed_at": movement.observed_at},
+        )
 
 
 def _utc_date(value: datetime):

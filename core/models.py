@@ -4470,6 +4470,59 @@ class AccountProfileSnapshot(models.Model):
         ]
 
 
+class ProfileMovementCandidate(models.Model):
+    STATUSES = (("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed"))
+
+    id = models.BigAutoField(primary_key=True)
+    account = models.ForeignKey(
+        Account, on_delete=models.CASCADE, related_name="profile_movement_candidates",
+        db_column="author_id", to_field="author_id",
+    )
+    prior_snapshot = models.ForeignKey(
+        AccountProfileSnapshot, on_delete=models.PROTECT,
+        related_name="movement_candidates_as_prior",
+    )
+    new_snapshot = models.ForeignKey(
+        AccountProfileSnapshot, on_delete=models.PROTECT,
+        related_name="movement_candidates_as_new",
+    )
+    source_post = models.ForeignKey(
+        Post, on_delete=models.PROTECT, related_name="profile_movement_candidates",
+    )
+    prior_description = models.TextField()
+    new_description = models.TextField()
+    observed_at = models.DateTimeField()
+    effective_date = models.CharField(max_length=10, blank=True, null=True)
+    effective_date_precision = models.CharField(
+        max_length=16, choices=DATE_PRECISION_CHOICES, default="unknown"
+    )
+    movement_identity = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=16, choices=STATUSES, default="pending")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "profile_movement_candidates"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "prior_snapshot", "new_snapshot"],
+                name="uq_profile_movement_transition",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=["pending", "succeeded", "failed"]),
+                name="ck_profile_movement_status",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "effective_date", "effective_date_precision"
+                ),
+                name="ck_profile_movement_date_precision",
+            ),
+        ]
+
+
 class PersonBrandAffiliation(models.Model):
     AFFILIATION_TYPES = (
         ("employment", "Employment"),
@@ -4846,6 +4899,15 @@ class BrandDiscoveryCandidateTokenEvidence(models.Model):
         "RareTypeSearchHit",
         on_delete=models.PROTECT,
         related_name="candidate_token_evidence",
+        blank=True,
+        null=True,
+    )
+    source_profile_movement = models.ForeignKey(
+        ProfileMovementCandidate,
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+        blank=True,
+        null=True,
     )
     source_post = models.ForeignKey(
         Post,
@@ -4864,7 +4926,20 @@ class BrandDiscoveryCandidateTokenEvidence(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["token", "source_hit", "source_post", "rare_type"],
-                name="uq_brand_candidate_token_evidence",
+                condition=models.Q(source_hit__isnull=False),
+                name="uq_candidate_token_hit_evidence",
+            ),
+            models.UniqueConstraint(
+                fields=["token", "source_profile_movement", "source_post", "rare_type"],
+                condition=models.Q(source_profile_movement__isnull=False),
+                name="uq_candidate_token_movement_evidence",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_hit__isnull=False, source_profile_movement__isnull=True)
+                    | models.Q(source_hit__isnull=True, source_profile_movement__isnull=False)
+                ),
+                name="ck_candidate_token_one_source",
             ),
             models.CheckConstraint(
                 condition=models.Q(
