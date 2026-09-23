@@ -44,6 +44,68 @@ def test_run_search_raises_auth_error_on_401():
             client.run_search("from:x")
 
 
+def test_raw_search_receipt_is_saved_before_normalization(monkeypatch):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    raw_body = b'{"tweets":[{"malformed":true}]}'
+
+    def fake_get(*args, **kwargs):
+        kwargs["raw_sink"](raw_body)
+        return raw_body, {"tweets": [{"malformed": True}]}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(
+        "x_monitor.apify._normalize_tweet",
+        MagicMock(side_effect=ValueError("malformed paid slot")),
+    )
+    captured = []
+
+    _, _, normalized, _, normalization_errors = client.run_search_page_with_raw(
+        "query",
+        since_time=1,
+        until_time=2,
+        receipt_sink=captured.append,
+    )
+
+    assert captured == [raw_body]
+    assert normalized == []
+    assert normalization_errors == 1
+
+
+def test_raw_search_receipt_is_saved_before_json_decode(monkeypatch):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    response = _mock_response(200, "not json")
+    response.content = b"not json"
+    response.json.side_effect = json.JSONDecodeError("bad", "not json", 0)
+    monkeypatch.setattr(requests, "get", MagicMock(return_value=response))
+    captured = []
+
+    with pytest.raises(json.JSONDecodeError):
+        client.run_search_page_with_raw(
+            "query",
+            since_time=1,
+            until_time=2,
+            receipt_sink=captured.append,
+        )
+
+    assert captured == [b"not json"]
+
+
+def test_raw_search_receipt_captures_http_error_body_and_status(monkeypatch):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    response = _mock_response(503, "provider down")
+    response.content = b"provider down"
+    monkeypatch.setattr(requests, "get", MagicMock(return_value=response))
+    captured = []
+
+    with pytest.raises(TwitterApiServerError) as exc_info:
+        client.run_search_page_with_raw(
+            "query", since_time=1, until_time=2, receipt_sink=captured.append
+        )
+
+    assert captured == [b"provider down"]
+    assert exc_info.value.response_status_code == 503
+
+
 def test_run_search_raises_rate_limit_on_429():
     client = TwitterApiClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(429, "rate")):
