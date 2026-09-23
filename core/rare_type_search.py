@@ -20,6 +20,9 @@ from django.db import transaction
 from django.db.models import Case, F, Value, When
 
 from core.models import (
+    BrandDiscoveryCandidate,
+    BrandDiscoveryCandidateToken,
+    BrandDiscoveryCandidateTokenEvidence,
     RareTypeDecision,
     RareTypeDecisionAttempt,
     RareTypeDecisionProcessingCycle,
@@ -72,6 +75,117 @@ class FundedDecisionClaim:
 
 class HitSerializationError(ValueError):
     """A paid provider response could not be reduced to the public allowlist."""
+
+
+@transaction.atomic
+def record_unknown_name_tokens(
+    *,
+    hit: RareTypeSearchHit,
+    candidate_identity: str,
+    observed_name: str,
+    tokens: Sequence[Mapping[str, str]],
+    rare_types: Sequence[str],
+    observed_at: datetime | None = None,
+) -> BrandDiscoveryCandidate:
+    """Append exact source-grounded tokens from one kept rare-type hit.
+
+    Candidate identity is supplied by the extraction layer. This function never
+    normalizes token text, guesses identity, creates a Brand, or changes harvest
+    keywords.
+    """
+    hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit.pk)
+    if hit.gate_state != RareTypeSearchHit.GateState.KEPT or hit.post_id is None:
+        raise ValueError("unknown-name tokens require a kept hit with a persisted post")
+    if not candidate_identity or not observed_name:
+        raise ValueError("candidate identity and observed name are required")
+    if not tokens or not rare_types:
+        raise ValueError("at least one token and rare type are required")
+
+    allowed_kinds = {value for value, _ in BrandDiscoveryCandidateToken.TOKEN_KINDS}
+    allowed_types = {
+        value for value, _ in BrandDiscoveryCandidateTokenEvidence.RARE_TYPES
+    }
+    clean_tokens: list[tuple[str, str, str]] = []
+    for token in tokens:
+        form = token.get("form")
+        kind = token.get("kind")
+        script = token.get("script")
+        if not isinstance(form, str) or not form:
+            raise ValueError("token form must be a non-empty string")
+        if kind not in allowed_kinds or not isinstance(script, str) or not script:
+            raise ValueError("token kind and script must be valid")
+        clean_tokens.append((form, kind, script))
+    clean_types = list(dict.fromkeys(rare_types))
+    if any(rare_type not in allowed_types for rare_type in clean_types):
+        raise ValueError("rare type is not supported by the token registry")
+
+    seen_at = observed_at or hit.fetched_at
+    source_query_id = RareTypeSearchRun.objects.values_list(
+        "source_query_id", flat=True
+    ).get(pk=hit.run_id)
+    candidate, created = BrandDiscoveryCandidate.objects.get_or_create(
+        candidate_identity=candidate_identity,
+        defaults={
+            "observed_name": observed_name,
+            "source_post_id": hit.post_id,
+            "source_query_id": source_query_id,
+            "source_identities": [f"post:{hit.post_id}"],
+            "verification_status": "pending",
+            "first_observed_at": seen_at,
+            "last_observed_at": seen_at,
+        },
+    )
+    if not created:
+        candidate = BrandDiscoveryCandidate.objects.select_for_update().get(
+            pk=candidate.pk
+        )
+        changed: list[str] = []
+        if seen_at < candidate.first_observed_at:
+            candidate.first_observed_at = seen_at
+            changed.append("first_observed_at")
+        if seen_at > candidate.last_observed_at:
+            candidate.last_observed_at = seen_at
+            changed.append("last_observed_at")
+        identities = list(candidate.source_identities or [])
+        source_identity = f"post:{hit.post_id}"
+        if source_identity not in identities:
+            candidate.source_identities = [*identities, source_identity]
+            changed.append("source_identities")
+        if changed:
+            candidate.save(update_fields=changed)
+
+    for form, kind, script in clean_tokens:
+        token, token_created = BrandDiscoveryCandidateToken.objects.get_or_create(
+            candidate=candidate,
+            form=form,
+            kind=kind,
+            defaults={
+                "script": script,
+                "first_observed_at": seen_at,
+                "last_observed_at": seen_at,
+            },
+        )
+        if not token_created:
+            updates: list[str] = []
+            if token.script != script:
+                raise ValueError("an exact token cannot change script on replay")
+            if seen_at < token.first_observed_at:
+                token.first_observed_at = seen_at
+                updates.append("first_observed_at")
+            if seen_at > token.last_observed_at:
+                token.last_observed_at = seen_at
+                updates.append("last_observed_at")
+            if updates:
+                token.save(update_fields=updates)
+        for rare_type in clean_types:
+            BrandDiscoveryCandidateTokenEvidence.objects.get_or_create(
+                token=token,
+                source_hit=hit,
+                source_post_id=hit.post_id,
+                rare_type=rare_type,
+                defaults={"observed_at": seen_at},
+            )
+    return candidate
 
 
 def _utc_date(value: datetime):

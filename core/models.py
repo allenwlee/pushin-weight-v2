@@ -4780,6 +4780,107 @@ class BrandDiscoveryCandidate(models.Model):
         ]
 
 
+class BrandDiscoveryCandidateToken(models.Model):
+    """One exact, reviewable spelling observed for an unresolved organization."""
+
+    TOKEN_KINDS = (
+        ("spelling", "Spelling"),
+        ("handle", "Handle"),
+        ("nickname", "Nickname"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    candidate = models.ForeignKey(
+        BrandDiscoveryCandidate,
+        on_delete=models.CASCADE,
+        related_name="exact_tokens",
+    )
+    form = models.TextField()
+    kind = models.CharField(max_length=16, choices=TOKEN_KINDS)
+    script = models.CharField(max_length=16)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "brand_discovery_candidate_tokens"
+        ordering = ["candidate_id", "kind", "form", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["candidate", "form", "kind"],
+                name="uq_brand_candidate_token_exact",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(form=""), name="ck_brand_candidate_token_form"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["spelling", "handle", "nickname"]),
+                name="ck_brand_candidate_token_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_observed_at__gte=models.F("first_observed_at")),
+                name="ck_brand_candidate_token_window",
+            ),
+        ]
+
+
+class BrandDiscoveryCandidateTokenEvidence(models.Model):
+    """Source-bound observation of an exact candidate token."""
+
+    RARE_TYPES = (
+        ("personnel_changes", "Personnel changes"),
+        ("job_listings", "Job listings"),
+        ("events", "Events"),
+        ("opportunities", "Opportunities"),
+        ("model_releases", "Model releases"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    token = models.ForeignKey(
+        BrandDiscoveryCandidateToken,
+        on_delete=models.CASCADE,
+        related_name="evidence",
+    )
+    source_hit = models.ForeignKey(
+        "RareTypeSearchHit",
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+        db_column="source_post_id",
+        to_field="tweet_id",
+    )
+    rare_type = models.CharField(max_length=32, choices=RARE_TYPES)
+    observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "brand_discovery_candidate_token_evidence"
+        ordering = ["token_id", "observed_at", "source_post_id", "rare_type", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token", "source_hit", "source_post", "rare_type"],
+                name="uq_brand_candidate_token_evidence",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    rare_type__in=[
+                        "personnel_changes",
+                        "job_listings",
+                        "events",
+                        "opportunities",
+                        "model_releases",
+                    ]
+                ),
+                name="ck_brand_candidate_token_rare_type",
+            ),
+        ]
+
+
 class JobListing(models.Model):
     APPLICATION_ROUTE_KINDS = (
         ("direct_url", "Direct URL"),
