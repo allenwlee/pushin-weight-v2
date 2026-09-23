@@ -22,6 +22,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "rare_type_extra_search"
 
 def test_planned_query_has_required_outer_shape() -> None:
     query = planned_query_string()
+    assert len(query) == 463
     assert query.startswith("((")
     assert query.endswith(")) min_faves:0")
     assert "since_time:" not in query
@@ -126,6 +127,7 @@ def test_rendered_query_uses_provider_renderer_and_stays_under_512(
     assert len(rendered) <= X_LENGTH_CAP
     assert rendered.endswith(f"since_time:{since_time} until_time:{until_time}")
     assert_under_length_cap(rendered)
+    assert len(rendered) == (507 if since_time < 10_000_000_000 else 509)
 
 
 @pytest.mark.parametrize(

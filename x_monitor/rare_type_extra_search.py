@@ -14,7 +14,7 @@ import re
 from x_monitor.apify import TwitterApiClient
 from x_monitor.queries import assert_under_length_cap
 
-QUERY_VERSION = "rare-types-v2-2026-09-22"
+QUERY_VERSION = "rare-types-v3-provisional-2026-09-23"
 
 # This matrix proves only inspectable local query shape. Provider interpretation
 # must be established separately with trial evidence.
@@ -48,14 +48,21 @@ QUERY_COVERAGE: tuple[dict[str, str], ...] = tuple(
 # AI/LLM/ML context.
 RARE_TYPE_EXTRA_SEARCH_GROUPS: tuple[str, ...] = (
     (
-        '("I\'ve joined" OR "I joined" OR "I left" OR "我加入了" OR "我离开了" '
-        'OR "に入社" OR "を退職") '
-        '(AI OR LLM OR "machine learning" OR OpenAI OR Anthropic)'
+        '("I\'ve joined" OR "I joined" OR "I left" OR "我加入" OR "我离开" '
+        'OR 出任 OR 换帅 OR に入社 OR を退職) '
+        '(AI OR LLM OR OpenAI OR Anthropic)'
     ),
     '("I\'ve joined @deepseek_ai")',
-    '("we\'re hiring" ("research scientist" OR "ML engineer"))',
-    '(("we\'ll be at" OR "tickets are live") ("AI conference" OR "AI summit"))',
-    '(("apply by" OR "applications close") (hackathon OR fellowship) (AI OR LLM))',
+    (
+        '("we\'re hiring" OR "currently hiring" OR 招聘 OR 募集中) '
+        '(engineer OR researcher)'
+    ),
+    '("we\'ll be at" OR 登壇) ("AI conference" OR summit)',
+    (
+        '("applications open" OR "apply by" OR 申请) '
+        '(hackathon OR fellowship) (AI OR LLM)'
+    ),
+    '(introducing OR 开源 OR 发布) (model OR weights OR Preview)',
     '("step 5 preview")',
 )
 
