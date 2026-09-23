@@ -38,6 +38,7 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     PersonnelDiscoveryRun,
     Post,
+    ProductVerificationProposal,
     ProfileMovementCandidate,
     RareTypeCategoryAssignment,
     SearchQuery,
@@ -150,7 +151,7 @@ unknown precision.
 Return one record per source-supported AI model or agent-harness release.
 Recaps, reseller availability, price comparisons, and vague roadmap claims do
 not qualify without an identifiable underlying release. Fields: brand_id,
-organization_name, organization_handle, model_name, version,
+organization_name, organization_handle, model_name, candidate_repo_id, version,
 release_channel (stable, preview, beta, or other), release_value,
 release_precision (day, month, year, or unknown), source_url, categories (one
 or more of llm-model, other-ai-model, agent-harness), and confidence. Preserve
@@ -1711,6 +1712,39 @@ def _persist_model_releases(
                 "extraction_version": version,
             },
         )
+        candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
+        if post.author_id:
+            ProductVerificationProposal.objects.get_or_create(
+                proposal_key=_hash(
+                    {
+                        "post": str(post.pk),
+                        "account": str(post.author_id),
+                        "model": model_name,
+                        "repo": candidate_repo_id.casefold(),
+                    }
+                ),
+                defaults={
+                    "source_post": post,
+                    "source_release": release,
+                    "proposed_brand": brand,
+                    "proposed_candidate": candidate,
+                    "account_id": post.author_id,
+                    "account_handle_snapshot": post.author_handle or "",
+                    "observed_name": model_name,
+                    "candidate_repo_id": candidate_repo_id,
+                    "account_evidence": {
+                        "stable_account_id": str(post.author_id),
+                        "handle": post.author_handle or "",
+                    },
+                    "policy_version": "product-x-hf-v1",
+                    "hf_outcome": "pending" if candidate_repo_id else "deferred",
+                    "rule_trace": [
+                        "awaiting_exact_public_hf_metadata"
+                        if candidate_repo_id
+                        else "candidate_repo_id_missing_owner_review_required"
+                    ],
+                },
+            )
         written += int(created)
         evidence += int(evidence_created)
     return written, evidence, candidates

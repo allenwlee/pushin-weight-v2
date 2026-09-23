@@ -84,6 +84,7 @@ from core.models import (
     SearchQuery,
     SentimentKey,
 )
+from core.product_verification import drain_pending_verifications
 from core.profile_snapshots import (
     build_account_affiliation_contexts,
     build_brand_reference_index,
@@ -108,12 +109,20 @@ from monitor.list_membership import (
 )
 from monitor.post_enrichment import (
     CANONICAL_LANG_CODES as _CANONICAL_LANG_CODES,
+)
+from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
-    commentary_is_distinct as _commentary_is_distinct,
     enrichment_stage_outcome,
-    persisted_output_complete as _legacy_translation_output_complete,
     persisted_output_complete_q,
     post_persisted_output_complete,
+)
+from monitor.post_enrichment import (
+    commentary_is_distinct as _commentary_is_distinct,
+)
+from monitor.post_enrichment import (
+    persisted_output_complete as _legacy_translation_output_complete,
+)
+from monitor.post_enrichment import (
     present_text as _present_text,
 )
 
@@ -127,12 +136,12 @@ from x_monitor.apify import (
     TwitterApiServerError,
 )
 from x_monitor.attribution import (
-    LLMCallBudgetExhausted,
     _MAX_RETRIES,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _TWO_ROLE_ALLOWED_REVISION_TRIPLETS,
     UNATTRIBUTED_BRAND_ID,
+    LLMCallBudgetExhausted,
     MentionRow,
-    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _two_role_fingerprint,
     attribute_to_brands,
     compile_keyword_index,
@@ -3617,6 +3626,8 @@ class CycleRunner:
         # Convert Django Brand models to v1 BrandRow shape expected by classifier
         from x_monitor.attribution import (
             BrandRow as _BrandRow,
+        )
+        from x_monitor.attribution import (
             _tracked_brand_catalog,
         )
         brand_rows = BrandModel.objects.filter(is_sentinel=False)
@@ -4965,6 +4976,25 @@ class CycleRunner:
             )
             summary["latency"]["post_fetch_completed_at"] = post_fetch_completed_at
             summary.setdefault("post_fetch", {}).update(pf_counters)
+            product_cfg = self.cfg.discovery.rare_types
+            if product_cfg.enabled and product_cfg.product_verification_enabled:
+                is_staging = "staging" in os.environ.get(
+                    "RENDER_SERVICE_NAME", ""
+                ).lower()
+                product_limit = (
+                    product_cfg.product_verification_staging_requests
+                    if is_staging
+                    else product_cfg.product_verification_normal_requests
+                )
+                product_result = drain_pending_verifications(
+                    max_requests=product_limit,
+                    deadline=deadline,
+                )
+                summary["product_verification"] = {
+                    "attempted": product_result.attempted,
+                    "resolved": product_result.resolved,
+                    "deferred": product_result.deferred,
+                }
             if self.cfg.discovery.rare_types.enabled:
                 summary["rare_type_ingestion"]["classified_reconciled"] = (
                     reconcile_classified_hits(

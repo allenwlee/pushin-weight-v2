@@ -2724,12 +2724,22 @@ class AccountPostAppearance(models.Model):
 
 
 class Product(models.Model):
+    TYPES = (
+        ("llm-model", "LLM model"),
+        ("other-ai-model", "Other AI model"),
+        ("agent-harness", "Agent harness"),
+    )
+
     id = models.BigAutoField(primary_key=True)
+    product_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     repo_id = models.CharField(
         max_length=256,
         unique=True,
         db_collation="case_insensitive",
+        blank=True,
+        null=True,
     )
+    type = models.CharField(max_length=32, choices=TYPES, blank=True, null=True)
     brand = models.ForeignKey(
         Brand,
         on_delete=models.SET_NULL,
@@ -2783,10 +2793,139 @@ class Product(models.Model):
                 fields=["collected_at"], name="idx_products_collected_at"
             ),
         ]
-        ordering = ["repo_id"]
+        ordering = ["display_name", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(type__isnull=True)
+                    | models.Q(
+                        type__in=["llm-model", "other-ai-model", "agent-harness"]
+                    )
+                ),
+                name="ck_product_type",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return self.repo_id
+        return self.repo_id or self.display_name or str(self.product_key)
+
+
+class PostBrandProduct(models.Model):
+    """Source-backed assertion that a post names an exact Product."""
+
+    pk = models.CompositePrimaryKey("post", "brand", "product")
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="product_edges",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="product_evidence",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name="post_evidence",
+    )
+    observed_name = models.TextField()
+    source_evidence = models.JSONField(default=dict)
+    verification_policy_version = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "posts_brands_products"
+        indexes = [
+            models.Index(fields=["product", "post"], name="idx_pbp_product_post"),
+        ]
+
+
+class ProductVerificationProposal(models.Model):
+    REVIEW_STATUSES = (
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    )
+
+    class HFOutcome(models.TextChoices):
+        PENDING = "pending", "Pending"
+        MATCHED = "matched", "Matched"
+        MISSING = "missing", "Missing"
+        PRIVATE = "private", "Private"
+        TIMEOUT = "timeout", "Timeout"
+        THROTTLED = "throttled", "Throttled"
+        ERROR = "error", "Error"
+        MALFORMED = "malformed", "Malformed"
+        DEFERRED = "deferred", "Deferred"
+
+    id = models.BigAutoField(primary_key=True)
+    proposal_key = models.CharField(max_length=64, unique=True)
+    source_post = models.ForeignKey(
+        Post, on_delete=models.PROTECT, related_name="product_verification_proposals",
+        db_column="source_post_id", to_field="tweet_id",
+    )
+    source_release = models.ForeignKey(
+        "ModelRelease", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="product_verification_proposals",
+    )
+    proposed_brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, blank=True, null=True,
+        related_name="product_verification_proposals", to_field="nickname",
+    )
+    proposed_candidate = models.ForeignKey(
+        "BrandDiscoveryCandidate", on_delete=models.PROTECT, blank=True, null=True,
+        related_name="product_verification_proposals",
+    )
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name="product_verification_proposals",
+        db_column="author_id", to_field="author_id",
+    )
+    account_handle_snapshot = models.CharField(max_length=64, blank=True, default="")
+    observed_name = models.TextField()
+    candidate_repo_id = models.CharField(max_length=256, blank=True, default="")
+    account_evidence = models.JSONField(default=dict)
+    hf_evidence = models.JSONField(default=dict)
+    hf_outcome = models.CharField(
+        max_length=16, choices=HFOutcome.choices, default=HFOutcome.PENDING,
+    )
+    policy_version = models.CharField(max_length=128)
+    rule_trace = models.JSONField(default=list)
+    review_status = models.CharField(
+        max_length=16, choices=REVIEW_STATUSES, default="pending",
+    )
+    resolved_product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, blank=True, null=True,
+        related_name="verification_proposals",
+    )
+    attempted_at = models.DateTimeField(blank=True, null=True)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    verification_claim_token = models.UUIDField(blank=True, null=True)
+    verification_claim_expires_at = models.DateTimeField(blank=True, null=True)
+    reviewer = models.TextField(blank=True, null=True)
+    review_reason = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_verification_proposals"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(proposed_brand__isnull=False, proposed_candidate__isnull=True)
+                    | models.Q(proposed_brand__isnull=True, proposed_candidate__isnull=False)
+                ),
+                name="ck_product_proposal_one_owner",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["hf_outcome", "next_attempt_at"], name="idx_product_proposal_due"),
+        ]
 
 
 # ============================================================================

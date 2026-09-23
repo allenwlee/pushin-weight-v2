@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
@@ -1214,6 +1215,13 @@ def _write_subjects(
                 product = Product.objects.filter(pk=product_id).first()
             if product is None and canonical_key:
                 product = Product.objects.filter(repo_id=canonical_key).first()
+                if product is None:
+                    try:
+                        product_key = uuid.UUID(canonical_key)
+                    except ValueError:
+                        product_key = None
+                    if product_key is not None:
+                        product = Product.objects.filter(product_key=product_key).first()
         if identity_type == TrendNarrativeSubject.IdentityType.BRAND and brand is None:
             raise ValueError("known brand subjects require an existing brand")
         if (
@@ -1272,7 +1280,7 @@ def _resolve_evidence_subject_identities(
                 Q(repo_id__iexact=observed_name) | Q(display_name__iexact=observed_name)
             )
             .distinct()
-            .order_by("repo_id")[:2]
+            .order_by("display_name", "id")[:2]
         )
         if len(brands) == 1 and not products:
             brand = brands[0]
@@ -1286,12 +1294,12 @@ def _resolve_evidence_subject_identities(
             )
         elif len(products) == 1 and not brands:
             product = products[0]
-            name = product.display_name or product.repo_id
+            name = product.display_name or product.repo_id or str(product.product_key)
             subject.update(
                 identity_type=TrendNarrativeSubject.IdentityType.PRODUCT,
                 product_id=product.pk,
                 observed_name="",
-                canonical_key_snapshot=product.repo_id,
+                canonical_key_snapshot=product.repo_id or str(product.product_key),
                 name_en_snapshot=name,
                 name_zh_cn_snapshot=name,
             )

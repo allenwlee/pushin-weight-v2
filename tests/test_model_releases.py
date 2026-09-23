@@ -11,6 +11,7 @@ from core.models import (
     ModelReleaseEvidence,
     Post,
     PostBrand,
+    ProductVerificationProposal,
     RareTypeCategoryAssignment,
 )
 from core.targeted_extraction import run_targeted_extractions
@@ -34,7 +35,9 @@ def _post(
         entities={"urls": [{"expanded_url": url} for url in source_urls]},
     )
     if brand:
-        row, _ = Brand.objects.get_or_create(nickname=brand, defaults={"display_name": brand})
+        row, _ = Brand.objects.get_or_create(
+            nickname=brand, defaults={"display_name": brand}
+        )
         PostBrand.objects.create(post=post, brand=row)
     return post
 
@@ -78,22 +81,68 @@ def test_two_source_posts_share_release_and_keep_two_evidence_rows():
     assert RareTypeCategoryAssignment.objects.count() == 4
 
 
+def test_exact_repo_candidate_becomes_durable_pending_verification_without_hf_call():
+    post = _post("release-repo", "MiniMax announces MiniMaxAI/M2")
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={
+            "model_release_extraction": lambda *_args: {
+                "records": [_record(candidate_repo_id="MiniMaxAI/M2")]
+            }
+        },
+        max_calls=1,
+        eligible_rare_types={"model_releases"},
+    )
+    assert result.failed_roles == ()
+    proposal = ProductVerificationProposal.objects.get()
+    assert proposal.source_post_id == post.pk
+    assert proposal.source_release_id == ModelRelease.objects.get().pk
+    assert proposal.hf_outcome == "pending"
+
+
+def test_named_release_without_repo_stays_durable_x_only_review_proposal():
+    post = _post("release-x-only", "MiniMax announces M2")
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={"model_release_extraction": lambda *_args: {"records": [_record()]}},
+        max_calls=1,
+        eligible_rare_types={"model_releases"},
+    )
+    assert result.failed_roles == ()
+    proposal = ProductVerificationProposal.objects.get()
+    assert proposal.candidate_repo_id == ""
+    assert proposal.hf_outcome == "deferred"
+    assert proposal.review_status == "pending"
+
+
 def test_unknown_publisher_stays_candidate_owned():
     post = _post("unknown-release", "Unknown AI announces A1", brand=None)
     result = run_targeted_extractions(
         post=post,
         post_types={"releases_updates"},
         config=_config(),
-        calls={"model_release_extraction": lambda *_args: {"records": [_record(
-            brand_id=None, organization_name="Unknown AI", model_name="A1"
-        )]}},
+        calls={
+            "model_release_extraction": lambda *_args: {
+                "records": [
+                    _record(
+                        brand_id=None, organization_name="Unknown AI", model_name="A1"
+                    )
+                ]
+            }
+        },
         max_calls=1,
         eligible_rare_types={"model_releases"},
     )
     assert result.organization_candidates_written == 1
     release = ModelRelease.objects.get()
     assert release.brand_id is None
-    assert release.brand_discovery_candidate_id == BrandDiscoveryCandidate.objects.get().pk
+    assert (
+        release.brand_discovery_candidate_id == BrandDiscoveryCandidate.objects.get().pk
+    )
     assert set(
         RareTypeCategoryAssignment.objects.values_list(
             "brand_discovery_candidate_id", flat=True
@@ -104,8 +153,10 @@ def test_unknown_publisher_stays_candidate_owned():
 def test_owner_constraints_reject_missing_or_double_owner():
     post = _post("constraint", "source")
     candidate = BrandDiscoveryCandidate.objects.create(
-        observed_name="Candidate", candidate_identity="c" * 64,
-        first_observed_at=post.fetched_at, last_observed_at=post.fetched_at,
+        observed_name="Candidate",
+        candidate_identity="c" * 64,
+        first_observed_at=post.fetched_at,
+        last_observed_at=post.fetched_at,
     )
     with pytest.raises(IntegrityError), transaction.atomic():
         RareTypeCategoryAssignment.objects.create(
@@ -113,8 +164,11 @@ def test_owner_constraints_reject_missing_or_double_owner():
         )
     with pytest.raises(IntegrityError), transaction.atomic():
         RareTypeCategoryAssignment.objects.create(
-            post=post, brand_id="minimax", brand_discovery_candidate=candidate,
-            category="llm-model", classification_version="v1",
+            post=post,
+            brand_id="minimax",
+            brand_discovery_candidate=candidate,
+            category="llm-model",
+            classification_version="v1",
         )
 
 
@@ -128,9 +182,12 @@ def test_release_identity_separates_owner_version_and_channel():
         _record(brand_id="openai", organization_name="OpenAI"),
     ]
     result = run_targeted_extractions(
-        post=post, post_types={"releases_updates"}, config=_config(),
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
         calls={"model_release_extraction": lambda *_args: {"records": records}},
-        max_calls=1, eligible_rare_types={"model_releases"},
+        max_calls=1,
+        eligible_rare_types={"model_releases"},
     )
     assert result.records_written == 3
     assert ModelRelease.objects.count() == 3
@@ -142,8 +199,11 @@ def test_release_identity_separates_owner_version_and_channel():
 def test_event_route_never_creates_model_release():
     post = _post("event-only", "MiniMax presents at AI Conf")
     run_targeted_extractions(
-        post=post, post_types={"events"}, config=_config(),
-        calls={"event_extraction": lambda *_args: {"records": []}}, max_calls=1,
+        post=post,
+        post_types={"events"},
+        config=_config(),
+        calls={"event_extraction": lambda *_args: {"records": []}},
+        max_calls=1,
     )
     assert not ModelRelease.objects.exists()
 
@@ -152,7 +212,9 @@ def test_ordinary_release_classification_without_jev_route_makes_no_release_call
     post = _post("ordinary-release", "ordinary A/B/C release post")
     called = []
     result = run_targeted_extractions(
-        post=post, post_types={"releases_updates"}, config=_config(),
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
         calls={"model_release_extraction": lambda *_args: called.append(True)},
         max_calls=1,
     )
@@ -165,16 +227,22 @@ def test_replay_preserves_review_and_evidence_is_idempotent():
     second = _post("review-2", "MiniMax confirms M2-preview")
     provider = lambda *_args: {"records": [_record()]}
     run_targeted_extractions(
-        post=first, post_types={"releases_updates"}, config=_config(),
-        calls={"model_release_extraction": provider}, max_calls=1,
+        post=first,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={"model_release_extraction": provider},
+        max_calls=1,
         eligible_rare_types={"model_releases"},
     )
     release = ModelRelease.objects.get()
     release.review_status = "confirmed"
     release.save(update_fields=["review_status", "updated_at"])
     run_targeted_extractions(
-        post=second, post_types={"releases_updates"}, config=_config(),
-        calls={"model_release_extraction": provider}, max_calls=1,
+        post=second,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={"model_release_extraction": provider},
+        max_calls=1,
         eligible_rare_types={"model_releases"},
     )
     release.refresh_from_db()
@@ -185,10 +253,19 @@ def test_replay_preserves_review_and_evidence_is_idempotent():
 def test_malformed_release_rolls_back_all_role_writes():
     post = _post("rollback", "MiniMax releases models")
     result = run_targeted_extractions(
-        post=post, post_types={"releases_updates"}, config=_config(),
-        calls={"model_release_extraction": lambda *_args: {"records": [
-            _record(), _record(model_name="bad", categories=["not-a-category"])
-        ]}}, max_calls=1, eligible_rare_types={"model_releases"},
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={
+            "model_release_extraction": lambda *_args: {
+                "records": [
+                    _record(),
+                    _record(model_name="bad", categories=["not-a-category"]),
+                ]
+            }
+        },
+        max_calls=1,
+        eligible_rare_types={"model_releases"},
     )
     assert result.failed_roles == ("model_release_extraction",)
     assert not ModelRelease.objects.exists()
@@ -199,10 +276,18 @@ def test_malformed_release_rolls_back_all_role_writes():
 def test_category_only_record_does_not_fabricate_release():
     post = _post("category-only", "MiniMax discusses model work")
     result = run_targeted_extractions(
-        post=post, post_types={"releases_updates"}, config=_config(),
-        calls={"model_release_extraction": lambda *_args: {"records": [
-            _record(model_name="", version="", categories=["llm-model"])
-        ]}}, max_calls=1, eligible_rare_types={"model_releases"},
+        post=post,
+        post_types={"releases_updates"},
+        config=_config(),
+        calls={
+            "model_release_extraction": lambda *_args: {
+                "records": [
+                    _record(model_name="", version="", categories=["llm-model"])
+                ]
+            }
+        },
+        max_calls=1,
+        eligible_rare_types={"model_releases"},
     )
     assert result.failed_roles == ()
     assert RareTypeCategoryAssignment.objects.get().category == "llm-model"
@@ -218,10 +303,18 @@ def test_unversioned_release_identity_uses_source_url():
     ]
     for post, source_url in zip(posts, (urls[0], urls[0], urls[1]), strict=True):
         run_targeted_extractions(
-            post=post, post_types={"releases_updates"}, config=_config(),
-            calls={"model_release_extraction": lambda *_args, url=source_url: {
-                "records": [_record(version="", source_url=url)]
-            }}, max_calls=1, eligible_rare_types={"model_releases"},
+            post=post,
+            post_types={"releases_updates"},
+            config=_config(),
+            calls={
+                "model_release_extraction": lambda *_args, url=source_url: {
+                    "records": [_record(version="", source_url=url)]
+                }
+            },
+            max_calls=1,
+            eligible_rare_types={"model_releases"},
         )
     assert ModelRelease.objects.count() == 2
-    assert sorted(release.evidence.count() for release in ModelRelease.objects.all()) == [1, 2]
+    assert sorted(
+        release.evidence.count() for release in ModelRelease.objects.all()
+    ) == [1, 2]

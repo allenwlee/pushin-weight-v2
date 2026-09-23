@@ -266,6 +266,9 @@ class RareTypeSearchConfig(BaseModel):
     daily_credit_ceiling: Literal[6000] = 6000
     reserved_credits_per_call: Literal[300] = 300
     jev: JevDecisionsConfig = JevDecisionsConfig()
+    product_verification_enabled: bool = False
+    product_verification_normal_requests: Literal[3] = 3
+    product_verification_staging_requests: Literal[1] = 1
 
     @model_validator(mode="after")
     def _validate_enablement_evidence(self) -> RareTypeSearchConfig:
