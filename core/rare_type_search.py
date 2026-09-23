@@ -23,6 +23,9 @@ from core.models import (
     BrandDiscoveryCandidate,
     BrandDiscoveryCandidateToken,
     BrandDiscoveryCandidateTokenEvidence,
+    Post,
+    PostBrandSignal,
+    PostEnrichmentState,
     RareTypeDecision,
     RareTypeDecisionAttempt,
     RareTypeDecisionProcessingCycle,
@@ -956,6 +959,98 @@ def expire_hit_payloads(*, now: datetime) -> int:
         ),
         updated_at=now,
     )
+
+
+def kept_hits_pending_post(*, limit: int, fetched_since: datetime | None = None):
+    """Return a bounded durable ingestion queue; no provider work occurs here."""
+
+    if limit < 1:
+        return RareTypeSearchHit.objects.none()
+    rows = RareTypeSearchHit.objects.filter(
+        gate_state=RareTypeSearchHit.GateState.KEPT,
+        post_id__isnull=True,
+        payload_expired_at__isnull=True,
+    )
+    if fetched_since is not None:
+        rows = rows.filter(fetched_at__gte=fetched_since)
+    return rows.select_related("run", "decision").order_by("fetched_at", "id")[:limit]
+
+
+@transaction.atomic
+def link_kept_hit_to_post(*, hit_id: int, post: Post, now: datetime) -> bool:
+    """Link an idempotently persisted Post without changing gate evidence."""
+
+    hit = RareTypeSearchHit.objects.select_for_update().get(pk=hit_id)
+    if hit.gate_state != RareTypeSearchHit.GateState.KEPT:
+        return False
+    if hit.provider_post_id != str(post.pk):
+        raise ValueError("rare-type hit and Post identities differ")
+    if hit.post_id is not None and hit.post_id != post.pk:
+        raise ValueError("rare-type hit is already linked to another Post")
+    hit.post = post
+    hit.post_persisted_at = hit.post_persisted_at or now
+    hit.last_error_code = ""
+    hit.save(
+        update_fields=["post", "post_persisted_at", "last_error_code", "updated_at"]
+    )
+    return True
+
+
+def mark_hit_ingestion_failed(*, hit_id: int, error_code: str) -> None:
+    """Leave a kept hit selectable for local replay while exposing failure."""
+
+    RareTypeSearchHit.objects.filter(
+        pk=hit_id,
+        gate_state=RareTypeSearchHit.GateState.KEPT,
+        post_id__isnull=True,
+    ).update(last_error_code=error_code[:128])
+
+
+def reconcile_classified_hits(
+    *, now: datetime, limit: int, fetched_since: datetime | None = None
+) -> int:
+    """Mark linked keepers classified and retain Jev/classifier disagreement."""
+
+    route_to_post_type = {
+        "personnel_changes": "personnel_changes",
+        "job_listings": "job_listings",
+        "events": "events",
+        "opportunities": "opportunities",
+        "model_releases": "releases_updates",
+    }
+    if limit < 1:
+        return 0
+    hits = RareTypeSearchHit.objects.filter(
+        gate_state=RareTypeSearchHit.GateState.KEPT,
+        post_id__isnull=False,
+        classified_at__isnull=True,
+        post__enrichment_state__classification_status=(
+            PostEnrichmentState.Status.SUCCEEDED
+        ),
+    ).select_related("decision")
+    if fetched_since is not None:
+        hits = hits.filter(fetched_at__gte=fetched_since)
+    reconciled = 0
+    for hit in hits.order_by("fetched_at", "id")[:limit]:
+        classified_types = set(
+            PostBrandSignal.objects.filter(post_id=hit.post_id).values_list(
+                "post_type_id", flat=True
+            )
+        )
+        expected_types = {
+            route_to_post_type[route]
+            for route in (hit.decision.derived_types if hit.decision else [])
+            if route in route_to_post_type
+        }
+        hit.classified_at = now
+        hit.last_error_code = (
+            "jev_classifier_disagreement"
+            if expected_types and expected_types.isdisjoint(classified_types)
+            else ""
+        )
+        hit.save(update_fields=["classified_at", "last_error_code", "updated_at"])
+        reconciled += 1
+    return reconciled
 
 
 def _ensure_decision_processing_cycle(

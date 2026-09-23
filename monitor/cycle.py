@@ -80,6 +80,7 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    RareTypeSearchHit,
     SearchQuery,
     SentimentKey,
 )
@@ -89,9 +90,13 @@ from core.profile_snapshots import (
     capture_post_profile_snapshot,
 )
 from core.rare_type_search import (
+    kept_hits_pending_post,
+    link_kept_hit_to_post,
+    mark_hit_ingestion_failed,
     mark_search_dispatched,
     mark_search_failed,
     persist_hit_batch,
+    reconcile_classified_hits,
     reserve_search_run,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
@@ -134,6 +139,7 @@ from x_monitor.attribution import (
 )
 from x_monitor.config import Config, CycleConfig, load_config
 from x_monitor.harvest_policy import HarvestPolicy
+from x_monitor.jev_decisions import build_jev_decision_gate
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -2943,6 +2949,125 @@ class CycleRunner:
         finally:
             api.max_retries = prior_retries
 
+    def _ingest_kept_rare_type_hits(
+        self,
+        *,
+        run_id: str,
+        fetched_since: datetime | None = None,
+        index: Any = None,
+        search_terms: dict[str, str] | None = None,
+    ) -> dict[str, int]:
+        """Join Jev-kept durable hits to the normal Post/enrichment queue."""
+
+        hits = list(
+            kept_hits_pending_post(
+                limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
+                fetched_since=fetched_since,
+            )
+        )
+        result = {"selected": len(hits), "persisted": 0, "failed": 0}
+        for hit in hits:
+            item = dict(hit.public_payload or {})
+            item["id"] = str(hit.provider_post_id)
+            item["tweet_id"] = str(hit.provider_post_id)
+            item["source_query_id"] = "RARE_EXTRA"
+            item["_discovery_lane"] = "rare_types"
+            item["_discovery_query_id"] = hit.run.source_query.query_id
+            item["_rare_type_hit_id"] = hit.pk
+            self._attribute_items(
+                [item], index if index is not None else (None, {}), search_terms or {}
+            )
+            if item.get("_unattributed"):
+                item["brand_id"] = UNATTRIBUTED_BRAND_ID
+                item["brand_ids"] = [UNATTRIBUTED_BRAND_ID]
+            _inserted, _updated, _attributed, failed = self._persist_items([item])
+            if failed or not item.get("_persisted_post_id"):
+                mark_hit_ingestion_failed(
+                    hit_id=hit.pk, error_code="post_persistence_failed"
+                )
+                result["failed"] += 1
+                continue
+            post = Post.objects.get(pk=item["_persisted_post_id"])
+            if link_kept_hit_to_post(hit_id=hit.pk, post=post, now=self._wall_now()):
+                result["persisted"] += 1
+            else:
+                mark_hit_ingestion_failed(
+                    hit_id=hit.pk, error_code="post_link_state_invalid"
+                )
+                result["failed"] += 1
+        return result
+
+    def _drain_rare_type_hits(
+        self,
+        *,
+        run_id: str,
+        index: Any,
+        search_terms: dict[str, str],
+        fetched_since: datetime | None = None,
+        deadline: Any = None,
+    ) -> dict[str, int]:
+        """Run the local decision/ingestion queue without another X request."""
+
+        result = {"selected": 0, "kept": 0, "junk": 0, "pending": 0}
+        if not self.cfg.discovery.rare_types.enabled:
+            return result
+        service_name = os.environ.get("RENDER_SERVICE_NAME", "").lower()
+        environment = "staging" if "staging" in service_name else "normal"
+        try:
+            gate = build_jev_decision_gate(
+                self.cfg, environment=environment, now=self._wall_now
+            )
+        except Exception as exc:
+            self._errors.append(f"rare_types.jev_unavailable: {exc}")
+            result["pending"] = RareTypeSearchHit.objects.filter(
+                gate_state__in=[
+                    RareTypeSearchHit.GateState.DECISION_PENDING,
+                    RareTypeSearchHit.GateState.PROVIDER_FAILED,
+                ],
+                post_id__isnull=True,
+            ).count()
+            gate = None
+        if gate is not None:
+            candidates = RareTypeSearchHit.objects.filter(
+                gate_state__in=[
+                    RareTypeSearchHit.GateState.DECISION_PENDING,
+                    RareTypeSearchHit.GateState.PROVIDER_FAILED,
+                ],
+                post_id__isnull=True,
+                payload_expired_at__isnull=True,
+            )
+            if fetched_since is not None:
+                candidates = candidates.filter(fetched_at__gte=fetched_since)
+            limit = (
+                self.cfg.discovery.rare_types.jev.staging_decisions_per_cycle
+                if environment == "staging"
+                else self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle
+            )
+            shared_deadline = getattr(deadline, "deadline_at", None)
+            for hit in candidates.order_by("fetched_at", "id")[:limit]:
+                result["selected"] += 1
+                decision = gate.process_hit(
+                    hit.pk,
+                    owner=run_id,
+                    shared_deadline_monotonic=shared_deadline,
+                )
+                if decision.outcome in {"kept", "junk"}:
+                    result[decision.outcome] += 1
+                else:
+                    result["pending"] += 1
+        result.update(
+            {
+                f"ingestion_{key}": value
+                for key, value in self._ingest_kept_rare_type_hits(
+                    run_id=run_id,
+                    fetched_since=fetched_since,
+                    index=index,
+                    search_terms=search_terms,
+                ).items()
+            }
+        )
+        return result
+
 
     def _prepare_call_a_roles(
         self, items: list[dict[str, Any]], *, list_id: int
@@ -3817,6 +3942,11 @@ class CycleRunner:
                     if isinstance(classification, dict)
                     for post_type in classification.get("post_types", [])
                 }
+                post_types.update(
+                    PostBrandSignal.objects.filter(post_id=tid).values_list(
+                        "post_type_id", flat=True
+                    )
+                )
                 targeted = run_targeted_extractions(
                     post=Post.objects.get(pk=tid),
                     post_types=post_types,
@@ -4796,6 +4926,18 @@ class CycleRunner:
 
         # ---- Bounded post-fetch queue: immediately after all live tips ----
         if summary["status"] != "aborted":
+            rare_fetched_since = (
+                cycle_started_wall
+                if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
+                else None
+            )
+            summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                run_id=run_id,
+                index=index,
+                search_terms=search_terms,
+                fetched_since=rare_fetched_since,
+                deadline=deadline,
+            )
             post_fetch_started = self._monotonic()
             pf_counters = self._run_post_fetch(
                 kept_all,
@@ -4812,6 +4954,14 @@ class CycleRunner:
             )
             summary["latency"]["post_fetch_completed_at"] = post_fetch_completed_at
             summary.setdefault("post_fetch", {}).update(pf_counters)
+            if self.cfg.discovery.rare_types.enabled:
+                summary["rare_type_ingestion"]["classified_reconciled"] = (
+                    reconcile_classified_hits(
+                        now=self._wall_now(),
+                        limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
+                        fetched_since=rare_fetched_since,
+                    )
+                )
             if pf_counters.get("n_translator_unavailable"):
                 summary["degraded"]["translator_unavailable"] = True
             if pf_counters.get("n_classifier_unavailable"):
