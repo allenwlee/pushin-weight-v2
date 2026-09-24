@@ -15,6 +15,12 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("internal/", views.home_internal, name="home_internal"),
     path("brands/<str:brand>/", views.brand_home, name="brand_home"),
+    path("product-review/", views.product_review, name="product_review"),
+    path(
+        "product-review/<int:proposal_id>/",
+        views.product_review_detail,
+        name="product_review_detail",
+    ),
 
     # JSON data APIs
     path("feed/", views.home_feed_json, name="feed"),

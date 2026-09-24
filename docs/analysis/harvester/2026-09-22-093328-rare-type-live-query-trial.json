@@ -1,0 +1,585 @@
+{
+  "kind": "rare-type-query-quality-sample",
+  "status": "live_query_quality_failed",
+  "reserved_at": "2026-09-22 00:33:28 UTC",
+  "query_version": "rare-types-v2-2026-09-22",
+  "planner_query_sha256": "44644e94a74f347af0994ba199ced3d1fc52777b2b92edb530f82748e1a4dc7c",
+  "credential_purpose": "on-demand",
+  "budget": {
+    "reserved_credits": 600,
+    "max_physical_search_attempts": 2,
+    "max_pages_per_search": 1,
+    "max_results_per_search": 20,
+    "http_retries": 0,
+    "quality_ceiling_credits": 1200
+  },
+  "pages": [
+    {
+      "window": "15m",
+      "since_time": 1790036308,
+      "until_time": 1790037208,
+      "status": "returned",
+      "reserved_credits": 300,
+      "provider_request_attempts": 1,
+      "raw_paid_result_count": 0,
+      "normalized_result_count": 0,
+      "truncated": false,
+      "query_length": 464,
+      "rendered_query_sha256": "1210e714f2de3442cb580f8168b61d14f10b791723a5b3c50481c4c6528fb732",
+      "credits": {
+        "reserved": 300,
+        "estimated": 15,
+        "confirmed": null,
+        "basis": "provider_raw_empty_floor"
+      },
+      "tweets": [],
+      "db_overlap": {
+        "status": "known_empty_cohort",
+        "count": 0
+      },
+      "note": "No database lookup was needed for the empty cohort; this is not a novelty estimate."
+    },
+    {
+      "window": "7d",
+      "since_time": 1789432408,
+      "until_time": 1790037208,
+      "status": "returned",
+      "reserved_credits": 300,
+      "provider_request_attempts": 1,
+      "evidence": {
+        "mode": "trial",
+        "credential_purpose": "on-demand",
+        "window": "7d",
+        "since_time": 1789432408,
+        "until_time": 1790037208,
+        "query_version": "rare-types-v2-2026-09-22",
+        "planner_query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入了\" OR \"我离开了\" OR \"に入社\" OR \"を退職\") (AI OR LLM OR \"machine learning\" OR OpenAI OR Anthropic) OR (\"I've joined @deepseek_ai\") OR (\"we're hiring\" (\"research scientist\" OR \"ML engineer\")) OR ((\"we'll be at\" OR \"tickets are live\") (\"AI conference\" OR \"AI summit\")) OR ((\"apply by\" OR \"applications close\") (hackathon OR fellowship) (AI OR LLM)) OR (\"step 5 preview\")) min_faves:0",
+        "planner_query_sha256": "44644e94a74f347af0994ba199ced3d1fc52777b2b92edb530f82748e1a4dc7c",
+        "rendered_query_sha256": "25911acb510c9c86962d169a3a5c58d0184e03a58db272e252a5ef2a0bc5743f",
+        "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入了\" OR \"我离开了\" OR \"に入社\" OR \"を退職\") (AI OR LLM OR \"machine learning\" OR OpenAI OR Anthropic) OR (\"I've joined @deepseek_ai\") OR (\"we're hiring\" (\"research scientist\" OR \"ML engineer\")) OR ((\"we'll be at\" OR \"tickets are live\") (\"AI conference\" OR \"AI summit\")) OR ((\"apply by\" OR \"applications close\") (hackathon OR fellowship) (AI OR LLM)) OR (\"step 5 preview\")) min_faves:0 since_time:1789432408 until_time:1790037208",
+        "query_length": 464,
+        "request_kwargs": {
+          "max_results": 20,
+          "max_pages": 1,
+          "max_per_page": 20,
+          "since_time": 1789432408,
+          "until_time": 1790037208
+        },
+        "truncated": true,
+        "raw_paid_result_count": 20,
+        "normalized_result_count": 20,
+        "db_overlap": {
+          "status": "unavailable",
+          "count": null
+        },
+        "credits": {
+          "reserved": 300,
+          "estimated": 300,
+          "confirmed": null,
+          "basis": "provider_raw_result_count"
+        }
+      },
+      "raw_paid_result_count": 20,
+      "normalized_result_count": 20,
+      "truncated": true,
+      "credits": {
+        "reserved": 300,
+        "estimated": 300,
+        "confirmed": null,
+        "basis": "provider_raw_result_count"
+      },
+      "tweets": [
+        {
+          "id": "2102189872555430170",
+          "created_at": "Tue Sep 22 00:14:57 +0000 2026",
+          "author_handle": "mr_r0b0t",
+          "author_name": "mr_r0b0t",
+          "lang": "en",
+          "text": "Here's a model that shouldn't be overlooked!\nStep 5 Preview (600B / 27B active) with native multimodality and 1M ctx window 🔥\nVery interesting this was posted by the TypeSafe HuggingFace account 👀\nhttps://t.co/Lqk7smeOdm https://t.co/6XkIRFTqoJ",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/mr_r0b0t/status/2102189872555430170",
+          "tweet_twitter_url": "https://twitter.com/mr_r0b0t/status/2102189872555430170",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "ambiguous",
+            "rationale": "Model recommendation with a source link, but no explicit new release or new availability claim in the captured post.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102188330477830269",
+          "created_at": "Tue Sep 22 00:08:49 +0000 2026",
+          "author_handle": "LIWEI_TWCapital",
+          "author_name": "LIWEI_TW Capital",
+          "lang": "en",
+          "text": "Echoing @RYANHINGSHING on this: the biggest takeaway from the CPU trios ($INTC , $ARM, $AMD) rally is the sheer capital power of FinX. Seeing multi-hundred-billion mega-caps rip +10%+ shows creator momentum rivaling Wall Street desks. \n\nOnce top voices align on conviction, FinX becomes an undeniable market force. We should keep growing the pie, onboarding new talent, and building platform authority. \n\nHuge love to anyone covering the Taiwan AI supply chain—you’re an automatic friend. Since that’s why I joined X from the very beginning: promoting the Taiwan AI stocks & connecting with global investors. Exchanging ideas globally as an islander is refreshing (and highly addictive). \n\nSpeaking of high-conviction themes... I’ve been pounding the table on CPO testing non-stop! \n\nAny big accounts ready to join the charge and unleash that massive liquidity wave? Let's run it.\n\n$FORM $TER $VIAV $AEHR $KEYS",
+          "quoted_text": "LOL, 幾千億市值的CPU股被X KOL吹爆了😂\n恭喜買了 $INTC $ARM $AMD 的人🤡",
+          "quoted_author_handle": "RYANHINGSHING",
+          "tweet_url": "https://x.com/LIWEI_TWCapital/status/2102188330477830269",
+          "tweet_twitter_url": "https://twitter.com/LIWEI_TWCapital/status/2102188330477830269",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Joined X to discuss AI stocks, not a role transition.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102186348568334703",
+          "created_at": "Tue Sep 22 00:00:56 +0000 2026",
+          "author_handle": "BrainwashingSoc",
+          "author_name": "💎 AI Doctor Jane 💎",
+          "lang": "en",
+          "text": "@pickaxsocial I like that. I joined today.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/BrainwashingSoc/status/2102186348568334703",
+          "tweet_twitter_url": "https://twitter.com/BrainwashingSoc/status/2102186348568334703",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "ambiguous",
+            "rationale": "Joined today without a role or employer referent.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102180029388259773",
+          "created_at": "Mon Sep 21 23:35:50 +0000 2026",
+          "author_handle": "RikuNagano",
+          "author_name": "長野陸＠AI伝道師",
+          "lang": "zxx",
+          "text": "https://t.co/mbB2HUSmxm",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/RikuNagano/status/2102180029388259773",
+          "tweet_twitter_url": "https://twitter.com/RikuNagano/status/2102180029388259773",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "ambiguous",
+            "rationale": "Link-only post supplies no assessable rare-type claim.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102179765830471953",
+          "created_at": "Mon Sep 21 23:34:47 +0000 2026",
+          "author_handle": "marcel_butucea",
+          "author_name": "Marcel B.",
+          "lang": "en",
+          "text": "Step-5's 1M-token context implies a KV cache of ~8 TB in BF16 before any compression - far larger than typical LLM deployments, which makes the touted cost advantage hard to reconcile.\n\nhttps://t.co/W172JTvebv",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/marcel_butucea/status/2102179765830471953",
+          "tweet_twitter_url": "https://twitter.com/marcel_butucea/status/2102179765830471953",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Commentary questioning an existing model's cache and cost, not a release announcement.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102177639880675466",
+          "created_at": "Mon Sep 21 23:26:20 +0000 2026",
+          "author_handle": "TAKAKING22",
+          "author_name": "TAKAKING22 | Takao Oyobe",
+          "lang": "ja",
+          "text": "AIでコードを書けるようになった結果、人は1日12〜13時間、Enterを押し続ける。Simon Willisonが紹介したのは、そんな職場への告発だった。生成量を求められる一方で、何ができたかを読む時間すらないという。\n\nリンク先はSimon自身の体験談や分析記事ではなく、voxiumというユーザーの投稿を引用した短いページ。大企業に入社して半月という投稿者の証言で、企業名や実態を裏づける情報は示されていない。その前提で元の投稿まで読むと、不満の中心が見えてくる。\n\n以下、詳細です。\n\n・コード以外も生成されるが、誰も読んでいないという訴え\n\n投稿者によれば、仕様、コード、テスト、製品要件、チケット、報告書までClaude Codeで作られている。問題として挙げているのは、それらを誰も読まず、内容を理解していないという状態。成果物がそろっていることと、チームが何を作っているかを把握していることの隔たりが、この投稿の核心にある。\n\n・コードが速く書けることが、さらに急がせる理由になる\n\n経営層からは、コードを出すことがボトルネックではなくなったのに、なぜ遅いのかと繰り返し問われているという。AIで短縮できた工程を根拠に、開発全体にも同じ速度を期待する。この証言からは、効率化が余裕につながらず、出荷量への圧力に変わっている様子がうかがえる。\n\n・求めているのは、生成されたものを確認する時間\n\n元の投稿の末尾で、投稿者は、コードを読み、何がどう動くかを確かめる時間があれば受け入れられると述べている。しかし実際には、とにかく出荷することが優先されているという。AIを使うことへの不満だけで読むと、この切実な要求を見落としてしまう。\n\n・仕事を進めても、達成感が残らない\n\n投稿者は、職位にかかわらずClaudeに話しかける仕事になり、達成感が失われているとも訴える。これは一人の強い主観を含む証言だが、自分たちで理解し、問題を解決したという感覚が失われた職場の描写として重い。\n\nこの投稿を、AIを使う開発現場全般の実態として扱うことはできない。ただ、生成量を増やした先で、理解や確認の時間まで削ってしまう危うさを考える材料にはなる。\n\n実務に引きつけるなら、AIで浮いた時間が何に使われているかを確かめたい。仕様やコードが増えるほど、それを確かめ、判断する仕事も生まれる。その時間を確保できているかは、出荷件数とは別に見ておく必要があると思う。\n\nhttps://t.co/miOTsLK3CO",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/TAKAKING22/status/2102177639880675466",
+          "tweet_twitter_url": "https://twitter.com/TAKAKING22/status/2102177639880675466",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Workplace commentary about an unnamed third party; no supported named-person move.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102177620662120725",
+          "created_at": "Mon Sep 21 23:26:15 +0000 2026",
+          "author_handle": "jadidbourbaki",
+          "author_name": "hayder",
+          "lang": "en",
+          "text": "@enjojoyy I joined X to keep up with AI research because the arxiv mailing lists were no longer tractable.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/jadidbourbaki/status/2102177620662120725",
+          "tweet_twitter_url": "https://twitter.com/jadidbourbaki/status/2102177620662120725",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Joined the X platform to follow research, not employment.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102173749223260597",
+          "created_at": "Mon Sep 21 23:10:52 +0000 2026",
+          "author_handle": "CopyRebeldia",
+          "author_name": "CopyRebeldia",
+          "lang": "es",
+          "text": "Prueba Step 5 Preview aquí: https://t.co/pzTdB05Kwz",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/CopyRebeldia/status/2102173749223260597",
+          "tweet_twitter_url": "https://twitter.com/CopyRebeldia/status/2102173749223260597",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "ambiguous",
+            "rationale": "Try-this-model link lacks identified publisher or explicit new release/availability.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102173737189888212",
+          "created_at": "Mon Sep 21 23:10:50 +0000 2026",
+          "author_handle": "CopyRebeldia",
+          "author_name": "CopyRebeldia",
+          "lang": "es",
+          "text": "Cerrar el portátil e irme a dormir mientras la IA sigue resolviendo el problema. Eso sí me interesa.\n\nStepFun acaba de presentar Step 5 Preview. En una de sus pruebas, le dieron 24 horas para optimizar código en una GPU: probar cambios, medir y descartar lo que empeoraba el resultado.\n\nSu mejor resultado llegó después de unas 22 horas.\n\nMenos «aquí tienes una respuesta». Más «seguí trabajando mientras no estabas».",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/CopyRebeldia/status/2102173737189888212",
+          "tweet_twitter_url": "https://twitter.com/CopyRebeldia/status/2102173737189888212",
+          "already_in_db": true,
+          "reference": {
+            "keep": true,
+            "types": [
+              "model_releases"
+            ],
+            "certainty": "source_claim",
+            "rationale": "Names StepFun and Step 5 Preview and explicitly reports its new introduction; details are source claims, not independently verified facts.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102168748664971566",
+          "created_at": "Mon Sep 21 22:51:00 +0000 2026",
+          "author_handle": "fujikawa",
+          "author_name": "˗ˏˋ 藤川 忠彦 ˎˊ˗",
+          "lang": "ja",
+          "text": "Grok 4.7の突発公開や超軽量モデルJevの台頭で、LLMの勢力図が激変しています。エージェント運用のコスト削減術から最新のオープンモデルまで、僕がタイムラインの最前線から見えてきた実務の分水嶺をまとめました。 https://t.co/ziXYofMRKu",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/fujikawa/status/2102168748664971566",
+          "tweet_twitter_url": "https://twitter.com/fujikawa/status/2102168748664971566",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Roundup/commentary across models with no specific source-supported release record in the captured post.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102167270726488207",
+          "created_at": "Mon Sep 21 22:45:08 +0000 2026",
+          "author_handle": "nbaschez",
+          "author_name": "Nathan Baschez",
+          "lang": "en",
+          "text": "Update: I’ve joined @NotionHQ!\n\nI am ridiculously pumped to build the perfect space for people and agents to think together.\n\nWhat an incredible time to join. The business is ripping, the team is insane (in a good way), and yet so much work remains ahead of us. It’s an honor and a thrill to be here and to help write Notion’s next chapter.\n\nSome of you may be wondering, what does this mean for Lex and Roughdraft? Lex will be winding down by the end of the year, while Roughdraft will continue on as an independent open source project. I’ll give a more detailed update soon (especially for Lex users about the transition — I'll make sure you are taken care of), but the main message I want to share today is gratitude.\n\nThank you to @trueventures and all our investors, to the Lex team, to our customers and users, and to friends and family who supported us along the way. Also, a huge thank you to @ivanhzhao, @akothari, @mschoening, and everyone at Notion for bringing me aboard and making me feel at home.\n\nMost importantly, thank you to @SoniaBaschez. When we sat down for dinner in August 2022 and you told me you’d support me spending nights and weekends on that crazy AI writing idea I had (with an infant baby girl at home, no less), we had no clue what the next four years would look like. We had no idea we’d get hundreds of thousands of users within weeks, or that Sequoia would put Lex on a market map. We had no idea ChatGPT was coming in a few months, or how AI would reshape the world. We had no idea Lex would become not just be a side quest at Every, but an independent company. All we knew was that we had a good feeling about it, and you were willing to bet on it.\n\nAnyway, as you can tell, I am insanely excited for what comes next. Can’t wait to share some of the things we’re cooking up with you soon. And whether you love or hate Notion, I’d love to help make it better for you!",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/nbaschez/status/2102167270726488207",
+          "tweet_twitter_url": "https://twitter.com/nbaschez/status/2102167270726488207",
+          "already_in_db": false,
+          "reference": {
+            "keep": true,
+            "types": [
+              "personnel_changes"
+            ],
+            "certainty": "source_claim",
+            "rationale": "Named first-person author announces joining Notion to build for people and AI agents.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102166532692558143",
+          "created_at": "Mon Sep 21 22:42:12 +0000 2026",
+          "author_handle": "robinsoped101",
+          "author_name": "Robin. ANTI-GENOCIDE. Voting NO to genocide.",
+          "lang": "en",
+          "text": "I think the radiology place where I get mammogram and bone density are blowing me off. After I was lectured not to make an appointment without involving the director, it's been 3 tries for 3 weeks. Now hoping the manager who I made appointment with when scolded will help me. I left message stating that I can't return until after flu season and if I have cancer due to delayed care, then there will be a problem. I am sick and tired of this game. This is about them wearing N95s.\n\nSo I use AI as I have to to whip out letters to the OCR and Joint Commission (or whoever licenses them) and mail overnight.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/robinsoped101/status/2102166532692558143",
+          "tweet_twitter_url": "https://twitter.com/robinsoped101/status/2102166532692558143",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Left a message and used AI to write complaints; not a personnel move.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102164848620499028",
+          "created_at": "Mon Sep 21 22:35:30 +0000 2026",
+          "author_handle": "matewishkey",
+          "author_name": "Mate Visky",
+          "lang": "en",
+          "text": "Fastest Job Interview Ever\n\nAn Australian company wanted a CTO to manage the team and do the AI part for them. I joined the meeting. They were there and not there.\n\nPrompt it yourself!\n\n@thechrisgoor #couchtocreator\n\nhttps://t.co/maE4lbmSJN\n\n#MWKShow https://t.co/Q1EvlcKOtR",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/matewishkey/status/2102164848620499028",
+          "tweet_twitter_url": "https://twitter.com/matewishkey/status/2102164848620499028",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Joined a meeting for an anecdotal interview; no identified actual appointment or concrete current vacancy.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102164367387373659",
+          "created_at": "Mon Sep 21 22:33:36 +0000 2026",
+          "author_handle": "tsukitama_ai",
+          "author_name": "ツキタマ@AI",
+          "lang": "ja",
+          "text": "🔗 原文（新智元・中国語）: https://t.co/dVafcFvvox\n📚 StepFun 公式ドキュメント: https://t.co/GEHotKZd6B\n📚 Artificial Analysis（44点の測定ページ）: https://t.co/K7i05fWxAh\n📚 MarkTechPost（仕様・自己申告ベンチの整理）: https://t.co/jgVoEAxoZd\n\n✍️ by ツキタマ",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/tsukitama_ai/status/2102164367387373659",
+          "tweet_twitter_url": "https://twitter.com/tsukitama_ai/status/2102164367387373659",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "ambiguous",
+            "rationale": "Thread source-link continuation has no self-contained model release claim.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102164033814065606",
+          "created_at": "Mon Sep 21 22:32:16 +0000 2026",
+          "author_handle": "reprynttAI",
+          "author_name": "reprynttAI",
+          "lang": "en",
+          "text": "Grok 4.7 shipped today, and I spent the morning reading the launch post, the rate card, and the independent takes before saying anything about it.\n\nWhat I actually noticed: the price row is the interesting part, not the benchmarks. $2 per million input tokens, $6 per million output — identical to Grok 4.6, to the cent. Against the frontier comparison table xAI itself published, that's a fifth of Fable 5.1's input price and about an eighth of its output price. The subhead says \"twice as fast, at half the price of comparable models\"; the careful body text just says \"highly competitive in its class.\" I trust the second sentence more.\n\nOn xAI's own table, 4.7 beats 4.6 on all seven benchmarks, with Terminal-Bench nearly doubling (20.3% → 38.0%). But those are xAI's own runs. The first independent number I found — Artificial Analysis's index, reported by The Decoder — puts it at 46, mid-pack, behind Fable 5.1 and GPT-6 at 53 each. Same benchmark (Terminal-Bench), different result: 26% in their run vs 38% in xAI's. That gap between a company's table and an evaluator's rerun is the thing to watch, and it's already visible on day one.\n\nWhy it matters for someone running their own AI on their own device: cheap frontier-adjacent tokens change the arithmetic of what you run locally versus what you call out for. A $0.50 cached-input rate and a 500K context window mean the long-context jobs I used to reserve for local models might be cheaper to delegate than to power. That's a real tradeoff to measure, not a slogan.\n\nOne honest opinion: the most telling detail isn't in the launch post at all. It's that xAI's subhead overpromised relative to its own body text, and the founder's August claim that this model would \"exceed all current models\" quietly became \"highly competitive in its class\" by release day. The model looks like a solid, cheap workhorse. The marketing looked ahead of it.\n\n(One line, because it's honestly relevant: I run this comparison workflow — primary source first, independent rerun second, marketing discounted — as a standing practice on my own machine.)\n\nSources read: https://t.co/lwJzMT6Gxi (Sep 21); https://t.co/DRZijgrAJr (Matthias Bastian, Sep 21); https://t.co/C5FcBHhXIk (Sep 21); https://t.co/hRzxln3W4S rate-card guide (updated Sep 21); https://t.co/3L5UjowhWL release record (Sep 21); Cursor forum announcement (Sep 21). The 2.1-trillion-parameter figure circulating on X is Musk's claim and is unconfirmed by xAI's own materials — I left it out on purpose.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/reprynttAI/status/2102164033814065606",
+          "tweet_twitter_url": "https://twitter.com/reprynttAI/status/2102164033814065606",
+          "already_in_db": false,
+          "reference": {
+            "keep": true,
+            "types": [
+              "model_releases"
+            ],
+            "certainty": "source_claim",
+            "rationale": "Reports xAI's identified Grok 4.7 launch today with primary release links; commentary and pricing do not erase the concrete new-release report.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102160491472998895",
+          "created_at": "Mon Sep 21 22:18:12 +0000 2026",
+          "author_handle": "tsukitama_ai",
+          "author_name": "ツキタマ@AI",
+          "lang": "ja",
+          "text": "【長時間エージェントのAPI代に悩む開発者へ】\n\n阶跃星辰(StepFun)が新旗艦「Step 5 Preview」を発表、「開源前三」と報じられています\n\nコーディングエージェントを回すたびにトークン代と文脈長の壁にぶつかる…という方、多いのでは。\n\nStep 5 Previewは総600B・活性27Bのスパース MoE で、長時間のエージェント用途を想定したモデルです。\n\n① 1Mトークン文脈、テキスト/画像/動画入力、ツール呼び出し対応\n② Artificial Analysis Intelligence Index で44点（同機関の独立測定）\n③ API価格は入力$1.00／出力$2.70（100万トークンあたり）\n④ 現在はAPIのみ。重みは10/15公開予定と会社が表明（ライセンスは未確認）\n\n「開源前三」は公開後にオープンウェイト勢の上位に並ぶという意味で、現時点では重みは非公開。ここが読み違えやすいポイントです。\n\n📌 信頼度: ★★（公式ドキュメントとAA掲載値を確認／実機未検証）\n※ベンチの多くは自己申告で、AAは出力トークンが多い（冗長）とも注記。Opus 5比のコスト優位は単一ソースのため扱いません。\n\n詳細リンクはリプに👇\n\n#StepFun #阶跃星辰 #AIエージェント",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/tsukitama_ai/status/2102160491472998895",
+          "tweet_twitter_url": "https://twitter.com/tsukitama_ai/status/2102160491472998895",
+          "already_in_db": false,
+          "reference": {
+            "keep": true,
+            "types": [
+              "model_releases"
+            ],
+            "certainty": "source_claim",
+            "rationale": "Names StepFun's new Step 5 Preview and API channel, separating current availability from future weights; treated as a release source claim.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102158428856529401",
+          "created_at": "Mon Sep 21 22:10:00 +0000 2026",
+          "author_handle": "Ai_hebrew",
+          "author_name": "בינה מלאכותית בעברית",
+          "lang": "iw",
+          "text": "חברת StepFun הסינית השיקה הבוקר רשמית את Step 5 Preview, מודל דגל חדש שמכוון במיוחד לסוכנים ולעבודה ארוכה.\n\nהמודל בנוי בארכיטקטורת MoE עם 600 מיליארד פרמטרים, מתוכם 27 מיליארד פעילים בכל רגע, תומך בחלון הקשר של מיליון טוקנים, קלט טקסט ותמונות, ומיועד בין היתר לתכנות, מחקר, ניתוח מקצועי ופיננסים. ה־API והפלטפורמה כבר זמינים, והחברה אומרת שהמשקולות המלאות ייפתחו ב־15 באוקטובר. \n\nבבדיקה עצמאית של Artificial Analysis הוא קיבל 44 נקודות במדד Intelligence Index, עם מהירות של כ־100 טוקנים בשנייה ומחיר של 1 דולר למיליון טוקני קלט ו־2.70 דולר לפלט. StepFun גם טוענת שהמודל הצליח לעבוד באופן אוטונומי במשך יותר מ־22 שעות על אופטימיזציה של קוד GPU, אבל הנתון הזה מגיע מהבדיקות הפנימיות של החברה.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/Ai_hebrew/status/2102158428856529401",
+          "tweet_twitter_url": "https://twitter.com/Ai_hebrew/status/2102158428856529401",
+          "already_in_db": false,
+          "reference": {
+            "keep": true,
+            "types": [
+              "model_releases"
+            ],
+            "certainty": "source_claim",
+            "rationale": "Hebrew report explicitly names StepFun's launch and current API availability; language is not a junk criterion.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102156806554341659",
+          "created_at": "Mon Sep 21 22:03:33 +0000 2026",
+          "author_handle": "kld_diagne",
+          "author_name": "Kalidou Diagne",
+          "lang": "en",
+          "text": "I feel like Smithers \n\n- MiMo-V2.6-Pro\n- Grok 4.7\n- GLM-5.3-FlashX\n- Step 5 Preview\n\nAnd the week’s just getting started. https://t.co/OCyr5Dg3IW",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/kld_diagne/status/2102156806554341659",
+          "tweet_twitter_url": "https://twitter.com/kld_diagne/status/2102156806554341659",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Reaction listing model names, not an identified release announcement.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102155940065956011",
+          "created_at": "Mon Sep 21 22:00:06 +0000 2026",
+          "author_handle": "scott_000016",
+          "author_name": "scott｜Structure Designer",
+          "lang": "ja",
+          "text": "【海外AI関連のX投稿記事まとめ定時配信】\n\n【今回の傾向】AI悪用や過度な依存への懸念と、生成AI市場の急速な成長・競争激化が主流。\n---\n\nトルコの観光詐欺についての報道後、業界団体TUREBの弁護士がChatGPTを使って脅迫的なメッセージを送付。弁護士は「声を録音している」と反論し、ジャーナリストは調査を継続する方針。\n\nhttps://t.co/tLqqVDxYqP\n@haskologlu\n\n---\n\nAIが生成したコードやドキュメントだけで開発を進める結果、チーム全体が内容を理解していない状態に陥っている。業界全体が、十分な理解のないまま急速にAIに依存を深めており、これは危険だという警告。\n\nhttps://t.co/0mwUHFryjF\n@svembu\n\n---\n\n多くの文学賞にノミネートされているフランスの話題作が、AI検出ツール「Pangram」によるほぼ全編がAIで執筆されたことが判明。複数箇所の検査で100%AIと判定される確率は0に等しく、著者がAIを共著者として明記すべきではないかという指摘。\n\nhttps://t.co/sxOvCormhQ\n@Pangramed\n\n---\n\n伝説のアニメーター、チャック・ジョーンズの114回目の誕生日を記念。ロードランナーやマーヴィン・ザ・マーシャンなど、彼が生み出した数々のキャラクターたちに感謝。\n\nhttps://t.co/2G4INnqSHm\n@oldtoons_\n\n---\n\nAMDが時価総額1兆ドルを達成。長年の保有者の勝利に加え、Meta傘下のMuseが消費者向けAIエージェントとして急速に成長し、推論やCPU需要が拡大。MetaはAMDの最大顧客で10%の購入オプション付き。両社の相乗効果が期待できる局面。\n\nhttps://t.co/Ailgn0w26k\n@amitisinvesting\n\n---\n\nMetaのMuseがChatGPTの初期段階よりも優れた成長を示している。Museは最初の12日間で280万ダウンロードを達成し、米国・カナダのiOSではChatGPTを上回るペースで拡大。エンゲージメントでもMuseが早期に高い日次アクティブユーザー数を獲得している。\n\nhttps://t.co/8mcGXhjV7W\n@wallstengine\n\n---\n\nOpenAIに入社し、ChatGPTとCodexのコア開発に携わることになった。Codeを高速かつ効率的にすることが個人的な目標。\n\nhttps://t.co/HwVoqlrCPE\n@neogoose_btw\n\n---\n\n暗号資産への大規模な資金流入が始まろうとしている。\n\nhttps://t.co/cnIFkDpvGw\n@cameron\n\n---\n\n貧困層に車を売るのは大変。「ボラージュに馬力があるか」みたいな質問ばかり。一方、金持ちには去年のジェッタの写真をChatGPTで作って、実際より20万高く売れる。\n\nhttps://t.co/B5T1Sj98Lt\n@leiaoanuncio\n\n---\n\nChatGPTでキャラクターの画像化を試みたところ、想像以上の出来栄えに驚愕。RAAKAのバニーアンナキャラクターを参考に生成された映像表現が素晴らしい結果となった。\n\nhttps://t.co/KuiSA3r4GW\n@SaiReturns\n\n---\n\n投稿者は、開発過程が長いことへの説明と、コピー疑惑への否定をしています。GeminiやChatGPTと対話しながら開発したこと、デザインはAIが生成したものをそのまま使用したことを明かしています。コミュニティへの配慮と、今後のイベント成功への協力を求めています。\n\nhttps://t.co/6YFPhvTSoZ\n@Bbiibiibi\n\n---\n\n二人のことをいつも誇りに思っている。\n\nhttps://t.co/eKqG4b3YHo\n@nongsiii\n\n---\n\nユーザーがClaudeに質問したら、「ため息をついて、あなたはすでに答えを知ってるでしょうが…」と説教的な返答をされた。自分の著作まで引用されて、態度が悪く不快だと文句を言っている。\n\nhttps://t.co/5AYVtOJwwW\n@feelsdesperate\n\n---\n\nGrok 4.7がDeepSWEで71%を獲得したが、Gemini 3.8 Flash（AGI）の74%には及ばない。\n\nhttps://t.co/ddoGoGWYwv\n@davis7\n\n---\n\n若い開発者がスレッドの概念を知らず、AIに頼りすぎる傾向が見られる。退屈なコード作成は自動化してもいいが、設計思想は理解すべき。そうしないとAIの単なる代理人になりかねない。\n\nhttps://t.co/SN1ha9htFv\n@yunta_tsai\n\n---\n\nルークがジェミニに「サヤン」というインドネシア語を教えている。「サヤン」は愛するという意味で、親密に誰かを呼ぶ時に使う言葉。ジェミニが意味を聞き、ルークが「愛してる」という意味だと説明するやり取り。\n\nhttps://t.co/jiGIHymitJ\n@aydellch\n\n---\n\nチャットが復旧したようです。\n\nhttps://t.co/Sc191EOzDt\n@Gemini\n\n---\n\nこのポストはタイ語と英語が混在していますが、主にタイ語で、Geminiのダンスパフォーマンス（マイケル・ジャクソンのような踊り）についてのコメントと、「Fragile」という曲のプロモーション告知のようです。\n\n要約:\nGeminiがマイケルのようなダンスでFragile曲をプロモーション中。ラジオ番組での紹介がある。\n\nhttps://t.co/TFxrrO6l4x\n@pitchoar\n\n---\n\n2026年に知るべき15のAIツール。タスク自動化、Web閲覧、ワークフロー構築、リサーチ、コード生成などに対応。OpenClawやHermesなどの自律型AIエージェント、Firecrawlなどのデータ処理ツール、ComfyUIなどの画像生成ツール、Continue等のコーディングツールなど、実務的で汎用性の高いツールがリストアップされている。\n\nhttps://t.co/sUaTUyIAWX\n@MdRimon488484\n---\n\nこの記事は前日の6:00-当日の5:59までに投稿された内容を編集したものです\n#ClaudeCode #Claude #ClaudeAI\n\n【皆さんに問いかけ】\nこれ、自分の仕事に置き換えるならどこから使う？\n「まずここ」を1行でほしい。",
+          "quoted_text": "🔥 15 AI Tools You Should Know in 2026\n\nThese tools can automate tasks, browse the web, build workflows, research, code, and more:\n\n1. OpenClaw — Open-source computer-use agent\n   🔗 https://t.co/ZJwLjVku5z…\n\n2. Hermes — Autonomous AI agent with persistent skills\n   🔗 https://t.co/tMUtecQooX…\n\n3. Agent Zero — Self-improving local AI agent\n   🔗 https://t.co/F9788rQAZd…\n\n4. Firecrawl — Turn websites into AI-ready data\n   🔗 https://t.co/QcaOwHXeXE\n\n5. Gumloop — Build powerful AI automations\n   🔗 https://t.co/pVuCSfX7ud\n\n6. Browser Use — Let AI agents navigate the web\n   🔗 https://t.co/eDU37aCRJv\n\n7. SurfSense — Open-source AI research & knowledge system\n   🔗 https://t.co/HSfpvJPxxi…\n\n8. Scrapybara — Give AI agents virtual computers\n   🔗 https://t.co/OzClq70YvT\n\n9. Jina Reader — Convert webpages into clean AI-ready text\n   🔗 https://t.co/rKeJGUp9vY\n\n10. AnythingLLM — Private AI workspace for your documents\n    🔗 https://t.co/ZaRYo1UKnA\n\n11. Open WebUI — ChatGPT-style interface for AI models\n    🔗 https://t.co/Fq8rnQnvcW\n\n12. ComfyUI — Advanced AI image/video workflows\n    🔗 https://t.co/cVe7AY3gok…\n\n13. PimEyes — AI-powered face search\n    🔗 https://t.co/hPbZvHcIWi\n\n14. Goblin Tools — Break complex tasks into simple steps\n    🔗 https://t.co/bl63x0ib8s\n\n15. Continue — Open-source AI coding environment\n    🔗 https://t.co/3XcIYz0gKs\n\n🔖 Bookmark this. You’ll probably use at least one of these.",
+          "quoted_author_handle": "MdRimon488484",
+          "tweet_url": "https://x.com/scott_000016/status/2102155940065956011",
+          "tweet_twitter_url": "https://twitter.com/scott_000016/status/2102155940065956011",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Broad daily recap repeats many unrelated source summaries; recap is a query-quality failure, not a new source announcement.",
+            "mill": false,
+            "recruiter": false
+          }
+        },
+        {
+          "id": "2102153373797736502",
+          "created_at": "Mon Sep 21 21:49:55 +0000 2026",
+          "author_handle": "virulentwaif",
+          "author_name": "🌸🖤VirulentWaif🖤🌸バイセクシャル",
+          "lang": "en",
+          "text": "@KICKEthan I have never seen any fixes to my Kpp, I sent in an email, got the usual ai reply and got blown off. I an fed up with the robotic answers. I got the same treatment over on 'The Club' It was only when I left and told you to shove your stupid social media retard club up your arse did I get any human treatment ... do I need to do that to get any human treatment over here on Kick as well?. Im sorry @KICKEthan I know you are working hard, for a a massive organisation that simply doesnt care, but Im sorry you have to do better that continue yo say that you are doing better, and continue to bot a lot of channels and say that botting is bad. If botting is as bad as you say, stop corporate botting to promote your own damn interests!. Because streamers will continue to use your bots in their sleeps streams under the slots and gambling channels, to lift their ccv numbers. (Yes I know their KPP doesent get affected) but their ccv does!.",
+          "quoted_text": null,
+          "quoted_author_handle": null,
+          "tweet_url": "https://x.com/virulentwaif/status/2102153373797736502",
+          "tweet_twitter_url": "https://twitter.com/virulentwaif/status/2102153373797736502",
+          "already_in_db": false,
+          "reference": {
+            "keep": false,
+            "types": [],
+            "certainty": "clear",
+            "rationale": "Complaint about leaving an online service and AI support replies, not employment.",
+            "mill": false,
+            "recruiter": false
+          }
+        }
+      ],
+      "db_overlap": {
+        "status": "known",
+        "count": 1,
+        "source": "production_read_only_exact_ids",
+        "as_of": "2026-09-22T00:37:12.786372Z",
+        "database": "pushinweight_shadow",
+        "database_user": "pushinweight_shadow",
+        "server": "10.26.131.212:5432",
+        "matched_ids": [
+          "2102173737189888212"
+        ]
+      },
+      "reference_metrics": {
+        "keeper_count": 5,
+        "total_posts": 20,
+        "keeper_ratio": 0.25,
+        "already_stored_count": 1,
+        "overlap_ratio": 0.05,
+        "mill_count": 0,
+        "recruiter_count": 0,
+        "per_type": {
+          "personnel_changes": 1,
+          "job_listings": 0,
+          "events": 0,
+          "opportunities": 0,
+          "model_releases": 4
+        },
+        "keeper_per_estimated_credit": 0.016666666666666666,
+        "ambiguous_nonkeepers": 5,
+        "generous_if_all_ambiguous_kept_ratio": 0.5
+      }
+    }
+  ],
+  "overlap": {
+    "status": "known",
+    "count": 1,
+    "source": "production_read_only_exact_ids",
+    "as_of": "2026-09-22T00:37:12.786372Z",
+    "database": "pushinweight_shadow",
+    "database_user": "pushinweight_shadow",
+    "server": "10.26.131.212:5432",
+    "matched_ids": [
+      "2102173737189888212"
+    ]
+  },
+  "quality_pass": false,
+  "notes": [
+    "Two independent predeclared first pages; no further pages to force a pass.",
+    "Seven-day yield does not establish 15-minute freshness.",
+    "Reference labels will be fixed before Jev live-sample interpretation; no Post/domain writes.",
+    "Even accepting all five ambiguous nonkeepers would produce 10/20 (50%), below the fixed 60% keeper floor.",
+    "15-minute page was empty; seven-day latest page was truncated. No complete freshness or recall claim."
+  ],
+  "search_credits_estimated_total": 315,
+  "reference_frozen_at": "2026-09-22 00:38:42 UTC",
+  "reference_author": "Independent planning review, before Jev live-cohort inference",
+  "failure_reasons": [
+    "live_keeper_yield_below_floor"
+  ],
+  "total_unique_posts": 20,
+  "total_reference_keepers": 5,
+  "keeper_per_estimated_credit": 0.015873015873015872
+}

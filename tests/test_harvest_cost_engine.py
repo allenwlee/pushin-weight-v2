@@ -123,3 +123,80 @@ def test_render_markdown_contains_totals():
 def test_extrapolate():
     ext = extrapolate(100.0)
     assert ext["per_day_96_cycles"] == 9600
+
+
+def test_rare_discovery_uses_estimated_floor_without_double_counting():
+    summary = {
+        "run_id": "rare-empty",
+        "calls": [
+            {"call_id": "A", "n_results": 1, "status": "completed"},
+            {
+                "call_id": "RARE_EXTRA",
+                "n_results": 0,
+                "provider_called": True,
+                "reserved_credits": 300,
+                "estimated_credits": 15,
+                "confirmed_credits": None,
+                "status": "no_results",
+            },
+        ],
+        # This is observability for the same physical call, not another bill.
+        "rare_types": {
+            "schema_version": "1",
+            "n_provider_attempts": 1,
+            "n_raw_paid_results": 0,
+            "search_credits_reserved": 300,
+            "search_credits_estimated": 15,
+            "search_credits_confirmed": 0,
+            "n_search_credit_confirmations": 0,
+        },
+    }
+
+    cycle = cost_cycle_from_summary(summary, RATES)
+
+    rare = [line for line in cycle.lines if line.label == "RARE_EXTRA"]
+    assert len(rare) == 1
+    assert rare[0].source == "discovery"
+    assert rare[0].n_results == 0
+    assert rare[0].credits == 15
+    assert "basis=estimated" in rare[0].notes
+    assert cycle.total_credits == 30
+
+
+def test_rare_discovery_prefers_confirmed_and_retains_unknown_reservation():
+    confirmed = cost_cycle_from_summary(
+        {
+            "run_id": "rare-confirmed",
+            "calls": [
+                {
+                    "call_id": "RARE_EXTRA",
+                    "n_results": 4,
+                    "provider_called": True,
+                    "reserved_credits": 300,
+                    "estimated_credits": 60,
+                    "confirmed_credits": 45,
+                }
+            ],
+        },
+        RATES,
+    )
+    unknown = cost_cycle_from_summary(
+        {
+            "run_id": "rare-unknown",
+            "calls": [
+                {
+                    "call_id": "RARE_EXTRA",
+                    "n_results": 0,
+                    "provider_called": True,
+                    "reserved_credits": 300,
+                    "status": "error",
+                }
+            ],
+        },
+        RATES,
+    )
+
+    assert confirmed.lines[0].credits == 45
+    assert "basis=confirmed" in confirmed.lines[0].notes
+    assert unknown.lines[0].credits == 300
+    assert "basis=reserved_usage_unknown" in unknown.lines[0].notes

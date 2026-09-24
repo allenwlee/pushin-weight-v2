@@ -1,0 +1,27 @@
+{
+  "question_set_version": "rare-types-jev-questions-v1",
+  "question_content_sha256": "2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
+  "threshold_version": "rare-types-jev-routing-v3",
+  "threshold_values_sha256": "1c6dc92d61493569059ba2ea2de6a0a3dd2bf660080689b98617f3be40a808d8",
+  "question_ids": [
+    "ai_related",
+    "person_identity",
+    "role_change",
+    "role_opening",
+    "attendance_event",
+    "bounded_opportunity",
+    "model_release",
+    "source_announcement",
+    "junk_mill",
+    "junk_lineup",
+    "junk_f1",
+    "junk_joke",
+    "junk_static_bio",
+    "junk_price_only",
+    "junk_conference_ad"
+  ],
+  "yes_threshold": "0.80",
+  "no_threshold": "0.20",
+  "role_opening_threshold": "0.30",
+  "attendance_event_threshold": "0.50"
+}

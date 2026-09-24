@@ -53,7 +53,13 @@ def _remove_stage1c_migration_seeded_brands():
     """Keep each synthetic ranking test isolated from canonical seed rows."""
 
     Brand.objects.filter(
-        nickname__in=("anthropic", "google_deepmind")
+        nickname__in=(
+            "anthropic",
+            "gemini",
+            "google_deepmind",
+            "openai",
+            "spacexai",
+        )
     ).delete()
 
 

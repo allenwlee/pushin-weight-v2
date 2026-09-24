@@ -160,7 +160,7 @@ def test_envelope_is_deterministic_hashed_and_structurally_redacted():
     second = build_summary_envelope(summary, service_id="cron-1", deploy_sha="abc123")
 
     assert first == second
-    assert first["schema_version"] == "2"
+    assert first["schema_version"] == "3"
     assert set(first) == {"schema_version", "service_id", "deploy_sha", "run_id", "summary", "hash"}
     line = serialize_summary_envelope(first)
     assert line.startswith(HARVEST_SUMMARY_PREFIX)
@@ -199,7 +199,7 @@ def test_envelope_is_deterministic_hashed_and_structurally_redacted():
     assert parse_summary_line(line) == first
 
 
-def test_parser_accepts_historical_v1_but_rejects_v2_fields_claimed_as_v1():
+def test_parser_accepts_historical_v1_and_v2_but_rejects_new_fields_as_v1():
     current = build_summary_envelope(
         {
             "run_id": "versioned-run",
@@ -224,6 +224,19 @@ def test_parser_accepts_historical_v1_but_rejects_v2_fields_claimed_as_v1():
         HARVEST_SUMMARY_PREFIX
         + json.dumps(historical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     ) == historical
+
+    historical_v2 = json.loads(json.dumps(current))
+    historical_v2["schema_version"] = "2"
+    _rehash(historical_v2)
+    assert parse_summary_line(
+        HARVEST_SUMMARY_PREFIX
+        + json.dumps(
+            historical_v2,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    ) == historical_v2
 
     historical["summary"]["post_fetch"]["n_enrichment_claimed"] = 1
     _rehash(historical)

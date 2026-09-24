@@ -11,7 +11,7 @@ from .pricing import PricingRates
 
 @dataclass(frozen=True)
 class CostLine:
-    source: str  # search | metrics | qt | residual | floor
+    source: str  # search | discovery | metrics | qt | residual | floor
     label: str
     n_results: int
     credits: float
@@ -36,7 +36,11 @@ class CycleCost:
         return rates.usd(self.total_credits)
 
     def search_credits(self) -> float:
-        return sum(ln.credits for ln in self.lines if ln.source in ("search", "residual"))
+        return sum(
+            ln.credits
+            for ln in self.lines
+            if ln.source in ("search", "discovery", "residual")
+        )
 
     def metrics_credits(self) -> float:
         return sum(ln.credits for ln in self.lines if ln.source == "metrics")
@@ -105,18 +109,40 @@ def cost_cycle_from_summary(
     lines: list[CostLine] = []
 
     calls = summary.get("calls") or []
+    rare_call_priced = False
     if isinstance(calls, list) and calls:
         for c in calls:
             if not isinstance(c, Mapping):
                 continue
             cid = str(c.get("call_id") or c.get("id") or "?")
             n = _pick_int(c, "n_results", "fetch_n", default=0)
-            credits = credits_for_tweet_units(n, rates, apply_floor=False)
             status = c.get("status") or ""
-            note = f"status={status}" if status else ""
+            source = "search"
+            if cid == "RARE_EXTRA":
+                rare_call_priced = True
+                source = "discovery"
+                confirmed = c.get("confirmed_credits")
+                estimated = c.get("estimated_credits")
+                reserved = c.get("reserved_credits")
+                if confirmed is not None:
+                    credits = max(float(confirmed), 0.0)
+                    basis = "confirmed"
+                elif estimated is not None:
+                    credits = max(float(estimated), 0.0)
+                    basis = "estimated"
+                elif c.get("provider_called") and reserved is not None:
+                    credits = max(float(reserved), 0.0)
+                    basis = "reserved_usage_unknown"
+                else:
+                    credits = 0.0
+                    basis = "not_dispatched"
+                note = f"status={status} basis={basis} raw_paid_results={n}"
+            else:
+                credits = credits_for_tweet_units(n, rates, apply_floor=False)
+                note = f"status={status}" if status else ""
             lines.append(
                 CostLine(
-                    source="search",
+                    source=source,
                     label=cid,
                     n_results=n,
                     credits=credits,
@@ -160,6 +186,40 @@ def cost_cycle_from_summary(
                     notes="aggregate posts seen only",
                 )
             )
+
+    rare_types = summary.get("rare_types") or {}
+    if (
+        not rare_call_priced
+        and isinstance(rare_types, Mapping)
+        and _pick_int(rare_types, "n_provider_attempts", default=0) > 0
+    ):
+        confirmed = rare_types.get("search_credits_confirmed")
+        estimated = rare_types.get("search_credits_estimated")
+        reserved = rare_types.get("search_credits_reserved")
+        if (
+            confirmed is not None
+            and _pick_int(
+                rare_types, "n_search_credit_confirmations", default=0
+            )
+            > 0
+        ):
+            credits = max(float(confirmed), 0.0)
+            basis = "confirmed"
+        elif estimated is not None:
+            credits = max(float(estimated), 0.0)
+            basis = "estimated"
+        else:
+            credits = max(float(reserved or 0), 0.0)
+            basis = "reserved_usage_unknown"
+        lines.append(
+            CostLine(
+                source="discovery",
+                label="RARE_EXTRA",
+                n_results=_pick_int(rare_types, "n_raw_paid_results", default=0),
+                credits=credits,
+                notes=f"counts-only fallback basis={basis}",
+            )
+        )
 
     mr = summary.get("metrics_refresh") or {}
     if isinstance(mr, Mapping) and mr:

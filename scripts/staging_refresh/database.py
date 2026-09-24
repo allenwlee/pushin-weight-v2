@@ -43,6 +43,28 @@ class RefreshError(RuntimeError):
     """A secret-free failure before staging activation."""
 
 
+_SOURCE_DEPENDENT_SEED_MIGRATIONS = (
+    (
+        "core.0033_stage1c_frontier_organization_brands",
+        (
+            ("anthropic", "anthropic"),
+            ("google_deepmind", "google"),
+        ),
+        False,
+    ),
+    (
+        "core.0049_rare_type_domain_records",
+        (
+            ("openai", "openai"),
+            ("anthropic", "anthropic"),
+            ("spacexai", "xai"),
+            ("gemini", "google"),
+        ),
+        True,
+    ),
+)
+
+
 @dataclass(frozen=True, slots=True)
 class SourceCensus:
     snapshot_id: str
@@ -303,6 +325,18 @@ def _table_count(cursor: Any, table: str) -> int:
     return int(cursor.fetchone()[0])
 
 
+def _source_exact_row_counts(
+    cursor: Any,
+    policy: RefreshPolicy,
+    source_tables: frozenset[str],
+) -> dict[str, int]:
+    return {
+        table: _table_count(cursor, table)
+        for table in policy.validation.exact_count_tables
+        if table in source_tables
+    }
+
+
 def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
     counts: dict[str, int] = {}
     for table, columns in policy.validation.translation_columns.items():
@@ -346,6 +380,62 @@ def _pending_migration_deltas(
         for table, delta in deltas.items():
             pending[table] = pending.get(table, 0) + delta
     return pending
+
+
+def _source_dependent_seed_migration_deltas(
+    cursor: Any, migration_rows: list[tuple[Any, ...]]
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Calculate exact idempotent seed effects from the exported source snapshot."""
+
+    applied = {(str(row[0]), str(row[1])) for row in migration_rows}
+    if ("core", "0049_rare_type_domain_records") in applied:
+        return {}, {}
+    pending_steps = [
+        (migration, organizations, rejects_conflicting_company)
+        for migration, organizations, rejects_conflicting_company in (
+            _SOURCE_DEPENDENT_SEED_MIGRATIONS
+        )
+        if tuple(migration.split(".", 1)) not in applied
+    ]
+    if not pending_steps:
+        return {}, {}
+
+    cursor.execute("SELECT nickname FROM brands")
+    brands = {str(row[0]) for row in cursor.fetchall()}
+    cursor.execute("SELECT nickname FROM companies")
+    companies = {str(row[0]) for row in cursor.fetchall()}
+    cursor.execute(
+        "SELECT b.nickname, c.nickname FROM brands_companies bc "
+        "JOIN brands b ON b.nickname = bc.brand_id "
+        "JOIN companies c ON c.nickname = bc.company_id"
+    )
+    links = {(str(row[0]), str(row[1])) for row in cursor.fetchall()}
+
+    count_deltas: dict[str, int] = {}
+    translation_deltas: dict[str, int] = {}
+
+    def increment(values: dict[str, int], key: str) -> None:
+        values[key] = values.get(key, 0) + 1
+
+    for migration, organizations, rejects_conflicting_company in pending_steps:
+        for brand, company in organizations:
+            if brand not in brands:
+                brands.add(brand)
+                increment(count_deltas, "brands")
+                increment(translation_deltas, "brands.display_name_en")
+            if company not in companies:
+                companies.add(company)
+                increment(count_deltas, "companies")
+                increment(translation_deltas, "companies.display_name_en")
+
+            owners = {owner for linked_brand, owner in links if linked_brand == brand}
+            if rejects_conflicting_company and owners - {company}:
+                raise RefreshError(f"source_forward_seed_conflict:{migration}:{brand}")
+            if (brand, company) not in links:
+                links.add((brand, company))
+                increment(count_deltas, "brands_companies")
+
+    return count_deltas, translation_deltas
 
 
 def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
@@ -431,12 +521,18 @@ class PsycopgSnapshotAdapter:
             pending_migration_translation_count_deltas = (
                 _pending_migration_translation_count_deltas(self.policy, migration_rows)
             )
-            row_counts: dict[str, int] = {}
-            for table in self.policy.validation.exact_count_tables:
-                cursor.execute(
-                    sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+            seed_count_deltas, seed_translation_count_deltas = (
+                _source_dependent_seed_migration_deltas(cursor, migration_rows)
+            )
+            for table, delta in seed_count_deltas.items():
+                pending_migration_count_deltas[table] = (
+                    pending_migration_count_deltas.get(table, 0) + delta
                 )
-                row_counts[table] = int(cursor.fetchone()[0])
+            for metric, delta in seed_translation_count_deltas.items():
+                pending_migration_translation_count_deltas[metric] = (
+                    pending_migration_translation_count_deltas.get(metric, 0) + delta
+                )
+            row_counts = _source_exact_row_counts(cursor, self.policy, source_tables)
             latest: dict[str, str | None] = {}
             table = self.policy.validation.latest_timestamp_table
             column = self.policy.validation.latest_timestamp_column

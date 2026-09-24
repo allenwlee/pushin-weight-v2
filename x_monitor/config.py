@@ -207,6 +207,86 @@ class DiscoveryLaneConfig(BaseModel):
         return self
 
 
+class JevDecisionsConfig(BaseModel):
+    """Pinned Decisions API, identity, pricing, and resource limits."""
+
+    endpoint: Literal["https://api.typesafe.ai/v1/systemone"] = (
+        "https://api.typesafe.ai/v1/systemone"
+    )
+    model: Literal["jev-1.13.0"] = "jev-1.13.0"
+    provider: Literal["TypeSafe"] = "TypeSafe"
+    question_set_version: str = Field(
+        default="rare-types-jev-questions-v1", min_length=1, max_length=63
+    )
+    question_content_sha256: str = Field(
+        default="2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    threshold_version: str = Field(
+        default="rare-types-jev-routing-v3", min_length=1, max_length=63
+    )
+    threshold_values_sha256: str = Field(
+        default="1c6dc92d61493569059ba2ea2de6a0a3dd2bf660080689b98617f3be40a808d8",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    yes_threshold: Decimal = Field(default=Decimal("0.80"), ge=0, le=1)
+    no_threshold: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    role_opening_threshold: Decimal = Field(default=Decimal("0.30"), ge=0, le=1)
+    attendance_event_threshold: Decimal = Field(default=Decimal("0.50"), ge=0, le=1)
+    input_price_per_million_usd: Decimal = Field(default=Decimal("0.042"), gt=0)
+    output_price_per_million_usd: Decimal = Field(default=Decimal(0), ge=0)
+    request_timeout_seconds: float = Field(default=10, gt=0, le=10)
+    max_concurrency: int = Field(default=2, ge=1, le=2)
+    gate_allocation_seconds: int = Field(default=60, ge=1, le=60)
+    normal_decisions_per_cycle: int = Field(default=20, ge=1, le=20)
+    staging_decisions_per_cycle: int = Field(default=5, ge=1, le=5)
+    cycle_budget_usd: Decimal = Field(default=Decimal("0.02"), gt=0, le=Decimal("0.02"))
+    daily_budget_usd: Decimal = Field(default=Decimal("0.50"), gt=0, le=Decimal("0.50"))
+    max_request_bytes: int = Field(default=32_000, ge=1, le=32_000)
+    max_response_bytes: int = Field(default=65_536, ge=1, le=65_536)
+
+    @model_validator(mode="after")
+    def _validate_thresholds(self) -> JevDecisionsConfig:
+        if self.no_threshold >= self.yes_threshold:
+            raise ValueError("Jev no threshold must be below yes threshold")
+        if not (
+            self.no_threshold < self.role_opening_threshold <= self.yes_threshold
+            and self.no_threshold
+            < self.attendance_event_threshold
+            <= self.yes_threshold
+        ):
+            raise ValueError("Jev type thresholds must be above no and at most yes")
+        if self.output_price_per_million_usd != 0:
+            raise ValueError("pinned Jev output pricing must remain zero")
+        return self
+
+
+class RareTypeSearchConfig(BaseModel):
+    """Disabled-by-default combined rare-type lane; U6 adds search wiring."""
+
+    enabled: bool = False
+    assessment_path: str = ""
+    assessment_digest: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    max_results: Literal[20] = 20
+    max_pages: Literal[1] = 1
+    max_per_page: Literal[20] = 20
+    daily_credit_ceiling: Literal[28800] = 28800
+    reserved_credits_per_call: Literal[300] = 300
+    jev: JevDecisionsConfig = JevDecisionsConfig()
+    product_verification_enabled: bool = False
+    targeted_extraction_enabled: bool = False
+    product_verification_normal_requests: Literal[3] = 3
+    product_verification_staging_requests: Literal[1] = 1
+
+    @model_validator(mode="after")
+    def _validate_enablement_evidence(self) -> RareTypeSearchConfig:
+        if self.enabled and (not self.assessment_path or not self.assessment_digest):
+            raise ValueError(
+                "enabled rare-types lane requires pinned assessment evidence"
+            )
+        return self
+
+
 class DiscoveryConfig(BaseModel):
     jobs: DiscoveryLaneConfig = DiscoveryLaneConfig(
         query_pack_version="jobs-discovery-v1"
@@ -214,6 +294,7 @@ class DiscoveryConfig(BaseModel):
     personnel: DiscoveryLaneConfig = DiscoveryLaneConfig(
         query_pack_version="personnel-discovery-v1"
     )
+    rare_types: RareTypeSearchConfig = RareTypeSearchConfig()
 
     @model_validator(mode="after")
     def _validate_global_query_ids(self) -> DiscoveryConfig:
@@ -234,6 +315,7 @@ TARGETED_EXTRACTION_ROLES = frozenset(
         "job_listing_extraction",
         "personnel_change_extraction",
         "profile_affiliation_extraction",
+        "model_release_extraction",
     }
 )
 
@@ -853,6 +935,26 @@ class Config(BaseModel):
     degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2", "C3"]] = Field(
         default_factory=lambda: ["B3", "B2", "B1", "C3", "C2", "C1", "A"]
     )
+
+    @model_validator(mode="after")
+    def _validate_rare_targeted_extraction(self) -> Config:
+        rare = self.discovery.rare_types
+        targeted = self.targeted_extraction
+        if rare.targeted_extraction_enabled and not rare.enabled:
+            raise ValueError(
+                "rare-types targeted extraction requires rare-types activation"
+            )
+        if rare.targeted_extraction_enabled and not targeted.enabled:
+            raise ValueError(
+                "rare-types targeted extraction requires the extraction lane"
+            )
+        if rare.targeted_extraction_enabled and not (
+            1 <= targeted.max_calls_per_cycle <= 20
+        ):
+            raise ValueError(
+                "rare-types targeted extraction requires a cap from 1 through 20"
+            )
+        return self
     # v1.7: x.com list ID for Call A (list-based fan-in). The list is
     # operator-managed (see v1.7 plan §"Operator manual step"). When
     # None, the pipeline runs in v1.6-compatible mode (per-brand
@@ -1241,6 +1343,76 @@ def load_config(path: Path) -> Config:
                 target[part] = child
             target = child
         target[path_parts[-1]] = os.environ[env_name]
+
+    # Rare-type collection has its own reviewed runtime activation tuple.  It
+    # may run in either deployed environment, but never in an unlabelled/local
+    # process.  The rare-scoped extraction switch intentionally supersedes the
+    # old broad temporary enable flag without changing the configured cap.
+    rare_activation_env_paths = {
+        "X_MONITOR_RARE_TYPES_ENABLED": ("discovery", "rare_types", "enabled"),
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH": (
+            "discovery",
+            "rare_types",
+            "assessment_path",
+        ),
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST": (
+            "discovery",
+            "rare_types",
+            "assessment_digest",
+        ),
+        "X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED": (
+            "discovery",
+            "rare_types",
+            "product_verification_enabled",
+        ),
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED": (
+            "discovery",
+            "rare_types",
+            "targeted_extraction_enabled",
+        ),
+    }
+    rare_runtime_enabled = (
+        os.environ.get("X_MONITOR_RARE_TYPES_ENABLED", "").strip().casefold()
+        in truthy_values
+    )
+    rare_targeted_extraction_enabled = (
+        os.environ.get(
+            "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED", ""
+        )
+        .strip()
+        .casefold()
+        in truthy_values
+    )
+    if rare_runtime_enabled:
+        deployment_environment = os.environ.get(
+            "X_MONITOR_DEPLOYMENT_ENVIRONMENT", ""
+        ).strip()
+        if deployment_environment not in {"staging", "production"}:
+            raise ValueError(
+                "rare-types activation requires "
+                "X_MONITOR_DEPLOYMENT_ENVIRONMENT=staging or production"
+            )
+        if not rare_targeted_extraction_enabled:
+            raise ValueError(
+                "rare-types activation requires its targeted extraction switch"
+            )
+    for env_name, path_parts in rare_activation_env_paths.items():
+        if env_name not in os.environ:
+            continue
+        target = raw
+        for part in path_parts[:-1]:
+            child = target.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                target[part] = child
+            target = child
+        target[path_parts[-1]] = os.environ[env_name]
+    if rare_targeted_extraction_enabled:
+        targeted = raw.get("targeted_extraction")
+        if not isinstance(targeted, dict):
+            targeted = {}
+            raw["targeted_extraction"] = targeted
+        targeted["enabled"] = True
     try:
         return Config.model_validate(raw)
     except ValidationError:

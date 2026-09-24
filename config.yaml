@@ -67,6 +67,36 @@ daily_ceiling: 333
 # persistence, and post-fetch classifier. Both lanes stay disabled until a
 # separate owner-approved provider trial establishes quality and cost.
 discovery:
+  rare_types:
+    enabled: false
+    max_results: 20
+    max_pages: 1
+    max_per_page: 20
+    daily_credit_ceiling: 28800
+    reserved_credits_per_call: 300
+    jev:
+      endpoint: https://api.typesafe.ai/v1/systemone
+      model: jev-1.13.0
+      provider: TypeSafe
+      question_set_version: rare-types-jev-questions-v1
+      question_content_sha256: 2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df
+      threshold_version: rare-types-jev-routing-v3
+      threshold_values_sha256: 1c6dc92d61493569059ba2ea2de6a0a3dd2bf660080689b98617f3be40a808d8
+      yes_threshold: '0.80'
+      no_threshold: '0.20'
+      role_opening_threshold: '0.30'
+      attendance_event_threshold: '0.50'
+      input_price_per_million_usd: '0.042'
+      output_price_per_million_usd: '0'
+      request_timeout_seconds: 10
+      max_concurrency: 2
+      gate_allocation_seconds: 60
+      normal_decisions_per_cycle: 20
+      staging_decisions_per_cycle: 5
+      cycle_budget_usd: '0.02'
+      daily_budget_usd: '0.50'
+      max_request_bytes: 32000
+      max_response_bytes: 65536
   jobs:
     enabled: false
     query_pack_version: jobs-discovery-v1
@@ -196,6 +226,10 @@ targeted_extraction:
       model: deepseek-ai/DeepSeek-V4-Flash-0731
       prompt_version: profile-affiliation-extraction-v2
       max_tokens: 2000
+    model_release_extraction:
+      model: deepseek-ai/DeepSeek-V4-Flash-0731
+      prompt_version: model-release-extraction-v1
+      max_tokens: 2500
 
 # Reply-chain cluster threshold. Tune via PR.
 clustering:

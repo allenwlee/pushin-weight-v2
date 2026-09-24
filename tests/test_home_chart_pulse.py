@@ -76,7 +76,13 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
     def setUpTestData(cls):
         super().setUpTestData()
         Brand.objects.filter(
-            nickname__in=("anthropic", "google_deepmind")
+            nickname__in=(
+                "anthropic",
+                "gemini",
+                "google_deepmind",
+                "openai",
+                "spacexai",
+            )
         ).delete()
         specs = {
             "up": (6, 4),

@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+from core.discovery import RARE_EXTRA_CALL_ID
 from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
     enrichment_fact_terminal_complete,
@@ -28,6 +29,12 @@ from x_monitor.twitterapi_credentials import (
 
 ACCEPTANCE_ENABLE_ENVIRONMENT = "X_MONITOR_STAGING_ACCEPTANCE_ENABLED"
 ACCEPTANCE_SERVICE_ENVIRONMENT = "X_MONITOR_STAGING_ACCEPTANCE_SERVICE"
+RARE_ASSESSMENT_PATH_ENVIRONMENT = (
+    "X_MONITOR_STAGING_ACCEPTANCE_RARE_ASSESSMENT_PATH"
+)
+RARE_ASSESSMENT_DIGEST_ENVIRONMENT = (
+    "X_MONITOR_STAGING_ACCEPTANCE_RARE_ASSESSMENT_DIGEST"
+)
 DEPLOYMENT_ENVIRONMENT = "X_MONITOR_DEPLOYMENT_ENVIRONMENT"
 EXPECTED_DEPLOYMENT_ENVIRONMENT = "staging"
 EXPECTED_SERVICE_NAME = "pushinweight-staging-harvest"
@@ -39,6 +46,8 @@ MAX_TRUNCATION_WALKS = 1
 MAX_ENRICHMENT_CLAIMS = 5
 MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS = 5
 MAX_CARRYOVER_ENRICHMENT_CLAIMS = 0
+MAX_RARE_TYPE_JEV_DECISIONS = 5
+MAX_RARE_TYPE_HF_REQUESTS = 1
 
 _SAFE_POST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _FACT_KEYS = {
@@ -61,29 +70,36 @@ class StagingAcceptanceProfile:
     environment: str
     database: str
     role: str
+    rare_extra: bool = False
 
     def as_dict(self) -> dict[str, Any]:
+        caps = {
+            "selected_calls": 1,
+            "search_requests": 1,
+            "results": MAX_RESULTS,
+            "pages": MAX_PAGES,
+            "page_size": MAX_PER_PAGE,
+            "truncation_walks": MAX_TRUNCATION_WALKS,
+            "metrics_refresh": False,
+            "enrichment_claims": MAX_ENRICHMENT_CLAIMS,
+            "enrichment_current_cycle_claims": (
+                MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS
+            ),
+            "enrichment_carryover_claims": MAX_CARRYOVER_ENRICHMENT_CLAIMS,
+            "http_retries": 0,
+        }
+        if self.rare_extra:
+            caps.update(
+                jev_decisions=MAX_RARE_TYPE_JEV_DECISIONS,
+                hf_requests=MAX_RARE_TYPE_HF_REQUESTS,
+            )
         return {
             "service": self.service,
             "environment": self.environment,
             "database": self.database,
             "database_role": self.role,
             "selected_call": self.selected_call,
-            "caps": {
-                "selected_calls": 1,
-                "search_requests": 1,
-                "results": MAX_RESULTS,
-                "pages": MAX_PAGES,
-                "page_size": MAX_PER_PAGE,
-                "truncation_walks": MAX_TRUNCATION_WALKS,
-                "metrics_refresh": False,
-                "enrichment_claims": MAX_ENRICHMENT_CLAIMS,
-                "enrichment_current_cycle_claims": (
-                    MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS
-                ),
-                "enrichment_carryover_claims": MAX_CARRYOVER_ENRICHMENT_CLAIMS,
-                "http_retries": 0,
-            },
+            "caps": caps,
         }
 
 
@@ -192,7 +208,7 @@ def _inspect_database(database, policy: RefreshPolicy) -> tuple[str, str]:
     return database_name, role
 
 
-def _bounded_config(cfg: Config) -> Config:
+def _bounded_config(cfg: Config, *, rare_extra: bool = False) -> Config:
     enrichment = cfg.harvest.enrichment.model_copy(
         update={
             "claim_per_cycle": MAX_ENRICHMENT_CLAIMS,
@@ -203,6 +219,30 @@ def _bounded_config(cfg: Config) -> Config:
         }
     )
     harvest = cfg.harvest.model_copy(update={"enrichment": enrichment})
+    rare_types = cfg.discovery.rare_types.model_copy(
+        update={
+            "jev": cfg.discovery.rare_types.jev.model_copy(
+                update={
+                    "staging_decisions_per_cycle": MAX_RARE_TYPE_JEV_DECISIONS
+                }
+            ),
+            "product_verification_enabled": (
+                True
+                if rare_extra
+                else cfg.discovery.rare_types.product_verification_enabled
+            ),
+            "product_verification_staging_requests": MAX_RARE_TYPE_HF_REQUESTS,
+            "targeted_extraction_enabled": (
+                True
+                if rare_extra
+                else cfg.discovery.rare_types.targeted_extraction_enabled
+            ),
+        }
+    )
+    discovery = cfg.discovery.model_copy(update={"rare_types": rare_types})
+    targeted_extraction = cfg.targeted_extraction
+    if rare_extra:
+        targeted_extraction = targeted_extraction.model_copy(update={"enabled": True})
     return cfg.model_copy(
         update={
             "search": cfg.search.model_copy(
@@ -219,8 +259,62 @@ def _bounded_config(cfg: Config) -> Config:
                 update={"enabled": False}
             ),
             "harvest": harvest,
+            "discovery": discovery,
+            "targeted_extraction": targeted_extraction,
         }
     )
+
+
+def _configure_rare_extra_assessment(
+    cfg: Config, environ: Mapping[str, str]
+) -> Config:
+    """Apply the staging-only assessment pin without enabling normal cycles."""
+
+    lane = cfg.discovery.rare_types
+    assessment_path = environ.get(RARE_ASSESSMENT_PATH_ENVIRONMENT, "").strip()
+    assessment_digest = environ.get(RARE_ASSESSMENT_DIGEST_ENVIRONMENT, "").strip()
+    if bool(assessment_path) != bool(assessment_digest):
+        raise StagingAcceptanceError("rare_extra_assessment_config_incomplete")
+    if assessment_path:
+        if lane.enabled and (
+            lane.assessment_path != assessment_path
+            or lane.assessment_digest != assessment_digest
+        ):
+            raise StagingAcceptanceError("rare_extra_assessment_mismatch")
+        lane = lane.model_copy(
+            update={
+                "enabled": True,
+                "assessment_path": assessment_path,
+                "assessment_digest": assessment_digest,
+                "targeted_extraction_enabled": True,
+            }
+        )
+        cfg = cfg.model_copy(
+            update={
+                "discovery": cfg.discovery.model_copy(
+                    update={"rare_types": lane}
+                )
+            }
+        )
+    return cfg
+
+
+def _validate_rare_extra_config(cfg: Config) -> None:
+    """Require the canonical planner to accept the pinned assessment tuple."""
+
+    if not cfg.discovery.rare_types.enabled:
+        raise StagingAcceptanceError("call_id_not_configured")
+    try:
+        # This is the canonical, provider-free validation used by the shared
+        # planner. Keeping it here prevents staging preflight and execution
+        # from accepting different query/Jev/threshold fingerprints.
+        from core.discovery import plan_rare_type_call
+
+        planned = plan_rare_type_call(cfg)
+    except (OSError, TypeError, ValueError) as exc:
+        raise StagingAcceptanceError("rare_extra_assessment_mismatch") from exc
+    if planned is None or planned.call_id != RARE_EXTRA_CALL_ID:
+        raise StagingAcceptanceError("rare_extra_assessment_mismatch")
 
 
 def _safe_nonnegative_count(source: Mapping[str, Any], key: str) -> int:
@@ -296,11 +390,23 @@ def evaluate_staging_acceptance(
         {},
     )
     call_status = str(selected_call.get("status") or "missing")
-    n_results = selected_call.get("n_results")
-    n_inserted = selected_call.get("n_inserted")
-    n_updated = selected_call.get("n_updated")
+    is_rare_extra = prepared.profile.selected_call == RARE_EXTRA_CALL_ID
+    if is_rare_extra:
+        n_results = selected_call.get("normalized_count")
+        totals = stats.get("totals")
+        totals = totals if isinstance(totals, Mapping) else {}
+        n_inserted = totals.get("n_inserted")
+        n_updated = totals.get("n_updated")
+        selected_call["n_results"] = n_results
+        selected_call["n_inserted"] = n_inserted
+        selected_call["n_updated"] = n_updated
+    else:
+        n_results = selected_call.get("n_results")
+        n_inserted = selected_call.get("n_inserted")
+        n_updated = selected_call.get("n_updated")
     safe_truncated_transfer = (
-        call_status == "truncated_replay_queued"
+        not is_rare_extra
+        and call_status == "truncated_replay_queued"
         and selected_call.get("coverage_transfer") == "transferred"
         and selected_call.get("cursor_advanced") is True
         and isinstance(selected_call.get("backlog_window_id"), int)
@@ -311,7 +417,12 @@ def evaluate_staging_acceptance(
         stats.get("status") not in {"completed", "degraded"}
         or bool(stats.get("errors"))
         or (
-            call_status not in {"completed", "no_results"}
+            call_status
+            not in (
+                {"stored", "no_results"}
+                if is_rare_extra
+                else {"completed", "no_results"}
+            )
             and not safe_truncated_transfer
         )
         or not isinstance(n_results, int)
@@ -515,7 +626,12 @@ def prepare_staging_acceptance(
     if environ.get(ACCEPTANCE_SERVICE_ENVIRONMENT) != EXPECTED_SERVICE_NAME:
         raise StagingAcceptanceError("configured_service_identity_mismatch")
 
-    if call_id not in _configured_call_ids(cfg):
+    if call_id == RARE_EXTRA_CALL_ID:
+        cfg = _configure_rare_extra_assessment(cfg, environ)
+        _validate_rare_extra_config(cfg)
+        if not environ.get("TYPESAFE_API_KEY"):
+            raise StagingAcceptanceError("provider_credential_missing:jev")
+    elif call_id not in _configured_call_ids(cfg):
         raise StagingAcceptanceError("call_id_not_configured")
 
     if not environ.get(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV):
@@ -541,8 +657,14 @@ def prepare_staging_acceptance(
         environment=EXPECTED_DEPLOYMENT_ENVIRONMENT,
         database=database_name,
         role=role,
+        rare_extra=call_id == RARE_EXTRA_CALL_ID,
     )
-    return PreparedStagingAcceptance(profile=profile, config=_bounded_config(cfg))
+    return PreparedStagingAcceptance(
+        profile=profile,
+        config=_bounded_config(
+            cfg, rare_extra=call_id == RARE_EXTRA_CALL_ID
+        ),
+    )
 
 
 class BoundedTwitterApiClient:
@@ -551,6 +673,7 @@ class BoundedTwitterApiClient:
     def __init__(self, delegate):
         self._delegate = delegate
         self._delegate.max_retries = 0
+        self._search_requests = 0
 
     @property
     def timeout_s(self):
@@ -560,11 +683,23 @@ class BoundedTwitterApiClient:
     def max_retries(self) -> int:
         return 0
 
+    @max_retries.setter
+    def max_retries(self, value: int) -> None:
+        if value != 0:
+            raise StagingAcceptanceError("search_retry_cap_exceeded")
+        self._delegate.max_retries = 0
+
     @property
     def _request_log(self):
         return getattr(self._delegate, "_request_log", None)
 
+    def _claim_search_request(self) -> None:
+        if self._search_requests >= 1:
+            raise StagingAcceptanceError("search_request_cap_exceeded")
+        self._search_requests += 1
+
     def run_search(self, query: str, **kwargs):
+        self._claim_search_request()
         kwargs.update(
             max_results=MAX_RESULTS,
             max_pages=MAX_PAGES,
@@ -574,6 +709,28 @@ class BoundedTwitterApiClient:
         items = list(items or [])
         over_limit = len(items) > MAX_RESULTS
         return items[:MAX_RESULTS], bool(truncated or over_limit)
+
+    def run_search_page_with_raw(self, query: str, **kwargs):
+        """Bound the raw-page entry point used by the shared rare-type caller."""
+
+        self._claim_search_request()
+        kwargs.update(
+            max_results=MAX_RESULTS,
+            max_pages=MAX_PAGES,
+            max_per_page=MAX_PER_PAGE,
+        )
+        body, raw, normalized, continuation, normalization_errors = (
+            self._delegate.run_search_page_with_raw(query, **kwargs)
+        )
+        normalized = list(normalized or [])
+        over_limit = len(normalized) > MAX_RESULTS
+        return (
+            body,
+            raw,
+            normalized[:MAX_RESULTS],
+            bool(continuation or over_limit),
+            normalization_errors,
+        )
 
 
 @contextmanager

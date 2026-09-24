@@ -29,6 +29,8 @@ from core.models import (
     JobDiscoveryRun,
     JobListing,
     JobListingEvidence,
+    ModelRelease,
+    ModelReleaseEvidence,
     Opportunity,
     Person,
     PersonAccount,
@@ -36,11 +38,17 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     PersonnelDiscoveryRun,
     Post,
+    ProductVerificationProposal,
+    ProfileMovementCandidate,
+    RareTypeCategoryAssignment,
+    RareTypeSearchHit,
     SearchQuery,
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
+from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.profile_snapshots import person_id_for_account, person_id_for_handle
+from core.rare_type_search import record_unknown_name_tokens_from_movement
 from x_monitor.config import TargetedExtractionConfig
 from x_monitor.provider_telemetry import (
     ProviderResponse,
@@ -55,6 +63,7 @@ TYPE_TO_ROLE = {
     "opportunities": "opportunity_extraction",
     "job_listings": "job_listing_extraction",
     "personnel_changes": "personnel_change_extraction",
+    "releases_updates": "model_release_extraction",
 }
 ALLOWED_AFFILIATION_TYPES = {
     value for value, _label in PersonBrandAffiliation.AFFILIATION_TYPES
@@ -68,6 +77,10 @@ ALLOWED_APPLICATION_ROUTES = {
 ALLOWED_EVENT_MODES = {value for value, _label in Event.ATTENDANCE_MODES}
 ALLOWED_EVENT_STATUSES = {value for value, _label in Event.SOURCE_STATUSES}
 ALLOWED_OPPORTUNITY_TYPES = {value for value, _label in Opportunity.OPPORTUNITY_TYPES}
+ALLOWED_RELEASE_CHANNELS = {value for value, _label in ModelRelease.CHANNELS}
+ALLOWED_RARE_CATEGORIES = {
+    value for value, _label in RareTypeCategoryAssignment.CATEGORIES
+}
 ALLOWED_OPPORTUNITY_STATUSES = {value for value, _label in Opportunity.SOURCE_STATUSES}
 
 TargetedCall = Callable[[str, str, str, int], Mapping[str, Any] | str]
@@ -135,6 +148,16 @@ employment_type, status (current, former, future, or unknown), start_date,
 start_date_precision (day, month, year, or unknown), end_date,
 end_date_precision, and confidence. Keep an unstated effective date null with
 unknown precision.
+""",
+    "model_release_extraction": """
+Return one record per source-supported AI model or agent-harness release.
+Recaps, reseller availability, price comparisons, and vague roadmap claims do
+not qualify without an identifiable underlying release. Fields: brand_id,
+organization_name, organization_handle, model_name, candidate_repo_id, version,
+release_channel (stable, preview, beta, or other), release_value,
+release_precision (day, month, year, or unknown), source_url, categories (one
+or more of llm-model, other-ai-model, agent-harness), and confidence. Preserve
+an unstated date as null with unknown precision.
 """,
     "profile_affiliation_extraction": """
 Review the supplied profile observations and return one record per supported
@@ -661,11 +684,10 @@ def _known_brand(context: _BrandEvidenceContext, value: Any) -> Brand | None:
     source_text = context.source_text
     names = {
         brand.nickname.replace("_", " "),
-        brand.display_name,
-        brand.display_name_en,
-        brand.display_name_zh_cn,
-        brand.display_name_ja,
-    }
+            brand.display_name,
+            brand.display_name_en,
+            brand.display_name_zh_cn,
+        }
     for name in names:
         normalized = unicodedata.normalize("NFKC", str(name or "")).casefold().strip()
         if not normalized:
@@ -1023,6 +1045,26 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             post, record, brand_context
         )
         candidates += candidate_created
+        if candidate is not None:
+            movement = ProfileMovementCandidate.objects.filter(
+                source_post=post, status__in=["pending", "failed"]
+            ).order_by("id").first()
+            if movement is not None:
+                organization = _organization_label(record)
+                handle = _text(record.get("organization_handle"), maximum=64)
+                tokens = [{
+                    "form": organization,
+                    "kind": "spelling",
+                    "script": (
+                        "han" if any("\u4e00" <= char <= "\u9fff" for char in organization)
+                        else "latn"
+                    ),
+                }]
+                if handle and handle != organization:
+                    tokens.append({"form": handle, "kind": "handle", "script": "latn"})
+                record_unknown_name_tokens_from_movement(
+                    movement=movement, candidate=candidate, tokens=tokens
+                )
         person_handle = _text(record.get("person_handle"), maximum=64)
         normalized_handle = (person_handle or "").removeprefix("@").casefold()
         self_authored = bool(
@@ -1239,15 +1281,15 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
         start_value, start_precision, _start_parsed = start
         end_value, end_precision, _end_parsed = end
         brand = _known_brand(brand_context, record.get("brand_id"))
+        candidate = None
         if brand is None:
-            _candidate, created = _organization_candidate(
+            candidate, created = _organization_candidate(
                 post=post,
                 name=_text(record.get("organization_name"), required=True) or "",
                 handle=_text(record.get("organization_handle"), maximum=64),
                 confidence=_confidence(record.get("confidence")),
             )
             candidates += int(created)
-            continue
         title = _text(record.get("title"), required=True) or ""
         organizer_name = _text(record.get("organization_name"), required=True) or ""
         source_url = _source_bound_url(
@@ -1277,11 +1319,12 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
             start_precision=start_precision,
             end_value=end_value,
             end_precision=end_precision,
-        )
+        ) if brand is not None else None
+        owner_identity = str(brand.pk) if brand is not None else f"candidate:{candidate.pk}"
         identity = (
             _hash(
                 {
-                    "brand": str(brand.pk),
+                    "brand": owner_identity,
                     "external_event_source": external_event_source,
                     "external_event_id": external_event_id,
                     "canonical_url": canonical_url,
@@ -1292,7 +1335,7 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
             if external_event_source and external_event_id
             else _hash(
                 {
-                    "brand": str(brand.pk),
+                    "brand": owner_identity,
                     "canonical_url": canonical_url,
                     "start": [start_value, start_precision],
                     "end": [end_value, end_precision],
@@ -1301,7 +1344,7 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
             if canonical_url
             else _hash(
                 {
-                    "brand": str(brand.pk),
+                    "brand": owner_identity,
                     "title": _normalized_event_text(title),
                     "organizer": _normalized_event_text(organizer_name),
                     "start": [start_value, start_precision],
@@ -1321,6 +1364,7 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
                 event_identity=identity,
                 defaults={
                     "brand": brand,
+                    "brand_discovery_candidate": candidate,
                     "source_post": post,
                     "source_url": source_url,
                     "canonical_url": canonical_url,
@@ -1473,18 +1517,18 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
         open_value, open_precision, _open_parsed = opens
         close_value, close_precision, _close_parsed = closes
         brand = _known_brand(brand_context, record.get("brand_id"))
+        candidate = None
         if brand is None:
-            _candidate, created = _organization_candidate(
+            candidate, created = _organization_candidate(
                 post=post,
                 name=_text(record.get("organization_name"), required=True) or "",
                 handle=_text(record.get("organization_handle"), maximum=64),
                 confidence=_confidence(record.get("confidence")),
             )
             candidates += int(created)
-            continue
         related_event = None
         related_event_title = _text(record.get("related_event_title"))
-        possible_events = events_by_brand.get(str(brand.pk), [])
+        possible_events = events_by_brand.get(str(brand.pk), []) if brand else []
         if related_event_title:
             related_event = next(
                 (
@@ -1508,6 +1552,7 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
             opportunity_identity=identity,
             defaults={
                 "brand": brand,
+                "brand_discovery_candidate": candidate,
                 "related_event": related_event,
                 "source_post": post,
                 "source_url": _source_bound_url(
@@ -1552,12 +1597,177 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
     return written, 0, candidates
 
 
+def _persist_categories(
+    *,
+    post: Post,
+    record: Mapping[str, Any],
+    version: str,
+    brand: Brand | None,
+    candidate: BrandDiscoveryCandidate | None,
+) -> int:
+    categories = record.get("categories") or []
+    if not isinstance(categories, list) or any(
+        category not in ALLOWED_RARE_CATEGORIES for category in categories
+    ):
+        raise ValueError("invalid rare-type categories")
+    written = 0
+    for category in set(categories):
+        _row, created = RareTypeCategoryAssignment.objects.get_or_create(
+            post=post,
+            brand=brand,
+            brand_discovery_candidate=candidate,
+            category=category,
+            defaults={
+                "source_evidence": dict(record),
+                "classification_version": version,
+            },
+        )
+        written += int(created)
+    return written
+
+
+def _persist_model_releases(
+    post: Post, records: list[Mapping[str, Any]], version: str
+):
+    written = evidence = candidates = 0
+    source_urls = _source_urls(post)
+    brand_context = _brand_evidence_context(post)
+    for record in records:
+        brand = _known_brand(brand_context, record.get("brand_id"))
+        candidate = None
+        if brand is None:
+            candidate, created = _organization_candidate(
+                post=post,
+                name=_text(record.get("organization_name"), required=True) or "",
+                handle=_text(record.get("organization_handle"), maximum=64),
+                confidence=_confidence(record.get("confidence")),
+            )
+            candidates += int(created)
+        model_name = _text(record.get("model_name")) or ""
+        _persist_categories(
+            post=post,
+            record=record,
+            version=version,
+            brand=brand,
+            candidate=candidate,
+        )
+        if not model_name:
+            continue
+        version_value = _text(record.get("version")) or ""
+        channel = _choice(
+            record.get("release_channel"),
+            allowed=ALLOWED_RELEASE_CHANNELS,
+            default="other",
+            field="release channel",
+        )
+        release_value, release_precision, _parsed = _temporal_value(
+            record.get("release_value"),
+            record.get("release_precision"),
+            field="model release",
+            allow_datetime=False,
+        )
+        source_url = _source_bound_url(
+            record.get("source_url"), source_urls=source_urls, field="source"
+        )
+        if source_url is None and not version_value:
+            raise ValueError("model release needs a source URL or exact version")
+        owner_identity = (
+            f"brand:{brand.pk}" if brand is not None else f"candidate:{candidate.pk}"
+        )
+        identity = _hash(
+            {
+                "owner": owner_identity,
+                "model": unicodedata.normalize("NFKC", model_name).casefold(),
+                "version": version_value,
+                "channel": channel,
+                **({"source_url": source_url} if not version_value else {}),
+            }
+        )
+        release, created = ModelRelease.objects.get_or_create(
+            release_identity=identity,
+            defaults={
+                "brand": brand,
+                "brand_discovery_candidate": candidate,
+                "observed_model_name": model_name,
+                "version": version_value,
+                "release_channel": channel,
+                "release_value": release_value,
+                "release_precision": release_precision,
+                "first_seen_at": post.fetched_at,
+                "last_seen_at": post.fetched_at,
+                "extraction_version": version,
+                "review_status": "pending",
+            },
+        )
+        if not created and post.fetched_at > release.last_seen_at:
+            release.last_seen_at = post.fetched_at
+            release.save(update_fields=["last_seen_at", "updated_at"])
+        evidence_hash = _hash({"post": str(post.pk), "record": record, "version": version})
+        _evidence, evidence_created = ModelReleaseEvidence.objects.get_or_create(
+            release=release,
+            source_post=post,
+            evidence_hash=evidence_hash,
+            defaults={
+                "source_url": source_url,
+                "observed_at": post.fetched_at,
+                "observed_claim": dict(record),
+                "extraction_version": version,
+            },
+        )
+        candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
+        if post.author_id:
+            source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
+            ProductVerificationProposal.objects.get_or_create(
+                proposal_key=_hash(
+                    {
+                        "post": str(post.pk),
+                        "account": str(post.author_id),
+                        "model": model_name,
+                        "repo": candidate_repo_id.casefold(),
+                    }
+                ),
+                defaults={
+                    "source_post": post,
+                    "source_release": release,
+                    "proposed_brand": brand,
+                    "proposed_candidate": candidate,
+                    "account_id": post.author_id,
+                    "account_handle_snapshot": post.author_handle or "",
+                    "observed_name": model_name,
+                    "candidate_repo_id": candidate_repo_id,
+                    "account_evidence": {
+                        "stable_account_id": str(post.author_id),
+                        "handle": post.author_handle or "",
+                        "account_handle_at_extraction": post.author.handle or "",
+                        "account_verified_type": post.author.verified_type,
+                        "post_author_verified_type": post.author_verified_type,
+                        **source_identity_evidence,
+                    },
+                    "policy_version": POLICY_VERSION,
+                    "hf_outcome": "pending" if candidate_repo_id else "deferred",
+                    "rule_trace": [
+                        (
+                            "awaiting_exact_public_hf_metadata"
+                            if source_identity_evidence["exact_hf_repo_link"]
+                            else "source_exact_repo_link_missing_owner_review_required"
+                        )
+                        if candidate_repo_id
+                        else "candidate_repo_id_missing_owner_review_required",
+                    ],
+                },
+            )
+        written += int(created)
+        evidence += int(evidence_created)
+    return written, evidence, candidates
+
+
 _PERSISTERS = {
     "event_extraction": _persist_events,
     "opportunity_extraction": _persist_opportunities,
     "job_listing_extraction": _persist_jobs,
     "personnel_change_extraction": _persist_personnel,
     "profile_affiliation_extraction": _persist_personnel,
+    "model_release_extraction": _persist_model_releases,
 }
 
 
@@ -1625,6 +1835,15 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             "affiliate_display_type",
         )
         payload["profile_observations"] = list(snapshots)
+        payload["profile_movements"] = [
+            {
+                "id": movement.pk,
+                "prior_description": movement.prior_description,
+                "new_description": movement.new_description,
+                "observed_at": movement.observed_at.isoformat(),
+            }
+            for movement in post.profile_movement_candidates.order_by("id")
+        ]
     user = json.dumps(
         payload,
         ensure_ascii=False,
@@ -1683,15 +1902,27 @@ def run_targeted_extractions(
     calls: Mapping[str, TargetedCall],
     max_calls: int,
     deadline: Any | None = None,
+    eligible_rare_types: set[str] | None = None,
 ) -> TargetedExtractionResult:
     if not config.enabled or max_calls < 1:
         return TargetedExtractionResult()
-    roles = [TYPE_TO_ROLE[key] for key in TYPE_TO_ROLE if key in post_types]
+    roles = [
+        TYPE_TO_ROLE[key]
+        for key in TYPE_TO_ROLE
+        if key in post_types
+        and (
+            key != "releases_updates"
+            or "model_releases" in (eligible_rare_types or set())
+        )
+    ]
     has_ambiguous_profile = PersonBrandAffiliationEvidence.objects.filter(
         source_profile_snapshot__first_source_post=post,
         extracted_claim_data__candidate_role="unknown",
     ).exists()
-    if has_ambiguous_profile:
+    has_profile_movement = ProfileMovementCandidate.objects.filter(
+        source_post=post, status__in=["pending", "failed"]
+    ).exists()
+    if has_ambiguous_profile or has_profile_movement:
         roles.append("profile_affiliation_extraction")
     calls_made = records_written = evidence_written = candidates_written = 0
     failed: list[str] = []
@@ -1773,6 +2004,12 @@ def run_targeted_extractions(
         state.last_attempted_at = attempted_at
         state.completed_at = attempted_at if outcome == "succeeded" else None
         state.save()
+        if role == "profile_affiliation_extraction":
+            ProfileMovementCandidate.objects.filter(source_post=post).update(
+                status=outcome,
+                attempts=F("attempts") + 1,
+                last_error_code=error_code,
+            )
         TargetedExtractionAttempt.objects.create(
             state=state,
             attempt_identity=_hash(
@@ -1791,6 +2028,20 @@ def run_targeted_extractions(
             latency_ms=latency_ms,
             error_code=error_code,
         )
+    if (
+        roles
+        and not failed
+        and not deferred
+        and TargetedExtractionState.objects.filter(
+            post=post, role__in=roles, status="succeeded"
+        ).count() == len(set(roles))
+    ):
+        RareTypeSearchHit.objects.filter(
+            post=post,
+            gate_state=RareTypeSearchHit.GateState.KEPT,
+            extracted_at__isnull=True,
+        ).update(extracted_at=timezone.now())
+
     return TargetedExtractionResult(
         calls_made=calls_made,
         records_written=records_written,

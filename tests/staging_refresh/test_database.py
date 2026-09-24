@@ -13,6 +13,7 @@ import pytest
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from scripts.database_lock import DatabaseLockError
+from scripts.staging_refresh import database as refresh_database
 from scripts.staging_refresh.database import (
     CandidateCensus,
     CandidateProcessor,
@@ -59,6 +60,7 @@ class FakeAdapter:
             schema_checksum="a" * 64,
             migration_checksum="b" * 64,
             row_counts={
+                **{table: 0 for table in policy.validation.exact_count_tables},
                 "accounts": 5,
                 "brands": 2,
                 "brands_companies": 2,
@@ -565,22 +567,176 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
     assert result.scrub.removed_narratives == 3
 
 
-def test_pending_migration_count_deltas_apply_only_until_migration_is_present() -> None:
+def test_static_pending_migration_deltas_remain_empty_for_source_dependent_seeds() -> None:
     policy = load_policy(POLICY_PATH)
-    migration = "0033_stage1c_frontier_organization_brands"
 
-    assert _pending_migration_count_deltas(policy, [("core", "0032", None)]) == {
-        "brands": 2,
-        "brands_companies": 2,
-    }
-    assert _pending_migration_count_deltas(policy, [("core", migration, None)]) == {}
+    assert _pending_migration_count_deltas(policy, [("core", "0032", None)]) == {}
     assert _pending_migration_translation_count_deltas(
         policy, [("core", "0032", None)]
-    ) == {"brands.display_name_en": 2}
-    assert (
-        _pending_migration_translation_count_deltas(policy, [("core", migration, None)])
-        == {}
+    ) == {}
+
+
+def test_source_exact_counts_skip_absent_optional_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = load_policy(POLICY_PATH)
+    observed: list[str] = []
+    expected = {"model_releases": 3, "posts": 12}
+
+    def fake_count(_cursor: object, table: str) -> int:
+        observed.append(table)
+        return expected[table]
+
+    monkeypatch.setattr(refresh_database, "_table_count", fake_count)
+
+    counts = refresh_database._source_exact_row_counts(
+        object(),
+        policy,
+        frozenset(expected),
     )
+
+    assert counts == expected
+    assert observed == ["model_releases", "posts"]
+
+
+class SeedSnapshotCursor:
+    def __init__(
+        self,
+        *,
+        brands: set[str],
+        companies: set[str],
+        links: set[tuple[str, str]],
+    ) -> None:
+        self.results = iter(
+            [
+                [(nickname,) for nickname in sorted(brands)],
+                [(nickname,) for nickname in sorted(companies)],
+                sorted(links),
+            ]
+        )
+        self.current: list[tuple[str, ...]] = []
+
+    def execute(self, _statement: str) -> None:
+        self.current = next(self.results)
+
+    def fetchall(self) -> list[tuple[str, ...]]:
+        return self.current
+
+
+def _seed_deltas(
+    *,
+    migrations: list[tuple[str, str, None]],
+    brands: set[str],
+    companies: set[str],
+    links: set[tuple[str, str]],
+) -> tuple[dict[str, int], dict[str, int]]:
+    return refresh_database._source_dependent_seed_migration_deltas(
+        SeedSnapshotCursor(brands=brands, companies=companies, links=links),
+        migrations,
+    )
+
+
+def test_source_snapshot_before_0049_counts_only_rows_the_seed_will_create() -> None:
+    counts, translations = _seed_deltas(
+        migrations=[("core", "0048_rare_type_candidate_tokens", None)],
+        brands={"anthropic", "google_deepmind", "gemini"},
+        companies={"anthropic", "google", "openai", "xai"},
+        links={
+            ("anthropic", "anthropic"),
+            ("google_deepmind", "google"),
+            ("gemini", "google"),
+        },
+    )
+
+    assert counts == {"brands": 2, "brands_companies": 2}
+    assert translations == {"brands.display_name_en": 2}
+
+
+def test_source_snapshot_partially_seeded_0049_uses_exact_missing_deltas() -> None:
+    counts, translations = _seed_deltas(
+        migrations=[("core", "0048_rare_type_candidate_tokens", None)],
+        brands={"anthropic", "google_deepmind", "openai"},
+        companies={"anthropic", "google"},
+        links={("anthropic", "anthropic"), ("google_deepmind", "google")},
+    )
+
+    assert counts == {
+        "brands": 2,
+        "brands_companies": 3,
+        "companies": 2,
+    }
+    assert translations == {
+        "brands.display_name_en": 2,
+        "companies.display_name_en": 2,
+    }
+
+
+def test_fully_seeded_source_with_0049_pending_has_zero_delta() -> None:
+    counts, translations = _seed_deltas(
+        migrations=[("core", "0048_rare_type_candidate_tokens", None)],
+        brands={"anthropic", "gemini", "google_deepmind", "openai", "spacexai"},
+        companies={"anthropic", "google", "openai", "xai"},
+        links={
+            ("anthropic", "anthropic"),
+            ("gemini", "google"),
+            ("google_deepmind", "google"),
+            ("openai", "openai"),
+            ("spacexai", "xai"),
+        },
+    )
+
+    assert counts == {}
+    assert translations == {}
+
+
+def test_applied_0049_needs_no_source_seed_snapshot_or_delta() -> None:
+    class NoQueryCursor:
+        def execute(self, _statement: str) -> None:
+            raise AssertionError("applied seed migrations must not query seed state")
+
+    assert refresh_database._source_dependent_seed_migration_deltas(
+        NoQueryCursor(),
+        [("core", "0049_rare_type_domain_records", None)],
+    ) == ({}, {})
+
+
+def test_pending_0049_conflicting_company_owner_fails_closed() -> None:
+    with pytest.raises(
+        RefreshError,
+        match=(
+            "source_forward_seed_conflict:"
+            "core.0049_rare_type_domain_records:openai"
+        ),
+    ):
+        _seed_deltas(
+            migrations=[("core", "0048_rare_type_candidate_tokens", None)],
+            brands={"anthropic", "google_deepmind", "openai"},
+            companies={"anthropic", "conflicting-owner", "google", "openai"},
+            links={
+                ("anthropic", "anthropic"),
+                ("google_deepmind", "google"),
+                ("openai", "conflicting-owner"),
+            },
+        )
+
+
+def test_pending_0033_and_0049_simulate_shared_anthropic_seed_once() -> None:
+    counts, translations = _seed_deltas(
+        migrations=[("core", "0032_stage1c_people_jobs_events", None)],
+        brands=set(),
+        companies=set(),
+        links=set(),
+    )
+
+    assert counts == {
+        "brands": 5,
+        "brands_companies": 5,
+        "companies": 4,
+    }
+    assert translations == {
+        "brands.display_name_en": 5,
+        "companies.display_name_en": 4,
+    }
 
 
 def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
@@ -627,6 +783,7 @@ def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
     ("change", "code"),
     [
         ("missing_migration", "candidate_migrations_pending"),
+        ("table_policy", "candidate_table_policy_mismatch"),
         ("invalid_view", "candidate_view_invalid"),
         ("stale_timestamp", "candidate_latest_timestamp_mismatch:posts.created_at"),
         ("count_drift", "candidate_count_mismatch:posts"),
@@ -646,6 +803,8 @@ def test_candidate_validation_blocks_every_unsafe_shape(
         census = adapter.candidate_census
         if change == "missing_migration":
             runner.fail = "django_migrate_check"
+        elif change == "table_policy":
+            census = replace(census, base_tables=census.base_tables - {"posts"})
         elif change == "invalid_view":
             census = replace(census, view_valid=False)
         elif change == "stale_timestamp":

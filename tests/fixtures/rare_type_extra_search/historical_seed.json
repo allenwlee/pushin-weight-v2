@@ -1,0 +1,6 @@
+{
+  "version": "appendix-seed-2026-09-21",
+  "status": "historical_seed_not_live",
+  "planner_query": "((\"I left OpenAI\" OR \"I've joined OpenAI\" OR \"I left Anthropic\" OR \"I've joined Anthropic\" OR \"I've joined @deepseek_ai\" OR \"I've joined Moonshot\" OR \"我离开了OpenAI\" OR \"OpenAIに入社\") OR (\"we're hiring\" (\"research scientist\" OR \"ML engineer\")) OR ((\"we'll be at\" OR \"tickets are live\") (DevDay OR \"AI Conference\" OR GTC)) OR ((\"apply by\" OR \"applications close\") (hackathon OR fellowship)) OR (\"step 5 preview\")) min_faves:0",
+  "rendered_query_example": "((\"I left OpenAI\" OR \"I've joined OpenAI\" OR \"I left Anthropic\" OR \"I've joined Anthropic\" OR \"I've joined @deepseek_ai\" OR \"I've joined Moonshot\" OR \"我离开了OpenAI\" OR \"OpenAIに入社\") OR (\"we're hiring\" (\"research scientist\" OR \"ML engineer\")) OR ((\"we'll be at\" OR \"tickets are live\") (DevDay OR \"AI Conference\" OR GTC)) OR ((\"apply by\" OR \"applications close\") (hackathon OR fellowship)) OR (\"step 5 preview\")) min_faves:0 since_time:1726900000 until_time:1726900900"
+}

@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-08-27.
+Last verified: 2026-09-24.
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -15,7 +15,9 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below describes the candidate schema through migration 0045_hf_catalog_observations.
+The allowlist below describes the rare-type schema through migration 0055 and
+the HF catalog schema from 0045_hf_catalog_observations, joined by migration
+0056_merge_hf_catalog_rare_types.
 Relations introduced after the production migration boundary at 0027 remain
 optional on the source so a staging refresh can accept an older production
 snapshot and create those relations during the shadow migration. Refresh
@@ -72,7 +74,8 @@ GRANT SELECT ON
   django_site, event_evidence, events, geopolitical_mode_keys,
   geopolitical_mode_labels, hf_orgs, job_discovery_runs,
   job_listing_evidence,
-  job_listings, nationalism_keys, nationalism_labels, national_stance_keys,
+  job_listings, model_release_evidence, model_releases, nationalism_keys,
+  nationalism_labels, national_stance_keys,
   national_stance_labels, opportunities, people,
   people_accounts, people_brand_affiliation_evidence,
   people_brand_affiliations, personnel_discovery_runs, post_type_keys,
@@ -81,9 +84,11 @@ GRANT SELECT ON
   posts_brands_audience_topics, posts_brands_classification_judgments,
   posts_brands_classification_states, posts_brands_discourse,
   posts_brands_geopolitical_modes,
-  posts_brands_mentions, posts_brands_product_labels, posts_brands_signals,
+  posts_brands_mentions, posts_brands_product_labels, posts_brands_products,
+  posts_brands_signals,
   posts_unsanctioned_flags, posts_untracked_brand_promotions,
   product_label_keys, product_label_labels, products,
+  rare_type_category_assignments,
   region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
   sentiment_labels, targeted_extraction_attempts, targeted_extraction_states,
   trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys,
@@ -99,11 +104,16 @@ GRANT MAINTAIN ON
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
-  brand_trend_narrative_texts, call_state, django_session,
+  brand_trend_narrative_texts, brand_discovery_candidate_token_evidence,
+  brand_discovery_candidate_tokens, call_state, django_session,
   harvest_backlog_windows, job_source_states, job_source_sync_runs,
   post_enrichment_states,
   post_synthesis_daily_budgets, post_synthesis_demands,
   post_synthesis_rate_limit_buckets,
+  product_verification_proposals, profile_movement_candidates,
+  rare_type_decision_attempts, rare_type_decision_processing_cycles,
+  rare_type_decisions, rare_type_search_daily_budgets, rare_type_search_hits,
+  rare_type_search_runs,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
   trend_narrative_demands, trend_narrative_provider_calls, trend_narrative_runs,
@@ -118,13 +128,16 @@ GRANT SELECT ON
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
   auth_user_groups_id_seq, auth_user_id_seq, auth_user_user_permissions_id_seq,
   audience_topic_concepts_id_seq, brand_discovery_candidates_id_seq,
+  brand_discovery_candidate_token_evidence_id_seq,
+  brand_discovery_candidate_tokens_id_seq,
   brand_trend_narratives_id_seq,
   brand_trend_narrative_texts_id_seq,
   django_content_type_id_seq, django_migrations_id_seq, django_site_id_seq,
   event_evidence_id_seq, events_id_seq, harvest_backlog_windows_id_seq,
   job_discovery_runs_id_seq,
   job_listing_evidence_id_seq, job_listings_id_seq,
-  job_source_sync_runs_id_seq, opportunities_id_seq,
+  job_source_sync_runs_id_seq, model_release_evidence_id_seq,
+  model_releases_id_seq, opportunities_id_seq,
   post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
   post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
   post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
@@ -132,7 +145,12 @@ GRANT SELECT ON
   posts_brands_classification_judgments_id_seq,
   people_brand_affiliation_evidence_id_seq,
   people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
-  products_id_seq, search_queries_id_seq,
+  products_id_seq, product_verification_proposals_id_seq,
+  profile_movement_candidates_id_seq, rare_type_category_assignments_id_seq,
+  rare_type_decision_attempts_id_seq,
+  rare_type_decision_processing_cycles_id_seq, rare_type_decisions_id_seq,
+  rare_type_search_daily_budgets_id_seq, rare_type_search_hits_id_seq,
+  rare_type_search_runs_id_seq, search_queries_id_seq,
   socialaccount_socialaccount_id_seq, socialaccount_socialapp_id_seq,
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
   targeted_extraction_attempts_id_seq, targeted_extraction_states_id_seq,
@@ -148,13 +166,28 @@ The sequence `SELECT` grants both preserve copied sequence state and permit
 tables receive `MAINTAIN` only, so the refresh role can lock their schema but
 cannot read their rows.
 
-Policy version 3 marks every relation and sequence introduced after the
+Policy version 4 marks every relation and sequence introduced after the
 production migration boundary at `0027` as optional on the source. This covers
 the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
-`0028`–`0044`, including classification judgment history, event evidence, and
-the U18A topic/geopolitical/promotion catalogs and assignments. The
-official-job sync run and lease tables are excluded and
+`0028`–`0055`, including classification judgment history, event evidence, the
+U18A topic/geopolitical/promotion catalogs and assignments, and the rare-type
+feature. The rare-type copy set retains `model_releases`,
+`model_release_evidence`, `rare_type_category_assignments`, and
+`posts_brands_products`; existing `products` and `brand_discovery_candidates`
+remain copied. Exact source/candidate counts protect all six domain relations
+whenever they exist on the source.
+
+Rare-type search, gate, budget, run, hit, attempt, and processing-cycle rows
+belong to one environment and are excluded and scrubbed. The same is true for
+pending Product verification proposals and the profile-movement work queue.
+`brand_discovery_candidate_tokens` and its evidence table are also excluded:
+their evidence points to excluded search hits or profile movements, so copying
+either table would retain claims without complete provenance or let cascade
+cleanup erase only part of the copied domain graph. Canonical discovery
+candidates themselves stay copied.
+
+The official-job sync run and lease tables are excluded and
 truncated because their active lease and diagnostic history belong to one
 environment; the job listings themselves remain in the copied set. This allows
 the staging-first release to refresh from the prior
@@ -162,12 +195,16 @@ production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count
 the complete post-migration relation set.
-When migration `core.0033_stage1c_frontier_organization_brands` is pending on
-the source, validation requires exactly two additional `brands` rows and two
-additional `brands_companies` rows after migration. Once the source has that
-migration, the expected delta automatically returns to zero. The same migration
-must add exactly two nonempty `brands.display_name_en` values and no undeclared
-translation-count changes.
+The repeatable-read source census calculates the exact idempotent seed effects
+for pending migrations `core.0033_stage1c_frontier_organization_brands` and
+`core.0049_rare_type_domain_records` from the same exported snapshot used by
+the dump. It simulates their ordered `get_or_create` behavior for Brands,
+Companies, Company links, and nonempty English display-name counts. Existing,
+partially seeded, and fully seeded sources therefore each receive exact
+source-dependent expectations; the shared Anthropic seed is counted only once
+when both migrations are pending. A conflicting Company owner for an 0049
+canonical Brand fails before dump work, matching the migration's own refusal.
+Validators still require exact equality; there is no range or broad allowance.
 Once those migrations are in production, apply the new grants above before the
 next refresh; preflight then requires each present optional relation to have
 its declared read or maintenance privilege.
@@ -302,11 +339,15 @@ do not substitute estimates from `pg_stat_user_tables`:
 ```bash
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
 SELECT 'accounts' AS relation, count(*) AS rows FROM accounts
+UNION ALL SELECT 'brand_discovery_candidates', count(*) FROM brand_discovery_candidates
 UNION ALL SELECT 'brands', count(*) FROM brands
 UNION ALL SELECT 'brands_companies', count(*) FROM brands_companies
 UNION ALL SELECT 'companies', count(*) FROM companies
+UNION ALL SELECT 'model_release_evidence', count(*) FROM model_release_evidence
+UNION ALL SELECT 'model_releases', count(*) FROM model_releases
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
+UNION ALL SELECT 'posts_brands_products', count(*) FROM posts_brands_products
 UNION ALL SELECT 'posts_brands_classification_judgments', count(*) FROM posts_brands_classification_judgments
 UNION ALL SELECT 'posts_brands_audience_topics', count(*) FROM posts_brands_audience_topics
 UNION ALL SELECT 'posts_brands_geopolitical_modes', count(*) FROM posts_brands_geopolitical_modes
@@ -314,6 +355,7 @@ UNION ALL SELECT 'posts_untracked_brand_promotions', count(*) FROM posts_untrack
 UNION ALL SELECT 'untracked_brand_promotion_evidence', count(*) FROM untracked_brand_promotion_evidence
 UNION ALL SELECT 'event_evidence', count(*) FROM event_evidence
 UNION ALL SELECT 'products', count(*) FROM products
+UNION ALL SELECT 'rare_type_category_assignments', count(*) FROM rare_type_category_assignments
 ORDER BY relation;
 
 SELECT max(created_at) AS latest_post_created_at FROM posts;
@@ -328,6 +370,8 @@ UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
 UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
 UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
 UNION ALL SELECT 'brand_trend_narrative_texts', count(*) FROM brand_trend_narrative_texts
+UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
+UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
 UNION ALL SELECT 'hf_model_catalog_runs', count(*) FROM hf_model_catalog_runs
 UNION ALL SELECT 'hf_model_catalog_namespace_runs', count(*) FROM hf_model_catalog_namespace_runs
 UNION ALL SELECT 'hf_model_catalog_observations', count(*) FROM hf_model_catalog_observations
@@ -338,6 +382,14 @@ UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
 UNION ALL SELECT 'post_synthesis_daily_budgets', count(*) FROM post_synthesis_daily_budgets
 UNION ALL SELECT 'post_synthesis_demands', count(*) FROM post_synthesis_demands
 UNION ALL SELECT 'post_synthesis_rate_limit_buckets', count(*) FROM post_synthesis_rate_limit_buckets
+UNION ALL SELECT 'product_verification_proposals', count(*) FROM product_verification_proposals
+UNION ALL SELECT 'profile_movement_candidates', count(*) FROM profile_movement_candidates
+UNION ALL SELECT 'rare_type_decision_attempts', count(*) FROM rare_type_decision_attempts
+UNION ALL SELECT 'rare_type_decision_processing_cycles', count(*) FROM rare_type_decision_processing_cycles
+UNION ALL SELECT 'rare_type_decisions', count(*) FROM rare_type_decisions
+UNION ALL SELECT 'rare_type_search_daily_budgets', count(*) FROM rare_type_search_daily_budgets
+UNION ALL SELECT 'rare_type_search_hits', count(*) FROM rare_type_search_hits
+UNION ALL SELECT 'rare_type_search_runs', count(*) FROM rare_type_search_runs
 UNION ALL SELECT 'socialaccount_socialaccount', count(*) FROM socialaccount_socialaccount
 UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialapp
 UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
@@ -389,7 +441,9 @@ find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
 
 Record the exact counts and latest timestamp next to the receipt. The census
 must include the copied classification-judgment and event-evidence tables
-introduced through migration 0043. All 32 scrub counts must be zero; both
+introduced through migration 0043, the rare-type domain relations through
+0055, and the HF catalog relations in 0045_hf_catalog_observations. Every
+scrub count listed above must be zero; both
 invariant queries must return no rows; the site must be
 `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must

@@ -228,6 +228,8 @@ services:
         value: "0"
       - key: DEEPINFRA_API_KEY
         sync: false
+      - key: TYPESAFE_API_KEY
+        sync: false
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets

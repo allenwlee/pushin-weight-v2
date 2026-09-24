@@ -33,12 +33,17 @@ from core.models import (
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     Post,
+    ProfileMovementCandidate,
     TwitterListMembership,
 )
 from monitor.twitterapi.user_about import SchemaDriftError, flatten_label
 
 PROFILE_RULE_VERSION = "profile-affiliation-rules-v1"
 PROFILE_HASH_VERSION = "profile-hash-v1"
+_MOVEMENT_CUE = re.compile(
+    r"(?:@\w+|\b(?:at|joined|left|former|now at|with)\b|加入|离开|入社|退社)",
+    re.IGNORECASE,
+)
 
 _PROFILE_SOURCE_MAP: tuple[tuple[str, str], ...] = (
     ("handle", "author_handle"),
@@ -446,6 +451,66 @@ def record_profile_snapshot(
             **defaults,
         )
         return snapshot, True, latest is not None
+
+
+def record_profile_movement_candidate(
+    *,
+    snapshot: AccountProfileSnapshot,
+    source_post: Post,
+    references: Iterable[BrandReference] = (),
+) -> ProfileMovementCandidate | None:
+    """Persist a meaningful description transition without inferring dates."""
+
+    if "description" not in snapshot.present_fields:
+        return None
+    current = str(snapshot.description or "").strip()
+    if not current:
+        return None
+    prior = (
+        AccountProfileSnapshot.objects.filter(account=snapshot.account)
+        .exclude(pk=snapshot.pk)
+        .filter(first_observed_at__lt=snapshot.first_observed_at)
+        .filter(present_fields__contains=["description"])
+        .exclude(description__isnull=True)
+        .exclude(description="")
+        .order_by("-first_observed_at", "-id")
+        .first()
+    )
+    if prior is None:
+        return None
+    previous = str(prior.description or "").strip()
+    if not previous or previous == current:
+        return None
+    def mentioned_brands(text: str) -> set[str]:
+        return {
+            reference.brand_id
+            for reference in references
+            if _reference_mentions(text, reference)
+        }
+
+    brand_change = mentioned_brands(previous) != mentioned_brands(current)
+    if not brand_change and not (
+        _MOVEMENT_CUE.search(previous) or _MOVEMENT_CUE.search(current)
+    ):
+        return None
+    identity = hashlib.sha256(
+        f"{snapshot.account_id}:{prior.pk}:{snapshot.pk}".encode()
+    ).hexdigest()
+    candidate, _ = ProfileMovementCandidate.objects.get_or_create(
+        movement_identity=identity,
+        defaults={
+            "account": snapshot.account,
+            "prior_snapshot": prior,
+            "new_snapshot": snapshot,
+            "source_post": source_post,
+            "prior_description": previous,
+            "new_description": current,
+            "observed_at": snapshot.first_observed_at,
+            "effective_date": None,
+            "effective_date_precision": "unknown",
+        },
+    )
+    return candidate
 
 
 def build_brand_reference_index() -> tuple[BrandReference, ...]:
@@ -886,10 +951,11 @@ def capture_post_profile_snapshot(
         source_kind="post",
         source_post=post,
     )
+    reference_rows = tuple(references or build_brand_reference_index())
     signals = classify_affiliation_signals(
         account=post.author,
         observation=observation,
-        references=references or build_brand_reference_index(),
+        references=reference_rows,
         context=affiliation_context,
     )
     counts = persist_affiliation_candidates(
@@ -898,6 +964,10 @@ def capture_post_profile_snapshot(
         signals=signals,
         observed_at=observed_at,
     )
+    if created and changed:
+        record_profile_movement_candidate(
+            snapshot=snapshot, source_post=post, references=reference_rows
+        )
     return ProfileCaptureResult(
         snapshot=snapshot,
         snapshot_created=created,

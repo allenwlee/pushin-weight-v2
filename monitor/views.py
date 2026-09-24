@@ -43,7 +43,14 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 from django.utils.dateparse import parse_datetime
@@ -70,6 +77,7 @@ from core.models import (
     AudienceTopicScheme,
     Brand,
     BrandAccount,
+    Company,
     Country,
     CountryLabel,
     GeopoliticalModeLabel,
@@ -89,13 +97,16 @@ from core.models import (
     PostTypeLabel,
     PostUnsanctionedFlag,
     PostUntrackedBrandPromotion,
+    Product,
     ProductLabelLabel,
+    ProductVerificationProposal,
     RegionLabel,
     RoleLabel,
     SentimentKey,
     SentimentLabel,
     UntrackedBrandPromotionLabel,
 )
+from core.product_verification import ProductReviewError, decide_product_proposal
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
@@ -5352,6 +5363,107 @@ def brand_chart_html(request: HttpRequest, brand: str) -> HttpResponse:
         "monitor/_brand_chart.html",
         {"payload": json.dumps(payload)},
     )
+
+
+# ============================================================================
+# Product proposal review
+# ============================================================================
+
+
+_PRODUCT_REVIEW_COPY = {
+    "en": {
+        "title": "Product review", "queue": "Pending proposals",
+        "empty": "No pending product proposals.", "source": "Source evidence",
+        "decision": "Owner decision", "reason": "Decision reason",
+        "brand": "Brand", "type": "Product type", "mode": "Catalog identity",
+        "x_only": "X-only product (no Hugging Face repository)",
+        "hf": "Matched Hugging Face repository", "approve": "Approve",
+        "reject": "Reject", "back": "Back to queue",
+    },
+    "zh_hans": {
+        "title": "产品审核", "queue": "待审核提案", "empty": "没有待审核的产品提案。",
+        "source": "来源证据", "decision": "所有者决定", "reason": "决定理由",
+        "brand": "品牌", "type": "产品类型", "mode": "目录身份",
+        "x_only": "仅 X 产品 (无 Hugging Face 仓库)",
+        "hf": "已匹配的 Hugging Face 仓库", "approve": "批准",
+        "reject": "拒绝", "back": "返回队列",
+    },
+    "ja": {
+        "title": "製品レビュー", "queue": "保留中の提案",
+        "empty": "保留中の製品提案はありません。", "source": "出典エビデンス",
+        "decision": "オーナーの判断", "reason": "判断理由", "brand": "ブランド",
+        "type": "製品タイプ", "mode": "カタログ識別子",
+        "x_only": "X のみの製品 (Hugging Face リポジトリなし)",
+        "hf": "一致した Hugging Face リポジトリ", "approve": "承認",
+        "reject": "却下", "back": "一覧に戻る",
+    },
+}
+
+
+def _can_review_products(request: HttpRequest) -> bool:
+    if not request.user.is_authenticated:
+        return False
+    email = (request.user.email or "").strip().casefold()
+    return bool(request.user.is_staff or (
+        email and email in settings.PRODUCT_REVIEW_OWNER_EMAILS
+    ))
+
+
+def _product_review_context(
+    request: HttpRequest, proposal: ProductVerificationProposal | None = None
+) -> dict[str, Any]:
+    locale = _resolve_locale(request)
+    proposals = (
+        ProductVerificationProposal.objects.select_related(
+            "source_post", "account", "proposed_brand", "proposed_candidate"
+        ).filter(review_status="pending").order_by("created_at", "id")
+    )
+    return {
+        "active_locale": locale,
+        "copy": _PRODUCT_REVIEW_COPY.get(locale, _PRODUCT_REVIEW_COPY["en"]),
+        "proposals": proposals,
+        "proposal": proposal,
+        "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),
+        "companies": Company.objects.order_by("nickname"),
+        "product_types": Product.TYPES,
+    }
+
+
+@login_required
+def product_review(request: HttpRequest) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Product review requires owner or staff access.")
+    return render(request, "monitor/product_review.html", _product_review_context(request))
+
+
+@login_required
+def product_review_detail(request: HttpRequest, proposal_id: int) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Product review requires owner or staff access.")
+    proposal = ProductVerificationProposal.objects.select_related(
+        "source_post", "account", "proposed_brand", "proposed_candidate",
+        "resolved_product",
+    ).filter(pk=proposal_id).first()
+    if proposal is None:
+        raise Http404("Product proposal not found")
+    if request.method == "POST":
+        reviewer = (request.user.email or request.user.get_username()).strip()
+        try:
+            decide_product_proposal(
+                proposal_id=proposal.pk,
+                action=request.POST.get("action", ""),
+                reviewer=reviewer,
+                reason=request.POST.get("reason", ""),
+                brand_id=request.POST.get("brand_id", ""),
+                product_type=request.POST.get("product_type", ""),
+                catalog_mode=request.POST.get("catalog_mode", "x_only"),
+                new_brand_id=request.POST.get("new_brand_id", ""),
+                company_id=request.POST.get("company_id", ""),
+            )
+        except ProductReviewError as exc:
+            return HttpResponseBadRequest(str(exc))
+        return redirect("product_review_detail", proposal_id=proposal.pk)
+    return render(request, "monitor/product_review.html", _product_review_context(request, proposal))
 
 
 # ============================================================================

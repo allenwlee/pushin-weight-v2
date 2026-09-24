@@ -1,0 +1,132 @@
+{
+  "schema_version": "rare-type-quality-stop-v1",
+  "status": "blocked",
+  "quality_gate_passed": false,
+  "enablement_approved": false,
+  "complete_assessment": false,
+  "plan_path": "docs/plans/2026-09-21-081940-feat-combined-rare-type-extra-search-plan.md",
+  "summary_path": "docs/analysis/harvester/2026-09-22-095250-rare-type-quality-stop.md",
+  "delivery_target": "staging",
+  "identity": {
+    "query_version": "rare-types-v2-2026-09-22",
+    "planner_query_sha256": "44644e94a74f347af0994ba199ced3d1fc52777b2b92edb530f82748e1a4dc7c",
+    "fixture_sha256": "e7dc35afbdc38b15343789f54df67cf76c403acb3ef98967968b1d09016cd7fa",
+    "model": "typesafe/jev-1.13-20260917",
+    "provider": "TypeSafe",
+    "question_version": "rare-types-jev-questions-v1",
+    "question_content_sha256": "2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
+    "threshold_version": "rare-types-jev-thresholds-v1",
+    "threshold_values_sha256": "9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a",
+    "yes_threshold": "0.80",
+    "no_threshold": "0.20"
+  },
+  "blockers": [
+    "live_keeper_yield_below_floor",
+    "fixture_recall_upper_bound_below_floor",
+    "corpus_capture_incomplete"
+  ],
+  "live_query": {
+    "primary_15m_raw_posts": 0,
+    "research_7d_raw_posts": 20,
+    "research_7d_truncated": true,
+    "reference_keepers": 5,
+    "keeper_ratio": 0.25,
+    "required_keeper_ratio": 0.6,
+    "generous_with_all_ambiguous_ratio": 0.5,
+    "exact_id_overlap_count": 1,
+    "exact_id_overlap_ratio": 0.05,
+    "reference_keepers_by_type": {
+      "personnel_changes": 1,
+      "job_listings": 0,
+      "events": 0,
+      "opportunities": 0,
+      "model_releases": 4
+    },
+    "physical_search_calls": 2,
+    "http_retries": 0,
+    "credits_reserved": 600,
+    "credits_estimated": 315,
+    "credits_confirmed": null,
+    "keeper_per_estimated_credit": 0.015873015873015872,
+    "artifact": "docs/analysis/harvester/2026-09-22-093328-rare-type-live-query-trial.json"
+  },
+  "jev_corpus": {
+    "frozen_cases": 56,
+    "saved_predictions": 37,
+    "missing_predictions": 19,
+    "source": "Canonical U7 derive_gate_outcome against the 37 complete captured predictions",
+    "captured_predictions": 37,
+    "outcomes": {
+      "review_needed": 35,
+      "junk": 2,
+      "kept": 0
+    },
+    "captured_reference_positives": 14,
+    "captured_positive_true_keeps": 0,
+    "full_reference_positives": 28,
+    "missing_reference_positives": 14,
+    "best_possible_full_positive_recall": 0.5,
+    "required_positive_recall": 0.9,
+    "exact_full_corpus_metrics_available": false,
+    "keeper_precision": null,
+    "conclusion": "Recall cannot pass even if every missing positive were correctly kept. Exact complete-corpus precision/recall remains unavailable.",
+    "missing_case_ids": [
+      "event_zh_voice_livestream",
+      "event_org_conference_session",
+      "event_reading_workshop",
+      "opportunity_research_grant",
+      "opportunity_coding_challenge",
+      "opportunity_zh_gpu_credits",
+      "opportunity_ja_safety_fellowship",
+      "opportunity_beta_access",
+      "release_cedar_preview",
+      "release_zh_open_weights",
+      "release_ja_voice_preview",
+      "release_third_party_report",
+      "release_reseller_availability",
+      "event_opportunity_hackathon",
+      "neg_mill_india_whatsapp",
+      "neg_mill_zh_piecework",
+      "neg_mill_ja_sidejob",
+      "neg_mill_aggregator",
+      "neg_lineup_join"
+    ],
+    "reported_total_usd_including_smoke": "0.004480350",
+    "reserved_total_usd_including_smoke": "0.017458980",
+    "full_itemized_usage_available": false,
+    "captured_itemized_cost_usd": "0.002903838",
+    "partial_per_type": {
+      "personnel_changes": {"true_positive": 0, "false_negative": 5, "precision": null, "recall": 0},
+      "job_listings": {"true_positive": 0, "false_negative": 5, "precision": null, "recall": 0},
+      "events": {"true_positive": 0, "false_negative": 2, "precision": null, "recall": 0},
+      "opportunities": {"true_positive": 0, "false_negative": 0, "precision": null, "recall": null},
+      "model_releases": {"true_positive": 0, "false_negative": 2, "precision": null, "recall": 0}
+    },
+    "artifact": "docs/analysis/harvester/2026-09-22-094002-rare-type-jev-corpus.json"
+  },
+  "schema_smoke": {
+    "scored": false,
+    "artifact": "docs/analysis/harvester/2026-09-22-093040-rare-type-jev-schema-smoke.json"
+  },
+  "operational_state": {
+    "same_checkout": true,
+    "search_lane_enabled": false,
+    "downstream_ingestion_implemented": false,
+    "staging_deployed": false,
+    "pushed": false,
+    "production_writes": false
+  },
+  "next_required": "Revise query and Jev questions/routing without lowering floors; version inputs and journal complete bounded evidence before reconsidering enablement.",
+  "verification": {
+    "tooling_commit": "b20e1af",
+    "worker_tests": 25,
+    "worker_red": "1 passed,18 missing-module failures before runtime implementation",
+    "host_tests_passed": 174,
+    "host_seconds": 93.56,
+    "required_postgres_executed": 80,
+    "required_postgres_skipped": 0,
+    "required_postgres_errors": 0,
+    "ruff": "pass",
+    "complete_assessment_rejects_missing_predictions": true
+  }
+}

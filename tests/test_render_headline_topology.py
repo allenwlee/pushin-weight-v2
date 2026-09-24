@@ -127,3 +127,20 @@ def test_about_backfill_hosts_have_explicit_production_identity():
             if "key" in entry
         }
         assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"] == "production"
+
+
+def test_harvest_declares_direct_typesafe_credential_without_a_value():
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    harvest = next(
+        service
+        for service in blueprint["services"]
+        if service["name"] == "pushinweight-harvest"
+    )
+    environment = {
+        entry["key"]: entry for entry in harvest["envVars"] if "key" in entry
+    }
+
+    assert environment["TYPESAFE_API_KEY"] == {
+        "key": "TYPESAFE_API_KEY",
+        "sync": False,
+    }

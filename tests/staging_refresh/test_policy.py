@@ -73,18 +73,59 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     assert "auth_user" in policy.relations.excluded_tables
     assert "posts" in policy.relations.copied_tables
     assert "trend_narrative_versions" in policy.relations.views
-    assert policy.validation.forward_migration_count_deltas == {
-        "core.0033_stage1c_frontier_organization_brands": {
-            "brands": 2,
-            "brands_companies": 2,
-        }
-    }
-    assert policy.validation.forward_migration_translation_count_deltas == {
-        "core.0033_stage1c_frontier_organization_brands": {"brands.display_name_en": 2}
-    }
+    assert policy.validation.forward_migration_count_deltas == {}
+    assert policy.validation.forward_migration_translation_count_deltas == {}
     assert {"brands", "brands_companies", "companies"} <= set(
         policy.validation.exact_count_tables
     )
+
+
+def test_rare_type_relations_have_explicit_copy_or_scrub_policy() -> None:
+    policy = load_policy(POLICY_PATH)
+
+    assert {
+        "model_release_evidence",
+        "model_releases",
+        "posts_brands_products",
+        "rare_type_category_assignments",
+    } <= policy.relations.copied_tables
+    assert {
+        "brand_discovery_candidate_token_evidence",
+        "brand_discovery_candidate_tokens",
+        "product_verification_proposals",
+        "profile_movement_candidates",
+        "rare_type_decision_attempts",
+        "rare_type_decision_processing_cycles",
+        "rare_type_decisions",
+        "rare_type_search_daily_budgets",
+        "rare_type_search_hits",
+        "rare_type_search_runs",
+    } <= policy.relations.excluded_tables
+    assert {
+        "brand_discovery_candidates",
+        "model_release_evidence",
+        "model_releases",
+        "posts_brands_products",
+        "products",
+        "rare_type_category_assignments",
+    } <= set(policy.validation.exact_count_tables)
+    rare_type_sequences = {
+        "brand_discovery_candidate_token_evidence_id_seq",
+        "brand_discovery_candidate_tokens_id_seq",
+        "model_release_evidence_id_seq",
+        "model_releases_id_seq",
+        "product_verification_proposals_id_seq",
+        "profile_movement_candidates_id_seq",
+        "rare_type_category_assignments_id_seq",
+        "rare_type_decision_attempts_id_seq",
+        "rare_type_decision_processing_cycles_id_seq",
+        "rare_type_decisions_id_seq",
+        "rare_type_search_daily_budgets_id_seq",
+        "rare_type_search_hits_id_seq",
+        "rare_type_search_runs_id_seq",
+    }
+    assert rare_type_sequences <= policy.relations.sequences
+    assert rare_type_sequences <= policy.relations.optional_source_sequences
 
 
 def test_migration_graph_tables_are_exhaustively_classified() -> None:
@@ -230,10 +271,13 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "posts_brands_audience_topics",
         "posts_brands_geopolitical_modes",
         "posts_brands_product_labels",
+        "posts_brands_products",
         "posts_untracked_brand_promotions",
         "untracked_brand_promotion_evidence",
         "account_profile_snapshots",
         "brand_discovery_candidates",
+        "brand_discovery_candidate_token_evidence",
+        "brand_discovery_candidate_tokens",
         "events",
         "event_evidence",
         "job_discovery_runs",
@@ -241,6 +285,8 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "job_listings",
         "job_source_states",
         "job_source_sync_runs",
+        "model_release_evidence",
+        "model_releases",
         "opportunities",
         "people",
         "people_accounts",
@@ -258,6 +304,15 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "post_synthesis_texts",
         "post_translation_artifacts",
         "post_translation_texts",
+        "product_verification_proposals",
+        "profile_movement_candidates",
+        "rare_type_category_assignments",
+        "rare_type_decision_attempts",
+        "rare_type_decision_processing_cycles",
+        "rare_type_decisions",
+        "rare_type_search_daily_budgets",
+        "rare_type_search_hits",
+        "rare_type_search_runs",
     } == policy.relations.optional_source_tables
 
     assert {

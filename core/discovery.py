@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from django.db.models import Sum
@@ -12,11 +13,79 @@ from django.db.models import Sum
 from core.models import JobDiscoveryRun, PersonnelDiscoveryRun, SearchQuery
 from x_monitor.config import Config, DiscoveryLaneConfig
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
+from x_monitor.rare_type_extra_search import QUERY_VERSION, planned_query_string
+from x_monitor.rare_type_quality_gate import (
+    QualityEvidenceError,
+    runtime_assessment_identity,
+    validate_assessment,
+)
 
 _RUN_MODELS = {
     "jobs": JobDiscoveryRun,
     "personnel": PersonnelDiscoveryRun,
 }
+RARE_EXTRA_CALL_ID = "RARE_EXTRA"
+
+
+def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
+    lane = cfg.discovery.rare_types
+    if not lane.enabled:
+        return None
+    path = Path(lane.assessment_path)
+    try:
+        assessment = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("rare-types assessment evidence is unreadable") from exc
+    if not isinstance(assessment, dict):
+        raise TypeError("rare-types assessment evidence must be an object")
+    if assessment.get("assessment_digest") != lane.assessment_digest:
+        raise ValueError("rare-types assessment digest does not match config")
+    identity = assessment.get("identity")
+    query = planned_query_string()
+    try:
+        expected = runtime_assessment_identity(
+            query_version=QUERY_VERSION,
+            planner_query=query,
+            config=lane.jev,
+        )
+    except QualityEvidenceError as exc:
+        if exc.code == "question_content_hash_mismatch":
+            raise ValueError(
+                "rare-types question content hash does not match config"
+            ) from exc
+        if exc.code == "threshold_values_hash_mismatch":
+            raise ValueError(
+                "rare-types threshold values hash does not match config"
+            ) from exc
+        raise
+    if not isinstance(identity, dict) or any(
+        identity.get(key) != value for key, value in expected.items()
+    ):
+        raise ValueError("rare-types assessment identity does not match runtime tuple")
+    try:
+        validate_assessment(assessment, expected_identity=identity)
+    except QualityEvidenceError as exc:
+        raise ValueError(str(exc)) from exc
+    return PlannedCall(
+        call_id=RARE_EXTRA_CALL_ID,
+        call_kind="brand_wide",
+        brand_id="*rare_types",
+        bucket=None,
+        query_string=query,
+        query_length=len(query),
+        discovery_lane="rare_types",
+        query_family="combined",
+        language="multilingual",
+        query_pack_version=QUERY_VERSION,
+        cadence_minutes=15,
+        max_lookback_hours=0.5,
+        max_results=lane.max_results,
+        max_pages=lane.max_pages,
+        max_per_page=lane.max_per_page,
+        daily_credit_ceiling=lane.daily_credit_ceiling,
+        credits_per_result=15,
+        minimum_credits_per_call=15,
+    )
 
 
 def remaining_discovery_result_capacity(
@@ -132,7 +201,7 @@ def plan_discovery_calls(
     cfg: Config, *, list_id: int, now: datetime | None = None
 ) -> list[PlannedCall]:
     now = now or datetime.now(UTC)
-    return [
+    calls = [
         *_calls_for_lane(
             lane_name="jobs", lane=cfg.discovery.jobs, list_id=list_id, now=now
         ),
@@ -143,6 +212,10 @@ def plan_discovery_calls(
             now=now,
         ),
     ]
+    rare = plan_rare_type_call(cfg)
+    if rare is not None:
+        calls.append(rare)
+    return calls
 
 
 def record_discovery_run(

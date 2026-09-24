@@ -2724,12 +2724,22 @@ class AccountPostAppearance(models.Model):
 
 
 class Product(models.Model):
+    TYPES = (
+        ("llm-model", "LLM model"),
+        ("other-ai-model", "Other AI model"),
+        ("agent-harness", "Agent harness"),
+    )
+
     id = models.BigAutoField(primary_key=True)
+    product_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     repo_id = models.CharField(
         max_length=256,
         unique=True,
         db_collation="case_insensitive",
+        blank=True,
+        null=True,
     )
+    type = models.CharField(max_length=32, choices=TYPES, blank=True, null=True)
     brand = models.ForeignKey(
         Brand,
         on_delete=models.SET_NULL,
@@ -2784,10 +2794,139 @@ class Product(models.Model):
                 fields=["collected_at"], name="idx_products_collected_at"
             ),
         ]
-        ordering = ["repo_id"]
+        ordering = ["display_name", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(type__isnull=True)
+                    | models.Q(
+                        type__in=["llm-model", "other-ai-model", "agent-harness"]
+                    )
+                ),
+                name="ck_product_type",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return self.repo_id
+        return self.repo_id or self.display_name or str(self.product_key)
+
+
+class PostBrandProduct(models.Model):
+    """Source-backed assertion that a post names an exact Product."""
+
+    pk = models.CompositePrimaryKey("post", "brand", "product")
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="product_edges",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="product_evidence",
+        db_column="brand_id",
+        to_field="nickname",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name="post_evidence",
+    )
+    observed_name = models.TextField()
+    source_evidence = models.JSONField(default=dict)
+    verification_policy_version = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "posts_brands_products"
+        indexes = [
+            models.Index(fields=["product", "post"], name="idx_pbp_product_post"),
+        ]
+
+
+class ProductVerificationProposal(models.Model):
+    REVIEW_STATUSES = (
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    )
+
+    class HFOutcome(models.TextChoices):
+        PENDING = "pending", "Pending"
+        MATCHED = "matched", "Matched"
+        MISSING = "missing", "Missing"
+        PRIVATE = "private", "Private"
+        TIMEOUT = "timeout", "Timeout"
+        THROTTLED = "throttled", "Throttled"
+        ERROR = "error", "Error"
+        MALFORMED = "malformed", "Malformed"
+        DEFERRED = "deferred", "Deferred"
+
+    id = models.BigAutoField(primary_key=True)
+    proposal_key = models.CharField(max_length=64, unique=True)
+    source_post = models.ForeignKey(
+        Post, on_delete=models.PROTECT, related_name="product_verification_proposals",
+        db_column="source_post_id", to_field="tweet_id",
+    )
+    source_release = models.ForeignKey(
+        "ModelRelease", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="product_verification_proposals",
+    )
+    proposed_brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, blank=True, null=True,
+        related_name="product_verification_proposals", to_field="nickname",
+    )
+    proposed_candidate = models.ForeignKey(
+        "BrandDiscoveryCandidate", on_delete=models.PROTECT, blank=True, null=True,
+        related_name="product_verification_proposals",
+    )
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name="product_verification_proposals",
+        db_column="author_id", to_field="author_id",
+    )
+    account_handle_snapshot = models.CharField(max_length=64, blank=True, default="")
+    observed_name = models.TextField()
+    candidate_repo_id = models.CharField(max_length=256, blank=True, default="")
+    account_evidence = models.JSONField(default=dict)
+    hf_evidence = models.JSONField(default=dict)
+    hf_outcome = models.CharField(
+        max_length=16, choices=HFOutcome.choices, default=HFOutcome.PENDING,
+    )
+    policy_version = models.CharField(max_length=128)
+    rule_trace = models.JSONField(default=list)
+    review_status = models.CharField(
+        max_length=16, choices=REVIEW_STATUSES, default="pending",
+    )
+    resolved_product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, blank=True, null=True,
+        related_name="verification_proposals",
+    )
+    attempted_at = models.DateTimeField(blank=True, null=True)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    verification_claim_token = models.UUIDField(blank=True, null=True)
+    verification_claim_expires_at = models.DateTimeField(blank=True, null=True)
+    reviewer = models.TextField(blank=True, null=True)
+    review_reason = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_verification_proposals"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(proposed_brand__isnull=False, proposed_candidate__isnull=True)
+                    | models.Q(proposed_brand__isnull=True, proposed_candidate__isnull=False)
+                ),
+                name="ck_product_proposal_one_owner",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["hf_outcome", "next_attempt_at"], name="idx_product_proposal_due"),
+        ]
 
 
 class HFModelCatalogRun(models.Model):
@@ -4536,6 +4675,59 @@ class AccountProfileSnapshot(models.Model):
         ]
 
 
+class ProfileMovementCandidate(models.Model):
+    STATUSES = (("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed"))
+
+    id = models.BigAutoField(primary_key=True)
+    account = models.ForeignKey(
+        Account, on_delete=models.CASCADE, related_name="profile_movement_candidates",
+        db_column="author_id", to_field="author_id",
+    )
+    prior_snapshot = models.ForeignKey(
+        AccountProfileSnapshot, on_delete=models.PROTECT,
+        related_name="movement_candidates_as_prior",
+    )
+    new_snapshot = models.ForeignKey(
+        AccountProfileSnapshot, on_delete=models.PROTECT,
+        related_name="movement_candidates_as_new",
+    )
+    source_post = models.ForeignKey(
+        Post, on_delete=models.PROTECT, related_name="profile_movement_candidates",
+    )
+    prior_description = models.TextField()
+    new_description = models.TextField()
+    observed_at = models.DateTimeField()
+    effective_date = models.CharField(max_length=10, blank=True, null=True)
+    effective_date_precision = models.CharField(
+        max_length=16, choices=DATE_PRECISION_CHOICES, default="unknown"
+    )
+    movement_identity = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=16, choices=STATUSES, default="pending")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "profile_movement_candidates"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "prior_snapshot", "new_snapshot"],
+                name="uq_profile_movement_transition",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=["pending", "succeeded", "failed"]),
+                name="ck_profile_movement_status",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition(
+                    "effective_date", "effective_date_precision"
+                ),
+                name="ck_profile_movement_date_precision",
+            ),
+        ]
+
+
 class PersonBrandAffiliation(models.Model):
     AFFILIATION_TYPES = (
         ("employment", "Employment"),
@@ -4842,6 +5034,129 @@ class BrandDiscoveryCandidate(models.Model):
                     | (models.Q(confidence__gte=0.0) & models.Q(confidence__lte=1.0))
                 ),
                 name="ck_brand_candidate_conf",
+            ),
+        ]
+
+
+class BrandDiscoveryCandidateToken(models.Model):
+    """One exact, reviewable spelling observed for an unresolved organization."""
+
+    TOKEN_KINDS = (
+        ("spelling", "Spelling"),
+        ("handle", "Handle"),
+        ("nickname", "Nickname"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    candidate = models.ForeignKey(
+        BrandDiscoveryCandidate,
+        on_delete=models.CASCADE,
+        related_name="exact_tokens",
+    )
+    form = models.TextField()
+    kind = models.CharField(max_length=16, choices=TOKEN_KINDS)
+    script = models.CharField(max_length=16)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "brand_discovery_candidate_tokens"
+        ordering = ["candidate_id", "kind", "form", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["candidate", "form", "kind"],
+                name="uq_brand_candidate_token_exact",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(form=""), name="ck_brand_candidate_token_form"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["spelling", "handle", "nickname"]),
+                name="ck_brand_candidate_token_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_observed_at__gte=models.F("first_observed_at")),
+                name="ck_brand_candidate_token_window",
+            ),
+        ]
+
+
+class BrandDiscoveryCandidateTokenEvidence(models.Model):
+    """Source-bound observation of an exact candidate token."""
+
+    RARE_TYPES = (
+        ("personnel_changes", "Personnel changes"),
+        ("job_listings", "Job listings"),
+        ("events", "Events"),
+        ("opportunities", "Opportunities"),
+        ("model_releases", "Model releases"),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    token = models.ForeignKey(
+        BrandDiscoveryCandidateToken,
+        on_delete=models.CASCADE,
+        related_name="evidence",
+    )
+    source_hit = models.ForeignKey(
+        "RareTypeSearchHit",
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+        blank=True,
+        null=True,
+    )
+    source_profile_movement = models.ForeignKey(
+        ProfileMovementCandidate,
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+        blank=True,
+        null=True,
+    )
+    source_post = models.ForeignKey(
+        Post,
+        on_delete=models.PROTECT,
+        related_name="candidate_token_evidence",
+        db_column="source_post_id",
+        to_field="tweet_id",
+    )
+    rare_type = models.CharField(max_length=32, choices=RARE_TYPES)
+    observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "brand_discovery_candidate_token_evidence"
+        ordering = ["token_id", "observed_at", "source_post_id", "rare_type", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token", "source_hit", "source_post", "rare_type"],
+                condition=models.Q(source_hit__isnull=False),
+                name="uq_candidate_token_hit_evidence",
+            ),
+            models.UniqueConstraint(
+                fields=["token", "source_profile_movement", "source_post", "rare_type"],
+                condition=models.Q(source_profile_movement__isnull=False),
+                name="uq_candidate_token_movement_evidence",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_hit__isnull=False, source_profile_movement__isnull=True)
+                    | models.Q(source_hit__isnull=True, source_profile_movement__isnull=False)
+                ),
+                name="ck_candidate_token_one_source",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    rare_type__in=[
+                        "personnel_changes",
+                        "job_listings",
+                        "events",
+                        "opportunities",
+                        "model_releases",
+                    ]
+                ),
+                name="ck_brand_candidate_token_rare_type",
             ),
         ]
 
@@ -5333,7 +5648,16 @@ class Event(models.Model):
         Brand,
         on_delete=models.PROTECT,
         related_name="events",
+        blank=True,
+        null=True,
         to_field="nickname",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate,
+        on_delete=models.PROTECT,
+        related_name="events",
+        blank=True,
+        null=True,
     )
     source_post = models.ForeignKey(
         Post,
@@ -5396,6 +5720,13 @@ class Event(models.Model):
         db_table = "events"
         ordering = ["-first_seen_at", "id"]
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
+                    | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
+                ),
+                name="ck_events_one_organization",
+            ),
             models.CheckConstraint(
                 condition=models.Q(
                     attendance_mode__in=[
@@ -5556,7 +5887,16 @@ class Opportunity(models.Model):
         Brand,
         on_delete=models.PROTECT,
         related_name="opportunities",
+        blank=True,
+        null=True,
         to_field="nickname",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate,
+        on_delete=models.PROTECT,
+        related_name="opportunities",
+        blank=True,
+        null=True,
     )
     related_event = models.ForeignKey(
         Event,
@@ -5628,6 +5968,13 @@ class Opportunity(models.Model):
         ordering = ["-first_seen_at", "id"]
         constraints = [
             models.CheckConstraint(
+                condition=(
+                    models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
+                    | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
+                ),
+                name="ck_opportunities_one_organization",
+            ),
+            models.CheckConstraint(
                 condition=models.Q(
                     opportunity_type__in=[
                         "giveaway",
@@ -5698,6 +6045,125 @@ class Opportunity(models.Model):
         ]
 
 
+class ModelRelease(models.Model):
+    CHANNELS = (("stable", "Stable"), ("preview", "Preview"), ("beta", "Beta"), ("other", "Other"))
+
+    id = models.BigAutoField(primary_key=True)
+    brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, related_name="model_releases",
+        blank=True, null=True, to_field="nickname",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate, on_delete=models.PROTECT,
+        related_name="model_releases", blank=True, null=True,
+    )
+    observed_model_name = models.TextField()
+    version = models.TextField(blank=True, default="")
+    release_channel = models.CharField(max_length=16, choices=CHANNELS, default="other")
+    release_value = models.CharField(max_length=64, blank=True, null=True)
+    release_precision = models.CharField(
+        max_length=16,
+        choices=tuple(
+            choice for choice in TEMPORAL_PRECISION_CHOICES if choice[0] != "datetime"
+        ),
+        default="unknown",
+    )
+    release_identity = models.CharField(max_length=64, unique=True)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    extraction_version = models.TextField()
+    review_status = models.CharField(
+        max_length=16, choices=REVIEW_STATUS_CHOICES, default="pending"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "model_releases"
+        ordering = ["-first_seen_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
+                    | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
+                ), name="ck_model_release_one_owner",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_model_release_seen_window",
+            ),
+            models.CheckConstraint(
+                condition=_precision_value_condition("release_value", "release_precision"),
+                name="ck_model_release_precision",
+            ),
+        ]
+
+
+class ModelReleaseEvidence(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    release = models.ForeignKey(ModelRelease, on_delete=models.CASCADE, related_name="evidence")
+    source_post = models.ForeignKey(
+        Post, on_delete=models.PROTECT, related_name="model_release_evidence",
+        db_column="source_post_id", to_field="tweet_id",
+    )
+    source_url = models.URLField(max_length=2048, blank=True, null=True)
+    observed_at = models.DateTimeField()
+    observed_claim = models.JSONField(default=dict)
+    evidence_hash = models.CharField(max_length=64)
+    extraction_version = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "model_release_evidence"
+        constraints = [models.UniqueConstraint(
+            fields=["release", "source_post", "evidence_hash"],
+            name="uq_model_release_evidence",
+        )]
+
+
+class RareTypeCategoryAssignment(models.Model):
+    CATEGORIES = (
+        ("llm-model", "LLM model"),
+        ("other-ai-model", "Other AI model"),
+        ("agent-harness", "Agent harness"),
+    )
+    id = models.BigAutoField(primary_key=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="rare_type_categories")
+    brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, related_name="rare_type_categories",
+        blank=True, null=True, to_field="nickname",
+    )
+    brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate, on_delete=models.PROTECT,
+        related_name="rare_type_categories", blank=True, null=True,
+    )
+    category = models.CharField(max_length=32, choices=CATEGORIES)
+    source_evidence = models.JSONField(default=dict)
+    classification_version = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "rare_type_category_assignments"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
+                    | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
+                ), name="ck_rare_category_one_owner",
+            ),
+            models.UniqueConstraint(
+                fields=["post", "brand", "category"],
+                condition=models.Q(brand__isnull=False),
+                name="uq_rare_category_post_brand",
+            ),
+            models.UniqueConstraint(
+                fields=["post", "brand_discovery_candidate", "category"],
+                condition=models.Q(brand_discovery_candidate__isnull=False),
+                name="uq_rare_category_post_candidate",
+            ),
+        ]
+
+
 class TargetedExtractionState(models.Model):
     STATUSES = (
         ("pending", "Pending"),
@@ -5744,6 +6210,7 @@ class TargetedExtractionState(models.Model):
                         "job_listing_extraction",
                         "personnel_change_extraction",
                         "profile_affiliation_extraction",
+                        "model_release_extraction",
                     ]
                 ),
                 name="ck_target_extract_role",
@@ -5784,4 +6251,593 @@ class TargetedExtractionAttempt(models.Model):
                 condition=models.Q(outcome__in=["succeeded", "failed"]),
                 name="ck_target_attempt_outcome",
             )
+        ]
+
+
+# ============================================================================
+# Rare-type extra-search durable ledgers
+# ============================================================================
+
+
+class RareTypeSearchDailyBudget(models.Model):
+    """One locked accounting row for a rare-search lane and UTC day."""
+
+    usage_date = models.DateField()
+    lane = models.CharField(max_length=64)
+    search_credits_reserved = models.PositiveIntegerField(default=0)
+    search_credits_accounted = models.PositiveIntegerField(default=0)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_daily_budgets"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usage_date", "lane"], name="uq_rare_budget_day_lane"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_budget_dec_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_budget_dec_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_budget_dec_confirmed",
+            ),
+        ]
+
+
+class RareTypeSearchRun(models.Model):
+    """Irreversible entitlement for one paid rare-search time slot."""
+
+    class Status(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        DISPATCHED = "dispatched", "Dispatched"
+        RETURNED = "returned", "Returned"
+        EMPTY = "empty", "Empty"
+        FAILED = "failed", "Failed"
+        USAGE_UNKNOWN = "usage_unknown", "Usage unknown"
+
+    lane = models.CharField(max_length=64)
+    slot_start = models.DateTimeField()
+    daily_budget = models.ForeignKey(
+        RareTypeSearchDailyBudget,
+        on_delete=models.PROTECT,
+        related_name="search_runs",
+    )
+    source_query = models.ForeignKey(
+        SearchQuery,
+        on_delete=models.PROTECT,
+        related_name="rare_type_search_runs",
+    )
+    query_string = models.TextField()
+    query_hash = models.CharField(max_length=64)
+    query_version = models.CharField(max_length=128)
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    attempted_start = models.DateTimeField()
+    attempted_end = models.DateTimeField()
+    complete_start = models.DateTimeField(blank=True, null=True)
+    complete_end = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.RESERVED
+    )
+    request_count = models.PositiveSmallIntegerField(default=0)
+    raw_result_count = models.PositiveIntegerField(blank=True, null=True)
+    normalized_result_count = models.PositiveIntegerField(blank=True, null=True)
+    reserved_credits = models.PositiveIntegerField(default=300)
+    estimated_credits = models.PositiveIntegerField(blank=True, null=True)
+    confirmed_credits = models.PositiveIntegerField(blank=True, null=True)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    has_coverage_gap = models.BooleanField(default=False)
+    gap_start = models.DateTimeField(blank=True, null=True)
+    gap_end = models.DateTimeField(blank=True, null=True)
+    gap_reason = models.CharField(max_length=128, blank=True, default="")
+    truncated = models.BooleanField(default=False)
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    error_detail = models.TextField(blank=True, default="")
+    environment = models.CharField(max_length=64)
+    release_sha = models.CharField(max_length=64)
+    reserved_at = models.DateTimeField()
+    dispatched_at = models.DateTimeField(blank=True, null=True)
+    returned_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_runs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lane", "slot_start"], name="uq_rare_run_lane_slot"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "reserved",
+                        "dispatched",
+                        "returned",
+                        "empty",
+                        "failed",
+                        "usage_unknown",
+                    ]
+                ),
+                name="ck_rare_run_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_end__gt=models.F("window_start")),
+                name="ck_rare_run_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempted_end__gt=models.F("attempted_start")),
+                name="ck_rare_run_attempted_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(complete_start__isnull=True, complete_end__isnull=True)
+                    | models.Q(
+                        complete_start__isnull=False,
+                        complete_end__isnull=False,
+                        complete_end__gt=models.F("complete_start"),
+                    )
+                ),
+                name="ck_rare_run_complete_window",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        has_coverage_gap=False,
+                        gap_start__isnull=True,
+                        gap_end__isnull=True,
+                        gap_reason="",
+                    )
+                    | models.Q(
+                        has_coverage_gap=True,
+                        gap_start__isnull=False,
+                        gap_end__isnull=False,
+                        gap_end__gt=models.F("gap_start"),
+                        gap_reason__gt="",
+                    )
+                ),
+                name="ck_rare_run_gap_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="reserved", dispatched_at__isnull=True, request_count=0)
+                    | models.Q(
+                        status__in=["dispatched", "returned", "empty", "usage_unknown"],
+                        dispatched_at__isnull=False,
+                        request_count=1,
+                    )
+                    | models.Q(status="failed", request_count__in=[0, 1])
+                ),
+                name="ck_rare_run_dispatch_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status__in=["reserved", "dispatched"],
+                        raw_result_count__isnull=True,
+                        normalized_result_count__isnull=True,
+                        estimated_credits__isnull=True,
+                        confirmed_credits__isnull=True,
+                        returned_at__isnull=True,
+                    )
+                    | models.Q(
+                        status="returned",
+                        raw_result_count__isnull=False,
+                        raw_result_count__gt=0,
+                        normalized_result_count__isnull=False,
+                        normalized_result_count__lte=models.F("raw_result_count"),
+                        estimated_credits__isnull=False,
+                        returned_at__isnull=False,
+                    )
+                    | models.Q(
+                        status="empty",
+                        raw_result_count__isnull=False,
+                        raw_result_count=0,
+                        normalized_result_count__isnull=False,
+                        normalized_result_count=0,
+                        estimated_credits__isnull=False,
+                        returned_at__isnull=False,
+                    )
+                    | models.Q(status__in=["failed", "usage_unknown"])
+                ),
+                name="ck_rare_run_result_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_run_dec_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_run_dec_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_run_dec_confirmed",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["lane", "-attempted_end"], name="idx_rare_run_attempted"),
+            models.Index(fields=["status", "slot_start"], name="idx_rare_run_status_slot"),
+        ]
+
+
+class RareTypeDecisionProcessingCycle(models.Model):
+    """Current 15-minute processing slot that funds Jev attempts."""
+
+    lane = models.CharField(max_length=64)
+    environment = models.CharField(max_length=16)
+    slot_start = models.DateTimeField()
+    usage_date = models.DateField()
+    daily_budget = models.ForeignKey(
+        RareTypeSearchDailyBudget,
+        on_delete=models.PROTECT,
+        related_name="decision_processing_cycles",
+    )
+    attempts_reserved = models.PositiveSmallIntegerField(default=0)
+    attempts_accounted = models.PositiveSmallIntegerField(default=0)
+    attempts_in_flight = models.PositiveSmallIntegerField(default=0)
+    decision_usd_reserved = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_accounted = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    decision_usd_confirmed = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    allocation_started_at = models.DateTimeField()
+    allocation_deadline = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decision_processing_cycles"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lane", "environment", "slot_start"],
+                name="uq_rare_dec_cycle_slot",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(environment__in=["normal", "staging"]),
+                name="ck_rare_dec_cycle_environment",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_reserved__gte=0),
+                name="ck_rare_dec_cycle_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_accounted__gte=0),
+                name="ck_rare_dec_cycle_accounted",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decision_usd_confirmed__gte=0),
+                name="ck_rare_dec_cycle_confirmed",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempts_in_flight__lte=2),
+                name="ck_rare_dec_cycle_inflight",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    allocation_deadline__gt=models.F("allocation_started_at")
+                ),
+                name="ck_rare_dec_cycle_allocation",
+            ),
+        ]
+
+
+class RareTypeDecision(models.Model):
+    """Versioned, reusable Jev interpretation identity and claim state."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CLAIMED = "claimed", "Claimed"
+        COMPLETED = "completed", "Completed"
+        REVIEW_NEEDED = "review_needed", "Review needed"
+        FAILED = "failed", "Failed"
+
+    class GateOutcome(models.TextChoices):
+        KEPT = "kept", "Kept"
+        JUNK = "junk", "Junk"
+        REVIEW_NEEDED = "review_needed", "Review needed"
+
+    provider_post_id = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    model = models.CharField(max_length=255)
+    question_version = models.CharField(max_length=128)
+    threshold_version = models.CharField(max_length=128)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    response_id = models.CharField(max_length=255, blank=True, default="")
+    probabilities = models.JSONField(default=dict)
+    derived_types = models.JSONField(default=list)
+    gate_outcome = models.CharField(
+        max_length=16, choices=GateOutcome.choices, blank=True, default=""
+    )
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    cost_usd = models.DecimalField(max_digits=16, decimal_places=9, default=0)
+    latency_ms = models.PositiveIntegerField(blank=True, null=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(blank=True, null=True)
+    claim_expires_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decisions"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "provider_post_id",
+                    "content_hash",
+                    "model",
+                    "question_version",
+                    "threshold_version",
+                ],
+                name="uq_rare_decision_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "pending",
+                        "claimed",
+                        "completed",
+                        "review_needed",
+                        "failed",
+                    ]
+                ),
+                name="ck_rare_decision_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempts__lte=2),
+                name="ck_rare_decision_attempts",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status="claimed",
+                        claim_owner__gt="",
+                        claim_fence__gt=0,
+                        claimed_at__isnull=False,
+                        claim_expires_at__isnull=False,
+                        claim_expires_at__gt=models.F("claimed_at"),
+                    )
+                    | (
+                        ~models.Q(status="claimed")
+                        & models.Q(
+                            claim_owner="",
+                            claimed_at__isnull=True,
+                            claim_expires_at__isnull=True,
+                        )
+                    )
+                ),
+                name="ck_rare_decision_claim_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status="completed",
+                        completed_at__isnull=False,
+                    )
+                    | (~models.Q(status="completed") & models.Q(completed_at__isnull=True))
+                ),
+                name="ck_rare_decision_complete_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(cost_usd__gte=0),
+                name="ck_rare_decision_cost",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "next_attempt_at"], name="idx_rare_decision_due"
+            ),
+            models.Index(
+                fields=["provider_post_id"], name="idx_rare_decision_post"
+            ),
+        ]
+
+
+class RareTypeDecisionAttempt(models.Model):
+    """Fenced, one-settlement funding record for a physical Jev attempt."""
+
+    class State(models.TextChoices):
+        RESERVED = "reserved", "Reserved"
+        SENT = "sent", "Sent"
+        SETTLED = "settled", "Settled"
+        RETAINED = "retained", "Retained"
+
+    decision = models.ForeignKey(
+        RareTypeDecision, on_delete=models.PROTECT, related_name="attempt_events"
+    )
+    processing_cycle = models.ForeignKey(
+        RareTypeDecisionProcessingCycle,
+        on_delete=models.PROTECT,
+        related_name="attempt_events",
+    )
+    fence = models.PositiveIntegerField()
+    state = models.CharField(
+        max_length=16, choices=State.choices, default=State.RESERVED
+    )
+    reserved_usd = models.DecimalField(max_digits=16, decimal_places=9)
+    accounted_usd = models.DecimalField(
+        max_digits=16, decimal_places=9, default=0
+    )
+    confirmed_usd = models.DecimalField(
+        max_digits=16, decimal_places=9, blank=True, null=True
+    )
+    error_code = models.CharField(max_length=128, blank=True, default="")
+    response_id = models.CharField(max_length=255, blank=True, default="")
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    reserved_at = models.DateTimeField()
+    sent_at = models.DateTimeField(blank=True, null=True)
+    settled_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_decision_attempts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["decision", "fence"], name="uq_rare_dec_attempt_fence"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    state__in=["reserved", "sent", "settled", "retained"]
+                ),
+                name="ck_rare_dec_attempt_state",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_usd__gt=0),
+                name="ck_rare_dec_attempt_reserved",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(accounted_usd__gte=0),
+                name="ck_rare_dec_attempt_accounted",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(confirmed_usd__isnull=True)
+                    | models.Q(confirmed_usd__gte=0)
+                ),
+                name="ck_rare_dec_attempt_confirmed",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(state="reserved", sent_at__isnull=True)
+                    | models.Q(
+                        state__in=["sent", "settled", "retained"],
+                        sent_at__isnull=False,
+                    )
+                ),
+                name="ck_rare_dec_attempt_send_shape",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(state="settled", settled_at__isnull=False)
+                    | (~models.Q(state="settled") & models.Q(settled_at__isnull=True))
+                ),
+                name="ck_rare_dec_attempt_settle_shape",
+            ),
+        ]
+
+
+class RareTypeSearchHit(models.Model):
+    """Durable inbox row for one already-paid provider result."""
+
+    class GateState(models.TextChoices):
+        DECISION_PENDING = "decision_pending", "Decision pending"
+        KEPT = "kept", "Kept"
+        JUNK = "junk", "Junk"
+        REVIEW_NEEDED = "review_needed", "Review needed"
+        PROVIDER_FAILED = "provider_failed", "Provider failed"
+        EXPIRED_UNPROCESSED = "expired_unprocessed", "Expired unprocessed"
+
+    run = models.ForeignKey(
+        RareTypeSearchRun, on_delete=models.PROTECT, related_name="hits"
+    )
+    provider_post_id = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    original_text = models.TextField(blank=True, default="")
+    public_payload = models.JSONField(default=dict)
+    payload_expires_at = models.DateTimeField()
+    payload_expired_at = models.DateTimeField(blank=True, null=True)
+    source_query_hash = models.CharField(max_length=64)
+    source_query_version = models.CharField(max_length=128)
+    source_window_start = models.DateTimeField()
+    source_window_end = models.DateTimeField()
+    gate_state = models.CharField(
+        max_length=24, choices=GateState.choices, default=GateState.DECISION_PENDING
+    )
+    decision = models.ForeignKey(
+        RareTypeDecision,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="hits",
+    )
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="rare_type_search_hits",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    fetched_at = models.DateTimeField()
+    gate_completed_at = models.DateTimeField(blank=True, null=True)
+    post_persisted_at = models.DateTimeField(blank=True, null=True)
+    classified_at = models.DateTimeField(blank=True, null=True)
+    extracted_at = models.DateTimeField(blank=True, null=True)
+    first_visible_at = models.DateTimeField(blank=True, null=True)
+    last_error_code = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rare_type_search_hits"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "provider_post_id"], name="uq_rare_hit_run_post"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    gate_state__in=[
+                        "decision_pending",
+                        "kept",
+                        "junk",
+                        "review_needed",
+                        "provider_failed",
+                        "expired_unprocessed",
+                    ]
+                ),
+                name="ck_rare_hit_gate_state",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_window_end__gt=models.F("source_window_start")
+                ),
+                name="ck_rare_hit_source_window",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(payload_expires_at__gt=models.F("fetched_at")),
+                name="ck_rare_hit_payload_expiry",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["gate_state", "fetched_at"], name="idx_rare_hit_gate_due"),
+            models.Index(fields=["provider_post_id"], name="idx_rare_hit_post"),
+            models.Index(fields=["payload_expires_at"], name="idx_rare_hit_expiry"),
         ]

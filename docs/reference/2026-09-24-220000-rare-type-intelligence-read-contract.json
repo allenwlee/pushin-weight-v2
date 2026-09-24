@@ -1,0 +1,85 @@
+{
+  "schema_version": "rare-type-intelligence-read-contract-v1",
+  "contract_kind": "deterministic-json-read-shape/v1",
+  "documents": {
+    "model_release_document": {
+      "root_keys": [
+        "id", "owner", "observed_model_name", "version", "channel",
+        "release_date", "review_status", "counts", "evidence"
+      ],
+      "required_paths": [
+        "owner.brand_id", "owner.candidate_id", "release_date.value",
+        "release_date.precision", "counts.canonical_records", "counts.evidence",
+        "counts.posts", "evidence[].source_post_id", "evidence[].observed_at",
+        "evidence[].extraction_version"
+      ],
+      "counting_rules": {
+        "canonical_records": "the returned ModelRelease row; always 1",
+        "evidence": "all source evidence rows attached to the release",
+        "posts": "distinct source_post_id values across evidence rows"
+      }
+    },
+    "rare_type_post_document": {
+      "root_keys": [
+        "post_id", "exists", "source_query_id", "classification", "categories",
+        "products", "product_proposals", "domain_records"
+      ],
+      "required_paths": [
+        "classification[].brand_id", "classification[].contract_version",
+        "classification[].taxonomy_version", "categories[].brand_id",
+        "categories[].candidate_id", "categories[].category",
+        "products[].product_key", "products[].policy_version",
+        "product_proposals[].hf_outcome", "product_proposals[].review_status",
+        "product_proposals[].rule_trace", "domain_records.model_releases[]",
+        "domain_records.events[]", "domain_records.opportunities[]",
+        "domain_records.job_listings[]", "domain_records.affiliations[]"
+      ]
+    },
+    "rare_type_status": {
+      "schema_version": "rare-type-status/v1",
+      "run_required_paths": [
+        "query.id", "query.version", "query.hash", "query.rendered",
+        "cost.twitterapi.reserved_credits", "cost.twitterapi.estimated_credits",
+        "cost.twitterapi.confirmed_credits", "cost.jev.reserved_usd",
+        "cost.jev.accounted_usd", "cost.jev.confirmed_usd",
+        "cost.jev_decision_attempts.scope",
+        "cost.jev_decision_attempts.billing_attribution",
+        "cost.jev_decision_attempts.decision_count",
+        "cost.jev_decision_attempts.reused_decision_count",
+        "cost.jev_decision_attempts.attempt_count",
+        "cost.jev_decision_attempts.reservation_ceiling_usd",
+        "cost.jev_decision_attempts.accounted_usd",
+        "cost.jev_decision_attempts.estimated_unconfirmed_usd",
+        "cost.jev_decision_attempts.confirmed_usd",
+        "cost.jev_decision_attempts.confirmation_status", "counts.raw",
+        "counts.normalized", "counts.persisted_posts", "counts.classified_hits",
+        "counts.extracted_hits", "counts.visible_hits", "counts.gate_states",
+        "latency.dispatch_to_return_ms", "gap.present", "gap.reason", "hits[]"
+      ],
+      "jev_cost_semantics": {
+        "cost.jev": "Legacy counters stored on the source search run. They are not populated by the separately funded decision-processing path and must not be used as the total cost of decisions referenced by the run.",
+        "cost.jev_decision_attempts": "Evidence attribution over each physical attempt once for the unique decisions referenced by this run's hits. A reused decision may therefore appear in more than one run document; this is not billing attribution to the search run and these values must not be summed across run documents.",
+        "reservation_ceiling_usd": "Sum of the per-attempt reservation ceilings, including released settled reservations and retained unknown-usage reservations; it is neither actual spend nor current outstanding reserve.",
+        "accounted_usd": "Sum of settled attempt costs with complete usage evidence.",
+        "estimated_unconfirmed_usd": "The accounted subset priced from usage evidence but not provider- or invoice-confirmed.",
+        "confirmed_usd": "Sum of provider-confirmed settled attempt costs, or null when no referenced attempt has confirmed cost evidence.",
+        "confirmation_status": "not_applicable when there are no attempts; complete only when every referenced physical attempt is settled with confirmed cost; otherwise incomplete."
+      },
+      "post_required_paths": [
+        "post_id", "classification", "categories", "products",
+        "product_proposals", "domain_records", "hits[]"
+      ],
+      "security": "No raw post text, API credentials, or provider response bodies."
+    },
+    "rare_type_replay": {
+      "schema_version": "rare-type-replay/v1",
+      "required_paths": [
+        "mode", "hit_ids", "post_ids", "rare_type", "post_fetch",
+        "targeted_replay", "classified_reconciled", "twitterapi_calls",
+        "budgets.translation_and_classification_calls",
+        "budgets.jev_normal_decisions", "budgets.targeted_extraction_calls",
+        "budgets.hugging_face_requests"
+      ]
+    }
+  }
+}

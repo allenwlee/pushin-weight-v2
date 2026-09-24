@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -132,6 +132,8 @@ class TwitterApiClient:
         params: dict[str, Any],
         *,
         timeout_s: int | None = None,
+        capture_raw: bool = False,
+        raw_sink: Callable[[bytes], None] | None = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
@@ -152,17 +154,23 @@ class TwitterApiClient:
                     time.sleep(2 ** attempt)
                     continue
                 raise
+            if raw_sink is not None:
+                raw_sink(r.content)
             if r.status_code == 401:
-                raise TwitterApiAuthError(
+                exc = TwitterApiAuthError(
                     f"TwitterAPI.io auth failed: {r.text[:200]}"
                 )
+                exc.response_status_code = r.status_code
+                raise exc
             if r.status_code == 429:
                 if attempt < self.max_retries:
                     time.sleep(2 ** (attempt + 2))
                     continue
-                raise TwitterApiRateLimitError(
+                exc = TwitterApiRateLimitError(
                     f"TwitterAPI.io rate limit: {r.text[:200]}"
                 )
+                exc.response_status_code = r.status_code
+                raise exc
             if 500 <= r.status_code < 600:
                 last_exc = TwitterApiServerError(
                     f"TwitterAPI.io 5xx: {r.status_code}"
@@ -170,14 +178,18 @@ class TwitterApiClient:
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
                     continue
+                last_exc.response_status_code = r.status_code
                 raise last_exc
             if r.status_code >= 400:
-                raise RuntimeError(
+                exc = RuntimeError(
                     f"TwitterAPI.io error {r.status_code}: {r.text[:200]}"
                 )
+                exc.response_status_code = r.status_code
+                raise exc
             # Success — record into the per-instance log before returning.
             self._record_request(path, params, r, t0, n_attempts)
-            return r.json()
+            parsed = r.json()
+            return (r.content, parsed) if capture_raw else parsed
         if last_exc:
             raise last_exc
         raise RuntimeError("TwitterAPI.io call failed without a recorded exception")
@@ -394,6 +406,58 @@ class TwitterApiClient:
             max_per_page=max_per_page,
             since_time=since_time,
         )
+
+    def run_search_page_with_raw(
+        self,
+        query: str,
+        *,
+        max_results: int = 20,
+        max_pages: int = 1,
+        max_per_page: int = 20,
+        since_time: int,
+        until_time: int,
+        receipt_sink: Callable[[bytes], None] | None = None,
+    ) -> tuple[bytes, dict[str, Any], list[dict[str, Any]], bool, int]:
+        """Fetch exactly one search page and retain the provider response.
+
+        This narrow receipt surface exists for bounded on-demand probes whose
+        evidence must be persisted before another HTTP call. Scheduled search
+        callers continue to use ``run_search`` / ``run_search_pages``.
+        """
+        if max_pages != 1:
+            raise ValueError("raw receipt search requires max_pages=1")
+        effective_query = self._effective_search_query(
+            query,
+            since=None,
+            since_time=since_time,
+            until_time=until_time,
+        )
+        params = {
+            "query": effective_query,
+            "queryType": "Latest",
+            "limit": min(max_per_page, max_results),
+        }
+        raw_body, data = self._get(
+            SEARCH_PATH,
+            params,
+            capture_raw=True,
+            raw_sink=receipt_sink,
+        )
+        if not isinstance(data, dict):
+            raise TypeError("TwitterAPI.io search response must be an object")
+        raw_items = data.get("tweets") or data.get("data") or []
+        if not isinstance(raw_items, list):
+            raise TypeError("TwitterAPI.io search results must be a list")
+        normalized = []
+        normalization_errors = 0
+        for item in raw_items[:max_results]:
+            try:
+                normalized.append(_normalize_tweet(item))
+            except (AttributeError, KeyError, TypeError, ValueError):
+                normalization_errors += 1
+        continuation = bool(data.get("has_next_page") or data.get("next_cursor"))
+        clipped = len(raw_items) > max_results
+        return raw_body, data, normalized, continuation or clipped, normalization_errors
 
     def run_search(
         self,

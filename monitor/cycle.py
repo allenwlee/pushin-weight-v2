@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -56,6 +57,7 @@ from core.classification_contract import (
     parse_stage1_classifications,
 )
 from core.discovery import (
+    RARE_EXTRA_CALL_ID,
     plan_discovery_calls,
     record_discovery_run,
     remaining_discovery_result_capacity,
@@ -79,12 +81,25 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    RareTypeSearchHit,
+    SearchQuery,
     SentimentKey,
 )
+from core.product_verification import drain_pending_verifications
 from core.profile_snapshots import (
     build_account_affiliation_contexts,
     build_brand_reference_index,
     capture_post_profile_snapshot,
+)
+from core.rare_type_search import (
+    kept_hits_pending_post,
+    link_kept_hit_to_post,
+    mark_hit_ingestion_failed,
+    mark_search_dispatched,
+    mark_search_failed,
+    persist_hit_batch,
+    reconcile_classified_hits,
+    reserve_search_run,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
 from monitor.harvest_summary import summarize_latency
@@ -95,14 +110,23 @@ from monitor.list_membership import (
 )
 from monitor.post_enrichment import (
     CANONICAL_LANG_CODES as _CANONICAL_LANG_CODES,
+)
+from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
-    commentary_is_distinct as _commentary_is_distinct,
     enrichment_stage_outcome,
-    persisted_output_complete as _legacy_translation_output_complete,
     persisted_output_complete_q,
     post_persisted_output_complete,
+)
+from monitor.post_enrichment import (
+    commentary_is_distinct as _commentary_is_distinct,
+)
+from monitor.post_enrichment import (
+    persisted_output_complete as _legacy_translation_output_complete,
+)
+from monitor.post_enrichment import (
     present_text as _present_text,
 )
+from monitor.rare_type_telemetry import build_rare_type_cycle_summary
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -114,18 +138,19 @@ from x_monitor.apify import (
     TwitterApiServerError,
 )
 from x_monitor.attribution import (
-    LLMCallBudgetExhausted,
     _MAX_RETRIES,
+    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _TWO_ROLE_ALLOWED_REVISION_TRIPLETS,
     UNATTRIBUTED_BRAND_ID,
+    LLMCallBudgetExhausted,
     MentionRow,
-    _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _two_role_fingerprint,
     attribute_to_brands,
     compile_keyword_index,
 )
 from x_monitor.config import Config, CycleConfig, load_config
 from x_monitor.harvest_policy import HarvestPolicy
+from x_monitor.jev_decisions import build_jev_decision_gate
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -830,7 +855,8 @@ class _BoundedClassifierClient:
                 remaining = self._reservations.pop(token, 0)
                 self._reserved_calls -= remaining
 
-    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+    def _start_physical_call(self, kwargs: dict[str, Any]) -> None:
+        """Consume one shared transport slot before calling the delegate."""
         reservation = kwargs.pop("_classifier_reservation", None)
         with self._lock:
             if reservation is not None:
@@ -849,7 +875,15 @@ class _BoundedClassifierClient:
                     self._sleep(wait_seconds)
             self._calls += 1
             self._last_started = self._monotonic()
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        self._start_physical_call(kwargs)
         return self._delegate.messages_create(**kwargs)
+
+    def messages_create_text(self, **kwargs: Any) -> Any:
+        """Forward raw-text requests through the same physical-call budget."""
+        self._start_physical_call(kwargs)
+        return self._delegate.messages_create_text(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -886,7 +920,11 @@ def _now_iso() -> str:
 
 
 def _requeue_recent_incomplete_translations(
-    *, cfg: Any, literal_v2_enabled: bool = False, now: datetime | None = None
+    *,
+    cfg: Any,
+    literal_v2_enabled: bool = False,
+    now: datetime | None = None,
+    post_ids: set[str] | None = None,
 ) -> int:
     """Reopen recent false successes without resurrecting historical debt."""
     now = now or django_timezone.now()
@@ -895,6 +933,8 @@ def _requeue_recent_incomplete_translations(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
     )
+    if post_ids is not None:
+        candidates = candidates.filter(post_id__in=post_ids)
     if literal_v2_enabled:
         candidates = candidates.exclude(
             post__translation_artifacts__is_current=True,
@@ -934,6 +974,7 @@ def _claim_enrichment_states(
     run_id: str,
     now: datetime | None = None,
     prefer_created_before: datetime | None = None,
+    post_ids: set[str] | None = None,
 ) -> EnrichmentClaimBatch:
     """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
@@ -955,6 +996,8 @@ def _claim_enrichment_states(
         Q(translation_status=PostEnrichmentState.Status.PENDING)
         | Q(classification_status=PostEnrichmentState.Status.PENDING)
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
+    if post_ids is not None:
+        due &= Q(post_id__in=post_ids)
     current_cycle: list[PostEnrichmentState] = []
     carryover: list[PostEnrichmentState] = []
 
@@ -2831,6 +2874,269 @@ class CycleRunner:
             return all_items, "truncated"
         return all_items, "ok"
 
+    def _run_rare_type_search(
+        self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
+    ) -> dict[str, Any]:
+        """Reserve and execute the one-page RARE_EXTRA slot exactly once."""
+
+        query_hash = hashlib.sha256(call.query_string.encode()).hexdigest()
+        slot_start = now.replace(
+            minute=(now.minute // 15) * 15, second=0, microsecond=0
+        )
+        try:
+            source_query, _ = SearchQuery.objects.get_or_create(
+                query_id=f"{call.call_id}:{call.query_pack_version}:{query_hash}",
+                defaults={
+                    "keywords": {
+                        "lane": "rare_types",
+                        "query": call.query_string,
+                        "query_version": call.query_pack_version,
+                    },
+                    "plan_calls_run_id": "rare-type-scheduled",
+                },
+            )
+            reservation = reserve_search_run(
+                lane="rare_types",
+                slot_start=slot_start,
+                source_query=source_query,
+                query_string=call.query_string,
+                query_hash=query_hash,
+                query_version=call.query_pack_version or "unknown",
+                environment=os.environ.get("RENDER_SERVICE_NAME", "local")[:64],
+                release_sha=os.environ.get("RENDER_GIT_COMMIT", "unknown")[:64],
+                now=now,
+                reserved_credits=self.cfg.discovery.rare_types.reserved_credits_per_call,
+                daily_credit_limit=int(call.daily_credit_ceiling or 0),
+            )
+        except DatabaseError as exc:
+            self._errors.append(f"rare_types.reservation_failed:{type(exc).__name__}")
+            return {"status": "reservation_failed", "provider_called": False}
+        if not reservation.created or reservation.run is None:
+            return {"status": reservation.reason, "provider_called": False}
+        run = reservation.run
+
+        def cost_fields() -> dict[str, int | None]:
+            try:
+                run.refresh_from_db(
+                    fields=[
+                        "reserved_credits",
+                        "estimated_credits",
+                        "confirmed_credits",
+                    ]
+                )
+            except DatabaseError:
+                pass
+            return {
+                "reserved_credits": run.reserved_credits,
+                "estimated_credits": run.estimated_credits,
+                "confirmed_credits": run.confirmed_credits,
+            }
+        effective_query = TwitterApiClient._effective_search_query(
+            call.query_string,
+            since=None,
+            since_time=int(run.attempted_start.timestamp()),
+            until_time=int(run.attempted_end.timestamp()),
+        )
+        try:
+            assert_under_length_cap(effective_query)
+        except ValueError:
+            mark_search_failed(
+                run.pk, error_code="length_cap_exceeded", now=self._wall_now()
+            )
+            return {"status": "length_cap_exceeded", "provider_called": False}
+        if not mark_search_dispatched(run.pk, now=self._wall_now()):
+            mark_search_failed(
+                run.pk, error_code="dispatch_state_invalid", now=self._wall_now()
+            )
+            return {"status": "dispatch_state_invalid", "provider_called": False}
+        prior_retries = api.max_retries
+        api.max_retries = 0
+        try:
+            # U5's allowlisted hit batch is the durable response evidence. If
+            # the process dies after dispatch but before this transaction,
+            # the DISPATCHED row retains the full reservation and the unique
+            # slot prevents an automatic paid retry.
+            _body, raw, normalized, continuation, normalization_errors = (
+                api.run_search_page_with_raw(
+                    call.query_string,
+                    max_results=20,
+                    max_pages=1,
+                    max_per_page=20,
+                    since_time=int(run.attempted_start.timestamp()),
+                    until_time=int(run.attempted_end.timestamp()),
+                )
+            )
+            raw_items = raw.get("tweets") or raw.get("data") or []
+            if not isinstance(raw_items, list) or len(raw_items) > 20:
+                raise ValueError("rare-type provider page violated 20-slot envelope")
+            persist_hit_batch(
+                run.pk,
+                normalized,
+                now=self._wall_now(),
+                raw_count=len(raw_items),
+                normalized_count=len(normalized),
+                truncated=continuation,
+            )
+            return {
+                "status": (
+                    "truncated"
+                    if continuation
+                    else ("no_results" if not raw_items else "stored")
+                ),
+                "provider_called": True,
+                "raw_count": len(raw_items),
+                "normalized_count": len(normalized),
+                "normalization_errors": normalization_errors,
+                "run_id": run.pk,
+                "query_version": call.query_pack_version,
+                **cost_fields(),
+            }
+        except Exception as exc:
+            try:
+                mark_search_failed(
+                    run.pk, error_code=type(exc).__name__[:128], now=self._wall_now()
+                )
+            except DatabaseError as mark_exc:
+                self._errors.append(
+                    f"rare_types.failure_record_failed:{type(mark_exc).__name__}"
+                )
+            self._errors.append(f"fetch.{call.call_id}: {exc}")
+            return {
+                "status": "error",
+                "provider_called": True,
+                "run_id": run.pk,
+                **cost_fields(),
+            }
+        finally:
+            api.max_retries = prior_retries
+
+    def _ingest_kept_rare_type_hits(
+        self,
+        *,
+        run_id: str,
+        fetched_since: datetime | None = None,
+        index: Any = None,
+        search_terms: dict[str, str] | None = None,
+        hit_ids: set[int] | None = None,
+    ) -> dict[str, int]:
+        """Join Jev-kept durable hits to the normal Post/enrichment queue."""
+
+        hits = list(
+            kept_hits_pending_post(
+                limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
+                fetched_since=fetched_since,
+                hit_ids=hit_ids,
+            )
+        )
+        result = {"selected": len(hits), "persisted": 0, "failed": 0}
+        for hit in hits:
+            item = dict(hit.public_payload or {})
+            item["id"] = str(hit.provider_post_id)
+            item["tweet_id"] = str(hit.provider_post_id)
+            item["source_query_id"] = RARE_EXTRA_CALL_ID
+            item["_discovery_lane"] = "rare_types"
+            item["_discovery_query_id"] = hit.run.source_query.query_id
+            item["_rare_type_hit_id"] = hit.pk
+            self._attribute_items(
+                [item], index if index is not None else (None, {}), search_terms or {}
+            )
+            if item.get("_unattributed"):
+                item["brand_id"] = UNATTRIBUTED_BRAND_ID
+                item["brand_ids"] = [UNATTRIBUTED_BRAND_ID]
+            _inserted, _updated, _attributed, failed = self._persist_items([item])
+            if failed or not item.get("_persisted_post_id"):
+                mark_hit_ingestion_failed(
+                    hit_id=hit.pk, error_code="post_persistence_failed"
+                )
+                result["failed"] += 1
+                continue
+            post = Post.objects.get(pk=item["_persisted_post_id"])
+            if link_kept_hit_to_post(hit_id=hit.pk, post=post, now=self._wall_now()):
+                result["persisted"] += 1
+            else:
+                mark_hit_ingestion_failed(
+                    hit_id=hit.pk, error_code="post_link_state_invalid"
+                )
+                result["failed"] += 1
+        return result
+
+    def _drain_rare_type_hits(
+        self,
+        *,
+        run_id: str,
+        index: Any,
+        search_terms: dict[str, str],
+        fetched_since: datetime | None = None,
+        deadline: Any = None,
+        hit_ids: set[int] | None = None,
+        allow_disabled: bool = False,
+    ) -> dict[str, int]:
+        """Run the local decision/ingestion queue without another X request."""
+
+        result = {"selected": 0, "kept": 0, "junk": 0, "pending": 0}
+        if not self.cfg.discovery.rare_types.enabled and not allow_disabled:
+            return result
+        service_name = os.environ.get("RENDER_SERVICE_NAME", "").lower()
+        environment = "staging" if "staging" in service_name else "normal"
+        try:
+            gate = build_jev_decision_gate(
+                self.cfg, environment=environment, now=self._wall_now
+            )
+        except Exception as exc:
+            self._errors.append(f"rare_types.jev_unavailable: {exc}")
+            result["pending"] = RareTypeSearchHit.objects.filter(
+                gate_state__in=[
+                    RareTypeSearchHit.GateState.DECISION_PENDING,
+                    RareTypeSearchHit.GateState.PROVIDER_FAILED,
+                ],
+                post_id__isnull=True,
+                **({"pk__in": hit_ids} if hit_ids is not None else {}),
+            ).count()
+            gate = None
+        if gate is not None:
+            candidates = RareTypeSearchHit.objects.filter(
+                gate_state__in=[
+                    RareTypeSearchHit.GateState.DECISION_PENDING,
+                    RareTypeSearchHit.GateState.PROVIDER_FAILED,
+                ],
+                post_id__isnull=True,
+                payload_expired_at__isnull=True,
+            )
+            if fetched_since is not None:
+                candidates = candidates.filter(fetched_at__gte=fetched_since)
+            if hit_ids is not None:
+                candidates = candidates.filter(pk__in=hit_ids)
+            limit = (
+                self.cfg.discovery.rare_types.jev.staging_decisions_per_cycle
+                if environment == "staging"
+                else self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle
+            )
+            shared_deadline = getattr(deadline, "deadline_at", None)
+            for hit in candidates.order_by("fetched_at", "id")[:limit]:
+                result["selected"] += 1
+                decision = gate.process_hit(
+                    hit.pk,
+                    owner=run_id,
+                    shared_deadline_monotonic=shared_deadline,
+                )
+                if decision.outcome in {"kept", "junk"}:
+                    result[decision.outcome] += 1
+                else:
+                    result["pending"] += 1
+        result.update(
+            {
+                f"ingestion_{key}": value
+                for key, value in self._ingest_kept_rare_type_hits(
+                    run_id=run_id,
+                    fetched_since=fetched_since,
+                    index=index,
+                    search_terms=search_terms,
+                    hit_ids=hit_ids,
+                ).items()
+            }
+        )
+        return result
+
 
     def _prepare_call_a_roles(
         self, items: list[dict[str, Any]], *, list_id: int
@@ -3193,6 +3499,7 @@ class CycleRunner:
         run_id: str = "post-fetch",
         deadline: Any | None = None,
         prefer_created_before: datetime | None = None,
+        post_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3238,18 +3545,27 @@ class CycleRunner:
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
+        selected_post_ids = (
+            {str(post_id) for post_id in post_ids}
+            if post_ids is not None
+            else None
+        )
         claim_safe_envelope = enrichment_cfg.claim_safe_envelope_seconds
         if deadline is not None and not deadline.can_start(claim_safe_envelope):
-            counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
+            deferred = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
-            ).count()
+            )
+            if selected_post_ids is not None:
+                deferred = deferred.filter(post_id__in=selected_post_ids)
+            counters["n_enrichment_deferred"] = deferred.count()
             return counters
 
         counters["n_translation_requeued"] = (
             _requeue_recent_incomplete_translations(
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
+                post_ids=selected_post_ids,
             )
         )
 
@@ -3257,6 +3573,7 @@ class CycleRunner:
             cfg=enrichment_cfg,
             run_id=run_id,
             prefer_created_before=prefer_created_before,
+            post_ids=selected_post_ids,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -3380,6 +3697,8 @@ class CycleRunner:
         # Convert Django Brand models to v1 BrandRow shape expected by classifier
         from x_monitor.attribution import (
             BrandRow as _BrandRow,
+        )
+        from x_monitor.attribution import (
             _tracked_brand_catalog,
         )
         brand_rows = BrandModel.objects.filter(is_sentinel=False)
@@ -3410,6 +3729,7 @@ class CycleRunner:
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
+        bounded_translator_client = None
         if translation_tweets and translator_client is None:
             logger.warning(
                 "_run_post_fetch: no translator client (configured provider "
@@ -3421,6 +3741,17 @@ class CycleRunner:
             counters["n_translator_unavailable"] = 1
             translation_rows = []
         elif translation_tweets:
+            remaining_llm_calls = (
+                None
+                if self._max_llm_calls is None
+                else max(0, self._max_llm_calls - self._llm_call_count)
+            )
+            bounded_translator_client = _BoundedClassifierClient(
+                translator_client,
+                maximum_calls=remaining_llm_calls,
+                pause_seconds=0,
+                monotonic=self._monotonic,
+            )
             translation_deadline = enrichment_cfg.start_attempt_deadline(
                 monotonic=self._monotonic
             )
@@ -3428,7 +3759,7 @@ class CycleRunner:
                 if self.cfg.llm.literal_translation_v2_enabled:
                     translation_rows = translate_batch_literal_plaintext(
                         translation_tweets,
-                        translator_client,
+                        bounded_translator_client,
                         cfg=self.cfg,
                         deadline=translation_deadline,
                         max_workers=3,
@@ -3438,7 +3769,7 @@ class CycleRunner:
                     translation_rows = translate_batch_pragmatics(
                         translation_tweets,
                         ["en", "zh_cn"],
-                        translator_client,
+                        bounded_translator_client,
                         on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
                             "translator_batch_failed",
                             self._error_counts["translator_batch_failed"] + 1,
@@ -3452,6 +3783,8 @@ class CycleRunner:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
                 translation_rows = []
+            finally:
+                self._llm_call_count += bounded_translator_client.calls
         else:
             translation_rows = []
 
@@ -3705,6 +4038,24 @@ class CycleRunner:
                     if isinstance(classification, dict)
                     for post_type in classification.get("post_types", [])
                 }
+                post_types.update(
+                    PostBrandSignal.objects.filter(post_id=tid).values_list(
+                        "post_type_id", flat=True
+                    )
+                )
+                eligible_rare_types: set[str] = set()
+                if (
+                    self.cfg.discovery.rare_types.enabled
+                    or selected_post_ids is not None
+                ):
+                    eligible_rare_types = set(
+                        RareTypeSearchHit.objects.filter(
+                            post_id=tid,
+                            gate_state=RareTypeSearchHit.GateState.KEPT,
+                            decision__derived_types__contains=["model_releases"],
+                        ).values_list("decision__derived_types", flat=True).first()
+                        or []
+                    )
                 targeted = run_targeted_extractions(
                     post=Post.objects.get(pk=tid),
                     post_types=post_types,
@@ -3712,6 +4063,7 @@ class CycleRunner:
                     calls=getattr(self, "_targeted_extraction_calls", {}),
                     max_calls=targeted_calls_remaining,
                     deadline=deadline,
+                    eligible_rare_types=eligible_rare_types,
                 )
                 targeted_calls_remaining -= targeted.calls_made
                 counters["n_targeted_extraction_calls"] += targeted.calls_made
@@ -3792,6 +4144,73 @@ class CycleRunner:
             self._error_counts["enrichment_quarantined"] += newly_failed
             self._errors.append(f"post_fetch.enrichment_quarantined:{newly_failed}")
         return counters
+
+    def _replay_targeted_extractions(
+        self,
+        *,
+        post_ids: set[str],
+        deadline: Any | None = None,
+    ) -> dict[str, Any]:
+        """Retry targeted work for explicit, already-classified saved posts."""
+
+        result: dict[str, Any] = {
+            "selected_posts": 0,
+            "calls": 0,
+            "records_written": 0,
+            "evidence_written": 0,
+            "organization_candidates_written": 0,
+            "failed_roles": [],
+            "deferred_roles": [],
+        }
+        if not post_ids or not self.cfg.targeted_extraction.enabled:
+            return result
+
+        from core.targeted_extraction import run_targeted_extractions
+
+        calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
+        posts = (
+            Post.objects.filter(
+                pk__in=post_ids,
+                enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
+            )
+            .order_by("tweet_id")
+        )
+        for post in posts:
+            result["selected_posts"] += 1
+            post_types = set(
+                PostBrandSignal.objects.filter(post=post).values_list(
+                    "post_type_id", flat=True
+                )
+            )
+            eligible_rare_types = set(
+                RareTypeSearchHit.objects.filter(
+                    post=post,
+                    gate_state=RareTypeSearchHit.GateState.KEPT,
+                    decision__derived_types__contains=["model_releases"],
+                )
+                .values_list("decision__derived_types", flat=True)
+                .first()
+                or []
+            )
+            targeted = run_targeted_extractions(
+                post=post,
+                post_types=post_types,
+                config=self.cfg.targeted_extraction,
+                calls=self._targeted_extraction_calls,
+                max_calls=calls_remaining,
+                deadline=deadline,
+                eligible_rare_types=eligible_rare_types,
+            )
+            calls_remaining -= targeted.calls_made
+            result["calls"] += targeted.calls_made
+            result["records_written"] += targeted.records_written
+            result["evidence_written"] += targeted.evidence_written
+            result["organization_candidates_written"] += (
+                targeted.organization_candidates_written
+            )
+            result["failed_roles"].extend(targeted.failed_roles)
+            result["deferred_roles"].extend(targeted.deferred_roles)
+        return result
 
     def _request_synthesis_prewarm(
         self, kept_posts: list[dict[str, Any]]
@@ -4316,6 +4735,24 @@ class CycleRunner:
                     "daily_credit_ceiling": call.daily_credit_ceiling,
                 }
 
+            if call.call_id == RARE_EXTRA_CALL_ID:
+                rare_result = self._run_rare_type_search(
+                    call, api, now=self._wall_now()
+                )
+                call_entry.update(rare_result)
+                call_entry["n_results"] = rare_result.get("raw_count", 0)
+                call_entry["fetch_n"] = rare_result.get("raw_count", 0)
+                call_entry["cursor_advanced"] = False
+                call_entry["wall_clock_ms"] = round(
+                    (self._monotonic() - call_t0) * 1000
+                )
+                summary["calls"].append(call_entry)
+                summary["totals"]["n_calls_run"] += int(
+                    rare_result.get("provider_called", False)
+                )
+                summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                continue
+
             # Resolve this call's time window from its cursor (or the
             # operator-supplied override) BEFORE fetching, so the value we
             # later store is exactly the upper bound we queried.
@@ -4666,6 +5103,18 @@ class CycleRunner:
 
         # ---- Bounded post-fetch queue: immediately after all live tips ----
         if summary["status"] != "aborted":
+            rare_fetched_since = (
+                cycle_started_wall
+                if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
+                else None
+            )
+            summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                run_id=run_id,
+                index=index,
+                search_terms=search_terms,
+                fetched_since=rare_fetched_since,
+                deadline=deadline,
+            )
             post_fetch_started = self._monotonic()
             pf_counters = self._run_post_fetch(
                 kept_all,
@@ -4682,6 +5131,33 @@ class CycleRunner:
             )
             summary["latency"]["post_fetch_completed_at"] = post_fetch_completed_at
             summary.setdefault("post_fetch", {}).update(pf_counters)
+            product_cfg = self.cfg.discovery.rare_types
+            if product_cfg.enabled and product_cfg.product_verification_enabled:
+                is_staging = "staging" in os.environ.get(
+                    "RENDER_SERVICE_NAME", ""
+                ).lower()
+                product_limit = (
+                    product_cfg.product_verification_staging_requests
+                    if is_staging
+                    else product_cfg.product_verification_normal_requests
+                )
+                product_result = drain_pending_verifications(
+                    max_requests=product_limit,
+                    deadline=deadline,
+                )
+                summary["product_verification"] = {
+                    "attempted": product_result.attempted,
+                    "resolved": product_result.resolved,
+                    "deferred": product_result.deferred,
+                }
+            if self.cfg.discovery.rare_types.enabled:
+                summary["rare_type_ingestion"]["classified_reconciled"] = (
+                    reconcile_classified_hits(
+                        now=self._wall_now(),
+                        limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
+                        fetched_since=rare_fetched_since,
+                    )
+                )
             if pf_counters.get("n_translator_unavailable"):
                 summary["degraded"]["translator_unavailable"] = True
             if pf_counters.get("n_classifier_unavailable"):
@@ -4758,6 +5234,17 @@ class CycleRunner:
         summary["totals"]["n_updated"] = self._posts_updated
         summary["totals"]["n_persist_failed"] = self._posts_persist_failed
         summary["totals"]["n_attributed"] = self._posts_attributed
+
+        if any(
+            call.get("call_id") == RARE_EXTRA_CALL_ID for call in summary["calls"]
+        ):
+            try:
+                summary["rare_types"] = build_rare_type_cycle_summary(summary)
+            except DatabaseError as exc:
+                summary["degraded"]["rare_type_telemetry"] = 1
+                self._errors.append(
+                    f"rare_types.telemetry_failed:{type(exc).__name__}"
+                )
 
         summary = self._finish_summary(summary, started_monotonic=t0, api=api)
 

@@ -1,0 +1,31 @@
+{
+  "query_version": "rare-types-v3-provisional-2026-09-23",
+  "positive_shapes": [
+    {"id": "personnel-en", "query_fragment": "\"I've joined\""},
+    {"id": "appendix-openai-context", "query_fragment": "OpenAI"},
+    {"id": "appendix-anthropic-context", "query_fragment": "Anthropic"},
+    {"id": "personnel-zh-cn", "query_fragment": "\"我加入\""},
+    {"id": "appendix-zh-cn-leave", "query_fragment": "\"我离开\""},
+    {"id": "personnel-zh-cn-appointment", "query_fragment": "出任"},
+    {"id": "personnel-zh-cn-leadership-change", "query_fragment": "换帅"},
+    {"id": "personnel-ja", "query_fragment": "に入社"},
+    {"id": "personnel-ja-leave", "query_fragment": "を退職"},
+    {"id": "unknown-ai-employer-context", "query_fragment": "(AI OR LLM OR OpenAI OR Anthropic)"},
+    {"id": "catalog-handle-only", "query_fragment": "\"I've joined @deepseek_ai\""},
+    {"id": "narrow-ml-job", "query_fragment": "(engineer OR researcher)"},
+    {"id": "multilingual-job", "query_fragment": "(\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中)"},
+    {"id": "bounded-event", "query_fragment": "(\"we'll be at\" OR 登壇) (\"AI conference\" OR summit)"},
+    {"id": "bounded-opportunity", "query_fragment": "(\"applications open\" OR \"apply by\" OR 申请)"},
+    {"id": "ai-bounded-opportunity", "query_fragment": "(hackathon OR fellowship) (AI OR LLM)"},
+    {"id": "generic-model-release", "query_fragment": "(introducing OR 开源 OR 发布) (model OR weights OR Preview)"},
+    {"id": "unbranded-release", "query_fragment": "\"step 5 preview\""}
+  ],
+  "forbidden_broad_alternatives": [
+    {"id": "bare-job-firehose", "query_fragment": "jobs OR careers OR opening OR apply"},
+    {"id": "bare-brand-join-chain", "query_fragment": "joined Qwen"},
+    {"id": "unsupported-brand-exclusion", "query_fragment": "-DeepSeek"},
+    {"id": "bare-b1-minimax", "query_fragment": " OR MiniMax OR "},
+    {"id": "bare-b1-qwen", "query_fragment": " OR Qwen OR "},
+    {"id": "bare-b1-deepseek", "query_fragment": " OR DeepSeek OR "}
+  ]
+}

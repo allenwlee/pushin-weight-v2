@@ -97,7 +97,8 @@ def test_additive_migration_preserves_existing_products():
 
     executor = MigrationExecutor(connection)
     before = [("core", "0044_merge_20260918_1344")]
-    after = [("core", "0045_hf_catalog_observations")]
+    after_hf = [("core", "0045_hf_catalog_observations")]
+    after_merged = [("core", "0056_merge_hf_catalog_rare_types")]
     executor.migrate(before)
     try:
         old_product = executor.loader.project_state(before).apps.get_model(
@@ -110,9 +111,15 @@ def test_additive_migration_preserves_existing_products():
             repo_id="lab/other", display_name="Curated name"
         )
         identities = [(hf.pk, hf.repo_id), (other.pk, other.repo_id)]
+        executor = MigrationExecutor(connection)
+        executor.migrate(after_hf)
+        hf_product = executor.loader.project_state(after_hf).apps.get_model(
+            "core", "Product"
+        )
+        assert hf_product.objects.get(pk=hf.pk).raw == {"review": "kept"}
     finally:
         executor = MigrationExecutor(connection)
-        executor.migrate(after)
+        executor.migrate(after_merged)
     assert [
         (Product.objects.get(pk=pk).pk, Product.objects.get(pk=pk).repo_id)
         for pk, _ in identities
