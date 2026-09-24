@@ -385,3 +385,28 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
     assert "private_evidence" not in stdout.getvalue()
     assert "private_response" not in stdout.getvalue()
     assert "private_request" not in stdout.getvalue()
+
+
+def test_status_separates_configured_route_from_persisted_receipts_without_response_text():
+    now = timezone.now()
+    run = TrendNarrativeRun.objects.create(
+        source_cycle_id="route-status", window_days=1, facts_as_of=now,
+        packet_schema_version=3, snapshot={}, brand_manifest=[],
+    )
+    TrendNarrativeProviderCall.objects.create(
+        run=run, stage="rank", request_identity="status-route", request_hash="f"*64, response_hash="a"*64,
+        state="completed", reserved_at=now, sent_at=now, completed_at=now,
+        response_payload={"raw_text":"private generated prose", "secret":"never-show-this",
+                          "provider_usage":{"provider":"DeepInfra", "model":"deepseek-ai/DeepSeek-V4-Flash-0731",
+                                            "service_tier":"priority", "cost_usd":0.001,
+                                            "unrecognized":"also-private"}},
+    )
+    out = StringIO()
+    call_command("headline_status", "--json", stdout=out)
+    result = json.loads(out.getvalue())
+    assert result["configured_route"]["model"]
+    receipt = result["windows"][0]["per_brand"]["transport"]["observed_route"]
+    assert receipt == {"receipt_count":1,"providers":["DeepInfra"],
+                       "models":["deepseek-ai/DeepSeek-V4-Flash-0731"],"service_tiers":["priority"],
+                       "provider_reported_cost_usd":"0.001"}
+    assert all(text not in out.getvalue() for text in ("private generated prose","never-show-this","also-private"))

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
+from django.db.models import F
 from django.utils import timezone
 
 from core.models import (
@@ -129,6 +131,12 @@ class Command(BaseCommand):
                 }
             )
         payload = {
+            "configured_route": {
+                "provider": config.provider, "model": config.model, "base_url": config.base_url,
+                "profiles": {stage: getattr(config, f"{stage}_request_profile") for stage in _CALL_STAGES},
+                "worker_concurrency": config.per_brand_worker_concurrency,
+                "brands_per_packet": config.per_brand_batch_size,
+            },
             "control_revision": config.control_revision,
             "activation_state": config.activation_state,
             "serving_enabled": config.serving_enabled,
@@ -213,7 +221,8 @@ def _per_brand_status(*, window_days: int, config, now) -> dict[str, object]:
 
     ``headline_status`` is deliberately a read-only, provider-free command.
     The output contains public brand snapshots and transport counters only;
-    it never traverses JSON request/response packets or evidence fields.
+    it selects only the provider_usage JSON child, never raw response text,
+    request packets, or evidence fields.
     """
     slot = (
         TrendNarrativeWorkSlot.objects.filter(window_days=window_days)
@@ -245,7 +254,9 @@ def _per_brand_status(*, window_days: int, config, now) -> dict[str, object]:
         outcome.status in TERMINAL_BRAND_STATUSES for outcome in outcomes
     )
     calls = list(
-        TrendNarrativeProviderCall.objects.filter(run=run).only(
+        TrendNarrativeProviderCall.objects.filter(run=run).annotate(
+            receipt_metadata=F("response_payload__provider_usage")
+        ).only(
             "stage",
             "state",
             "error_code",
@@ -401,6 +412,7 @@ def _transport_status(calls: list[TrendNarrativeProviderCall]) -> dict[str, obje
             "ambiguous_codes": ambiguous_codes,
         }
     return {
+        "observed_route": _observed_route_status(calls),
         "call_count": len(calls),
         "failed_count": sum(
             call.state == TrendNarrativeProviderCall.State.FAILED for call in calls
@@ -409,6 +421,26 @@ def _transport_status(calls: list[TrendNarrativeProviderCall]) -> dict[str, obje
             call.state == TrendNarrativeProviderCall.State.AMBIGUOUS for call in calls
         ),
         "stages": stages,
+    }
+
+
+def _observed_route_status(calls) -> dict[str, object]:
+    receipts = [call.receipt_metadata for call in calls
+                if isinstance(getattr(call, "receipt_metadata", None), dict)]
+    costs = []
+    for receipt in receipts:
+        try:
+            cost = Decimal(str(receipt.get("cost_usd")))
+        except (InvalidOperation, ValueError, TypeError):
+            continue
+        if cost.is_finite() and cost >= 0:
+            costs.append(cost)
+    return {
+        "receipt_count": len(receipts),
+        "providers": sorted({str(r["provider"]) for r in receipts if r.get("provider")}),
+        "models": sorted({str(r["model"]) for r in receipts if r.get("model")}),
+        "service_tiers": sorted({str(r["service_tier"]) for r in receipts if r.get("service_tier")}),
+        "provider_reported_cost_usd": str(sum(costs, Decimal(0))) if receipts and len(costs) == len(receipts) else None,
     }
 
 
