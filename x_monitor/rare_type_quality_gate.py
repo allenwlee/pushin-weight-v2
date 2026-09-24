@@ -162,7 +162,9 @@ def _validated_prediction(
     if row.get("provider") != config.provider:
         raise QualityEvidenceError(f"response provider mismatch: {case_id}")
     response_id = row.get("response_id")
-    if not isinstance(response_id, str) or not response_id:
+    # Direct TypeSafe System One currently omits an ID; parse_response
+    # normalizes that documented shape to an empty string.
+    if not isinstance(response_id, str):
         raise QualityEvidenceError(f"response id missing: {case_id}")
     evidence_kind = row.get("evidence_kind")
     if evidence_kind not in {"captured_real", "mock"}:
@@ -216,9 +218,9 @@ def evaluate_fixture_predictions(
         if case_id not in expected_ids:
             raise QualityEvidenceError(f"unexpected prediction: {case_id}")
         response_id = prediction.get("response_id")
-        if isinstance(response_id, str) and response_id in response_ids:
+        if isinstance(response_id, str) and response_id and response_id in response_ids:
             raise QualityEvidenceError(f"duplicate response id: {response_id}")
-        if isinstance(response_id, str):
+        if isinstance(response_id, str) and response_id:
             response_ids.add(response_id)
         by_id[case_id] = prediction
     missing = sorted(expected_ids - set(by_id))
@@ -518,14 +520,21 @@ def complete_assessment(
     usage_complete = budget.get("usage_complete")
     if not isinstance(usage_complete, bool):
         raise QualityEvidenceError("usage_complete must be boolean")
+    estimated_raw = budget.get("estimated_usd_from_usage")
+    estimated = (
+        None
+        if estimated_raw is None
+        else _decimal(estimated_raw, field="estimated_usd_from_usage")
+    )
+    measured_spend = confirmed if confirmed is not None else estimated
     if reserved > ASSESSMENT_BUDGET_USD or (
-        confirmed is not None and confirmed > ASSESSMENT_BUDGET_USD
+        measured_spend is not None and measured_spend > ASSESSMENT_BUDGET_USD
     ):
         fail_reasons.append("assessment_budget_exceeded")
-    if not usage_complete or confirmed is None:
+    if not usage_complete or measured_spend is None:
         inconclusive_reasons.append("usage_unknown")
     captured_cost = Decimal(fixture_metrics["captured_cost_usd"])
-    if confirmed is not None and confirmed < captured_cost:
+    if measured_spend is not None and measured_spend < captured_cost:
         fail_reasons.append("confirmed_usage_below_captured")
 
     fail_reasons = list(dict.fromkeys(fail_reasons))
@@ -540,7 +549,7 @@ def complete_assessment(
         status = "pass"
         reasons = []
     assessment: dict[str, Any] = {
-        "schema_version": "rare-type-quality-assessment-v1",
+        "schema_version": "rare-type-quality-assessment-v2",
         "identity": dict(identity),
         "status": status,
         "quality_gate_passed": status == "pass",
@@ -553,6 +562,10 @@ def complete_assessment(
             "ceiling_usd": format(ASSESSMENT_BUDGET_USD, "f"),
             "reserved_usd": format(reserved, "f"),
             "confirmed_usd": None if confirmed is None else format(confirmed, "f"),
+            "estimated_usd_from_usage": (
+                None if estimated is None else format(estimated, "f")
+            ),
+            "invoice_confirmed": confirmed is not None,
             "usage_complete": usage_complete,
         },
     }

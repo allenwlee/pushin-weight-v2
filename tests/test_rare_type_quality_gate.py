@@ -310,6 +310,80 @@ def test_complete_assessment_passes_only_real_complete_evidence_and_has_stable_d
     )
 
 
+def test_complete_assessment_accepts_complete_direct_usage_with_unconfirmed_invoice():
+    from x_monitor.rare_type_quality_gate import complete_assessment
+
+    assessment = complete_assessment(
+        identity=_identity(),
+        corpus=_corpus(),
+        predictions=_predictions(),
+        config=_cfg(),
+        live_evidence=_live(),
+        budget={
+            "reserved_usd": "0.25",
+            "estimated_usd_from_usage": "0.0056",
+            "confirmed_usd": None,
+            "usage_complete": True,
+        },
+    )
+    assert assessment["status"] == "pass"
+    assert assessment["budget"]["invoice_confirmed"] is False
+    assert assessment["budget"]["estimated_usd_from_usage"] == "0.0056"
+
+
+def test_direct_usage_missing_tokens_is_inconclusive_and_estimate_over_cap_fails():
+    from x_monitor.rare_type_quality_gate import complete_assessment
+
+    base = {
+        "identity": _identity(),
+        "corpus": _corpus(),
+        "predictions": _predictions(),
+        "config": _cfg(),
+        "live_evidence": _live(),
+    }
+    missing = complete_assessment(
+        **base,
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": None,
+            "estimated_usd_from_usage": None,
+            "usage_complete": False,
+        },
+    )
+    assert missing["status"] == "inconclusive"
+    assert "usage_unknown" in missing["reasons"]
+    over = complete_assessment(
+        **base,
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": None,
+            "estimated_usd_from_usage": "0.251",
+            "usage_complete": True,
+        },
+    )
+    assert over["status"] == "fail"
+    assert "assessment_budget_exceeded" in over["reasons"]
+
+
+def test_legacy_confirmed_budget_schema_remains_supported():
+    from x_monitor.rare_type_quality_gate import complete_assessment
+
+    assessment = complete_assessment(
+        identity=_identity(),
+        corpus=_corpus(),
+        predictions=_predictions(),
+        config=_cfg(),
+        live_evidence=_live(),
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": "0.0056",
+            "usage_complete": True,
+        },
+    )
+    assert assessment["status"] == "pass"
+    assert assessment["budget"]["invoice_confirmed"] is True
+
+
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
