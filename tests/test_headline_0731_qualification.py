@@ -93,3 +93,34 @@ def test_absent_operational_evidence_cannot_be_ready(evidence):
     result = assess(*evidence[:3], {})
     assert result["decision"] == "improve_0731"
     assert set(result["unmet_success_criteria"]) == {"SC4", "SC5", "SC6", "SC7", "SC8", "SC9"}
+
+
+def test_minor_control_wording_does_not_block_a_supported_final_result(evidence):
+    control = evidence[1][0]["review"]["controls"][0]
+    control.update(fully_supported=False, minor_issues=["Awkward but intelligible idiom."])
+    result = assess(*evidence)
+    assert result["decision"] == "ready_0731"
+    assert result["control_reviews"][0]["minor_issues"]
+
+
+def test_critic_recovery_is_reported_separately_from_raw_failure():
+    from scripts.headline_0731_qualification import mechanical_results
+
+    calls = [
+        {"stage": "editor", "batch_key": "1d:001", "mechanical": {"valid": False}},
+        {"stage": "critic", "batch_key": "1d:001", "mechanical": {"valid": True}},
+        {"stage": "editor", "batch_key": "7d:001", "mechanical": {"valid": False}},
+        {"stage": "critic", "batch_key": "7d:001", "mechanical": {"valid": False}},
+    ]
+    raw, recovered, unresolved = mechanical_results(calls)
+    assert len(raw) == 3
+    assert recovered == ["editor:1d:001"]
+    assert unresolved == ["editor:7d:001", "critic:7d:001"]
+
+
+def test_fixture_defect_is_inconclusive_and_is_not_a_model_critical_error(evidence):
+    evidence[1][0]["review"]["controls"][0]["fixture_defect"] = True
+    result = assess(*evidence)
+    assert result["decision"] == "improve_0731"
+    assert result["fixture_defects"]
+    assert result["critical_cases"] == []

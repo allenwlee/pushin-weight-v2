@@ -291,13 +291,20 @@ provider-specific request tuning.
   Review factual support, proportionality, why-first relevance, secondary
   usefulness, and translation equivalence. The initial standalone quality
   target is a mean of at least 4/5 on each dimension and zero critical factual
-  failures. Report all scores and reasons. A hold is acceptable only when the
+  failures in the **final reader-visible result**. Material errors change
+  identity, amount, direction, negation, attribution, event reality or decision-
+  relevant meaning. Awkward wording, harmless omissions and mild qualitative
+  scope overstatement lower the relevant score; they do not independently
+  block release. A materially misleading scope claim still blocks. Report all
+  scores and reasons. A hold is acceptable only when the
   source packet cannot support a substantive narrative; withholding supported
   narratives cannot manufacture a zero-error result. These absolute targets
   replace the former comparative gate and must be locked before output review.
-- SC3. The final validation run has zero unresolved mechanical-invalid results
-  after representation-only normalization. Report raw and normalized error
-  counts separately; normalization cannot supply model-written content.
+- SC3. The final validation run has zero unresolved mechanical-invalid final
+  results. An invalid editor draft recovered by its already-planned, valid
+  critic is a successful pipeline repair. Report raw, normalized, critic-
+  recovered and unresolved counts separately; code normalization cannot supply
+  model-written content. Do not add repair calls or retry entitlements.
 - SC4. One-day completion p95 is at most 12 minutes, seven-day completion p95 is
   at most 15 minutes, and arrival/drain utilization stays below 0.75 at
   concurrency three.
@@ -1175,3 +1182,19 @@ source-conflict audit before the verdict. Record disagreements with IDs from
 both passages; validate ID ownership and reject duplicate/invented support.
 Do not mistake these mechanical checks for semantic qualification. The reserved
 unseen set and independent review assignments are still sealed.
+
+### Owner-approved severity policy — 2026-09-24
+
+The owner paused broad iteration to distinguish material errors from minor
+wording and harness defects, then approved continuing with this distinction.
+`final-output-severity-v2` judges the final reader-visible result. Preserve the
+zero-material-error gate and five rubric means of at least 4/5; minor style,
+harmless omission and mild scope issues are deductions rather than standalone
+release blockers. A normal critic repair counts as a successful pipeline
+repair. Keep raw intermediate failures in the report. Fixture defects are
+reported separately and make the affected control inconclusive; correct that
+fixture and retest its control rather than retuning the generator for it.
+Earlier results remain unchanged. The first fresh qualification's assignments
+remain fixed; archive the earlier rubric and lock this owner-selected rubric
+before generating or reviewing any fresh output. Return to prompt tuning only
+for material failures or an unmet aggregate quality threshold.

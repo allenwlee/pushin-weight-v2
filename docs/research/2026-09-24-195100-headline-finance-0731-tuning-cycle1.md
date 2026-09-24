@@ -256,3 +256,24 @@ The standalone readiness reporter additionally has 13 passing gate tests for
 critical errors, missing/duplicate reviews, false holds, route/format failures,
 actual billing, latency, memory and missing operational evidence. It cannot
 emit `ready_0731` before every success criterion has supporting evidence.
+
+### Owner-selected final-output measurement policy
+
+After ten completed diagnostic rounds (200 transports; $0.20834766 billed), the
+owner requested a pause and approved judging final output by severity. Cycle 4
+round 2 was stopped at 2026-09-24 12:19:58 UTC with 18 completed-call receipts
+logged and no final artifact; an accepted in-flight request may still be billed.
+It is an interrupted run, neither a pass nor a failure. Its call entitlements
+are not replayed. On resume, the generator remained at writer finance-v7 and
+critic source-audit-v5, and the fresh source set entered first validation.
+
+`final-output-severity-v2` keeps material factual failures as release blockers
+and the five mean-quality thresholds at 4/5. Minor wording, harmless omissions
+and mild qualitative scope issues are deductions. An existing critic's repair
+of an invalid editor draft is measured as recovered, while raw failures remain
+visible. Invalid final responses remain blockers. Fixture defects are separate
+inconclusive controls and require fixture correction, not automatic generator
+retuning. Sixteen readiness-policy tests pass. The old rubric and manifest were
+archived before the new rubric was frozen; the 24 case assignments are unchanged.
+New rubric SHA-256:
+`b3e1304baba85be313f12b976625d51bbf0d9eb3a01ae31203dcd69508024be6`.

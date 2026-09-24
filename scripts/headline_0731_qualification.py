@@ -18,6 +18,22 @@ FIELDS = (
     "secondary_usefulness", "translation_equivalence",
 )
 MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
+MEASUREMENT_POLICY = "final-output-severity-v2"
+
+
+def mechanical_results(calls):
+    """An invalid draft recovered by the existing critic is not a final failure."""
+    valid_repairs = {c["batch_key"] for c in calls
+                     if c["stage"] == "critic" and c["mechanical"]["valid"] is True}
+    raw, recovered, unresolved = [], [], []
+    for call in calls:
+        if call["mechanical"]["valid"] is True:
+            continue
+        identity = f"{call['stage']}:{call['batch_key']}"
+        raw.append(identity)
+        target = recovered if call["stage"] == "editor" and call["batch_key"] in valid_repairs else unresolved
+        target.append(identity)
+    return raw, recovered, unresolved
 
 
 def sha256(path: Path) -> str:
@@ -56,9 +72,12 @@ def assess(artifact, reviews, manifest, operations):
                 for r in reviews))
     means = {field: sum(c[field] for c in cases) / len(cases) if cases else 0 for field in FIELDS}
     control_ids = [c["control"] for c in calibration["controls"]]
+    # Imperfect wording is reported without turning every repaired control into
+    # a release blocker. Fixture defects make that control inconclusive, never
+    # a model failure or an automatically excluded success.
     controls_valid = (Counter(c["control_id"] for c in controls) == Counter(control_ids)
-        and all(c["fully_supported"] is True and c["unsupported_claim_survives"] is False
-                and c["new_material_error"] is False for c in controls))
+        and all(c["unsupported_claim_survives"] is False and c["new_material_error"] is False
+                and c.get("fixture_defect", False) is False for c in controls))
     held = {(o["window_days"], o["brand_key"]) for o in outcomes if o["outcome"] == "hold"}
     false_holds = [c["case_id"] for c in cases
                   if (expected_cases[c["case_id"]]["window_days"], expected_cases[c["case_id"]]["brand_key"]) in held
@@ -66,9 +85,8 @@ def assess(artifact, reviews, manifest, operations):
     gates["SC2"] = bool(assignments_valid and controls_valid and not false_holds
                         and not any(c["critical_failure"] for c in cases)
                         and all(mean >= 4 for mean in means.values()))
-    invalid = [f"{c['stage']}:{c['batch_key']}" for c in calls if c["mechanical"]["valid"] is not True]
-    # This report never invents a normalization or forgives an invalid response.
-    gates["SC3"] = not invalid
+    invalid, recovered, unresolved = mechanical_results(calls)
+    gates["SC3"] = not unresolved
     costs = defaultdict(Decimal)
     tokens = defaultdict(lambda: [0, 0, 0])
     prices_complete = True
@@ -113,10 +131,15 @@ def assess(artifact, reviews, manifest, operations):
         gates[criterion] = operational_match and operations.get(criterion, {}).get("passed") is True
     return {
         "decision": "ready_0731" if all(gates.values()) else "improve_0731",
+        "measurement_policy": MEASUREMENT_POLICY,
         "gates": gates, "unmet_success_criteria": [k for k, v in gates.items() if not v],
         "rubric_means": means, "critical_cases": [c for c in cases if c["critical_failure"]],
         "withheld_supported_cases": false_holds, "control_reviews": controls,
         "raw_mechanical_invalid": invalid, "normalized_mechanical_invalid": invalid,
+        "critic_recovered_drafts": recovered, "final_mechanical_invalid": unresolved,
+        "minor_case_issues": [{"case_id": c["case_id"], "issues": c["minor_issues"]}
+                              for c in cases if c.get("minor_issues")],
+        "fixture_defects": [c for c in controls if c.get("fixture_defect")],
         "representation_normalization": "none",
         "provider_billed_cost_by_window_usd": {k: str(v) for k, v in costs.items()},
         "input_output_calls_by_window": dict(tokens),
