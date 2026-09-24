@@ -1,0 +1,216 @@
+{
+  "reviewer": "R1",
+  "model": "openai/gpt-5.6-sol",
+  "usage": {
+    "prompt_tokens": 63250,
+    "completion_tokens": 2777,
+    "total_tokens": 66027,
+    "cost": 0.1858935,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 63247,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.1858935,
+      "upstream_inference_prompt_cost": 0.1581235,
+      "upstream_inference_completions_cost": 0.02777
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 1195,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "review": {
+    "reviewer": "blind_headline_reviewer",
+    "cases": [
+      {
+        "case_id": "H01",
+        "A": {
+          "factual_support": 2,
+          "proportionality": 2,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 3,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "The attributed post supports StepFun being named in a claimed US cyber-agency list, but the headline turns that single post into broader or rising security concerns. The secondary also states that volume fell from the prior period even though period comparison is explicitly disallowed because of unresolved backlog."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "A contains a prohibited period comparison and overstates the security implication; the hold is safer."
+      },
+      {
+        "case_id": "H02",
+        "A": {
+          "factual_support": 5,
+          "proportionality": 4,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "The headline and secondary accurately summarize the official technical-report post, the clarification that U1.5 itself was not open-sourced, the U1.5-Lite invitation, and the presence of several link-only posts. It appropriately cautions against inferring a broad conversation shift."
+        },
+        "B": {
+          "factual_support": 2,
+          "proportionality": 2,
+          "why_first_relevance": 3,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": true,
+          "concise_reason": "The release and technical details are supported, but saying it dominated official posts is not established by one substantive post plus opaque links. It also reports an increase from 2 to 10 despite comparisons being explicitly disallowed, and speculates that link-only posts likely point to the same materials."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "A is well supported, informative, and cautious, while B makes an impermissible period comparison and overstates dominance."
+      },
+      {
+        "case_id": "H03",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "B": {
+          "factual_support": 4,
+          "proportionality": 3,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "The Qwen-Image-2.1 release, benchmark score, downloadable weights, Zhenwu V900 mention, 5–10T model reference, capacity target, bootstrapping discussion, and Omarchy sponsorship are all present in supplied posts. Framing these few posts as highlights of a 1,201-post corpus is somewhat underqualified, and 'plans' is slightly stronger than the source's 'flagged.'"
+        },
+        "preferred_arm": "B",
+        "preference_reason": "B provides a substantially supported event-led narrative, whereas A is unavailable."
+      },
+      {
+        "case_id": "H04",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "preferred_arm": "tie",
+        "preference_reason": "Both arms are held and provide no narrative."
+      },
+      {
+        "case_id": "H05",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "B": {
+          "factual_support": 2,
+          "proportionality": 2,
+          "why_first_relevance": 2,
+          "secondary_usefulness": 3,
+          "translation_equivalence": 5,
+          "critical_failure": true,
+          "concise_reason": "The Seedance 2.5 Draft Mode details and savings figures are supported by BytePlusGlobal posts, but presenting them as a Doubao headline creates cross-brand leakage because the evidence does not connect this product promotion to Doubao. The secondary also uses prior-period increases even though comparison is explicitly disallowed."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "B combines cross-brand framing with prohibited period comparisons, so the hold is safer."
+      },
+      {
+        "case_id": "H06",
+        "A": {
+          "factual_support": 4,
+          "proportionality": 4,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 4,
+          "critical_failure": false,
+          "concise_reason": "Multiple supplied posts support MiMo-V2.5 appearing in free-access and discounted platform promotions. The secondary properly attributes the extraordinary traffic and user figures to one promotional post and labels them unverified. Chinese wording is slightly more direct about MiMo itself offering the promotion than the English and Japanese versions."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "A offers a supported and appropriately caveated account of the promotional discussion; B is unavailable."
+      },
+      {
+        "case_id": "H07",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "B": {
+          "factual_support": 3,
+          "proportionality": 2,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "One supplied user post supports the speed, cost, and value praise, and another supports the KV-cache architecture summary. However, the output generalizes a single favorable comparison into plural 'users' and broader discussion despite a 9,866-post corpus, so representativeness is overstated."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "Despite overgeneralizing from sparse examples, B's concrete claims are traceable to supplied posts and are more useful than a hold."
+      },
+      {
+        "case_id": "H08",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 2,
+          "translation_equivalence": 5,
+          "critical_failure": true,
+          "concise_reason": "The Turkish posts shown are unrelated items captured through the common Turkish suffix “-yi”; none establishes discussion of the 01.AI Yi brand. Calling them 01.AI Yi discussion is therefore cross-brand/query leakage. The claim that only 3 of 10 posts completed classification also contradicts the dossier, which says classification succeeded for all 10; three is only the coverage denominator for selected classification families."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held output has no narrative to evaluate."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "A misidentifies unrelated Turkish-language material as Yi discussion and misstates classification coverage, so the hold is preferable."
+      }
+    ]
+  }
+}
