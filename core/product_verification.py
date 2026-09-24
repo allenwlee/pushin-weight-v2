@@ -34,7 +34,7 @@ from core.models import (
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
 )
-from x_monitor.hf_client import HF_API_BASE, _next_cursor
+from x_monitor.hf_client import HF_API_BASE
 
 POLICY_VERSION = "product-x-hf-v2"
 logger = logging.getLogger(__name__)
@@ -55,16 +55,6 @@ class LegitimacyDecision:
 class HFMetadataResult:
     outcome: str
     payload: dict[str, Any] | None
-
-
-@dataclass(frozen=True)
-class CatalogImportResult:
-    imported: int
-    updated: int
-    requests: int
-    complete: bool
-    stop_reason: str
-    next_cursor: str | None = None
 
 
 @dataclass(frozen=True)
@@ -649,141 +639,6 @@ def attach_verified_product(
         },
     )
     return product
-
-
-def import_known_org_catalog(
-    *,
-    brand: Brand,
-    hf_org: HFOrg,
-    client: httpx.Client,
-    max_requests: int,
-    max_models: int,
-    cursor: str | None = None,
-) -> CatalogImportResult:
-    """Bounded, resumable catalog enumeration; never fetches model files."""
-    if not hf_org.confirmed:
-        raise ValueError("catalog import requires a confirmed HF organization")
-    if not BrandCompany.objects.filter(
-        brand=brand, company_id=hf_org.company_id
-    ).exists():
-        raise ValueError(
-            "catalog import Brand does not own the confirmed HF organization"
-        )
-    if max_requests < 1 or max_models < 1:
-        return CatalogImportResult(0, 0, 0, False, "budget_exhausted")
-    cursor = cursor.strip() if cursor else None
-    seen_cursors: set[str] = {cursor} if cursor else set()
-    imported = updated = requests = 0
-    while requests < max_requests and imported + updated < max_models:
-        params: dict[str, Any] = {
-            "author": hf_org.namespace,
-            "limit": min(100, max_models - imported - updated),
-            "full": "true",
-            "sort": "lastModified",
-            "direction": -1,
-        }
-        if cursor:
-            params["cursor"] = cursor
-        try:
-            response = client.get(
-                f"{HF_API_BASE}/models",
-                params=params,
-                headers=_PUBLIC_HEADERS,
-                timeout=2.0,
-            )
-        except httpx.HTTPError:
-            return CatalogImportResult(
-                imported, updated, requests + 1, False, "request_error", cursor
-            )
-        requests += 1
-        if response.status_code != 200:
-            return CatalogImportResult(
-                imported,
-                updated,
-                requests,
-                False,
-                f"http_{response.status_code}",
-                cursor,
-            )
-        try:
-            payload = response.json()
-        except ValueError:
-            return CatalogImportResult(
-                imported, updated, requests, False, "malformed", cursor
-            )
-        if not isinstance(payload, list):
-            return CatalogImportResult(
-                imported, updated, requests, False, "malformed", cursor
-            )
-        remaining = max_models - imported - updated
-        if len(payload) > remaining:
-            return CatalogImportResult(
-                imported, updated, requests, False, "provider_exceeded_limit", cursor
-            )
-        validated: list[tuple[str, dict[str, Any]]] = []
-        for item in payload:
-            if not isinstance(item, dict):
-                return CatalogImportResult(
-                    imported, updated, requests, False, "malformed", cursor
-                )
-            repo_id = str(item.get("id") or item.get("modelId") or "")
-            if (
-                not _REPO_ID.fullmatch(repo_id)
-                or repo_id.split("/", 1)[0].casefold() != hf_org.namespace.casefold()
-            ):
-                return CatalogImportResult(
-                    imported, updated, requests, False, "owner_mismatch", cursor
-                )
-            validated.append((repo_id, item))
-        next_cursor = _next_cursor(response.headers.get("link", ""))
-        if next_cursor and next_cursor in seen_cursors:
-            return CatalogImportResult(
-                imported, updated, requests, False, "no_progress", cursor
-            )
-        for repo_id, item in validated:
-            with transaction.atomic():
-                defaults = _product_defaults(item, brand=brand, hf_org=hf_org)
-                product, created = Product.objects.get_or_create(
-                    repo_id=repo_id, defaults=defaults
-                )
-                product = Product.objects.select_for_update().get(pk=product.pk)
-                if product and (
-                    product.brand_id not in (None, brand.pk)
-                    or product.hf_org_id not in (None, hf_org.pk)
-                ):
-                    return CatalogImportResult(
-                        imported, updated, requests, False, "owner_conflict", cursor
-                    )
-                if not created:
-                    defaults["raw"] = {
-                        **(product.raw if isinstance(product.raw, dict) else {}),
-                        **item,
-                    }
-                    for field, value in defaults.items():
-                        setattr(product, field, value)
-                    product.save()
-            imported += int(created)
-            updated += int(not created)
-            if imported + updated >= max_models:
-                return CatalogImportResult(
-                    imported,
-                    updated,
-                    requests,
-                    not bool(next_cursor),
-                    "exhausted" if not next_cursor else "model_cap",
-                    next_cursor,
-                )
-        if not next_cursor:
-            return CatalogImportResult(imported, updated, requests, True, "exhausted")
-        if not payload:
-            return CatalogImportResult(
-                imported, updated, requests, False, "no_progress", cursor
-            )
-        seen_cursors.add(next_cursor)
-        cursor = next_cursor
-    return CatalogImportResult(
-        imported, updated, requests, False, "request_cap", cursor
-    )
 
 
 def proposal_key(

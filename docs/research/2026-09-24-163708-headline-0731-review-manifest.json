@@ -1,0 +1,175 @@
+{
+  "assignment_seed": 20260924,
+  "cases": [
+    {
+      "A_is_candidate": true,
+      "brand_key": "stepfun",
+      "case_id": "H01",
+      "reviewer": "R1",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "sensenova",
+      "case_id": "H02",
+      "reviewer": "R1",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "qwen",
+      "case_id": "H03",
+      "reviewer": "R1",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "glm",
+      "case_id": "H04",
+      "reviewer": "R1",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "doubao",
+      "case_id": "H05",
+      "reviewer": "R1",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "mimo",
+      "case_id": "H06",
+      "reviewer": "R1",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "deepseek",
+      "case_id": "H07",
+      "reviewer": "R1",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "yi",
+      "case_id": "H08",
+      "reviewer": "R1",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "seed",
+      "case_id": "H09",
+      "reviewer": "R2",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "glm",
+      "case_id": "H10",
+      "reviewer": "R2",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "upstage",
+      "case_id": "H11",
+      "reviewer": "R2",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "nemo_megatron",
+      "case_id": "H12",
+      "reviewer": "R2",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "sensechat",
+      "case_id": "H13",
+      "reviewer": "R2",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "mistral",
+      "case_id": "H14",
+      "reviewer": "R2",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "moonshot_kimi",
+      "case_id": "H15",
+      "reviewer": "R2",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "inclusionai",
+      "case_id": "H16",
+      "reviewer": "R2",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "minimax",
+      "case_id": "H17",
+      "reviewer": "R3",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "kuaishou",
+      "case_id": "H18",
+      "reviewer": "R3",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "yi",
+      "case_id": "H19",
+      "reviewer": "R3",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "mistral",
+      "case_id": "H20",
+      "reviewer": "R3",
+      "window_days": 1
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "sensechat",
+      "case_id": "H21",
+      "reviewer": "R3",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": false,
+      "brand_key": "qwen",
+      "case_id": "H22",
+      "reviewer": "R3",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "kuaishou",
+      "case_id": "H23",
+      "reviewer": "R3",
+      "window_days": 7
+    },
+    {
+      "A_is_candidate": true,
+      "brand_key": "dots",
+      "case_id": "H24",
+      "reviewer": "R3",
+      "window_days": 1
+    }
+  ],
+  "rubric_sha256": "b5dedd9e56e949aa0df5c99ee00ac6e692c088dd49b64db2f18f4fcaeb6263c5",
+  "source_sha256": "7a808d08967e3d1b84e5c29add9416dabcd6000f368e4d9a12b76c881774226c"
+}

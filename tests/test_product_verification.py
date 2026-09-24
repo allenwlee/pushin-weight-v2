@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import json
 from datetime import timedelta
-from io import StringIO
 
 import httpx
 import pytest
-from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.models import (
@@ -34,7 +30,6 @@ from core.product_verification import (
     evaluate_known_publisher,
     exact_model_metadata,
     hf_org_socials,
-    import_known_org_catalog,
     source_repo_evidence,
 )
 
@@ -266,200 +261,6 @@ def test_hf_socials_requires_exact_org_shape_and_never_follows_payload_urls():
     assert calls[0].url.path == "/api/organizations/MiniMaxAI/socials"
 
 
-def test_catalog_import_is_bounded_reports_truncation_and_never_downloads_files():
-    brand, org, _account, _post = _publisher()
-    calls = []
-
-    def respond(request):
-        calls.append(request)
-        return httpx.Response(
-            200,
-            json=[{"id": "MiniMaxAI/M1", "author": "MiniMaxAI"}],
-            headers={
-                "link": '<https://huggingface.co/api/models?cursor=next>; rel="next"'
-            },
-        )
-
-    result = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=_client(respond),
-        max_requests=1,
-        max_models=10,
-    )
-    assert (result.imported, result.complete, result.stop_reason) == (
-        1,
-        False,
-        "request_cap",
-    )
-    assert len(calls) == 1
-    assert calls[0].url.path == "/api/models"
-
-
-def test_catalog_keeps_quantized_variant_as_separate_product_and_replay_updates():
-    brand, org, _account, _post = _publisher()
-    payload = [
-        {"id": "MiniMaxAI/M2", "author": "MiniMaxAI", "sha": "a"},
-        {"id": "MiniMaxAI/M2-GGUF", "author": "MiniMaxAI", "sha": "b"},
-    ]
-    client = _client(lambda _request: httpx.Response(200, json=payload))
-    first = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=client,
-        max_requests=1,
-        max_models=10,
-    )
-    second = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=client,
-        max_requests=1,
-        max_models=10,
-    )
-    assert (first.imported, second.updated, Product.objects.count()) == (2, 2, 2)
-    assert set(Product.objects.values_list("type", flat=True)) == {None}
-
-
-def test_catalog_refresh_preserves_metadata_omitted_from_listing():
-    brand, org, _account, _post = _publisher()
-    Product.objects.create(
-        repo_id="MiniMaxAI/M2",
-        brand=brand,
-        hf_org=org,
-        siblings=[{"rfilename": "config.json"}],
-        raw={"detail_only": "kept", "sha": "old"},
-    )
-    result = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=_client(
-            lambda _request: httpx.Response(
-                200,
-                json=[
-                    {
-                        "id": "MiniMaxAI/M2",
-                        "author": "MiniMaxAI",
-                        "sha": "new",
-                    }
-                ],
-            )
-        ),
-        max_requests=1,
-        max_models=10,
-    )
-    product = Product.objects.get()
-    assert (result.updated, product.sha) == (1, "new")
-    assert product.siblings == [{"rfilename": "config.json"}]
-    assert product.raw == {
-        "detail_only": "kept",
-        "sha": "new",
-        "id": "MiniMaxAI/M2",
-        "author": "MiniMaxAI",
-    }
-
-
-def test_catalog_resume_returns_exact_next_cursor():
-    brand, org, _account, _post = _publisher()
-    seen = []
-
-    def respond(request):
-        seen.append(request.url.params.get("cursor"))
-        return httpx.Response(
-            200,
-            json=[{"id": "MiniMaxAI/M3", "author": "MiniMaxAI"}],
-            headers={
-                "link": '<https://huggingface.co/api/models?cursor=NEXT>; rel="next"'
-            },
-        )
-
-    result = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=_client(respond),
-        max_requests=1,
-        max_models=10,
-        cursor="START",
-    )
-    assert seen == ["START"]
-    assert (result.complete, result.stop_reason, result.next_cursor) == (
-        False,
-        "request_cap",
-        "NEXT",
-    )
-
-
-def test_catalog_rejects_wrong_brand_owner_before_network():
-    _brand, org, _account, _post = _publisher()
-    wrong_brand = Brand.objects.create(nickname="wrong")
-    calls = []
-    with pytest.raises(ValueError, match="does not own"):
-        import_known_org_catalog(
-            brand=wrong_brand,
-            hf_org=org,
-            client=_client(lambda request: calls.append(request)),
-            max_requests=1,
-            max_models=1,
-        )
-    assert calls == []
-
-
-def test_catalog_command_preview_is_provider_free(monkeypatch):
-    brand, org, _account, _post = _publisher()
-    monkeypatch.setattr(
-        "monitor.management.commands.import_hf_product_catalog.httpx.Client",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("preview must not construct an HTTP client")
-        ),
-    )
-    stdout = StringIO()
-    call_command(
-        "import_hf_product_catalog",
-        "--brand",
-        brand.pk,
-        "--confirmed-namespace",
-        org.pk,
-        "--max-requests",
-        "1",
-        "--max-models",
-        "5",
-        stdout=stdout,
-    )
-    payload = json.loads(stdout.getvalue())
-    assert payload == {
-        "brand": "minimax",
-        "confirmed_namespace": "MiniMaxAI",
-        "cursor": None,
-        "max_models": 5,
-        "max_requests": 1,
-        "mode": "preview",
-    }
-
-
-def test_catalog_command_rejects_wrong_brand_before_network(monkeypatch):
-    _brand, org, _account, _post = _publisher()
-    wrong_brand = Brand.objects.create(nickname="wrong")
-    monkeypatch.setattr(
-        "monitor.management.commands.import_hf_product_catalog.httpx.Client",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("invalid ownership must fail before HTTP")
-        ),
-    )
-    with pytest.raises(CommandError, match="does not own"):
-        call_command(
-            "import_hf_product_catalog",
-            "--brand",
-            wrong_brand.pk,
-            "--confirmed-namespace",
-            org.pk,
-            "--max-requests",
-            "1",
-            "--max-models",
-            "1",
-            "--commit",
-        )
-
-
 def test_existing_product_owner_conflict_fails_without_reassignment():
     brand, _org, account, post = _publisher()
     other = Brand.objects.create(nickname="other")
@@ -475,26 +276,6 @@ def test_existing_product_owner_conflict_fails_without_reassignment():
             evidence={},
             product_type="llm-model",
         )
-    product.refresh_from_db()
-    assert product.brand_id == "other"
-
-
-def test_catalog_owner_conflict_stops_without_reassignment():
-    brand, org, _account, _post = _publisher()
-    other = Brand.objects.create(nickname="other")
-    product = Product.objects.create(repo_id="MiniMaxAI/M2", brand=other)
-    result = import_known_org_catalog(
-        brand=brand,
-        hf_org=org,
-        client=_client(
-            lambda _request: httpx.Response(
-                200, json=[{"id": "MiniMaxAI/M2", "author": "MiniMaxAI"}]
-            )
-        ),
-        max_requests=1,
-        max_models=10,
-    )
-    assert result.stop_reason == "owner_conflict"
     product.refresh_from_db()
     assert product.brand_id == "other"
 

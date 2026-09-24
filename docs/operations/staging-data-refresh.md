@@ -15,7 +15,9 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below describes the candidate schema through migration 0055.
+The allowlist below describes the rare-type schema through migration 0055 and
+the HF catalog schema from 0045_hf_catalog_observations, joined by migration
+0056_merge_hf_catalog_rare_types.
 Relations introduced after the production migration boundary at 0027 remain
 optional on the source so a staging refresh can accept an older production
 snapshot and create those relations during the shadow migration. Refresh
@@ -97,6 +99,8 @@ TO staging_refresh_reader;
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
 GRANT MAINTAIN ON
+  hf_model_catalog_runs, hf_model_catalog_namespace_runs,
+  hf_model_catalog_observations,
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
@@ -118,6 +122,7 @@ GRANT MAINTAIN ON
 TO staging_refresh_reader;
 
 GRANT SELECT ON
+  hf_model_catalog_namespace_runs_id_seq, hf_model_catalog_observations_id_seq,
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
@@ -367,6 +372,9 @@ UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
 UNION ALL SELECT 'brand_trend_narrative_texts', count(*) FROM brand_trend_narrative_texts
 UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
 UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
+UNION ALL SELECT 'hf_model_catalog_runs', count(*) FROM hf_model_catalog_runs
+UNION ALL SELECT 'hf_model_catalog_namespace_runs', count(*) FROM hf_model_catalog_namespace_runs
+UNION ALL SELECT 'hf_model_catalog_observations', count(*) FROM hf_model_catalog_observations
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
@@ -433,8 +441,9 @@ find /tmp "$PWD/.staging-refresh" -maxdepth 1 -type f \
 
 Record the exact counts and latest timestamp next to the receipt. The census
 must include the copied classification-judgment and event-evidence tables
-introduced through migration 0043 plus the rare-type domain relations through
-0055. All 41 scrub counts must be zero; both
+introduced through migration 0043, the rare-type domain relations through
+0055, and the HF catalog relations in 0045_hf_catalog_observations. Every
+scrub count listed above must be zero; both
 invariant queries must return no rows; the site must be
 `pushinweight-staging-web.onrender.com` / `Pushin Weight Staging`; the
 receipt-named recovery must have `datallowconn = f`; and the dump search must
@@ -510,3 +519,8 @@ ALTER ROLE staging_refresh_reader NOLOGIN;
 
 Do not revoke or rotate the production application credential as part of this
 procedure.
+
+HF catalog refresh policy: Products (including rich metadata) are copied. The
+three `hf_model_catalog_*` ledger tables are excluded, optional on older sources,
+and scrubbed on staging. Copied metadata references retain their original run
+UUID and do not imply the original observations exist in staging.

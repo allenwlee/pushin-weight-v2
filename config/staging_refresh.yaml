@@ -116,6 +116,9 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    - hf_model_catalog_observations
+    - hf_model_catalog_namespace_runs
+    - hf_model_catalog_runs
     - _applied_config_snapshot
     - account_emailaddress
     - account_emailconfirmation
@@ -158,6 +161,9 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - hf_model_catalog_observations
+    - hf_model_catalog_namespace_runs
+    - hf_model_catalog_runs
     - account_profile_snapshots
     - audience_topic_concepts
     - audience_topic_labels
@@ -219,6 +225,8 @@ relations:
   views:
     - trend_narrative_versions
   sequences:
+    - hf_model_catalog_namespace_runs_id_seq
+    - hf_model_catalog_observations_id_seq
     - account_emailaddress_id_seq
     - account_emailconfirmation_id_seq
     - account_profile_snapshots_id_seq
@@ -283,6 +291,8 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - hf_model_catalog_namespace_runs_id_seq
+    - hf_model_catalog_observations_id_seq
     - account_profile_snapshots_id_seq
     - brand_discovery_candidates_id_seq
     - brand_discovery_candidate_token_evidence_id_seq
@@ -325,6 +335,9 @@ relations:
 
 scrub:
   truncate_tables:
+    - hf_model_catalog_observations
+    - hf_model_catalog_namespace_runs
+    - hf_model_catalog_runs
     - _applied_config_snapshot
     - account_emailaddress
     - account_emailconfirmation
