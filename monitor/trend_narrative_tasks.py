@@ -575,13 +575,25 @@ def execute_per_brand_stage(
             if not exc.transport_completed
             else fail_trend_narrative_provider_call
         )
-        marker(
+        recorded = marker(
             claimed.pk,
             owner=owner,
             fence=claimed.claim_fence,
             error_code=exc.code,
             now=timezone.now(),
         )
+        if recorded and exc.provider_usage is not None:
+            usage = exc.provider_usage
+            TrendNarrativeProviderCall.objects.filter(
+                pk=claimed.pk,
+                claim_owner=owner,
+                claim_fence=claimed.claim_fence,
+                state=TrendNarrativeProviderCall.State.FAILED,
+            ).update(
+                response_payload={"provider_usage": usage},
+                input_tokens=int(usage.get("input_tokens") or 0),
+                output_tokens=int(usage.get("output_tokens") or 0),
+            )
         _reconcile_run(
             claimed.run,
             config=config,

@@ -399,6 +399,8 @@ def test_0731_critic_pairs_each_valid_draft_with_its_own_dossier():
     assert critic["review_bundles"][0]["dossier"]["facts"][0]["fact_id"] == "alpha:1"
     assert critic["review_bundles"][1]["draft"]["headline_en"] == "Beta"
     assert "editor_response_raw" not in critic
+    assert critic["analysis_packet"]["manifest_brand_keys"] == ["alpha", "beta"]
+    assert "analysis_packet" not in request["messages"][0]["content"]
     assert "\\\"brands\\\"" not in request["messages"][0]["content"]
 
     with pytest.raises(HeadlineGenerationError, match="editor_response_manifest_mismatch"):

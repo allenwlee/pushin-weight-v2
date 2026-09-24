@@ -80,6 +80,101 @@ _PROFILES: dict[str, dict[str, Any]] = {
 }
 
 
+def _closed_object(properties: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(properties),
+        "additionalProperties": False,
+    }
+
+
+_REF_SCHEMA = _closed_object({
+    "kind": {"type": "string", "enum": ["fact", "evidence", "corpus_signal"]},
+    "id": {"type": "string"},
+})
+_PROPOSITION_SCHEMA = _closed_object({
+    "proposition_id": {"type": "string"},
+    "output_section": {"type": "string", "enum": ["headline", "secondary"]},
+    "claim_en": {"type": "string"},
+    "claim_zh_cn": {"type": "string"},
+    "claim_ja": {"type": "string"},
+    "claim_type": {"type": "string", "enum": ["content_summary", "event", "mix", "quantity", "quote", "sentiment"]},
+    "fact_ids": {"type": "array", "items": {"type": "string"}},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+})
+_EVENT_SCHEMA = _closed_object({
+    "event_id": {"type": "string"},
+    "label_en": {"type": "string"},
+    "label_zh_cn": {"type": "string"},
+    "label_ja": {"type": "string"},
+    "occurred_at": {"type": ["string", "null"]},
+    "support_kind": {"type": "string", "enum": ["first_party", "independent_discussion", "first_party_plus_discussion"]},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "proposition_ids": {"type": "array", "items": {"type": "string"}},
+})
+_NARRATIVE_SCHEMA = _closed_object({
+    "brand_key": {"type": "string"},
+    "headline_en": {"type": "string"},
+    "headline_zh_cn": {"type": "string"},
+    "headline_ja": {"type": "string"},
+    "secondary_en": {"type": "string"},
+    "secondary_zh_cn": {"type": "string"},
+    "secondary_ja": {"type": "string"},
+    "narrative_kind": {"type": "string", "enum": ["event_led", "content_shift", "mix_shift", "quiet_context"]},
+    "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+    "headline_proposition_ids": {"type": "array", "items": {"type": "string"}},
+    "secondary_proposition_ids": {"type": "array", "items": {"type": "string"}},
+    "propositions": {"type": "array", "items": _PROPOSITION_SCHEMA},
+    "events": {"type": "array", "items": _EVENT_SCHEMA},
+})
+_HEADLINE_SCHEMAS = {
+    "rank": _closed_object({
+        "rank_response_schema_version": {"type": "integer", "enum": [1]},
+        "packet_hash": {"type": "string"},
+        "batch_key": {"type": "string"},
+        "ordered_brands": {"type": "array", "items": _closed_object({
+            "brand_key": {"type": "string"},
+            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "reason_refs": {"type": "array", "items": _REF_SCHEMA},
+        })},
+    }),
+    "editor": _closed_object({
+        "editor_response_schema_version": {"type": "integer", "enum": [2]},
+        "packet_hash": {"type": "string"},
+        "batch_key": {"type": "string"},
+        "brands": {"type": "array", "items": _NARRATIVE_SCHEMA},
+    }),
+    "critic": _closed_object({
+        "critic_response_schema_version": {"type": "integer", "enum": [2]},
+        "packet_hash": {"type": "string"},
+        "batch_key": {"type": "string"},
+        "decisions": {"type": "array", "items": _closed_object({
+            "brand_key": {"type": "string"},
+            "decision": {"type": "string", "enum": ["approve", "repair", "hold"]},
+            "narrative": {"anyOf": [_NARRATIVE_SCHEMA, {"type": "null"}]},
+            "hold_code": {"type": ["string", "null"]},
+        })},
+    }),
+}
+for _headline_stage, _headline_schema in _HEADLINE_SCHEMAS.items():
+    _PROFILES[f"headline_{_headline_stage}_v2"] = {
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "seed": 42,
+        "reasoning_effort": "none",
+        "service_tier": "priority",
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": f"headline_{_headline_stage}_v2",
+                "strict": True,
+                "schema": _headline_schema,
+            },
+        },
+    }
+
+
 def _json_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, item in pairs:
@@ -209,9 +304,12 @@ class DeepInfraChatCompletionsClient:
         request_messages.extend(messages)
         request: dict[str, Any] = {"model": self.model, "max_tokens": max_tokens, "messages": request_messages}
         profile = _PROFILES.get(self.request_profile or "", {})
-        if self.request_profile and self.request_profile.startswith("headline_"):
-            if set(_ignored) - {"timeout"}:
-                raise DeepInfraPermanentError("deepinfra_headline_unsupported_option")
+        if (
+            self.request_profile
+            and self.request_profile.startswith("headline_")
+            and set(_ignored) - {"timeout"}
+        ):
+            raise DeepInfraPermanentError("deepinfra_headline_unsupported_option")
         for name, value in (("temperature", temperature), ("top_p", top_p), ("seed", seed), ("reasoning_effort", reasoning_effort)):
             selected = profile.get(name, value)
             if name in profile and value is not None and value != profile[name]:

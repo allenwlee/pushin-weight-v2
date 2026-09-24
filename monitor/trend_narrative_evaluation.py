@@ -9,13 +9,17 @@ after an explicit finite manifest passes preflight.
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from django.db import connection, transaction
@@ -176,10 +180,10 @@ class EvaluationManifest:
         return cls.from_mapping(value)
 
     def validate(self) -> None:
-        if self.model != REQUIRED_MODEL:
+        if self.model not in {REQUIRED_MODEL, "deepseek-ai/DeepSeek-V4-Flash-0731"}:
             raise EvaluationConfigurationError("evaluation_model_must_be_explicit")
-        if self.concurrency != 1:
-            raise EvaluationConfigurationError("evaluation_concurrency_must_be_one")
+        if not 1 <= self.concurrency <= 3:
+            raise EvaluationConfigurationError("evaluation_concurrency_out_of_bounds")
         decimals = (
             self.dollar_budget,
             self.input_dollars_per_million_tokens,
@@ -513,7 +517,9 @@ def evaluation_preflight(
             estimates.append(
                 _request_estimate("rank", rank_envelope, rank_request, manifest)
             )
-            batches = build_editor_batches(snapshot)
+            batches = build_editor_batches(
+                snapshot, max_brands_per_batch=config.per_brand_batch_size
+            )
             for batch in batches:
                 editor_envelope, editor_request = build_per_brand_editor_request(
                     batch, config
@@ -527,7 +533,7 @@ def evaluation_preflight(
                 critic_envelope, critic_request = build_per_brand_critic_request(
                     editor_envelope,
                     _canonical_json(editor),
-                    {"status": "valid", "error_codes": []},
+                    {"status": "valid", "error_codes": [], "response": editor},
                     config,
                 )
                 estimates.append(
@@ -575,7 +581,7 @@ def evaluation_preflight(
         "manifest": manifest.as_json(),
         "transport_enabled": False,
         "publication_enabled": False,
-        "concurrency": 1,
+        "concurrency": manifest.concurrency,
         "windows": window_reports,
         "planned_call_count": totals["calls"],
         "estimated_input_tokens_total": totals["input_tokens"],
@@ -636,9 +642,12 @@ def run_per_brand_evaluation(
     calls = []
     outcomes = []
     controls = []
+    window_timings = []
+    transport_started = time.monotonic()
     stop_reason = "completed"
     try:
         for snapshot in snapshots:
+            window_started = time.monotonic()
             eligible = [
                 row
                 for row in snapshot.get("dossiers", [])
@@ -674,7 +683,11 @@ def run_per_brand_evaluation(
                     "error_code": _safe_error_code(exc, "rank_response_invalid"),
                     "fallback": "canonical_brand_order",
                 }
-            batches = build_editor_batches(snapshot, brand_order=rank_order)
+            batches = build_editor_batches(
+                snapshot,
+                brand_order=rank_order,
+                max_brands_per_batch=config.per_brand_batch_size,
+            )
             eligible_keys = {str(row.get("brand_key")) for row in eligible}
             batched_keys = {
                 key for batch in batches for key in batch["manifest_brand_keys"]
@@ -684,72 +697,32 @@ def run_per_brand_evaluation(
                     "evaluation_brand_coverage_incomplete"
                 )
             outcomes.extend(_noneligible_outcomes(snapshot, manifest.reviewer))
-            for batch in batches:
-                editor_envelope, editor_request = build_per_brand_editor_request(
-                    batch, config
-                )
-                editor_call = _execute_call(
-                    "editor",
-                    editor_envelope,
-                    editor_request,
+
+            def evaluate(batch):
+                return _evaluate_batch(
+                    batch,
                     config,
                     ledger,
-                    calls,
+                    reviewer=manifest.reviewer,
                     api_key=api_key,
                     client_factory=client_factory,
                     cancellation_path=cancellation_path,
                 )
-                editor_parse = {"status": "invalid", "error_codes": []}
-                try:
-                    validate_per_brand_editor_response(
-                        _parse_json(editor_call["raw_response"]), editor_envelope
-                    )
-                    editor_parse["status"] = "valid"
-                    editor_call["mechanical"] = {"valid": True, "error_code": ""}
-                except (HeadlineGenerationError, ValueError, TypeError) as exc:
-                    code = _safe_error_code(exc, "editor_response_invalid")
-                    editor_parse["error_codes"] = [code]
-                    editor_call["mechanical"] = {"valid": False, "error_code": code}
-                critic_envelope, critic_request = build_per_brand_critic_request(
-                    editor_envelope,
-                    editor_call["raw_response"],
-                    editor_parse,
-                    config,
-                )
-                critic_call = _execute_call(
-                    "critic",
-                    critic_envelope,
-                    critic_request,
-                    config,
-                    ledger,
-                    calls,
-                    api_key=api_key,
-                    client_factory=client_factory,
-                    cancellation_path=cancellation_path,
-                )
-                try:
-                    critic = validate_per_brand_critic_response(
-                        _parse_json(critic_call["raw_response"]), critic_envelope
-                    )
-                    critic_call["mechanical"] = {"valid": True, "error_code": ""}
-                    outcomes.extend(
-                        _critic_outcomes(
-                            critic,
-                            batch,
-                            reviewer=manifest.reviewer,
-                            editor_valid=editor_parse["status"] == "valid",
-                        )
-                    )
-                except (HeadlineGenerationError, ValueError, TypeError) as exc:
-                    code = _safe_error_code(exc, "critic_response_invalid")
-                    critic_call["mechanical"] = {"valid": False, "error_code": code}
-                    outcomes.extend(
-                        _held_batch_outcomes(
-                            batch,
-                            reviewer=manifest.reviewer,
-                            hold_code=code,
-                        )
-                    )
+
+            if manifest.concurrency == 1:
+                batch_results = map(evaluate, batches)
+                for batch_calls, batch_outcomes in batch_results:
+                    calls.extend(batch_calls)
+                    outcomes.extend(batch_outcomes)
+            else:
+                with ThreadPoolExecutor(max_workers=manifest.concurrency) as pool:
+                    for batch_calls, batch_outcomes in pool.map(evaluate, batches):
+                        calls.extend(batch_calls)
+                        outcomes.extend(batch_outcomes)
+            window_timings.append({
+                "window_days": int(snapshot["window_days"]),
+                "wall_ms": round((time.monotonic() - window_started) * 1000),
+            })
         if include_calibration_controls:
             control_batch = _calibration_control_batch(snapshots)
             controls = _run_calibration_controls(
@@ -765,6 +738,9 @@ def run_per_brand_evaluation(
         stop_reason = "cancelled"
     except HeadlineGenerationError as exc:
         stop_reason = exc.code
+    wall_ms = round((time.monotonic() - transport_started) * 1000)
+    for sequence, call in enumerate(calls, start=1):
+        call["sequence"] = sequence
     unsupported_false_accepts = sum(control["false_accept"] for control in controls)
     supported_false_holds = sum(control["false_hold"] for control in controls)
     invalid_controls = sum(not control["mechanically_valid"] for control in controls)
@@ -779,12 +755,14 @@ def run_per_brand_evaluation(
         "transport_enabled": True,
         "publication_enabled": False,
         "execution": {
-            "concurrency": 1,
+            "concurrency": manifest.concurrency,
             "calls_used": ledger.calls,
             "accounted_input_tokens": ledger.input_tokens,
             "accounted_output_tokens": ledger.output_tokens,
             "accounted_cost_dollars": _decimal_json(ledger.cost),
             "stop_reason": stop_reason,
+            "wall_ms": wall_ms,
+            "window_timings": window_timings,
         },
         "snapshots": [deepcopy(dict(snapshot)) for snapshot in snapshots],
         "calls": calls,
@@ -828,6 +806,74 @@ def run_per_brand_evaluation(
             and complete_controls,
         },
     }
+
+
+def _evaluate_batch(
+    batch: Mapping[str, Any],
+    config: HeadlineNarrativeConfig,
+    ledger: _EvaluationLedger,
+    *,
+    reviewer: str,
+    api_key: str | None,
+    client_factory: Callable[..., Any] | None,
+    cancellation_path: Path | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run one editor/critic chain; each batch owns only its local output."""
+    batch_calls: list[dict[str, Any]] = []
+    editor_envelope, editor_request = build_per_brand_editor_request(batch, config)
+    editor_call = _execute_call(
+        "editor",
+        editor_envelope,
+        editor_request,
+        config,
+        ledger,
+        batch_calls,
+        api_key=api_key,
+        client_factory=client_factory,
+        cancellation_path=cancellation_path,
+    )
+    editor_parse: dict[str, Any] = {"status": "invalid", "error_codes": []}
+    try:
+        parsed_editor = validate_per_brand_editor_response(
+            _parse_json(editor_call["raw_response"]), editor_envelope
+        )
+        editor_parse["status"] = "valid"
+        editor_parse["response"] = parsed_editor
+        editor_call["mechanical"] = {"valid": True, "error_code": ""}
+    except (HeadlineGenerationError, ValueError, TypeError) as exc:
+        code = _safe_error_code(exc, "editor_response_invalid")
+        editor_parse["error_codes"] = [code]
+        editor_call["mechanical"] = {"valid": False, "error_code": code}
+    critic_envelope, critic_request = build_per_brand_critic_request(
+        editor_envelope, editor_call["raw_response"], editor_parse, config
+    )
+    critic_call = _execute_call(
+        "critic",
+        critic_envelope,
+        critic_request,
+        config,
+        ledger,
+        batch_calls,
+        api_key=api_key,
+        client_factory=client_factory,
+        cancellation_path=cancellation_path,
+    )
+    try:
+        critic = validate_per_brand_critic_response(
+            _parse_json(critic_call["raw_response"]), critic_envelope
+        )
+        critic_call["mechanical"] = {"valid": True, "error_code": ""}
+        batch_outcomes = _critic_outcomes(
+            critic,
+            batch,
+            reviewer=reviewer,
+            editor_valid=editor_parse["status"] == "valid",
+        )
+    except (HeadlineGenerationError, ValueError, TypeError) as exc:
+        code = _safe_error_code(exc, "critic_response_invalid")
+        critic_call["mechanical"] = {"valid": False, "error_code": code}
+        batch_outcomes = _held_batch_outcomes(batch, reviewer=reviewer, hold_code=code)
+    return batch_calls, batch_outcomes
 
 
 def _calibration_control_batch(
@@ -877,6 +923,11 @@ class _EvaluationLedger:
     input_tokens: int = 0
     output_tokens: int = 0
     cost: Decimal = Decimal(0)
+    pending_calls: int = 0
+    pending_input_tokens: int = 0
+    pending_output_tokens: int = 0
+    pending_cost: Decimal = Decimal(0)
+    lock: Lock = dataclass_field(default_factory=Lock, repr=False)
 
     def reserve(self, request: Mapping[str, Any]) -> tuple[int, int, Decimal]:
         estimated_input = _estimated_input_tokens(request)
@@ -884,14 +935,28 @@ class _EvaluationLedger:
         reserved_cost = _cost(estimated_input, reserved_output, self.manifest)
         if estimated_input + reserved_output > self.manifest.context_window_tokens:
             raise HeadlineGenerationError("evaluation_context_limit_exceeded")
-        if self.calls + 1 > self.manifest.max_calls:
-            raise HeadlineGenerationError("evaluation_call_cap")
-        if self.input_tokens + estimated_input > self.manifest.input_token_budget:
-            raise HeadlineGenerationError("evaluation_input_token_cap")
-        if self.output_tokens + reserved_output > self.manifest.output_token_budget:
-            raise HeadlineGenerationError("evaluation_output_token_cap")
-        if self.cost + reserved_cost > self.manifest.dollar_budget:
-            raise HeadlineGenerationError("evaluation_dollar_cap")
+        with self.lock:
+            if self.calls + self.pending_calls + 1 > self.manifest.max_calls:
+                raise HeadlineGenerationError("evaluation_call_cap")
+            if (
+                self.input_tokens + self.pending_input_tokens + estimated_input
+                > self.manifest.input_token_budget
+            ):
+                raise HeadlineGenerationError("evaluation_input_token_cap")
+            if (
+                self.output_tokens + self.pending_output_tokens + reserved_output
+                > self.manifest.output_token_budget
+            ):
+                raise HeadlineGenerationError("evaluation_output_token_cap")
+            if (
+                self.cost + self.pending_cost + reserved_cost
+                > self.manifest.dollar_budget
+            ):
+                raise HeadlineGenerationError("evaluation_dollar_cap")
+            self.pending_calls += 1
+            self.pending_input_tokens += estimated_input
+            self.pending_output_tokens += reserved_output
+            self.pending_cost += reserved_cost
         return estimated_input, reserved_output, reserved_cost
 
     def charge(
@@ -904,22 +969,38 @@ class _EvaluationLedger:
         input_tokens = response.input_tokens or estimated_input
         output_tokens = response.output_tokens or reserved_output
         cost = _cost(input_tokens, output_tokens, self.manifest)
-        self.calls += 1
-        self.input_tokens += input_tokens
-        self.output_tokens += output_tokens
-        self.cost += cost
+        with self.lock:
+            self._release_pending(estimated_input, reserved_output)
+            self.calls += 1
+            self.input_tokens += input_tokens
+            self.output_tokens += output_tokens
+            self.cost += cost
         return cost
 
     def charge_reserved_failure(
-        self, *, estimated_input: int, reserved_output: int
+        self,
+        *,
+        estimated_input: int,
+        reserved_output: int,
+        provider_usage: Mapping[str, Any] | None = None,
     ) -> Decimal:
-        """Conservatively account for a started call with no usage response."""
-        cost = _cost(estimated_input, reserved_output, self.manifest)
-        self.calls += 1
-        self.input_tokens += estimated_input
-        self.output_tokens += reserved_output
-        self.cost += cost
+        """Charge a failed call from its receipt, or from the reservation if absent."""
+        input_tokens = int((provider_usage or {}).get("input_tokens") or estimated_input)
+        output_tokens = int((provider_usage or {}).get("output_tokens") or reserved_output)
+        cost = _cost(input_tokens, output_tokens, self.manifest)
+        with self.lock:
+            self._release_pending(estimated_input, reserved_output)
+            self.calls += 1
+            self.input_tokens += input_tokens
+            self.output_tokens += output_tokens
+            self.cost += cost
         return cost
+
+    def _release_pending(self, estimated_input: int, reserved_output: int) -> None:
+        self.pending_calls -= 1
+        self.pending_input_tokens -= estimated_input
+        self.pending_output_tokens -= reserved_output
+        self.pending_cost -= _cost(estimated_input, reserved_output, self.manifest)
 
 
 def _execute_call(
@@ -948,11 +1029,16 @@ def _execute_call(
             config,
             api_key=api_key,
             client_factory=client_factory,
+            telemetry_context={
+                "stage": "critic" if stage == "critic_calibration" else stage,
+                "source": "headline_evaluation",
+            },
         )
     except HeadlineGenerationError as exc:
         accounted_cost = ledger.charge_reserved_failure(
             estimated_input=estimated_input,
             reserved_output=reserved_output,
+            provider_usage=exc.provider_usage,
         )
         sink.append(
             {
@@ -964,13 +1050,14 @@ def _execute_call(
                 "provider_request": deepcopy(dict(request)),
                 "raw_response": "",
                 "usage": {
-                    "reported_input_tokens": 0,
-                    "reported_output_tokens": 0,
+                    "reported_input_tokens": int((exc.provider_usage or {}).get("input_tokens") or 0),
+                    "reported_output_tokens": int((exc.provider_usage or {}).get("output_tokens") or 0),
                     "estimated_input_tokens": estimated_input,
                     "reserved_output_tokens": reserved_output,
                     "reserved_cost_dollars": _decimal_json(reserved_cost),
                     "accounted_cost_dollars": _decimal_json(accounted_cost),
                     "latency_ms": None,
+                    "provider_usage": exc.provider_usage,
                 },
                 "mechanical": {"valid": False, "error_code": exc.code},
             }
@@ -997,6 +1084,7 @@ def _execute_call(
             "reserved_cost_dollars": _decimal_json(reserved_cost),
             "accounted_cost_dollars": _decimal_json(accounted_cost),
             "latency_ms": response.latency_ms,
+            "provider_usage": response.provider_usage,
         },
         "mechanical": {"valid": None, "error_code": "pending"},
     }
@@ -1200,7 +1288,7 @@ def _calibration_control_requests(
         critic_envelope, critic_request = build_per_brand_critic_request(
             editor_envelope,
             _canonical_json(editor),
-            {"status": "valid", "error_codes": []},
+            {"status": "valid", "error_codes": [], "response": editor},
             config,
         )
         requests.append(

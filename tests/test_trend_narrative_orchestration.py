@@ -591,6 +591,10 @@ def test_provider_failures_record_post_send_uncertainty_or_known_failure(
             HeadlineGenerationError(
                 "provider_fixture_failure",
                 transport_completed=transport_completed,
+                provider_usage=(
+                    {"input_tokens": 123, "output_tokens": 45, "cost_usd": 0.00002}
+                    if transport_completed else None
+                ),
             )
         ),
     )
@@ -610,6 +614,9 @@ def test_provider_failures_record_post_send_uncertainty_or_known_failure(
     assert result["status"] == "terminal_failure"
     assert rank.state == expected_state
     assert rank.error_code == "provider_fixture_failure"
+    if transport_completed:
+        assert rank.response_payload["provider_usage"]["cost_usd"] == 0.00002
+        assert (rank.input_tokens, rank.output_tokens) == (123, 45)
 
 
 def test_rank_fallback_preserves_prior_overlap_then_uses_fact_movement():

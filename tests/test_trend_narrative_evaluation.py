@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import time
 from copy import deepcopy
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Lock
 from types import SimpleNamespace
 
 import pytest
@@ -59,10 +61,13 @@ class _Messages:
         self.owner = owner
 
     def create(self, **request):
-        self.owner.requests.append(request)
-        self.owner.active += 1
-        self.owner.max_active = max(self.owner.max_active, self.owner.active)
+        with self.owner.lock:
+            self.owner.requests.append(request)
+            self.owner.active += 1
+            self.owner.max_active = max(self.owner.max_active, self.owner.active)
         try:
+            if self.owner.delay:
+                time.sleep(self.owner.delay)
             content = request["messages"][0]["content"]
             payload = None
             if content.startswith("Critique"):
@@ -166,7 +171,8 @@ class _Messages:
                 usage=SimpleNamespace(input_tokens=500, output_tokens=200),
             )
         finally:
-            self.owner.active -= 1
+            with self.owner.lock:
+                self.owner.active -= 1
             if self.owner.cancel_path is not None and len(self.owner.requests) == 1:
                 self.owner.cancel_path.touch()
 
@@ -178,10 +184,13 @@ class _Client:
         *,
         repair_adversarial: bool = False,
         invalid_unsupported_control: bool = False,
+        delay: float = 0,
     ):
         self.requests = []
         self.active = 0
         self.max_active = 0
+        self.lock = Lock()
+        self.delay = delay
         self.cancel_path = cancel_path
         self.repair_adversarial = repair_adversarial
         self.invalid_unsupported_control = invalid_unsupported_control
@@ -191,13 +200,15 @@ class _Client:
         return self
 
 
-def test_manifest_requires_explicit_model_reviewer_budgets_and_concurrency_one():
+def test_manifest_requires_explicit_model_reviewer_budgets_and_bounded_concurrency():
     with pytest.raises(EvaluationConfigurationError, match="reviewer"):
         _manifest(reviewer=None)
     with pytest.raises(EvaluationConfigurationError, match="model_must_be_explicit"):
         _manifest(model="ambient")
+    assert _manifest(concurrency=2).concurrency == 2
+    assert _manifest(concurrency=3).concurrency == 3
     with pytest.raises(EvaluationConfigurationError, match="concurrency"):
-        _manifest(concurrency=2)
+        _manifest(concurrency=4)
     with pytest.raises(EvaluationConfigurationError, match="finite"):
         _manifest(dollar_budget="NaN")
 
@@ -327,6 +338,40 @@ def test_real_style_run_without_controls_cannot_claim_activation_calibration():
     assert artifact["activation_assessment"]["zero_unsupported_publications"] is False
 
 
+def test_two_brand_evaluation_runs_three_chains_concurrently_in_rank_order():
+    client = _Client(delay=0.02)
+    config = HeadlineNarrativeConfig(
+        per_brand_batch_size=2,
+        per_brand_call_cap=41,
+        per_brand_input_token_cap=1_600_000,
+        per_brand_output_token_cap=350_000,
+    )
+    artifact = run_per_brand_evaluation(
+        _manifest(concurrency=3, max_calls=41),
+        [build_synthetic_per_brand_snapshot(5)],
+        config,
+        include_calibration_controls=False,
+        api_key="unit-secret",
+        client_factory=client.factory,
+    )
+
+    assert artifact["execution"]["stop_reason"] == "completed"
+    assert artifact["execution"]["concurrency"] == 3
+    assert artifact["execution"]["calls_used"] == 7
+    assert client.max_active == 3
+    assert [row["sequence"] for row in artifact["calls"]] == list(range(1, 8))
+    assert [row["stage"] for row in artifact["calls"]] == [
+        "rank",
+        "editor",
+        "critic",
+        "editor",
+        "critic",
+        "editor",
+        "critic",
+    ]
+    assert artifact["activation_assessment"]["every_eligible_brand_decided"]
+
+
 def test_completion_counts_repeated_brand_fixtures_instead_of_collapsing_them():
     snapshots = _snapshots()
     outcomes = [
@@ -400,6 +445,22 @@ def test_started_transport_failure_is_conservatively_counted_and_recorded():
         "valid": False,
         "error_code": "headline_provider_timeout",
     }
+
+
+def test_failed_call_uses_provider_receipt_instead_of_reserved_output():
+    ledger = _EvaluationLedger(_manifest())
+    estimated_input, reserved_output, _ = ledger.reserve({"max_tokens": 1000})
+
+    ledger.charge_reserved_failure(
+        estimated_input=estimated_input,
+        reserved_output=reserved_output,
+        provider_usage={"input_tokens": 22, "output_tokens": 7},
+    )
+
+    assert ledger.calls == 1
+    assert ledger.input_tokens == 22
+    assert ledger.output_tokens == 7
+    assert ledger.pending_calls == 0
 
 
 def test_cancellation_between_calls_keeps_partial_artifact_and_starts_no_next_call(

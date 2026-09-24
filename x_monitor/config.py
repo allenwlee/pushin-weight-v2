@@ -547,6 +547,9 @@ class HeadlineNarrativeConfig(BaseModel):
     critic_prompt_version: str = Field(
         default="headline-critic-v6", min_length=1, max_length=64
     )
+    rank_request_profile: Literal["headline_rank_v1", "headline_rank_v2"] = "headline_rank_v1"
+    editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2"] = "headline_editor_v1"
+    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2"] = "headline_critic_v1"
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)

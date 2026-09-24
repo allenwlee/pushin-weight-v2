@@ -169,6 +169,29 @@ def test_headline_profile_pins_priority_json_and_no_reasoning(profile):
         client.build_request(max_tokens=800, messages=[], provider={"only": ["elsewhere"]})
 
 
+@pytest.mark.parametrize(
+    ("profile", "required_field"),
+    [
+        ("headline_rank_v2", "ordered_brands"),
+        ("headline_editor_v2", "brands"),
+        ("headline_critic_v2", "decisions"),
+    ],
+)
+def test_headline_v2_profiles_pin_strict_stage_schema(profile, required_field):
+    client = DeepInfraChatCompletionsClient(
+        api_key="secret", model=DEEPSEEK_0731_MODEL, request_profile=profile,
+    )
+
+    request = client.build_request(max_tokens=800, messages=[])
+
+    assert request["service_tier"] == "priority"
+    assert request["reasoning_effort"] == "none"
+    output = request["response_format"]
+    assert output["type"] == "json_schema"
+    assert output["json_schema"]["strict"] is True
+    assert required_field in output["json_schema"]["schema"]["required"]
+
+
 def test_headline_profile_rejects_tier_and_usage_mismatch():
     response = _response(DEEPSEEK_0731_MODEL, "headline")
     response["service_tier"] = "standard"
