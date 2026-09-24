@@ -32,7 +32,8 @@ def test_worker_boundary_proof_executes_without_transport():
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("headline_worker_boundary_ok ")
-    assert "transport=anthropic" in result.stdout
+    assert "transport=deepinfra" in result.stdout
+    assert DEEPSEEK_0731_MODEL in result.stdout
 
 
 def test_direct_0731_worker_boundary_builds_all_three_wire_requests():

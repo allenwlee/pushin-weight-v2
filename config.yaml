@@ -295,18 +295,21 @@ llm:
 # translator/classifier route. Service-specific environment variables request
 # each control; activation remains fail-closed until its state is explicit.
 headline_narrative:
-  provider: "deepseek"
-  base_url: "https://api.deepseek.com/anthropic"
-  model: "deepseek-v4-flash"
-  rank_prompt_version: "headline-rank-v1"
-  editor_prompt_version: "headline-editor-v7-ja"
-  critic_prompt_version: "headline-critic-v7-ja"
-  rank_max_tokens: 2400
-  editor_max_tokens: 10000
-  critic_max_tokens: 11000
-  timeout_seconds: 60
-  prompt_version: "headline-v11-ja-parity"
-  publication_epoch: 11
+  provider: "deepinfra"
+  base_url: "https://api.deepinfra.com/v1/openai"
+  model: "deepseek-ai/DeepSeek-V4-Flash-0731"
+  rank_prompt_version: "headline-rank-0731-v3"
+  editor_prompt_version: "headline-editor-finance-v9-ja"
+  critic_prompt_version: "headline-critic-finance-source-audit-source-ledger-only-v56-ja"
+  rank_request_profile: "headline_rank_v2"
+  editor_request_profile: "headline_editor_v4"
+  critic_request_profile: "headline_critic_v6"
+  rank_max_tokens: 7000
+  editor_max_tokens: 8000
+  critic_max_tokens: 8000
+  timeout_seconds: 300
+  prompt_version: "headline-v12-0731-v56"
+  publication_epoch: 12
   materiality_policy_version: "headline-materiality-v2"
   demand_shaping_enabled: null
   demand_hot_minutes: 180
@@ -333,17 +336,16 @@ headline_narrative:
   evidence_excerpt_characters: 1000
   evidence_provider_packet_bytes: 131072
   call_cap: 4
+  per_brand_batch_size: 2
   per_brand_call_cap: 51
   per_brand_input_token_cap: 2000000
   per_brand_output_token_cap: 420000
-  # Conservative peak, cache-miss rates from DeepSeek's official 2026-09-02
-  # pricing page. Off-peak/cache-hit billing can only reduce actual cost.
-  per_brand_cost_cap_usd: "1.50"
-  per_brand_input_usd_per_million: "0.44"
-  per_brand_output_usd_per_million: "1.32"
-  per_brand_pricing_version: "deepseek-v4-flash-peak-2026-09-02"
+  per_brand_cost_cap_usd: "0.30"
+  per_brand_input_usd_per_million: "0.09"
+  per_brand_output_usd_per_million: "0.27"
+  per_brand_pricing_version: "deepinfra-priority-0731-2026-09-24"
   per_brand_expected_max_brands: 50
-  per_brand_p95_latency_seconds: "45"
+  per_brand_p95_latency_seconds: "120"
   per_brand_worker_concurrency: 3
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120

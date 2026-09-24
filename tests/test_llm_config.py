@@ -40,6 +40,31 @@ def test_headline_snapshot_cap_covers_observed_tracked_brand_roster():
     assert headline.per_brand_call_cap >= 1 + 2 * batches
 
 
+def test_headline_yaml_pins_frozen_v56_0731_route():
+    """Production yaml must load the frozen V56 DeepInfra lock."""
+    from decimal import Decimal
+
+    from x_monitor.config import load_config
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+    headline = load_config(CONFIG_PATH).headline_narrative
+    assert headline.provider == "deepinfra"
+    assert headline.base_url == "https://api.deepinfra.com/v1/openai"
+    assert headline.model == DEEPSEEK_0731_MODEL
+    assert headline.rank_prompt_version == "headline-rank-0731-v3"
+    assert headline.editor_prompt_version == "headline-editor-finance-v9-ja"
+    assert headline.critic_prompt_version == (
+        "headline-critic-finance-source-audit-source-ledger-only-v56-ja"
+    )
+    assert headline.rank_request_profile == "headline_rank_v2"
+    assert headline.editor_request_profile == "headline_editor_v4"
+    assert headline.critic_request_profile == "headline_critic_v6"
+    assert headline.per_brand_batch_size == 2
+    assert headline.per_brand_worker_concurrency == 3
+    assert headline.per_brand_cost_cap_usd == Decimal("0.30")
+    assert headline.publication_epoch == 12
+
+
 def test_llm_config_enrichment_base_urls_default_to_deepseek():
     """Routine harvest roles have explicit DeepSeek endpoint defaults."""
     from x_monitor.config import Config

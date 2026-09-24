@@ -3,11 +3,12 @@ title: "feat: reshape headline generation for DeepSeek V4 Flash 0731"
 type: feat
 date: 2026-09-23
 artifact_contract: ce-unified-plan/v1
+artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
 execution: code
 depth: deep
 deepened: 2026-09-23
-updated: 2026-09-24
+updated: 2026-09-25
 ollija:
   change_id: feat-headline-0731-architecture-2026-09-24-060052
   branch: feat/headline-0731-architecture
@@ -1500,3 +1501,55 @@ cannot translate a slur faithfully. AI app/model usage `Tokens` remain
 and does not discuss cryptocurrency. Focused tests cover both attribution and
 lexical guards. Probe Q239/Q240, replay the saved source failures, and only
 then freeze and review a new disjoint live source. Do not deploy V45.
+
+## Remaining delivery — U6 V56 pin and exact-SHA promote
+
+Owner-directed freeze: V56 is the candidate. Do not add another critic
+prompt version. Remaining work is U6 plus Ollija production delivery.
+
+### U6 pin (this SHA)
+
+Write the bakeoff lock into `config.yaml` `headline_narrative`:
+
+- provider `deepinfra`, base_url `https://api.deepinfra.com/v1/openai`
+- model `deepseek-ai/DeepSeek-V4-Flash-0731`
+- rank `headline-rank-0731-v3` / `headline_rank_v2`
+- editor `headline-editor-finance-v9-ja` / `headline_editor_v4`
+- critic `headline-critic-finance-source-audit-source-ledger-only-v56-ja` / `headline_critic_v6`
+- timeout 300; rank/editor/critic max tokens 7000/8000/8000
+- `per_brand_batch_size` 2, worker concurrency 3
+- cost cap `$0.30`, prices `$0.09` / `$0.27`, pricing version `deepinfra-priority-0731-2026-09-24`
+- bump `publication_epoch` so persisted last-good is not mixed with V56 prose
+
+Env flags still gate transport: staging worker starts with provider calls
+off; production yaml already has them on. Recovery is disable provider
+calls and serve last-good.
+
+Merge `origin/main` (`8ba61d5`, HF docs, `[skip render]`) so the candidate
+is a fast-forward of `main`. Re-run focused headline + Ollija tests. Commit
+and push the feature branch. New HEAD is the candidate SHA.
+
+### Staging then production
+
+Do not push `refs/heads/staging`. Disable auto-deploy on
+`pushinweight-staging-web` and `pushinweight-staging-headlines`. Deploy the
+exact candidate SHA to those two services. Confirm reported commit SHA.
+Prove harvest command/env unchanged. With provider off, last-good still
+serves. Then one staging provider-on canary. Stop if SHA, harvest, memory,
+or canary fails.
+
+Only then:
+
+```bash
+git fetch origin refs/heads/main
+git push origin <candidate-sha>:refs/heads/main
+```
+
+Confirm `origin/main` and production web + headlines worker report that
+SHA. Worktree remove is the final filesystem action and only after that
+verification.
+
+**Test scenarios:** `load_config(config.yaml)` returns the V56 lock;
+`per_brand_call_cap >= 1 + 2 * ceil(47 / batch_size)`; finance prompt
+rejects a non-DeepInfra provider; focused headline and `tests/ollija`
+suites pass.
