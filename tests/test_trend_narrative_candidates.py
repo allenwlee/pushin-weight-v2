@@ -527,7 +527,6 @@ def test_u1_provider_packet_excludes_private_arrays_and_ordinary_identity():
         "status": "partial",
         "covered_post_count": 8,
         "current_leader": "positive",
-        "largest_change": "positive",
     }
     assert "author_group_id" not in evidence
     assert "source_cluster_id" not in evidence
@@ -675,6 +674,7 @@ def test_u1_irreducible_five_brand_packet_splits_without_dropping_evidence():
             {
                 "brand_key": brand_key,
                 "outcome": "narrative_eligible",
+                "comparison_status": {"allowed": True},
                 "facts": [
                     {
                         "fact_id": f"{brand_key}:fact-{fact_index}",
@@ -688,7 +688,7 @@ def test_u1_irreducible_five_brand_packet_splits_without_dropping_evidence():
                         "display_en": "10%",
                         "display_zh_cn": "10%",
                     }
-                    for fact_index in range(200)
+                    for fact_index in range(240)
                 ],
                 "evidence": [
                     {

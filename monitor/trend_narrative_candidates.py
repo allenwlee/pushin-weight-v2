@@ -22,6 +22,7 @@ from core.classification_contract import (
     taxonomy_crosswalk_rows,
 )
 from core.classification_readers import read_brand_scalars_many
+from core.models import BrandKeyword
 from monitor.trend_narrative_facts import (
     DEFAULT_TREND_THRESHOLDS,
     TrendFactThresholds,
@@ -29,6 +30,7 @@ from monitor.trend_narrative_facts import (
     canonical_fact_json,
     fetch_trend_candidate_series,
 )
+from monitor.trend_narrative_packet import project_dossier
 
 TREND_SNAPSHOT_SCHEMA_VERSION = 1
 COMPACT_DOSSIER_SCHEMA_VERSION = 3
@@ -78,7 +80,12 @@ _CLASSIFIER_DERIVED_FAMILIES = frozenset(
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _PURE_REPOST_RE = re.compile(r"^\s*RT\s+@", re.IGNORECASE)
-_CORPUS_TOKEN_SEPARATOR_RE = re.compile(r"(?:[^\w-]|_)+", re.UNICODE)
+_CORPUS_TOKEN_SEPARATOR_RE = re.compile(r"(?:[^\w.\-]|_)+", re.UNICODE)
+_CORPUS_URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# Only pairs made entirely of function words are excluded. Negations are kept.
+_CORPUS_STOPWORDS = frozenset(
+    ["a", "an", "the", "of", "in", "on", "at", "to", "for", "by", "with", "from", "and", "or", "as", "is", "are", "was", "were", "be", "been", "it", "its", "this", "that", "these", "those", "we", "you", "they", "he", "she", "i", "my", "your", "our", "their", "de", "la", "le", "les", "des", "du", "un", "une", "en", "et", "el", "los", "las", "del", "que", "con", "para", "por", "da", "do", "dos", "das", "um", "uma", "em", "e", "o", "os", "ao", "à", "の", "は", "が", "を", "に", "で", "と", "も", "的", "了", "在", "是", "和", "与"]
+)
 
 _CORPUS_SOURCE_ROWS_SQL = """
     SELECT pb.brand_id::text AS brand_key,
@@ -328,47 +335,8 @@ def _fit_or_split_editor_batch(
 
 
 def _provider_dossier(dossier: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the bounded public-to-provider half of one dossier."""
-    projected = {
-        key: value
-        for key, value in dossier.items()
-        if key
-        not in {
-            "raw_series",
-            "aggregate_inputs",
-            "source_row_provenance",
-            "evidence_selection_provenance",
-        }
-    }
-    projected["family_summaries"] = {
-        family: {
-            key: value
-            for key, value in dict(summary).items()
-            if key not in {"denominator", "total_post_count"}
-        }
-        for family, summary in dict(dossier.get("family_summaries") or {}).items()
-    }
-    projected["evidence"] = []
-    for evidence in dossier.get("evidence", []):
-        row = {
-            key: value
-            for key, value in evidence.items()
-            if key
-            not in {
-                "author_group_id",
-                "source_cluster_id",
-                "post_type_keys",
-                "product_label_keys",
-                "sentiment_keys",
-                "china_nationalism_keys",
-                "us_nationalism_keys",
-                "unsanctioned_flag_keys",
-            }
-        }
-        if row.get("first_party_role") not in {"official", "staff"}:
-            row.pop("handle_snapshot", None)
-        projected["evidence"].append(row)
-    return projected
+    """Return the closed, source-preserving provider view of one dossier."""
+    return project_dossier(dossier)
 
 
 def _fit_editor_batch_to_packet_budget(batch: dict[str, Any]) -> None:
@@ -400,6 +368,7 @@ def _fit_editor_batch_to_packet_budget(batch: dict[str, Any]) -> None:
         excerpt = str(evidence.get("excerpt") or "")
         if len(excerpt) > 160:
             evidence["excerpt"] = excerpt[: max(160, len(excerpt) // 2)]
+            evidence["excerpt_truncated"] = True
         elif evidence.get("text_zh_cn"):
             evidence.pop("text_zh_cn", None)
         else:
@@ -601,6 +570,7 @@ def build_trend_analysis_snapshot(
             corpus_signals=corpus_signals,
             corpus_extraction_status=corpus_extraction_status,
             stable_family_facts=stable_family_facts,
+            brand_aliases=_snapshot_brand_aliases(full_window),
         )
         canonical_snapshot_json(snapshot)
         # Exercise every deterministic editor packet before this immutable
@@ -1021,6 +991,7 @@ def _assemble_compact_snapshot(
     corpus_signals: Mapping[str, Sequence[Mapping[str, Any]]],
     corpus_extraction_status: str,
     stable_family_facts: Mapping[str, Mapping[str, Any]],
+    brand_aliases: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, Any]:
     """Assemble U1's private all-brand snapshot without a post-text archive."""
     details_by_brand = {
@@ -1066,6 +1037,10 @@ def _assemble_compact_snapshot(
             pools.get(str(candidate_key["candidate_id"]), []),
             newest_segment_start=newest_segment_start,
         )
+        for evidence in selected_evidence:
+            evidence["brand_relevance"] = _source_brand_relevance(
+                evidence, brand_key, brand_aliases or {}
+            )
         outcome = (
             "narrative_eligible"
             if usable_raw_count and selected_evidence
@@ -1147,6 +1122,65 @@ def _assemble_compact_snapshot(
         },
         "coverage": facts["coverage"],
         "dossiers": dossiers,
+    }
+
+
+def _snapshot_brand_aliases(
+    candidates: Sequence[Mapping[str, Any]],
+) -> dict[str, list[str]]:
+    """Read existing literal brand/product keywords in the snapshot transaction.
+
+    No entity discovery, classifier rewrite, or external catalog lookup occurs.
+    Bound the optional keyword read; display names remain available if it fills.
+    """
+    aliases = {
+        str(row["candidate_key"]["brand_key"]): sorted({
+            str(value) for value in (
+                row["candidate_key"]["brand_key"], row.get("display_name_en"),
+                row.get("display_name_zh_cn"),
+            ) if value
+        }) for row in candidates
+    }
+    rows = BrandKeyword.objects.filter(brand_id__in=aliases, is_regex=False).order_by(
+        "brand_id", "pattern"
+    ).values_list("brand_id", "pattern")[:3000]
+    for brand, keyword in rows:
+        if keyword and len(keyword) <= 128 and keyword not in aliases[str(brand)]:
+            aliases[str(brand)].append(keyword)
+    return aliases
+
+
+def _source_brand_relevance(
+    evidence: Mapping[str, Any], brand_key: str,
+    aliases: Mapping[str, Sequence[str]],
+) -> dict[str, Any]:
+    """Flag ambiguous attribution; a matched mention is not claim ownership."""
+    text = str(evidence.get("excerpt") or "")
+    matches = {}
+    for key, names in aliases.items():
+        found = []
+        for alias in names:
+            # Short ASCII tokens are ambiguous (e.g. Turkish accusative -yi).
+            # An explicit full name/model token or reviewed affiliation is
+            # required instead; no holdout IDs or hardcoded brand exceptions.
+            if alias.isascii() and len(alias) <= 2:
+                continue
+            pattern = re.escape(alias)
+            if alias.isascii():
+                pattern = r"(?<![\w'’\-])" + pattern + r"(?![\w'’\-])"
+            if re.search(pattern, text, re.IGNORECASE):
+                found.append(alias)
+        if found:
+            matches[key] = sorted(found)[:8]
+    others = sorted(key for key in matches if key != brand_key)
+    own = matches.get(brand_key, [])
+    affiliated = evidence.get("first_party_role") in {"official", "staff"}
+    return {
+        "status": ("multiple_brands" if own and others else "explicit_mention" if own
+                   else "affiliated_source" if affiliated else "uncertain"),
+        "matched_aliases": own,
+        "other_brand_keys": others,
+        "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
     }
 
 
@@ -1683,24 +1717,7 @@ def _compact_shape_summary(
 
 
 def _project_compact_ranking_packet(snapshot: Mapping[str, Any]) -> dict[str, Any]:
-    dossiers = []
-    for dossier in snapshot.get("dossiers", []):
-        row = _provider_dossier(dossier)
-        # Ranking is the only all-brand transport. Keep its content-led
-        # signals and citable facts, but omit per-brand trajectories/episodes
-        # and cap evidence previews so 20+ brands fit the shared budget.
-        for key in ("metadata_trajectories", "episodes", "evidence_allocation"):
-            row.pop(key, None)
-        row["evidence"] = [
-            {
-                "evidence_id": evidence["evidence_id"],
-                "created_at": evidence.get("created_at"),
-                "excerpt": evidence.get("excerpt"),
-                "first_party_role": evidence.get("first_party_role", "public_opaque"),
-            }
-            for evidence in dossier.get("evidence", [])[:2]
-        ]
-        dossiers.append(row)
+    dossiers = [project_dossier(row, rank=True) for row in snapshot.get("dossiers", [])]
     return {
         "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
         "window_days": snapshot["window_days"],
@@ -2383,11 +2400,14 @@ def _iter_corpus_documents(
         if source_key in seen_sources:
             continue
         seen_sources.add(source_key)
-        normalized = _CORPUS_TOKEN_SEPARATOR_RE.sub(" ", lowered).strip()
-        tokens = [token for token in normalized.split() if len(token) >= 2]
+        normalized = _CORPUS_TOKEN_SEPARATOR_RE.sub(" ", _CORPUS_URL_RE.sub(" ", lowered)).strip()
+        tokens = [token.strip(".") for token in normalized.split() if len(token.strip(".")) >= 2]
         if len(tokens) > MAX_CORPUS_TOKENS_PER_DOCUMENT:
             raise _CorpusPhraseResourceLimit
-        phrases = {f"{current} {following}" for current, following in pairwise(tokens)}
+        phrases = {
+            f"{current} {following}" for current, following in pairwise(tokens)
+            if not (current in _CORPUS_STOPWORDS and following in _CORPUS_STOPWORDS)
+        }
         selected = created_at >= start_at
         yield {
             "tweet_id": str(tweet_id),
