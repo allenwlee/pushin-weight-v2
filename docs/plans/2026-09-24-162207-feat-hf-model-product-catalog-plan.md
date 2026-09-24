@@ -9,8 +9,8 @@ ollija:
   change_id: hf-model-product-catalog-2026-09-24-162207
   branch: feat/hf-model-product-catalog
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -38,10 +38,24 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/hf-model-product-catalog` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/hf-model-product-catalog` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -57,6 +71,8 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 # Hugging Face model Product catalog - Plan
 
 ## Delivery Exceptions
+
+- Owner-directed, 2026-09-24: "ok go", followed by "continue to deployment to production", authorizes HF staging deployment and bounded import validation, then production deployment and collection after staging passes. Promote the same verified candidate. This supersedes the earlier local-only and on-request limits. Preserve the HF-only branch boundary; do not merge another session's unreleased work. No scheduler, service suspension, Blueprint topology change, or model download is authorized.
 
 - Owner-directed, 2026-09-24: isolate HF on a new `feat/hf-model-product-catalog` branch based on the fetched `origin/main`, selecting only HF changes. Do not merge or carry the rare-type branch's commits. Preserve the root checkout and its unrelated work; use the canonical `.worktrees/feat/hf-model-product-catalog` checkout for the HF branch. Local HF commits are explicitly authorized. This supersedes the old generated root-placement instruction while transferring this same plan. No push, staging deployment, or production action is authorized by this exception.
 - Main-based integration must use the existing Product schema and callers on `main`; keep rare-type-only verification, review, cycle, and non-HF identity code out of this branch. Reverify the adapted migration and caller chains on the isolated base. The earlier combined-branch verification remains historical evidence, not verification of this new candidate.
