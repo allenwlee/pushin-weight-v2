@@ -15,6 +15,8 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from core.models import Brand, TrendNarrativeDemand, TrendNarrativeRun
+from monitor.trend_narrative_facts import FINANCE_FACT_VERSION
+from monitor.trend_narrative_packet import PROJECTION_VERSION
 from x_monitor.config import HeadlineNarrativeConfig
 
 WINDOWS = frozenset({1, 7, 30, 365})
@@ -27,10 +29,10 @@ REASON_PRIORITY = {
 
 def target_identity(config: HeadlineNarrativeConfig) -> tuple[str, str, str]:
     """Return the version identity that makes old work non-publishable."""
-    contract = f"per-brand-v3:epoch-{config.publication_epoch}"
+    contract = f"per-brand-v3:{FINANCE_FACT_VERSION}:epoch-{config.publication_epoch}"
     prompt = (
         f"{config.prompt_version}:{config.rank_prompt_version}:"
-        f"{config.editor_prompt_version}:{config.critic_prompt_version}"
+        f"{config.editor_prompt_version}:{config.critic_prompt_version}:{PROJECTION_VERSION}"
     )
     return contract[:64], prompt[:255], config.model[:128]
 
@@ -335,6 +337,7 @@ def _material_dossier_projection(
     )
     return {
         "policy": policy_version,
+        "projection_version": PROJECTION_VERSION,
         "brand_key": dossier.get("brand_key"),
         "outcome": dossier.get("outcome"),
         "enrichment_coverage": _coverage_projection(
@@ -345,11 +348,30 @@ def _material_dossier_projection(
         ),
         "family_summaries": family_summaries,
         "facts": facts,
+        "finance_context": _finance_projection(dossier.get("finance_context") or {}, band_percent=band_percent),
         "shape_summary": _shape_projection(
             dossier.get("shape_summary") or {}, band_percent=band_percent
         ),
         "corpus_signals": corpus_signals,
         "evidence": evidence,
+    }
+
+
+def _finance_projection(value: Mapping[str, Any], *, band_percent: int) -> dict[str, Any]:
+    """Material measurements and policy changes, without sliding-time jitter."""
+    history = value.get("historical_status") or {}
+    return {
+        "version": value.get("version"),
+        "history": {key: history.get(key) for key in ("policy", "state", "reason", "sample_size")},
+        "shape": value.get("shape_status"),
+        "facts": [
+            {"id": row.get("fact_id"), "unit": row.get("unit"),
+             "basis": (row.get("fact_scope") or {}).get("basis"),
+             "band": _band_value(row.get("source_value"), unit=str(row.get("unit") or ""),
+                                 band_percent=band_percent)}
+            for row in value.get("facts", [])
+        ],
+        "phases": [(row.get("kind"), row.get("provisional")) for row in value.get("phases", [])],
     }
 
 

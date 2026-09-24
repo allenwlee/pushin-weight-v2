@@ -25,9 +25,12 @@ from core.classification_readers import read_brand_scalars_many
 from core.models import BrandKeyword
 from monitor.trend_narrative_facts import (
     DEFAULT_TREND_THRESHOLDS,
+    FINANCE_FACT_VERSION,
     TrendFactThresholds,
     aggregate_trend_family_facts,
+    build_finance_context,
     canonical_fact_json,
+    fetch_finance_observations,
     fetch_trend_candidate_series,
 )
 from monitor.trend_narrative_packet import project_dossier
@@ -571,6 +574,10 @@ def build_trend_analysis_snapshot(
             corpus_extraction_status=corpus_extraction_status,
             stable_family_facts=stable_family_facts,
             brand_aliases=_snapshot_brand_aliases(full_window),
+            finance_observations=fetch_finance_observations(
+                brand_keys, window_days=window_days, as_of=as_of_utc
+            ),
+            thresholds=thresholds,
         )
         canonical_snapshot_json(snapshot)
         # Exercise every deterministic editor packet before this immutable
@@ -992,6 +999,8 @@ def _assemble_compact_snapshot(
     corpus_extraction_status: str,
     stable_family_facts: Mapping[str, Mapping[str, Any]],
     brand_aliases: Mapping[str, Sequence[str]] | None = None,
+    finance_observations: Mapping[str, Mapping[str, Any]] | None = None,
+    thresholds: TrendFactThresholds = DEFAULT_TREND_THRESHOLDS,
 ) -> dict[str, Any]:
     """Assemble U1's private all-brand snapshot without a post-text archive."""
     details_by_brand = {
@@ -1064,6 +1073,17 @@ def _assemble_compact_snapshot(
                 else []
             ),
         ]
+        observed = (finance_observations or {}).get(brand_key, {})
+        finance_context = build_finance_context(
+            brand_key, observed.get("series", []), as_of=_parse_utc(str(facts["as_of"])),
+            window_days=int(facts["window_days"]),
+            bucket_seconds=int(facts["schedule"]["coarse"]["duration_seconds"]),
+            selected_coverage=selected_coverage, history=observed.get("history", []),
+            participation=observed.get("participation"), thresholds=thresholds,
+        )
+        if observed.get("status") == "resource_limited":
+            finance_context["shape_status"] = {"state": "unavailable", "reason": "resource_limited"}
+            finance_context["historical_status"]["reason"] = "resource_limited"
         dossiers.append(
             {
                 "brand_key": brand_key,
@@ -1085,6 +1105,7 @@ def _assemble_compact_snapshot(
                 "family_summaries": _compact_family_summaries(family_facts),
                 "facts": _compact_citable_facts(brand_key, family_facts),
                 "shape_summary": _compact_shape_summary(detail["coarse_series"]),
+                "finance_context": finance_context,
                 "corpus_signals_status": corpus_extraction_status,
                 "corpus_signals": brand_corpus_signals,
                 "evidence_allocation": allocation,
@@ -1112,6 +1133,7 @@ def _assemble_compact_snapshot(
     return {
         "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
         "snapshot_schema_version": TREND_SNAPSHOT_SCHEMA_VERSION,
+        "semantic_fact_version": FINANCE_FACT_VERSION,
         "window_days": facts["window_days"],
         "as_of": facts["as_of"],
         "baseline_context": {

@@ -12,9 +12,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from itertools import pairwise
+from statistics import median
 from typing import Any
 
-from django.db import connection
+from django.db import OperationalError, connection, transaction
 from django.db.models import Count, Min, Q
 
 from core.classification_contract import (
@@ -134,6 +136,8 @@ class TrendFactThresholds:
 
 
 DEFAULT_TREND_THRESHOLDS = TrendFactThresholds()
+FINANCE_FACT_VERSION = "activity-context-v1"
+MATCHED_HISTORY_POLICY = "utc-weekly-offsets-8-min4-v1"
 
 _WINDOW_SCHEDULES = {
     1: TrendWindowSchedule(8, 3 * 60 * 60, 96, 15 * 60),
@@ -141,6 +145,259 @@ _WINDOW_SCHEDULES = {
     30: TrendWindowSchedule(10, 3 * 24 * 60 * 60, 30, 24 * 60 * 60),
     365: TrendWindowSchedule(12, 2_628_000, 365, 24 * 60 * 60),
 }
+
+
+def matched_history_summary(
+    intervals: Sequence[Mapping[str, Any]], *, as_of: datetime, window_days: int,
+    observed_count: int, regime: str | None,
+    minimum_coverage: Decimal = DEFAULT_TREND_THRESHOLDS.minimum_coverage,
+) -> dict[str, Any]:
+    """Admit only distinct, completed, provenance-backed weekly matches.
+
+    Stored post timestamps alone never attest collection completeness. The
+    current DB adapter deliberately leaves coverage/regime unproven because
+    current cursors and the latest config hash are not historical receipts.
+    """
+    summary = {"policy": MATCHED_HISTORY_POLICY, "timezone": "UTC",
+               "state": "unavailable", "sample_size": 0}
+    if window_days not in {1, 7}:
+        return {**summary, "reason": "window_not_supported"}
+    cutoff = _as_utc(as_of)
+    duration = timedelta(days=window_days)
+    expected_bounds = {(cutoff - duration - timedelta(weeks=w), cutoff - timedelta(weeks=w))
+                       for w in range(1, 9)}
+    eligible = {}
+    for row in intervals[:8]:
+        start, end = _parse_utc(str(row["start_at"])), _parse_utc(str(row["end_at"]))
+        if ((start, end) not in expected_bounds or not row.get("coverage_proven")
+                or not regime or row.get("regime") != regime
+                or row.get("backlog_overlap")
+                or Decimal(str(row.get("coverage") or 0)) < minimum_coverage):
+            continue
+        eligible[(start, end)] = int(row.get("post_count") or 0)
+    summary["sample_size"] = len(eligible)
+    if len(eligible) < 4:
+        return {**summary, "reason": "insufficient_proven_comparable_intervals"}
+    mean = Decimal(sum(eligible.values())) / Decimal(len(eligible))
+    if mean <= 0:
+        return {**summary, "reason": "zero_expected_activity"}
+    return {
+        **summary, "state": "available",
+        "start_at": _iso_utc(min(start for start, _ in eligible)),
+        "end_at": _iso_utc(max(end for _, end in eligible)),
+        "expected_posts_per_hour": _decimal_string(mean / Decimal(24 * window_days)),
+        "observed_expected_ratio": _decimal_string(Decimal(observed_count) / mean),
+    }
+
+
+def build_finance_context(
+    brand_key: str, series: Sequence[Mapping[str, Any]], *, as_of: datetime,
+    window_days: int, bucket_seconds: int, selected_coverage: Mapping[str, Any],
+    thresholds: TrendFactThresholds = DEFAULT_TREND_THRESHOLDS,
+    history: Sequence[Mapping[str, Any]] = (),
+    participation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Measure completed bucket rates, keeping overall and recent change apart."""
+    cutoff = _as_utc(as_of)
+    observed = int((participation or {}).get("post_count") or 0)
+    context = {
+        "version": FINANCE_FACT_VERSION,
+        "historical_status": matched_history_summary(
+            history, as_of=cutoff, window_days=window_days, observed_count=observed,
+            regime=(participation or {}).get("regime"), minimum_coverage=thresholds.minimum_coverage,
+        ),
+        "shape_status": {"state": "unavailable", "reason": "insufficient_completed_buckets"},
+        "facts": [], "phases": [], "history_intervals": list(history),
+    }
+    current_start = cutoff - timedelta(days=window_days)
+
+    def add(metric, value, unit, start, end, *, basis="within_window", **extra):
+        item = {
+            "fact_id": f"f:{brand_key}:activity:{metric}", "family": "activity", "metric": metric,
+            "source_value": _decimal_string(Decimal(value)), "unit": unit,
+            "fact_scope": {"brand_key": brand_key, "start_at": _iso_utc(start),
+                           "end_at": _iso_utc(end), "basis": basis,
+                           "denominator": "observed_posts", "coverage": {"status": "observed_only"}},
+            **extra,
+        }
+        context["facts"].append(item)
+        return item["fact_id"]
+
+    if participation and participation.get("status") == "available":
+        for metric, unit in (("distinct_authors", "authors"), ("deduplicated_sources", "sources")):
+            add(metric, int(participation.get(metric) or 0), unit, current_start, cutoff,
+                basis="observed_participation_not_adoption")
+    complete = []
+    for row in series:
+        start, end = _parse_utc(str(row["start_at"])), _parse_utc(str(row["end_at"]))
+        duration = Decimal(str((end - start).total_seconds()))
+        if start < current_start or end > cutoff or duration < bucket_seconds or row.get("complete") is False:
+            continue
+        count = int(row.get("post_count") or 0)
+        complete.append((start, end, Decimal(count) * 3600 / duration, count))
+    complete.sort(key=lambda row: row[0])
+    if len(complete) < 2:
+        return context
+    if any(before[1] != after[0] for before, after in pairwise(complete)):
+        context["shape_status"]["reason"] = "noncontiguous_buckets"
+        return context
+    if selected_coverage.get("known_backlog_overlap") or selected_coverage.get("state") != "sufficient":
+        context["shape_status"]["reason"] = "collection_incomplete"
+        return context
+    context["shape_status"] = {"state": "available", "completed_bucket_count": len(complete)}
+    rates = [row[2] for row in complete]
+    start, end = complete[0][0], complete[-1][1]
+    net = rates[-1] - rates[0]
+    steps = [after - before for before, after in pairwise(rates)]
+    movement = sum(abs(step) for step in steps)
+    add("directional_efficiency", abs(net) / movement if movement else Decimal(0), "ratio", start, end)
+    for metric, first, last, since in (
+        ("overall_rate_change_pct", rates[0], rates[-1], start),
+        ("recent_rate_change_pct", rates[-2], rates[-1], complete[-2][0]),
+    ):
+        if first > 0:
+            change = (last - first) * 100 / first
+            add(metric, change, "percent", since, end, basis="completed_bucket_rate_change",
+                direction="increase" if change > 0 else "decrease" if change < 0 else "flat",
+                current_value=_decimal_string(last), baseline_value=_decimal_string(first))
+    peak_index = max(range(len(rates)), key=lambda index: (rates[index], -index))
+    peak = rates[peak_index]
+    peak_id = add("peak_post_rate", peak, "posts_per_hour", complete[peak_index][0], complete[peak_index][1])
+    add("hours_since_peak", Decimal(str((end - complete[peak_index][1]).total_seconds())) / 3600,
+        "hours", complete[peak_index][1], end)
+    drop_id = None
+    if peak:
+        drop_id = add("drop_from_peak_pct", (peak - rates[-1]) * 100 / peak, "percent",
+                      complete[peak_index][0], end, basis="peak_to_latest_completed_bucket")
+    norm = context["historical_status"]
+    if norm["state"] == "available":
+        add("observed_expected_ratio", Decimal(norm["observed_expected_ratio"]), "ratio",
+            current_start, cutoff, basis="matched_historical_expectation")
+        expected_rate = Decimal(norm["expected_posts_per_hour"])
+        add("recent_expected_ratio", rates[-1] / expected_rate, "ratio", complete[-1][0], end,
+            basis="matched_historical_expectation")
+
+    # Phase vocabulary is diagnostic and bounded; no historical-elevation
+    # language is emitted without a proven matched expectation.
+    def phase(kind, first, last, refs):
+        return {"kind": kind, "start_at": _iso_utc(complete[first][0]),
+                "end_at": _iso_utc(complete[last][1]), "fact_ids": refs,
+                "provisional": last == len(complete) - 1}
+
+    enough = sum(row[3] for row in complete) >= thresholds.min_posts
+    middle = median(rates)
+    bursts = [index for index in range(1, len(rates) - 1)
+              if middle > 0 and rates[index] >= middle * thresholds.episode_peak_ratio
+              and rates[index] > rates[index - 1] and rates[index] > rates[index + 1]]
+    if enough and len(bursts) >= 2:
+        burst_id = add("separated_peak_count", len(bursts), "peaks", start, end,
+                       basis="local_peaks_at_least_3x_window_median_rate")
+        context["phases"].append(phase("repeated_bursts", bursts[0], bursts[-1], [burst_id]))
+    elif enough and peak_index > 0 and rates[0] > 0 and peak / rates[0] >= thresholds.episode_peak_ratio:
+        context["phases"].append(phase("buildup", 0, peak_index - 1, [peak_id]))
+        context["phases"].append(phase("spike", peak_index, peak_index, [peak_id]))
+    if enough and peak_index < len(complete) - 1 and peak and rates[-1] / peak < thresholds.steady_ratio:
+        after_peak = bursts[-1] + 1 if len(bursts) >= 2 else peak_index + 1
+        context["phases"].append(phase("cooling", after_peak, len(complete) - 1, [peak_id, drop_id]))
+    if enough and norm["state"] == "available":
+        expected = Decimal(norm["expected_posts_per_hour"])
+        if all(rate >= expected * thresholds.surging_ratio for rate in rates[-2:]):
+            context["phases"] = [phase("sustained_elevated", len(rates) - 2, len(rates) - 1,
+                                       [f"f:{brand_key}:activity:recent_expected_ratio"])]
+        elif peak >= expected * thresholds.episode_peak_ratio and thresholds.steady_ratio <= rates[-1] / expected <= thresholds.rising_ratio:
+            context["phases"] = context["phases"][:2] + [phase(
+                "return_to_usual", len(rates) - 1, len(rates) - 1,
+                [f"f:{brand_key}:activity:recent_expected_ratio", peak_id],
+            )]
+    return context
+
+
+def fetch_finance_observations(
+    brand_keys: Sequence[str], *, window_days: int, as_of: datetime,
+) -> dict[str, dict[str, Any]]:
+    """One bounded aggregate read; never infer historical collection receipts.
+
+    At most 100 brands × (12 current buckets + 8 history intervals) leave SQL.
+    The savepoint allows this optional family to report resource_limited after
+    a statement timeout without losing the surrounding read-only snapshot.
+    """
+    _validate_window(window_days)
+    keys = sorted(set(brand_keys))
+    if len(keys) > 100:
+        raise ValueError("finance_brand_cap_exceeded")
+    if not keys:
+        return {}
+    cutoff = _as_utc(as_of)
+    start = cutoff - timedelta(days=window_days)
+    schedule = _WINDOW_SCHEDULES[window_days]
+    bounds = [
+        (start + timedelta(seconds=schedule.coarse_bucket_seconds * index),
+         min(cutoff, start + timedelta(seconds=schedule.coarse_bucket_seconds * (index + 1))),
+         "current") for index in range(schedule.coarse_bucket_count)
+    ]
+    if window_days in {1, 7}:
+        bounds += [(start - timedelta(weeks=week), cutoff - timedelta(weeks=week), "history")
+                   for week in range(1, 9)]
+    # No raw post text escapes this aggregation. Quotations sharing a parent
+    # are one source; otherwise identical normalized source text is one source.
+    sql = """
+        WITH bounds AS (
+            SELECT * FROM unnest(%s::timestamptz[], %s::timestamptz[])
+                WITH ORDINALITY AS b(start_at, end_at, idx)
+        )
+        SELECT pb.brand_id::text, b.idx, count(*)::bigint,
+               count(DISTINCT p.author_id)::bigint,
+               count(DISTINCT coalesce(
+                   p.quoted_status_id::text,
+                   nullif(md5(lower(regexp_replace(btrim(coalesce(p.text, '')), '\\s+', ' ', 'g'))), md5('')),
+                   p.tweet_id::text
+               ))::bigint
+        FROM bounds b
+        JOIN posts p ON p.created_at >= b.start_at AND p.created_at < b.end_at
+                    AND p.fetched_at <= %s::timestamptz
+        JOIN posts_brands pb ON pb.post_id = p.tweet_id
+        WHERE pb.brand_id::text = ANY(%s::text[])
+        GROUP BY pb.brand_id, b.idx
+        ORDER BY pb.brand_id, b.idx
+    """
+    result = {key: {"status": "available", "series": [], "history": [], "participation": {}}
+              for key in keys}
+    # Current full-window breadth cannot be obtained by summing bucket-distinct
+    # counts. Add that exact interval to the same query instead.
+    bounds.append((start, cutoff, "participation"))
+    try:
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('statement_timeout')")
+            original_timeout = cursor.fetchone()[0]
+            cursor.execute("SELECT set_config('statement_timeout', '10000', true)")
+            cursor.execute(sql, [[row[0] for row in bounds], [row[1] for row in bounds], cutoff, keys])
+            rows = cursor.fetchall()
+            cursor.execute("SELECT set_config('statement_timeout', %s, true)", [original_timeout])
+    except OperationalError as exc:
+        if getattr(exc.__cause__, "sqlstate", None) != "57014":
+            raise
+        return {key: {"status": "resource_limited", "series": [], "history": [], "participation": {}}
+                for key in keys}
+    values = {(str(key), int(index)): (int(count), int(authors), int(sources))
+              for key, index, count, authors, sources in rows}
+    for key in keys:
+        for index, (lower, upper, kind) in enumerate(bounds, start=1):
+            count, authors, sources = values.get((key, index), (0, 0, 0))
+            row = {"start_at": _iso_utc(lower), "end_at": _iso_utc(upper), "post_count": count}
+            if kind == "current":
+                result[key]["series"].append(row)
+            elif kind == "history":
+                # These are observed counts, not evidence of coverage or scope
+                # stability. Neither CallState nor AppliedConfigSnapshot keeps
+                # the interval history needed to promote them to a norm.
+                result[key]["history"].append({**row, "coverage_proven": False,
+                                              "reason": "historical_collection_provenance_unavailable"})
+            else:
+                result[key]["participation"] = {
+                    "status": "available", "post_count": count,
+                    "distinct_authors": authors, "deduplicated_sources": sources,
+                }
+    return result
 
 
 def canonical_fact_json(packet: dict[str, Any]) -> str:

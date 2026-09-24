@@ -112,10 +112,12 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
     scope_ids: dict[str, str] = {}
     facts = []
     interval = dossier.get("source_row_provenance") or {}
-    for fact in dossier.get("facts", []):
+    finance = dossier.get("finance_context") or {}
+    for fact in [*dossier.get("facts", []), *finance.get("facts", [])]:
         metric = str(fact.get("metric") or "")
         is_change = metric.endswith(("_change_pct", "_change_pp"))
-        if is_change and not allowed:
+        supplied_scope = fact.get("fact_scope") or {}
+        if is_change and not supplied_scope and not allowed:
             continue
         current_coverage = fact.get("coverage_scope") or {}
         scope = {
@@ -125,6 +127,10 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
             "denominator": current_coverage.get("covered_post_count"),
             "coverage": pick(current_coverage, ("status", "covered_post_count", "total_post_count")),
         }
+        if supplied_scope:
+            scope = pick(supplied_scope, ("brand_key", "start_at", "end_at", "basis", "denominator"))
+            scope["coverage"] = pick(supplied_scope.get("coverage") or {},
+                                     ("status", "covered_post_count", "total_post_count"))
         scope_json = json.dumps(scope, sort_keys=True)
         scope_ref = scope_ids.setdefault(scope_json, f"s{len(scope_ids) + 1}")
         scopes[scope_ref] = scope
@@ -143,11 +149,27 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
             if fact.get("family") not in seen:
                 salient.append(fact)
                 seen.add(fact.get("family"))
-        facts = salient[:8]
+        activity = [fact for fact in facts if fact.get("family") == "activity" and fact.get("metric") in {
+            "distinct_authors", "overall_rate_change_pct", "recent_rate_change_pct",
+        }]
+        facts = (salient[:1] + activity + [fact for fact in salient[1:] if fact.get("family") != "activity"])[:8]
         refs = {fact["scope_ref"] for fact in facts}
         scopes = {key: value for key, value in scopes.items() if key in refs}
     result["scopes"] = scopes
     result["facts"] = facts
+    if finance:
+        result["finance_context"] = {
+            "version": finance.get("version"),
+            "historical_status": pick(finance.get("historical_status") or {}, (
+                "policy", "timezone", "state", "reason", "sample_size", "start_at", "end_at",
+            )),
+            "shape_status": pick(finance.get("shape_status") or {}, ("state", "reason", "completed_bucket_count")),
+        }
+        if not rank:
+            result["finance_context"]["phases"] = [
+                pick(phase, ("kind", "start_at", "end_at", "fact_ids", "provisional"))
+                for phase in finance.get("phases", [])[:3]
+            ]
 
     result["corpus_signals"] = []
     for signal in dossier.get("corpus_signals", [])[:(3 if rank else 8)]:
@@ -166,6 +188,6 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
             "evidence_id", "excerpt", "source_language", "created_at", "first_party_role",
             "brand_relevance",
         )) for row in result["evidence"][:2]]
-    elif dossier.get("shape_summary"):
+    elif not finance and dossier.get("shape_summary"):
         result["shape_summary"] = project_shape(dossier["shape_summary"])
     return result
