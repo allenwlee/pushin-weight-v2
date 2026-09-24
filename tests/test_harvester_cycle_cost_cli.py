@@ -6,12 +6,10 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from scripts.harvest_cost import cli  # noqa: E402
+from scripts.harvest_cost import cli
 
 
 def _fixture_cycle(run_id: str, finished: str, b1: int, metrics: int) -> dict:
@@ -124,3 +122,63 @@ def test_cli_writes_out_file(tmp_path: Path):
     assert "B1" in text
     assert "metrics_refresh" in text
     assert "945" in text
+
+
+def test_cli_prices_empty_rare_call_at_persisted_estimated_floor(
+    tmp_path: Path, capsys
+):
+    run = tmp_path / "rare.json"
+    run.write_text(
+        json.dumps(
+            {
+                "run_id": "rare-empty",
+                "finished_at": "2026-09-24T08:15:00+00:00",
+                "calls": [
+                    {
+                        "call_id": "RARE_EXTRA",
+                        "n_results": 0,
+                        "provider_called": True,
+                        "reserved_credits": 300,
+                        "estimated_credits": 15,
+                        "confirmed_credits": None,
+                        "status": "no_results",
+                    }
+                ],
+                "rare_types": {
+                    "schema_version": "1",
+                    "n_provider_attempts": 1,
+                    "n_raw_paid_results": 0,
+                    "search_credits_estimated": 15,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = cli.main(
+        [
+            "--input",
+            str(run),
+            "--format",
+            "json",
+            "--tweet-credits",
+            "15",
+            "--call-floor-credits",
+            "15",
+            "--credits-per-usd",
+            "100000",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["total_credits"] == 15
+    assert payload["cycles"][0]["lines"] == [
+        {
+            "source": "discovery",
+            "label": "RARE_EXTRA",
+            "n_results": 0,
+            "credits": 15.0,
+            "notes": "status=no_results basis=estimated raw_paid_results=0",
+        }
+    ]

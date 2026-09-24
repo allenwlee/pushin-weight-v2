@@ -151,8 +151,10 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
     assert state.claim_run_id == ""
     assert len(translator_calls) == 1
-    assert translator_calls[0][1:] == (["en", "zh_cn"], client)
+    assert translator_calls[0][1] == ["en", "zh_cn"]
+    assert translator_calls[0][2]._delegate is client
     assert len(classifier_calls) == 1
+    assert classifier_calls[0][2]._delegate is client
     assert attempt_deadlines[0] is not attempt_deadlines[1]
     assert all(deadline.request_timeout_seconds == 90 for deadline in attempt_deadlines)
     post.refresh_from_db()

@@ -21,11 +21,11 @@ from typing import Any
 from monitor.post_enrichment import ENRICHMENT_COUNT_KEYS, enrichment_stage_outcome
 
 HARVEST_SUMMARY_PREFIX = "HARVEST_SUMMARY "
-HARVEST_SUMMARY_SCHEMA_VERSION = "2"
+HARVEST_SUMMARY_SCHEMA_VERSION = "3"
 HARVEST_COHORT_PREFIX = "HARVEST_COHORT "
 HARVEST_COHORT_SCHEMA_VERSION = "1"
 
-_SUPPORTED_SUMMARY_SCHEMA_VERSIONS = frozenset({"1", "2"})
+_SUPPORTED_SUMMARY_SCHEMA_VERSIONS = frozenset({"1", "2", "3"})
 
 _ENVELOPE_KEYS = {
     "schema_version",
@@ -51,6 +51,7 @@ _SUMMARY_KEYS = {
     "post_fetch",
     "metrics_refresh",
     "latency",
+    "rare_types",
 }
 _CALL_KEYS = {
     "call_id",
@@ -82,6 +83,10 @@ _CALL_KEYS = {
     "wall_clock_ms",
     "page_receipts",
     "provider_late",
+    "provider_called",
+    "reserved_credits",
+    "estimated_credits",
+    "confirmed_credits",
 }
 _PLANNED_CALL_KEYS = {
     "call_id",
@@ -139,6 +144,56 @@ _LATENCY_KEYS = {
     "api_to_db_p95_ms",
     "api_to_db_max_ms",
     "api_to_db",
+}
+_RARE_TYPE_KEYS = {
+    "schema_version",
+    "n_provider_attempts",
+    "n_raw_paid_results",
+    "n_normalized_hits",
+    "search_credits_reserved",
+    "search_credits_estimated",
+    "search_credits_confirmed",
+    "n_search_credit_confirmations",
+    "n_search_usage_unknown",
+    "jev_slot_usd_reserved",
+    "jev_slot_usd_accounted",
+    "jev_slot_usd_confirmed",
+    "n_jev_slot_attempts",
+    "n_jev_completed",
+    "n_jev_review_needed",
+    "n_jev_failed",
+    "n_hits_kept",
+    "n_hits_junk",
+    "n_posts_persisted",
+    "n_posts_classified",
+    "n_posts_extracted",
+    "n_posts_visible",
+    "n_canonical_records",
+    "n_evidence_attachments",
+    "n_model_releases",
+    "n_model_release_evidence",
+    "n_events",
+    "n_event_evidence",
+    "n_opportunities",
+    "n_opportunity_evidence",
+    "n_job_listings",
+    "n_job_evidence",
+    "n_affiliations",
+    "n_affiliation_evidence",
+    "n_unknown_tokens",
+    "n_unknown_token_evidence",
+    "n_pending_hits_global",
+    "n_pending_post_persistence_global",
+    "n_pending_classification",
+    "n_pending_extraction",
+    "n_pending_product_verification",
+    "n_gap_runs",
+    "n_truncated_runs",
+    "fetch_to_gate_p95_ms",
+    "fetch_to_post_p95_ms",
+    "fetch_to_classification_p95_ms",
+    "fetch_to_extraction_p95_ms",
+    "fetch_to_visible_p95_ms",
 }
 _PAGE_RECEIPT_KEYS = {"page_number", "received_at"}
 _OBSERVATION_KEYS = {
@@ -333,11 +388,16 @@ def _normalise_call(raw: Mapping[str, Any], *, replay: bool = False) -> dict[str
         "n_attributed",
         "not_include_drops",
         "llm_drops",
+        "reserved_credits",
+        "estimated_credits",
+        "confirmed_credits",
     ):
         if key in raw:
             value = _safe_number(raw.get(key), integer=True)
             if value is not None:
                 result[key] = value
+    if "provider_called" in raw:
+        result["provider_called"] = bool(raw.get("provider_called"))
     if "keep_rate" in raw:
         value = _safe_number(raw.get("keep_rate"))
         if value is not None:
@@ -544,6 +604,17 @@ def _normalise_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
     metrics = summary.get("metrics_refresh")
     if isinstance(metrics, Mapping):
         result["metrics_refresh"] = _copy_number_fields(metrics, _METRICS_KEYS)
+    rare_types = summary.get("rare_types")
+    if isinstance(rare_types, Mapping):
+        result["rare_types"] = {
+            "schema_version": _safe_token(
+                rare_types.get("schema_version"), default="unknown"
+            ),
+            **_copy_number_fields(
+                rare_types,
+                _RARE_TYPE_KEYS - {"schema_version"},
+            ),
+        }
     result["latency"] = _normalise_latency(summary)
     return result
 
@@ -634,6 +705,8 @@ def _validate_envelope(envelope: Mapping[str, Any], *, verify_hash: bool) -> Non
         raise SummaryValidationError("summary must be an object")
     if set(envelope["summary"]) - _SUMMARY_KEYS:
         raise SummaryValidationError("unknown summary fields")
+    if schema_version in {"1", "2"} and "rare_types" in envelope["summary"]:
+        raise SummaryValidationError("rare_types requires summary schema 3")
     required_summary = {
         "planned_calls",
         "calls",
@@ -711,6 +784,25 @@ def _validate_envelope(envelope: Mapping[str, Any], *, verify_hash: bool) -> Non
                     raise SummaryValidationError(
                         f"invalid post_fetch field: {field}"
                     )
+    rare_types = summary.get("rare_types")
+    if rare_types is not None:
+        if (
+            not isinstance(rare_types, Mapping)
+            or set(rare_types) - _RARE_TYPE_KEYS
+            or rare_types.get("schema_version") != "1"
+        ):
+            raise SummaryValidationError("invalid rare_types summary")
+        for field, raw in rare_types.items():
+            if field == "schema_version":
+                continue
+            if (
+                not isinstance(raw, (int, float))
+                or isinstance(raw, bool)
+                or not math.isfinite(float(raw))
+                or raw < 0
+                or (field.startswith("n_") and int(raw) != raw)
+            ):
+                raise SummaryValidationError(f"invalid rare_types field: {field}")
     for key in ("calls", "planned_calls", "backlog_replays"):
         rows = envelope["summary"].get(key)
         if not isinstance(rows, list):

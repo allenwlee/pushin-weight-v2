@@ -2,6 +2,13 @@
 
 Operator tool: price TwitterAPI harvest spend from cycle summary JSON.
 
+The optional `RARE_EXTRA` discovery lane is priced from its durable search
+ledger fields in the summary: confirmed credits when present, otherwise the
+estimated charge, otherwise the full retained reservation when provider usage
+is unknown. Its raw paid-result count remains a separate denominator. The
+counts-only `rare_types` telemetry block describes the same physical call and
+is used only as a compatibility fallback, so it is never billed twice.
+
 ## Run
 
 ```bash

@@ -125,6 +125,7 @@ from monitor.post_enrichment import (
 from monitor.post_enrichment import (
     present_text as _present_text,
 )
+from monitor.rare_type_telemetry import build_rare_type_cycle_summary
 
 # x_monitor imports — reuse existing pipeline modules.
 # These have no import-time side effects; they don't touch Store or
@@ -2869,36 +2870,57 @@ class CycleRunner:
         """Reserve and execute the one-page RARE_EXTRA slot exactly once."""
 
         query_hash = hashlib.sha256(call.query_string.encode()).hexdigest()
-        source_query, _ = SearchQuery.objects.get_or_create(
-            query_id=f"{call.call_id}:{call.query_pack_version}:{query_hash}",
-            defaults={
-                "keywords": {
-                    "lane": "rare_types",
-                    "query": call.query_string,
-                    "query_version": call.query_pack_version,
-                },
-                "plan_calls_run_id": "rare-type-scheduled",
-            },
-        )
         slot_start = now.replace(
             minute=(now.minute // 15) * 15, second=0, microsecond=0
         )
-        reservation = reserve_search_run(
-            lane="rare_types",
-            slot_start=slot_start,
-            source_query=source_query,
-            query_string=call.query_string,
-            query_hash=query_hash,
-            query_version=call.query_pack_version or "unknown",
-            environment=os.environ.get("RENDER_SERVICE_NAME", "local")[:64],
-            release_sha=os.environ.get("RENDER_GIT_COMMIT", "unknown")[:64],
-            now=now,
-            reserved_credits=self.cfg.discovery.rare_types.reserved_credits_per_call,
-            daily_credit_limit=int(call.daily_credit_ceiling or 0),
-        )
+        try:
+            source_query, _ = SearchQuery.objects.get_or_create(
+                query_id=f"{call.call_id}:{call.query_pack_version}:{query_hash}",
+                defaults={
+                    "keywords": {
+                        "lane": "rare_types",
+                        "query": call.query_string,
+                        "query_version": call.query_pack_version,
+                    },
+                    "plan_calls_run_id": "rare-type-scheduled",
+                },
+            )
+            reservation = reserve_search_run(
+                lane="rare_types",
+                slot_start=slot_start,
+                source_query=source_query,
+                query_string=call.query_string,
+                query_hash=query_hash,
+                query_version=call.query_pack_version or "unknown",
+                environment=os.environ.get("RENDER_SERVICE_NAME", "local")[:64],
+                release_sha=os.environ.get("RENDER_GIT_COMMIT", "unknown")[:64],
+                now=now,
+                reserved_credits=self.cfg.discovery.rare_types.reserved_credits_per_call,
+                daily_credit_limit=int(call.daily_credit_ceiling or 0),
+            )
+        except DatabaseError as exc:
+            self._errors.append(f"rare_types.reservation_failed:{type(exc).__name__}")
+            return {"status": "reservation_failed", "provider_called": False}
         if not reservation.created or reservation.run is None:
             return {"status": reservation.reason, "provider_called": False}
         run = reservation.run
+
+        def cost_fields() -> dict[str, int | None]:
+            try:
+                run.refresh_from_db(
+                    fields=[
+                        "reserved_credits",
+                        "estimated_credits",
+                        "confirmed_credits",
+                    ]
+                )
+            except DatabaseError:
+                pass
+            return {
+                "reserved_credits": run.reserved_credits,
+                "estimated_credits": run.estimated_credits,
+                "confirmed_credits": run.confirmed_credits,
+            }
         effective_query = TwitterApiClient._effective_search_query(
             call.query_string,
             since=None,
@@ -2957,13 +2979,24 @@ class CycleRunner:
                 "normalization_errors": normalization_errors,
                 "run_id": run.pk,
                 "query_version": call.query_pack_version,
+                **cost_fields(),
             }
         except Exception as exc:
-            mark_search_failed(
-                run.pk, error_code=type(exc).__name__[:128], now=self._wall_now()
-            )
+            try:
+                mark_search_failed(
+                    run.pk, error_code=type(exc).__name__[:128], now=self._wall_now()
+                )
+            except DatabaseError as mark_exc:
+                self._errors.append(
+                    f"rare_types.failure_record_failed:{type(mark_exc).__name__}"
+                )
             self._errors.append(f"fetch.{call.call_id}: {exc}")
-            return {"status": "error", "provider_called": True, "run_id": run.pk}
+            return {
+                "status": "error",
+                "provider_called": True,
+                "run_id": run.pk,
+                **cost_fields(),
+            }
         finally:
             api.max_retries = prior_retries
 
@@ -5191,6 +5224,15 @@ class CycleRunner:
         summary["totals"]["n_updated"] = self._posts_updated
         summary["totals"]["n_persist_failed"] = self._posts_persist_failed
         summary["totals"]["n_attributed"] = self._posts_attributed
+
+        if any(call.get("call_id") == "RARE_EXTRA" for call in summary["calls"]):
+            try:
+                summary["rare_types"] = build_rare_type_cycle_summary(summary)
+            except DatabaseError as exc:
+                summary["degraded"]["rare_type_telemetry"] = 1
+                self._errors.append(
+                    f"rare_types.telemetry_failed:{type(exc).__name__}"
+                )
 
         summary = self._finish_summary(summary, started_monotonic=t0, api=api)
 
