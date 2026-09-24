@@ -1,0 +1,3322 @@
+{
+  "identity": {
+    "outcome": "ok",
+    "payload": {
+      "_id": "6778fc29920093dbc0c24917",
+      "avatarUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/676e38ad04af5bec20bc9faf/dUd-LsZEX0H_d4qefO_g6.jpeg",
+      "fullname": "MiniMax",
+      "name": "MiniMaxAI",
+      "details": "Intelligence with Everyone",
+      "isVerified": false,
+      "isFollowing": false,
+      "plan": "team",
+      "numUsers": 12,
+      "numModels": 21,
+      "numSpaces": 8,
+      "numDatasets": 7,
+      "numKernels": 1,
+      "numBuckets": 0,
+      "numPapers": 4,
+      "numFollowers": 10874
+    },
+    "next_cursor": null,
+    "attempts": [
+      {
+        "endpoint": "https://huggingface.co/api/organizations/MiniMaxAI/overview",
+        "parameters": null,
+        "attempted_at": "2026-09-24T08:09:24.018039+00:00",
+        "http_status": 200,
+        "outcome": "ok",
+        "payload": {
+          "_id": "6778fc29920093dbc0c24917",
+          "avatarUrl": "https://cdn-avatars.huggingface.co/v1/production/uploads/676e38ad04af5bec20bc9faf/dUd-LsZEX0H_d4qefO_g6.jpeg",
+          "fullname": "MiniMax",
+          "name": "MiniMaxAI",
+          "details": "Intelligence with Everyone",
+          "isVerified": false,
+          "isFollowing": false,
+          "plan": "team",
+          "numUsers": 12,
+          "numModels": 21,
+          "numSpaces": 8,
+          "numDatasets": 7,
+          "numKernels": 1,
+          "numBuckets": 0,
+          "numPapers": 4,
+          "numFollowers": 10874
+        },
+        "inventory_version": "hf-model-metadata-v1",
+        "link": "",
+        "observed_at": "2026-09-24T08:09:24.237041+00:00"
+      }
+    ]
+  },
+  "listing": {
+    "outcome": "ok",
+    "payload": [
+      {
+        "_id": "6a75ce4156758b68af00f678",
+        "id": "MiniMaxAI/MiniMax-Music3",
+        "author": "MiniMaxAI",
+        "gated": false,
+        "lastModified": "2026-08-14T10:51:40.000Z",
+        "likes": 1405,
+        "private": false,
+        "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+        "downloads": 11427,
+        "tags": [
+          "diffusers",
+          "safetensors",
+          "minimax_music3",
+          "music-generation",
+          "text-to-music",
+          "pytorch",
+          "sglang-omni",
+          "text-to-audio",
+          "region:us"
+        ],
+        "pipeline_tag": "text-to-audio",
+        "library_name": "diffusers",
+        "createdAt": "2026-08-07T12:23:29.000Z",
+        "modelId": "MiniMaxAI/MiniMax-Music3",
+        "siblings": [
+          {
+            "rfilename": ".gitattributes"
+          },
+          {
+            "rfilename": "LICENSE"
+          },
+          {
+            "rfilename": "README.md"
+          },
+          {
+            "rfilename": "assets/minimax_ttm.wav"
+          },
+          {
+            "rfilename": "condition_encoder/config.json"
+          },
+          {
+            "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors"
+          },
+          {
+            "rfilename": "config.json"
+          },
+          {
+            "rfilename": "dav.pth"
+          },
+          {
+            "rfilename": "figures/Music3.png"
+          },
+          {
+            "rfilename": "figures/logo.svg"
+          },
+          {
+            "rfilename": "figures/music3.0-Architecture-Diagram.png"
+          },
+          {
+            "rfilename": "flowmatching_vae.pth"
+          },
+          {
+            "rfilename": "language_model/config.json"
+          },
+          {
+            "rfilename": "language_model/generation_config.json"
+          },
+          {
+            "rfilename": "language_model/model-00001-of-00004.safetensors"
+          },
+          {
+            "rfilename": "language_model/model-00002-of-00004.safetensors"
+          },
+          {
+            "rfilename": "language_model/model-00003-of-00004.safetensors"
+          },
+          {
+            "rfilename": "language_model/model-00004-of-00004.safetensors"
+          },
+          {
+            "rfilename": "language_model/model.safetensors.index.json"
+          },
+          {
+            "rfilename": "modular_model_index.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/config.json"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors"
+          },
+          {
+            "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json"
+          },
+          {
+            "rfilename": "rvq_depth_decoder/config.json"
+          },
+          {
+            "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors"
+          },
+          {
+            "rfilename": "scheduler/scheduler_config.json"
+          },
+          {
+            "rfilename": "scripts/end_to_end/minimax_ttm_test.py"
+          },
+          {
+            "rfilename": "tokenizer/chat_template.jinja"
+          },
+          {
+            "rfilename": "tokenizer/tokenizer.json"
+          },
+          {
+            "rfilename": "tokenizer/tokenizer_config.json"
+          },
+          {
+            "rfilename": "transformer/config.json"
+          },
+          {
+            "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+          },
+          {
+            "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+          },
+          {
+            "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json"
+          },
+          {
+            "rfilename": "vocoder/config.json"
+          },
+          {
+            "rfilename": "vocoder/diffusion_pytorch_model.safetensors"
+          }
+        ]
+      }
+    ],
+    "next_cursor": "eyIkb3IiOlt7Imxhc3RNb2RpZmllZCI6IjIwMjYtMDgtMTRUMTA6NTE6NDAuMDAwWiIsIl9pZCI6eyIkZ3QiOiI2YTc1Y2U0MTU2NzU4YjY4YWYwMGY2NzgifX0seyJsYXN0TW9kaWZpZWQiOnsiJGx0IjoiMjAyNi0wOC0xNFQxMDo1MTo0MC4wMDBaIn19LHsibGFzdE1vZGlmaWVkIjpudWxsfV0sInNlYXJjaFNlcXVlbmNlVG9rZW4iOiJDSVRsb0FJYUNTbGdJdWIvbndFQUFCb09XZ3hxZGM1QlZuV0xhSzhBOW5naURsb01hblhPUVZaMWkyaXZBUFo0In0=",
+    "attempts": [
+      {
+        "endpoint": "https://huggingface.co/api/models",
+        "parameters": {
+          "author": "MiniMaxAI",
+          "full": "true",
+          "limit": 1,
+          "sort": "lastModified",
+          "direction": -1
+        },
+        "attempted_at": "2026-09-24T08:09:24.237094+00:00",
+        "http_status": 200,
+        "outcome": "ok",
+        "payload": [
+          {
+            "_id": "6a75ce4156758b68af00f678",
+            "id": "MiniMaxAI/MiniMax-Music3",
+            "author": "MiniMaxAI",
+            "gated": false,
+            "lastModified": "2026-08-14T10:51:40.000Z",
+            "likes": 1405,
+            "private": false,
+            "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+            "downloads": 11427,
+            "tags": [
+              "diffusers",
+              "safetensors",
+              "minimax_music3",
+              "music-generation",
+              "text-to-music",
+              "pytorch",
+              "sglang-omni",
+              "text-to-audio",
+              "region:us"
+            ],
+            "pipeline_tag": "text-to-audio",
+            "library_name": "diffusers",
+            "createdAt": "2026-08-07T12:23:29.000Z",
+            "modelId": "MiniMaxAI/MiniMax-Music3",
+            "siblings": [
+              {
+                "rfilename": ".gitattributes"
+              },
+              {
+                "rfilename": "LICENSE"
+              },
+              {
+                "rfilename": "README.md"
+              },
+              {
+                "rfilename": "assets/minimax_ttm.wav"
+              },
+              {
+                "rfilename": "condition_encoder/config.json"
+              },
+              {
+                "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors"
+              },
+              {
+                "rfilename": "config.json"
+              },
+              {
+                "rfilename": "dav.pth"
+              },
+              {
+                "rfilename": "figures/Music3.png"
+              },
+              {
+                "rfilename": "figures/logo.svg"
+              },
+              {
+                "rfilename": "figures/music3.0-Architecture-Diagram.png"
+              },
+              {
+                "rfilename": "flowmatching_vae.pth"
+              },
+              {
+                "rfilename": "language_model/config.json"
+              },
+              {
+                "rfilename": "language_model/generation_config.json"
+              },
+              {
+                "rfilename": "language_model/model-00001-of-00004.safetensors"
+              },
+              {
+                "rfilename": "language_model/model-00002-of-00004.safetensors"
+              },
+              {
+                "rfilename": "language_model/model-00003-of-00004.safetensors"
+              },
+              {
+                "rfilename": "language_model/model-00004-of-00004.safetensors"
+              },
+              {
+                "rfilename": "language_model/model.safetensors.index.json"
+              },
+              {
+                "rfilename": "modular_model_index.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/config.json"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors"
+              },
+              {
+                "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json"
+              },
+              {
+                "rfilename": "rvq_depth_decoder/config.json"
+              },
+              {
+                "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors"
+              },
+              {
+                "rfilename": "scheduler/scheduler_config.json"
+              },
+              {
+                "rfilename": "scripts/end_to_end/minimax_ttm_test.py"
+              },
+              {
+                "rfilename": "tokenizer/chat_template.jinja"
+              },
+              {
+                "rfilename": "tokenizer/tokenizer.json"
+              },
+              {
+                "rfilename": "tokenizer/tokenizer_config.json"
+              },
+              {
+                "rfilename": "transformer/config.json"
+              },
+              {
+                "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+              },
+              {
+                "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+              },
+              {
+                "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json"
+              },
+              {
+                "rfilename": "vocoder/config.json"
+              },
+              {
+                "rfilename": "vocoder/diffusion_pytorch_model.safetensors"
+              }
+            ]
+          }
+        ],
+        "inventory_version": "hf-model-metadata-v1",
+        "link": "<https://huggingface.co/api/models?author=MiniMaxAI&full=true&limit=1&sort=lastModified&direction=-1&cursor=eyIkb3IiOlt7Imxhc3RNb2RpZmllZCI6IjIwMjYtMDgtMTRUMTA6NTE6NDAuMDAwWiIsIl9pZCI6eyIkZ3QiOiI2YTc1Y2U0MTU2NzU4YjY4YWYwMGY2NzgifX0seyJsYXN0TW9kaWZpZWQiOnsiJGx0IjoiMjAyNi0wOC0xNFQxMDo1MTo0MC4wMDBaIn19LHsibGFzdE1vZGlmaWVkIjpudWxsfV0sInNlYXJjaFNlcXVlbmNlVG9rZW4iOiJDSVRsb0FJYUNTbGdJdWIvbndFQUFCb09XZ3hxZGM1QlZuV0xhSzhBOW5naURsb01hblhPUVZaMWkyaXZBUFo0In0%3D>; rel=\"next\"",
+        "observed_at": "2026-09-24T08:09:24.410241+00:00"
+      }
+    ]
+  },
+  "detail": {
+    "outcome": "ok",
+    "payload": {
+      "_id": "6a75ce4156758b68af00f678",
+      "id": "MiniMaxAI/MiniMax-Music3",
+      "private": false,
+      "pipeline_tag": "text-to-audio",
+      "library_name": "diffusers",
+      "tags": [
+        "diffusers",
+        "safetensors",
+        "minimax_music3",
+        "music-generation",
+        "text-to-music",
+        "pytorch",
+        "sglang-omni",
+        "text-to-audio",
+        "region:us"
+      ],
+      "downloads": 11427,
+      "likes": 1405,
+      "modelId": "MiniMaxAI/MiniMax-Music3",
+      "author": "MiniMaxAI",
+      "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+      "lastModified": "2026-08-14T10:51:40.000Z",
+      "gated": false,
+      "disabled": false,
+      "model-index": null,
+      "config": {
+        "architectures": [
+          "MiniMaxMusic3ForConditionalGeneration"
+        ],
+        "model_type": "minimax_music3"
+      },
+      "cardData": {
+        "library_name": "diffusers",
+        "pipeline_tag": "text-to-audio",
+        "tags": [
+          "music-generation",
+          "text-to-music",
+          "pytorch",
+          "sglang-omni"
+        ]
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "670322096ca4aa3112f12e0ff9d0ae1742e85310",
+          "size": 329
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "6df669dd190b8a36bc0829b604ce186ee0a1a357",
+          "size": 7373
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "2ec3b0baf19253ab3ef9cf3dcda6e67cfb1b545d",
+          "size": 11699
+        },
+        {
+          "rfilename": "assets/minimax_ttm.wav",
+          "blobId": "3d770a423d3ee4e95d97daa788626fcc73b1f5de",
+          "size": 36460944,
+          "lfs": {
+            "sha256": "0d7c582e9c53eb1a83333906964294b6053e81c342cd62167da1514f375ea6d9",
+            "size": 36460944,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "condition_encoder/config.json",
+          "blobId": "a51f209c4f914061b5b7ff2272c05cbce4764e87",
+          "size": 292
+        },
+        {
+          "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors",
+          "blobId": "2251146adebf5f6bc529b6e0b7bf4dd657b2997e",
+          "size": 100671852,
+          "lfs": {
+            "sha256": "83179c5eaa9a68a370affe0c1b96c2179f659ea4175666b31071490a202c2a4d",
+            "size": 100671852,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "2b673e6ef0e8bc328be6af1a8cedfae50e89250a",
+          "size": 107
+        },
+        {
+          "rfilename": "dav.pth",
+          "blobId": "49c7a50179b3649be9f9024291db99c8c673db5f",
+          "size": 491817450,
+          "lfs": {
+            "sha256": "52adde6c6c52cca872f549449cd7b608677d1e69f4a98eee22da3403e63b56e8",
+            "size": 491817450,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "figures/Music3.png",
+          "blobId": "c3f6700d3cc1f79c6545bc2c81d59cb5ca84ab2f",
+          "size": 916912,
+          "lfs": {
+            "sha256": "6ebfe65de89e57657b796d96e2f4bb279b9508871eecc0f8727cdb14ae6b0d04",
+            "size": 916912,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "figures/logo.svg",
+          "blobId": "972b41cdb04e1ab4c2b94fa0c35df0c80a5151a2",
+          "size": 8462
+        },
+        {
+          "rfilename": "figures/music3.0-Architecture-Diagram.png",
+          "blobId": "c56b38be6d285275b49c137ffdea354b33ea0e62",
+          "size": 1097623,
+          "lfs": {
+            "sha256": "a69b6f939699896193d417371fa0bb3748971c5aed9ab3118c3f75b5ac8ceac5",
+            "size": 1097623,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "flowmatching_vae.pth",
+          "blobId": "44733e938334bab51e544f62127fcf56258408db",
+          "size": 9828468476,
+          "lfs": {
+            "sha256": "941f3ed9591684679e733d184308be89949abeb1b069a6e17e69a013ecec08fe",
+            "size": 9828468476,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "language_model/config.json",
+          "blobId": "ff464e670afc4b54ccd7ccab9e45f0b8ce81c950",
+          "size": 1596
+        },
+        {
+          "rfilename": "language_model/generation_config.json",
+          "blobId": "5d7d66f6298786d530fc9e88a3e3f8d0983c3ff1",
+          "size": 158
+        },
+        {
+          "rfilename": "language_model/model-00001-of-00004.safetensors",
+          "blobId": "c42f6c34c7edde6067b8ebc0fcd2b3fe5a760acd",
+          "size": 4910103856,
+          "lfs": {
+            "sha256": "1e95924a158b45b67cfad04fa0f0a352e5a263e69338734d7c1d558be776cc98",
+            "size": 4910103856,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "language_model/model-00002-of-00004.safetensors",
+          "blobId": "3ccc05f17eb435165db4ea175f31cfc543c62e49",
+          "size": 4915960352,
+          "lfs": {
+            "sha256": "fde2d335eef7eafa268d35e53d4b040ee51d2f3fa727f9855b4c97d88a2892da",
+            "size": 4915960352,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "language_model/model-00003-of-00004.safetensors",
+          "blobId": "56d5c269b0efd8595ce68f0e35763b329bd03849",
+          "size": 4983068496,
+          "lfs": {
+            "sha256": "6549a831637ab678a573047e7fa8fdf966998c4f45330e6eb7573d67f7b9b4c6",
+            "size": 4983068496,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "language_model/model-00004-of-00004.safetensors",
+          "blobId": "028088aa2db9ae06f7c3c51adcfc282f4c298ef2",
+          "size": 2359864688,
+          "lfs": {
+            "sha256": "a1c9865f357b64d3ae9f428fb98a844831e5a0aee9ed17b19bd7f7be32b964a9",
+            "size": 2359864688,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "language_model/model.safetensors.index.json",
+          "blobId": "4e8df47c67eeca92b3d7bd421fc2d190bab4ebfa",
+          "size": 32914
+        },
+        {
+          "rfilename": "modular_model_index.json",
+          "blobId": "1ebb9c9031bca3491daf781890bf10d19167e80e",
+          "size": 2391
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json",
+          "blobId": "82275ed8a85dbc8a16d45d662b044542a83e673f",
+          "size": 880
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt",
+          "blobId": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+          "size": 1671853
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json",
+          "blobId": "140696ca58a324947c5468a010f119d3579ecb1c",
+          "size": 612
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json",
+          "blobId": "a25ae99b8d491de870d3bf3d6e1a6395a496c4cf",
+          "size": 11423806,
+          "lfs": {
+            "sha256": "bc63169ebf49c476995ced3f3dbae68f93ed9cf2a2997d3658863672f2f05f0f",
+            "size": 11423806,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json",
+          "blobId": "7faee959e6c9a77686796b2b7986e3c00a42bf6b",
+          "size": 10853
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json",
+          "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "size": 2776833
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/config.json",
+          "blobId": "8b3c16ef0454afea4703053e9948ff02598a8485",
+          "size": 1663
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors",
+          "blobId": "9eff704e4e4c7b40521c6e2e0d7325c1e88beffd",
+          "size": 1638400144,
+          "lfs": {
+            "sha256": "725ce815b308b4a27e3aa3e6f119df7941fb51e254bfd67554c4a4f7f9180a8d",
+            "size": 1638400144,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors",
+          "blobId": "d773e20d0a1367c334b09d71ca7c817bcebf7d1f",
+          "size": 58720400,
+          "lfs": {
+            "sha256": "ef64b4f6d8dd60c7288d1caebef63c1336511c0f70b93d7e26445135fed218e4",
+            "size": 58720400,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors",
+          "blobId": "d0708c2ada54245c87175d0832c47df0b8ae7f6c",
+          "size": 285230720,
+          "lfs": {
+            "sha256": "3e4df154f642995c40ef2916450751b55607d6ee956f6c16a283aab0e15cc632",
+            "size": 285230720,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors",
+          "blobId": "bac4a866de9f32c4866e1b2249a5b2267ff7a0cb",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "3d9cf1da3c2096a76c83c28382d213fdf971f9935ce918dd4fa5e8eca2b8b0b6",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors",
+          "blobId": "310dbe530a1b2cfc2048c3cb8cc0c4ff5720839e",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "118fab650caf1fabea9a02ebe7d1470aee432d864f92dbaae1c7c4f79406104f",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors",
+          "blobId": "9d484d65f5add0e5f0113d3b628cbebbd37686e3",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "7a3dcfc8d85c6a9c32c416a251eab634f94a68b938a4ded2bdbe253f20c59149",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors",
+          "blobId": "8f2b6d713b82dccceb64e0810b981d90e763d5ea",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "d3790d5fd2b792d72919660fe5f1f67bdb1dcfa9f0fe4994546f78ee56c9b669",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors",
+          "blobId": "9bbe1dc74fe41c260ca65dce9f23ca494f2108c6",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "7fddc6782c77cbc72da2ad59de44481f4a522209d0c93049ccb45e5ba8d0903a",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors",
+          "blobId": "c2267871988c1dfb2d521b436ec60bd4e5ae25dc",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "3593e1c065a7c9e98549c988e0b93e66372d5ebee83a5087e8dd4ab6b1521fc4",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors",
+          "blobId": "7b8ba946347f860abe69b6130bd6929cc06d0c4a",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "9d7e532ae3d5de8a1b7ec9b18e0d16c6c3142d52100dfecec1fe23812cf0fdf7",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors",
+          "blobId": "612140d4cd78867453d572f955c3a68fbb6c09db",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "ff035d2881fc2aade282c11cb083ebf975da136a8e9f8cc208c7053298c77ee1",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors",
+          "blobId": "7e73c6e7cef62ff420f6d89095741808a5cf794a",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "81639eef3aa9e633a11aaa5735e7d8bc6254e6494f1a413f18dc27965eb75141",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors",
+          "blobId": "8e9ef8b6483477ad8ab1dd618cc67af2efe993d9",
+          "size": 385894144,
+          "lfs": {
+            "sha256": "498d5b76cfac24f2465b437540d39a0f8e9d822d3ad1bcec2e7c991df51652b0",
+            "size": 385894144,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors",
+          "blobId": "e0073d358bf78d337d0f8ccd3f4a53d1b3a364ee",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "be29431b2e33aef359a1a0fa3867b9386631cde646a34c1fc86538a209a6ca71",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors",
+          "blobId": "ff9ef475821949f46e66c644acff928a593271de",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "c9b5ca8b4ca1f34df20d48c23f7f01f80751a15a10308703c3eed2693b86ca4e",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors",
+          "blobId": "5382edbad4336767abde77b25e6bb1fb4898e248",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "337a491f37a967603bd622b1daaca312c759637c6c38415e31743b2f9a05c27c",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors",
+          "blobId": "011c2687f9a1e0076b7e6aeb216fd182acde155e",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "71687a19e4f5376243da4c42dba4a3fffbad27d0414bae63e802e96a700b73dd",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors",
+          "blobId": "f395705e55e9b1bef82fa42eb3850eea272e6bc8",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "c44b315361a14d8ca417934d7d09cf40737459717b2ebf7e5f755b4affec8f34",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors",
+          "blobId": "d3531391cd331a4e25c07af886b092ffb84c3f59",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "5dcfe06cdc37d5456e330b9354be8b88ea1cf4146c456abc8fe08ade8b6a10e6",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors",
+          "blobId": "5ba27efedf0232315201b3bffc9f2c3e034d07eb",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "1132f82d97f2d4afef680b2eca823d3d6b3d75b985579e221aad94afc4224ac0",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors",
+          "blobId": "4fd7757d0fe627c5aaa07f2a57b7b73620a4cc90",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "dd733b38709fc6209d50e7b232fca7d0c3fb75dd26cd13c9924fe1c6fc95d860",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors",
+          "blobId": "b53d7fc1aab229af6a0bf44ad2819570924b6776",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "7abcd88567f9de99d0b7563472178694540d91ca030d275ec5651d735eab726e",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors",
+          "blobId": "cf4027cd5725e1e6c6304eacfda520ddd53cd799",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "130ef32dbdf2a463d7b9216fb90bb351a1af8a3974c23ebf3cad8efe25bc01e6",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors",
+          "blobId": "f026c799c428f28a176bb2babc4ad6753eba3dd0",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "cb68dfdbee7f809a253201e6ee515d84c5354c6ef70b0e16ad3dc624c3f3b2c2",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors",
+          "blobId": "c4ac468a4fd79e02991e4c8e58f2d2cc7b02e374",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "0ed6929536a99741a63b2cee15cc1bb7d9f77ddcf3edfe1d163d7ab5fcaa1e5d",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors",
+          "blobId": "46c0fc51e67970966529db73ae5962179c1ff8f1",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "29668e2887f5b63de4bdb016a14121407801e1189e24c07a31ce774bf070eb15",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors",
+          "blobId": "4a4d0a933da6c4870031e6c8d754f190b6a8ec6d",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "11671a0c9cef106550bfd56d7ab588fe85c79001b2c4c5aeed77e511192fccf8",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors",
+          "blobId": "4333bd638c85975b4270647e7bff3f557414cc11",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "f318b6b4e063bd0e9b93a300151f8c9a367610ab4a28893a2d911b1a44ec51a2",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors",
+          "blobId": "c3eaa691ead910610154c472a25328267ff58d9d",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "9ff622627db5da65e548357109de4bb10331a04671340f4cdf3c8e210700ec3c",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors",
+          "blobId": "52541d9523d78ca09c19fcf7f266094e520cbe93",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "d30758486725a17873f8cfc9bae90daedf88f37aacae9a07b53c40503de55f20",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors",
+          "blobId": "7932c53413805ea2cfcab351dbd404ffd39e0680",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "e16401b15371064adf2ccf5f7640a56044e0b114cdffc5357460bddb4fbbcf73",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors",
+          "blobId": "348c9e07583a69581af0ff221c4ba5ef8ebd68f3",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "af25a25b7a5a9c2c634cdf840391676f6481c5fa81fb76b85a4d38f586b40a7d",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors",
+          "blobId": "109999f5ca5f7bd0c6cd9331e64745878dd918c5",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "9dc3b8e17a9be8b670331d6d79d4eb0d943cba07f3d68ed208ff8c469bce671e",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors",
+          "blobId": "a9e966e357ee03c599194321318bcb2fdc913f8c",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "f7a0e15fa315ef9e6722de95c43bdd454d80ae1c71b85c4cf880f5d54173c39d",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors",
+          "blobId": "2659834bd14595e2c513266ba6ed0cc0fbda26fc",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "b7156d00c719c49e471146930fa1697b3cb99aa8e5606701e983db1fabb47d6d",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors",
+          "blobId": "95e0b9f804af4d056c9db7b9e7725479f4bcaaaa",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "30a80b6b4582014ae613a3ec4a807b82e9b36adcc946bab1cbb98e795897700e",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors",
+          "blobId": "a942deba753fac3d87cfcfe2bd6905295fcb58b8",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "768abad0bbd7c606b603d1eba5cacdf93a49d4c07a2dfe737d7cb63c15d6ad32",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors",
+          "blobId": "2456e527cde4cc2506b2b157fa0429308cff3d19",
+          "size": 385894152,
+          "lfs": {
+            "sha256": "7882a7ddabe655dfcd09ec04c16bac56e4a7942544438f2d02cb10f59cf60843",
+            "size": 385894152,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors",
+          "blobId": "c111543863503fe40a4fee82946dbb1bdb678f57",
+          "size": 1739071824,
+          "lfs": {
+            "sha256": "7c47ec26724811b813e4d0568bc8a18b27360b979bce0a4f6c905a913b2fff1b",
+            "size": 1739071824,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors",
+          "blobId": "7cfd201de2304128bad69028c0fc31dfbac99c28",
+          "size": 50463208,
+          "lfs": {
+            "sha256": "29c86ffd0951470a0c32ff7a3840bf6673bf1a953190be2af1c2d2c4598f43e7",
+            "size": 50463208,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors",
+          "blobId": "4b3996be0bc5c7301f9004e93573221684dd6ec1",
+          "size": 16777480,
+          "lfs": {
+            "sha256": "afc13130962b4bb346db8dbd06e37d4b0faf1543cb9c3c4704172ba7c489115d",
+            "size": 16777480,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors",
+          "blobId": "bd01c8a17ea5647f371fea725a801446dd8f654f",
+          "size": 16777480,
+          "lfs": {
+            "sha256": "03508eed1b8d6f7ec042bf4139ac7c101e9e8d64038fe2de423d1dbe3b93e034",
+            "size": 16777480,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors",
+          "blobId": "7eff53654b17b29041349701afe93e1d71694a87",
+          "size": 109060744,
+          "lfs": {
+            "sha256": "ee743120815778e694c747ce6c57120c7f27d35005a099c6904443ba17d05b0c",
+            "size": 109060744,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors",
+          "blobId": "ecad51e17c95e0fec711eab8243442159f0d97bd",
+          "size": 285230240,
+          "lfs": {
+            "sha256": "f548dee6c2e9deba7e04451843794d581cc58691a28fc42ffe2099381fd2ab88",
+            "size": 285230240,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors",
+          "blobId": "4a3d4970024e70c5f7ba5bc9f76bcbc452efd788",
+          "size": 285230240,
+          "lfs": {
+            "sha256": "dab8447646b085b185441bda9f5010408c55a43c59a5fc496f25dcde429546b0",
+            "size": 285230240,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors",
+          "blobId": "5833d3dd05c496a6c8d70ff4a54c77d45cd05145",
+          "size": 285230240,
+          "lfs": {
+            "sha256": "bfb04b889e83dec4321bc380d38bbb45760113ecf0e20cdaeda38c0e1e99136b",
+            "size": 285230240,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors",
+          "blobId": "48783fef51d9c4a0e8467602453496cb2c2bc8bf",
+          "size": 184566536,
+          "lfs": {
+            "sha256": "75660a0d42c4ef9f813ba98d28b64859e0b86bfa3165953ebeeee3a12d9574ad",
+            "size": 184566536,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json",
+          "blobId": "f39c12f96b58954dc1a274ac2ac7ee03fe4e7ce9",
+          "size": 39019
+        },
+        {
+          "rfilename": "rvq_depth_decoder/config.json",
+          "blobId": "3b9e35a49f6cf4bf168753eebf7382c805528468",
+          "size": 274
+        },
+        {
+          "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors",
+          "blobId": "45ac339bd78e36b4547b7e796d13fd916a90cc5e",
+          "size": 1292055248,
+          "lfs": {
+            "sha256": "80e86ab006bb5c8d4f223205045035a1c77b2bb9c3be9a86d7e740bbafe5ddf0",
+            "size": 1292055248,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "scheduler/scheduler_config.json",
+          "blobId": "8acb48912e92c0adc83fb427d1e5f0944f4d866a",
+          "size": 483
+        },
+        {
+          "rfilename": "scripts/end_to_end/minimax_ttm_test.py",
+          "blobId": "6828e20cfcb09a8e7f304a916e20acf75387259e",
+          "size": 8584
+        },
+        {
+          "rfilename": "tokenizer/chat_template.jinja",
+          "blobId": "01be9b307daa2d425f7c168c9fb145a286e0afb4",
+          "size": 4168
+        },
+        {
+          "rfilename": "tokenizer/tokenizer.json",
+          "blobId": "c0ab7233a075b8e94938b82ed13bd1f7587ac9a6",
+          "size": 11423801,
+          "lfs": {
+            "sha256": "b1537fa9e59a537276ecbc2e12d0438edff635a1f4a4948e679774b5feb3e610",
+            "size": 11423801,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "tokenizer/tokenizer_config.json",
+          "blobId": "9158804bfff9329ed49a867d691553315871282d",
+          "size": 377
+        },
+        {
+          "rfilename": "transformer/config.json",
+          "blobId": "5e8073e8558b209170cfc1d3b191f68d85d61252",
+          "size": 294
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+          "blobId": "786c1a495c4e220b1a6058d7ed490289a2da02d7",
+          "size": 4959921384,
+          "lfs": {
+            "sha256": "1943baebe93b5d5a57e9e1f603d9cef51a73a55e7a42f52913932dc06dcf10f0",
+            "size": 4959921384,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+          "blobId": "e5a5d07eaf404132f606ab88c6014cc3420c9c5f",
+          "size": 4767750800,
+          "lfs": {
+            "sha256": "b2f9e29d241e107e5a281f8b369d6db48eee983917df966c56d7b8dd0bd482c2",
+            "size": 4767750800,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json",
+          "blobId": "c1dcee31b5deb31e8383a5493c98b912578a312e",
+          "size": 42679
+        },
+        {
+          "rfilename": "vocoder/config.json",
+          "blobId": "bc056a8465fd8116f4df46a70f203c6df1c6ad4d",
+          "size": 251
+        },
+        {
+          "rfilename": "vocoder/diffusion_pytorch_model.safetensors",
+          "blobId": "a3edba293536b27ca6f113fc968bf2794741fc98",
+          "size": 216695272,
+          "lfs": {
+            "sha256": "daf0bf0560ea978ce7b5ec3e82f420a44429efef18bdfbe3c714d55ceffbe934",
+            "size": 216695272,
+            "pointerSize": 134
+          }
+        }
+      ],
+      "securityRepoStatus": {
+        "scansDone": true,
+        "filesWithIssues": []
+      },
+      "spaces": [
+        "embedl/hfviewer",
+        "MiniMaxAI/MiniMax-Music3",
+        "victor/MiniMax-Music3-Jam",
+        "Monster-Code/Blog",
+        "MiniMaxAI/MiniMax-Music3-workflow",
+        "multimodalart/minimax-music3-prompting-guide",
+        "abalanescu/flow2",
+        "Shivlal6660jyoti/MTTS",
+        "SYNAPSEai1/Synapse-Music-V13",
+        "akhaliq/MiniMax-Music3-workflow",
+        "abi3420/LingoVid",
+        "henrybit/minimax-music3-lab",
+        "abidlabs/MiniMax-Music3",
+        "Obwi/MiniMax-Music3-Demo",
+        "XXXMARK/MiniMax-Music3",
+        "Radiotomy/Aurora",
+        "abi3420/finderon",
+        "owenisas/minimax-music3",
+        "SiTH777/MiniMax-Music3-demo",
+        "Upsampler/minimax-music3",
+        "Shivlal6660/MTTS",
+        "garyamorris/minimax-music3-playground",
+        "SuperPauly/MiniMax-Music3-workflow",
+        "atrezonator/MiniMax-Music3",
+        "JMullings/LLM-XRay",
+        "cpuai/MiniMax-Music3",
+        "abi3420/dubify-backend",
+        "lalopenguin/MiniMax-Music3-Demo",
+        "smartdigitalnetworks/generativesongs",
+        "adilkh/MiniMax-Music3-Jam",
+        "Anessen/minimax-music3-studio",
+        "aryan012234/ai_music_gen",
+        "Taxiulmblack/hsdhjgig",
+        "Taxiulmblack/ulmertaxi",
+        "jafernazeer/MiniMax-Music3-Demo",
+        "filgood31/minimax-music3-demo",
+        "brpager/MiniMax-Music3-demo",
+        "Shivlal6660jyotilove/MTTS",
+        "Shivlal6660jyotiloveshiv/sks",
+        "tonythethompson/hermes-music-studio",
+        "Produsa/MiniMax-Music3",
+        "BhagyeshJo/AI-song-studio",
+        "smartdigitalnetworks/generative_songs",
+        "Lokorye/MiniMax-Music3",
+        "Evilwagen/MiniMax-Music3-Demo",
+        "ntc-ai/minimax-music3-particle-sliders",
+        "TeamFLEX/MiniMax-Music3-workflow",
+        "2Btainment/2b-studio",
+        "Anubis136/MiniMax-Music3",
+        "qaqwebs/MiniMax-Music3-LoRa",
+        "Aura-Studio/Aura-muo",
+        "JamesYao777/minimax-music3-song-studio"
+      ],
+      "createdAt": "2026-08-07T12:23:29.000Z",
+      "safetensors": {
+        "parameters": {
+          "F32": 2431905920
+        },
+        "total": 2431905920
+      },
+      "usedStorage": 67214176196
+    },
+    "next_cursor": null,
+    "attempts": [
+      {
+        "endpoint": "https://huggingface.co/api/models/MiniMaxAI/MiniMax-Music3",
+        "parameters": [
+          [
+            "blobs",
+            "true"
+          ],
+          [
+            "securityStatus",
+            "true"
+          ]
+        ],
+        "attempted_at": "2026-09-24T08:09:24.410712+00:00",
+        "http_status": 200,
+        "outcome": "ok",
+        "payload": {
+          "_id": "6a75ce4156758b68af00f678",
+          "id": "MiniMaxAI/MiniMax-Music3",
+          "private": false,
+          "pipeline_tag": "text-to-audio",
+          "library_name": "diffusers",
+          "tags": [
+            "diffusers",
+            "safetensors",
+            "minimax_music3",
+            "music-generation",
+            "text-to-music",
+            "pytorch",
+            "sglang-omni",
+            "text-to-audio",
+            "region:us"
+          ],
+          "downloads": 11427,
+          "likes": 1405,
+          "modelId": "MiniMaxAI/MiniMax-Music3",
+          "author": "MiniMaxAI",
+          "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+          "lastModified": "2026-08-14T10:51:40.000Z",
+          "gated": false,
+          "disabled": false,
+          "model-index": null,
+          "config": {
+            "architectures": [
+              "MiniMaxMusic3ForConditionalGeneration"
+            ],
+            "model_type": "minimax_music3"
+          },
+          "cardData": {
+            "library_name": "diffusers",
+            "pipeline_tag": "text-to-audio",
+            "tags": [
+              "music-generation",
+              "text-to-music",
+              "pytorch",
+              "sglang-omni"
+            ]
+          },
+          "siblings": [
+            {
+              "rfilename": ".gitattributes",
+              "blobId": "670322096ca4aa3112f12e0ff9d0ae1742e85310",
+              "size": 329
+            },
+            {
+              "rfilename": "LICENSE",
+              "blobId": "6df669dd190b8a36bc0829b604ce186ee0a1a357",
+              "size": 7373
+            },
+            {
+              "rfilename": "README.md",
+              "blobId": "2ec3b0baf19253ab3ef9cf3dcda6e67cfb1b545d",
+              "size": 11699
+            },
+            {
+              "rfilename": "assets/minimax_ttm.wav",
+              "blobId": "3d770a423d3ee4e95d97daa788626fcc73b1f5de",
+              "size": 36460944,
+              "lfs": {
+                "sha256": "0d7c582e9c53eb1a83333906964294b6053e81c342cd62167da1514f375ea6d9",
+                "size": 36460944,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "condition_encoder/config.json",
+              "blobId": "a51f209c4f914061b5b7ff2272c05cbce4764e87",
+              "size": 292
+            },
+            {
+              "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors",
+              "blobId": "2251146adebf5f6bc529b6e0b7bf4dd657b2997e",
+              "size": 100671852,
+              "lfs": {
+                "sha256": "83179c5eaa9a68a370affe0c1b96c2179f659ea4175666b31071490a202c2a4d",
+                "size": 100671852,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "config.json",
+              "blobId": "2b673e6ef0e8bc328be6af1a8cedfae50e89250a",
+              "size": 107
+            },
+            {
+              "rfilename": "dav.pth",
+              "blobId": "49c7a50179b3649be9f9024291db99c8c673db5f",
+              "size": 491817450,
+              "lfs": {
+                "sha256": "52adde6c6c52cca872f549449cd7b608677d1e69f4a98eee22da3403e63b56e8",
+                "size": 491817450,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "figures/Music3.png",
+              "blobId": "c3f6700d3cc1f79c6545bc2c81d59cb5ca84ab2f",
+              "size": 916912,
+              "lfs": {
+                "sha256": "6ebfe65de89e57657b796d96e2f4bb279b9508871eecc0f8727cdb14ae6b0d04",
+                "size": 916912,
+                "pointerSize": 131
+              }
+            },
+            {
+              "rfilename": "figures/logo.svg",
+              "blobId": "972b41cdb04e1ab4c2b94fa0c35df0c80a5151a2",
+              "size": 8462
+            },
+            {
+              "rfilename": "figures/music3.0-Architecture-Diagram.png",
+              "blobId": "c56b38be6d285275b49c137ffdea354b33ea0e62",
+              "size": 1097623,
+              "lfs": {
+                "sha256": "a69b6f939699896193d417371fa0bb3748971c5aed9ab3118c3f75b5ac8ceac5",
+                "size": 1097623,
+                "pointerSize": 132
+              }
+            },
+            {
+              "rfilename": "flowmatching_vae.pth",
+              "blobId": "44733e938334bab51e544f62127fcf56258408db",
+              "size": 9828468476,
+              "lfs": {
+                "sha256": "941f3ed9591684679e733d184308be89949abeb1b069a6e17e69a013ecec08fe",
+                "size": 9828468476,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "language_model/config.json",
+              "blobId": "ff464e670afc4b54ccd7ccab9e45f0b8ce81c950",
+              "size": 1596
+            },
+            {
+              "rfilename": "language_model/generation_config.json",
+              "blobId": "5d7d66f6298786d530fc9e88a3e3f8d0983c3ff1",
+              "size": 158
+            },
+            {
+              "rfilename": "language_model/model-00001-of-00004.safetensors",
+              "blobId": "c42f6c34c7edde6067b8ebc0fcd2b3fe5a760acd",
+              "size": 4910103856,
+              "lfs": {
+                "sha256": "1e95924a158b45b67cfad04fa0f0a352e5a263e69338734d7c1d558be776cc98",
+                "size": 4910103856,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "language_model/model-00002-of-00004.safetensors",
+              "blobId": "3ccc05f17eb435165db4ea175f31cfc543c62e49",
+              "size": 4915960352,
+              "lfs": {
+                "sha256": "fde2d335eef7eafa268d35e53d4b040ee51d2f3fa727f9855b4c97d88a2892da",
+                "size": 4915960352,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "language_model/model-00003-of-00004.safetensors",
+              "blobId": "56d5c269b0efd8595ce68f0e35763b329bd03849",
+              "size": 4983068496,
+              "lfs": {
+                "sha256": "6549a831637ab678a573047e7fa8fdf966998c4f45330e6eb7573d67f7b9b4c6",
+                "size": 4983068496,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "language_model/model-00004-of-00004.safetensors",
+              "blobId": "028088aa2db9ae06f7c3c51adcfc282f4c298ef2",
+              "size": 2359864688,
+              "lfs": {
+                "sha256": "a1c9865f357b64d3ae9f428fb98a844831e5a0aee9ed17b19bd7f7be32b964a9",
+                "size": 2359864688,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "language_model/model.safetensors.index.json",
+              "blobId": "4e8df47c67eeca92b3d7bd421fc2d190bab4ebfa",
+              "size": 32914
+            },
+            {
+              "rfilename": "modular_model_index.json",
+              "blobId": "1ebb9c9031bca3491daf781890bf10d19167e80e",
+              "size": 2391
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json",
+              "blobId": "82275ed8a85dbc8a16d45d662b044542a83e673f",
+              "size": 880
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt",
+              "blobId": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+              "size": 1671853
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json",
+              "blobId": "140696ca58a324947c5468a010f119d3579ecb1c",
+              "size": 612
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json",
+              "blobId": "a25ae99b8d491de870d3bf3d6e1a6395a496c4cf",
+              "size": 11423806,
+              "lfs": {
+                "sha256": "bc63169ebf49c476995ced3f3dbae68f93ed9cf2a2997d3658863672f2f05f0f",
+                "size": 11423806,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json",
+              "blobId": "7faee959e6c9a77686796b2b7986e3c00a42bf6b",
+              "size": 10853
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json",
+              "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+              "size": 2776833
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/config.json",
+              "blobId": "8b3c16ef0454afea4703053e9948ff02598a8485",
+              "size": 1663
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors",
+              "blobId": "9eff704e4e4c7b40521c6e2e0d7325c1e88beffd",
+              "size": 1638400144,
+              "lfs": {
+                "sha256": "725ce815b308b4a27e3aa3e6f119df7941fb51e254bfd67554c4a4f7f9180a8d",
+                "size": 1638400144,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors",
+              "blobId": "d773e20d0a1367c334b09d71ca7c817bcebf7d1f",
+              "size": 58720400,
+              "lfs": {
+                "sha256": "ef64b4f6d8dd60c7288d1caebef63c1336511c0f70b93d7e26445135fed218e4",
+                "size": 58720400,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors",
+              "blobId": "d0708c2ada54245c87175d0832c47df0b8ae7f6c",
+              "size": 285230720,
+              "lfs": {
+                "sha256": "3e4df154f642995c40ef2916450751b55607d6ee956f6c16a283aab0e15cc632",
+                "size": 285230720,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors",
+              "blobId": "bac4a866de9f32c4866e1b2249a5b2267ff7a0cb",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "3d9cf1da3c2096a76c83c28382d213fdf971f9935ce918dd4fa5e8eca2b8b0b6",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors",
+              "blobId": "310dbe530a1b2cfc2048c3cb8cc0c4ff5720839e",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "118fab650caf1fabea9a02ebe7d1470aee432d864f92dbaae1c7c4f79406104f",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors",
+              "blobId": "9d484d65f5add0e5f0113d3b628cbebbd37686e3",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "7a3dcfc8d85c6a9c32c416a251eab634f94a68b938a4ded2bdbe253f20c59149",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors",
+              "blobId": "8f2b6d713b82dccceb64e0810b981d90e763d5ea",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "d3790d5fd2b792d72919660fe5f1f67bdb1dcfa9f0fe4994546f78ee56c9b669",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors",
+              "blobId": "9bbe1dc74fe41c260ca65dce9f23ca494f2108c6",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "7fddc6782c77cbc72da2ad59de44481f4a522209d0c93049ccb45e5ba8d0903a",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors",
+              "blobId": "c2267871988c1dfb2d521b436ec60bd4e5ae25dc",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "3593e1c065a7c9e98549c988e0b93e66372d5ebee83a5087e8dd4ab6b1521fc4",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors",
+              "blobId": "7b8ba946347f860abe69b6130bd6929cc06d0c4a",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "9d7e532ae3d5de8a1b7ec9b18e0d16c6c3142d52100dfecec1fe23812cf0fdf7",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors",
+              "blobId": "612140d4cd78867453d572f955c3a68fbb6c09db",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "ff035d2881fc2aade282c11cb083ebf975da136a8e9f8cc208c7053298c77ee1",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors",
+              "blobId": "7e73c6e7cef62ff420f6d89095741808a5cf794a",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "81639eef3aa9e633a11aaa5735e7d8bc6254e6494f1a413f18dc27965eb75141",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors",
+              "blobId": "8e9ef8b6483477ad8ab1dd618cc67af2efe993d9",
+              "size": 385894144,
+              "lfs": {
+                "sha256": "498d5b76cfac24f2465b437540d39a0f8e9d822d3ad1bcec2e7c991df51652b0",
+                "size": 385894144,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors",
+              "blobId": "e0073d358bf78d337d0f8ccd3f4a53d1b3a364ee",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "be29431b2e33aef359a1a0fa3867b9386631cde646a34c1fc86538a209a6ca71",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors",
+              "blobId": "ff9ef475821949f46e66c644acff928a593271de",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "c9b5ca8b4ca1f34df20d48c23f7f01f80751a15a10308703c3eed2693b86ca4e",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors",
+              "blobId": "5382edbad4336767abde77b25e6bb1fb4898e248",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "337a491f37a967603bd622b1daaca312c759637c6c38415e31743b2f9a05c27c",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors",
+              "blobId": "011c2687f9a1e0076b7e6aeb216fd182acde155e",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "71687a19e4f5376243da4c42dba4a3fffbad27d0414bae63e802e96a700b73dd",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors",
+              "blobId": "f395705e55e9b1bef82fa42eb3850eea272e6bc8",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "c44b315361a14d8ca417934d7d09cf40737459717b2ebf7e5f755b4affec8f34",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors",
+              "blobId": "d3531391cd331a4e25c07af886b092ffb84c3f59",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "5dcfe06cdc37d5456e330b9354be8b88ea1cf4146c456abc8fe08ade8b6a10e6",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors",
+              "blobId": "5ba27efedf0232315201b3bffc9f2c3e034d07eb",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "1132f82d97f2d4afef680b2eca823d3d6b3d75b985579e221aad94afc4224ac0",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors",
+              "blobId": "4fd7757d0fe627c5aaa07f2a57b7b73620a4cc90",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "dd733b38709fc6209d50e7b232fca7d0c3fb75dd26cd13c9924fe1c6fc95d860",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors",
+              "blobId": "b53d7fc1aab229af6a0bf44ad2819570924b6776",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "7abcd88567f9de99d0b7563472178694540d91ca030d275ec5651d735eab726e",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors",
+              "blobId": "cf4027cd5725e1e6c6304eacfda520ddd53cd799",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "130ef32dbdf2a463d7b9216fb90bb351a1af8a3974c23ebf3cad8efe25bc01e6",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors",
+              "blobId": "f026c799c428f28a176bb2babc4ad6753eba3dd0",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "cb68dfdbee7f809a253201e6ee515d84c5354c6ef70b0e16ad3dc624c3f3b2c2",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors",
+              "blobId": "c4ac468a4fd79e02991e4c8e58f2d2cc7b02e374",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "0ed6929536a99741a63b2cee15cc1bb7d9f77ddcf3edfe1d163d7ab5fcaa1e5d",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors",
+              "blobId": "46c0fc51e67970966529db73ae5962179c1ff8f1",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "29668e2887f5b63de4bdb016a14121407801e1189e24c07a31ce774bf070eb15",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors",
+              "blobId": "4a4d0a933da6c4870031e6c8d754f190b6a8ec6d",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "11671a0c9cef106550bfd56d7ab588fe85c79001b2c4c5aeed77e511192fccf8",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors",
+              "blobId": "4333bd638c85975b4270647e7bff3f557414cc11",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "f318b6b4e063bd0e9b93a300151f8c9a367610ab4a28893a2d911b1a44ec51a2",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors",
+              "blobId": "c3eaa691ead910610154c472a25328267ff58d9d",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "9ff622627db5da65e548357109de4bb10331a04671340f4cdf3c8e210700ec3c",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors",
+              "blobId": "52541d9523d78ca09c19fcf7f266094e520cbe93",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "d30758486725a17873f8cfc9bae90daedf88f37aacae9a07b53c40503de55f20",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors",
+              "blobId": "7932c53413805ea2cfcab351dbd404ffd39e0680",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "e16401b15371064adf2ccf5f7640a56044e0b114cdffc5357460bddb4fbbcf73",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors",
+              "blobId": "348c9e07583a69581af0ff221c4ba5ef8ebd68f3",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "af25a25b7a5a9c2c634cdf840391676f6481c5fa81fb76b85a4d38f586b40a7d",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors",
+              "blobId": "109999f5ca5f7bd0c6cd9331e64745878dd918c5",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "9dc3b8e17a9be8b670331d6d79d4eb0d943cba07f3d68ed208ff8c469bce671e",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors",
+              "blobId": "a9e966e357ee03c599194321318bcb2fdc913f8c",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "f7a0e15fa315ef9e6722de95c43bdd454d80ae1c71b85c4cf880f5d54173c39d",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors",
+              "blobId": "2659834bd14595e2c513266ba6ed0cc0fbda26fc",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "b7156d00c719c49e471146930fa1697b3cb99aa8e5606701e983db1fabb47d6d",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors",
+              "blobId": "95e0b9f804af4d056c9db7b9e7725479f4bcaaaa",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "30a80b6b4582014ae613a3ec4a807b82e9b36adcc946bab1cbb98e795897700e",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors",
+              "blobId": "a942deba753fac3d87cfcfe2bd6905295fcb58b8",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "768abad0bbd7c606b603d1eba5cacdf93a49d4c07a2dfe737d7cb63c15d6ad32",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors",
+              "blobId": "2456e527cde4cc2506b2b157fa0429308cff3d19",
+              "size": 385894152,
+              "lfs": {
+                "sha256": "7882a7ddabe655dfcd09ec04c16bac56e4a7942544438f2d02cb10f59cf60843",
+                "size": 385894152,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors",
+              "blobId": "c111543863503fe40a4fee82946dbb1bdb678f57",
+              "size": 1739071824,
+              "lfs": {
+                "sha256": "7c47ec26724811b813e4d0568bc8a18b27360b979bce0a4f6c905a913b2fff1b",
+                "size": 1739071824,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors",
+              "blobId": "7cfd201de2304128bad69028c0fc31dfbac99c28",
+              "size": 50463208,
+              "lfs": {
+                "sha256": "29c86ffd0951470a0c32ff7a3840bf6673bf1a953190be2af1c2d2c4598f43e7",
+                "size": 50463208,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors",
+              "blobId": "4b3996be0bc5c7301f9004e93573221684dd6ec1",
+              "size": 16777480,
+              "lfs": {
+                "sha256": "afc13130962b4bb346db8dbd06e37d4b0faf1543cb9c3c4704172ba7c489115d",
+                "size": 16777480,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors",
+              "blobId": "bd01c8a17ea5647f371fea725a801446dd8f654f",
+              "size": 16777480,
+              "lfs": {
+                "sha256": "03508eed1b8d6f7ec042bf4139ac7c101e9e8d64038fe2de423d1dbe3b93e034",
+                "size": 16777480,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors",
+              "blobId": "7eff53654b17b29041349701afe93e1d71694a87",
+              "size": 109060744,
+              "lfs": {
+                "sha256": "ee743120815778e694c747ce6c57120c7f27d35005a099c6904443ba17d05b0c",
+                "size": 109060744,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors",
+              "blobId": "ecad51e17c95e0fec711eab8243442159f0d97bd",
+              "size": 285230240,
+              "lfs": {
+                "sha256": "f548dee6c2e9deba7e04451843794d581cc58691a28fc42ffe2099381fd2ab88",
+                "size": 285230240,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors",
+              "blobId": "4a3d4970024e70c5f7ba5bc9f76bcbc452efd788",
+              "size": 285230240,
+              "lfs": {
+                "sha256": "dab8447646b085b185441bda9f5010408c55a43c59a5fc496f25dcde429546b0",
+                "size": 285230240,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors",
+              "blobId": "5833d3dd05c496a6c8d70ff4a54c77d45cd05145",
+              "size": 285230240,
+              "lfs": {
+                "sha256": "bfb04b889e83dec4321bc380d38bbb45760113ecf0e20cdaeda38c0e1e99136b",
+                "size": 285230240,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors",
+              "blobId": "48783fef51d9c4a0e8467602453496cb2c2bc8bf",
+              "size": 184566536,
+              "lfs": {
+                "sha256": "75660a0d42c4ef9f813ba98d28b64859e0b86bfa3165953ebeeee3a12d9574ad",
+                "size": 184566536,
+                "pointerSize": 134
+              }
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json",
+              "blobId": "f39c12f96b58954dc1a274ac2ac7ee03fe4e7ce9",
+              "size": 39019
+            },
+            {
+              "rfilename": "rvq_depth_decoder/config.json",
+              "blobId": "3b9e35a49f6cf4bf168753eebf7382c805528468",
+              "size": 274
+            },
+            {
+              "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors",
+              "blobId": "45ac339bd78e36b4547b7e796d13fd916a90cc5e",
+              "size": 1292055248,
+              "lfs": {
+                "sha256": "80e86ab006bb5c8d4f223205045035a1c77b2bb9c3be9a86d7e740bbafe5ddf0",
+                "size": 1292055248,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "scheduler/scheduler_config.json",
+              "blobId": "8acb48912e92c0adc83fb427d1e5f0944f4d866a",
+              "size": 483
+            },
+            {
+              "rfilename": "scripts/end_to_end/minimax_ttm_test.py",
+              "blobId": "6828e20cfcb09a8e7f304a916e20acf75387259e",
+              "size": 8584
+            },
+            {
+              "rfilename": "tokenizer/chat_template.jinja",
+              "blobId": "01be9b307daa2d425f7c168c9fb145a286e0afb4",
+              "size": 4168
+            },
+            {
+              "rfilename": "tokenizer/tokenizer.json",
+              "blobId": "c0ab7233a075b8e94938b82ed13bd1f7587ac9a6",
+              "size": 11423801,
+              "lfs": {
+                "sha256": "b1537fa9e59a537276ecbc2e12d0438edff635a1f4a4948e679774b5feb3e610",
+                "size": 11423801,
+                "pointerSize": 133
+              }
+            },
+            {
+              "rfilename": "tokenizer/tokenizer_config.json",
+              "blobId": "9158804bfff9329ed49a867d691553315871282d",
+              "size": 377
+            },
+            {
+              "rfilename": "transformer/config.json",
+              "blobId": "5e8073e8558b209170cfc1d3b191f68d85d61252",
+              "size": 294
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+              "blobId": "786c1a495c4e220b1a6058d7ed490289a2da02d7",
+              "size": 4959921384,
+              "lfs": {
+                "sha256": "1943baebe93b5d5a57e9e1f603d9cef51a73a55e7a42f52913932dc06dcf10f0",
+                "size": 4959921384,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+              "blobId": "e5a5d07eaf404132f606ab88c6014cc3420c9c5f",
+              "size": 4767750800,
+              "lfs": {
+                "sha256": "b2f9e29d241e107e5a281f8b369d6db48eee983917df966c56d7b8dd0bd482c2",
+                "size": 4767750800,
+                "pointerSize": 135
+              }
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json",
+              "blobId": "c1dcee31b5deb31e8383a5493c98b912578a312e",
+              "size": 42679
+            },
+            {
+              "rfilename": "vocoder/config.json",
+              "blobId": "bc056a8465fd8116f4df46a70f203c6df1c6ad4d",
+              "size": 251
+            },
+            {
+              "rfilename": "vocoder/diffusion_pytorch_model.safetensors",
+              "blobId": "a3edba293536b27ca6f113fc968bf2794741fc98",
+              "size": 216695272,
+              "lfs": {
+                "sha256": "daf0bf0560ea978ce7b5ec3e82f420a44429efef18bdfbe3c714d55ceffbe934",
+                "size": 216695272,
+                "pointerSize": 134
+              }
+            }
+          ],
+          "securityRepoStatus": {
+            "scansDone": true,
+            "filesWithIssues": []
+          },
+          "spaces": [
+            "embedl/hfviewer",
+            "MiniMaxAI/MiniMax-Music3",
+            "victor/MiniMax-Music3-Jam",
+            "Monster-Code/Blog",
+            "MiniMaxAI/MiniMax-Music3-workflow",
+            "multimodalart/minimax-music3-prompting-guide",
+            "abalanescu/flow2",
+            "Shivlal6660jyoti/MTTS",
+            "SYNAPSEai1/Synapse-Music-V13",
+            "akhaliq/MiniMax-Music3-workflow",
+            "abi3420/LingoVid",
+            "henrybit/minimax-music3-lab",
+            "abidlabs/MiniMax-Music3",
+            "Obwi/MiniMax-Music3-Demo",
+            "XXXMARK/MiniMax-Music3",
+            "Radiotomy/Aurora",
+            "abi3420/finderon",
+            "owenisas/minimax-music3",
+            "SiTH777/MiniMax-Music3-demo",
+            "Upsampler/minimax-music3",
+            "Shivlal6660/MTTS",
+            "garyamorris/minimax-music3-playground",
+            "SuperPauly/MiniMax-Music3-workflow",
+            "atrezonator/MiniMax-Music3",
+            "JMullings/LLM-XRay",
+            "cpuai/MiniMax-Music3",
+            "abi3420/dubify-backend",
+            "lalopenguin/MiniMax-Music3-Demo",
+            "smartdigitalnetworks/generativesongs",
+            "adilkh/MiniMax-Music3-Jam",
+            "Anessen/minimax-music3-studio",
+            "aryan012234/ai_music_gen",
+            "Taxiulmblack/hsdhjgig",
+            "Taxiulmblack/ulmertaxi",
+            "jafernazeer/MiniMax-Music3-Demo",
+            "filgood31/minimax-music3-demo",
+            "brpager/MiniMax-Music3-demo",
+            "Shivlal6660jyotilove/MTTS",
+            "Shivlal6660jyotiloveshiv/sks",
+            "tonythethompson/hermes-music-studio",
+            "Produsa/MiniMax-Music3",
+            "BhagyeshJo/AI-song-studio",
+            "smartdigitalnetworks/generative_songs",
+            "Lokorye/MiniMax-Music3",
+            "Evilwagen/MiniMax-Music3-Demo",
+            "ntc-ai/minimax-music3-particle-sliders",
+            "TeamFLEX/MiniMax-Music3-workflow",
+            "2Btainment/2b-studio",
+            "Anubis136/MiniMax-Music3",
+            "qaqwebs/MiniMax-Music3-LoRa",
+            "Aura-Studio/Aura-muo",
+            "JamesYao777/minimax-music3-song-studio"
+          ],
+          "createdAt": "2026-08-07T12:23:29.000Z",
+          "safetensors": {
+            "parameters": {
+              "F32": 2431905920
+            },
+            "total": 2431905920
+          },
+          "usedStorage": 67214176196
+        },
+        "inventory_version": "hf-model-metadata-v1",
+        "link": "",
+        "observed_at": "2026-09-24T08:09:24.662095+00:00"
+      }
+    ]
+  },
+  "expanded": {
+    "outcome": "ok",
+    "payload": {
+      "_id": "6a75ce4156758b68af00f678",
+      "id": "MiniMaxAI/MiniMax-Music3",
+      "author": "MiniMaxAI",
+      "cardData": {
+        "library_name": "diffusers",
+        "pipeline_tag": "text-to-audio",
+        "tags": [
+          "music-generation",
+          "text-to-music",
+          "pytorch",
+          "sglang-omni"
+        ]
+      },
+      "config": {
+        "architectures": [
+          "MiniMaxMusic3ForConditionalGeneration"
+        ],
+        "model_type": "minimax_music3"
+      },
+      "disabled": false,
+      "downloads": 11427,
+      "downloadsAllTime": 30109,
+      "gated": false,
+      "lastModified": "2026-08-14T10:51:40.000Z",
+      "library_name": "diffusers",
+      "likes": 1405,
+      "model-index": null,
+      "pipeline_tag": "text-to-audio",
+      "private": false,
+      "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+      "tags": [
+        "diffusers",
+        "safetensors",
+        "minimax_music3",
+        "music-generation",
+        "text-to-music",
+        "pytorch",
+        "sglang-omni",
+        "text-to-audio",
+        "region:us"
+      ],
+      "trendingScore": 16,
+      "siblings": [
+        {
+          "rfilename": ".gitattributes"
+        },
+        {
+          "rfilename": "LICENSE"
+        },
+        {
+          "rfilename": "README.md"
+        },
+        {
+          "rfilename": "assets/minimax_ttm.wav"
+        },
+        {
+          "rfilename": "condition_encoder/config.json"
+        },
+        {
+          "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors"
+        },
+        {
+          "rfilename": "config.json"
+        },
+        {
+          "rfilename": "dav.pth"
+        },
+        {
+          "rfilename": "figures/Music3.png"
+        },
+        {
+          "rfilename": "figures/logo.svg"
+        },
+        {
+          "rfilename": "figures/music3.0-Architecture-Diagram.png"
+        },
+        {
+          "rfilename": "flowmatching_vae.pth"
+        },
+        {
+          "rfilename": "language_model/config.json"
+        },
+        {
+          "rfilename": "language_model/generation_config.json"
+        },
+        {
+          "rfilename": "language_model/model-00001-of-00004.safetensors"
+        },
+        {
+          "rfilename": "language_model/model-00002-of-00004.safetensors"
+        },
+        {
+          "rfilename": "language_model/model-00003-of-00004.safetensors"
+        },
+        {
+          "rfilename": "language_model/model-00004-of-00004.safetensors"
+        },
+        {
+          "rfilename": "language_model/model.safetensors.index.json"
+        },
+        {
+          "rfilename": "modular_model_index.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/config.json"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors"
+        },
+        {
+          "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json"
+        },
+        {
+          "rfilename": "rvq_depth_decoder/config.json"
+        },
+        {
+          "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors"
+        },
+        {
+          "rfilename": "scheduler/scheduler_config.json"
+        },
+        {
+          "rfilename": "scripts/end_to_end/minimax_ttm_test.py"
+        },
+        {
+          "rfilename": "tokenizer/chat_template.jinja"
+        },
+        {
+          "rfilename": "tokenizer/tokenizer.json"
+        },
+        {
+          "rfilename": "tokenizer/tokenizer_config.json"
+        },
+        {
+          "rfilename": "transformer/config.json"
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+        },
+        {
+          "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json"
+        },
+        {
+          "rfilename": "vocoder/config.json"
+        },
+        {
+          "rfilename": "vocoder/diffusion_pytorch_model.safetensors"
+        }
+      ],
+      "spaces": [
+        "embedl/hfviewer",
+        "MiniMaxAI/MiniMax-Music3",
+        "victor/MiniMax-Music3-Jam",
+        "Monster-Code/Blog",
+        "MiniMaxAI/MiniMax-Music3-workflow",
+        "multimodalart/minimax-music3-prompting-guide",
+        "abalanescu/flow2",
+        "Shivlal6660jyoti/MTTS",
+        "SYNAPSEai1/Synapse-Music-V13",
+        "akhaliq/MiniMax-Music3-workflow",
+        "abi3420/LingoVid",
+        "henrybit/minimax-music3-lab",
+        "abidlabs/MiniMax-Music3",
+        "Obwi/MiniMax-Music3-Demo",
+        "XXXMARK/MiniMax-Music3",
+        "Radiotomy/Aurora",
+        "abi3420/finderon",
+        "owenisas/minimax-music3",
+        "SiTH777/MiniMax-Music3-demo",
+        "Upsampler/minimax-music3",
+        "Shivlal6660/MTTS",
+        "garyamorris/minimax-music3-playground",
+        "SuperPauly/MiniMax-Music3-workflow",
+        "atrezonator/MiniMax-Music3",
+        "JMullings/LLM-XRay",
+        "cpuai/MiniMax-Music3",
+        "abi3420/dubify-backend",
+        "lalopenguin/MiniMax-Music3-Demo",
+        "smartdigitalnetworks/generativesongs",
+        "adilkh/MiniMax-Music3-Jam",
+        "Anessen/minimax-music3-studio",
+        "Taxiulmblack/hsdhjgig",
+        "aryan012234/ai_music_gen",
+        "Taxiulmblack/ulmertaxi",
+        "jafernazeer/MiniMax-Music3-Demo",
+        "filgood31/minimax-music3-demo",
+        "brpager/MiniMax-Music3-demo",
+        "Shivlal6660jyotilove/MTTS",
+        "Shivlal6660jyotiloveshiv/sks",
+        "tonythethompson/hermes-music-studio",
+        "Produsa/MiniMax-Music3",
+        "BhagyeshJo/AI-song-studio",
+        "smartdigitalnetworks/generative_songs",
+        "Evilwagen/MiniMax-Music3-Demo",
+        "Lokorye/MiniMax-Music3",
+        "ntc-ai/minimax-music3-particle-sliders",
+        "TeamFLEX/MiniMax-Music3-workflow",
+        "2Btainment/2b-studio",
+        "Anubis136/MiniMax-Music3",
+        "qaqwebs/MiniMax-Music3-LoRa",
+        "Aura-Studio/Aura-muo",
+        "JamesYao777/minimax-music3-song-studio"
+      ],
+      "createdAt": "2026-08-07T12:23:29.000Z",
+      "safetensors": {
+        "parameters": {
+          "F32": 2431905920
+        },
+        "total": 2431905920
+      },
+      "childrenModelCount": {
+        "adapter": 22,
+        "merge": 0,
+        "quantized": 26,
+        "finetune": 18
+      },
+      "usedStorage": 67214176196,
+      "inferenceProviderMapping": {}
+    },
+    "next_cursor": null,
+    "attempts": [
+      {
+        "endpoint": "https://huggingface.co/api/models/MiniMaxAI/MiniMax-Music3",
+        "parameters": [
+          [
+            "expand",
+            "author"
+          ],
+          [
+            "expand",
+            "baseModels"
+          ],
+          [
+            "expand",
+            "cardData"
+          ],
+          [
+            "expand",
+            "childrenModelCount"
+          ],
+          [
+            "expand",
+            "config"
+          ],
+          [
+            "expand",
+            "createdAt"
+          ],
+          [
+            "expand",
+            "disabled"
+          ],
+          [
+            "expand",
+            "downloads"
+          ],
+          [
+            "expand",
+            "downloadsAllTime"
+          ],
+          [
+            "expand",
+            "evalResults"
+          ],
+          [
+            "expand",
+            "gated"
+          ],
+          [
+            "expand",
+            "gguf"
+          ],
+          [
+            "expand",
+            "inference"
+          ],
+          [
+            "expand",
+            "inferenceProviderMapping"
+          ],
+          [
+            "expand",
+            "lastModified"
+          ],
+          [
+            "expand",
+            "library_name"
+          ],
+          [
+            "expand",
+            "likes"
+          ],
+          [
+            "expand",
+            "mask_token"
+          ],
+          [
+            "expand",
+            "model-index"
+          ],
+          [
+            "expand",
+            "pipeline_tag"
+          ],
+          [
+            "expand",
+            "private"
+          ],
+          [
+            "expand",
+            "safetensors"
+          ],
+          [
+            "expand",
+            "sha"
+          ],
+          [
+            "expand",
+            "siblings"
+          ],
+          [
+            "expand",
+            "spaces"
+          ],
+          [
+            "expand",
+            "tags"
+          ],
+          [
+            "expand",
+            "transformersInfo"
+          ],
+          [
+            "expand",
+            "trendingScore"
+          ],
+          [
+            "expand",
+            "widgetData"
+          ],
+          [
+            "expand",
+            "usedStorage"
+          ],
+          [
+            "expand",
+            "resourceGroup"
+          ]
+        ],
+        "attempted_at": "2026-09-24T08:09:24.662201+00:00",
+        "http_status": 200,
+        "outcome": "ok",
+        "payload": {
+          "_id": "6a75ce4156758b68af00f678",
+          "id": "MiniMaxAI/MiniMax-Music3",
+          "author": "MiniMaxAI",
+          "cardData": {
+            "library_name": "diffusers",
+            "pipeline_tag": "text-to-audio",
+            "tags": [
+              "music-generation",
+              "text-to-music",
+              "pytorch",
+              "sglang-omni"
+            ]
+          },
+          "config": {
+            "architectures": [
+              "MiniMaxMusic3ForConditionalGeneration"
+            ],
+            "model_type": "minimax_music3"
+          },
+          "disabled": false,
+          "downloads": 11427,
+          "downloadsAllTime": 30109,
+          "gated": false,
+          "lastModified": "2026-08-14T10:51:40.000Z",
+          "library_name": "diffusers",
+          "likes": 1405,
+          "model-index": null,
+          "pipeline_tag": "text-to-audio",
+          "private": false,
+          "sha": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+          "tags": [
+            "diffusers",
+            "safetensors",
+            "minimax_music3",
+            "music-generation",
+            "text-to-music",
+            "pytorch",
+            "sglang-omni",
+            "text-to-audio",
+            "region:us"
+          ],
+          "trendingScore": 16,
+          "siblings": [
+            {
+              "rfilename": ".gitattributes"
+            },
+            {
+              "rfilename": "LICENSE"
+            },
+            {
+              "rfilename": "README.md"
+            },
+            {
+              "rfilename": "assets/minimax_ttm.wav"
+            },
+            {
+              "rfilename": "condition_encoder/config.json"
+            },
+            {
+              "rfilename": "condition_encoder/diffusion_pytorch_model.safetensors"
+            },
+            {
+              "rfilename": "config.json"
+            },
+            {
+              "rfilename": "dav.pth"
+            },
+            {
+              "rfilename": "figures/Music3.png"
+            },
+            {
+              "rfilename": "figures/logo.svg"
+            },
+            {
+              "rfilename": "figures/music3.0-Architecture-Diagram.png"
+            },
+            {
+              "rfilename": "flowmatching_vae.pth"
+            },
+            {
+              "rfilename": "language_model/config.json"
+            },
+            {
+              "rfilename": "language_model/generation_config.json"
+            },
+            {
+              "rfilename": "language_model/model-00001-of-00004.safetensors"
+            },
+            {
+              "rfilename": "language_model/model-00002-of-00004.safetensors"
+            },
+            {
+              "rfilename": "language_model/model-00003-of-00004.safetensors"
+            },
+            {
+              "rfilename": "language_model/model-00004-of-00004.safetensors"
+            },
+            {
+              "rfilename": "language_model/model.safetensors.index.json"
+            },
+            {
+              "rfilename": "modular_model_index.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/added_tokens.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/merges.txt"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/special_tokens_map.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/tokenizer_config.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen3-8B-tokenizer-music/vocab.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/config.json"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00000-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00001-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00002-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00003-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00004-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00005-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00006-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00007-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00008-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00009-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00010-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00011-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00012-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00013-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00014-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00015-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00016-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00017-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00018-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00019-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00020-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00021-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00022-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00023-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00024-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00025-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00026-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00027-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00028-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00029-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00030-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00031-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00032-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00033-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00034-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00035-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00036-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00037-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00038-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00039-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00040-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00041-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00042-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00043-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00044-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00045-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model-00046-of-00048.safetensors"
+            },
+            {
+              "rfilename": "qwen_7B/qwen_7B/model.safetensors.index.json"
+            },
+            {
+              "rfilename": "rvq_depth_decoder/config.json"
+            },
+            {
+              "rfilename": "rvq_depth_decoder/diffusion_pytorch_model.safetensors"
+            },
+            {
+              "rfilename": "scheduler/scheduler_config.json"
+            },
+            {
+              "rfilename": "scripts/end_to_end/minimax_ttm_test.py"
+            },
+            {
+              "rfilename": "tokenizer/chat_template.jinja"
+            },
+            {
+              "rfilename": "tokenizer/tokenizer.json"
+            },
+            {
+              "rfilename": "tokenizer/tokenizer_config.json"
+            },
+            {
+              "rfilename": "transformer/config.json"
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors"
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors"
+            },
+            {
+              "rfilename": "transformer/diffusion_pytorch_model.safetensors.index.json"
+            },
+            {
+              "rfilename": "vocoder/config.json"
+            },
+            {
+              "rfilename": "vocoder/diffusion_pytorch_model.safetensors"
+            }
+          ],
+          "spaces": [
+            "embedl/hfviewer",
+            "MiniMaxAI/MiniMax-Music3",
+            "victor/MiniMax-Music3-Jam",
+            "Monster-Code/Blog",
+            "MiniMaxAI/MiniMax-Music3-workflow",
+            "multimodalart/minimax-music3-prompting-guide",
+            "abalanescu/flow2",
+            "Shivlal6660jyoti/MTTS",
+            "SYNAPSEai1/Synapse-Music-V13",
+            "akhaliq/MiniMax-Music3-workflow",
+            "abi3420/LingoVid",
+            "henrybit/minimax-music3-lab",
+            "abidlabs/MiniMax-Music3",
+            "Obwi/MiniMax-Music3-Demo",
+            "XXXMARK/MiniMax-Music3",
+            "Radiotomy/Aurora",
+            "abi3420/finderon",
+            "owenisas/minimax-music3",
+            "SiTH777/MiniMax-Music3-demo",
+            "Upsampler/minimax-music3",
+            "Shivlal6660/MTTS",
+            "garyamorris/minimax-music3-playground",
+            "SuperPauly/MiniMax-Music3-workflow",
+            "atrezonator/MiniMax-Music3",
+            "JMullings/LLM-XRay",
+            "cpuai/MiniMax-Music3",
+            "abi3420/dubify-backend",
+            "lalopenguin/MiniMax-Music3-Demo",
+            "smartdigitalnetworks/generativesongs",
+            "adilkh/MiniMax-Music3-Jam",
+            "Anessen/minimax-music3-studio",
+            "Taxiulmblack/hsdhjgig",
+            "aryan012234/ai_music_gen",
+            "Taxiulmblack/ulmertaxi",
+            "jafernazeer/MiniMax-Music3-Demo",
+            "filgood31/minimax-music3-demo",
+            "brpager/MiniMax-Music3-demo",
+            "Shivlal6660jyotilove/MTTS",
+            "Shivlal6660jyotiloveshiv/sks",
+            "tonythethompson/hermes-music-studio",
+            "Produsa/MiniMax-Music3",
+            "BhagyeshJo/AI-song-studio",
+            "smartdigitalnetworks/generative_songs",
+            "Evilwagen/MiniMax-Music3-Demo",
+            "Lokorye/MiniMax-Music3",
+            "ntc-ai/minimax-music3-particle-sliders",
+            "TeamFLEX/MiniMax-Music3-workflow",
+            "2Btainment/2b-studio",
+            "Anubis136/MiniMax-Music3",
+            "qaqwebs/MiniMax-Music3-LoRa",
+            "Aura-Studio/Aura-muo",
+            "JamesYao777/minimax-music3-song-studio"
+          ],
+          "createdAt": "2026-08-07T12:23:29.000Z",
+          "safetensors": {
+            "parameters": {
+              "F32": 2431905920
+            },
+            "total": 2431905920
+          },
+          "childrenModelCount": {
+            "adapter": 22,
+            "merge": 0,
+            "quantized": 26,
+            "finetune": 18
+          },
+          "usedStorage": 67214176196,
+          "inferenceProviderMapping": {}
+        },
+        "inventory_version": "hf-model-metadata-v1",
+        "link": "",
+        "observed_at": "2026-09-24T08:09:24.868948+00:00"
+      }
+    ]
+  },
+  "physical_requests": 4,
+  "retries": 0
+}

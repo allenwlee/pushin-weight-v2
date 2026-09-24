@@ -1,0 +1,3 @@
+# Ownership comes from confirmed HFOrg rows, not guessed account names.
+# Optional reviewed attribution: namespace, repo OR prefix, brand, source URL.
+brand_rules: []

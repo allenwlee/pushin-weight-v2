@@ -212,6 +212,9 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
 
     assert {
         "product_label_keys",
+        "hf_model_catalog_runs",
+        "hf_model_catalog_namespace_runs",
+        "hf_model_catalog_observations",
         "product_label_labels",
         "audience_topic_concepts",
         "audience_topic_labels",

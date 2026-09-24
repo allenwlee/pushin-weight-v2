@@ -1,0 +1,84 @@
+{
+  "attribution_gap_repositories": [],
+  "attribution_gaps": 0,
+  "complete": false,
+  "conflicts": 0,
+  "cumulative_requests": 8,
+  "enrichment_complete": true,
+  "enumeration_complete": false,
+  "group_outcomes": {
+    "detail": {
+      "ok": 3
+    },
+    "expanded": {
+      "ok": 3
+    }
+  },
+  "imported": 3,
+  "max_models": 3,
+  "max_requests": 12,
+  "max_response_bytes": 16777216,
+  "max_seconds": 120,
+  "mode": "commit",
+  "namespaces": [
+    {
+      "enumeration_complete": false,
+      "namespace": "MiniMaxAI",
+      "next_cursor": "eyIkb3IiOlt7Imxhc3RNb2RpZmllZCI6IjIwMjYtMDctMjNUMDQ6MjU6MjAuMDAwWiIsIl9pZCI6eyIkZ3QiOiI2YTFlOGIwYjc1MWQ4ZWVlNDYxZmQ2NzgifX0seyJsYXN0TW9kaWZpZWQiOnsiJGx0IjoiMjAyNi0wNy0yM1QwNDoyNToyMC4wMDBaIn19LHsibGFzdE1vZGlmaWVkIjpudWxsfV0sInNlYXJjaFNlcXVlbmNlVG9rZW4iOiJDTCtXcmdJYUNTbUFoemlObndFQUFCb09XZ3hxSG9zTGRSMk83a1lmMW5naURsb01haDZMQzNVZGp1NUdIOVo0In0=",
+      "outcome": "model_cap",
+      "raw_count": 3,
+      "unique_models": 3
+    }
+  ],
+  "requests": 8,
+  "run_id": "2229cef8-e8f4-43ee-8ab5-558eabc59325",
+  "scope": {
+    "brands": [
+      "minimax"
+    ],
+    "companies": [],
+    "gaps": [],
+    "inventory_version": "hf-model-metadata-v1",
+    "namespace_filter": "MiniMaxAI",
+    "namespaces": [
+      {
+        "brands": [
+          "minimax"
+        ],
+        "company": "minimax",
+        "namespace": "MiniMaxAI",
+        "ownership_evidence": "Staging read-only snapshot 2026-09-24: curated",
+        "source_url": "https://huggingface.co/MiniMaxAI"
+      }
+    ],
+    "rules": [],
+    "version": 1
+  },
+  "scope_gaps": [],
+  "stop_reason": "coverage_gaps",
+  "unique_models": 3,
+  "updated": 0,
+  "exit_code": 2,
+  "validation_destination": "isolated local PostgreSQL hf_catalog_acceptance_20260924; not Render staging",
+  "product_ids": [
+    {
+      "id": 2,
+      "product_key": "359c6621-309a-4443-9cf3-3d8254c34d98",
+      "repo_id": "MiniMaxAI/MiniMax-H3"
+    },
+    {
+      "id": 3,
+      "product_key": "a42fd03f-08a7-4676-bcbb-ab6a1cb7d3b1",
+      "repo_id": "MiniMaxAI/MiniMax-M3"
+    },
+    {
+      "id": 1,
+      "product_key": "a74fdada-ab99-4580-9014-5119d7e64b3f",
+      "repo_id": "MiniMaxAI/MiniMax-Music3"
+    }
+  ],
+  "product_json_stored_bytes": [
+    59631,
+    61392
+  ]
+}
