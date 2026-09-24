@@ -72,10 +72,120 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
+- Owner-requested closeout, 2026-09-24: "push to main, ollija clear worktree (we're on isolated, right)?" The HF implementation and data work are already production-verified; remaining changes are documentation only. For this closeout, publish only the HF plan and announcement-triggered HF follow-up note on the latest `main` using `[skip render]`. Leave `staging` and the other session's active rare-type release candidate unchanged. This documentation-only interpretation supersedes generated restaging/redeployment steps for the closeout, not for future code changes. Before cleanup, verify the published closeout SHA, a docs-only diff from the previously verified production HF implementation, and the production HF data state. Require the canonical worktree to be registered, clean, unlocked, and at that exact published closeout SHA; remove it from the authoritative root without `--force`, preserve feature branches, and make removal the final filesystem action. Never remove the authoritative root.
+
+- Owner-directed, 2026-09-24: "with that fix to doubao, categorize (and create new brands) as you proposed the remaining 524", followed by "leave 203 linked only to publisher", authorizes the one-time assignment of the 321 matched selected Products and creation of their 12 missing Brand identities/company links. Keep the other 203 selected Products publisher-only and exclude the 400 retained Google extras. Seed is the model-family brand; Doubao remains the consumer-app brand. Reuse existing StepFun for the combined Step/StepFun grouping. This is a data update after staging rollback validation; it does not change code, the other session's release candidate, scheduler, tracked-brand membership, or harvesting keywords.
+
 - Owner-directed, 2026-09-24: "ok go", followed by "continue to deployment to production", authorizes HF staging deployment and bounded import validation, then production deployment and collection after staging passes. Promote the same verified candidate. This supersedes the earlier local-only and on-request limits. Preserve the HF-only branch boundary; do not merge another session's unreleased work. No scheduler, service suspension, Blueprint topology change, or model download is authorized.
 
 - Owner-directed, 2026-09-24: isolate HF on a new `feat/hf-model-product-catalog` branch based on the fetched `origin/main`, selecting only HF changes. Do not merge or carry the rare-type branch's commits. Preserve the root checkout and its unrelated work; use the canonical `.worktrees/feat/hf-model-product-catalog` checkout for the HF branch. Local HF commits are explicitly authorized. This supersedes the old generated root-placement instruction while transferring this same plan. No push, staging deployment, or production action is authorized by this exception.
 - Main-based integration must use the existing Product schema and callers on `main`; keep rare-type-only verification, review, cycle, and non-HF identity code out of this branch. Reverify the adapted migration and caller chains on the isolated base. The earlier combined-branch verification remains historical evidence, not verification of this new candidate.
+
+## Collection scope revised during production import
+
+Owner-directed, 2026-09-24: collect the first **100 Google repositories and 100
+NVIDIA repositories**, sorted by `lastModified` descending. Continue collecting
+all public model repositories from the other verified publishers. Keep automatic
+progress through the remaining scope rather than stopping at an overall request
+quota; respect HF's own rate limits.
+
+Google already had 500 Products when the owner changed the limit. The owner
+explicitly asked to keep them. Its first 100 observations are fully enriched;
+the 400 extra Products are retained with whatever metadata was already obtained.
+Do not delete them or continue the original uncapped Google traversal.
+
+The original production run `0ba5bcfa-0b2a-47d9-91a2-9a526fc7bf9c` was interrupted
+to apply this scope change. Reuse its completed publisher observations and Google's
+first 100, then use separate namespace runs for remaining publishers. NVIDIA's run
+`0e6e0081-f4a2-4e53-9596-c3d80a8a86ee` stopped intentionally at 100 with both metadata
+groups complete. `--all-tracked` alone does not encode these revised per-publisher
+limits; do not resume the old global run as a way to finish this revised selection.
+
+Deployed code: `db35b50b2974f35185356d7969cade7b89f1d822`, verified first on staging
+and then production. Operational evidence and aggregate coverage are recorded in
+`/Users/fuchitalee/.cache/hf-delivery-20260924/` on the authoritative host.
+
+### Production completion evidence
+
+Completed on 2026-09-24 at the deployed SHA above. The aggregate audit verified
+all 2,007 selected repositories across 28 verified publisher pages, including
+successful empty listings for Anthropic and THUDM. Both requested metadata groups
+completed for every selected repository. Production contains 2,407 Products:
+2,007 selected plus 400 retained Google extras. Google has 500 rows; NVIDIA has
+100. Of the Google extras, 96 retain incomplete enrichment (7 partial, 89 pending)
+under the owner's instruction to keep existing data and stop further collection.
+
+No duplicate repository IDs were found; the original Product's ID, repository,
+brand, publisher, and curated name were preserved. All 2,407 Products have source
+creation, source modification, and local collection timestamps. These are not
+verified public-release dates. The selected data contains 34 distinct metadata
+field names; source fields may legitimately be absent for individual models.
+
+At the initial import audit, 524 selected Products lacked a brand assignment; their verified
+publisher is retained. The original six company/namespace mapping gaps remain
+explicit in the audit. This is completion of the revised verified-publisher
+selection, not a claim that every company alias or brand attribution is resolved.
+Production login returned HTTP 200 after collection; no catalog runs remain
+running. Evidence: `production-final-audit.txt`, `production-final-extras.txt`,
+and `RELEASE.md` in the cache directory above. The worktree was initially retained
+for uncommitted owner-requested notes; the later closeout exception above governs
+publication and guarded cleanup.
+
+### One-time brand assignment completed — 2026-09-24
+
+The owner subsequently approved the proposed brand groupings with Seed as the
+model-family brand and Doubao as the consumer-app brand, then explicitly chose
+to leave the 203 unmatched selected Products publisher-only. Applied 321 exact
+repository assignments across 19 existing/new brand identities. Created 12
+missing Brands and their Company links: `alphagenome`, `autoglm`, `bagel`,
+`codegeex`, `cogagent`, `cogvideo`, `cogview`, `cogvlm`, `magenta`, `qianfan`,
+`timesfm`, and `ui_tars`. Used existing `stepfun` for the combined Step/StepFun
+grouping; existing `doubao` remains the app brand and receives no HF weights.
+SigLIP had no repository among these selected 524, so no unused SigLIP brand was
+created and its repositories among the 400 Google extras were not reassigned.
+
+Staging candidate `4cf16b6b3f03f46c409128543e9cfae8cf978728` passed a rollback-only
+trial covering all 321 mappings, 12 Brand creations, preservation of Product IDs
+and non-brand fields, and an unchanged rerun. The same frozen mapping was applied
+atomically to production at `db35b50b2974f35185356d7969cade7b89f1d822` and verified
+after commit. Only target Product brand/timestamp fields, missing Brands, and
+their Company links changed. No code, release candidate, tracked-brand config,
+keywords, or scheduler changed.
+
+Final state: 2,407 total Products; 203 selected Products remain publisher-only,
+plus 400 retained Google extras outside this assignment batch, for 603 total
+Products with no brand. The earlier count of 524 selected attribution gaps above
+is the pre-assignment audit. Evidence and before/after receipts are in the cache
+directory above: `brand-assignment-manifest.json`, `brand-assignment-staging-test.txt`,
+`brand-assignment-production-result.txt`, and `brand-assignment-verified.txt`.
+
+## Next import: try collecting first, then upserting
+
+Owner-requested follow-up, 2026-09-24: for the next large import, evaluate
+collecting HF responses into separate local storage, validating and freezing that
+dataset, testing its import on staging, then replaying the **same dataset** into
+production through the Product writer. Upserting means inserting a missing
+repository or updating the permitted fields of its existing Product.
+
+The current importer already inserts or updates Products by repository identity.
+The proposed experiment separates collection from production writes so the exact
+dataset can be inspected and tested before promotion. Match on the case-insensitive
+HF repository identity; preserve production Product IDs, relationships, curated
+fields, and unrelated concurrent changes. Verify expected inserts/updates and
+an unchanged rerun before adopting this workflow.
+
+A recent production copy may help test realistic relationships, but do **not**
+replace the live database with that modified copy: production can receive new
+posts and edits after the snapshot. Promote only the intended HF row/field changes.
+PostgreSQL provides atomic insert-or-update behavior through
+[`INSERT ... ON CONFLICT DO UPDATE`](https://www.postgresql.org/docs/current/sql-insert.html).
+This is a future experiment; the owner asked to keep the current collection running.
+
+## Follow-up for the rare-type workflow
+
+The separate [announcement-triggered HF verification note](../handoffs/2026-09-24-213119-rare-type-announcement-triggered-hf-followup.md)
+records the proposed background lookup, candidate search, retry and Product
+upsert extension. It is future work, outside the other session's active release.
 
 ## Main-based integration contract
 
