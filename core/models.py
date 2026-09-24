@@ -2757,10 +2757,10 @@ class Product(models.Model):
     disabled = models.BooleanField(blank=True, null=True)
     pipeline_tag = models.TextField(blank=True, null=True)
     library_name = models.TextField(blank=True, null=True)
-    downloads = models.IntegerField(blank=True, null=True)
-    downloads_all_time = models.IntegerField(blank=True, null=True)
+    downloads = models.BigIntegerField(blank=True, null=True)
+    downloads_all_time = models.BigIntegerField(blank=True, null=True)
     download_velocity = models.FloatField(blank=True, null=True)
-    likes = models.IntegerField(blank=True, null=True)
+    likes = models.BigIntegerField(blank=True, null=True)
     trending_score = models.FloatField(blank=True, null=True)
     paperswithcode_id = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
@@ -2771,6 +2771,7 @@ class Product(models.Model):
     config = models.JSONField(blank=True, null=True, db_column="config_json")
     spaces = models.JSONField(blank=True, null=True, db_column="spaces_json")
     raw = models.JSONField(blank=True, null=True, db_column="raw_json")
+    hf_metadata = models.JSONField(default=dict, blank=True)
     collected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2787,6 +2788,71 @@ class Product(models.Model):
 
     def __str__(self) -> str:
         return self.repo_id
+
+
+class HFModelCatalogRun(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scope = models.JSONField()
+    outcome = models.CharField(max_length=40, default="pending")
+    invocations = models.JSONField(default=list)
+    report = models.JSONField(default=dict)
+    started_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "hf_model_catalog_runs"
+
+
+class HFModelCatalogNamespaceRun(models.Model):
+    run = models.ForeignKey(
+        HFModelCatalogRun, on_delete=models.CASCADE, related_name="namespaces"
+    )
+    namespace = models.CharField(max_length=64)
+    ownership = models.JSONField()
+    cursor = models.TextField(null=True, blank=True)
+    cursor_history = models.JSONField(default=list)
+    enumeration_complete = models.BooleanField(default=False)
+    outcome = models.CharField(max_length=64, default="pending")
+    envelopes = models.JSONField(default=list)
+    raw_count = models.BigIntegerField(default=0)
+
+    class Meta:
+        db_table = "hf_model_catalog_namespace_runs"
+        constraints = (
+            models.UniqueConstraint(
+                fields=["run", "namespace"], name="uq_hf_catalog_run_namespace"
+            ),
+        )
+
+
+class HFModelCatalogObservation(models.Model):
+    namespace_run = models.ForeignKey(
+        HFModelCatalogNamespaceRun,
+        on_delete=models.CASCADE,
+        related_name="observations",
+    )
+    repo_key = models.CharField(max_length=256)
+    repo_id = models.CharField(max_length=256)
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_product = models.BooleanField(default=False)
+    listing = models.JSONField(default=dict)
+    envelopes = models.JSONField(default=list)
+    groups = models.JSONField(default=dict)
+    outcome = models.CharField(max_length=64, default="pending")
+    observed_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "hf_model_catalog_observations"
+        constraints = (
+            models.UniqueConstraint(
+                fields=["namespace_run", "repo_key"],
+                name="uq_hf_catalog_repo_observation",
+            ),
+        )
 
 
 # ============================================================================
