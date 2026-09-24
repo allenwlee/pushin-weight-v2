@@ -909,7 +909,11 @@ def _now_iso() -> str:
 
 
 def _requeue_recent_incomplete_translations(
-    *, cfg: Any, literal_v2_enabled: bool = False, now: datetime | None = None
+    *,
+    cfg: Any,
+    literal_v2_enabled: bool = False,
+    now: datetime | None = None,
+    post_ids: set[str] | None = None,
 ) -> int:
     """Reopen recent false successes without resurrecting historical debt."""
     now = now or django_timezone.now()
@@ -918,6 +922,8 @@ def _requeue_recent_incomplete_translations(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
     )
+    if post_ids is not None:
+        candidates = candidates.filter(post_id__in=post_ids)
     if literal_v2_enabled:
         candidates = candidates.exclude(
             post__translation_artifacts__is_current=True,
@@ -957,6 +963,7 @@ def _claim_enrichment_states(
     run_id: str,
     now: datetime | None = None,
     prefer_created_before: datetime | None = None,
+    post_ids: set[str] | None = None,
 ) -> EnrichmentClaimBatch:
     """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
@@ -978,6 +985,8 @@ def _claim_enrichment_states(
         Q(translation_status=PostEnrichmentState.Status.PENDING)
         | Q(classification_status=PostEnrichmentState.Status.PENDING)
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
+    if post_ids is not None:
+        due &= Q(post_id__in=post_ids)
     current_cycle: list[PostEnrichmentState] = []
     carryover: list[PostEnrichmentState] = []
 
@@ -2965,6 +2974,7 @@ class CycleRunner:
         fetched_since: datetime | None = None,
         index: Any = None,
         search_terms: dict[str, str] | None = None,
+        hit_ids: set[int] | None = None,
     ) -> dict[str, int]:
         """Join Jev-kept durable hits to the normal Post/enrichment queue."""
 
@@ -2972,6 +2982,7 @@ class CycleRunner:
             kept_hits_pending_post(
                 limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
                 fetched_since=fetched_since,
+                hit_ids=hit_ids,
             )
         )
         result = {"selected": len(hits), "persisted": 0, "failed": 0}
@@ -3014,11 +3025,13 @@ class CycleRunner:
         search_terms: dict[str, str],
         fetched_since: datetime | None = None,
         deadline: Any = None,
+        hit_ids: set[int] | None = None,
+        allow_disabled: bool = False,
     ) -> dict[str, int]:
         """Run the local decision/ingestion queue without another X request."""
 
         result = {"selected": 0, "kept": 0, "junk": 0, "pending": 0}
-        if not self.cfg.discovery.rare_types.enabled:
+        if not self.cfg.discovery.rare_types.enabled and not allow_disabled:
             return result
         service_name = os.environ.get("RENDER_SERVICE_NAME", "").lower()
         environment = "staging" if "staging" in service_name else "normal"
@@ -3034,6 +3047,7 @@ class CycleRunner:
                     RareTypeSearchHit.GateState.PROVIDER_FAILED,
                 ],
                 post_id__isnull=True,
+                **({"pk__in": hit_ids} if hit_ids is not None else {}),
             ).count()
             gate = None
         if gate is not None:
@@ -3047,6 +3061,8 @@ class CycleRunner:
             )
             if fetched_since is not None:
                 candidates = candidates.filter(fetched_at__gte=fetched_since)
+            if hit_ids is not None:
+                candidates = candidates.filter(pk__in=hit_ids)
             limit = (
                 self.cfg.discovery.rare_types.jev.staging_decisions_per_cycle
                 if environment == "staging"
@@ -3072,6 +3088,7 @@ class CycleRunner:
                     fetched_since=fetched_since,
                     index=index,
                     search_terms=search_terms,
+                    hit_ids=hit_ids,
                 ).items()
             }
         )
@@ -3439,6 +3456,7 @@ class CycleRunner:
         run_id: str = "post-fetch",
         deadline: Any | None = None,
         prefer_created_before: datetime | None = None,
+        post_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3484,18 +3502,27 @@ class CycleRunner:
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
+        selected_post_ids = (
+            {str(post_id) for post_id in post_ids}
+            if post_ids is not None
+            else None
+        )
         claim_safe_envelope = enrichment_cfg.claim_safe_envelope_seconds
         if deadline is not None and not deadline.can_start(claim_safe_envelope):
-            counters["n_enrichment_deferred"] = PostEnrichmentState.objects.filter(
+            deferred = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
-            ).count()
+            )
+            if selected_post_ids is not None:
+                deferred = deferred.filter(post_id__in=selected_post_ids)
+            counters["n_enrichment_deferred"] = deferred.count()
             return counters
 
         counters["n_translation_requeued"] = (
             _requeue_recent_incomplete_translations(
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
+                post_ids=selected_post_ids,
             )
         )
 
@@ -3503,6 +3530,7 @@ class CycleRunner:
             cfg=enrichment_cfg,
             run_id=run_id,
             prefer_created_before=prefer_created_before,
+            post_ids=selected_post_ids,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -3658,6 +3686,7 @@ class CycleRunner:
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
         translation_succeeded: set[str] = set()
+        bounded_translator_client = None
         if translation_tweets and translator_client is None:
             logger.warning(
                 "_run_post_fetch: no translator client (configured provider "
@@ -3669,6 +3698,17 @@ class CycleRunner:
             counters["n_translator_unavailable"] = 1
             translation_rows = []
         elif translation_tweets:
+            remaining_llm_calls = (
+                None
+                if self._max_llm_calls is None
+                else max(0, self._max_llm_calls - self._llm_call_count)
+            )
+            bounded_translator_client = _BoundedClassifierClient(
+                translator_client,
+                maximum_calls=remaining_llm_calls,
+                pause_seconds=0,
+                monotonic=self._monotonic,
+            )
             translation_deadline = enrichment_cfg.start_attempt_deadline(
                 monotonic=self._monotonic
             )
@@ -3676,7 +3716,7 @@ class CycleRunner:
                 if self.cfg.llm.literal_translation_v2_enabled:
                     translation_rows = translate_batch_literal_plaintext(
                         translation_tweets,
-                        translator_client,
+                        bounded_translator_client,
                         cfg=self.cfg,
                         deadline=translation_deadline,
                         max_workers=3,
@@ -3686,7 +3726,7 @@ class CycleRunner:
                     translation_rows = translate_batch_pragmatics(
                         translation_tweets,
                         ["en", "zh_cn"],
-                        translator_client,
+                        bounded_translator_client,
                         on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
                             "translator_batch_failed",
                             self._error_counts["translator_batch_failed"] + 1,
@@ -3700,6 +3740,8 @@ class CycleRunner:
                 logger.warning("_run_post_fetch: translate failed: %s", exc, exc_info=True)
                 self._error_counts["translator_batch_failed"] += 1
                 translation_rows = []
+            finally:
+                self._llm_call_count += bounded_translator_client.calls
         else:
             translation_rows = []
 
@@ -3959,7 +4001,10 @@ class CycleRunner:
                     )
                 )
                 eligible_rare_types: set[str] = set()
-                if self.cfg.discovery.rare_types.enabled:
+                if (
+                    self.cfg.discovery.rare_types.enabled
+                    or selected_post_ids is not None
+                ):
                     eligible_rare_types = set(
                         RareTypeSearchHit.objects.filter(
                             post_id=tid,
@@ -4056,6 +4101,73 @@ class CycleRunner:
             self._error_counts["enrichment_quarantined"] += newly_failed
             self._errors.append(f"post_fetch.enrichment_quarantined:{newly_failed}")
         return counters
+
+    def _replay_targeted_extractions(
+        self,
+        *,
+        post_ids: set[str],
+        deadline: Any | None = None,
+    ) -> dict[str, Any]:
+        """Retry targeted work for explicit, already-classified saved posts."""
+
+        result: dict[str, Any] = {
+            "selected_posts": 0,
+            "calls": 0,
+            "records_written": 0,
+            "evidence_written": 0,
+            "organization_candidates_written": 0,
+            "failed_roles": [],
+            "deferred_roles": [],
+        }
+        if not post_ids or not self.cfg.targeted_extraction.enabled:
+            return result
+
+        from core.targeted_extraction import run_targeted_extractions
+
+        calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
+        posts = (
+            Post.objects.filter(
+                pk__in=post_ids,
+                enrichment_state__classification_status=PostEnrichmentState.Status.SUCCEEDED,
+            )
+            .order_by("tweet_id")
+        )
+        for post in posts:
+            result["selected_posts"] += 1
+            post_types = set(
+                PostBrandSignal.objects.filter(post=post).values_list(
+                    "post_type_id", flat=True
+                )
+            )
+            eligible_rare_types = set(
+                RareTypeSearchHit.objects.filter(
+                    post=post,
+                    gate_state=RareTypeSearchHit.GateState.KEPT,
+                    decision__derived_types__contains=["model_releases"],
+                )
+                .values_list("decision__derived_types", flat=True)
+                .first()
+                or []
+            )
+            targeted = run_targeted_extractions(
+                post=post,
+                post_types=post_types,
+                config=self.cfg.targeted_extraction,
+                calls=self._targeted_extraction_calls,
+                max_calls=calls_remaining,
+                deadline=deadline,
+                eligible_rare_types=eligible_rare_types,
+            )
+            calls_remaining -= targeted.calls_made
+            result["calls"] += targeted.calls_made
+            result["records_written"] += targeted.records_written
+            result["evidence_written"] += targeted.evidence_written
+            result["organization_candidates_written"] += (
+                targeted.organization_candidates_written
+            )
+            result["failed_roles"].extend(targeted.failed_roles)
+            result["deferred_roles"].extend(targeted.deferred_roles)
+        return result
 
     def _request_synthesis_prewarm(
         self, kept_posts: list[dict[str, Any]]

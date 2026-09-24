@@ -9,14 +9,213 @@ from django.db.models import Prefetch
 
 from core.models import (
     Event,
+    EventEvidence,
     JobListing,
     JobListingEvidence,
+    ModelRelease,
+    ModelReleaseEvidence,
     Opportunity,
     Person,
     PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
+    Post,
+    PostBrandClassificationState,
+    PostBrandProduct,
+    ProductVerificationProposal,
+    RareTypeCategoryAssignment,
 )
+
+
+def model_release_document(release_id: int) -> dict[str, Any]:
+    """Return one canonical release with source evidence and honest counts."""
+    release = (
+        ModelRelease.objects.select_related("brand", "brand_discovery_candidate")
+        .prefetch_related(
+            Prefetch(
+                "evidence",
+                queryset=ModelReleaseEvidence.objects.order_by("observed_at", "id"),
+            )
+        )
+        .get(pk=release_id)
+    )
+    evidence = list(release.evidence.all())
+    post_ids = sorted({row.source_post_id for row in evidence})
+    candidate = release.brand_discovery_candidate
+    return {
+        "id": release.pk,
+        "owner": {
+            "brand_id": release.brand_id,
+            "candidate_id": release.brand_discovery_candidate_id,
+            "observed_name": candidate.observed_name if candidate else None,
+            "reviewed_brand_id": candidate.reviewed_brand_id if candidate else None,
+        },
+        "observed_model_name": release.observed_model_name,
+        "version": release.version,
+        "channel": release.release_channel,
+        "release_date": _effective_date(
+            release.release_value, release.release_precision
+        ),
+        "review_status": release.review_status,
+        "counts": {
+            "canonical_records": 1,
+            "evidence": len(evidence),
+            "posts": len(post_ids),
+        },
+        "evidence": [
+            {
+                "id": row.pk,
+                "source_post_id": row.source_post_id,
+                "source_url": row.source_url,
+                "observed_at": _iso(row.observed_at),
+                "claim": row.observed_claim,
+                "extraction_version": row.extraction_version,
+            }
+            for row in evidence
+        ],
+    }
+
+
+def rare_type_post_document(post_id: str) -> dict[str, Any]:
+    """Read source-linked categories, Products, and unresolved Product work."""
+    post = Post.objects.filter(pk=post_id).only("tweet_id", "source_query_id").first()
+    categories = (
+        RareTypeCategoryAssignment.objects.filter(post_id=post_id)
+        .select_related("brand_discovery_candidate")
+        .order_by("brand_id", "brand_discovery_candidate_id", "category", "id")
+    )
+    products = (
+        PostBrandProduct.objects.filter(post_id=post_id)
+        .select_related("product")
+        .order_by("brand_id", "product_id")
+    )
+    proposals = (
+        ProductVerificationProposal.objects.filter(source_post_id=post_id)
+        .select_related("resolved_product")
+        .order_by("id")
+    )
+    classifications = PostBrandClassificationState.objects.filter(
+        post_id=post_id
+    ).order_by("brand_id")
+    release_ids = ModelReleaseEvidence.objects.filter(
+        source_post_id=post_id
+    ).values_list("release_id", flat=True)
+    event_ids = EventEvidence.objects.filter(source_post_id=post_id).values_list(
+        "event_id", flat=True
+    )
+    job_ids = JobListingEvidence.objects.filter(source_post_id=post_id).values_list(
+        "listing_id", flat=True
+    )
+    affiliation_ids = PersonBrandAffiliationEvidence.objects.filter(
+        source_post_id=post_id
+    ).values_list("affiliation_id", flat=True)
+    return {
+        "post_id": str(post_id),
+        "exists": post is not None,
+        "source_query_id": post.source_query_id if post else None,
+        "classification": [
+            {
+                "brand_id": row.brand_id,
+                "outcome": row.outcome,
+                "contract_version": row.contract_version,
+                "taxonomy_version": row.taxonomy_version,
+                "prompt_version": row.prompt_version,
+                "model": row.model,
+                "classified_at": _iso(row.classified_at),
+            }
+            for row in classifications
+        ],
+        "categories": [
+            {
+                "brand_id": row.brand_id,
+                "candidate_id": row.brand_discovery_candidate_id,
+                "observed_owner": row.brand_discovery_candidate.observed_name
+                if row.brand_discovery_candidate
+                else None,
+                "reviewed_brand_id": row.brand_discovery_candidate.reviewed_brand_id
+                if row.brand_discovery_candidate
+                else None,
+                "category": row.category,
+                "classification_version": row.classification_version,
+                "source_evidence": row.source_evidence,
+            }
+            for row in categories
+        ],
+        "products": [
+            {
+                "brand_id": row.brand_id,
+                "product_id": row.product_id,
+                "product_key": str(row.product.product_key),
+                "repo_id": row.product.repo_id,
+                "name": row.observed_name,
+                "type": row.product.type,
+                "policy_version": row.verification_policy_version,
+                "source_evidence": row.source_evidence,
+            }
+            for row in products
+        ],
+        "product_proposals": [
+            {
+                "id": row.pk,
+                "observed_name": row.observed_name,
+                "candidate_repo_id": row.candidate_repo_id,
+                "hf_outcome": row.hf_outcome,
+                "review_status": row.review_status,
+                "resolved_product_id": row.resolved_product_id,
+                "resolved_product_key": (
+                    str(row.resolved_product.product_key)
+                    if row.resolved_product_id
+                    else None
+                ),
+                "brand_id": row.proposed_brand_id,
+                "candidate_id": row.proposed_candidate_id,
+                "policy_version": row.policy_version,
+                "rule_trace": row.rule_trace,
+                "attempted_at": _iso(row.attempted_at),
+                "next_attempt_at": _iso(row.next_attempt_at),
+                "reviewed_at": _iso(row.reviewed_at),
+            }
+            for row in proposals
+        ],
+        "domain_records": {
+            "model_releases": [
+                model_release_document(release_id)
+                for release_id in sorted(set(release_ids))
+            ],
+            "events": list(
+                Event.objects.filter(pk__in=event_ids)
+                .order_by("id")
+                .values("id", "title", "brand_id", "brand_discovery_candidate_id")
+            ),
+            "opportunities": list(
+                Opportunity.objects.filter(source_post_id=post_id)
+                .order_by("id")
+                .values(
+                    "id",
+                    "opportunity_type",
+                    "brand_id",
+                    "brand_discovery_candidate_id",
+                )
+            ),
+            "job_listings": list(
+                JobListing.objects.filter(pk__in=job_ids)
+                .order_by("id")
+                .values("id", "title", "brand_id", "brand_discovery_candidate_id")
+            ),
+            "affiliations": list(
+                PersonBrandAffiliation.objects.filter(pk__in=affiliation_ids)
+                .order_by("id")
+                .values(
+                    "id",
+                    "person_id",
+                    "brand_id",
+                    "brand_discovery_candidate_id",
+                    "affiliation_type",
+                    "status",
+                )
+            ),
+        },
+    }
 
 
 def _iso(value) -> str | None:

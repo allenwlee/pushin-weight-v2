@@ -1012,7 +1012,12 @@ def expire_hit_payloads(*, now: datetime) -> int:
     )
 
 
-def kept_hits_pending_post(*, limit: int, fetched_since: datetime | None = None):
+def kept_hits_pending_post(
+    *,
+    limit: int,
+    fetched_since: datetime | None = None,
+    hit_ids: set[int] | None = None,
+):
     """Return a bounded durable ingestion queue; no provider work occurs here."""
 
     if limit < 1:
@@ -1024,6 +1029,8 @@ def kept_hits_pending_post(*, limit: int, fetched_since: datetime | None = None)
     )
     if fetched_since is not None:
         rows = rows.filter(fetched_at__gte=fetched_since)
+    if hit_ids is not None:
+        rows = rows.filter(pk__in=hit_ids)
     return rows.select_related("run", "decision").order_by("fetched_at", "id")[:limit]
 
 
@@ -1058,7 +1065,11 @@ def mark_hit_ingestion_failed(*, hit_id: int, error_code: str) -> None:
 
 
 def reconcile_classified_hits(
-    *, now: datetime, limit: int, fetched_since: datetime | None = None
+    *,
+    now: datetime,
+    limit: int,
+    fetched_since: datetime | None = None,
+    hit_ids: set[int] | None = None,
 ) -> int:
     """Mark linked keepers classified and retain Jev/classifier disagreement."""
 
@@ -1081,6 +1092,8 @@ def reconcile_classified_hits(
     ).select_related("decision")
     if fetched_since is not None:
         hits = hits.filter(fetched_at__gte=fetched_since)
+    if hit_ids is not None:
+        hits = hits.filter(pk__in=hit_ids)
     reconciled = 0
     for hit in hits.order_by("fetched_at", "id")[:limit]:
         classified_types = set(
