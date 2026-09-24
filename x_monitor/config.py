@@ -621,6 +621,7 @@ class HeadlineNarrativeConfig(BaseModel):
         default="deepseek-v4-flash-peak-2026-09-02", min_length=1, max_length=64
     )
     per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
+    per_brand_batch_size: int = Field(default=5, ge=1, le=5)
     per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
     per_brand_worker_concurrency: Literal[1] = 1
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
@@ -698,7 +699,9 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError("headline evidence allocation limits must ascend")
         if self.lease_seconds <= self.timeout_seconds:
             raise ValueError("headline lease must exceed provider timeout")
-        expected_batches = (self.per_brand_expected_max_brands + 4) // 5
+        expected_batches = (
+            self.per_brand_expected_max_brands + self.per_brand_batch_size - 1
+        ) // self.per_brand_batch_size
         expected_calls = 1 + 2 * expected_batches
         if expected_calls > self.per_brand_call_cap:
             raise ValueError("per-brand call cap cannot fit the expected brand graph")

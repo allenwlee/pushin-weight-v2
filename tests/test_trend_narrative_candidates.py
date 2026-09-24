@@ -260,6 +260,28 @@ def test_u1_editor_batch_preserves_one_to_five_brand_cardinality(cardinality: in
     assert len(batches[0]["dossiers"]) == cardinality
 
 
+@pytest.mark.parametrize("cardinality", [0, 1, 2, 3, 40])
+def test_0731_two_brand_batches_preserve_every_eligible_brand(cardinality: int):
+    snapshot = {
+        "packet_schema_version": 3,
+        "window_days": 1,
+        "as_of": "2026-09-24T00:00:00Z",
+        "baseline_context": {"label": "prior_period"},
+        "dossiers": [
+            {"brand_key": f"brand-{index:02d}", "outcome": "narrative_eligible", "evidence": []}
+            for index in range(cardinality)
+        ],
+    }
+
+    batches = build_editor_batches(snapshot, max_brands_per_batch=2)
+
+    assert all(len(batch["manifest_brand_keys"]) <= 2 for batch in batches)
+    assert [key for batch in batches for key in batch["manifest_brand_keys"]] == [
+        f"brand-{index:02d}" for index in range(cardinality)
+    ]
+    assert len(batches) == (cardinality + 1) // 2
+
+
 def test_u1_evidence_reservations_roll_over_without_losing_the_window_target():
     ordinary = [
         {

@@ -370,6 +370,45 @@ def test_u3_malformed_editor_body_is_critic_input_but_absence_is_not():
         )
 
 
+def test_0731_critic_pairs_each_valid_draft_with_its_own_dossier():
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra", base_url="https://api.deepinfra.com/v1/openai",
+        model=DEEPSEEK_0731_MODEL, per_brand_batch_size=2,
+        per_brand_expected_max_brands=2,
+        editor_prompt_version="headline-editor-0731-v1-ja",
+        critic_prompt_version="headline-critic-0731-v1-ja",
+    )
+    packet = {
+        "packet_schema_version": 3, "window_days": 7, "batch_key": "7d:001",
+        "manifest_brand_keys": ["alpha", "beta"],
+        "dossiers": [
+            {"brand_key": "alpha", "facts": [{"fact_id": "alpha:1"}], "evidence": []},
+            {"brand_key": "beta", "facts": [{"fact_id": "beta:1"}], "evidence": []},
+        ],
+    }
+    envelope, _ = build_per_brand_editor_request(packet, config)
+    drafts = [{"brand_key": "alpha", "headline_en": "Alpha"}, {"brand_key": "beta", "headline_en": "Beta"}]
+    critic, request = build_per_brand_critic_request(
+        envelope, json.dumps({"brands": drafts}),
+        {"status": "valid", "error_codes": [], "response": {"brands": drafts}}, config,
+    )
+
+    assert [bundle["brand_key"] for bundle in critic["review_bundles"]] == ["alpha", "beta"]
+    assert critic["review_bundles"][0]["dossier"]["facts"][0]["fact_id"] == "alpha:1"
+    assert critic["review_bundles"][1]["draft"]["headline_en"] == "Beta"
+    assert "editor_response_raw" not in critic
+    assert "\\\"brands\\\"" not in request["messages"][0]["content"]
+
+    with pytest.raises(HeadlineGenerationError, match="editor_response_manifest_mismatch"):
+        build_per_brand_critic_request(
+            envelope, "{}",
+            {"status": "valid", "error_codes": [], "response": {"brands": list(reversed(drafts))}},
+            config,
+        )
+
+
 def test_u3_production_transport_uses_the_exact_messages_request_once():
     packet = {
         "packet_schema_version": 3,

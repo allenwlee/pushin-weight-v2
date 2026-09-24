@@ -22,7 +22,6 @@ from core.models import (
     TrendNarrativeWorkSlot,
 )
 from monitor.trend_narrative_candidates import (
-    MAX_EDITOR_BRANDS_PER_BATCH,
     EvidenceSelectionPolicy,
     build_editor_batches,
     build_trend_analysis_snapshot,
@@ -261,10 +260,10 @@ def initialize_per_brand_snapshot(
     expected_calls = 1 + 2 * (
         (
             len([d for d in dossiers if d.get("outcome") == "narrative_eligible"])
-            + MAX_EDITOR_BRANDS_PER_BATCH
+            + config.per_brand_batch_size
             - 1
         )
-        // MAX_EDITOR_BRANDS_PER_BATCH
+        // config.per_brand_batch_size
     )
     if expected_calls > config.per_brand_call_cap:
         _suspend_run(
@@ -693,7 +692,7 @@ def _reconcile_run(run: TrendNarrativeRun, *, config, now: datetime, enqueue) ->
     rank = _terminalize_expired_sent(rank, now=now)
     if rank.state == TrendNarrativeProviderCall.State.SENT:
         return 0
-    batches = _resolved_batches(run, rank)
+    batches = _resolved_batches(run, rank, config=config)
     scheduled = 0
     for batch in batches:
         key = str(batch["batch_key"])
@@ -826,7 +825,7 @@ def _terminalize_expired_sent(call, *, now):
 
 
 def _resolved_batches(
-    run: TrendNarrativeRun, rank: TrendNarrativeProviderCall
+    run: TrendNarrativeRun, rank: TrendNarrativeProviderCall, *, config: HeadlineNarrativeConfig
 ) -> list[dict[str, Any]]:
     """Use model order, then prior visible order and deterministic fact signals."""
     if not run.batch_manifest:
@@ -842,14 +841,14 @@ def _resolved_batches(
                 order = [str(row["brand_key"]) for row in valid["ordered_brands"]]
             except (ValueError, TypeError, HeadlineGenerationError):
                 pass
-        batches = _batches_for_order(run.snapshot, order)
+        batches = _batches_for_order(run.snapshot, order, config=config)
         run.internal_order = order
         run.batch_manifest = [
             {"batch_key": b["batch_key"], "brand_keys": b["manifest_brand_keys"]}
             for b in batches
         ]
         run.save(update_fields=["internal_order", "batch_manifest", "updated_at"])
-    return _batches_for_order(run.snapshot, list(run.internal_order))
+    return _batches_for_order(run.snapshot, list(run.internal_order), config=config)
 
 
 def _fallback_brand_order(run: TrendNarrativeRun) -> list[str]:
@@ -907,10 +906,13 @@ def _decimal_or_zero(value: object) -> Decimal:
 
 
 def _batches_for_order(
-    snapshot: dict[str, Any], order: list[str]
+    snapshot: dict[str, Any], order: list[str], *, config: HeadlineNarrativeConfig
 ) -> list[dict[str, Any]]:
-    """Freeze the resolved rank/fallback order into exact one-to-five packets."""
-    return build_editor_batches(snapshot, brand_order=order)
+    """Freeze the resolved rank/fallback order into bounded packets."""
+    return build_editor_batches(
+        snapshot, brand_order=order,
+        max_brands_per_batch=config.per_brand_batch_size,
+    )
 
 
 def _ensure_call(

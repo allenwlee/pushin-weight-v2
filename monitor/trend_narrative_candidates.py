@@ -253,14 +253,17 @@ def build_editor_batches(
     snapshot: Mapping[str, Any],
     *,
     brand_order: Sequence[str] | None = None,
+    max_brands_per_batch: int = MAX_EDITOR_BRANDS_PER_BATCH,
 ) -> list[dict[str, Any]]:
-    """Project deterministic packets of at most five brands from a V3 snapshot.
+    """Project deterministic bounded brand packets from a V3 snapshot.
 
     ``brand_order`` is the mechanically validated rank-stage order. Missing or
     ineligible keys are ignored and eligible keys omitted by the rank response
     are appended canonically, so evaluation and production share one batching
     implementation without allowing the model to drop a brand.
     """
+    if not 1 <= max_brands_per_batch <= MAX_EDITOR_BRANDS_PER_BATCH:
+        raise ValueError("editor_batch_size_invalid")
     if (
         int(snapshot.get("packet_schema_version") or 0)
         != COMPACT_DOSSIER_SCHEMA_VERSION
@@ -282,11 +285,11 @@ def build_editor_batches(
         ordered_keys.extend(key for key in by_key if key not in ordered_keys)
         dossiers = [by_key[key] for key in ordered_keys]
     batches = []
-    for index in range(0, len(dossiers), MAX_EDITOR_BRANDS_PER_BATCH):
-        members = dossiers[index : index + MAX_EDITOR_BRANDS_PER_BATCH]
+    for index in range(0, len(dossiers), max_brands_per_batch):
+        members = dossiers[index : index + max_brands_per_batch]
         batch_key = (
             f"{snapshot['window_days']}d:"
-            f"{index // MAX_EDITOR_BRANDS_PER_BATCH + 1:03d}"
+            f"{index // max_brands_per_batch + 1:03d}"
         )
         batches.extend(_fit_or_split_editor_batch(snapshot, members, batch_key))
     return batches
