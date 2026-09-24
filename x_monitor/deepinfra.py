@@ -197,6 +197,92 @@ for _headline_stage in ("editor", "critic"):
     else:
         _properties["decisions"]["items"]["properties"]["narrative"]["anyOf"][0] = _FINANCE_NARRATIVE_SCHEMA
     _PROFILES[f"headline_{_headline_stage}_v3"] = _profile
+    _bound = deepcopy(_profile)
+    _bound["response_format"]["json_schema"]["name"] = f"headline_{_headline_stage}_v4"
+    _PROFILES[f"headline_{_headline_stage}_v4"] = _bound
+
+
+def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Constrain each brand's citations without changing the response contract.
+
+    These choices are derived only from our closed input envelope. Always copy
+    the template: a shared profile must never retain another request's IDs.
+    """
+    try:
+        content = messages[-1]["content"]
+        if not isinstance(content, str):
+            raise TypeError("bound request content")
+        encoded = (content.split("request_envelope=", 1)[1] if profile_name == "headline_editor_v4"
+                   else content.split("\n", 1)[1])
+        envelope = json.loads(encoded)
+        dossiers = ([bundle["dossier"] for bundle in envelope["review_bundles"]]
+                    if "review_bundles" in envelope else envelope["analysis_packet"]["dossiers"])
+        if not 1 <= len(dossiers) <= 5:
+            raise ValueError("bound brand count")
+        result = deepcopy(_PROFILES[profile_name]["response_format"])
+        schema = result["json_schema"]["schema"]
+        for key in ("packet_hash", "batch_key"):
+            schema["properties"][key]["enum"] = [envelope[key]]
+        narratives = []
+        for dossier in dossiers:
+            narrative = deepcopy(_FINANCE_NARRATIVE_SCHEMA)
+            props = narrative["properties"]
+            props["brand_key"]["enum"] = [dossier["brand_key"]]
+            proposition = props["propositions"]["items"]["properties"]
+            fact_ids = [fact["fact_id"] for fact in dossier.get("facts", [])]
+            evidence_ids = [item["evidence_id"] for item in dossier.get("evidence", [])]
+            for target, ids in ((proposition["fact_ids"], fact_ids),
+                                (proposition["evidence_ids"], evidence_ids),
+                                (props["events"]["items"]["properties"]["evidence_ids"], evidence_ids)):
+                if ids:
+                    target["items"]["enum"] = ids
+                else:
+                    target["maxItems"] = 0
+            bindings = [_closed_object({key: {"type": "string", "enum": [str(fact[key])]}
+                                       for key in ("fact_id", "value", "unit", "scope_ref")})
+                        for fact in dossier.get("facts", [])]
+            if bindings:
+                proposition["measurements"]["items"] = {"anyOf": bindings}
+            else:
+                proposition["measurements"]["maxItems"] = 0
+            # Emit citations and scoped values before prose. The model then
+            # composes from selected evidence rather than justifying a headline
+            # it already wrote. Key order changes no stored response fields.
+            proposition_schema = props["propositions"]["items"]
+            proposition_schema["properties"] = {
+                key: proposition[key] for key in (
+                    "proposition_id", "output_section", "claim_type",
+                    "evidence_ids", "fact_ids", "measurements",
+                    "claim_en", "claim_zh_cn", "claim_ja",
+                )
+            }
+            proposition_schema["required"] = list(proposition_schema["properties"])
+            narrative["properties"] = {
+                key: props[key] for key in (
+                    "brand_key", "propositions", "headline_proposition_ids",
+                    "secondary_proposition_ids", "headline_en", "headline_zh_cn",
+                    "headline_ja", "secondary_en", "secondary_zh_cn", "secondary_ja",
+                    "narrative_kind", "confidence", "events",
+                )
+            }
+            narrative["required"] = list(narrative["properties"])
+            narratives.append(narrative)
+        if profile_name == "headline_editor_v4":
+            array = schema["properties"]["brands"]
+            array["items"] = {"anyOf": narratives}
+        else:
+            array = schema["properties"]["decisions"]
+            decisions = []
+            for narrative in narratives:
+                decision = deepcopy(array["items"])
+                decision["properties"]["brand_key"] = narrative["properties"]["brand_key"]
+                decision["properties"]["narrative"]["anyOf"] = [narrative, {"type": "null"}]
+                decisions.append(decision)
+            array["items"] = {"anyOf": decisions}
+        array["minItems"] = array["maxItems"] = len(dossiers)
+        return result
+    except (KeyError, TypeError, IndexError, ValueError) as exc:
+        raise DeepInfraPermanentError("deepinfra_headline_schema_binding_invalid") from exc
 
 
 def _json_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -342,7 +428,11 @@ class DeepInfraChatCompletionsClient:
                 request[name] = selected
         if self.request_profile and self.request_profile.startswith("headline_"):
             request["service_tier"] = profile["service_tier"]
-            request["response_format"] = profile["response_format"]
+            request["response_format"] = (
+                _bound_headline_format(self.request_profile, messages)
+                if self.request_profile in {"headline_editor_v4", "headline_critic_v4"}
+                else profile["response_format"]
+            )
         # Deliberately omit response_format, provider, service_tier, thinking,
         # reasoning, and OpenRouter routing controls from the direct envelope.
         return request

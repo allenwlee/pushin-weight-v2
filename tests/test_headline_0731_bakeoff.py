@@ -45,3 +45,65 @@ def test_0731_two_brand_bakeoff_preflight_reserves_the_complete_graph():
     assert max(
         len(row["manifest_brand_keys"]) for row in preflight["estimates"][1:]
     ) == 2
+
+
+def test_active_tuning_manifest_rejects_competing_model_arm():
+    import pytest
+
+    with pytest.raises(ValueError, match="0731_only_workflow"):
+        _manifest("incumbent", concurrency=3)
+
+
+def test_finance_calibration_repairs_require_independent_review(monkeypatch):
+    import json
+
+    from monitor import trend_narrative_evaluation as evaluation
+    from monitor.trend_narrative_generation import _finance_contract
+
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra", model=DEEPSEEK_0731_MODEL,
+        base_url="https://api.deepinfra.com/v1/openai",
+        editor_prompt_version="headline-editor-finance-v1-ja",
+        critic_prompt_version="headline-critic-finance-v1-ja",
+        editor_request_profile="headline_editor_v3", critic_request_profile="headline_critic_v3",
+    )
+    assert _finance_contract(config.editor_prompt_version)
+    batch = evaluation._calibration_control_batch([build_synthetic_per_brand_snapshot(3)])
+    # The real request builder, schema, and validator run. Only transport is replaced.
+    def execute(stage, envelope, request, config, ledger, calls, **kwargs):
+        packet = envelope["analysis_packet"]
+        repaired = evaluation._supported_editor_response({
+            "analysis_packet": packet, "packet_hash": envelope["packet_hash"],
+            "batch_key": envelope["batch_key"], "prompt_version": config.editor_prompt_version,
+        })
+        raw = {"critic_response_schema_version": 3, "packet_hash": envelope["packet_hash"],
+               "batch_key": envelope["batch_key"], "decisions": [
+                   {"brand_key": n["brand_key"], "decision": "repair", "narrative": n, "hold_code": None}
+                   for n in repaired["brands"]]}
+        call = {"raw_response": json.dumps(raw)}
+        calls.append(call)
+        return call
+
+    monkeypatch.setattr(evaluation, "_execute_call", execute)
+    result = evaluation._run_calibration_controls(batch, config, evaluation._EvaluationLedger(_manifest("candidate")), [],
+                                                api_key="test", client_factory=None, cancellation_path=None)
+    assert len(result) == 8
+    assert all(row["mechanically_valid"] for row in result)
+    assert not any(row["false_accept"] for row in result)
+    assert sum(row["repair_review_required"] for row in result) == 7
+    assert all(row["narrative"] for row in result)
+
+
+def test_active_0731_preflight_rejects_stale_pricing():
+    from dataclasses import replace
+
+    import pytest
+
+    from monitor.trend_narrative_evaluation import EvaluationConfigurationError
+
+    config = HeadlineNarrativeConfig(provider="deepinfra", model=DEEPSEEK_0731_MODEL,
+                                     base_url="https://api.deepinfra.com/v1/openai")
+    manifest = replace(_manifest("candidate"), pricing_checked_at="2026-08-01T00:00:00Z")
+    with pytest.raises(EvaluationConfigurationError, match="pricing_snapshot_stale"):
+        evaluation_preflight(manifest, [build_synthetic_per_brand_snapshot(1)], config,
+                             include_calibration_controls=False)

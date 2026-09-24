@@ -548,8 +548,8 @@ class HeadlineNarrativeConfig(BaseModel):
         default="headline-critic-v6", min_length=1, max_length=64
     )
     rank_request_profile: Literal["headline_rank_v1", "headline_rank_v2"] = "headline_rank_v1"
-    editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2", "headline_editor_v3"] = "headline_editor_v1"
-    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2", "headline_critic_v3"] = "headline_critic_v1"
+    editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2", "headline_editor_v3", "headline_editor_v4"] = "headline_editor_v1"
+    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2", "headline_critic_v3", "headline_critic_v4"] = "headline_critic_v1"
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
@@ -625,7 +625,7 @@ class HeadlineNarrativeConfig(BaseModel):
     )
     per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
     per_brand_batch_size: int = Field(default=5, ge=1, le=5)
-    per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
+    per_brand_p95_latency_seconds: Decimal = Field(default=Decimal(45), gt=0, le=120)
     per_brand_worker_concurrency: int = Field(default=1, ge=1, le=3)
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
@@ -682,7 +682,7 @@ class HeadlineNarrativeConfig(BaseModel):
             prompt_parts = getattr(self, f"{stage}_prompt_version").casefold().split("-")
             finance = "finance" in prompt_parts
             profile = getattr(self, f"{stage}_request_profile")
-            if finance != (profile == f"headline_{stage}_v3") or (
+            if finance != (profile in {f"headline_{stage}_v3", f"headline_{stage}_v4"}) or (
                 finance and (self.provider != "deepinfra" or "ja" not in prompt_parts)
             ):
                 raise ValueError("headline finance prompt requires its trilingual DeepInfra v3 schema")
@@ -742,7 +742,7 @@ class HeadlineNarrativeConfig(BaseModel):
             * self.per_brand_p95_latency_seconds
             / Decimal(3600 * self.per_brand_worker_concurrency)
         )
-        max_utilization = Decimal("0.75") if self.provider == "deepinfra" else Decimal("1")
+        max_utilization = Decimal("0.75") if self.provider == "deepinfra" else Decimal(1)
         if self.provider_calls_active and drain_utilization >= max_utilization:
             raise ValueError(
                 "headline worker drain rate must exceed the configured arrival rate"

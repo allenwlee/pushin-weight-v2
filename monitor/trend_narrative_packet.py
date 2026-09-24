@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-PROJECTION_VERSION = "headline-packet-v1"
+PROJECTION_VERSION = "headline-packet-v2"
 FAMILIES = (
     "volume", "engagement", "post_type", "product_label", "sentiment",
     "china_nationalism", "us_nationalism", "language", "unsanctioned_flags",
@@ -202,4 +202,11 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
         )) for row in result["evidence"][:2]]
     elif not finance and dossier.get("shape_summary"):
         result["shape_summary"] = project_shape(dossier["shape_summary"])
+    result["evidence_scope"] = {
+        "selected_source_count": len(result["evidence"]),
+        "collected_post_count": next((fact["value"] for fact in facts
+                                      if fact.get("metric") == "post_count"), None),
+        "selection": "bounded_nonrandom_examples",
+        "population_inference_allowed": False,
+    }
     return result

@@ -28,13 +28,10 @@ from monitor.trend_narrative_evaluation import (
 from x_monitor.config import HeadlineNarrativeConfig, load_config
 from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
 
-INCUMBENT_MODEL = "deepseek-v4-flash"
 CANDIDATE_MODEL = DEEPSEEK_0731_MODEL
-CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v2/headline_critic_v2"
+CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v4/headline_critic_v4"
 CANDIDATE_INPUT_PRICE = Decimal("0.09")
 CANDIDATE_OUTPUT_PRICE = Decimal("0.27")
-INCUMBENT_INPUT_PRICE = Decimal("0.44")
-INCUMBENT_OUTPUT_PRICE = Decimal("1.32")
 CANDIDATE_TIMEOUT_SECONDS = 300
 
 
@@ -76,41 +73,58 @@ def load_frozen_live_snapshots(path: Path) -> list[dict[str, Any]]:
 
 
 def _manifest(arm: str, *, concurrency: int = 1) -> EvaluationManifest:
-    candidate = arm == "candidate"
+    if arm != "candidate":
+        raise ValueError("0731_only_workflow")
     return EvaluationManifest.from_mapping(
         {
             "run_id": f"headline-0731-bakeoff-{arm}",
             "reviewer": "codex:headline-0731-bakeoff",
-            # The production evaluator pins this logical prompt contract. The
-            # candidate's actual provider/model identity is separately strict
-            # in the adapter and retained in route_evidence.
-            "model": CANDIDATE_MODEL if candidate else INCUMBENT_MODEL,
+            "model": CANDIDATE_MODEL,
             "max_calls": 120,
             "input_token_budget": 4_000_000,
             "output_token_budget": 1_000_000,
             "dollar_budget": "2.00",
             "input_dollars_per_million_tokens": str(
-                CANDIDATE_INPUT_PRICE if candidate else INCUMBENT_INPUT_PRICE
+                CANDIDATE_INPUT_PRICE
             ),
             "output_dollars_per_million_tokens": str(
-                CANDIDATE_OUTPUT_PRICE if candidate else INCUMBENT_OUTPUT_PRICE
+                CANDIDATE_OUTPUT_PRICE
             ),
             "pricing_version": (
                 "deepinfra-priority-0731-2026-09-24"
-                if candidate
-                else "deepseek-v4.1-flash-peak-2026-09-02"
             ),
             "pricing_checked_at": "2026-09-24T00:00:00+09:00",
             "context_window_tokens": 500_000,
             "brand_cap": 50,
             "concurrency": concurrency,
-            # The all-brand rank path has no packet-byte cap; the 128 KiB
-            # production bound applies to each editor packet. The untouched
-            # holdout's 1-day rank packet is ~287 KiB. Bound both bakeoff arms
-            # equally above that observed size without modifying its evidence.
+            # Absolute bound for every stage; editor also has its smaller
+            # production packet bound. Historical artifacts remain unchanged.
             "max_packet_bytes": 384 * 1024,
         }
     )
+
+
+def configuration_lock(config: HeadlineNarrativeConfig) -> dict[str, Any]:
+    """Pin inference behavior separately from activation and publication controls."""
+    fields = (
+        "provider", "base_url", "model", "timeout_seconds", "rank_max_tokens",
+        "editor_max_tokens", "critic_max_tokens", "rank_prompt_version",
+        "editor_prompt_version", "critic_prompt_version", "rank_request_profile",
+        "editor_request_profile", "critic_request_profile", "per_brand_batch_size",
+        "per_brand_worker_concurrency",
+    )
+    serialized = config.model_dump(mode="json")
+    root = Path(__file__).resolve().parents[1]
+    return {
+        "configuration": {key: serialized[key] for key in fields},
+        "implementation_sha256": {
+            file: _sha256(root / file) for file in (
+                "monitor/trend_narrative_packet.py", "monitor/trend_narrative_facts.py",
+                "monitor/trend_narrative_candidates.py", "monitor/trend_narrative_generation.py",
+                "x_monitor/deepinfra.py",
+            )
+        },
+    }
 
 
 def _candidate_actual_cost(receipts: list[dict[str, Any]]) -> Decimal | None:
@@ -163,9 +177,9 @@ def summarize(
     provider_cost = _candidate_actual_cost(receipts) if arm == "candidate" else None
     return {
         "arm": arm,
-        "logical_prompt_model": CANDIDATE_MODEL if arm == "candidate" else INCUMBENT_MODEL,
-        "actual_provider": "DeepInfra" if arm == "candidate" else "DeepSeek",
-        "actual_model": CANDIDATE_MODEL if arm == "candidate" else INCUMBENT_MODEL,
+        "logical_prompt_model": CANDIDATE_MODEL,
+        "actual_provider": "DeepInfra",
+        "actual_model": CANDIDATE_MODEL,
         "frozen_input_sha256": frozen_input_sha256,
         "calls_used": int(execution.get("calls_used") or 0),
         "input_tokens": int(execution.get("accounted_input_tokens") or 0),
@@ -203,59 +217,74 @@ def summarize(
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    _load_literal_env(Path(".env"))
+    _load_literal_env(Path(args.secret_env))
+    output_dir = Path(args.output_dir)
+    if not args.preflight_only and (output_dir / "candidate-artifact.json").exists():
+        raise ValueError("evaluation_output_already_exists")
     frozen = Path(args.frozen_input)
     snapshots = [build_synthetic_per_brand_snapshot(count) for count in (1, 3, 5)]
     if args.holdout_only:
         snapshots = load_frozen_live_snapshots(frozen)
     elif not args.synthetic_only:
         snapshots.extend(load_frozen_live_snapshots(frozen))
-    include_controls = not args.holdout_only
+    include_controls = args.include_controls or not args.holdout_only
     config = load_config(Path(args.config)).headline_narrative
-    if args.arm == "candidate":
-        candidate_values = config.model_dump()
-        candidate_values.update(
-            provider="deepinfra",
-            base_url="https://api.deepinfra.com/v1/openai",
-            model=CANDIDATE_MODEL,
-            timeout_seconds=CANDIDATE_TIMEOUT_SECONDS,
-            rank_max_tokens=7_000,
-            editor_max_tokens=8_000,
-            critic_max_tokens=8_000,
-            rank_prompt_version="headline-rank-0731-v3",
-            editor_prompt_version="headline-editor-0731-v3-ja",
-            critic_prompt_version="headline-critic-0731-v3-ja",
-            rank_request_profile="headline_rank_v2",
-            editor_request_profile="headline_editor_v2",
-            critic_request_profile="headline_critic_v2",
-            per_brand_batch_size=2,
-            per_brand_call_cap=41,
-            per_brand_input_token_cap=1_600_000,
-            per_brand_output_token_cap=350_000,
-            per_brand_cost_cap_usd=Decimal("0.30"),
-            per_brand_input_usd_per_million=CANDIDATE_INPUT_PRICE,
-            per_brand_output_usd_per_million=CANDIDATE_OUTPUT_PRICE,
-            per_brand_pricing_version="deepinfra-priority-0731-2026-09-24",
-            per_brand_p95_latency_seconds=Decimal(120),
-            per_brand_worker_concurrency=3,
-        )
-        config = HeadlineNarrativeConfig.model_validate(candidate_values)
-    if args.preflight_only:
-        from monitor.trend_narrative_evaluation import evaluation_preflight
+    if args.arm != "candidate":
+        raise ValueError("0731_only_workflow")
+    candidate_values = config.model_dump()
+    candidate_values.update(
+        provider="deepinfra",
+        base_url="https://api.deepinfra.com/v1/openai",
+        model=CANDIDATE_MODEL,
+        timeout_seconds=CANDIDATE_TIMEOUT_SECONDS,
+        rank_max_tokens=7_000,
+        editor_max_tokens=8_000,
+        critic_max_tokens=8_000,
+        rank_prompt_version="headline-rank-0731-v3",
+        editor_prompt_version="headline-editor-finance-v6-ja",
+        critic_prompt_version="headline-critic-finance-v6-ja",
+        rank_request_profile="headline_rank_v2",
+        editor_request_profile="headline_editor_v4",
+        critic_request_profile="headline_critic_v4",
+        per_brand_batch_size=2,
+        per_brand_call_cap=41,
+        per_brand_input_token_cap=1_600_000,
+        per_brand_output_token_cap=350_000,
+        per_brand_cost_cap_usd=Decimal("0.30"),
+        per_brand_input_usd_per_million=CANDIDATE_INPUT_PRICE,
+        per_brand_output_usd_per_million=CANDIDATE_OUTPUT_PRICE,
+        per_brand_pricing_version="deepinfra-priority-0731-2026-09-24",
+        per_brand_p95_latency_seconds=Decimal(120),
+        per_brand_worker_concurrency=3,
+    )
+    config = HeadlineNarrativeConfig.model_validate(candidate_values)
+    from monitor.trend_narrative_evaluation import evaluation_preflight
 
-        return evaluation_preflight(
-            _manifest(args.arm, concurrency=3 if args.arm == "candidate" else 1),
-            snapshots,
-            config,
-            include_calibration_controls=include_controls,
-        )
+    lock = configuration_lock(config)
+    if args.lock_file and json.loads(Path(args.lock_file).read_text()) != lock:
+        raise ValueError("qualified_configuration_changed")
+    preflight = evaluation_preflight(
+        _manifest(args.arm, concurrency=3), snapshots, config,
+        include_calibration_controls=include_controls,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = output_dir / "configuration-lock.json"
+    if lock_path.exists() and json.loads(lock_path.read_text()) != lock:
+        raise ValueError("evaluation_configuration_changed")
+    lock_path.write_text(json.dumps(lock, sort_keys=True, indent=2) + "\n")
+    (output_dir / "input-manifest.json").write_text(json.dumps({
+        "frozen_input_sha256": _sha256(frozen), "preflight": preflight,
+        "configuration_lock_sha256": _sha256(lock_path),
+    }, sort_keys=True, indent=2) + "\n")
+    if args.preflight_only:
+        return preflight
     artifact = run_per_brand_evaluation(
-        _manifest(args.arm, concurrency=3 if args.arm == "candidate" else 1),
+        _manifest(args.arm, concurrency=3),
         snapshots,
         config,
         include_calibration_controls=include_controls,
         api_key=os.environ.get(
-            "DEEPINFRA_API_KEY" if args.arm == "candidate" else "DEEPSEEK_API_KEY"
+            "DEEPINFRA_API_KEY"
         ),
     )
     receipts = [
@@ -263,12 +292,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         for call in artifact.get("calls") or []
         if (call.get("usage") or {}).get("provider_usage")
     ]
+    if configuration_lock(config) != lock:
+        raise ValueError("configuration_changed_during_evaluation")
+    artifact["configuration_lock"] = lock
+    artifact["configuration"] = config.model_dump(mode="json")
+    artifact["configuration_sha256"] = hashlib.sha256(json.dumps(artifact["configuration"], sort_keys=True).encode()).hexdigest()
     artifact["route_evidence"] = {
         "arm": args.arm,
-        "logical_prompt_model": CANDIDATE_MODEL if args.arm == "candidate" else INCUMBENT_MODEL,
-        "actual_provider": "DeepInfra" if args.arm == "candidate" else "DeepSeek",
-        "actual_model": CANDIDATE_MODEL if args.arm == "candidate" else INCUMBENT_MODEL,
-        "request_profile": CANDIDATE_PROFILE if args.arm == "candidate" else None,
+        "logical_prompt_model": CANDIDATE_MODEL,
+        "actual_provider": "DeepInfra",
+        "actual_model": CANDIDATE_MODEL,
+        "request_profile": CANDIDATE_PROFILE,
         "reasoning": "disabled",
         "fallback": "none",
         "provider_receipts": receipts,
@@ -297,13 +331,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arm", choices=("incumbent", "candidate"), required=True)
+    parser.add_argument("--arm", choices=("candidate",), default="candidate")
     parser.add_argument("--frozen-input", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--secret-env", default=".env")
+    parser.add_argument("--lock-file")
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--synthetic-only", action="store_true")
     parser.add_argument("--holdout-only", action="store_true")
+    parser.add_argument("--include-controls", action="store_true")
     return parser.parse_args()
 
 

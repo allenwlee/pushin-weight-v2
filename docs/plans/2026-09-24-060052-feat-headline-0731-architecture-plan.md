@@ -1120,3 +1120,24 @@ diagnostic input; they have not been rewritten as passing results. U7–U9 and
 the iterative U4/U5 workflow now address those failures until the 0731 route
 meets the product's own requirements. Model choice is settled; deployment still
 requires a ready configuration and the staging/production checks.
+
+## Execution progress — 2026-09-24
+
+- U7 complete in `dcc704e`: closed compact packet, deduplicated text, scoped
+  facts, cleaned phrases and source relevance.
+- U8 complete in `a47aa27`: bounded historical eligibility, completed-bucket
+  activity and participation facts; absent collection-regime proof produces
+  unavailable historical norms.
+- U9 complete in `c60194e`: measurement/value/unit/scope validation and real
+  PostgreSQL snapshot-to-publication regression coverage.
+- U4 in progress: cycle 1 completed three diagnostic rounds; cycle 2 applies
+  targeted corrections. Dynamic per-brand citation schemas prevent the observed
+  cross-brand citation failure. Shorter, evidence-first writing is under test.
+- U5 pending: new source corpus reserved with no reused evidence IDs or exact
+  excerpts; 24 independent review assignments frozen before output. Repaired
+  calibration controls require actual source review before closure.
+- U6 pending: status receipt reporting prepared; active production routing and
+  infrastructure remain unchanged until qualification and staging pass.
+
+Detailed receipts, changes and limitations:
+[0731 finance tuning report](../research/2026-09-24-195100-headline-finance-0731-tuning-cycle1.md).

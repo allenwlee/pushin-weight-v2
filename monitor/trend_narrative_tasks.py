@@ -42,6 +42,7 @@ from monitor.trend_narrative_generation import (
     build_per_brand_editor_request,
     build_per_brand_rank_request,
     execute_per_brand_provider_request,
+    provider_request_for_budget,
     validate_per_brand_critic_response,
     validate_per_brand_editor_response,
     validate_per_brand_rank_response,
@@ -957,7 +958,7 @@ def _ensure_call(
         if existing is not None:
             return existing
         budget_reason = _provider_budget_reason(
-            locked_run, next_request=request, config=config
+            locked_run, next_request=request, next_stage=stage, config=config
         )
         if budget_reason:
             raise _PerBrandBudgetExceeded(budget_reason)
@@ -984,6 +985,7 @@ def _provider_budget_reason(
     *,
     next_request: dict[str, Any],
     config: HeadlineNarrativeConfig,
+    next_stage: str = "editor",
 ) -> str:
     """Return a closed pre-send budget reason, including reserved work."""
     calls = list(
@@ -992,6 +994,7 @@ def _provider_budget_reason(
             "input_tokens",
             "output_tokens",
             "request_packet",
+            "stage",
         )
     )
     if len(calls) + 1 > config.per_brand_call_cap:
@@ -1006,10 +1009,14 @@ def _provider_budget_reason(
             output_tokens += call.output_tokens
             continue
         request = (call.request_packet or {}).get("provider_request") or {}
-        estimated_input, estimated_output = _estimate_request_tokens(request)
+        estimated_input, estimated_output = _estimate_request_tokens(
+            provider_request_for_budget(request, config, call.stage)
+        )
         input_tokens += estimated_input
         output_tokens += estimated_output
-    estimated_input, estimated_output = _estimate_request_tokens(next_request)
+    estimated_input, estimated_output = _estimate_request_tokens(
+        provider_request_for_budget(next_request, config, next_stage)
+    )
     input_tokens += estimated_input
     output_tokens += estimated_output
     if input_tokens > config.per_brand_input_token_cap:

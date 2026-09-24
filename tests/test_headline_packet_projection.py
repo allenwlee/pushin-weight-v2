@@ -118,3 +118,17 @@ def test_source_relevance_does_not_treat_a_turkish_suffix_as_a_brand():
     assert both["status"] == "multiple_brands"
     assert both["matched_aliases"] == ["Kling"]
     assert both["other_brand_keys"] == ["deepseek"]
+
+
+def test_source_sample_is_not_presented_as_a_whole_window_census():
+    from monitor.trend_narrative_packet import project_dossier
+
+    dossier = {"brand_key":"alpha", "facts":[
+        {"fact_id":"f:count", "family":"volume", "metric":"post_count", "source_value":"100", "unit":"posts"}],
+        "evidence":[{"evidence_id":str(i),"excerpt":"example"} for i in range(6)]}
+    full = project_dossier(dossier)
+    preview = project_dossier(dossier, rank=True)
+    assert full["evidence_scope"] == {"selected_source_count":6,"collected_post_count":"100",
+                                      "selection":"bounded_nonrandom_examples","population_inference_allowed":False}
+    assert preview["evidence_scope"]["selected_source_count"] == 2
+    assert preview["evidence_scope"]["collected_post_count"] == "100"

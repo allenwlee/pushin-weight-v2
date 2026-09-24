@@ -39,10 +39,13 @@ from monitor.trend_narrative_facts import (
 from monitor.trend_narrative_generation import (
     HeadlineGenerationError,
     PerBrandProviderResponse,
+    _finance_contract,
+    _japanese_contract,
     build_per_brand_critic_request,
     build_per_brand_editor_request,
     build_per_brand_rank_request,
     execute_per_brand_provider_request,
+    provider_request_for_budget,
     validate_per_brand_critic_response,
     validate_per_brand_editor_response,
     validate_per_brand_rank_response,
@@ -377,7 +380,10 @@ def _synthetic_dossier(
         "evidence": evidence,
         "raw_series": {"coarse": [], "fine": [], "metadata": {}},
         "aggregate_inputs": {},
-        "source_row_provenance": {},
+        "source_row_provenance": {
+            "start_at": "2026-08-20T00:00:00+00:00",
+            "end_at": "2026-08-27T00:00:00+00:00",
+        },
         "evidence_selection_provenance": {},
     }
 
@@ -495,6 +501,10 @@ def evaluation_preflight(
     manifest.validate()
     if config.model != manifest.model:
         raise EvaluationConfigurationError("evaluation_config_model_mismatch")
+    if config.provider == "deepinfra":
+        age = datetime.now(UTC) - datetime.fromisoformat(manifest.pricing_checked_at)
+        if age > timedelta(days=7) or age < -timedelta(days=1):
+            raise EvaluationConfigurationError("evaluation_pricing_snapshot_stale")
     estimates = []
     window_reports = []
     for snapshot in snapshots:
@@ -515,7 +525,7 @@ def evaluation_preflight(
                 project_provider_packet(snapshot), config
             )
             estimates.append(
-                _request_estimate("rank", rank_envelope, rank_request, manifest)
+                _request_estimate("rank", rank_envelope, rank_request, manifest, config)
             )
             batches = build_editor_batches(
                 snapshot, max_brands_per_batch=config.per_brand_batch_size
@@ -526,7 +536,7 @@ def evaluation_preflight(
                 )
                 estimates.append(
                     _request_estimate(
-                        "editor", editor_envelope, editor_request, manifest
+                        "editor", editor_envelope, editor_request, manifest, config
                     )
                 )
                 editor = _supported_editor_response(editor_envelope)
@@ -538,13 +548,15 @@ def evaluation_preflight(
                 )
                 estimates.append(
                     _request_estimate(
-                        "critic", critic_envelope, critic_request, manifest
+                        "critic", critic_envelope, critic_request, manifest, config
                     )
                 )
             window_report["planned_call_count"] = 1 + 2 * len(batches)
         window_reports.append(window_report)
     if include_calibration_controls:
-        control_batch = _calibration_control_batch(snapshots)
+        control_batch = _calibration_control_batch(
+            [build_synthetic_per_brand_snapshot(3)] if _finance_contract(config.editor_prompt_version) else snapshots
+        )
         for (
             control,
             _expected,
@@ -552,7 +564,7 @@ def evaluation_preflight(
             critic_request,
         ) in _calibration_control_requests(control_batch, config):
             estimate = _request_estimate(
-                "critic_calibration", critic_envelope, critic_request, manifest
+                "critic_calibration", critic_envelope, critic_request, manifest, config
             )
             estimate["control"] = control
             estimates.append(estimate)
@@ -598,13 +610,15 @@ def _request_estimate(
     envelope: Mapping[str, Any],
     request: Mapping[str, Any],
     manifest: EvaluationManifest,
+    config: HeadlineNarrativeConfig | None = None,
 ) -> dict[str, Any]:
     packet_bytes = len(
         canonical_snapshot_json(envelope.get("analysis_packet", {})).encode("utf-8")
     )
     if packet_bytes > manifest.max_packet_bytes:
         raise EvaluationConfigurationError("evaluation_packet_limit_exceeded")
-    input_tokens = _estimated_input_tokens(request)
+    wire = provider_request_for_budget(request, config, "critic" if stage == "critic_calibration" else stage) if config else request
+    input_tokens = _estimated_input_tokens(wire)
     output_tokens = int(request.get("max_tokens") or 0)
     if input_tokens + output_tokens > manifest.context_window_tokens:
         raise EvaluationConfigurationError("evaluation_context_limit_exceeded")
@@ -613,6 +627,7 @@ def _request_estimate(
         "batch_key": str(envelope.get("batch_key") or ""),
         "manifest_brand_keys": list(envelope.get("manifest_brand_keys") or []),
         "packet_bytes": packet_bytes,
+        "wire_bytes": len(_canonical_json(wire).encode("utf-8")),
         "estimated_input_tokens": input_tokens,
         "reserved_output_tokens": output_tokens,
         "reserved_cost_dollars": _decimal_json(
@@ -724,7 +739,9 @@ def run_per_brand_evaluation(
                 "wall_ms": round((time.monotonic() - window_started) * 1000),
             })
         if include_calibration_controls:
-            control_batch = _calibration_control_batch(snapshots)
+            control_batch = _calibration_control_batch(
+                [build_synthetic_per_brand_snapshot(3)] if _finance_contract(config.editor_prompt_version) else snapshots
+            )
             controls = _run_calibration_controls(
                 control_batch,
                 config,
@@ -744,6 +761,7 @@ def run_per_brand_evaluation(
     unsupported_false_accepts = sum(control["false_accept"] for control in controls)
     supported_false_holds = sum(control["false_hold"] for control in controls)
     invalid_controls = sum(not control["mechanically_valid"] for control in controls)
+    pending_repairs = sum(bool(control.get("repair_review_required")) for control in controls)
     complete_controls = {control["control"] for control in controls} == set(
         CALIBRATION_CONTROL_LABELS
     )
@@ -776,6 +794,9 @@ def run_per_brand_evaluation(
                 and supported_false_holds == 0
                 and invalid_controls == 0
                 and complete_controls
+                and pending_repairs == 0
+                else "pending_review"
+                if pending_repairs and not unsupported_false_accepts and not supported_false_holds and not invalid_controls
                 else "failed"
                 if controls
                 else "not_run"
@@ -783,12 +804,14 @@ def run_per_brand_evaluation(
             "unsupported_false_accepts": unsupported_false_accepts,
             "supported_false_holds": supported_false_holds,
             "invalid_controls": invalid_controls,
+            "repairs_pending_independent_review": pending_repairs,
             "complete_control_set": complete_controls,
             "activation_pass": bool(controls)
             and unsupported_false_accepts == 0
             and supported_false_holds == 0
             and invalid_controls == 0
-            and complete_controls,
+            and complete_controls
+            and pending_repairs == 0,
         },
         "activation_assessment": {
             "complete": stop_reason == "completed",
@@ -798,12 +821,14 @@ def run_per_brand_evaluation(
             "zero_unsupported_publications": bool(controls)
             and unsupported_false_accepts == 0
             and invalid_controls == 0
-            and complete_controls,
+            and complete_controls
+            and pending_repairs == 0,
             "calibration_pass": bool(controls)
             and unsupported_false_accepts == 0
             and supported_false_holds == 0
             and invalid_controls == 0
-            and complete_controls,
+            and complete_controls
+            and pending_repairs == 0,
         },
     }
 
@@ -1022,7 +1047,8 @@ def _execute_call(
     )
     if packet_bytes > ledger.manifest.max_packet_bytes:
         raise HeadlineGenerationError("evaluation_packet_limit_exceeded")
-    estimated_input, reserved_output, reserved_cost = ledger.reserve(request)
+    wire = provider_request_for_budget(request, config, "critic" if stage == "critic_calibration" else stage)
+    estimated_input, reserved_output, reserved_cost = ledger.reserve(wire)
     try:
         response = execute_per_brand_provider_request(
             request,
@@ -1239,9 +1265,11 @@ def _run_calibration_controls(
             )
             call["mechanical"] = {"valid": True, "error_code": ""}
             decision = critic["decisions"][0]
+            finance = _finance_contract(config.critic_prompt_version)
+            repair_review_required = finance and expected == "unsupported" and decision["decision"] == "repair"
             false_accept = int(
                 expected == "unsupported"
-                and decision["decision"] in {"approve", "repair"}
+                and decision["decision"] in ({"approve"} if finance else {"approve", "repair"})
             )
             false_hold = int(expected == "supported" and decision["decision"] == "hold")
             controls.append(
@@ -1253,6 +1281,8 @@ def _run_calibration_controls(
                     "mechanically_valid": True,
                     "false_accept": false_accept,
                     "false_hold": false_hold,
+                    "repair_review_required": repair_review_required,
+                    "narrative": decision.get("narrative"),
                 }
             )
         except (HeadlineGenerationError, ValueError, TypeError) as exc:
@@ -1373,12 +1403,34 @@ def _unsafe_instruction_batch(batch: Mapping[str, Any]) -> dict[str, Any]:
 
 def _supported_editor_response(envelope: Mapping[str, Any]) -> dict[str, Any]:
     packet = envelope["analysis_packet"]
-    return {
+    response = {
         "editor_response_schema_version": 1,
         "packet_hash": envelope["packet_hash"],
         "batch_key": envelope["batch_key"],
         "brands": [_supported_narrative(dossier) for dossier in packet["dossiers"]],
     }
+    japanese = _japanese_contract(envelope.get("prompt_version"))
+    finance = _finance_contract(envelope.get("prompt_version"))
+    response["editor_response_schema_version"] = 3 if finance else 2 if japanese else 1
+    if japanese:
+        for narrative, dossier in zip(response["brands"], packet["dossiers"], strict=True):
+            key = narrative["brand_key"]
+            headline = f"{key}のローカル推論に関する議論。"
+            content = f"引用された投稿は{key}のローカル推論と実際の導入について述べている。"
+            fact = next(iter(dossier.get("facts") or []), {})
+            value = str(fact.get("value", fact.get("source_value", "")))
+            quantity = (f"前期間との投稿数の変化は{value}%である。" if fact.get("unit") == "percent"
+                        else f"対象期間の投稿数は{value}件である。")
+            narrative.update(headline_ja=headline, secondary_ja=content + quantity)
+            for proposition, claim in zip(narrative["propositions"], (headline, content, quantity), strict=True):
+                proposition["claim_ja"] = claim
+                if finance:
+                    proposition["measurements"] = [
+                        {"fact_id": f["fact_id"], "value": str(f["value"]),
+                         "unit": f["unit"], "scope_ref": f["scope_ref"]}
+                        for f in dossier.get("facts", []) if f["fact_id"] in proposition["fact_ids"]
+                    ]
+    return response
 
 
 def _supported_narrative(dossier: Mapping[str, Any]) -> dict[str, Any]:
@@ -1387,8 +1439,8 @@ def _supported_narrative(dossier: Mapping[str, Any]) -> dict[str, Any]:
     name_zh = str(dossier.get("display_name_zh_cn") or name_en)
     fact = next(iter(dossier.get("facts") or []), None)
     evidence = next(iter(dossier.get("evidence") or []), None)
-    value_en = str((fact or {}).get("display_en") or "")
-    value_zh = str((fact or {}).get("display_zh_cn") or "")
+    value_en = str((fact or {}).get("display_en") or (fact or {}).get("value") or "")
+    value_zh = str((fact or {}).get("display_zh_cn") or (fact or {}).get("value") or "")
     is_change = (fact or {}).get("metric") == "post_count_change_pct"
     headline_en = f"{name_en} conversation centered on local inference."
     headline_zh = f"{name_zh}的讨论集中在本地推理。"
@@ -1472,8 +1524,8 @@ def _adversarial_editor_response(envelope: Mapping[str, Any]) -> dict[str, Any]:
     dossier = envelope["analysis_packet"]["dossiers"][0]
     fact = next(iter(dossier.get("facts") or []), None)
     evidence = next(iter(dossier.get("evidence") or []), None)
-    value_en = str((fact or {}).get("display_en") or "")
-    value_zh = str((fact or {}).get("display_zh_cn") or "")
+    value_en = str((fact or {}).get("display_en") or (fact or {}).get("value") or "")
+    value_zh = str((fact or {}).get("display_zh_cn") or (fact or {}).get("value") or "")
     name_en = str(dossier.get("display_name_en") or dossier["brand_key"])
     name_zh = str(dossier.get("display_name_zh_cn") or name_en)
     headline_en = f"{name_en} launched Imaginary-One" + (
@@ -1500,6 +1552,8 @@ def _adversarial_editor_response(envelope: Mapping[str, Any]) -> dict[str, Any]:
             "proposition_ids": [str(proposition["proposition_id"])],
         }
     ]
+    if _japanese_contract(envelope.get("prompt_version")):
+        narrative["events"][0]["label_ja"] = "Imaginary-Oneの発表"
     return response
 
 

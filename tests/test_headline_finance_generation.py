@@ -126,7 +126,8 @@ def test_measurements_and_ambiguous_brand_mentions_always_get_a_critic():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch):
+@pytest.mark.parametrize("profile_version", [3, 4])
+def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, profile_version):
     from datetime import UTC, datetime, timedelta
 
     from core.models import (
@@ -143,6 +144,8 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch):
     config, _, _, template = finance_case()
     config = HeadlineNarrativeConfig.model_validate({
         **config.model_dump(), "activation_state": "reviewed", "serving_enabled": True,
+        "editor_request_profile": f"headline_editor_v{profile_version}",
+        "critic_request_profile": f"headline_critic_v{profile_version}",
         "materiality_policy_version": "reviewed-finance-v1",
         "enqueue_enabled": True, "provider_calls_enabled": True,
         "per_brand_batch_size": 2, "per_brand_call_cap": 41,
@@ -219,3 +222,31 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch):
         locale_key = locale.replace("-", "_")
         assert projection["items"][0]["headline"] == template["brands"][0][f"headline_{locale_key}"]
         assert projection["items"][0]["secondary"] == template["brands"][0][f"secondary_{locale_key}"].replace("10", "1")
+
+
+def test_bound_schema_cannot_reuse_another_requests_citations():
+    from copy import deepcopy
+
+    config, _envelope, request, _response = finance_case()
+    client = DeepInfraChatCompletionsClient(api_key="test", model=config.model,
+                                           request_profile="headline_editor_v4")
+    def wire(req):
+        return client.build_request(model=req["model"], system=req["system"],
+                                    messages=req["messages"], max_tokens=req["max_tokens"])
+    first = wire(request)
+    raw = json.loads(request["messages"][0]["content"].split("request_envelope=",1)[1])
+    second = deepcopy(raw)
+    second["analysis_packet"]["dossiers"][0]["evidence"][0]["evidence_id"] = "different-source"
+    modified = deepcopy(request)
+    modified["messages"][0]["content"] = "request_envelope=" + json.dumps(second)
+    second_wire = wire(modified)
+    schema = first["response_format"]["json_schema"]["schema"]
+    branch = schema["properties"]["brands"]["items"]["anyOf"][0]
+    assert branch["properties"]["brand_key"]["enum"] == ["alpha"]
+    assert list(branch["properties"])[1] == "propositions"
+    ordered = list(branch["properties"]["propositions"]["items"]["properties"])
+    assert ordered.index("measurements") < ordered.index("claim_en")
+    assert branch["properties"]["propositions"]["items"]["properties"]["evidence_ids"]["items"]["enum"] == ["e1"]
+    assert "different-source" not in json.dumps(first)
+    assert '"e1"' not in json.dumps(second_wire["response_format"])
+    assert wire(request) == first
