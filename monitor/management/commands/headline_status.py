@@ -19,7 +19,6 @@ from core.models import (
     TrendNarrativeVisibleRun,
     TrendNarrativeWorkSlot,
 )
-from monitor.trend_narrative_candidates import MAX_EDITOR_BRANDS_PER_BATCH
 from monitor.trend_narrative_lifecycle import TERMINAL_BRAND_STATUSES
 from monitor.trend_narrative_projection import trend_narrative_state
 from x_monitor.config import load_config
@@ -469,12 +468,13 @@ def _drain_status(
         dossier.get("outcome") == "narrative_eligible"
         for dossier in ((run.snapshot or {}).get("dossiers", []) if run else [])
     )
+    batch_size = config.per_brand_batch_size
     expected_calls = (
         1
         + 2
         * (
-            (eligible_count + MAX_EDITOR_BRANDS_PER_BATCH - 1)
-            // MAX_EDITOR_BRANDS_PER_BATCH
+            (eligible_count + batch_size - 1)
+            // batch_size
         )
         if eligible_count
         else 0
@@ -483,8 +483,8 @@ def _drain_status(
         expected_calls * 60 / config.cadence_minutes[window_days]
     )
     fleet_expected_calls = 1 + 2 * (
-        (config.per_brand_expected_max_brands + MAX_EDITOR_BRANDS_PER_BATCH - 1)
-        // MAX_EDITOR_BRANDS_PER_BATCH
+        (config.per_brand_expected_max_brands + batch_size - 1)
+        // batch_size
     )
     fleet_expected_arrival_calls_per_hour = sum(
         fleet_expected_calls * 60 / config.cadence_minutes[window]

@@ -22,7 +22,7 @@ from core.classification_contract import (
     taxonomy_crosswalk_rows,
 )
 from core.classification_readers import read_brand_scalars_many
-from core.models import BrandKeyword
+from core.models import BrandAccount, BrandKeyword, Product
 from monitor.trend_narrative_facts import (
     DEFAULT_TREND_THRESHOLDS,
     FINANCE_FACT_VERSION,
@@ -393,12 +393,17 @@ def normalized_excerpt(
     value: str | None,
     *,
     max_characters: int = MAX_EVIDENCE_CHARACTERS,
+    preserve_tail: bool = False,
 ) -> str:
     """Normalize an exact evidence excerpt and apply the fixed character cap."""
     if not value:
         return ""
     normalized = unicodedata.normalize("NFC", value)
     collapsed = _WHITESPACE_RE.sub(" ", normalized).strip()
+    if preserve_tail and len(collapsed) > max_characters and max_characters >= 200:
+        head = max_characters // 2
+        tail = max_characters - head - 3
+        return collapsed[:head] + " … " + collapsed[-tail:]
     return collapsed[:max_characters]
 
 
@@ -573,7 +578,7 @@ def build_trend_analysis_snapshot(
             corpus_signals=corpus_signals,
             corpus_extraction_status=corpus_extraction_status,
             stable_family_facts=stable_family_facts,
-            brand_aliases=_snapshot_brand_aliases(full_window),
+            brand_aliases=_snapshot_brand_aliases(full_window, evidence_rows=evidence_rows),
             finance_observations=fetch_finance_observations(
                 brand_keys, window_days=window_days, as_of=as_of_utc
             ),
@@ -1149,8 +1154,10 @@ def _assemble_compact_snapshot(
 
 def _snapshot_brand_aliases(
     candidates: Sequence[Mapping[str, Any]],
+    *,
+    evidence_rows: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, list[str]]:
-    """Read existing literal brand/product keywords in the snapshot transaction.
+    """Read bounded brand keywords and exact catalog model names in the snapshot.
 
     No entity discovery, classifier rewrite, or external catalog lookup occurs.
     Bound the optional keyword read; display names remain available if it fills.
@@ -1163,12 +1170,88 @@ def _snapshot_brand_aliases(
             ) if value
         }) for row in candidates
     }
+    qualifying_terms = {
+        brand: {value.casefold() for value in names if len(value) >= 4}
+        for brand, names in aliases.items()
+    }
+    evidence_text = "\n".join(
+        str(row.get(field) or "") for row in evidence_rows
+        for field in ("text", "quoted_text")
+    ).casefold()
     rows = BrandKeyword.objects.filter(brand_id__in=aliases, is_regex=False).order_by(
         "brand_id", "pattern"
-    ).values_list("brand_id", "pattern")[:3000]
-    for brand, keyword in rows:
+    ).values_list("brand_id", "pattern", "is_primary")[:3000]
+    for brand, keyword, is_primary in rows:
+        # A bare secondary product word can also be an ordinary noun. A
+        # catalog-backed full model name or an explicit brand identity is
+        # needed before it can anchor a company headline (for example,
+        # "solar wafers" is not a mention of Upstage's Solar model).
+        if (keyword and keyword.isascii() and keyword.isalpha()
+                and not is_primary
+                and keyword.casefold() not in {
+                    name.casefold() for name in aliases[str(brand)]
+                }):
+            # A long secondary product name followed by a version identifies
+            # the product. A bare long name needs nearby model/use context;
+            # ordinary short words such as "Solar" never gain this authority.
+            if len(keyword) >= 8:
+                pattern = rf"(?<!\w){re.escape(keyword.casefold())}[ _-]+v?\d[\w.-]*"
+                for match in re.finditer(pattern, evidence_text):
+                    versioned = match.group(0)
+                    if len(versioned) <= 128 and versioned not in aliases[str(brand)]:
+                        aliases[str(brand)].append(versioned)
+                bare = re.compile(rf"(?<!\w){re.escape(keyword.casefold())}(?!\w)")
+                for row in evidence_rows:
+                    prose = " ".join(str(row.get(field) or "") for field in ("text", "quoted_text")).casefold()
+                    if any(re.search(r"\b(?:\d+(?:\.\d+)?b|model|openrouter|llm|weights|inference|agent)\b",
+                                     prose[max(0, match.start() - 70):match.end() + 70])
+                           for match in bare.finditer(prose)):
+                        aliases[str(brand)].append(keyword)
+                        qualifying_terms[str(brand)].add(keyword.casefold())
+                        break
+            continue
+        if keyword and len(keyword) >= 4:
+            qualifying_terms[str(brand)].add(keyword.casefold())
+        # Short secondary product words (for example, Ring) are not enough
+        # to establish that an unrelated post concerns this tracked brand.
+        # The brand key and display names were already seeded above.
+        if keyword and keyword.isascii() and len(keyword) <= 4 and not is_primary:
+            continue
         if keyword and len(keyword) <= 128 and keyword not in aliases[str(brand)]:
             aliases[str(brand)].append(keyword)
+    # A curated official handle can disambiguate a short product name in a
+    # third-party post. Only include handles that themselves name the tracked
+    # brand/product; a parent-company account must not identify a subbrand.
+    accounts = BrandAccount.objects.filter(
+        brand_id__in=aliases, role_id="official",
+    ).order_by("brand_id", "account__handle").values_list(
+        "brand_id", "account__handle"
+    )[:3000]
+    for brand, handle in accounts:
+        if not handle:
+            continue
+        normalized = str(handle).lstrip("@").casefold()
+        if not any(term in normalized for term in qualifying_terms[str(brand)]):
+            continue
+        alias = "@" + str(handle).lstrip("@")
+        if alias not in aliases[str(brand)]:
+            aliases[str(brand)].append(alias)
+    # Exact model names already linked to a tracked brand are stronger than
+    # ambiguous short keywords such as "Ming". Retain only names visible in
+    # this bounded evidence reservoir so the later per-source scan stays small.
+    if evidence_text:
+        products = Product.objects.filter(
+            brand_id__in=aliases, hf_type="model",
+        ).order_by("brand_id", "repo_id").values_list(
+            "brand_id", "display_name", "repo_id"
+        )[:3000]
+        for brand, display_name, repo_id in products:
+            names = {str(display_name or ""), str(repo_id).rsplit("/", 1)[-1]}
+            for name in names:
+                if (8 <= len(name) <= 128 and any(char.isdigit() for char in name)
+                        and name.casefold() in evidence_text
+                        and name not in aliases[str(brand)]):
+                    aliases[str(brand)].append(name)
     return aliases
 
 
@@ -1177,7 +1260,12 @@ def _source_brand_relevance(
     aliases: Mapping[str, Sequence[str]],
 ) -> dict[str, Any]:
     """Flag ambiguous attribution; a matched mention is not claim ownership."""
-    text = str(evidence.get("excerpt") or "")
+    # The bounded original excerpt may omit a model name in the middle of a
+    # long post even when a stored translation retains it. Both are supplied
+    # to the writer, so relevance must inspect the same closed evidence.
+    text = " ".join(str(evidence.get(field) or "") for field in (
+        "excerpt", "text_en", "text_zh_cn",
+    ))
     matches = {}
     for key, names in aliases.items():
         found = []
@@ -3600,10 +3688,12 @@ def _evidence_candidate(
     post_text = normalized_excerpt(
         row.get("text"),
         max_characters=excerpt_characters,
+        preserve_tail=True,
     )
     quoted_text = normalized_excerpt(
         row.get("quoted_text"),
         max_characters=excerpt_characters,
+        preserve_tail=True,
     )
     is_retweet = bool(row["is_retweet"])
     if post_text and not (is_retweet and _PURE_REPOST_RE.match(post_text)):

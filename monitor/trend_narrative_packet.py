@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
@@ -46,9 +47,20 @@ def evidence_support_spans(evidence: Mapping[str, Any]) -> list[dict[str, str]]:
         while start < len(value):
             end = min(len(value), start + 400)
             if end < len(value):
-                boundary = value.rfind(" ", start + 200, end)
-                if boundary >= 0:
-                    end = boundary + 1
+                # A whitespace cut can detach "it ran 4.3x faster" from the
+                # preceding product name. Prefer a complete sentence while
+                # keeping concatenation byte-for-byte identical.
+                sentence_ends = [
+                    start + match.end()
+                    for match in re.finditer(r"[.!?]\s+|[。！？]\s*", value[start:end])
+                    if start + match.end() >= start + 200
+                ]
+                if sentence_ends:
+                    end = sentence_ends[-1]
+                else:
+                    boundary = value.rfind(" ", start + 200, end)
+                    if boundary >= 0:
+                        end = boundary + 1
             text = value[start:end]
             identity = json.dumps([evidence["evidence_id"], field, start, text], ensure_ascii=False)
             spans.append({"span_id": "s:" + hashlib.sha256(identity.encode()).hexdigest()[:20],

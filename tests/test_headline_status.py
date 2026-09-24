@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from io import StringIO
+from pathlib import Path
 
 import pytest
 from django.core.management import call_command
@@ -25,6 +26,7 @@ from monitor.trend_narrative_lifecycle import (
     publish_generation,
     reserve_generation,
 )
+from x_monitor.config import load_config
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -352,27 +354,28 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
     # Derive the throughput expectations from this fixture and the committed
     # scheduling inputs so a changed denominator or batch shape is visible.
     eligible_brands = 3
-    editor_batch_size = 5
+    config = load_config(Path("config.yaml")).headline_narrative
+    editor_batch_size = config.per_brand_batch_size
     expected_calls = 1 + 2 * (
         (eligible_brands + editor_batch_size - 1) // editor_batch_size
     )
-    cadence_minutes = (60, 1440, 10080, 43200)
-    expected_max_brands = 40
+    cadence_minutes = tuple(config.cadence_minutes.values())
+    expected_max_brands = config.per_brand_expected_max_brands
     fleet_calls = 1 + 2 * (
         (expected_max_brands + editor_batch_size - 1) // editor_batch_size
     )
     fleet_arrival_rate = sum(
         fleet_calls * 60 / cadence for cadence in cadence_minutes
     )
-    worker_capacity = 3600 * 3 / 45
+    worker_capacity = 3600 * config.per_brand_worker_concurrency / float(config.per_brand_p95_latency_seconds)
     assert status["drain"] == {
         "eligible_brand_count": eligible_brands,
         "expected_call_count": expected_calls,
         "recorded_call_count": 2,
-        "worker_concurrency": 3,
-        "p95_latency_seconds": 45.0,
-        "estimated_run_drain_seconds": expected_calls * 45 / 3,
-        "window_expected_arrival_calls_per_hour": expected_calls * 60 / 60,
+        "worker_concurrency": config.per_brand_worker_concurrency,
+        "p95_latency_seconds": float(config.per_brand_p95_latency_seconds),
+        "estimated_run_drain_seconds": expected_calls * float(config.per_brand_p95_latency_seconds) / config.per_brand_worker_concurrency,
+        "window_expected_arrival_calls_per_hour": expected_calls * 60 / config.cadence_minutes[1],
         "fleet_expected_call_count_per_window": fleet_calls,
         "fleet_expected_arrival_calls_per_hour": pytest.approx(fleet_arrival_rate),
         "p95_capacity_calls_per_hour": worker_capacity,

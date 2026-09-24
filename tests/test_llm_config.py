@@ -30,6 +30,16 @@ def test_llm_config_defaults_match_enrichment_role_models():
     assert cfg.llm.relevancy_model == "deepseek-v4-flash"
 
 
+def test_headline_snapshot_cap_covers_observed_tracked_brand_roster():
+    """The 2026-09-24 read-only snapshot contained 47 tracked brand dossiers."""
+    from x_monitor.config import load_config
+
+    headline = load_config(CONFIG_PATH).headline_narrative
+    assert headline.per_brand_expected_max_brands >= 47
+    batches = (47 + headline.per_brand_batch_size - 1) // headline.per_brand_batch_size
+    assert headline.per_brand_call_cap >= 1 + 2 * batches
+
+
 def test_llm_config_enrichment_base_urls_default_to_deepseek():
     """Routine harvest roles have explicit DeepSeek endpoint defaults."""
     from x_monitor.config import Config

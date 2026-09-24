@@ -1,8 +1,45 @@
 """A high average cannot erase a critical case or missing operational proof."""
 
+import json
+
 import pytest
 
-from scripts.headline_0731_qualification import FIELDS, MODEL, assess
+from scripts.headline_0731_qualification import (
+    FIELDS,
+    MODEL,
+    assess,
+    normalized_final_responses,
+    normalized_no_lead_holds,
+)
+
+
+def test_normalization_receipt_identifies_raw_to_visible_text_change():
+    raw = {"decisions": [{"brand_key": "stepfun", "narrative": {
+        "secondary_en": "Another post from the same test series says StepFun seems generous."}}]}
+    calls = [{"stage": "critic", "batch_key": "1d:001",
+              "envelope": {"analysis_packet": {"window_days": 1}},
+              "mechanical": {"valid": True}, "raw_response": json.dumps(raw)}]
+    outcomes = [{"window_days": 1, "brand_key": "stepfun", "narrative": {
+        "secondary_en": "Another post says StepFun seems generous."}}]
+    assert normalized_final_responses(calls, outcomes) == [{
+        "window_days": 1, "brand_key": "stepfun", "batch_key": "1d:001",
+        "changed_fields": ["secondary_en"],
+    }]
+
+
+def test_no_lead_normalization_reports_raw_writer_approval_without_content():
+    calls = [{"stage": "critic", "batch_key": "1d:009",
+              "envelope": {"analysis_packet": {"window_days": 1},
+                           "lead_evidence_by_brand": {"sakana_ai": None}},
+              "mechanical": {"valid": True},
+              "raw_response": json.dumps({"decisions": [{"brand_key": "sakana_ai",
+                  "decision": "repair", "narrative": {"headline_en": "A brief reaction."}}]})}]
+    outcomes = [{"window_days": 1, "brand_key": "sakana_ai", "outcome": "hold",
+                 "hold_code": "no_relevant_evidence", "narrative": None}]
+    assert normalized_no_lead_holds(calls, outcomes) == [{
+        "window_days": 1, "brand_key": "sakana_ai", "batch_key": "1d:009",
+        "raw_decision": "repair",
+    }]
 
 
 @pytest.fixture
@@ -49,6 +86,14 @@ def test_ready_requires_every_criterion_and_reports_monthly_actual_billing(evide
     assert result["decision"] == "ready_0731"
     assert result["projected_monthly_headline_cost_usd"] == "6.56"
     assert result["unmet_success_criteria"] == []
+
+
+@pytest.mark.parametrize("reasoning_tokens,valid", [(None, True), (0, True), (1, False)])
+def test_reasoning_receipt_preserves_unreported_vs_positive_usage(evidence, reasoning_tokens, valid):
+    evidence[0]["calls"][0]["usage"]["provider_usage"]["reasoning_tokens"] = reasoning_tokens
+    result = assess(*evidence)
+    assert result["gates"]["SC1"] is valid
+    assert result["reasoning_usage_unreported_calls"] == (1 if reasoning_tokens is None else 0)
 
 
 @pytest.mark.parametrize("defect,criterion", [
@@ -124,3 +169,20 @@ def test_fixture_defect_is_inconclusive_and_is_not_a_model_critical_error(eviden
     assert result["decision"] == "improve_0731"
     assert result["fixture_defects"]
     assert result["critical_cases"] == []
+
+
+def test_known_source_regressions_must_be_reviewed_and_supported(evidence):
+    artifact, reviews, manifest, operations = evidence
+    manifest["required_semantic_regressions"] = ["ranking_class", "accusation_actor"]
+    assert assess(artifact, reviews, manifest, operations)["gates"]["SC2"] is False
+    operations["semantic_regressions"] = {"cases": [
+        {"case_id": case_id, "mechanical_valid": True, "decision": "repair",
+         "critical_failure": False, "factual_support": 5}
+        for case_id in manifest["required_semantic_regressions"]
+    ]}
+    assert assess(artifact, reviews, manifest, operations)["gates"]["SC2"] is True
+    operations["semantic_regressions"]["cases"][1]["critical_failure"] = True
+    assert assess(artifact, reviews, manifest, operations)["gates"]["SC2"] is False
+    operations["semantic_regressions"]["cases"][1]["critical_failure"] = False
+    operations["semantic_regressions"]["cases"][1]["mechanical_valid"] = False
+    assert assess(artifact, reviews, manifest, operations)["gates"]["SC2"] is False

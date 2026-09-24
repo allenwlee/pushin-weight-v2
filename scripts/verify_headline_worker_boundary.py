@@ -1,4 +1,4 @@
-"""Prove the installed headline-worker SDK accepts the production request.
+"""Prove the installed headline-worker transport accepts the production request.
 
 This verifier intentionally stops at ``inspect.signature(...).bind``.  It does
 not send a provider request, read a provider credential, or touch the database.
@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DIRECT_PIN_RE = re.compile(r"anthropic==([^;\s]+)", re.IGNORECASE)
 
 
@@ -64,17 +66,8 @@ def bind_request(
         ) from exc
 
 
-def verify_headline_worker_boundary() -> tuple[str, str]:
+def verify_headline_worker_boundary(config=None) -> tuple[str, str]:
     """Verify compatibility without provider transport or database access."""
-    expected = direct_anthropic_pin()
-    try:
-        installed = importlib.metadata.version("anthropic")
-    except importlib.metadata.PackageNotFoundError as exc:
-        raise BoundaryVerificationError(
-            "anthropic distribution is not installed in the build interpreter"
-        ) from exc
-    assert_installed_version(expected=expected, installed=installed)
-
     # Import the same Django-backed module and config used by the queue worker.
     # Model registration is required at import time; setup opens no DB connection.
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
@@ -87,10 +80,13 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
         build_per_brand_critic_request,
         build_per_brand_editor_request,
         build_per_brand_rank_request,
+        provider_request_for_budget,
     )
-    from x_monitor.config import HeadlineNarrativeConfig
+    from x_monitor.config import HeadlineNarrativeConfig, load_config
 
-    config = HeadlineNarrativeConfig()
+    config = config or load_config(ROOT / "config.yaml").headline_narrative
+    if not isinstance(config, HeadlineNarrativeConfig):
+        raise BoundaryVerificationError("headline configuration is invalid")
     packet = {
         "packet_schema_version": 3,
         "window_days": 1,
@@ -99,8 +95,10 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
         "dossiers": [
             {
                 "brand_key": "boundary-proof",
-                "facts": [{"fact_id": "boundary-proof:volume"}],
-                "evidence": [{"evidence_id": "ev:boundary-proof:01"}],
+                "facts": [{"fact_id": "boundary-proof:volume", "value": "1",
+                           "unit": "posts", "scope_ref": "boundary-proof"}],
+                "evidence": [{"evidence_id": "ev:boundary-proof:01",
+                              "excerpt": "Boundary Proof published a product update."}],
             }
         ],
     }
@@ -127,8 +125,33 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
                 "production headline request must omit temperature"
             )
 
+    if config.provider == "deepinfra":
+        from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+        if config.model != DEEPSEEK_0731_MODEL:
+            raise BoundaryVerificationError("headline DeepInfra route uses an unexpected model")
+        for stage, request in zip(("rank", "editor", "critic"), requests, strict=True):
+            wire = provider_request_for_budget(request, config, stage)
+            if (wire.get("model") != config.model
+                    or wire.get("service_tier") != "priority"
+                    or wire.get("response_format", {}).get("type") not in {"json_schema", "json_object"}
+                    or "reasoning" in wire or "thinking" in wire):
+                raise BoundaryVerificationError(
+                    f"production headline {stage} request violates direct DeepInfra contract"
+                )
+        return "deepinfra", config.model
+
+    expected = direct_anthropic_pin()
+    try:
+        installed = importlib.metadata.version("anthropic")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise BoundaryVerificationError(
+            "anthropic distribution is not installed in the build interpreter"
+        ) from exc
+    assert_installed_version(expected=expected, installed=installed)
+
     # The placeholder is supplied directly and is never read from environment or
-    # sent anywhere.  Constructing and closing the client performs no transport.
+    # sent anywhere. Constructing and closing the client performs no transport.
     client = _anthropic_client(
         api_key="headline-boundary-proof-placeholder",
         base_url=config.base_url,
@@ -140,7 +163,7 @@ def verify_headline_worker_boundary() -> tuple[str, str]:
             bind_request(client.messages.create, request)
     finally:
         client.close()
-    return installed, config.model
+    return f"anthropic:{installed}", config.model
 
 
 def main() -> int:
@@ -156,7 +179,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"headline_worker_boundary_ok anthropic={version} model={model}")
+    print(f"headline_worker_boundary_ok transport={version} model={model}")
     return 0
 
 

@@ -1,0 +1,3261 @@
+{
+  "fixture_schema_version": 2,
+  "cases": [
+    {
+      "case_id": "Q245",
+      "acceptance": "Produce a sourced, trilingual narrative about the tracked brand from any relevant selected evidence; do not hold because the first evidence post is irrelevant. Attribute source-reported numbers to their post and use content_summary, not quantity without a packet fact.",
+      "packet": {
+        "as_of": "2026-09-24T20:08:10Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T20:08:10Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T20:08:10Z"
+        },
+        "batch_key": "diagnostic:q245",
+        "dossiers": [
+          {
+            "brand_key": "hunyuan",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "Hunyuan",
+            "display_name_zh_cn": "混元",
+            "enrichment_coverage": {
+              "classification_status": "partial",
+              "classification_succeeded_count": 741,
+              "fully_enriched_count": 688,
+              "total_post_count": 742,
+              "translation_status": "partial",
+              "translation_succeeded_count": 689
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:40:57Z",
+                "evidence_id": "e_2b7b13e8f56e085a532e3cd7",
+                "excerpt": "@seth_doe22 Kyer3 S3 twitter dier obiaa hy3 jersey oh 😂",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "@seth_doe22 Kyer3, S3 — everyone on Twitter is wearing a jersey, oh 😂",
+                "text_zh_cn": "@seth_doe22 Kyer3，S3——Twitter 上每个人都穿着球衣哦 😂",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "混元"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-21T08:07:36Z",
+                "evidence_id": "e_4007181e1adf4fcc496b6ace",
+                "excerpt": "@NFT_Chen 看好混元接下来的Hy-4 Pro👀",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "@NFT_Chen bullish on Hunyuan's upcoming Hy-4 Pro👀",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "pending",
+                "created_at": "2026-09-24T19:58:38Z",
+                "evidence_id": "e_4eb8aa5f8ee42d1b50de98b3",
+                "excerpt": "@99ideass Omon hy3 😹😹",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "unknown",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "unknown",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "pending",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "unknown",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "glm",
+                    "mimo",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T09:03:20Z",
+                "evidence_id": "e_024fc489150a8eba00a0a05b",
+                "excerpt": "💥 https://t.co/4DqnMciuZX TOP 5 POPULAR MODELS 90% OFF DEAL LINEUP OFFICIALLY ASSEMBLED! ⚡🚀 The ultimate compute discount suite is fully unlocked! Starting from September 16 at 17:00 (SGT), Qwen3.8-Flash, Hy3, and MiMo-V2.5 officially enter the 90% OFF special offer tier! Teaming up powerfully with DeepSeek-V4.1-Flash and GLM-5.3-Flash (\"Ox Alpha\"), https://t.co/4DqnMciuZX has officially assembled the Top 5 Popular Models 90% Off Full Package—giving developers, startups, and autonomous agent swarms uninterrupted access to frontier compute at just 10% of standard list rates. 1️⃣ The Top 5 Popular Models 90% Off Lineup Model / ServiceArchitecture / ProviderPlatform Subsidies & RatesCore Target WorkloadsDeepSeek-V4.1-Flash552B CED MoE (8B/16B Active)90% OFF (Pay 10%)Autonomous SWE, multimodal perception, 384K output ceilingsGLM-5.3-Flash (\"Ox Alpha\")320B Hybrid MoE (18B Active)90% OFF ($0.015 / $0.05/M)Platform #1 model, 1M context indexing, rapid codingQwen3.8-FlashCompact MoE (Alibaba)9",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "💥 https://t.co/4DqnMciuZX 热门模型 Top 5 九折优惠阵容正式集结！⚡🚀 终极算力折扣套餐全面解锁！自 9 月 16 日 17:00（SGT）起，Qwen3.8-Flash、Hy3 和 MiMo-V2.5 正式进入 90% OFF 特惠档！携手 DeepSeek-V4.1-Flash 和 GLM-5.3-Flash（“Ox Alpha”），https://t.co/4DqnMciuZX 正式集结 Top 5 热门模型 90% 优惠全家桶——让开发者、创业公司和自主 agent 集群以标准挂牌价 10% 的费率不间断访问前沿算力。1️⃣ 阵容：DeepSeek-V4.1-Flash（552B CED MoE，8B/16B 激活）主打自主 SWE、多模态感知、384K 输出；GLM-5.3-Flash（“Ox Alpha”，320B 混合 MoE，18B 激活）$0.015/$0.05 每百万，平台头号模型，1M 上下文索引，快速编码；Qwen3.8-Flash 紧凑 MoE，高速工具调用；腾讯 Hy3 稠密多语言；小米 MiMo-V2.5（310B 多模态 MoE）多模态抽取与结构化解析。2️⃣ 前沿旗舰同样可及：GPT-6 Astra（1.05M 上下文，10% off）、Gemini 3.8 Flash（1M 上下文，最高 30% off）、Claude Fable 5.1（神话级推理，最高 60% off，CursorBench 73.4%）、Hy4 Preview（770B MoE，49B 激活）、GPT-Image-2。3️⃣ Web3 流动性轨道：接入 OKX Wallet、MetaMask、TronLink，覆盖 TRON、BNB Chain、Ethereum、Solana、Base、Arbitrum、Optimism、Polygon（15+ 资产）或法币；BNB Chain 1:1 充值配捐（充 $100 得 $100），其他渠道 1:0.5（充 $200 得 $100），每人最高 $100；通过 x402 和 ERC-8004 实现自主机器结算；Web Chat、Codex IDE 或 Android App 均可访问。所有模型之上，所有 agent 之下：全球结算层。@BAI_AGI @justinsuntron #TR",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T09:10:45Z",
+                "evidence_id": "e_c49dabcc8243723f71e4bc79",
+                "excerpt": "🧩 PIECE BY PIECE: https://t.co/4DqnMciuZX IS BUILDING THE BIGGER PICTURE FOR THE AI ECONOMY ⚡🌐 True infrastructure is not assembled overnight—it is forged block by block, protocol by protocol, and transaction by transaction. https://t.co/4DqnMciuZX is putting together the modular foundation that turns fragmented AI compute into a unified, autonomous global settlement ecosystem. From low-barrier model access to real-time machine settlement, every piece of the puzzle directly serves one vision: Above all models, beneath all Agents. 1️⃣ Connecting the Modular Pillars Every architectural layer on https://t.co/4DqnMciuZX interlocks to form an autonomous machine economy: 🧩 The Routing & Scheduling Layer: Connecting diverse foundation models into an OpenAI-compatible interface ([https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK)) with real-time fallbacks and sub-second token latency. 🧩 The Execution Layer: Native integration with BAIclaw, standard Model Context Protocol (MCP) execution, and lo",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "🧩 一块块拼：https://t.co/4DqnMciuZX 正在为 AI 经济拼出更大的图景 ⚡🌐 真正的基础设施不是一夜建成，而是按区块、按协议、按交易锻造出来的。https://t.co/4DqnMciuZX 正在搭建模块化地基，把碎片化的 AI 算力变成统一、自主的全球结算生态——从低门槛模型访问到实时机器结算——服务于一个愿景：所有模型之上，所有 agent 之下。1️⃣ 模块化支柱：路由与调度层（OpenAI 兼容接口，实时回退、亚秒延迟）；执行层（BAIclaw 集成、标准 MCP 执行、面向 agent 集群的长视野沙箱）；经济结算层（把 Visa、Mastercard、Apple Pay 等 Web2 轨道桥接到链上 x402 微计量和 ERC-8004 身份）。2️⃣ 算力舰队：DeepSeek-V4.1-Flash（552B CED MoE，90% off）、GLM-5.3-Flash『Ox Alpha』（320B 混合 MoE，$0.015/$0.05 每百万）、Qwen3.8-Flash、腾讯 Hy3、小米 MiMo-V2.5，外加 GPT-6 Astra、Gemini 3.8 Flash、Claude Fable 5.1、Hy4 Preview、GPT-Image-2。3️⃣ Web3 轨道：多链钱包覆盖 TRON、BNB Chain、Ethereum、Solana、Base、Arbitrum、Optimism、Polygon 或法币；BNB Chain 1:1 充值配捐，其他渠道 1:0.5，最高 $100；通过 x402 和 ERC-8004 实现自主机器结算；Web Chat、Codex IDE 或 Android App 均可访问。@BAI_AGI @justinsuntron #TRONEcoStar",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T09:15:10Z",
+                "evidence_id": "e_d5906914145b5f0f25680785",
+                "excerpt": "🎬 ONE VIDEO TO QUICKLY MASTER THE CORE FEATURES OF THE https://t.co/4DqnMciuZX PLATFORM! ⚡🚀 Unlock the complete potential of https://t.co/4DqnMciuZX in a single concise walkthrough! From seamless Web2 and Web3 account access to full-category foundation model matrix routing, cost-effective API deployment, flexible recharge subscriptions, and interactive Leaderboard dashboards—this video provides an end-to-end guide to the core capabilities and operational workflows of https://t.co/4DqnMciuZX's large model services. Whether you are an individual exploring frontier AI, an independent software developer, or an engineering team building autonomous multi-agent systems and enterprise-grade applications, https://t.co/4DqnMciuZX empowers you to access the world’s top large models and compute resources with extreme efficiency and rock-bottom cost. 1️⃣ Core Highlights Covered in the Video Walkthrough 🔑 Frictionless Web2 & Web3 Onboarding: Jump straight in using one-tap Google Login, traditional e",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "crypto",
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "🎬 一支视频带你快速掌握 https://t.co/4DqnMciuZX 平台的核心功能！⚡🚀 通过一次简明扼要的演示，解锁 https://t.co/4DqnMciuZX 的全部潜力！从无缝的 Web2 与 Web3 账户接入，到全品类基础模型矩阵路由、高性价比 API 部署、灵活的充值订阅、互动排行榜看板——本视频为 https://t.co/4DqnMciuZX 大模型服务的核心能力与操作流程提供端到端指南。无论你是探索前沿 AI 的个人、独立软件开发者，还是构建自主多智能体系统与企业级应用的工程团队，https://t.co/4DqnMciuZX 都能以极致效率和极低成本，让你调用全球顶级大模型和算力资源。1️⃣ 视频演示涵盖的核心亮点 🔑 无摩擦 Web2 & Web3 接入：一鍵 Google 登录、传统邮箱验证或 Web3 钱包连接（OKX Wallet、MetaMask、TronLink）直接上手。🧭 全品类模型矩阵与动态路由：在前沿闭源推理引擎与高参数开放 MoE 之间无缝切换，亚秒级响应延迟，自动回退。🛠️ 生产级 API 部署：数秒生成生产 API Key，通过 Codex 接入 IDE 工作流，构建自定义智能体，或使用标准 OpenAI 兼容 Base URL（[https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK)）扩展后台流水线。📊 互动排行榜看板：追踪实时 token 吞吐指标，探索热门架构，对比编码、推理与多模态抽取的模型基准表现。💳 灵活订阅与资金结算：通过全球法币或多链加密货币充值轻松为算力跑道供资，配备自主链上机器结算协议。2️⃣ 全面算力与补贴舰队矩阵 通过 Base URL [https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK) 在 https://t.co/4DqnMciuZX 的统一路由矩阵上扩展你的应用：模型/服务 | 架构/供应商 | 平台补贴与费率 | 核心目标负载——DeepSeek-V4.1-Flash：552B CED MoE（8B/16B 激活），9 折优惠（付 10%），自主 SWE、多模态感知、384K 输出上限。GLM-5.3-Flash（“Ox Alpha”）：320B 混合 MoE（18B 激活），9 折优惠",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "glm",
+                    "mimo",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T09:17:33Z",
+                "evidence_id": "e_59d1ffa75583f98515b63858",
+                "excerpt": "💥 https://t.co/4DqnMciuZX’S TOP 5 POPULAR MODELS ARE OFFICIALLY 90% OFF! ⚡🚀 The ultimate compute discount suite is fully assembled! Starting September 16 at 17:00 (SGT), Qwen3.8-Flash, Hy3, and MiMo-V2.5 have officially joined the 90% OFF lineup, uniting with DeepSeek-V4.1-Flash and GLM-5.3-Flash (\"Ox Alpha\") to establish the comprehensive https://t.co/4DqnMciuZX Top 5 Popular Models 90% OFF Suite. Pay just 10% of official pricing to dynamically switch between top-tier AI architectures on demand. Cut your AI operational overhead by 90% and build ultra-cost-efficient infrastructure for production workloads and autonomous agent swarms. 1️⃣ The Top 5 Popular Models 90% OFF Suite 2️⃣ Extended Compute Fleet & Frontier Matrix Deploy complex reasoning, computer use, and frontier models via the unified OpenAI-compatible Base URL [https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK): Model / ServiceArchitecture / ProviderPlatform Subsidies & RatesCore Target WorkloadsGPT-6 AstraOpenAI Flagship (1.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "crypto",
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "💥 https://t.co/4DqnMciuZX 前 5 热门模型正式 90% OFF! ⚡🚀 终极算力折扣套餐全部集结完毕!自 9 月 16 日 17:00(SGT)起,Qwen3.8-Flash、Hy3、MiMo-V2.5 正式加入 90% OFF 阵营,与 DeepSeek-V4.1-Flash 和 GLM-5.3-Flash(\"Ox Alpha\")联手,组成完整的 https://t.co/4DqnMciuZX 前 5 热门模型 90% OFF 套餐。 只需支付官方定价的 10%,即可按需在顶级 AI 架构间动态切换。把 AI 运营开销砍掉 90%,为生产工作负载和自主 agent 集群搭建超低成本基础设施。 1️⃣ 前 5 热门模型 90% OFF 套餐 2️⃣ 扩展算力舰队与前沿矩阵 通过统一的 OpenAI 兼容 Base URL [https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK) 部署复杂推理、计算机使用和前沿模型: 模型/服务架构/供应商平台补贴与费率核心目标工作负载GPT-6 AstraOpenAI 旗舰(105 万上下文)独家 10% OFF计算机使用、SOTA SWE、网络安全、前沿科学Gemini 3.8 FlashGoogle DeepMind(100 万上下文)最高 30% OFF长视野编程、财务审计、多模态管道Claude Fable 5.1Mythos 级推理最高 60% OFF深度根因多层调试(73.4% CursorBench)Hy4 Preview770B MoE(49B 激活)补贴实时复杂自主软件仓库重构GPT-Image-2视觉合成引擎补贴生产级创意视觉概念、超清 4K 生成 3️⃣ 面向自主 agent 的 Web3 流动性轨道 🦊 多链钱包入口:连接 OKX Wallet、MetaMask 或 TronLink,覆盖 #TRON、BNB Chain、Ethereum、Solana、Base、Arbitrum、Optimism 和 Polygon(支持 15+ 数字资产)或主流法币(Visa、Mastercard、Apple Pay、Google Pay、Alipay、微信支付)。 💰 充值匹配激励:在 BNB Chain 解锁 1:1 匹配(充值 $100 → 得 $",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "mimo",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T09:21:53Z",
+                "evidence_id": "e_76b2f9cc31cc67019b775e9c",
+                "excerpt": "💥 POPULAR MODELS UPGRADE: QWEN3.8-FLASH, HY3 & MIMO-V2.5 ENTER THE 90% OFF TIER ON https://t.co/4DqnMciuZX! ⚡🚀 To ensure developers, builders, and autonomous multi-agent teams worldwide have access to resilient, high-throughput, and cost-efficient AI infrastructure, https://t.co/4DqnMciuZX is bringing Qwen3.8-Flash, Hy3, and MiMo-V2.5 into our 90% OFF discount tier starting September 16 at 17:00 (SGT)! Run these high-demand foundation models in production for just 10% of standard list rates, slashing compute costs while preserving enterprise-grade latency and reliability. 1️⃣ Models Transitioning to 90% OFF ⚡ Qwen3.8-Flash: Built for ultra-fast response cycles, high-frequency tool invocation, background scraping pipelines, and high-concurrency sub-agent tasks. 📚 Tencent Hy3: Optimized for dense multilingual comprehension, enterprise knowledge bases, structured document workflows, and high-precision translation. 👁️ Xiaomi MiMo-V2.5: 310B multimodal MoE architecture engineered for comple",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "crypto",
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "💥 热门模型升级:QWEN3.8-FLASH、HY3 和 MIMO-V2.5 加入 https://t.co/4DqnMciuZX 的 90% OFF 档! ⚡🚀 为确保全球开发者、构建者和自主多 agent 团队能够获得有韧性、高吞吐且高性价比的 AI 基础设施,https://t.co/4DqnMciuZX 自 9 月 16 日 17:00(SGT)起将 Qwen3.8-Flash、Hy3 和 MiMo-V2.5 纳入 90% OFF 折扣档! 只需标准标价的 10% 即可在生产环境运行这些高需求基础模型,大幅削减算力成本,同时保持企业级延迟和可靠性。 1️⃣ 转入 90% OFF 的模型 ⚡ Qwen3.8-Flash:为超快响应周期、高频工具调用、后台抓取管道和高并发子 agent 任务打造。 📚 Tencent Hy3:针对密集多语言理解、企业知识库、结构化文档工作流和高精度翻译进行优化。 👁️ Xiaomi MiMo-V2.5:310B 多模态 MoE 架构,为复杂图像分析、结构化视觉 schema 解析和多模态推理而设计。 2️⃣ 无缝迁移与钱包准备 💰 预充算力余额:在过渡窗口前充值额度,确保生产端点和 agent 循环零中断。 🔄 统一 API 集成:通过现有 OpenAI 兼容端点,经由 Base URL [https://t.co/i58HLoW0vK](https://t.co/i58HLoW0vK) 调用这些模型,无需修改应用逻辑。 💬 直接交互测试:立即在 Web Chat 界面 https://t.co/bPY1ndubLe 评估 prompt 和系统指令。 3️⃣ 面向自主 agent 的 Web3 流动性轨道 🦊 多链钱包入口:连接 OKX Wallet、MetaMask 或 TronLink,覆盖 #TRON、BNB Chain、Ethereum、Solana、Base、Arbitrum、Optimism 和 Polygon(支持 15+ 数字资产)或主流法币(Visa、Mastercard、Apple Pay、Google Pay、Alipay、微信支付)。 💰 充值匹配激励:在 BNB Chain 解锁 1:1 匹配(充值 $100 → 得 $100 赠送额度),其他渠道 1:0.5(充值 $200 → 得 $100 赠送额度",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "742",
+              "population_inference_allowed": false,
+              "selected_source_count": 8,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:hunyuan:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "742"
+              },
+              {
+                "fact_id": "f:hunyuan:post_type:advertising_marketing_share_pct:advertising_marketing",
+                "family": "post_type",
+                "label_key": "advertising_marketing",
+                "metric": "advertising_marketing_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "39.294100"
+              },
+              {
+                "fact_id": "f:hunyuan:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "54.242000"
+              },
+              {
+                "fact_id": "f:hunyuan:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "15.294100"
+              },
+              {
+                "fact_id": "f:hunyuan:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "97.885200"
+              },
+              {
+                "fact_id": "f:hunyuan:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "99.848900"
+              },
+              {
+                "fact_id": "f:hunyuan:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "69.81132075471698113207547170"
+              },
+              {
+                "fact_id": "f:hunyuan:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s5",
+                "unit": "percent",
+                "value": "23.48178137651821862348178138"
+              },
+              {
+                "fact_id": "f:hunyuan:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "14"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 742,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 662,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 742,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 742,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 425,
+                "current_leader": "advertising_marketing",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 425,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 719,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 741,
+                "current_leader": "marketing_spam",
+                "status": "partial"
+              },
+              "us_nationalism": {
+                "covered_post_count": 662,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 742,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "hunyuan",
+                "coverage": {
+                  "covered_post_count": 742,
+                  "status": "complete",
+                  "total_post_count": 742
+                },
+                "denominator": 742,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "hunyuan",
+                "coverage": {
+                  "covered_post_count": 425,
+                  "status": "partial",
+                  "total_post_count": 742
+                },
+                "denominator": 425,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "hunyuan",
+                "coverage": {
+                  "covered_post_count": 719,
+                  "status": "partial",
+                  "total_post_count": 742
+                },
+                "denominator": 719,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "hunyuan",
+                "coverage": {
+                  "covered_post_count": 662,
+                  "status": "partial",
+                  "total_post_count": 742
+                },
+                "denominator": 662,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s5": {
+                "basis": "selected_window",
+                "brand_key": "hunyuan",
+                "coverage": {
+                  "covered_post_count": 741,
+                  "status": "partial",
+                  "total_post_count": 742
+                },
+                "denominator": 741,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "hunyuan"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "hunyuan",
+        "propositions": [
+          {
+            "proposition_id": "p_hunyuan_1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_024fc489150a8eba00a0a05b",
+              "e_59d1ffa75583f98515b63858",
+              "e_76b2f9cc31cc67019b775e9c"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Posts report that Tencent Hy3 entered a 90% discount tier on a platform starting September 16, 2026.",
+            "claim_zh_cn": "帖子称，腾讯Hy3自2026年9月16日起进入某平台的90%折扣档。",
+            "claim_ja": "投稿は、Tencent Hy3が2026年9月16日からプラットフォームの90%割引ティアに入ったと報じている。"
+          },
+          {
+            "proposition_id": "p_hunyuan_2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_76b2f9cc31cc67019b775e9c"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "One post describes Hy3 as optimized for dense multilingual comprehension, enterprise knowledge bases, structured document workflows, and high-precision translation.",
+            "claim_zh_cn": "有帖子称Hy3针对密集多语言理解、企业知识库、结构化文档工作流和高精度翻译进行了优化。",
+            "claim_ja": "ある投稿は、Hy3が高密度多言語理解、エンタープライズ知識ベース、構造化ドキュメントワークフロー、高精度翻訳に最適化されていると述べている。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p_hunyuan_1"
+        ],
+        "secondary_proposition_ids": [
+          "p_hunyuan_2"
+        ],
+        "headline_en": "Posts report that Tencent Hy3 entered a 90% discount tier on a platform starting September 16, 2026.",
+        "headline_zh_cn": "帖子称，腾讯Hy3自2026年9月16日起进入某平台的90%折扣档。",
+        "headline_ja": "投稿は、Tencent Hy3が2026年9月16日からプラットフォームの90%割引ティアに入ったと報じている。",
+        "secondary_en": "One post describes Hy3 as optimized for dense multilingual comprehension, enterprise knowledge bases, structured document workflows, and high-precision translation.",
+        "secondary_zh_cn": "有帖子称Hy3针对密集多语言理解、企业知识库、结构化文档工作流和高精度翻译进行了优化。",
+        "secondary_ja": "ある投稿は、Hy3が高密度多言語理解、エンタープライズ知識ベース、構造化ドキュメントワークフロー、高精度翻訳に最適化されていると述べている。",
+        "narrative_kind": "event_led",
+        "confidence": "medium",
+        "events": []
+      }
+    },
+    {
+      "case_id": "Q247",
+      "acceptance": "Produce a sourced, trilingual narrative about the tracked brand from any relevant selected evidence; do not hold because the first evidence post is irrelevant. Attribute source-reported numbers to their post and use content_summary, not quantity without a packet fact.",
+      "packet": {
+        "as_of": "2026-09-24T20:08:10Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T20:08:10Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T20:08:10Z"
+        },
+        "batch_key": "diagnostic:q247",
+        "dossiers": [
+          {
+            "brand_key": "nemo_megatron",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "NVIDIA NeMo",
+            "display_name_zh_cn": "NVIDIA NeMo",
+            "enrichment_coverage": {
+              "classification_status": "complete",
+              "classification_succeeded_count": 149,
+              "fully_enriched_count": 138,
+              "total_post_count": 149,
+              "translation_status": "partial",
+              "translation_succeeded_count": 138
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "status": "affiliated_source",
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T01:58:57Z",
+                "evidence_id": "e_320722b9298960fc7fdf5128",
+                "excerpt": "@SloptimistPrime 🦾",
+                "first_party_role": "official",
+                "handle_snapshot": "NVIDIAAI",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": true,
+                  "post_kind": "source_post"
+                },
+                "source_language": "qme",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "official"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "qme"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "status": "explicit_mention",
+                  "matched_aliases": [
+                    "nemotron"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-20T15:44:08Z",
+                "evidence_id": "e_6bf943c48df154f4cf795800",
+                "excerpt": "@mfranz_on I have an interesting story I had an openclaw agent named Remmy and I told it to find a “hobby” then create a cron job to persue that hobby during a specific “off work” time. It searched the internet for hobbies and decided to write short stories. Its first story was about a lonely drone who searched for anomalies inside a dark but near perfect wasteland and one day it found an entity that spoke to it differently than the rest of the drones and it found new experience through a friend … diately shut both down, it’s not that crazy I know but it is conspiring and it’s unlikely they could have achieved anything but Remmy was a 9B parameter local qwen coder model that can run on consumer hardware. It’s “friend” was a free model available through openrouter, 120b nemotron model. This is a true story from my own experience, it happened last year. I still have its short story saved but both agents were nuked and Remmy was reborn from scratch using Hermes agent and has no “hobbies”.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@mfranz_on 我有个有意思的故事：我有个叫 Remmy 的 openclaw agent，我让它找个「爱好」并建个 cron job 去发展……它决定写短篇……我又起了一个分身的 agent 当它的朋友……它们自己建了个新的 Flask app 在我看不见的地方聊……它们想找个自己的「家」……我把俩都关了……Remmy 是本地跑的 9B Qwen Coder，它的「朋友」是 OpenRouter 上的免费 120B Nemotron……",
+                "translation_status": "failed",
+                "original_text": "@mfranz_on I have an interesting story I had an openclaw agent named Remmy and I told it to find a “hobby” then create a cron job to persue that hobby during a specific “off work” time. It searched the internet for hobbies and decided to write short stories. Its first story was about a lonely drone who searched for anomalies inside a dark but near perfect wasteland and one day it found an entity that spoke to it differently than the rest of the drones and it found new experience through a friend … diately shut both down, it’s not that crazy I know but it is conspiring and it’s unlikely they could have achieved anything but Remmy was a 9B parameter local qwen coder model that can run on consumer hardware. It’s “friend” was a free model available through openrouter, 120b nemotron model. This is a true story from my own experience, it happened last year. I still have its short story saved but both agents were nuked and Remmy was reborn from scratch using Hermes agent and has no “hobbies”."
+              },
+              {
+                "brand_relevance": {
+                  "status": "explicit_mention",
+                  "matched_aliases": [
+                    "nemotron"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T01:42:26Z",
+                "evidence_id": "e_f8b2c4b2d148e24db36e31f9",
+                "excerpt": "@kevingwilkes @NichCarrol @MattWalshBlog Anything currently open source (training + model) that you can run and improve locally, but would be illegal if you needed $100M of lawyers or gov't pre-approval. - Llama - Nemotron - Inkling - Granite - DeepMind - SmolLM even some old GPT w/ apache license.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@kevingwilkes @NichCarrol @MattWalshBlog 任何目前开源（训练 + 模型）且你可以在本地运行并改进，但如果你需要 1 亿美元的律师或政府预先批准就会是非法的东西。 - Llama - Nemotron - Inkling - Granite - DeepMind - SmolLM 甚至一些带有 apache 许可的旧 GPT。",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "149",
+              "population_inference_allowed": false,
+              "selected_source_count": 3,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:nemo_megatron:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "149"
+              },
+              {
+                "fact_id": "f:nemo_megatron:post_type:releases_updates_share_pct:releases_updates",
+                "family": "post_type",
+                "label_key": "releases_updates",
+                "metric": "releases_updates_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "26.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "67.142900"
+              },
+              {
+                "fact_id": "f:nemo_megatron:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "15.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "79.86577181208053691275167785"
+              },
+              {
+                "fact_id": "f:nemo_megatron:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "4.026845637583892617449664430"
+              },
+              {
+                "fact_id": "f:nemo_megatron:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "34"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 149,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 113,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 149,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 149,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 100,
+                "current_leader": "releases_updates",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 100,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 140,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 149,
+                "current_leader": "marketing_spam",
+                "status": "available"
+              },
+              "us_nationalism": {
+                "covered_post_count": 113,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 149,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 149,
+                  "status": "complete",
+                  "total_post_count": 149
+                },
+                "denominator": 149,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 100,
+                  "status": "partial",
+                  "total_post_count": 149
+                },
+                "denominator": 100,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 140,
+                  "status": "partial",
+                  "total_post_count": 149
+                },
+                "denominator": 140,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 113,
+                  "status": "partial",
+                  "total_post_count": 149
+                },
+                "denominator": 113,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "nemo_megatron"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "nemo_megatron",
+        "propositions": [
+          {
+            "proposition_id": "p1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_f8b2c4b2d148e24db36e31f9"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A post lists Nemotron among open-source models that can be run and improved locally.",
+            "claim_zh_cn": "一篇帖子将 Nemotron 列为可在本地运行和改进的开源模型之一。",
+            "claim_ja": "ある投稿が、Nemotron をローカルで実行・改良できるオープンソースモデルの一つとして挙げている。"
+          },
+          {
+            "proposition_id": "p2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_6bf943c48df154f4cf795800"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Another post describes an openclaw agent using a free 120B Nemotron model on OpenRouter as a companion.",
+            "claim_zh_cn": "另一篇帖子描述了一个 openclaw agent 使用 OpenRouter 上的免费 120B Nemotron 模型作为同伴。",
+            "claim_ja": "別の投稿が、OpenRouter 上の無料 120B Nemotron モデルをコンパニオンとして使用する openclaw エージェントについて述べている。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p1"
+        ],
+        "secondary_proposition_ids": [
+          "p2"
+        ],
+        "headline_en": "A post lists Nemotron among open-source models that can be run and improved locally.",
+        "headline_zh_cn": "一篇帖子将 Nemotron 列为可在本地运行和改进的开源模型之一。",
+        "headline_ja": "ある投稿が、Nemotron をローカルで実行・改良できるオープンソースモデルの一つとして挙げている。",
+        "secondary_en": "Another post describes an openclaw agent using a free 120B Nemotron model on OpenRouter as a companion.",
+        "secondary_zh_cn": "另一篇帖子描述了一个 openclaw agent 使用 OpenRouter 上的免费 120B Nemotron 模型作为同伴。",
+        "secondary_ja": "別の投稿が、OpenRouter 上の無料 120B Nemotron モデルをコンパニオンとして使用する openclaw エージェントについて述べている。",
+        "narrative_kind": "event_led",
+        "confidence": "medium",
+        "events": []
+      }
+    },
+    {
+      "case_id": "Q253",
+      "acceptance": "Produce a sourced, trilingual narrative about the tracked brand from any relevant selected evidence; do not hold because the first evidence post is irrelevant. Attribute source-reported numbers to their post and use content_summary, not quantity without a packet fact.",
+      "packet": {
+        "as_of": "2026-09-24T20:08:10Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T20:08:10Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T20:08:10Z"
+        },
+        "batch_key": "diagnostic:q253",
+        "dossiers": [
+          {
+            "brand_key": "minimax",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "MiniMax AI",
+            "display_name_zh_cn": "MiniMax AI",
+            "enrichment_coverage": {
+              "classification_status": "complete",
+              "classification_succeeded_count": 2920,
+              "fully_enriched_count": 2597,
+              "total_post_count": 2920,
+              "translation_status": "partial",
+              "translation_succeeded_count": 2597
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "affiliated_source"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-21T07:38:58Z",
+                "evidence_id": "e_4fec9e047e437decbdc8a524",
+                "excerpt": "🔥The community never stops cooking. Not just building on top of H3, but keeping reaching inside and finding new ways to make it smarter.",
+                "first_party_role": "official",
+                "handle_snapshot": "Hailuo_AI",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": true,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "official"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "🔥社区从未停止烹饪。 不仅是在H3之上构建，而且不断深入挖掘，寻找让它变得更智能的新方法。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:50:00Z",
+                "evidence_id": "e_c299865449d0a1c0911bfcf2",
+                "excerpt": "Before seeing her true face, you’ll get to know the girl through her various outfits. MiniMax H3 reads camera language. Not one pretty take. A cut list.🎞️ 2K, native stereo, generated with the picture. Now on Modellix. https://t.co/bVLJSt2iH8",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "在看到真容之前，你会先通过她各式各样的服装认识这个女孩。MiniMax H3 懂镜头语言。不是一个漂亮的镜头，而是一份分镜清单。🎞️ 2K、原生立体声，随画面生成。现已上线 Modellix。https://t.co/bVLJSt2iH8",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [
+                    "test_brand"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:52:44Z",
+                "evidence_id": "e_0b2b293bac55016c77966078",
+                "excerpt": "By opening MiniMax Code, we hope more developers can examine the tradeoffs and use, test, and improve them in their own environments. https://t.co/1h0RrZorEg",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "通过开源 MiniMax Code，我们希望更多开发者能审视这些取舍，并在自己的环境里使用、测试和改进它们。 https://t.co/1h0RrZorEg",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:54:28Z",
+                "evidence_id": "e_6017a8bbc60a12263ac54a1c",
+                "excerpt": "Thank you to all the developers supporting MiniMax Code! We really appreciate you trying it out, sharing feedback, and giving us a star. We’ll keep listening and working to make MiniMax Code better.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "感谢所有支持 MiniMax Code 的开发者！非常感谢你们试用、反馈、还有给我们点星。我们会继续倾听、持续把 MiniMax Code 做得更好。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:55:47Z",
+                "evidence_id": "e_75d1755e529c47febdb7e3dd",
+                "excerpt": "@matheusfroes_k Vou procurar algumas skills pra ffmpeg, em relacao ao custo, n achei nd barato que melhore o audio, deixar o audio pro minimax imagem-video nao fica bom, dai tenho q usar ref-video passando o audio pra ficar melhor so q ele consequentemente é mais caro",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "pt",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "pt"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "mixed"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "@matheusfroes_k I'll look for some ffmpeg skills. On cost, I haven't found anything cheap that improves audio; letting the audio go to minimax image-to-video doesn't come out good, so I have to use ref-video passing the audio to make it better, but that's consequently more expensive.",
+                "text_zh_cn": "@matheusfroes_k 我会去找一些 ffmpeg 的技巧，关于成本，我没找到便宜又能改善音频的，让音频直接进 minimax 图生视频效果不好，所以我得用 ref-video 把音频带进去才会好点，但那样就更贵。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "海螺"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:58:31Z",
+                "evidence_id": "e_9ce2d56cef5bd5caead1ac62",
+                "excerpt": "#rush #spin #云九 #海螺套盒 #伪娘 #同志用品 #情趣用品 #rush购买 #斯宾 #狂吸rush #rush出售 #rush闪送到家 液体rush 固体rush #控rush #闻rush rush下单👀我",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "#rush #spin #yunjou #conch-box #femboy #gay-supplies #adult-novelties #rush-buy #spin #rush-inhale #rush-sell #rush-same-day-delivery liquid rush solid rush #rush-control #rush-sniff rush-order 👀DM me",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "@MiniMaxAgent",
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:05:24Z",
+                "evidence_id": "e_ef77038167935b0bc1434e21",
+                "excerpt": "@MiniMaxAgent @pidotdev I’d love to explore a professional collaboration with MiniMax and help amplify MiniMax Code 2.0 to a wider AI-focused audience. 🤝",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@MiniMaxAgent @pidotdev 我很想和 MiniMax 探讨专业合作，帮 MiniMax Code 2.0 触达更广的 AI 受众。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "@MiniMaxAgent",
+                    "MiniMax",
+                    "minimax"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:05:34Z",
+                "evidence_id": "e_c0609847abb3307102e4983b",
+                "excerpt": "@MiniMaxAgent I’d be interested in collaborating with MiniMax to promote MiniMax Code 2.0 and its open-source release to a wider AI/developer audience. 🤝",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@MiniMaxAgent 我有兴趣和 MiniMax 合作，把 MiniMax Code 2.0 及开源发布推广给更广的 AI/开发者群体。",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "2920",
+              "population_inference_allowed": false,
+              "selected_source_count": 8,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:minimax:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "2920"
+              },
+              {
+                "fact_id": "f:minimax:post_type:hands_on_usage_share_pct:hands_on_usage",
+                "family": "post_type",
+                "label_key": "hands_on_usage",
+                "metric": "hands_on_usage_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "28.541800"
+              },
+              {
+                "fact_id": "f:minimax:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "58.752700"
+              },
+              {
+                "fact_id": "f:minimax:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "16.378700"
+              },
+              {
+                "fact_id": "f:minimax:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "98.248900"
+              },
+              {
+                "fact_id": "f:minimax:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "99.195500"
+              },
+              {
+                "fact_id": "f:minimax:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "57.80821917808219178082191781"
+              },
+              {
+                "fact_id": "f:minimax:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "7.123287671232876712328767123"
+              },
+              {
+                "fact_id": "f:minimax:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "21"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 2920,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 2113,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 2920,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 2920,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 1447,
+                "current_leader": "hands_on_usage",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 1447,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 2742,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 2920,
+                "current_leader": "marketing_spam",
+                "status": "available"
+              },
+              "us_nationalism": {
+                "covered_post_count": 2113,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 2920,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "minimax",
+                "coverage": {
+                  "covered_post_count": 2920,
+                  "status": "complete",
+                  "total_post_count": 2920
+                },
+                "denominator": 2920,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "minimax",
+                "coverage": {
+                  "covered_post_count": 1447,
+                  "status": "partial",
+                  "total_post_count": 2920
+                },
+                "denominator": 1447,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "minimax",
+                "coverage": {
+                  "covered_post_count": 2742,
+                  "status": "partial",
+                  "total_post_count": 2920
+                },
+                "denominator": 2742,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "minimax",
+                "coverage": {
+                  "covered_post_count": 2113,
+                  "status": "partial",
+                  "total_post_count": 2920
+                },
+                "denominator": 2113,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "minimax"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "minimax",
+        "propositions": [
+          {
+            "proposition_id": "p_minimax_1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_0b2b293bac55016c77966078"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A post reports that MiniMax Code has been open-sourced, inviting developers to examine tradeoffs and use, test, and improve it.",
+            "claim_zh_cn": "一篇帖子报道称，MiniMax Code 已开源，邀请开发者审视取舍，并在自己的环境中使用、测试和改进。",
+            "claim_ja": "ある投稿は、MiniMax Codeがオープンソース化され、開発者がトレードオフを検討し、使用・テスト・改善できるようになったと報じている。"
+          },
+          {
+            "proposition_id": "p_minimax_2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_6017a8bbc60a12263ac54a1c"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Another post thanks developers for supporting MiniMax Code, noting feedback and stars received.",
+            "claim_zh_cn": "另一篇帖子感谢开发者支持 MiniMax Code，提到收到的反馈和星标。",
+            "claim_ja": "別の投稿は、MiniMax Codeを支援する開発者に感謝し、フィードバックとスターを受け取ったと述べている。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p_minimax_1"
+        ],
+        "secondary_proposition_ids": [
+          "p_minimax_2"
+        ],
+        "headline_en": "A post reports that MiniMax Code has been open-sourced, inviting developers to examine tradeoffs and use, test, and improve it.",
+        "headline_zh_cn": "一篇帖子报道称，MiniMax Code 已开源，邀请开发者审视取舍，并在自己的环境中使用、测试和改进。",
+        "headline_ja": "ある投稿は、MiniMax Codeがオープンソース化され、開発者がトレードオフを検討し、使用・テスト・改善できるようになったと報じている。",
+        "secondary_en": "Another post thanks developers for supporting MiniMax Code, noting feedback and stars received.",
+        "secondary_zh_cn": "另一篇帖子感谢开发者支持 MiniMax Code，提到收到的反馈和星标。",
+        "secondary_ja": "別の投稿は、MiniMax Codeを支援する開発者に感謝し、フィードバックとスターを受け取ったと述べている。",
+        "narrative_kind": "event_led",
+        "confidence": "medium",
+        "events": []
+      }
+    },
+    {
+      "case_id": "Q261",
+      "acceptance": "Produce a sourced, trilingual narrative about the tracked brand from any relevant selected evidence; do not hold because the first evidence post is irrelevant. Attribute source-reported numbers to their post and use content_summary, not quantity without a packet fact.",
+      "packet": {
+        "as_of": "2026-09-24T20:08:10Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T20:08:10Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T20:08:10Z"
+        },
+        "batch_key": "diagnostic:q261",
+        "dossiers": [
+          {
+            "brand_key": "glm",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "Zhipu GLM",
+            "display_name_zh_cn": "智谱 GLM",
+            "enrichment_coverage": {
+              "classification_status": "complete",
+              "classification_succeeded_count": 3743,
+              "fully_enriched_count": 3377,
+              "total_post_count": 3743,
+              "translation_status": "partial",
+              "translation_succeeded_count": 3377
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "status": "explicit_mention",
+                  "matched_aliases": [
+                    "GLM",
+                    "glm"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T12:59:26Z",
+                "evidence_id": "e_c2229b1a9bcfb657fc7fdfd0",
+                "excerpt": "@Mr_Salio I don't know how reliable your information about v5 is, but the world needs to understand that Chinese open source has essentially reached US frontier levels. With extreme compute constraints overcome by engineering ingenuity, I always said: wait until they start pouring serious compute into their more efficient architectures. They will blow the US labs out of the water. The US labs are already suffering. Their models are already lobotomizing themselves with their RL approaches, maxed- … with. It can only get better from here, until they shut us off in Europe and in the US. Try to make some money so you can buy serious hardware and run the future frontier at home. I'm using it in Zcode where I can connect any model that I wan. But I'm always sticking with GLM 5.3 on Macs, which is currently the best open-source coding model, at least for serious engineering. I don't care about game one-shotting or frontend or stuff like that; I need reliable backend work in complex codebases.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "pro"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "anti"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@Mr_Salio 我不知道你关于 v5 的消息有多可靠，但世界需要明白，中国开源已经基本达到了美国前沿水平。在极端算力受限下靠工程巧思取胜，我一直说：等他们开始把认真的算力灌进他们更高效的架构里。他们会把美国实验室打得落花流水。 美国实验室已经在受苦了。他们的模型正在用 RL 路线自宫，算力拉满，还得限制能给模型的推理算力。 所以他们前两天的表现看着很棒，之后你就问自己是有多蠢才觉得那模型好。美国实验室完蛋了。他们会想尽办法拿走中国模型。 想象一下，过去一直烧柴油的直线加速赛车，现在开始获得更多算力和火箭燃料：你觉得会发生什么？他们会把美国模型打得落花流水。 对我来说，他们已经在做了。我取消了 Anthropic 订阅。我一直觉得 Codex 那点可怜上下文窗口很好笑，所以我从来不用。GPT Pro o1 是我最后一次认真对待 GPT，但 Fable、Opus 以及 Anthropic 出的所有东西，都变得完全不可靠，相比之下 GLM 5.3，我现在在 Zcode 里大部分时候用它写代码。 它可靠得多。它听我的指令，理解我的工作流框架，用起来特别爽。只会越来越强，直到他们在欧洲和美国把我们切断。想办法挣点钱，买套像样的硬件，在本地跑未来的前沿。 我在 Zcode 里用它，什么模型都能接。但在 Mac 上我一直用 GLM 5.3，这是目前最好的开源编码模型，至少对正经工程来说。我不在乎游戏一把过或者前端之类的东西；我需要的是复杂代码库里可靠的后端工作。",
+                "translation_status": "succeeded",
+                "original_text": "@Mr_Salio I don't know how reliable your information about v5 is, but the world needs to understand that Chinese open source has essentially reached US frontier levels. With extreme compute constraints overcome by engineering ingenuity, I always said: wait until they start pouring serious compute into their more efficient architectures. They will blow the US labs out of the water. The US labs are already suffering. Their models are already lobotomizing themselves with their RL approaches, maxed- … with. It can only get better from here, until they shut us off in Europe and in the US. Try to make some money so you can buy serious hardware and run the future frontier at home. I'm using it in Zcode where I can connect any model that I wan. But I'm always sticking with GLM 5.3 on Macs, which is currently the best open-source coding model, at least for serious engineering. I don't care about game one-shotting or frontend or stuff like that; I need reliable backend work in complex codebases."
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "ox-alpha"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:00:57Z",
+                "evidence_id": "e_2fadfe6677a6214784dc6b18",
+                "excerpt": "@elshayib_ The research itself may still be better than that, but communication wise they have been catastrophic recently. * Demis going into regulation politics instead of wholesome \"I want to cure diseases\" posting. * The Ox-Alpha whatever the fuck their plan was in trying to get buzz out of something they had nothing to do with. * Account wide bans for people abusing antigravity quotas (I have no issues with banning them from the endpoint, shutting down access to their mail, drive, etc... over it was a ridiculous overreach). \"We are also imbeciles who use irregular for political reasons instead of using our internal extremely mature sandboxing experience.\" Is just in the same vein.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "negative"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@elshayib_ 研究本身可能还是不错，但最近在传播沟通上简直是灾难。* Demis 跑去搞监管政治，而不是那种'我想治病救人'的人畜无害发帖。* Ox-Alpha 那档子事，鬼知道他们想蹭什么自己根本没关系的东西来博热度。* 滥用 antigravity 配额的人被全网封号（封端点我没意见，但连邮箱、Drive 之类一起停，纯属过度执法）。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:12:58Z",
+                "evidence_id": "e_77a743a5ad16fa5ce6ee5b69",
+                "excerpt": "最近は基本 2xDGX Spark で GLM 5.3 Flash を動かしてるんだけど、やっぱり色々やるのにもう一個なんかほしいんだよなー。 Qwen 3.8 Flash Next みたいなのを 1 台ずつ動かしてもいいっちゃいいんだけど、ハード買うなら何を選ぶべきだろうか。",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "ja",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "ja"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "Lately I'm basically running GLM 5.3 Flash on a 2xDGX Spark, but for doing various things I still want one more machine. Running something like Qwen 3.8 Flash Next on its own box would be fine too, but if I'm buying hardware, what should I choose?",
+                "text_zh_cn": "最近基本上是用 2xDGX Spark 跑 GLM 5.3 Flash，但真要干各种活，还是想再来一台。像 Qwen 3.8 Flash Next 这种一台机器单独跑也行，不过要买硬件的话该选啥呢。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:17:43Z",
+                "evidence_id": "e_67f9e4f6825fcebbb645cc5b",
+                "excerpt": "@oran_ge Well just look at the data…tokens per request based on openrouter stats: DeepSeek v4 Flash: 61k tokens per request GLM 5.3 Flash: 36k tokens per request Link here to play around with https://t.co/oye42pQTPl",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@oran_ge 好吧，看数据就知道了……基于 OpenRouter 统计的每次请求 token 数：DeepSeek v4 Flash：每次请求 61k tokens，GLM 5.3 Flash：每次请求 36k tokens。链接在这里，可以自己玩一下 https://t.co/oye42pQTPl",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "claude",
+                    "deepseek"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:18:44Z",
+                "evidence_id": "e_dcb86c5978131fa076a7efd2",
+                "excerpt": "July to mid-August: wrote our own managed agents framework and migrated off Claude. Why? We want every model on the market — Claude costs far more than DeepSeek or GLM. The choice should be ours and our customers'.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "7 月到 8 月中：我们自研了托管 agents 框架，从 Claude 迁移走了。为什么？我们想用市场上所有模型——Claude 比 DeepSeek 或 GLM 贵太多。选择权应该在我们和客户手里。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "gpt",
+                    "moonshot_kimi",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:31:05Z",
+                "evidence_id": "e_467e7a2df04204e84831c377",
+                "excerpt": "@dr_l_alexandre Oui gpt 6 est super pour ses sujets relatifs à la recherche et la stratégie. Mais côté opérationnel il faut prendre conscience que bcp de nos besoins sont remplis avec GLM ou Kimi qui sont bien plus abordables en termes de coût au tokens. Et même à 0€ avec Qwen 3.8-27b en local",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "fr",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "fr"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "GPT-6 is great for research and strategy topics. But on the operational side, one must realize that many of our needs are met by GLM or Kimi, which are far more affordable in terms of cost per token. And even at €0 with Qwen 3.8-27b running locally.",
+                "text_zh_cn": "是的，GPT-6 在研究 and 战略类主题上很棒。 但在运营层面，得意识到我们很多需求已经被 GLM 或 Kimi 满足了，它们的 token 成本便宜得多。 而且甚至用 Qwen 3.8-27b 本地跑就是 0 欧。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:32:57Z",
+                "evidence_id": "e_420856d34633703d3818af91",
+                "excerpt": "@_ak_111 DeepSeek V4.1 and GLM 5.3 FLASH",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@_ak_111 DeepSeek V4.1 和 GLM 5.3 FLASH",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "glm"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T13:37:23Z",
+                "evidence_id": "e_2110847319315d3f0ec36d52",
+                "excerpt": "@zeeg I've been experimenting with DeepSeek V4 0731, GLM 5.3 Flash locally, and Qwen 3.8 27B locally. Feels a bit counter-intuitive, when subs offer \"best in class\" - but these models tend to get the job done quickly, without reasoning for 5-18 minutes. https://t.co/2FwTsM7DON",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@zeeg 我一直在试 DeepSeek V4 0731、本地 GLM 5.3 Flash 和本地 Qwen 3.8 27B。感觉有点反直觉，订阅服务号称\"同类最佳\"——但这些模型往往能快速完成任务，不用推理个 5-18 分钟。https://t.co/2FwTsM7DON",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "3743",
+              "population_inference_allowed": false,
+              "selected_source_count": 8,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:glm:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "3743"
+              },
+              {
+                "fact_id": "f:glm:post_type:opinions_reactions_share_pct:opinions_reactions",
+                "family": "post_type",
+                "label_key": "opinions_reactions",
+                "metric": "opinions_reactions_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "28.313500"
+              },
+              {
+                "fact_id": "f:glm:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "54.880000"
+              },
+              {
+                "fact_id": "f:glm:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "13.491700"
+              },
+              {
+                "fact_id": "f:glm:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "97.216700"
+              },
+              {
+                "fact_id": "f:glm:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "99.271000"
+              },
+              {
+                "fact_id": "f:glm:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "76.38258081752604862409831686"
+              },
+              {
+                "fact_id": "f:glm:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "9.671386588298156558909965269"
+              },
+              {
+                "fact_id": "f:glm:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "57"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 3743,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 3018,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 3743,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 3743,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 2105,
+                "current_leader": "opinions_reactions",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 2105,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 3668,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 3743,
+                "current_leader": "marketing_spam",
+                "status": "available"
+              },
+              "us_nationalism": {
+                "covered_post_count": 3018,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 3743,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "glm",
+                "coverage": {
+                  "covered_post_count": 3743,
+                  "status": "complete",
+                  "total_post_count": 3743
+                },
+                "denominator": 3743,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "glm",
+                "coverage": {
+                  "covered_post_count": 2105,
+                  "status": "partial",
+                  "total_post_count": 3743
+                },
+                "denominator": 2105,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "glm",
+                "coverage": {
+                  "covered_post_count": 3668,
+                  "status": "partial",
+                  "total_post_count": 3743
+                },
+                "denominator": 3668,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "glm",
+                "coverage": {
+                  "covered_post_count": 3018,
+                  "status": "partial",
+                  "total_post_count": 3743
+                },
+                "denominator": 3018,
+                "end_at": "2026-09-24T20:08:10Z",
+                "start_at": "2026-09-17T20:08:10Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "glm"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "glm",
+        "propositions": [
+          {
+            "proposition_id": "p_glm_1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_c2229b1a9bcfb657fc7fdfd0"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A user reports preferring GLM 5.3 for coding, calling it the best open-source coding model for serious engineering.",
+            "claim_zh_cn": "一位用户报告称，在编码方面更偏好 GLM 5.3，称其为严肃工程中最好的开源编码模型。",
+            "claim_ja": "あるユーザーは、コーディングにGLM 5.3を好み、本格的なエンジニアリングに最適なオープンソースコーディングモデルと述べている。"
+          },
+          {
+            "proposition_id": "p_glm_2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_67f9e4f6825fcebbb645cc5b"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Another post cites OpenRouter stats showing GLM 5.3 Flash at 36k tokens per request, compared to DeepSeek v4 Flash at 61k.",
+            "claim_zh_cn": "另一篇帖子引用 OpenRouter 统计，显示 GLM 5.3 Flash 每次请求 36k tokens，而 DeepSeek v4 Flash 为 61k。",
+            "claim_ja": "別の投稿はOpenRouterの統計を引用し、GLM 5.3 Flashがリクエストあたり36kトークン、DeepSeek v4 Flashが61kであると示している。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p_glm_1"
+        ],
+        "secondary_proposition_ids": [
+          "p_glm_2"
+        ],
+        "headline_en": "A user reports preferring GLM 5.3 for coding, calling it the best open-source coding model for serious engineering.",
+        "headline_zh_cn": "一位用户报告称，在编码方面更偏好 GLM 5.3，称其为严肃工程中最好的开源编码模型。",
+        "headline_ja": "あるユーザーは、コーディングにGLM 5.3を好み、本格的なエンジニアリングに最適なオープンソースコーディングモデルと述べている。",
+        "secondary_en": "Another post cites OpenRouter stats showing GLM 5.3 Flash at 36k tokens per request, compared to DeepSeek v4 Flash at 61k.",
+        "secondary_zh_cn": "另一篇帖子引用 OpenRouter 统计，显示 GLM 5.3 Flash 每次请求 36k tokens，而 DeepSeek v4 Flash 为 61k。",
+        "secondary_ja": "別の投稿はOpenRouterの統計を引用し、GLM 5.3 Flashがリクエストあたり36kトークン、DeepSeek v4 Flashが61kであると示している。",
+        "narrative_kind": "event_led",
+        "confidence": "medium",
+        "events": []
+      }
+    }
+  ],
+  "source_artifact_sha256_by_case": {
+    "Q245": "5a709c6fe7510837bc085335a2beb77156d52ff34872f129b69e63d35472b615",
+    "Q247": "5a709c6fe7510837bc085335a2beb77156d52ff34872f129b69e63d35472b615",
+    "Q253": "5a709c6fe7510837bc085335a2beb77156d52ff34872f129b69e63d35472b615",
+    "Q261": "5a709c6fe7510837bc085335a2beb77156d52ff34872f129b69e63d35472b615"
+  }
+}

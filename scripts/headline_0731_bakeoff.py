@@ -29,7 +29,7 @@ from x_monitor.config import HeadlineNarrativeConfig, load_config
 from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
 
 CANDIDATE_MODEL = DEEPSEEK_0731_MODEL
-CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v4/headline_critic_v5"
+CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v4/headline_critic_v6"
 CANDIDATE_INPUT_PRICE = Decimal("0.09")
 CANDIDATE_OUTPUT_PRICE = Decimal("0.27")
 CANDIDATE_TIMEOUT_SECONDS = 300
@@ -246,15 +246,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         editor_max_tokens=8_000,
         critic_max_tokens=8_000,
         rank_prompt_version="headline-rank-0731-v3",
-        editor_prompt_version="headline-editor-finance-v7-ja",
-        critic_prompt_version="headline-critic-finance-source-audit-v5-ja",
+        editor_prompt_version="headline-editor-finance-v9-ja",
+        critic_prompt_version="headline-critic-finance-source-audit-source-ledger-only-v56-ja",
         rank_request_profile="headline_rank_v2",
         editor_request_profile="headline_editor_v4",
-        critic_request_profile="headline_critic_v5",
+        critic_request_profile="headline_critic_v6",
         per_brand_batch_size=2,
-        per_brand_call_cap=41,
-        per_brand_input_token_cap=1_600_000,
-        per_brand_output_token_cap=350_000,
+        per_brand_call_cap=51,
+        per_brand_input_token_cap=2_000_000,
+        per_brand_output_token_cap=420_000,
         per_brand_cost_cap_usd=Decimal("0.30"),
         per_brand_input_usd_per_million=CANDIDATE_INPUT_PRICE,
         per_brand_output_usd_per_million=CANDIDATE_OUTPUT_PRICE,

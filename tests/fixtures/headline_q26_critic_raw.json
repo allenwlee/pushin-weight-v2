@@ -1,0 +1,94 @@
+{
+  "critic_response_schema_version": 5,
+  "packet_hash": "sha256:a28b62b3ede11ede9588fdfb5baf04da8b637f8198a28b466759df43862f292a",
+  "batch_key": "regression:q26",
+  "decisions": [
+    {
+      "brand_key": "deepseek",
+      "source_check": {
+        "subject": "A post reports that a platform (linked via t.co) achieved 2.5 million cumulative registered users and opened DeepSeek-V4.1-Flash Web Chat and API, with a 1折 (pay 10%) discount layered on official pricing, plus OKX Wallet EVM chain login and payment. Another post reports that the same platform offers DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp at 50% off (五折). A third post announces a Qwen vs DeepSeek Go match on 25 Sep 2026 in Singapore. Other posts mention DeepSeek in passing (e.g., a user says 'good with deepseek 4.1 atm', a hypothetical C2 committee, and a fishing analogy).",
+        "brand_relevance": "direct",
+        "span_ids": [
+          "s:2164f28e073f87dd8ad7",
+          "s:c83ace7499791d65035e",
+          "s:1dd3efef9f1740fc44d4",
+          "s:6c81375d7c6c5234f1b8"
+        ],
+        "conflicts": [],
+        "number_ownership": [
+          {
+            "figure": "2.5 million",
+            "owner": "platform linked via t.co",
+            "meaning_and_status": "cumulative registered users milestone, reported by a post"
+          },
+          {
+            "figure": "10.9 trillion",
+            "owner": "platform linked via t.co",
+            "meaning_and_status": "cumulative Token throughput, reported by a post"
+          },
+          {
+            "figure": "89.56 million",
+            "owner": "platform linked via t.co",
+            "meaning_and_status": "API calls completed, reported by a post"
+          },
+          {
+            "figure": "1折 (pay 10%)",
+            "owner": "platform linked via t.co",
+            "meaning_and_status": "discount on DeepSeek-V4.1-Flash, layered on official pricing, reported by a post"
+          }
+        ],
+        "supported_headline_en": "A post reports a platform opened DeepSeek-V4.1-Flash Web Chat and API with a 1折 (pay 10%) discount on official pricing.",
+        "supported_secondary_en": "Another post reports the same platform offers DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp at 50% off."
+      },
+      "draft_errors": [],
+      "narrative": {
+        "brand_key": "deepseek",
+        "propositions": [
+          {
+            "proposition_id": "p1",
+            "output_section": "headline",
+            "claim_type": "content_summary",
+            "evidence_ids": [
+              "e_fe99a66f8eb229b9aca0de82"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A post reports a platform opened DeepSeek-V4.1-Flash Web Chat and API with a 1折 (pay 10%) discount on official pricing.",
+            "claim_zh_cn": "有帖子称，某平台开放了 DeepSeek-V4.1-Flash 的 Web Chat 和 API，并在官方调价基础上叠加 1 折优惠。",
+            "claim_ja": "ある投稿は、プラットフォームがDeepSeek-V4.1-FlashのWeb ChatとAPIを開放し、公式価格に1割（10%支払い）の割引を重ねたと報じている。"
+          },
+          {
+            "proposition_id": "p2",
+            "output_section": "secondary",
+            "claim_type": "content_summary",
+            "evidence_ids": [
+              "e_0f87bcab8ee7754598ad07f2"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Another post reports the same platform offers DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp at 50% off.",
+            "claim_zh_cn": "另一帖子称，同一平台对 DeepSeek-V4-Flash 和 DeepSeek-V4-Flash-Vision-Exp 提供五折优惠。",
+            "claim_ja": "別の投稿は、同じプラットフォームがDeepSeek-V4-FlashとDeepSeek-V4-Flash-Vision-Expを50%オフで提供していると報じている。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p1"
+        ],
+        "secondary_proposition_ids": [
+          "p2"
+        ],
+        "headline_en": "A post reports a platform opened DeepSeek-V4.1-Flash Web Chat and API with a 1折 (pay 10%) discount on official pricing.",
+        "headline_zh_cn": "有帖子称，某平台开放了 DeepSeek-V4.1-Flash 的 Web Chat 和 API，并在官方调价基础上叠加 1 折优惠。",
+        "headline_ja": "ある投稿は、プラットフォームがDeepSeek-V4.1-FlashのWeb ChatとAPIを開放し、公式価格に1割（10%支払い）の割引を重ねたと報じている。",
+        "secondary_en": "Another post reports the same platform offers DeepSeek-V4-Flash and DeepSeek-V4-Flash-Vision-Exp at 50% off.",
+        "secondary_zh_cn": "另一帖子称，同一平台对 DeepSeek-V4-Flash 和 DeepSeek-V4-Flash-Vision-Exp 提供五折优惠。",
+        "secondary_ja": "別の投稿は、同じプラットフォームがDeepSeek-V4-FlashとDeepSeek-V4-Flash-Vision-Expを50%オフで提供していると報じている。",
+        "narrative_kind": "content_shift",
+        "confidence": "medium",
+        "events": []
+      },
+      "decision": "repair",
+      "hold_code": null
+    }
+  ]
+}

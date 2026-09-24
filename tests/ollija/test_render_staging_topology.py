@@ -154,7 +154,7 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
         == HEADLINE_CONTROL_REVISION
     )
     assert environment["DEEPSEEK_API_KEY"]["sync"] is False
-    assert "DEEPINFRA_API_KEY" not in environment
+    assert environment["DEEPINFRA_API_KEY"]["sync"] is False
     assert "OLLIJA_STAGING_MODE" not in environment
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert not any("fromGroup" in entry for entry in service["envVars"])

@@ -8,6 +8,7 @@ import pytest
 from monitor.trend_narrative_candidates import build_editor_batches
 from monitor.trend_narrative_generation import (
     HeadlineGenerationError,
+    _lead_evidence_id,
     build_per_brand_critic_request,
     build_per_brand_editor_request,
     validate_per_brand_critic_response,
@@ -291,6 +292,204 @@ def test_source_audit_precedes_decision_and_retains_exact_support():
     branch = wire["response_format"]["json_schema"]["schema"]["properties"]["decisions"]["items"]["anyOf"][0]
     assert list(branch["properties"]).index("source_check") < list(branch["properties"]).index("decision")
     assert validate_per_brand_critic_response(response, envelope) == response
+
+
+def test_source_ledger_binds_final_english_to_pre_draft_supported_wording():
+    config, editor, _, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": "headline-critic-finance-source-audit-source-ledger-v12-ja"})
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    narrative = draft["brands"][0]
+    span = evidence_support_spans(editor["analysis_packet"]["dossiers"][0]["evidence"][0])[0]["span_id"]
+    check = {"subject": "Alpha's local inference tools", "brand_relevance": "direct",
+             "span_ids": [span], "conflicts": [], "number_ownership": [],
+             "supported_headline_en": narrative["headline_en"],
+             "supported_secondary_en": narrative["secondary_en"]}
+    response = {"critic_response_schema_version": 5, "packet_hash": envelope["packet_hash"],
+                "batch_key": envelope["batch_key"], "decisions": [{"brand_key": "alpha",
+                "source_check": check, "draft_errors": [], "narrative": narrative,
+                "decision": "approve", "hold_code": None}]}
+    wire = DeepInfraChatCompletionsClient(api_key="test", model=config.model,
+        request_profile=config.critic_request_profile).build_request(model=request["model"],
+        system=request["system"], messages=request["messages"], max_tokens=request["max_tokens"])
+    branch = wire["response_format"]["json_schema"]["schema"]["properties"]["decisions"]["items"]["anyOf"][0]
+    assert "supported_headline_en" in branch["properties"]["source_check"]["required"]
+    assert validate_per_brand_critic_response(response, envelope) == response
+    changed = deepcopy(response)
+    changed["decisions"][0]["narrative"]["headline_en"] = "Alpha has a different headline."
+    with pytest.raises(HeadlineGenerationError, match="source_audit"):
+        validate_per_brand_critic_response(changed, envelope)
+
+
+def test_source_only_hold_code_is_bounded_and_accepts_no_relevant_evidence():
+    config, editor, _, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": "headline-critic-finance-source-audit-source-ledger-only-v17-ja"})
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    wire = DeepInfraChatCompletionsClient(api_key="test", model=config.model,
+        request_profile=config.critic_request_profile).build_request(model=request["model"],
+        system=request["system"], messages=request["messages"], max_tokens=request["max_tokens"])
+    variants = wire["response_format"]["json_schema"]["schema"]["properties"]["decisions"]["items"]["anyOf"]
+    hold = next(row for row in variants if row["properties"]["decision"]["enum"] == ["hold"])
+    assert "no_relevant_evidence" in hold["properties"]["hold_code"]["enum"]
+    assert "no_substantive_brand_news" not in hold["properties"]["hold_code"]["enum"]
+    response = {"critic_response_schema_version": 5, "packet_hash": envelope["packet_hash"],
+                "batch_key": envelope["batch_key"], "decisions": [{
+                    "brand_key": "alpha", "decision": "hold", "hold_code": "no_relevant_evidence",
+                    "draft_errors": [], "narrative": None,
+                    "source_check": {"subject": "No relevant content", "brand_relevance": "absent",
+                                     "span_ids": [], "conflicts": [], "number_ownership": [],
+                                     "supported_headline_en": "", "supported_secondary_en": ""},
+                }]}
+    assert validate_per_brand_critic_response(response, envelope) == response
+
+
+def test_lead_source_prefers_product_evidence_over_sibling_official_post():
+    dossier = {"brand_key": "llama", "evidence": [
+        {"evidence_id": "muse", "first_party_role": "official",
+         "excerpt": "Meta announces Muse Realtime Voice and Muse Realtime Avatar.",
+         "brand_relevance": {"status": "affiliated_source", "matched_aliases": []}},
+        {"evidence_id": "llama", "first_party_role": "public_opaque",
+         "excerpt": "Llama 4 judges scored their own HealthBench outputs more harshly.",
+         "brand_relevance": {"status": "explicit_mention", "matched_aliases": ["Llama"]}},
+    ]}
+    assert _lead_evidence_id(dossier) == "llama"
+    assert _lead_evidence_id({"brand_key": "stepfun", "evidence": [
+        {"evidence_id": "greeting", "first_party_role": "official",
+         "excerpt": "It's always great to have you all!",
+         "brand_relevance": {"status": "affiliated_source", "matched_aliases": []}},
+    ]}) is None
+    assert _lead_evidence_id({"brand_key": "qwen", "evidence": [
+        {"evidence_id": "release", "first_party_role": "official",
+         "excerpt": "Qwen-Image-2.1 runs locally on RTX GPUs with open weights.",
+         "brand_relevance": {"status": "affiliated_source", "matched_aliases": []}},
+    ]}) == "release"
+
+
+def test_lead_source_contract_rejects_claims_cited_to_another_post():
+    config, original_editor, _, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": "headline-critic-finance-source-audit-source-ledger-only-v37l-ja"})
+    packet = deepcopy(original_editor["analysis_packet"])
+    packet["dossiers"][0]["evidence"][0]["excerpt"] = (
+        "Alpha has useful local inference tools for developers today."
+    )
+    packet["dossiers"][0]["evidence"].append({
+        "evidence_id": "e2", "excerpt": "Alpha's competitor releases a new model."})
+    editor, _ = build_per_brand_editor_request(packet, config)
+    draft["packet_hash"] = editor["packet_hash"]
+    narrative = draft["brands"][0]
+    narrative["propositions"][1].update(
+        claim_type="content_summary", fact_ids=[], evidence_ids=["e2"], measurements=[])
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    assert envelope["lead_evidence_by_brand"] == {"alpha": "e1"}
+    provider = json.loads(request["messages"][-1]["content"].split("\n", 1)[1])
+    assert [row["evidence_id"] for row in envelope["analysis_packet"]["dossiers"][0]["evidence"]] == ["e1", "e2"]
+    assert [row["evidence_id"] for row in provider["analysis_packet"]["dossiers"][0]["evidence"]] == ["e1"]
+    assert provider["analysis_packet"]["dossiers"][0]["other_selected_source_count"] == 1
+    span = evidence_support_spans(packet["dossiers"][0]["evidence"][0])[0]["span_id"]
+    response = {"critic_response_schema_version": 5, "packet_hash": envelope["packet_hash"],
+                "batch_key": envelope["batch_key"], "decisions": [{
+                    "brand_key": "alpha", "decision": "repair", "hold_code": None,
+                    "draft_errors": [], "narrative": narrative,
+                    "source_check": {"subject": "Alpha's local inference tools",
+                                     "brand_relevance": "direct", "span_ids": [span],
+                                     "conflicts": [], "number_ownership": [],
+                                     "supported_headline_en": narrative["headline_en"],
+                                     "supported_secondary_en": narrative["secondary_en"]}}]}
+    with pytest.raises(HeadlineGenerationError, match="lead_source_invalid"):
+        validate_per_brand_critic_response(response, envelope)
+
+
+def test_no_lead_deterministically_holds_a_writer_that_narrated_the_example():
+    config, original_editor, _, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": "headline-critic-finance-source-audit-source-ledger-only-v40l-ja"})
+    editor, _ = build_per_brand_editor_request(original_editor["analysis_packet"], config)
+    draft["packet_hash"] = editor["packet_hash"]
+    envelope, _ = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    assert envelope["lead_evidence_by_brand"] == {"alpha": None}
+    assert envelope["must_narrate_brand_keys"] == []
+    span = evidence_support_spans(
+        envelope["analysis_packet"]["dossiers"][0]["evidence"][0]
+    )[0]["span_id"]
+    narrative = draft["brands"][0]
+    response = {"critic_response_schema_version": 5, "packet_hash": envelope["packet_hash"],
+                "batch_key": envelope["batch_key"], "decisions": [{
+                    "brand_key": "alpha", "decision": "repair", "hold_code": None,
+                    "draft_errors": [], "narrative": narrative,
+                    "source_check": {"subject": "Alpha has useful local inference tools.",
+                                     "brand_relevance": "direct", "span_ids": [span],
+                                     "conflicts": [], "number_ownership": [],
+                                     "supported_headline_en": narrative["headline_en"],
+                                     "supported_secondary_en": narrative["secondary_en"]}}]}
+    parsed = validate_per_brand_critic_response(response, envelope)
+    assert parsed["decisions"][0]["decision"] == "hold"
+    assert parsed["decisions"][0]["hold_code"] == "no_relevant_evidence"
+    assert parsed["decisions"][0]["narrative"] is None
+
+
+def test_v50_final_writer_sees_all_selected_sources_before_a_hold():
+    config, original_editor, _, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": "headline-critic-finance-source-audit-source-ledger-only-v50-ja"})
+    packet = deepcopy(original_editor["analysis_packet"])
+    packet["dossiers"][0]["evidence"] = [
+        {"evidence_id": "unrelated", "excerpt": "A note about an unrelated jersey."},
+        {"evidence_id": "e1", "excerpt": "Alpha opens its local inference tools for developers."},
+    ]
+    editor, _ = build_per_brand_editor_request(packet, config)
+    draft["packet_hash"] = editor["packet_hash"]
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    provider = json.loads(request["messages"][-1]["content"].split("\n", 1)[1])
+    assert "lead_evidence_by_brand" not in envelope
+    assert [row["evidence_id"] for row in provider["analysis_packet"]["dossiers"][0]["evidence"]] == [
+        "unrelated", "e1",
+    ]
+    assert "Read every selected evidence post" in request["system"]
+    assert "quantity requires a packet fact_id" in request["system"]
+    assert "Every subject," in request["system"] and "SAME post" in request["system"]
+
+
+@pytest.mark.parametrize("version", ("v54", "v56"))
+def test_final_writer_sees_only_strong_brand_sources_with_full_audit_packet(version):
+    from pathlib import Path
+
+    fixture = json.loads(Path("tests/fixtures/headline_v52_critical_regressions.json").read_text())
+    case = next(row for row in fixture["cases"] if row["case_id"] == "Q294")
+    base, _, _, _ = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**base.model_dump(),
+        "critic_request_profile": "headline_critic_v6",
+        "critic_prompt_version": f"headline-critic-finance-source-audit-source-ledger-only-{version}-ja"})
+    editor, _ = build_per_brand_editor_request(case["packet"], config)
+    draft = {"editor_response_schema_version": 3, "packet_hash": editor["packet_hash"],
+             "batch_key": editor["batch_key"], "brands": [case["incorrect_narrative"]]}
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    provider = json.loads(request["messages"][-1]["content"].split("\n", 1)[1])
+    full_ids = {row["evidence_id"] for row in envelope["analysis_packet"]["dossiers"][0]["evidence"]}
+    visible_ids = {row["evidence_id"] for row in provider["analysis_packet"]["dossiers"][0]["evidence"]}
+    choices = set(envelope["headline_source_choices_by_brand"]["doubao"])
+    assert visible_ids == choices < full_ids
+    assert "CITABLE SOURCE SET" in request["system"]
+    if version == "v56":
+        assert "SECONDARY PRECISION" in request["system"]
+    wire = DeepInfraChatCompletionsClient(api_key="test", model=config.model,
+        request_profile=config.critic_request_profile).build_request(model=request["model"],
+        system=request["system"], messages=request["messages"], max_tokens=request["max_tokens"])
+    decision = wire["response_format"]["json_schema"]["schema"]["properties"]["decisions"]["items"]["anyOf"][0]
+    proposition = decision["properties"]["narrative"]["properties"]["propositions"]["items"]
+    assert set(proposition["anyOf"][0]["properties"]["evidence_ids"]["items"]["enum"]) == choices
 
 
 @pytest.mark.parametrize("corruption", ["fabricated_span", "other_brand", "absent_brand", "ignored_error", "no_support", "fabricated_conflict", "duplicate_conflict"])

@@ -1,0 +1,210 @@
+{
+  "cases": [
+    {
+      "brand_key": "inclusionai",
+      "display_name_en": "InclusionAI",
+      "display_name_zh_cn": "InclusionAI",
+      "evidence": [
+        {
+          "evidence_id": "e_810f09f0a0bc1f4244b26585",
+          "original_text": "I did not want another chatbot tab. I wanted a private stack. @nvidia DGX Spark writes the tokens — one live model, @MiaAI_lab recipe, Qwen / @deepseek_ai / Ling on the slot. @Apple Mac Mini stays on. That is where @agnt_gg lives. A local System One hop sits in front of the GPU. Official @typesafeai Jev stays official. Laya only clones the wire. The MacBook is @Tailscale, not a second GPU. Lid closes. Work does not. https://t.co/oI6a9rvW6q",
+          "excerpt": "I did not want another chatbot tab. I wanted a private stack. @nvidia DGX Spark writes the tokens — one live model, @MiaAI_lab recipe, Qwen / @deepseek_ai / Ling on the slot. @Apple Mac Mini stays on. That is where @agnt_gg lives. A local System One hop sits in front of the GPU. Official @typesafeai Jev stays official. Laya only clones the wire. The MacBook is @Tailscale, not a second GPU. Lid closes. Work does not. https://t.co/oI6a9rvW6q",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [
+              "qwen"
+            ],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_d1defb88748f40889e412f18",
+          "original_text": "@AntLingAGI Ling‑3.0‑flash‑VL 发布，原生视觉代理能力太值得关注。不只是看图，而是能结合视觉做闭环推理，STEM、文档、前端编码、医疗报告都覆盖，多模态的实用性又往前迈了一步。",
+          "excerpt": "@AntLingAGI Ling‑3.0‑flash‑VL 发布，原生视觉代理能力太值得关注。不只是看图，而是能结合视觉做闭环推理，STEM、文档、前端编码、医疗报告都覆盖，多模态的实用性又往前迈了一步。",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "releases_updates"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_ee784e361d1a25d503a20490",
+          "original_text": "@zhongying14 @AntLingAGI Using the hinge angle as the core UI state driver is a brilliant concept. Ling 3.0 Flash VL moving from image input to a whole conceptual product design in one shot is wild!",
+          "excerpt": "@zhongying14 @AntLingAGI Using the hinge angle as the core UI state driver is a brilliant concept. Ling 3.0 Flash VL moving from image input to a whole conceptual product design in one shot is wild!",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "hands_on_usage"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_be9ccc7839da83bb7f7cf5fe",
+          "original_text": "@zhongying14 @AntLingAGI 这种不让 AI 直接照搬，而是让它重新思考和设计的方式确实很有意思，也能看出 Ling-3.0-flash-VL 在视觉理解和创意生成上的实力。",
+          "excerpt": "@zhongying14 @AntLingAGI 这种不让 AI 直接照搬，而是让它重新思考和设计的方式确实很有意思，也能看出 Ling-3.0-flash-VL 在视觉理解和创意生成上的实力。",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_4b58fc68a2832802aaafdd47",
+          "original_text": "@skavenps1 @AntLingAGI 还可以怎么玩，Ling-3.0-flash-VL识别能力可以啊，flash也可以有nb的地方",
+          "excerpt": "@skavenps1 @AntLingAGI 还可以怎么玩，Ling-3.0-flash-VL识别能力可以啊，flash也可以有nb的地方",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "hands_on_usage",
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_ffeaca027fc74fb422a2f80a",
+          "original_text": "@zhongying14 @AntLingAGI 太惊艳的创意实验！不给复刻指令，只用苹果折叠 iPhone 官网截图，Ling‑3.0‑flash‑VL 直接衍生全新产品概念：铰链角度即是界面，不同开合角度对应三套交互模式，还输出可直接运行的单文件 HTML",
+          "excerpt": "@zhongying14 @AntLingAGI 太惊艳的创意实验！不给复刻指令，只用苹果折叠 iPhone 官网截图，Ling‑3.0‑flash‑VL 直接衍生全新产品概念：铰链角度即是界面，不同开合角度对应三套交互模式，还输出可直接运行的单文件 HTML",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "hands_on_usage",
+            "results_analysis"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_a966153e721de8b42a0a636a",
+          "original_text": "@AntLingAGI Visual understanding + agent capabilities is a powerful combination. Excited to see how Ling-3.0-flash-VL performs on real-world multimodal tasks. 🔥",
+          "excerpt": "@AntLingAGI Visual understanding + agent capabilities is a powerful combination. Excited to see how Ling-3.0-flash-VL performs on real-world multimodal tasks. 🔥",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        },
+        {
+          "evidence_id": "e_764306177764f41c12247832",
+          "original_text": "New free models on Arctic, picked up on their own: Ling 3.0 Flash VL · Sept 10 Nex N2.5 Pro and Mini · Sept 8 GLM 5.3 Fast · Sept 2 GLM 5.3 Flash · Aug 26 Same key, same API. 49 language models live, $0. https://t.co/xifJ1nifdn",
+          "excerpt": "New free models on Arctic, picked up on their own: Ling 3.0 Flash VL · Sept 10 Nex N2.5 Pro and Mini · Sept 8 GLM 5.3 Fast · Sept 2 GLM 5.3 Flash · Aug 26 Same key, same API. 49 language models live, $0. https://t.co/xifJ1nifdn",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "advertising_marketing",
+            "releases_updates"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [
+              "glm"
+            ],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        }
+      ]
+    },
+    {
+      "brand_key": "sakana_ai",
+      "display_name_en": "Sakana AI",
+      "display_name_zh_cn": "サカナAI",
+      "evidence": [
+        {
+          "evidence_id": "e_ac005c98b538a64c36dffc7b",
+          "original_text": "@SakanaAILabs wowowowowowowo. Sakana to the moon now.",
+          "excerpt": "@SakanaAILabs wowowowowowowo. Sakana to the moon now.",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [
+              "Sakana"
+            ],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "explicit_mention"
+          }
+        },
+        {
+          "evidence_id": "e_7831291dfda95ea1df6c5b42",
+          "original_text": "@SakanaAILabs in fact, he founded sakana AI in the 90s...",
+          "excerpt": "@SakanaAILabs in fact, he founded sakana AI in the 90s...",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [
+              "Sakana",
+              "Sakana AI"
+            ],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "explicit_mention"
+          }
+        },
+        {
+          "evidence_id": "e_55e5513cac47a3d65b54e34b",
+          "original_text": "@SakanaAILabs (Schmidthuber invented the name Sakana 1387)",
+          "excerpt": "@SakanaAILabs (Schmidthuber invented the name Sakana 1387)",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [
+              "Sakana"
+            ],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "explicit_mention"
+          }
+        },
+        {
+          "evidence_id": "e_ae6c6233823e54986454202d",
+          "original_text": "The sickest lab on the frontier. I respect you, @SakanaAILabs",
+          "excerpt": "The sickest lab on the frontier. I respect you, @SakanaAILabs",
+          "first_party_role": "public_opaque",
+          "post_type_keys": [
+            "opinions_reactions"
+          ],
+          "brand_relevance": {
+            "matched_aliases": [],
+            "other_brand_keys": [],
+            "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+            "status": "uncertain"
+          }
+        }
+      ]
+    }
+  ]
+}

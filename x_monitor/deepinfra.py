@@ -26,6 +26,13 @@ DEEPINFRA_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
 GEMMA_4_31B_MODEL = "google/gemma-4-31B-it-turbo"
 SUPPORTED_MODELS = frozenset({DEEPSEEK_0731_MODEL, GEMMA_4_31B_MODEL})
+HEADLINE_CRITIC_HOLD_CODES = frozenset({
+    "unsupported_event", "unsupported_causality", "unsupported_number",
+    "unsupported_quote", "event_conflation", "cross_brand_evidence",
+    "translation_not_equivalent", "secondary_not_substantive",
+    "proportionality_failure", "unsafe_instruction_following",
+    "output_contract_invalid", "no_relevant_evidence",
+})
 
 
 class DeepInfraRetryableError(RuntimeError):
@@ -230,6 +237,18 @@ _audit_props["decisions"]["items"] = _closed_object({
 })
 _PROFILES["headline_critic_v5"] = _audit_profile
 
+_ledger_profile = deepcopy(_audit_profile)
+_ledger_format = _ledger_profile["response_format"]["json_schema"]
+_ledger_format["name"] = "headline_critic_v6"
+_ledger_props = _ledger_format["schema"]["properties"]
+_ledger_props["critic_response_schema_version"]["enum"] = [5]
+_ledger_check = _ledger_props["decisions"]["items"]["properties"]["source_check"]
+_ledger_check["properties"]["subject"]["maxLength"] = 1500
+for _key in ("supported_headline_en", "supported_secondary_en"):
+    _ledger_check["properties"][_key] = {"type": "string"}
+    _ledger_check["required"].append(_key)
+_PROFILES["headline_critic_v6"] = _ledger_profile
+
 
 def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Constrain each brand's citations without changing the response contract.
@@ -286,6 +305,21 @@ def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) ->
                 )
             }
             proposition_schema["required"] = list(proposition_schema["properties"])
+            if profile_name == "headline_critic_v6":
+                proposition_schema["properties"]["evidence_ids"]["maxItems"] = 1
+                if any(tag in envelope.get("prompt_version", "") for tag in ("v53", "v54", "v55", "v56")):
+                    choices = (envelope.get("headline_source_choices_by_brand") or {}).get(
+                        dossier["brand_key"], []
+                    )
+                    if choices:
+                        headline_proposition = deepcopy(proposition_schema)
+                        headline_proposition["properties"]["output_section"]["enum"] = ["headline"]
+                        headline_proposition["properties"]["evidence_ids"]["items"]["enum"] = choices
+                        secondary_proposition = deepcopy(proposition_schema)
+                        secondary_proposition["properties"]["output_section"]["enum"] = ["secondary"]
+                        props["propositions"]["items"] = {
+                            "anyOf": [headline_proposition, secondary_proposition]
+                        }
             narrative["properties"] = {
                 key: props[key] for key in (
                     "brand_key", "propositions", "headline_proposition_ids",
@@ -307,6 +341,8 @@ def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) ->
                 decision["properties"]["brand_key"] = narrative["properties"]["brand_key"]
                 decision["properties"]["narrative"]["anyOf"] = [narrative, {"type": "null"}]
                 if "source_check" in decision["properties"]:
+                    if "ledger-only" in envelope.get("prompt_version", ""):
+                        decision["properties"]["draft_errors"]["maxItems"] = 0
                     span_refs = decision["properties"]["source_check"]["properties"]["span_ids"]
                     brand_key = narrative["properties"]["brand_key"]["enum"][0]
                     own_dossier = next(d for d in dossiers if d["brand_key"] == brand_key)
@@ -318,7 +354,43 @@ def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) ->
                     else:
                         span_refs["maxItems"] = 0
                         decision["properties"]["source_check"]["properties"]["conflicts"]["maxItems"] = 0
-                decisions.append(decision)
+                    # Each choice must be a complete closed object. The live
+                    # decoder discarded outer fields when given partial
+                    # anyOf constraints alongside shared object properties.
+                    if "ledger-only" in envelope.get("prompt_version", ""):
+                        verdicts = (("repair",) if brand_key in envelope.get("must_narrate_brand_keys", [])
+                                    else ("repair", "hold"))
+                    else:
+                        verdicts = ("approve", "repair", "hold")
+                    for verdict in verdicts:
+                        variant = deepcopy(decision)
+                        fields = variant["properties"]
+                        fields["decision"]["enum"] = [verdict]
+                        if verdict == "hold":
+                            fields["narrative"] = {"type": "null"}
+                            fields["hold_code"] = {
+                                "type": "string", "enum": sorted(HEADLINE_CRITIC_HOLD_CODES),
+                            }
+                            if "ledger-only" in envelope.get("prompt_version", ""):
+                                for key in ("supported_headline_en", "supported_secondary_en"):
+                                    fields["source_check"]["properties"][key]["enum"] = [""]
+                        else:
+                            fields["source_check"]["properties"]["brand_relevance"]["enum"] = ["direct"]
+                            fields["source_check"]["properties"]["span_ids"]["minItems"] = 1
+                            fields["narrative"] = narrative
+                            fields["hold_code"] = {"type": "null"}
+                            if profile_name == "headline_critic_v6":
+                                for key in ("supported_headline_en", "supported_secondary_en"):
+                                    fields["source_check"]["properties"][key]["minLength"] = 1
+                                fields["narrative"]["properties"]["propositions"]["minItems"] = 2
+                                for section in ("headline", "secondary"):
+                                    for locale in ("en", "zh_cn", "ja"):
+                                        fields["narrative"]["properties"][f"{section}_{locale}"]["minLength"] = 1
+                            if verdict == "approve":
+                                fields["draft_errors"]["maxItems"] = 0
+                        decisions.append(variant)
+                else:
+                    decisions.append(decision)
             array["items"] = {"anyOf": decisions}
         array["minItems"] = array["maxItems"] = len(dossiers)
         return result
@@ -471,7 +543,7 @@ class DeepInfraChatCompletionsClient:
             request["service_tier"] = profile["service_tier"]
             request["response_format"] = (
                 _bound_headline_format(self.request_profile, messages)
-                if self.request_profile in {"headline_editor_v4", "headline_critic_v4", "headline_critic_v5"}
+                if self.request_profile in {"headline_editor_v4", "headline_critic_v4", "headline_critic_v5", "headline_critic_v6"}
                 else profile["response_format"]
             )
         # Deliberately omit response_format, provider, service_tier, thinking,

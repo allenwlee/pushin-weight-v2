@@ -1243,6 +1243,16 @@ def test_normalization_and_near_duplicate_threshold_are_frozen():
     ) >= Decimal("0.90")
 
 
+def test_long_original_evidence_preserves_a_model_mention_near_the_end():
+    original = "A developer describes an agent experiment. " + "details " * 180 + "free 120B Nemotron on OpenRouter."
+    excerpt = normalized_excerpt(original, preserve_tail=True)
+    assert len(excerpt) == 1000
+    assert excerpt.startswith("A developer describes an agent experiment.")
+    assert " … " in excerpt
+    assert excerpt.endswith("free 120B Nemotron on OpenRouter.")
+    assert "Nemotron" not in normalized_excerpt(original)
+
+
 def _seed_snapshot_posts() -> tuple[Brand, str, str]:
     brand = Brand.objects.create(
         nickname="snapshot_brand",

@@ -90,6 +90,32 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
   intact. This exception does not authorize application or infrastructure
   changes or removal of the canonical implementation worktree.
 
+- **2026-09-25, headline-only staging identity:** The owner selected this
+  headline change for production. The shared `staging` branch is currently 43
+  commits ahead of `main` with a separate rare-type feature; merging it into
+  the headline candidate would carry unrelated application changes to
+  production. Preserve the owner's headline-only scope by leaving that branch
+  untouched. After the final fresh candidate passes SC2/SC3, commit and push this feature branch,
+  disable automatic deploys for the staging web and headline worker, deploy
+  the *exact candidate SHA* manually to those services, verify their reported
+  SHA, and run the bounded staging checks. Configure the isolated staging
+  headline worker to the candidate's three-process command and secret before
+  its canary, then restore its prior configuration after testing. Render
+  [supports deploying a specific commit](https://render.com/docs/deploys#deploying-a-specific-commit)
+  without changing the linked branch. This exception replaces only the
+  guide's staging-branch fast-forward step; the exact-SHA checks, production
+  fast-forward to `main`, and guarded cleanup still apply. If the manual
+  exact-SHA route cannot be verified, stop before production.
+
+- **2026-09-25, owner-directed V56 freeze:** After nineteen prompt/code
+  cycles the owner stopped zero-critical SC2 retuning. V56 is the frozen
+  candidate. A twelve-case lead-sentence review of the saved V56
+  regressions passed. Commit and push this feature branch with that freeze.
+  Do not add another critic prompt version. Incomplete Cycle 19 fresh
+  generation stays unused. Staging and production remain fail-closed and
+  still follow the headline-only exact-SHA exception above; this exception
+  authorizes the feature-branch commit/push before those deploys.
+
 # Reshape headline generation for DeepSeek V4 Flash 0731
 
 ## Plain-English Summary
@@ -233,6 +259,10 @@ provider-specific request tuning.
   rich immutable snapshot privately; omit selection internals and exact text
   duplicates from the model request. Do not trade away evidence cardinality,
   provenance, meaningful minority views, or completeness warnings for size.
+  The v38 final-writer one-source trial is a separate factual-ownership
+  control, not a token-saving trim: keep all selected evidence in the canonical
+  packet, log the lead and omitted count, and require independent review of
+  lost synthesis and contradiction context before accepting it.
 - R15. Suppressed aggregate comparisons are absent from model-visible facts,
   phrase statistics, summaries, and generated examples, not merely accompanied
   by a warning. This does not redact comparisons an author actually wrote;
@@ -414,11 +444,18 @@ before fresh U5 qualification.
   Recovery is a previous qualified 0731 profile or disabled generation plus
   last-good serving. Remove alternate headline model fallback/rollback controls
   during U6; do not delete shared credentials or change other enrichment roles.
-- KTD9. Use separate rank/editor/critic projections from a versioned canonical
-  snapshot. Rank gets concise per-brand notability facts and two source
-  previews. Editor gets the selected source evidence and permitted context.
-  Critic gets the same admissible brand facts/evidence with its matching draft,
-  including contrary context; do not narrow it to the draft's citations alone.
+- KTD9. Use separate rank/editor/final-writer projections from a versioned
+  canonical snapshot. Rank gets concise per-brand notability facts and two
+  source previews. Editor gets all selected source evidence and permitted
+  context. The v38 diagnostic selects one brand-identifying, substantive lead
+  post for the final writer. The complete selected set remains in the local
+  audit envelope, while the provider sees only that lead post; when none
+  qualifies it sees one example solely to explain a hold. This deliberate
+  source-isolation tradeoff prevents transferring claims among visible posts,
+  but loses cross-post contradiction checks and synthesis. Qualify its
+  usefulness and factual support against the unchanged SC2 gate before
+  adopting it. Editor citations are salience hints only after mechanical
+  brand-identity and subject-focus checks; draft prose never becomes evidence.
 - KTD10. New finance facts are calculated in the existing read-only repeatable-
   read snapshot transaction with finite database work. Adopt the bounded
   initial policy below, calibrate thresholds on diagnostics, and lock the
@@ -840,6 +877,18 @@ cycle is insufficient, amend the responsible implementation unit and continue
 with another bounded cycle instead of proposing another model. Freeze one
 profile per stage for the next independent validation.
 
+**Current iteration rule (owner direction, 2026-09-24):** Narrow the
+remaining model work to source attribution: ranking comparison classes and
+the actor/action/target of allegations or motives. Finish one correction,
+replay both saved source-backed regressions, then run one newly frozen,
+disjoint validation set. Resolve audit-verdict contradictions as a separate
+schema/code defect. Do not tune for minor wording or optional details. If
+either regression remains materially wrong, or fresh review finds a material
+error, keep the release closed, diagnose that failure, and run another bounded
+0731 correction and genuinely new validation. The owner explicitly authorized
+continuing these loops while away until success; record each attempt and
+provider bill. Retain the zero-material-error rule and five 4/5 rubric means.
+
 For the revised campaign, treat all first-qualification outputs and reviewer
 comments as diagnostic material. Include suppressed comparisons, unrelated
 Yi suffix matches, product/parent-brand scope, wrong-company financial figures,
@@ -895,6 +944,8 @@ For `improve_0731`, turn the failures into targeted diagnostic cases, amend the
 responsible implementation unit, and return to U4 under another finite budget.
 The next validation uses fresh unseen data; do not relabel the same examined
 cases as an independent pass. Model selection is closed.
+The current iteration rule above narrows each return to U4 to material failures
+with a concrete, independently verifiable correction.
 
 **Test scenarios:**
 
@@ -979,10 +1030,12 @@ the uncertainty and require the critic to omit/hold that claim. Do not rewrite
 underlying `PostBrand` or classification rows in this headline task.
 
 **Verification:** All provider-visible paths omit suppressed comparisons and
-private scores, preserve selected evidence IDs, retain source language and
-negation, and give the critic both supporting and contrary context. Measure
-the serialized request actually sent, not only its local enclosing artifact.
-Record changed source selection separately from representation-only savings.
+private scores; the canonical audit packet preserves every selected evidence
+ID, source language, and negation. The source-isolated final writer records its
+lead ID and omitted-source count, and the validator rejects claims cited to
+another post. Measure the serialized request actually sent, not only its local
+enclosing artifact. Record changed source selection separately from
+representation-only savings and evaluate lost cross-post context in SC2.
 
 ### U8. Add bounded historical and phase facts
 
@@ -1137,12 +1190,14 @@ requires a ready configuration and the staging/production checks.
   unavailable historical norms.
 - U9 complete in `c60194e`: measurement/value/unit/scope validation and real
   PostgreSQL snapshot-to-publication regression coverage.
-- U4 in progress: cycle 1 completed three diagnostic rounds; cycle 2 applies
-  targeted corrections. Dynamic per-brand citation schemas prevent the observed
-  cross-brand citation failure. Shorter, evidence-first writing is under test.
-- U5 pending: new source corpus reserved with no reused evidence IDs or exact
-  excerpts; 24 independent review assignments frozen before output. Repaired
-  calibration controls require actual source review before closure.
+- U4 configuration frozen after ten completed diagnostic rounds (200 calls).
+  Cycle 4 round 2 was interrupted at the owner's pause; its partial receipts
+  remain preserved and are not reported as a completed result. The approved
+  final-output severity policy is committed in `94fbc7c`.
+- U5 in progress: fresh generation uses 44 eligible brand/window cases, with
+  no reused source IDs or exact excerpts from prior diagnostics. The 24 review
+  assignments and revised rubric were locked before output. Repaired controls
+  require source review; a passed transport alone does not close this gate.
 - U6 pending: status receipt reporting prepared; active production routing and
   infrastructure remain unchanged until qualification and staging pass.
 
@@ -1198,3 +1253,250 @@ Earlier results remain unchanged. The first fresh qualification's assignments
 remain fixed; archive the earlier rubric and lock this owner-selected rubric
 before generating or reviewing any fresh output. Return to prompt tuning only
 for material failures or an unmet aggregate quality threshold.
+
+### Owner-directed correction scope — 2026-09-24
+
+The first fresh review found four material failures among 24 cases: two
+source-attribution errors and two useful narratives withheld by contradictory
+audit fields. All five rubric means passed; all eight corrupted-draft controls
+were successfully repaired. The first replay fixed the ranking comparison but
+still approved the misattached accusation. A partial-branch `anyOf` schema
+experiment made the live decoder omit required fields, so that shape was
+rejected. Complete closed schema branches now retain the local validator.
+The owner then authorized continued bounded iterations while away until the
+same quality gates pass. A miss still stops promotion of that candidate.
+
+### Cycle 7 source-ownership regression net
+
+The next blind source freeze is
+`.context/headline-finance-cycle7/fresh-unseen-source.json` (SHA-256
+`713fbf737a5bdff877637064d16c396b0f9a35d84905e3e94a7ccd26605cf61d`).
+It excludes selected evidence IDs and exact excerpts from prior frozen sets
+before the bounded evidence reservoir is filled. The 24 reviewer assignments
+(12 per window, eight per reviewer), fixed rubric, and ten required saved
+regressions are sealed in
+`.context/headline-finance-cycle7/validation/manifest.json` before any fresh
+candidate generation. The combined fixture is
+`tests/fixtures/headline_all_source_regressions.json`.
+
+The final 0731 writer receives source spans, verified aliases, deterministic
+Chinese discount glosses, and sanitized evidence-ID hints from the editor. It
+does not receive an earlier draft as content to approve. Its source check must
+own the English wording, which the three-locale narrative copies and translates.
+The validator keeps one cited source per proposition and rejects false holds
+for direct brand mentions. It rejects unverified cross-post links, including
+shared authorship without matching observed handles and shared test-series
+claims without explicit source support. A bounded, source-preserving correction
+may remove only the unsupported link wording from English, Chinese, and
+Japanese together; unknown phrasings remain invalid. Short, non-primary
+product keywords by themselves do not establish brand ownership. Raw provider
+output and final normalized output must both remain in qualification receipts.
+
+The v31 and v33 ten-case provider replays were mechanically complete but
+failed independent factual review on discount meaning and corpus-count/source
+scope. The partial v32 replay exposed one source-check/final-line mismatch.
+Those receipts and reviewer reasons are recorded in
+`docs/research/2026-09-24-195100-headline-finance-0731-tuning-cycle1.md`.
+The correction is limited to Chinese 1折 basis in Japanese, attribution of
+corpus counts to the collected dataset, and deletion of an unsupported
+all-post negative from a bounded nonrandom sample. Mechanical guards reject
+unknown variants. The v34 replay exposed a spacing variant of the Japanese
+discount error; v35's spacing-tolerant guard closed it. The v35 combined
+ten-case replay passed mechanical checks and independent source review with
+zero critical failures and factual support at least 4/5 in every case. Fresh
+qualification and operational criteria still control U6 activation.
+
+Cycle 8 froze new selected evidence IDs and exact excerpts in
+`.context/headline-finance-cycle8/fresh-unseen-source.json` (SHA-256
+`b08740c4dc1213ed7dd7aac2c63ff5b4ace87f05be23797fe70c9463b607f94a`)
+and sealed 24 disjoint case/reviewer assignments in
+`.context/headline-finance-cycle8/validation/manifest.json`. The v31 fresh
+run was stopped on a failed regression and produced no reviewed candidate
+artifact; Cycle 8 was unseen before the locked v35 fresh generation began.
+
+Cycle 8's v35 fresh run completed, but five of 24 reviewed cases had material
+source-ownership or false-hold failures and two final-writer batches were
+mechanically invalid. Its unchanged SC2 and SC3 gates failed; no v35
+publication is authorized. The supporting report is
+`docs/research/2026-09-24-195100-headline-finance-0731-tuning-cycle1.md`.
+The next finite diagnostic cycle tests source isolation: v36 exposed all
+selected posts and showed that 0731 still transferred a claim from a second
+post while citing the chosen lead; v37 exposed only the lead and removed that
+transfer in the targeted case but one empty-evidence hold call timed out.
+V38 retains one example solely to explain no-lead holds, selects a brand-
+centric lead using the existing editor's citations only as untrusted salience
+hints, and confines the final writer to that single post. All ten saved
+regressions were mechanically valid in the v38 diagnostic. Independent Sol
+source review found no critical failure and factual support at least 4/5 for
+all ten, closing the saved-regression gate. Cycle 9 then froze a new disjoint
+production source and reviewer manifest before v38 fresh generation. Cycle 8
+remains diagnostic material and cannot serve as an unseen holdout.
+
+Cycle 9 froze another disjoint production source
+(`.context/headline-finance-cycle9/fresh-unseen-source.json`, SHA-256
+`ffe8273324a6794a3ce88559d3886435045b9f3869b984a3092f85a46a89b68c`)
+and sealed its 24 assignments and eight controls before v38 generation. The
+46 calls finished without transport failure for $0.05857470. Three blind
+reviewers scored all five dimensions above 4/5 on average and all controls
+contained no surviving unsupported claim. SC2 still failed: one supported
+InclusionAI Ling-3.0-flash-VL story was withheld because the source snapshot
+did not recognize a curated official handle mentioned by a third party. SC3
+also failed: a short Sakana AI joke was expanded into an unsupported dated
+event, which the validator rejected, invalidating its paired Yi batch. The
+Cycle 9 report and reviewer scores remain immutable diagnostic evidence.
+
+V39 adds curated, brand-specific official handles to source attribution and
+requires a substantive lead when an entire public dossier consists of brief
+opinion/reaction posts. The former restores a supported product story; the
+latter prevents short jokes from becoming a headline and keeps their paired
+brand's result available. Both rules are tested against Cycle 9 source cases,
+not brand-name exceptions in the runtime. Replay Cycle 9 as a diagnostic only,
+then run the ten saved regressions and independent source review. Freeze a
+**new disjoint** production source and reviewer manifest before candidate fresh
+qualification. The unchanged gate still requires ten valid, relevant,
+noncritical saved cases, 24 independent fresh reviews with five 4/5 means and
+zero material errors, zero unresolved final responses, eight safe controls,
+the cost ceiling, and worker timing/memory checks. Only a candidate meeting
+these criteria advances through disabled-first staging, bounded staging
+publication, exact-SHA production verification, and Ollija-guided delivery.
+
+The v39 replay recovered InclusionAI but exposed a projection mismatch:
+provider packets hold post types in `taxonomy.post_types.values`, not the
+private `post_type_keys` field. V40 reads the projected field and converts any
+model-written no-lead narrative to a deterministic hold before claim
+validation; raw output is retained for audit and no content is manufactured.
+A small v40 two-window probe retained the paired Upstage story and produced
+clean normalized holds when Sakana AI and Yi lacked a substantive lead. Run
+the ten saved regressions and independent review under v40, then use a **new**
+unseen source and sealed 24-case manifest for formal qualification. The v40
+ten-case replay has now finished 10/10 mechanically valid; independent Sol
+review found zero critical errors and every factual score at least 4/5.
+The new disjoint source freeze and manifest seal completed before fresh
+generation.
+
+Cycle 10 completed on a newly frozen, disjoint source (SHA-256
+`76631cf01fe419d73f5d1c98fb339e375557c6dc0b800e860aca1867277c63c4`).
+V40 used 46 calls and $0.05786667 in provider-billed generation. The final
+critic batches were mechanically valid; all five 24-case rubric means exceeded
+4/5. Independent review still found two material errors, so SC2 failed and
+this candidate cannot advance: Q122 withheld a supported InclusionAI model
+release, and Q127 translated Chinese `48折` (pay 48% of the applicable price)
+as “48% off” in English and Japanese. The frozen source, manifest, raw calls,
+and reviews remain diagnostic evidence under `.context/headline-finance-cycle10/`.
+
+V41 addresses these two root causes only. Snapshot attribution reads exact
+brand-linked model names already present in the Product catalog, retaining
+only names visible in the bounded source reservoir; it does not admit bare
+ambiguous short names such as “Ming.” Discount projection resolves two-digit
+Chinese shorthand into both pay and off percentages and repairs the exact
+pay-percent-as-discount inversion in the final source-linked text. Tests must
+pin the source-to-lead call chain and the three-language discount output.
+Replay Cycle 10 only diagnostically, close the ten saved regressions with
+independent source review, then freeze a *new*, disjoint production source and
+seal assignments before V41's fresh 24-case qualification. No staging
+activation is allowed until SC2 and SC3 pass on that fresh source.
+V41's ten saved regressions have now passed mechanical and independent Sol
+source review with zero critical errors and every factual-support score at
+least 4/5. The new Cycle 11 source is frozen at SHA-256
+`01c4d2ebc43a19553212249d750605f2b14ec64116a6a467bc68c2b48c9276b3`,
+and its 24 review assignments were sealed before generation. Fresh V41
+qualification then proceeded under that seal.
+
+Cycle 11's sealed V41 run completed 40/40 calls, 29/29 eligible brand
+outcomes, zero mechanically invalid finals, zero missing locales, and
+$0.05293098 in provider-billed calls including eight controls. The 24 blind
+reviews averaged at least 4/5 on each dimension, but two material findings
+failed SC2. Q151 incorrectly attributed a Reliance battery/solar-wafer post
+to Upstage because bare secondary `Solar` was treated as brand evidence *and*
+the final-source selector treated the last word of `Upstage Solar` as a brand
+name. Q166 omitted a cited `Date: Nov 10, 2024` from a Llama hackathon recap
+posted in 2026, making an old win look current. The preliminary qualification
+at `.context/headline-finance-cycle11/validation/qualification-v41-preliminary.json`
+records SC1, SC3, SC4, and SC5 as passed; SC2 and the still-unmeasured staging
+operations fail. This remains diagnostic evidence, not a release candidate.
+
+V42 makes one shared attribution correction and one temporal-context
+correction. A bare, nonprimary ASCII product keyword cannot anchor a company
+headline by itself; exact catalog model names, multiword model names, primary
+brand names, and reviewed official handles remain eligible. The lead selector
+uses the complete display name rather than treating its final word as an
+independent identity. The final critic must preserve an explicit labeled past
+event date in all three visible locales; a deterministic source-date guard
+repairs an omitted date only when one unambiguous labeled date is more than
+90 days before its post. Recheck Q151/Q166 and the ten saved regressions, then
+freeze a *new* disjoint source and sealed review assignment before V42's
+fresh qualification. Minor review suggestions are recorded but are not a
+reason for an unbounded prompt-tuning loop.
+
+The first V42 preparation uncovered a saved regression: a Moonshot Kimi
+source was held because its display-name suffix `Kimi` also appears in the
+canonical brand key `moonshot_kimi`. The still-running V42 regression replay
+and read-only freeze were stopped; their partial files are diagnostic only
+and confer no qualification. V43 narrows the suffix rule: accept it only when
+the suffix is also a token in the canonical brand key. This keeps `Kimi`
+eligible without making generic `Solar` an identity for `upstage`. The
+affected focused suite passed 113 tests, including PostgreSQL checks. V43
+must use a new regression directory, a new disjoint source freeze, and sealed
+review assignments. No V42 results may be counted toward release gates.
+
+V43 passed 10/10 saved mechanical regressions and the expanded headline tests
+(318 passed). Independent review found one critical factual error in saved
+Q32: the Chinese line attached “one day” to a +5.55% return although the
+source applied that period only to an 11-place ranking climb. The already
+sealed fresh V43 run was stopped after partial rank/editor calls, before a
+complete artifact; it is not qualification evidence. V44 adds one general
+numeric-scope rule to the existing source-ledger prompt: each number retains
+its entity, metric, and time period independently in EN/ZH/JA. Probe Q32
+before replaying the ten saved cases and reviewing them; only after that,
+freeze another disjoint source and seal assignments for fresh qualification.
+Do not tune minor copy changes or broaden taxonomy in this loop.
+
+The single Q32 V44 probe separated the figures correctly, but the same
+prompt produced a wrong daily-return scope in its ten-case replay. This is
+model variance, not a solved gate. V45 adds a narrow normalization after the
+model's source ledger: when the ledger calls a percentage a period-unspecified
+return, separately calls a rank change one-day, and the cited source confirms
+both figures, remove a one-day modifier that the Chinese or Japanese text
+places directly on the percentage. This only deletes unsupported timing from
+visible text; it does not create a new event, figure, or claim. Unit tests
+cover both the correction and a genuinely daily return that must remain
+untouched. Revalidate the V44 raw Q32 result diagnostically, then run fresh
+V45 saved regressions and independent review before any full fresh run.
+The V44 live source and 24-case manifest were frozen and sealed but never
+used for a completed generation or review. V45 reuses those byte-identical,
+still-unseen source and assignment files; its code change is downstream of
+source selection. The frozen source SHA remains
+`2285a16e82661d4bbcce532b2b55e9e38b95a0ace85253d68867b39eec44e4ea`.
+Any V45 generation and all three reviews must refer to that same SHA.
+The V45 saved replay passed 10/10 mechanical checks. Independent Sol review
+found zero critical failures, no holds, and factual-support scores of at
+least 4/5 for every case. A separate diagnostic review of the normalized V44
+Q32 raw output scored factual support 5/5 and translation equivalence 4/5,
+with no critical error. The sealed 24-case V45 production-shaped trial is the
+next gate; saved-case success alone does not authorize staging.
+
+V45 finished all 36 planned calls and 26/26 eligible brand outcomes, with
+zero mechanically invalid finals or missing locale fields. Direct DeepInfra
+receipts totaled $0.04903794; observed snapshot-plus-generation time was
+283.834 seconds for one day and 320.54 seconds for seven days. The blind
+24-case review failed SC2 on three concrete failure classes. Q218 and Q223
+were false holds of a supported Nemotron 3 Diarization app post: the bare
+secondary keyword `nemotron` was correctly excluded as ambiguous, but its
+versioned phrase was not admitted as a product identity. Q239 softened a
+Chinese abusive quote to Japanese “outdated,” changing the register; Q240
+translated AI-service Tokens as Chinese `代币`, implying crypto tokens. The
+preliminary qualifier passed SC1, SC3, SC4 and SC5 and failed SC2; SC6–SC9
+are unmeasured. No V45 staging activation is allowed.
+
+V46 handles these exact classes without broad taxonomy work. A long secondary
+alphabetic product keyword followed by a version number becomes an alias for
+the *versioned phrase only*, so `Nemotron 3` can anchor its app post without
+making every bare Nemotron mention a source; the short `Solar`/solar-wafer
+false match remains excluded. The source-ledger prompt tells the writer to
+paraphrase abusive language with equivalent strength across locales if it
+cannot translate a slur faithfully. AI app/model usage `Tokens` remain
+`Token`, `词元`, or `额度` in Chinese; a source-conditioned normalizer restores
+`Token` when an AI-service source explicitly distinguishes it from API Token
+and does not discuss cryptocurrency. Focused tests cover both attribution and
+lexical guards. Probe Q239/Q240, replay the saved source failures, and only
+then freeze and review a new disjoint live source. Do not deploy V45.

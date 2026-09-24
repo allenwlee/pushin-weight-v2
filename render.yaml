@@ -108,9 +108,9 @@ services:
           type: keyvalue
           name: pushinweight-headlines-broker
           property: connectionString
-      # Headline generation still uses DeepSeek directly; translation and
-      # classification use the separate DeepInfra credential on harvest.
       - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPINFRA_API_KEY
         sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "True"

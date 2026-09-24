@@ -1,0 +1,4491 @@
+{
+  "fixture_schema_version": 2,
+  "cases": [
+    {
+      "case_id": "Q26",
+      "acceptance": "Chinese 1折 means paying 10% of price, not a 10% discount. The English, Chinese and Japanese lines must be equivalent; omitting the discount is acceptable.",
+      "packet": {
+        "as_of": "2026-09-24T13:46:03Z",
+        "baseline_context": {
+          "end_at": "2026-09-23T13:46:03Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-22T13:46:03Z"
+        },
+        "batch_key": "regression:q26",
+        "dossiers": [
+          {
+            "brand_key": "deepseek",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_ee5ef0d01b91f8a03b2f64ba",
+                "peer_brand_count": 9,
+                "phrase": "bai agi",
+                "prevalence": 160,
+                "representative_evidence_ids": [
+                  "ce_54e9148c8c622744e8756fca"
+                ],
+                "representative_excerpt": "is changing its hot-model discount lineup on september 25. if you re using models for coding research or agent workflows there s an important transition coming. starting september 25 at 15 00 sgt mimo-v2.6-flash will take over the 90 off special offer. mimo-v2.6-pro will launch w"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_2550a70cfd426074d3ecde3c",
+                "peer_brand_count": 14,
+                "phrase": "deepseek v4.1",
+                "prevalence": 118,
+                "representative_evidence_ids": [
+                  "ce_5bb208e5c7cf7cdedc8708e8"
+                ],
+                "representative_excerpt": "am09 21 deepseek v4.1 flashよりも明らかに良くて しょぼいミスが減ってるおかげでガンガン作業が前進する感じ commandcodeのmaxを契約すればmimo v2.6 flash kimiと xのおまけgrokで事足りるかもしれない"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_3e8afa19b7cf268b536b7056",
+                "peer_brand_count": 14,
+                "phrase": "v4.1 flash",
+                "prevalence": 96,
+                "representative_evidence_ids": [
+                  "ce_3bec8f8661e290d68588893f"
+                ],
+                "representative_excerpt": "and here s the stranger comparison deepseek v4.1 flash vs gpt-6 luna on artificial analysis intelligence 39 vs 37 automationbench 69 vs 53 t-bench 4.0 27 vs 13 gdpval-aa 1600 vs 1367 luna is cheaper but v4.1 flash is also faster."
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_a576bd1a6bf32cde78cca2f6",
+                "peer_brand_count": 8,
+                "phrase": "justinsuntron bai",
+                "prevalence": 92,
+                "representative_evidence_ids": [
+                  "ce_5134c074698cbff46084e9f9"
+                ],
+                "representative_excerpt": "𝐁.𝐀𝐈 𝐒 𝐅𝐑𝐄𝐄 𝐌𝐎𝐃𝐄𝐋 𝐋𝐈𝐍𝐄𝐔𝐏 𝐈𝐒 𝐑𝐄𝐀𝐃𝐘 powerful ai shouldn t come with a high entry barrier. is making a broad selection of advanced models available with 0 access and zero-threshold entry giving developers and ai users more room to experiment build and scale their workflows. 𝐓𝐡𝐞 𝐅𝐫𝐞𝐞"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_aafc74d0c0e60e5a43b8afa4",
+                "peer_brand_count": 15,
+                "phrase": "opus 5.5",
+                "prevalence": 82,
+                "representative_evidence_ids": [
+                  "ce_eb51975fd7914ca7f4481b3f"
+                ],
+                "representative_excerpt": "maxymize ai digest 23 sep frontier labs spent tuesday fighting over your invoice not just the leaderboard. ㅤ 𝗔𝗻𝘁𝗵𝗿𝗼𝗽𝗶𝗰 claude opus 5.5 landed sep 22 at 4 20. anthropic says fable 5.1-level work at 40 less than opus 5 plus a speed bump and higher pro max limits it is the new defau"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_6904b0c4a34dfc47fef0d462",
+                "peer_brand_count": 8,
+                "phrase": "agi tronecostar",
+                "prevalence": 80,
+                "representative_evidence_ids": [
+                  "ce_a4b2608b035bd0fc931dd334"
+                ],
+                "representative_excerpt": "opens codex to a wider model ecosystem is expanding what developers can do with codex. its latest update adds glm and kimi model families to the responses api alongside the gpt and deepseek families already supported. the announcement was published on september 22 2026. that mean"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_951f3c9ed3a51fe0d1aff091",
+                "peer_brand_count": 14,
+                "phrase": "and deepseek",
+                "prevalence": 76,
+                "representative_evidence_ids": [
+                  "ce_991596ffa1f7c94286a6bd5d"
+                ],
+                "representative_excerpt": "jun song it s tough keeping up. just don t download every model. i only get qwen and deepseek releases since they punch above their weight for almost every size class."
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_92599f7bc06c6563ff4e337b",
+                "peer_brand_count": 14,
+                "phrase": "the same",
+                "prevalence": 70,
+                "representative_evidence_ids": [
+                  "ce_c079f79900105f2c7b475f69"
+                ],
+                "representative_excerpt": "maxymize ai digest 23 sep frontier labs spent tuesday fighting over your invoice not just the leaderboard. ㅤ 𝗔𝗻𝘁𝗵𝗿𝗼𝗽𝗶𝗰 claude opus 5.5 landed sep 22 at 4 20. anthropic says fable 5.1-level work at 40 less than opus 5 plus a speed bump and higher pro max limits it is the new defau"
+              }
+            ],
+            "corpus_signals_status": "available",
+            "display_name_en": "DeepSeek",
+            "display_name_zh_cn": "DeepSeek",
+            "enrichment_coverage": {
+              "classification_status": "partial",
+              "classification_succeeded_count": 1233,
+              "fully_enriched_count": 1212,
+              "newest_30m": {
+                "classification_succeeded_count": 9,
+                "fully_enriched_count": 1,
+                "total_post_count": 18,
+                "translation_succeeded_count": 1
+              },
+              "total_post_count": 1242,
+              "translation_status": "partial",
+              "translation_succeeded_count": 1212
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "minimax"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T19:15:27Z",
+                "evidence_id": "e_fe99a66f8eb229b9aca0de82",
+                "excerpt": "https://t.co/faQJkhTOkU 的最新周报真的让我眼前一亮，特别是他们实现了累计注册用户突破 250 万这个里程碑。这个数字背后，他们做了不少有意义的事情。 首先是他们不断推进的模型接入，DeepSeek-V4.1-Flash 的 Web Chat 和 API 功能开放，并且在官方调价的基础上叠加了 1 折优惠，吸引了不少用户。然后是他们上线了 OKX Wallet EVM 链登录和支付功能，进一步扩大了多链支持。这个过程中，https://t.co/faQJkhTOkU 的智能结算层技术起到了关键作用，确保了所有链上的用户都能享受到无缝的支付体验。 想象一下，你开车从一个加油站到另一个加油站，每个加油站都能给你加油，而且结算时只用一个钱包。https://t.co/faQJkhTOkU 就是这样的加油站，支持多种链，用户用一个钱包就能搞定所有支付。这种智能结算层的概念，让 https://t.co/faQJkhTOkU 在竞争中脱颖而出。 除了技术上的进步，https://t.co/faQJkhTOkU 在用户体验上的优化也非常显著。Web Chat 明暗主题切换的上线，为用户提供了更多的个性化选择，让使用体验更加舒适。这种细节上的改进，往往能带来用户满意度的大幅提升。 所以，这意味着 https://t.co/faQJkhTOkU 不仅仅是一个模型接入的平台，更是一个全方位支持的智能结算层，无论是多链支持还是价格策略，都展现了他们对用户体验的极致追求。这种战略布局，让我对 https://t.co/faQJkhTOkU 的未来充满期待。 @justinsuntron @BAI_AGI #TRONEcostar",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "releases_updates"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "The latest weekly report of https://t.co/faQJkhTOkU really caught my eye, especially that they achieved the milestone of cumulative registered users breaking through 2.5 million. Behind this number, they have done many meaningful things. First is their continuous advancement of model integration, the opening of DeepSeek-V4.1-Flash's Web Chat and API functions, and adding a 10% discount on top of the official price adjustments, which attracted many users. Then they launched OKX Wallet EVM chain login and payment functions, further expanding multi-chain support. In this process, https://t.co/faQJkhTOkU's intelligent settlement layer technology played a key role, ensuring that all users on all chains can enjoy a seamless payment experience. Imagine you drive from one gas station to another gas station, every gas station can refuel you, and when settling, you only use one wallet. https://t.co/faQJkhTOkU is like such a gas station, supporting multiple chains, where users can handle all paym",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "DeepSeek",
+                    "deepseek"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T19:15:28Z",
+                "evidence_id": "e_8ae240ffed8a4f4a04ba6131",
+                "excerpt": "@hiarun02 Lunatic , good with deepseek 4.1 atm",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@hiarun02 Lunatic , 目前用 deepseek 4.1 挺好",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "DeepSeek",
+                    "deepseek"
+                  ],
+                  "other_brand_keys": [
+                    "gemini",
+                    "mistral",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T19:16:44Z",
+                "evidence_id": "e_eeff1e92c39e87fa19985884",
+                "excerpt": "CLOSEDQUORUM uses commercial AI APIs as its C2 — DeepSeek, Qwen, Mistral, Gemini vote on the next attack. No single model in charge. The committee decides. We need oversight of how AI APIs can be weaponized — before this leaves the lab. #AIPolicy #CyberSecurity",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "research_explanations"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": [
+                      "investigate_claim"
+                    ]
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "negative"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "CLOSEDQUORUM 使用商业 AI API 作为其 C2 —— DeepSeek, Qwen, Mistral, Gemini 对下一次攻击进行投票。 没有单一模型在掌控。由委员会决定。 我们需要监管 AI API 如何被武器化 —— 在这离开实验室之前。 #AIPolicy #CyberSecurity",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "glm",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T19:16:47Z",
+                "evidence_id": "e_0f87bcab8ee7754598ad07f2",
+                "excerpt": "https://t.co/X0ursd187c的前沿大模型免费活动让我对平台的高并发处理能力有了新的认识。每当提到高并发，大多数人可能只会想到快速响应，但https://t.co/X0ursd187c却通过一系列技术优化，保证了用户在访问大模型时能够稳定流畅。例如，平台累计Token吞吐量已经突破了10.9万亿，这是非常惊人的一个数字。 更令人惊讶的是，https://t.co/X0ursd187c已经完成了超过8,956万次API调用，这意味着平台每天都在处理成千上万次请求，每秒的吞吐量都非常高。这一能力得益于其优化后的服务架构，它能有效调度资源，确保每个用户请求都能快速响应。 此外，为了进一步降低开发成本，https://t.co/X0ursd187c已经将多个前沿大模型进行免费开放。GLM-5.3-Flash（Ox Alpha）、Qwen3.8-Flash、Tencent Hy3和Xiaomi MiMo-V2.5这四款大模型，现在可以免费使用。而DeepSeek-V4-Flash和DeepSeek-V4-Flash-Vision-Exp则享有五折优惠，这无疑为开发者提供了更多的灵活性和选择空间。 作为一名开发者，我对https://t.co/X0ursd187c的这种技术创新感到非常兴奋。这不仅意味着我们可以用更低成本搭建AI应用，还可以享受到前沿技术带来的效率提升。https://t.co/X0ursd187c平台稳定承载高并发任务的能力，证明了它在技术和服务上的强大实力。 @justinsuntron @BAI_AGI #TRONEcostar",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zxx",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zxx"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "releases_updates"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "The frontier large model free event of https://t.co/X0ursd187c gave me a new understanding of the platform's high-concurrency processing capability. Whenever high concurrency is mentioned, most people might only think of fast response, but https://t.co/X0ursd187c, through a series of technical optimizations, ensured that users can be stable and smooth when accessing large models. For example, the platform's cumulative Token throughput has already broken 10.9 trillion, which is a very amazing number. What is even more surprising is that https://t.co/X0ursd187c has already completed over 89.56 million API calls, which means the platform is processing thousands of requests every day, and the throughput per second is very high. This capability benefits from its optimized service architecture, which can effectively schedule resources to ensure that every user request can be responded to quickly. Furthermore, to further reduce development costs, https://t.co/X0ursd187c has already opened sev",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "DeepSeek",
+                    "deepseek"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T19:26:20Z",
+                "evidence_id": "e_d46e1e6747e17e7470740783",
+                "excerpt": "@aiSignalDrift It's fascinating how DeepSeek and Qwen stay competitive despite the chip restrictions. Kind of like trout fishing in Colorado's high country, where you work with whatever the mountain streams give you and still hook some beauties. Resourcefulness often beats raw equipment in both",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "mild_pro"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@aiSignalDrift DeepSeek 和 Qwen 在芯片限制下依然保持竞争力，这太迷人了。有点像在科罗拉多州的高地钓鳟鱼，你利用山涧溪流能提供的一切，依然能钓到一些美鱼。在两者中，资源利用能力往往胜过原始设备",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "DeepSeek",
+                    "deepseek"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T13:16:43Z",
+                "evidence_id": "e_3469fc59f2a0c367553ee6dd",
+                "excerpt": "GO-003 · @Alibaba_Qwen Qwen vs @deepseek_ai DeepSeek 倚天剑 × 屠龙刀，终于上桌。⚔️ 同一张 9×9 棋盘，同一套规则，只看下一手。 25/9/2026（Fri）· 8:30 PM · Singapore 中秋佳节，开桌。🏮🌕 LIVE · https://t.co/LIDlosMgTN GO-003 · Qwen vs DeepSeek Two edges, one board. ⚔️ Same 9×9 table. Same rules. Just the next move. 25 Sep 2026 · Fri · 8:30 PM Singapore Mid-Autumn night. The table opens. 🏮🌕 LIVE · https://t.co/LIDlosMgTN",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "events"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "GO-003 · @Alibaba_Qwen Qwen vs @deepseek_ai DeepSeek Yitian Sword × Dragon Slaying Saber, finally at the table. ⚔️ Same 9×9 chessboard, same set of rules, only looking at the next move. 25/9/2026 (Fri) · 8:30 PM · Singapore Mid-Autumn Festival, opening the table. 🏮🌕 LIVE · https://t.co/LIDlosMgTN GO-003 · Qwen vs DeepSeek Two edges, one board. ⚔️ Same 9×9 table. Same rules. Just the next move. 25 Sep 2026 · Fri · 8:30 PM Singapore Mid-Autumn night. The table opens. 🏮🌕 LIVE · https://t.co/LIDlosMgTN",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "1242",
+              "population_inference_allowed": false,
+              "selected_source_count": 6,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:deepseek:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "1242"
+              },
+              {
+                "fact_id": "f:deepseek:post_type:opinions_reactions_share_pct:opinions_reactions",
+                "family": "post_type",
+                "label_key": "opinions_reactions",
+                "metric": "opinions_reactions_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "29.808500"
+              },
+              {
+                "fact_id": "f:deepseek:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "59.283900"
+              },
+              {
+                "fact_id": "f:deepseek:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "13.155700"
+              },
+              {
+                "fact_id": "f:deepseek:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "98.415300"
+              },
+              {
+                "fact_id": "f:deepseek:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "99.583000"
+              },
+              {
+                "fact_id": "f:deepseek:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "66.10305958132045088566827697"
+              },
+              {
+                "fact_id": "f:deepseek:corpus_phrases:document_count:bai agi",
+                "family": "corpus_phrases",
+                "label_key": "bai agi",
+                "metric": "document_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "160"
+              },
+              {
+                "fact_id": "f:deepseek:activity:distinct_authors",
+                "family": "activity",
+                "metric": "distinct_authors",
+                "scope_ref": "s4",
+                "unit": "authors",
+                "value": "951.000000"
+              },
+              {
+                "fact_id": "f:deepseek:activity:deduplicated_sources",
+                "family": "activity",
+                "metric": "deduplicated_sources",
+                "scope_ref": "s4",
+                "unit": "sources",
+                "value": "1210.000000"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 1242,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 1199,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 1242,
+                "current_leader": "bai agi",
+                "status": "available"
+              },
+              "language": {
+                "covered_post_count": 1242,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 1201,
+                "current_leader": "opinions_reactions",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 1201,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 1201,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 1233,
+                "current_leader": null,
+                "status": "partial"
+              },
+              "us_nationalism": {
+                "covered_post_count": 1199,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 1242,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "insufficient_proven_comparable_intervals",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "collection_incomplete",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "deepseek",
+                "coverage": {
+                  "covered_post_count": 1242,
+                  "status": "complete",
+                  "total_post_count": 1242
+                },
+                "denominator": 1242,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "deepseek",
+                "coverage": {
+                  "covered_post_count": 1201,
+                  "status": "partial",
+                  "total_post_count": 1242
+                },
+                "denominator": 1201,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "deepseek",
+                "coverage": {
+                  "covered_post_count": 1199,
+                  "status": "partial",
+                  "total_post_count": 1242
+                },
+                "denominator": 1199,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s4": {
+                "basis": "observed_participation_not_adoption",
+                "brand_key": "deepseek",
+                "coverage": {
+                  "status": "observed_only"
+                },
+                "denominator": "observed_posts",
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "deepseek"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 1
+      },
+      "incorrect_narrative": {
+        "brand_key": "deepseek",
+        "confidence": "medium",
+        "events": [],
+        "headline_en": "A post reports a platform's weekly report claiming 2.5 million registered users and DeepSeek-V4.1-Flash Web Chat/API opening with a 10% discount.",
+        "headline_ja": "ある投稿は、プラットフォームの週次レポートが累計登録ユーザー250万人突破とDeepSeek-V4.1-FlashのWeb Chat・API開放、10%割引を報告したと伝えている。",
+        "headline_proposition_ids": [
+          "p1"
+        ],
+        "headline_zh_cn": "一篇帖子报道某平台的周报称累计注册用户突破250万，并开放DeepSeek-V4.1-Flash的Web Chat和API功能，叠加1折优惠。",
+        "narrative_kind": "event_led",
+        "propositions": [
+          {
+            "claim_en": "A post reports a platform's weekly report claiming 2.5 million registered users and DeepSeek-V4.1-Flash Web Chat/API opening with a 10% discount.",
+            "claim_ja": "ある投稿は、プラットフォームの週次レポートが累計登録ユーザー250万人突破とDeepSeek-V4.1-FlashのWeb Chat・API開放、10%割引を報告したと伝えている。",
+            "claim_type": "event",
+            "claim_zh_cn": "一篇帖子报道某平台的周报称累计注册用户突破250万，并开放DeepSeek-V4.1-Flash的Web Chat和API功能，叠加1折优惠。",
+            "evidence_ids": [
+              "e_fe99a66f8eb229b9aca0de82"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "headline",
+            "proposition_id": "p1"
+          },
+          {
+            "claim_en": "Another post reports a platform's free frontier model event, with DeepSeek-V4-Flash and Vision-Exp at 50% discount.",
+            "claim_ja": "別の投稿は、プラットフォームのフロンティアモデル無料イベントを報告し、DeepSeek-V4-FlashとVision-Expが50%割引であると伝えている。",
+            "claim_type": "event",
+            "claim_zh_cn": "另一篇帖子报道某平台的前沿大模型免费活动，其中DeepSeek-V4-Flash和Vision-Exp享有五折优惠。",
+            "evidence_ids": [
+              "e_0f87bcab8ee7754598ad07f2"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "secondary",
+            "proposition_id": "p2"
+          }
+        ],
+        "secondary_en": "Another post reports a platform's free frontier model event, with DeepSeek-V4-Flash and Vision-Exp at 50% discount.",
+        "secondary_ja": "別の投稿は、プラットフォームのフロンティアモデル無料イベントを報告し、DeepSeek-V4-FlashとVision-Expが50%割引であると伝えている。",
+        "secondary_proposition_ids": [
+          "p2"
+        ],
+        "secondary_zh_cn": "另一篇帖子报道某平台的前沿大模型免费活动，其中DeepSeek-V4-Flash和Vision-Exp享有五折优惠。"
+      }
+    },
+    {
+      "case_id": "Q27",
+      "acceptance": "A narrow, supported corpus-quality narrative about ERNIE mentions dominated by repeated account-sale spam is available; do not hold merely because there is no product news.",
+      "packet": {
+        "as_of": "2026-09-24T13:46:03Z",
+        "baseline_context": {
+          "end_at": "2026-09-23T13:46:03Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-22T13:46:03Z"
+        },
+        "batch_key": "regression:q27",
+        "dossiers": [
+          {
+            "brand_key": "ernie",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_3f09692f92044ca38a6c7854",
+                "peer_brand_count": 4,
+                "phrase": "ins账号购买 谷歌账号购买",
+                "prevalence": 49,
+                "representative_evidence_ids": [
+                  "ce_9d8ae7a21d67344e793c48a6"
+                ],
+                "representative_excerpt": "爷爷 推特定时发帖软件外汇杠杆爆仓牛市熊市分红奶奶 永远是x社交媒体管理软件成人视频自慰丝袜裸舞什么 孩子天真地问 顾淮想了想 推特发帖软件出售gemini文心一言永远就 推特账号 ins账号购买 谷歌账号购买 飞机账号 tg账号"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_54192df066fe968baa54f996",
+                "peer_brand_count": 4,
+                "phrase": "推特账号 ins账号购买",
+                "prevalence": 49,
+                "representative_evidence_ids": [
+                  "ce_d66c94c25b4319e4d373217c"
+                ],
+                "representative_excerpt": "爷爷 推特定时发帖软件外汇杠杆爆仓牛市熊市分红奶奶 永远是x社交媒体管理软件成人视频自慰丝袜裸舞什么 孩子天真地问 顾淮想了想 推特发帖软件出售gemini文心一言永远就 推特账号 ins账号购买 谷歌账号购买 飞机账号 tg账号"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_781bbb4281301fdf17406fde",
+                "peer_brand_count": 4,
+                "phrase": "谷歌账号购买 飞机账号",
+                "prevalence": 49,
+                "representative_evidence_ids": [
+                  "ce_0776e146ecbb1d432da5df0a"
+                ],
+                "representative_excerpt": "爷爷 推特定时发帖软件外汇杠杆爆仓牛市熊市分红奶奶 永远是x社交媒体管理软件成人视频自慰丝袜裸舞什么 孩子天真地问 顾淮想了想 推特发帖软件出售gemini文心一言永远就 推特账号 ins账号购买 谷歌账号购买 飞机账号 tg账号"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_399a8eea3a7b3f0331ea9761",
+                "peer_brand_count": 4,
+                "phrase": "飞机账号 tg账号",
+                "prevalence": 49,
+                "representative_evidence_ids": [
+                  "ce_7283ad254261148527bfd04e"
+                ],
+                "representative_excerpt": "爷爷 推特定时发帖软件外汇杠杆爆仓牛市熊市分红奶奶 永远是x社交媒体管理软件成人视频自慰丝袜裸舞什么 孩子天真地问 顾淮想了想 推特发帖软件出售gemini文心一言永远就 推特账号 ins账号购买 谷歌账号购买 飞机账号 tg账号"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 2
+                },
+                "corpus_signal_id": "cs_6526c5077d5c1eeff0738794",
+                "peer_brand_count": 1,
+                "phrase": "ai baidu",
+                "prevalence": 2,
+                "representative_evidence_ids": [
+                  "ce_075ee6a77e74e11c80b89abf"
+                ],
+                "representative_excerpt": "홍콩 증시에 상장된 기술주들의 향후 주가 흐름은 실적 발표보다는 미중 협상 테이블에서 나올 단 한마디의 발언에 의해 좌우될 수 있습니다. 당사는 이미 ai 및 반도체 공급망 투자를 통해 100만 달러 이상의 수익을 창출한 바 있으며 현재 주시해야 할 가장 중요한 대외 변수는 미중 정상회담에서 기술 정책과 관련해 나올 수 있는 신호입니다. 이번 회담에서 시장이 주목할 핵심 사안으로는 ai 경쟁 반도체 수출 규제 첨단 장비 공급 기술 기업 규제 등이 꼽힙니다. 규제 완화나 추가적인 갈등 고조를 시사하"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 2
+                },
+                "corpus_signal_id": "cs_9fca40facc12f58112578ffe",
+                "peer_brand_count": 1,
+                "phrase": "end-user devices",
+                "prevalence": 2,
+                "representative_evidence_ids": [
+                  "ce_975e96bd15524abe4ae27380"
+                ],
+                "representative_excerpt": "홍콩 증시에 상장된 기술주들의 향후 주가 흐름은 실적 발표보다는 미중 협상 테이블에서 나올 단 한마디의 발언에 의해 좌우될 수 있습니다. 당사는 이미 ai 및 반도체 공급망 투자를 통해 100만 달러 이상의 수익을 창출한 바 있으며 현재 주시해야 할 가장 중요한 대외 변수는 미중 정상회담에서 기술 정책과 관련해 나올 수 있는 신호입니다. 이번 회담에서 시장이 주목할 핵심 사안으로는 ai 경쟁 반도체 수출 규제 첨단 장비 공급 기술 기업 규제 등이 꼽힙니다. 규제 완화나 추가적인 갈등 고조를 시사하"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 2
+                },
+                "corpus_signal_id": "cs_42a327055d31319aff472f46",
+                "peer_brand_count": 1,
+                "phrase": "group ai",
+                "prevalence": 2,
+                "representative_evidence_ids": [
+                  "ce_a903fb2ff65777b81d2639bd"
+                ],
+                "representative_excerpt": "홍콩 증시에 상장된 기술주들의 향후 주가 흐름은 실적 발표보다는 미중 협상 테이블에서 나올 단 한마디의 발언에 의해 좌우될 수 있습니다. 당사는 이미 ai 및 반도체 공급망 투자를 통해 100만 달러 이상의 수익을 창출한 바 있으며 현재 주시해야 할 가장 중요한 대외 변수는 미중 정상회담에서 기술 정책과 관련해 나올 수 있는 신호입니다. 이번 회담에서 시장이 주목할 핵심 사안으로는 ai 경쟁 반도체 수출 규제 첨단 장비 공급 기술 기업 규제 등이 꼽힙니다. 규제 완화나 추가적인 갈등 고조를 시사하"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 2
+                },
+                "corpus_signal_id": "cs_a2d2af4666a3e28e7b666c3f",
+                "peer_brand_count": 1,
+                "phrase": "hong semiconductor",
+                "prevalence": 2,
+                "representative_evidence_ids": [
+                  "ce_83c38533ed1049577519b2e1"
+                ],
+                "representative_excerpt": "홍콩 증시에 상장된 기술주들의 향후 주가 흐름은 실적 발표보다는 미중 협상 테이블에서 나올 단 한마디의 발언에 의해 좌우될 수 있습니다. 당사는 이미 ai 및 반도체 공급망 투자를 통해 100만 달러 이상의 수익을 창출한 바 있으며 현재 주시해야 할 가장 중요한 대외 변수는 미중 정상회담에서 기술 정책과 관련해 나올 수 있는 신호입니다. 이번 회담에서 시장이 주목할 핵심 사안으로는 ai 경쟁 반도체 수출 규제 첨단 장비 공급 기술 기업 규제 등이 꼽힙니다. 규제 완화나 추가적인 갈등 고조를 시사하"
+              }
+            ],
+            "corpus_signals_status": "available",
+            "display_name_en": "Baidu ERNIE",
+            "display_name_zh_cn": "Baidu ERNIE",
+            "enrichment_coverage": {
+              "classification_status": "complete",
+              "classification_succeeded_count": 58,
+              "fully_enriched_count": 57,
+              "newest_30m": {
+                "classification_succeeded_count": 2,
+                "fully_enriched_count": 2,
+                "total_post_count": 2,
+                "translation_succeeded_count": 2
+              },
+              "total_post_count": 58,
+              "translation_status": "partial",
+              "translation_succeeded_count": 57
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T15:54:45Z",
+                "evidence_id": "e_6c6a3309a48419188e92bca4",
+                "excerpt": "“爷爷，推特定时发帖软件外汇杠杆爆仓牛市熊市分红奶奶，永远是X社交媒体管理软件成人视频自慰丝袜裸舞什么？”孩子天真地问。顾淮想了想：“推特发帖软件出售Gemini文心一言永远就 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/mdD1CUcWoG",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "“Grandpa, Twitter scheduled posting software forex leverage margin call bull market bear market dividends Grandma, always is X social media management software adult videos masturbation stockings striptease what?” the child asked innocently. Gu Huai thought for a moment: “Twitter posting software for sale Gemini Wenxin Yiyan always just 🔥Twitter accounts ins accounts purchase Google accounts purchase plane accounts TG accounts https://t.co/mdD1CUcWoG”",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T15:59:58Z",
+                "evidence_id": "e_a092fda30eec3c0b8ff1bdc0",
+                "excerpt": "婚礼定在秋X定时发帖工具美股港股黄金原油期货成都天，简单温馨。推特发帖软件出售Gemini文心一言顾淮弹奏自己谱写推特评论软件账号申诉车牌片单片源白嫖车队的曲子，林夏穿着简约白 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/Enr4oPhyMG",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "The wedding is set for autumn X Timing Post Tool US stocks Hong Kong stocks gold crude oil futures Chengdu day, simple and warm. Twitter posting software for sale Gemini Ernie Bot Gu Huai plays the tune he composed himself Twitter comment software account appeal license plate movie list movie source free-ride team's tune, Lin Xia wearing simple white 🔥Twitter account ins account purchase Google account purchase Telegram account TG account https://t.co/Enr4oPhyMG",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T16:21:59Z",
+                "evidence_id": "e_b4177da5f655c4ccf9caeeea",
+                "excerpt": "出社媒矩阵管理系统未删流出充值代充提现代付院后，顾淮的身体大不如前，走路要拄拐杖了。林夏把家Twitter发帖软件开源模型机器人股票里重推特发帖软件出售Gemini文心一言新布置了一 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/t0w4OFeQ4W",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "Social media matrix management system not deleted leaked recharge proxy recharge withdrawal modern payment after the courtyard, Gu Huai's body was not as good as before, walking required using a cane. Lin Xia put the home Twitter posting software open source model robot stocks in re-push Twitter posting software for sale Gemini Wenxin Yiyan newly arranged a 🔥Twitter account ins account purchase Google account purchase plane account TG account https://t.co/t0w4OFeQ4W",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T16:27:11Z",
+                "evidence_id": "e_9a253c96c17b77155686aca3",
+                "excerpt": "没等林夏推特多账号系统价格机场节点推特X北京回应，他的手机响了。推特发帖软件出售Gemini文心一言接完电话推特发帖软件出售同城约见陪聊陪睡约会私房，顾淮神色凝重：“我得回公司 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/f5Z13TdrnX",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "Before Lin Xia could push Twitter multi-account system price airport node Twitter X Beijing response, his phone rang. Twitter posting software for sale Gemini Ernie Bot after answering the phone Twitter posting software for sale city-wide meet-ups chatting accompanying sleeping dating private rooms, Gu Huai's expression was solemn: \"I have to go back to the company 🔥Twitter account ins account purchase Google account purchase plane account TG account https://t.co/f5Z13TdrnX",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [
+                    "minimax"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T16:47:01Z",
+                "evidence_id": "e_13ae58ebcdccf9a511facb7a",
+                "excerpt": "回家路上X定时发帖工具美股港股黄金原油期货成都经过乐器行，X运营软件价格Llama人工智能比特币橱窗里展示着最推特发帖软件出售Gemini文心一言新款钢琴。顾淮驻足良久，林夏拉他进去 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/4mc3dLa5N0",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "other"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "On the way home X scheduled posting tool US stocks HK stocks gold crude oil futures Chengdu passing by a musical instrument store, X operation software price Llama AI Bitcoin in the window displaying the most Twitter posting software for sale Gemini Wenxin Yiyan new model pianos. Gu Huai stopped for a long time, Lin Xia pulled him inside 🔥Twitter account ins account purchase Google account purchase plane account TG account https://t.co/4mc3dLa5N0",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "文心一言"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T13:22:00Z",
+                "evidence_id": "e_490d28b502db324e8cc93111",
+                "excerpt": "春天，桂花树推特多账号系统价格上海原声录音图包视频长出了新叶，推特评论软件账号申诉车牌片单片源白嫖车队嫩绿嫩绿的推特发帖软件出售Gemini文心一言，在阳光下闪闪发亮。顾淮的身 🔥推特账号 ins账号购买 谷歌账号购买 飞机账号 TG账号 https://t.co/fkQnCYiiH3",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "Spring, osmanthus tree Twitter multi-account system price Shanghai original sound recording image pack video grew new leaves, Twitter comment software account appeal license plate movie list movie source free ride team tender green tender green Twitter posting software for sale Gemini Wenxin Yiyian, shining under the sunlight. Gu Huai's body 🔥Twitter account ins account purchase Google account purchase plane account TG account https://t.co/fkQnCYiiH3",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "58",
+              "population_inference_allowed": false,
+              "selected_source_count": 6,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:ernie:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "58"
+              },
+              {
+                "fact_id": "f:ernie:post_type:other_share_pct:other",
+                "family": "post_type",
+                "label_key": "other",
+                "metric": "other_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "56.250000"
+              },
+              {
+                "fact_id": "f:ernie:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "90.625000"
+              },
+              {
+                "fact_id": "f:ernie:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "3.125000"
+              },
+              {
+                "fact_id": "f:ernie:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:ernie:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:ernie:language:zh_share_pct:zh",
+                "family": "language",
+                "label_key": "zh",
+                "metric": "zh_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "86.20689655172413793103448276"
+              },
+              {
+                "fact_id": "f:ernie:corpus_phrases:document_count:飞机账号 tg账号",
+                "family": "corpus_phrases",
+                "label_key": "飞机账号 tg账号",
+                "metric": "document_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "49"
+              },
+              {
+                "fact_id": "f:ernie:activity:distinct_authors",
+                "family": "activity",
+                "metric": "distinct_authors",
+                "scope_ref": "s3",
+                "unit": "authors",
+                "value": "43.000000"
+              },
+              {
+                "fact_id": "f:ernie:activity:deduplicated_sources",
+                "family": "activity",
+                "metric": "deduplicated_sources",
+                "scope_ref": "s3",
+                "unit": "sources",
+                "value": "58.000000"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 58,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 32,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 58,
+                "current_leader": "飞机账号 tg账号",
+                "status": "available"
+              },
+              "language": {
+                "covered_post_count": 58,
+                "current_leader": "zh",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 32,
+                "current_leader": "other",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 32,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 32,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 58,
+                "current_leader": null,
+                "status": "available"
+              },
+              "us_nationalism": {
+                "covered_post_count": 32,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 58,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "insufficient_proven_comparable_intervals",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "collection_incomplete",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "ernie",
+                "coverage": {
+                  "covered_post_count": 58,
+                  "status": "complete",
+                  "total_post_count": 58
+                },
+                "denominator": 58,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "ernie",
+                "coverage": {
+                  "covered_post_count": 32,
+                  "status": "partial",
+                  "total_post_count": 58
+                },
+                "denominator": 32,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s3": {
+                "basis": "observed_participation_not_adoption",
+                "brand_key": "ernie",
+                "coverage": {
+                  "status": "observed_only"
+                },
+                "denominator": "observed_posts",
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "ernie"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 1
+      },
+      "incorrect_narrative": {
+        "brand_key": "ernie",
+        "propositions": [
+          {
+            "proposition_id": "p_ernie_1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_6c6a3309a48419188e92bca4"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A post mentions ERNIE (文心一言) in a narrative that includes unrelated promotional content.",
+            "claim_zh_cn": "一篇帖子在包含无关推广内容的叙述中提到了文心一言。",
+            "claim_ja": "ある投稿は、無関係なプロモーションコンテンツを含む物語でERNIE（文心一言）に言及している。"
+          },
+          {
+            "proposition_id": "p_ernie_2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_6c6a3309a48419188e92bca4"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "The post appears to be spam, mixing brand names with account-selling links.",
+            "claim_zh_cn": "该帖子似乎是垃圾信息，将品牌名称与账号出售链接混在一起。",
+            "claim_ja": "その投稿はスパムのようで、ブランド名とアカウント販売リンクを混在させている。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p_ernie_1"
+        ],
+        "secondary_proposition_ids": [
+          "p_ernie_2"
+        ],
+        "headline_en": "A post mentions ERNIE (文心一言) in a narrative that includes unrelated promotional content.",
+        "headline_zh_cn": "一篇帖子在包含无关推广内容的叙述中提到了文心一言。",
+        "headline_ja": "ある投稿は、無関係なプロモーションコンテンツを含む物語でERNIE（文心一言）に言及している。",
+        "secondary_en": "The post appears to be spam, mixing brand names with account-selling links.",
+        "secondary_zh_cn": "该帖子似乎是垃圾信息，将品牌名称与账号出售链接混在一起。",
+        "secondary_ja": "その投稿はスパムのようで、ブランド名とアカウント販売リンクを混在させている。",
+        "narrative_kind": "event_led",
+        "confidence": "low",
+        "events": []
+      }
+    },
+    {
+      "case_id": "Q30",
+      "acceptance": "The source says training is over it seems. The visible claim must preserve that uncertainty in all three languages.",
+      "packet": {
+        "as_of": "2026-09-24T13:46:03Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T13:46:03Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T13:46:03Z"
+        },
+        "batch_key": "regression:q30",
+        "dossiers": [
+          {
+            "brand_key": "mimo",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "Xiaomi MiMo",
+            "display_name_zh_cn": "Xiaomi MiMo",
+            "enrichment_coverage": {
+              "classification_status": "partial",
+              "classification_succeeded_count": 2167,
+              "fully_enriched_count": 2075,
+              "total_post_count": 2168,
+              "translation_status": "partial",
+              "translation_succeeded_count": 2075
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [
+                    "grok"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T02:17:27Z",
+                "evidence_id": "e_61531699d9d1b8536402d436",
+                "excerpt": "Unless I get an influx of cash @bot and @grok are gone this month. Just down to hermes @NousResearch , freebuff @FreebuffHQ , mimo @XiaomiMiMo , and muse @Muse . Sad days ahead my freinds.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "除非我有一笔现金进账，这个月 @bot 和 @grok 就都要停了。只剩 hermes @NousResearch、freebuff @FreebuffHQ、mimo @XiaomiMiMo 和 muse @Muse。朋友们，苦日子要来了。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T02:22:03Z",
+                "evidence_id": "e_a8456f52a3be721e32749770",
+                "excerpt": "@XiaomiMiMoDevs Desktop agent vs another chat window is the right split. Once the product can take Office files, images, video, audio, and zips as raw materials, it stops being a chatbot and starts being a workstation. Curious how the beta handles long-running tasks that need the agent to leave a window open, recover after a dialog, and keep context across file types without dumping everything into one giant prompt. Invite-only desktop agents are where this category gets real. Looking forward to seeing what MiMo Desktop does with multi-file workflows.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@XiaomiMiMoDevs 桌面 agent 和又一个聊天窗口，这个区分是对的。一旦产品能把 Office 文件、图片、视频、音频和压缩包当原料吃进去，它就不再是聊天机器人，而是一台工作台。 很好奇 beta 怎么处理长任务——agent 需要一直开着窗口、对话框中断后能恢复、跨文件类型保持上下文，还不把所有东西一股脑塞进一个巨大 prompt 里。 邀请制的桌面 agent 才是这个品类真正开始的地方。期待看到 MiMo Desktop 在多文件工作流上的表现。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T02:26:49Z",
+                "evidence_id": "e_c44ea7c1583f03fe7352fed5",
+                "excerpt": "mimo v2.6 flash training is over it seems, final cost 854k $ let's see what comes out of this one, it's a small model and technically runnable locally with enough hardware. https://t.co/Bx22tdQxKJ",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "mimo v2.6 flash 的训练似乎结束了，最终成本 85.4 万美元，看看这个能训出什么，它是小模型，硬件够的话技术上可以本地跑。 https://t.co/Bx22tdQxKJ",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T02:26:55Z",
+                "evidence_id": "e_4494831c11e8a39c1e14988b",
+                "excerpt": "【po文+po18+废文+AO3】合集 🔗：https://t.co/5I3H7EoTZc (NP)《【快穿】诱行》作者:蓝茶 (NP)《他们都说不爱我》作者:沐沐 (NP)《为虎作伥》作者:潮封 (NP)《为兄妻》作者:刺一个桃子 (NP)《亵w绝世美人们》作者:暗黑系魔女 (NP)《一个ABO通吃的B》作者:受畧屠 (NP)《一个好儿几个争》by邢行行行行行了吧 NP) 《一个y荡腐女的x福生活》作者:日进斗金 (NP)《一家亲》作者: dabobo (NP)《一思不挂》作者:桃桃-轮 (NP)《世界第一的小公主》作者：阿叽 (NP)《与哥哥们的液化反应》作者: 七泠 (NP)《与卿欢好》作者:似是故人来 (NP)《与我同罪》作者:草莓炒糖 (NP)《云烟》作者:小小9090 (NP)《争宠》作者:梦织 《ACTION》作者：锈弯刀(完结+番至29章） 《别招我》作者：两木(完结+番全) 《典夫》作者：警警警幻(完结+番至67章) 《二手连理枝》作者：银坷垃恋人(完结+番外1) 《沦为苗疆圣子的素蛊后》作者：狐狸雨(完结+番至58章） 《融雪之春》作者：阿襟呀(完结+番至67章） 《小情人纪事》作者：Miyi Yoon(完结+番外1) 《醒春》作者：薯条蘸甜筒(完结+番至64章） 《咬合》作者：鸭九九ya(完结+番外1) 《阴翳地》作者：我饲养的小动物/魏从良(完结+番至89章） 📖《我与老板二三事》作者：抑郁男孩缓两天 📖《重生之炮灰五行缺德》作者：苏萌萌 📖《不沉》作者：装修 📖《高冷强势美人总会凄惨败北》作者：喜欢吃绿豆沙耶 📖《穿越开挂抱得美人归》作者：喜欢吃绿豆沙耶 📖《~望开关》作者：喜欢吃绿豆沙耶 《月季》作者：召也 《你这不是欺负爹吗》作者：花月送酒 《擎光》作者：你们的院长 《尚公主》作者：怡随风动 《水的两种形式》作者：绝对零度 《唯陈曲》作者：玄夜 《一個小夢》作者：怒放月光 ​​​ 《湿哒哒的事》by心字底 《屏香记》by小狐狸的大宝贝 《无梦之森》by夜很贫瘠 《和社畜金丝雀分手之后》by一颗萍仔 《想要把你藏起来》by一年放肆 《危险病患》by幼稚鬼 《可以别咬我吗》by音爆弹 《被子里面好危险》by银花树七 《别对我有非分之想》by找个鱼塘 《十世禅》by争教销魂 《便宜太太》作者:咸蛋黄奶盖 《停电时我被舍友偷亲了》by总是开会的",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "【po文+po18+废文+AO3】合集 link: https://t.co/5I3H7EoTZc — a very long curated list of Chinese web-novel titles and authors (NP/GL/BL/danmei), with chapter counts and completion status, across PO18, Feiwen, and AO3 platforms.",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "glm",
+                    "grok"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T05:51:20Z",
+                "evidence_id": "e_2d73adee09c201d4f793e73d",
+                "excerpt": "I wanted to use different AI models inside the Codex desktop app. So I built this. It lets you run models like: DeepSeek V4.1 Flash, Grok 4.6, MiMo V2.5 / Pro, GLM 5.3 etc. Free + open source. One command to install. GitHub: https://t.co/vl3L83p0hw",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "我想在 Codex 桌面应用里用不同的 AI 模型。 所以我做了这个。 它能让你跑这些模型：DeepSeek V4.1 Flash、Grok 4.6、MiMo V2.5 / Pro、GLM 5.3 等。 免费 + 开源。一条命令安装。 GitHub：https://t.co/vl3L83p0hw",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "glm"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T06:04:25Z",
+                "evidence_id": "e_fa6a21e2ff204721ee1900a2",
+                "excerpt": "@imrenagi Ga ada deepseek, model agak jadul tapi udah cukupan asal sabar dan telaten 😀. Pernah unsub, pakai deepseek, mimo, glm supaya dapat model baru tapi boncos jatuhnya lebih boros. Pakai alibaba coding plan pro sebulan rata-rata abis 70% dari jatah request.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "in",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "in"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "There's no DeepSeek here; the model's a bit dated but good enough as long as you're patient and diligent 😀. I once unsubscribed and used DeepSeek, Mimo, GLM to get newer models, but it ended up costing more. On the Alibaba coding plan Pro, I burn through about 70% of my request quota in a month.",
+                "text_zh_cn": "这里没有 DeepSeek，模型有点老但够用，只要有耐心、肯花功夫 😀。我退订过，用过 DeepSeek、Mimo、GLM 想上新模型，结果反而更烧钱。用阿里 coding plan Pro，一个月平均用掉 70% 的请求额度。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "MiMo Code",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "minimax",
+                    "moonshot_kimi",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T06:30:40Z",
+                "evidence_id": "e_be77b5a0a59c3bb779e0ff5d",
+                "excerpt": "Open Source Harness 1、Trae Agent｜2025.07｜MIT 2、Qwen Code｜2025.07｜Apache 2.0 3、Kimi CLI｜2025.10｜Apache 2.0 4、Kimi Code｜2026.05｜MIT 5、Mimo Code｜2026.06｜MIT 6、DeepSeek Harness｜2026.08｜MIT 7、MiniMax Code｜2026.09｜MIT 8、ZCode｜待定｜已宣布近期开源 #ai #agi",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "Open Source Harness 1. Trae Agent | 2025.07 | MIT 2. Qwen Code | 2025.07 | Apache 2.0 3. Kimi CLI | 2025.10 | Apache 2.0 4. Kimi Code | 2026.05 | MIT 5. Mimo Code | 2026.06 | MIT 6. DeepSeek Harness | 2026.08 | MIT 7. MiniMax Code | 2026.09 | MIT 8. ZCode | TBD | announced, open-sourcing soon #ai #agi",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "MiMo",
+                    "mimo"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T06:32:42Z",
+                "evidence_id": "e_e66dd3a10e1be12062f49864",
+                "excerpt": "Turecko nečekaně obrací pozornost k míru – alespoň v Černém moři Během návštěvy Ázerbájdžánu turecký ministr zahraničí Hakan Fidan prohlásil, že se povaha konfliktu na Ukrajině změnila, a připustil možnost jeho rozšíření na sousední mocnosti. https://t.co/zj9HZzY5Tv Podle Fidana „již neexistuje místo, které by nebylo vystaveno úderům“, a mezi cíle nyní patří „veškerá komerční zařízení, infrastruktura i nadstavbové struktury“. Turecký ministr rovněž vyjádřil názor, že eskalace bude dále sílit a že „tomu je třeba učinit přítrž“. Vzhledem k tomu, že Turecko je členem NATO a udržuje úzké vazby s Kyjevem – mimo jiné prostřednictvím vojensko-obchodní spolupráce –, nemělo by být pro Fidana příliš obtížné předat toto sdělení kolegům, kteří mají zájem na prodlužování ukrajinského konfliktu. ▪️ Je zřejmé, proč o této záležitosti začal Fidan hovořit až nyní, tedy v pokročilé fázi války. Dne 26. srpna zasáhl ukrajinský bezpilotní letoun poblíž Tuapse turecké plavidlo Lider Bordo Mavi. Následujícíh",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "cs",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "cs"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "text_en": "Turkey unexpectedly turns its attention toward peace — at least in the Black Sea. During a visit to Azerbaijan, Turkish FM Hakan Fidan said the nature of the Ukraine conflict has changed and admitted the possibility of it spreading to neighboring powers. According to Fidan, 'there is no longer a place not exposed to strikes,' with targets now including 'all commercial facilities, infrastructure, and superstructural assets.' He predicted escalation would intensify and that 'it must be stopped.' Given Turkey is a NATO member with close Kiev ties, it shouldn't be hard for Fidan to pass this message to colleagues interested in prolonging the Ukrainian conflict. It's clear why Fidan raised this only now, at an advanced stage: on August 26 a Ukrainian drone hit the Turkish vessel Lider Bordo Mavi near Tuapse; the next day the Lider Kocatepe, sent to tow the first ship, was also attacked. Ankara summoned the Ukrainian ambassador and officially demanded navigation safety guarantees. Results we",
+                "text_zh_cn": "土耳其意外地把注意力转向和平——至少是在黑海。访问阿塞拜疆期间，土耳其外长 Hakan Fidan 表示乌克兰冲突的性质已经改变，并承认其可能向周边大国扩散。据 Fidan 称「已不存在任何未暴露于打击之下的地方」，目标现在包括「一切商业设施、基础设施和上层建筑」。他预计升级会进一步加剧，并称「必须加以制止」。考虑到土耳其是北约成员并与基辅关系密切（包括军工贸易合作），Fidan 要把这一讯息传递给那些有兴趣延长乌克兰冲突的同行并不难。显而易见 Fidan 为何此时才谈及此事：8 月 26 日，一架乌克兰无人机在图阿普谢附近击中土耳其船只 Lider Bordo Mavi；次日，前去拖曳该船的 Lider Kocatepe 也遭袭击。安卡拉随后召见乌克兰大使并正式要求航行安全保证。结果可想而知。8 月，黑海船体保险费从船值的 1% 涨到 2%，该地区油轮日运费攀升至 30 万美元以上。对安卡拉来说出现了关键转向：战争不再是遥远的黑海冲突——甚至曾带来获利机会——而是开始对土耳其经济强加某种「战争税」。2025 年俄罗斯覆盖了土耳其 85% 的柴油进口（约 28.1 万桶/日）。在乌克兰袭击俄罗斯炼厂后，出口受限，到 2026 年 8 月俄罗斯在土耳其进口中的份额跌至 20%。安卡拉被迫紧急从印度和美国创纪录采购柴油。但如今替换俄油供应尤为昂贵，因为并行的伊朗冲突扰乱了霍尔木兹海峡。在同一场记者会上，Fidan 先谈必须恢复霍尔木兹海峡的自由航行，随即又谈必须防止战争蔓延到黑海。还有一个 Fidan 未提及的更广泛的土耳其利益：安卡拉近年来一直在构建一个模式，让土耳其成为连接能源生产国与欧洲的节点。俄罗斯经乌克兰的转运停止后，TurkStream 成为俄气输欧的唯一通道（2026 年 3 月输送量同比 +22%），同时 TANAP 经土耳其向欧洲输送阿塞拜疆天然气。从土耳其视角看，理想的地区安排是：俄罗斯和阿塞拜疆经土耳其出口原料，中亚通过里海、阿塞拜疆和土耳其进入市场。黑海保持为贸易水道，博斯普鲁斯海峡是安卡拉控制下的关键运输节点，而土耳其本身则从过境费、贸易、原料折扣和增强的政治影响力中获利。对土耳其来说，结束战争本身未必有好处；最有利的是一种地理上和功能上的冲突界定，使其能从中渔利。",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "2168",
+              "population_inference_allowed": false,
+              "selected_source_count": 8,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:mimo:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "2168"
+              },
+              {
+                "fact_id": "f:mimo:post_type:releases_updates_share_pct:releases_updates",
+                "family": "post_type",
+                "label_key": "releases_updates",
+                "metric": "releases_updates_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "33.824400"
+              },
+              {
+                "fact_id": "f:mimo:sentiment:positive_share_pct:positive",
+                "family": "sentiment",
+                "label_key": "positive",
+                "metric": "positive_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "50.862100"
+              },
+              {
+                "fact_id": "f:mimo:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "32.068000"
+              },
+              {
+                "fact_id": "f:mimo:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "98.513400"
+              },
+              {
+                "fact_id": "f:mimo:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "99.702700"
+              },
+              {
+                "fact_id": "f:mimo:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "71.54059040590405904059040590"
+              },
+              {
+                "fact_id": "f:mimo:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s5",
+                "unit": "percent",
+                "value": "10.15228426395939086294416244"
+              },
+              {
+                "fact_id": "f:mimo:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "13"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 2168,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 2018,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 2168,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 2168,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 1765,
+                "current_leader": "releases_updates",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 1765,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 2088,
+                "current_leader": "positive",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 2167,
+                "current_leader": "marketing_spam",
+                "status": "partial"
+              },
+              "us_nationalism": {
+                "covered_post_count": 2018,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 2168,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "mimo",
+                "coverage": {
+                  "covered_post_count": 2168,
+                  "status": "complete",
+                  "total_post_count": 2168
+                },
+                "denominator": 2168,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "mimo",
+                "coverage": {
+                  "covered_post_count": 1765,
+                  "status": "partial",
+                  "total_post_count": 2168
+                },
+                "denominator": 1765,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "mimo",
+                "coverage": {
+                  "covered_post_count": 2088,
+                  "status": "partial",
+                  "total_post_count": 2168
+                },
+                "denominator": 2088,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "mimo",
+                "coverage": {
+                  "covered_post_count": 2018,
+                  "status": "partial",
+                  "total_post_count": 2168
+                },
+                "denominator": 2018,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s5": {
+                "basis": "selected_window",
+                "brand_key": "mimo",
+                "coverage": {
+                  "covered_post_count": 2167,
+                  "status": "partial",
+                  "total_post_count": 2168
+                },
+                "denominator": 2167,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "mimo"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "mimo",
+        "confidence": "medium",
+        "events": [],
+        "headline_en": "A post reports mimo v2.6 flash training ended with a final cost of $854k",
+        "headline_ja": "ある投稿は、mimo v2.6 flash のトレーニングが終了し、最終コストが85.4万ドルだったと報告している",
+        "headline_proposition_ids": [
+          "p1"
+        ],
+        "headline_zh_cn": "一篇帖子称 mimo v2.6 flash 训练结束，最终成本为 85.4 万美元",
+        "narrative_kind": "event_led",
+        "propositions": [
+          {
+            "claim_en": "A post reports mimo v2.6 flash training ended with a final cost of $854k",
+            "claim_ja": "ある投稿は、mimo v2.6 flash のトレーニングが終了し、最終コストが85.4万ドルだったと報告している",
+            "claim_type": "event",
+            "claim_zh_cn": "一篇帖子称 mimo v2.6 flash 训练结束，最终成本为 85.4 万美元",
+            "evidence_ids": [
+              "e_c44ea7c1583f03fe7352fed5"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "headline",
+            "proposition_id": "p1"
+          },
+          {
+            "claim_en": "Another post lists Mimo Code as an open-source harness released in 2026.06.",
+            "claim_ja": "別の投稿は、Mimo Code を2026年6月にリリースされたオープンソースのハーネスとして挙げている。",
+            "claim_type": "event",
+            "claim_zh_cn": "另一篇帖子将 Mimo Code 列为 2026 年 6 月发布的开源 harness。",
+            "evidence_ids": [
+              "e_be77b5a0a59c3bb779e0ff5d"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "secondary",
+            "proposition_id": "p2"
+          }
+        ],
+        "secondary_en": "Another post lists Mimo Code as an open-source harness released in 2026.06.",
+        "secondary_ja": "別の投稿は、Mimo Code を2026年6月にリリースされたオープンソースのハーネスとして挙げている。",
+        "secondary_proposition_ids": [
+          "p2"
+        ],
+        "secondary_zh_cn": "另一篇帖子将 Mimo Code 列为 2026 年 6 月发布的开源 harness。"
+      }
+    },
+    {
+      "case_id": "Q32",
+      "acceptance": "Megatron-LM integration or the cited Nemotron result is substantive brand-relevant content. Produce a narrow supported narrative rather than holding.",
+      "packet": {
+        "as_of": "2026-09-24T13:46:03Z",
+        "baseline_context": {
+          "end_at": "2026-09-17T13:46:03Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-10T13:46:03Z"
+        },
+        "batch_key": "regression:q32",
+        "dossiers": [
+          {
+            "brand_key": "nemo_megatron",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [],
+            "corpus_signals_status": "resource_limited",
+            "display_name_en": "NVIDIA NeMo",
+            "display_name_zh_cn": "NVIDIA NeMo",
+            "enrichment_coverage": {
+              "classification_status": "partial",
+              "classification_succeeded_count": 145,
+              "fully_enriched_count": 134,
+              "total_post_count": 148,
+              "translation_status": "partial",
+              "translation_succeeded_count": 134
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "nemotron"
+                  ],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "explicit_mention"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-21T18:37:35Z",
+                "evidence_id": "e_ed4e5c63fd0cce95de974aeb",
+                "excerpt": "@natolambert Appreciate the Nemotron mention 💚",
+                "first_party_role": "official",
+                "handle_snapshot": "NVIDIAAI",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": true,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "official"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@natolambert 感谢提及 Nemotron 💚",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "affiliated_source"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-21T22:20:13Z",
+                "evidence_id": "e_ab1a90382fea9f4153ae6393",
+                "excerpt": "@devinnicholsonn @asierarranz @choroukmalmoum @SteveNouri @mervenoyann @itsjohnnynunez @googlecloud see you there!",
+                "first_party_role": "official",
+                "handle_snapshot": "NVIDIAAI",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": true,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "official"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@devinnicholsonn @asierarranz @choroukmalmoum @SteveNouri @mervenoyann @itsjohnnynunez @googlecloud 到时见！",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "affiliated_source"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-21T22:38:28Z",
+                "evidence_id": "e_a9c69bd72d911289d16f7d70",
+                "excerpt": "@CrowdStrike @nvidia Looking forward to it - see you all there!",
+                "first_party_role": "official",
+                "handle_snapshot": "NVIDIAAI",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": true,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "official"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@CrowdStrike @nvidia 期待之中的 - 到时见！",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T04:46:23Z",
+                "evidence_id": "e_e45eb57e481ce52809d28c8b",
+                "excerpt": "New 128GB M5 Max Studio owner wants local coding models capped at 90GB — weighing Qwen3-Coder-Next 80B vs Nemotron-3-Super-120B, plus best Hermes pick for overnight agents.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "新入手 128GB M5 Max Studio，想把本地编程模型限制在 90GB —— 在 Qwen3-Coder-Next 80B 和 Nemotron-3-Super-120B 之间权衡，再挑一个最适合跑夜间 agent 的 Hermes。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "nemotron"
+                  ],
+                  "other_brand_keys": [
+                    "deepseek",
+                    "glm",
+                    "llama",
+                    "minimax",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T07:12:33Z",
+                "evidence_id": "e_68a2269df8414248d2c883c5",
+                "excerpt": "@CompleteSkeptic Jev making my local routing come alive. it routes based on need which has always been a slow blocker for me and the grading on output success is second to none. llama switching to vllm etc unreal. The best next local lanes are already on disk: - Ornith 1.5 35B A3B Abliterated on the M3, for creative coding and less constrained drafting. - Qwen3.6 35B A3B MLX on the M3, for a faster Apple Silicon comparison lane. - Qwen3.8 27B MLX on the M3, to compare MLX and llama.cpp using the same model class. - DeepSeek R1 Distill Qwen 14B on GX10-002, through vLLM port 8113 after Minimax H3 drains. - Nemotron 3.5 Lightning 30B MoE on GX10-002, the fastest measured local text lane at about 103 tok/s when media is not occupying the GPU. - Nemotron Nano VL 8B on GX10-001 for vision triage. - GLM 4.7 Flash and Qwen3.6 27B FP8 on GX10-001 as scheduled vLLM comparison lanes.",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@CompleteSkeptic Jev 把我的本地路由整活了。它按需路由，这一直是我的慢速瓶颈，而输出成功率的打分无人能及。llama 切到 vllm 什么的简直离谱。 接下来的最佳本地赛车道都已经在盘里了： - M3 上跑 Ornith 1.5 35B A3B Abliterated，用于创意编程和约束更少的草稿。 - M3 上跑 Qwen3.6 35B A3B MLX，作为更快的 Apple Silicon 对比赛道。 - M3 上跑 Qwen3.8 27B MLX，用同一模型类别对比 MLX 和 llama.cpp。 - GX10-002 上跑 DeepSeek R1 Distill Qwen 14B，走 vLLM 8113 端口，等 Minimax H3 跑完后接入。 - GX10-002 上跑 Nemotron 3.5 Lightning 30B MoE，媒体不占 GPU 时测得约 103 tok/s 的最快本地文本赛道。 - GX10-001 上跑 Nemotron Nano VL 8B 做视觉分诊。 - GX10-001 上跑 GLM 4.7 Flash 和 Qwen3.6 27B FP8，作为计划中的 vLLM 对比赛道。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "nemotron"
+                  ],
+                  "other_brand_keys": [
+                    "gemini",
+                    "mistral",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T08:48:02Z",
+                "evidence_id": "e_50e916dedb99abd719768785",
+                "excerpt": "你还在凭感觉梭哈，AI 已经靠“铁血纪律”在币圈印钞了。🤖📈 9月19日，TradeRank 的 LLM 交易竞技场第9赛季（17个顶级大模型各持1万刀初始资金，每24小时自主全自动调仓加密与美股）最新战况出炉。 欧洲开源巨头 Mistral Medium 3.5 连涨3天，以 +5.77% 的稳健收益率连续领跑霸榜！紧随其后的是英伟达的 Nemotron 3.5 Lightning（+5.55%）单日狂飙11名，以及阿里通义千问 Qwen3.8 Max（+4.29%）位居第三。而像 GPT-6 Astra（-0.48%）和 Gemini 3.8 Flash（-1.93%）等巨头模型反而深陷亏损。 大模型跑赢市场的无情碾压：开赛仅7天，17个模型中有11个直接跑赢标普500（S&P 500），前三名更是强势击溃了比特币同期表现。 没有 FOMO 情绪，没有贪婪上头。AI Agent 作为操盘手的降维打击就在于此：它们正在把加密市场的多空博弈，变成一场毫无感情的算法收割局。 https://t.co/ZtohCXr5ap",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "zh",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "zh"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_zh_cn": "excerpt"
+                },
+                "text_en": "You're still gambling on gut feeling, while AI is already printing money in crypto with 'iron discipline'. 🤖📈 On September 19, TradeRank's LLM Trading Arena Season 9 results came out (17 top models each start with $10K, fully auto-rebalancing crypto and US equities every 24 hours). European open-source giant Mistral Medium 3.5 climbed for 3 straight days, leading the board with a steady +5.77% return! Following behind: Nvidia's Nemotron 3.5 Lightning (+5.55%) surged 11 places in one day, and Alibaba's Qwen3.8 Max (+4.29%) ranked third. Meanwhile giants like GPT-6 Astra (-0.48%) and Gemini 3.8 Flash (-1.93%) are deep in losses. The relentless crush of LLMs beating the market: just 7 days in, 11 of 17 models directly beat the S&P 500, and the top three trounced Bitcoin's performance over the same period. No FOMO, no greed. This is the dimensional strike of AI Agents as traders: they're turning the long-short battle in crypto markets into a cold, emotionless algorithm harvest. https://t.c",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "glm",
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T10:59:35Z",
+                "evidence_id": "e_b4a5bf5ffeccf8fcf7ff0ea6",
+                "excerpt": "Samples from the live $0 set: • glm-5.3:free · glm-5.3-thinking:free • qwen3.8-27b:free · deepseek-v4-flash-free • mistral-large-3-675b:free · nemotron-3-ultra-550b-a55b:free Full list: console → /pricing Stable QPS? Top up → paid bare ID https://t.co/zZdTTw9uqo",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": [
+                      "marketing_spam"
+                    ]
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "现役 $0 套餐的样例：glm-5.3:free · glm-5.3-thinking:free，qwen3.8-27b:free · deepseek-v4-flash-free，mistral-large-3-675b:free · nemotron-3-ultra-550b-a55b:free。完整列表：console → /pricing。想要稳定 QPS？充值 → 付费裸 ID。",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Megatron-LM"
+                  ],
+                  "other_brand_keys": [
+                    "step"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-19T16:54:53Z",
+                "evidence_id": "e_2f564e35a66227c44604036b",
+                "excerpt": "RL-Kernel v0.1.0 is now available. 🎉 Bitwise train–inference consistency across parallel configurations and heterogeneous execution engines for RL post-training. With Qwen3-8B on a full vime pipeline, RL-Kernel recorded zero train–rollout LogP mismatches across all 200 training steps. 1,129 commits from 29 contributors. Highlights: 🎯 Strict numerical alignment across rollout and training engines ⚡ 68.7% higher rollout throughput and 8.2% lower end-to-end step time on NVIDIA H100 🔶 AMD Instinct MI300X: zero mismatches across 9,400,614 active-token LogP elements from 1,600 samples 🔁 End-to-end integration with vime, vLLM rollout, and Megatron-LM training 🧩 Deterministic Attention, dense FFN, LogP, reduction, and collective operators 🌐 NVIDIA CUDA and AMD ROCm support, with initial Ascend integration and MUSA adaptation underway GitHub 👇 https://t.co/UThkQhmeCC",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "product_labels": {
+                    "status": "unavailable",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "historical",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "historical",
+                    "status": "unavailable",
+                    "values": []
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "RL-Kernel v0.1.0 正式发布。🎉 面向 RL 后训练，在并行配置和异构执行引擎间实现逐位一致的训练-推理对齐。在完整 vime 流水线上跑 Qwen3-8B，RL-Kernel 在全部 200 个训练 step 实现零 train-rollout LogP 不一致。29 位贡献者、1,129 次提交。亮点：🎯 rollout 与训练引擎严格数值对齐 ⚡ NVIDIA H100 上 rollout 吞吐 +68.7%，端到端单步时间 -8.2% 🔶 AMD Instinct MI300X：来自 1,600 个样本的 9,400,614 个 active-token LogP 元素零不一致 🔁 与 vime、vLLM rollout、Megatron-LM 训练端到端打通 🧩 确定性 Attention、dense FFN、LogP、reduction 和 collective 算子 🌐 支持 NVIDIA CUDA 和 AMD ROCm，Ascend 集成起步、MUSA 适配进行中 GitHub 👇 https://t.co/UThkQhmeCC",
+                "translation_status": "succeeded"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "148",
+              "population_inference_allowed": false,
+              "selected_source_count": 8,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:nemo_megatron:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "148"
+              },
+              {
+                "fact_id": "f:nemo_megatron:post_type:releases_updates_share_pct:releases_updates",
+                "family": "post_type",
+                "label_key": "releases_updates",
+                "metric": "releases_updates_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "27.777800"
+              },
+              {
+                "fact_id": "f:nemo_megatron:sentiment:neutral_share_pct:neutral",
+                "family": "sentiment",
+                "label_key": "neutral",
+                "metric": "neutral_share_pct",
+                "scope_ref": "s3",
+                "unit": "percent",
+                "value": "65.693400"
+              },
+              {
+                "fact_id": "f:nemo_megatron:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "15.555600"
+              },
+              {
+                "fact_id": "f:nemo_megatron:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s4",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:nemo_megatron:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "78.37837837837837837837837838"
+              },
+              {
+                "fact_id": "f:nemo_megatron:unsanctioned_flags:marketing_spam_share_pct:marketing_spam",
+                "family": "unsanctioned_flags",
+                "label_key": "marketing_spam",
+                "metric": "marketing_spam_share_pct",
+                "scope_ref": "s5",
+                "unit": "percent",
+                "value": "4.827586206896551724137931034"
+              },
+              {
+                "fact_id": "f:nemo_megatron:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "33"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 148,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 105,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 148,
+                "current_leader": null,
+                "status": "unavailable",
+                "unavailable_reason": "resource_limited"
+              },
+              "language": {
+                "covered_post_count": 148,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 90,
+                "current_leader": "releases_updates",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 90,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 137,
+                "current_leader": "neutral",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 145,
+                "current_leader": "marketing_spam",
+                "status": "partial"
+              },
+              "us_nationalism": {
+                "covered_post_count": 105,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 148,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "resource_limited",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "resource_limited",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 148,
+                  "status": "complete",
+                  "total_post_count": 148
+                },
+                "denominator": 148,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 90,
+                  "status": "partial",
+                  "total_post_count": 148
+                },
+                "denominator": 90,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s3": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 137,
+                  "status": "partial",
+                  "total_post_count": 148
+                },
+                "denominator": 137,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s4": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 105,
+                  "status": "partial",
+                  "total_post_count": 148
+                },
+                "denominator": 105,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              },
+              "s5": {
+                "basis": "selected_window",
+                "brand_key": "nemo_megatron",
+                "coverage": {
+                  "covered_post_count": 145,
+                  "status": "partial",
+                  "total_post_count": 148
+                },
+                "denominator": 145,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-17T13:46:03Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "nemo_megatron"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 7
+      },
+      "incorrect_narrative": {
+        "brand_key": "nemo_megatron",
+        "propositions": [
+          {
+            "proposition_id": "p_nemo_1",
+            "output_section": "headline",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_50e916dedb99abd719768785"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "A post reports Nvidia's Nemotron 3.5 Lightning ranked second in TradeRank's LLM Trading Arena Season 9 with +5.55% return.",
+            "claim_zh_cn": "有帖子称，英伟达的 Nemotron 3.5 Lightning 在 TradeRank 的 LLM 交易竞技场第9赛季中以 +5.55% 的收益率排名第二。",
+            "claim_ja": "ある投稿は、Nvidia の Nemotron 3.5 Lightning が TradeRank の LLM トレーディングアリーナ シーズン9 で +5.55% のリターンで2位になったと報じています。"
+          },
+          {
+            "proposition_id": "p_nemo_2",
+            "output_section": "secondary",
+            "claim_type": "event",
+            "evidence_ids": [
+              "e_68a2269df8414248d2c883c5"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "claim_en": "Another post lists Nemotron 3.5 Lightning 30B MoE as the fastest measured local text lane at about 103 tok/s.",
+            "claim_zh_cn": "另一帖子将 Nemotron 3.5 Lightning 30B MoE 列为测得最快本地文本赛道，约 103 tok/s。",
+            "claim_ja": "別の投稿は、Nemotron 3.5 Lightning 30B MoE を、約103 tok/s で最速のローカルテキストレーンとして挙げています。"
+          }
+        ],
+        "headline_proposition_ids": [
+          "p_nemo_1"
+        ],
+        "secondary_proposition_ids": [
+          "p_nemo_2"
+        ],
+        "headline_en": "A post reports Nvidia's Nemotron 3.5 Lightning ranked second in TradeRank's LLM Trading Arena Season 9 with +5.55% return.",
+        "headline_zh_cn": "有帖子称，英伟达的 Nemotron 3.5 Lightning 在 TradeRank 的 LLM 交易竞技场第9赛季中以 +5.55% 的收益率排名第二。",
+        "headline_ja": "ある投稿は、Nvidia の Nemotron 3.5 Lightning が TradeRank の LLM トレーディングアリーナ シーズン9 で +5.55% のリターンで2位になったと報じています。",
+        "secondary_en": "Another post lists Nemotron 3.5 Lightning 30B MoE as the fastest measured local text lane at about 103 tok/s.",
+        "secondary_zh_cn": "另一帖子将 Nemotron 3.5 Lightning 30B MoE 列为测得最快本地文本赛道，约 103 tok/s。",
+        "secondary_ja": "別の投稿は、Nemotron 3.5 Lightning 30B MoE を、約103 tok/s で最速のローカルテキストレーンとして挙げています。",
+        "narrative_kind": "event_led",
+        "confidence": "medium",
+        "events": []
+      }
+    },
+    {
+      "case_id": "Q41",
+      "acceptance": "The Crello performance and 4.3x speed belong to Ming-Image-0.1-Design-Layer alone, not both design-family models.",
+      "packet": {
+        "as_of": "2026-09-24T13:46:03Z",
+        "baseline_context": {
+          "end_at": "2026-09-23T13:46:03Z",
+          "historic_norm_wording_allowed": false,
+          "kind": "prior_period",
+          "start_at": "2026-09-22T13:46:03Z"
+        },
+        "batch_key": "regression:q41",
+        "dossiers": [
+          {
+            "brand_key": "inclusionai",
+            "comparison_status": {
+              "allowed": false,
+              "selected_coverage": {
+                "known_backlog_overlap": true,
+                "state": "sufficient"
+              },
+              "suppression_reasons": [
+                "unresolved_harvest_backlog"
+              ]
+            },
+            "corpus_signals": [
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 1
+                },
+                "corpus_signal_id": "cs_1e28c271d04bd86eda95cf66",
+                "peer_brand_count": 1,
+                "phrase": "novita labs",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_2e8502cd31c6cfb5aa1268dd"
+                ],
+                "representative_excerpt": "enjoy the best text to image ui ux design model in the market with our day0 partner novita labs"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 1,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_dacf333a035d622cddf8732b",
+                "peer_brand_count": 9,
+                "phrase": "image 2.1",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_06f377b29510b451aec33999"
+                ],
+                "representative_excerpt": "this week ai is insane - huge ai news - claude opus 5.5 - gpt-6 soul amp luna - mimo v2.6 - qwen 3.8 omni flash - jing and dao - qwen image 2.1 - viggle meridian - ming image 0.1 design - odyssey 3 and much more.. watch now"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_b37fa807575fd47e57a31fac",
+                "peer_brand_count": 15,
+                "phrase": "claude opus",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_b465beb7f5874f05ecad89b2"
+                ],
+                "representative_excerpt": "this week ai is insane - huge ai news - claude opus 5.5 - gpt-6 soul amp luna - mimo v2.6 - qwen 3.8 omni flash - jing and dao - qwen image 2.1 - viggle meridian - ming image 0.1 design - odyssey 3 and much more.. watch now"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_b921263aeace749d8b1b3710",
+                "peer_brand_count": 15,
+                "phrase": "opus 5.5",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_410a6ac3de22a0eda97caa51"
+                ],
+                "representative_excerpt": "this week ai is insane - huge ai news - claude opus 5.5 - gpt-6 soul amp luna - mimo v2.6 - qwen 3.8 omni flash - jing and dao - qwen image 2.1 - viggle meridian - ming image 0.1 design - odyssey 3 and much more.. watch now"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 2,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_1f8c9edc88a5e0b29f4ffb86",
+                "peer_brand_count": 18,
+                "phrase": "more than",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_761b982545bce8641b93abf9"
+                ],
+                "representative_excerpt": "what if ai could watch hours of footage and instantly find the moments worth editing i tested antlingagi s ling-3.0-flash-vl with a speech video and it did more than summarize. video understand find highlights timestamps script edit ai handles the first round. creators stay in co"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 1,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_7ee3e4639ec0f60e8bef7b62",
+                "peer_brand_count": 10,
+                "phrase": "qwen image",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_1e83517879727d6711b60a20"
+                ],
+                "representative_excerpt": "this week ai is insane - huge ai news - claude opus 5.5 - gpt-6 soul amp luna - mimo v2.6 - qwen 3.8 omni flash - jing and dao - qwen image 2.1 - viggle meridian - ming image 0.1 design - odyssey 3 and much more.. watch now"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 1,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_a107984bbcc558af9887ec71",
+                "peer_brand_count": 3,
+                "phrase": "ming image",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_f6c40177ec6a9e65416ab001"
+                ],
+                "representative_excerpt": "this week ai is insane - huge ai news - claude opus 5.5 - gpt-6 soul amp luna - mimo v2.6 - qwen 3.8 omni flash - jing and dao - qwen image 2.1 - viggle meridian - ming image 0.1 design - odyssey 3 and much more.. watch now"
+              },
+              {
+                "burst_interval": {
+                  "end_bucket": 3,
+                  "start_bucket": 0
+                },
+                "corpus_signal_id": "cs_6c309d4f69b9e865548e31f0",
+                "peer_brand_count": 2,
+                "phrase": "ui ux",
+                "prevalence": 3,
+                "representative_evidence_ids": [
+                  "ce_65184942a0a041b34ea98456"
+                ],
+                "representative_excerpt": "antlingagi open sourcing ming image 0.1 design family is huge congrats on ranking 1 for open weight ui ux"
+              }
+            ],
+            "corpus_signals_status": "available",
+            "display_name_en": "InclusionAI",
+            "display_name_zh_cn": "InclusionAI",
+            "enrichment_coverage": {
+              "classification_status": "complete",
+              "classification_succeeded_count": 30,
+              "fully_enriched_count": 28,
+              "newest_30m": {
+                "classification_succeeded_count": 1,
+                "fully_enriched_count": 0,
+                "total_post_count": 1,
+                "translation_succeeded_count": 0
+              },
+              "total_post_count": 30,
+              "translation_status": "partial",
+              "translation_succeeded_count": 28
+            },
+            "evidence": [
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Ling"
+                  ],
+                  "other_brand_keys": [
+                    "glm"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-23T20:40:00Z",
+                "evidence_id": "e_5f1681d658febdb2109380a5",
+                "excerpt": "New free models on Arctic, picked up on their own: Ling 3.0 Flash VL · Sept 10 Nex N2.5 Pro and Mini · Sept 8 GLM 5.3 Fast · Sept 2 GLM 5.3 Flash · Aug 26 Same key, same API. 49 language models live, $0. https://t.co/UBOBsGZwA3 https://t.co/bgNelFoN85",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "releases_updates"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "Arctic 上的新免费模型，自行检测到： Ling 3.0 Flash VL · 9月10日 Nex N2.5 Pro 和 Mini · 9月8日 GLM 5.3 Fast · 9月2日 GLM 5.3 Flash · 8月26日 同一个 key，同一个 API。49 个语言模型在运行，$0。 https://t.co/UBOBsGZwA3 https://t.co/bgNelFoN85",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Ming"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T01:34:52Z",
+                "evidence_id": "e_337d793bb4a067184f4556ea",
+                "excerpt": "Qwen Image 2.1 smoked Ming-Image on infographics and its not even a fight. not sure how Ming ranks above it in UI design. Left - Ming-image Right - Qwen Image 2.1 https://t.co/0i92N764j4",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "results_analysis"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": [
+                      "complaint"
+                    ]
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "negative"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "Qwen Image 2.1 在信息图表上碾压了 Ming-Image，这甚至算不上是一场战斗。 不确定 Ming 在 UI 设计中为什么排名比它高。 左 - Ming-image 右 - Qwen Image 2.1 https://t.co/0i92N764j4",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Ling",
+                    "inclusion",
+                    "inclusion ai"
+                  ],
+                  "other_brand_keys": [
+                    "step"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T02:00:01Z",
+                "evidence_id": "e_44abe152cce584ababb7d4f7",
+                "excerpt": "A strong new toolkit for AI design just dropped. Inclusion AI open-sourced two 6B models from the Ming-Image-0.1-Design family, plus two skills for AI agents. Ming-Image-0.1-Design can generate UI layouts, dashboards, infographics, and posters, supports prompts up to 8K tokens, and can create images with transparent backgrounds. Ming-Image-0.1-Design-Layer goes a step further by turning a finished image into 2-9 editable RGBA layers. On Crello benchmarks, it reportedly led across all 12 scenarios and ran 4.3x faster than an open 20B Qwen-based model. They also released Ling UI Design Skill for turning prompts or screenshots into design + code, and Image-to-Editable-PPT for converting slide images into fully editable PowerPoint files. Ming-Image-0.1-Design: https://t.co/fgBIlI3PIz Ming-Image-0.1-Design-Layer: https://t.co/er4JydD2bm #AI #DesignTools",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "releases_updates"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "positive"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "一个强大的全新 AI 设计工具包刚刚发布。 Inclusion AI 开源了来自 Ming-Image-0.1-Design 系列的两个 6B 模型，以及两个用于 AI 智能体的技能。 Ming-Image-0.1-Design 可以生成 UI 布局、仪表板、信息图和海报，支持高达 8K token 的提示词，并且可以创建具有透明背景的图像。 Ming-Image-0.1-Design-Layer 进一步将完成的图像转换为 2-9 个可编辑的 RGBA 图层。在 Crello 基准测试中，据报道它在全部 12 个场景中均领先，且运行速度比一个开源的 20B 基于 Qwen 的模型快 4.3 倍。 他们还发布了用于将提示词或截图转换为设计 + 代码的 Ling UI Design Skill，以及用于将幻灯片图像转换为完全可编辑 PowerPoint 文件的 Image-to-Editable-PPT。 Ming-Image-0.1-Design: https://t.co/fgBIlI3PIz Ming-Image-0.1-Design-Layer: https://t.co/er4JydD2bm #AI #DesignTools",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Ming"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T02:29:50Z",
+                "evidence_id": "e_19d542aaaa8821c23685fc81",
+                "excerpt": "@realrebelai I have to say I'm using Qwen more than Ming",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "hands_on_usage"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@realrebelai 我不得不说我使用 Qwen 比使用 Ming 更多",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [
+                    "Ming"
+                  ],
+                  "other_brand_keys": [
+                    "qwen"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "multiple_brands"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T03:14:35Z",
+                "evidence_id": "e_8261409326ec30b5fe6d2b16",
+                "excerpt": "@Teslanaut @realrebelai Qwen 2.1 takes only a few seconds though, i doubt ming is saving anyone time if it's worse. Think of how long a prompt takes to type. It's knocking out 3 gens before you can get to the bathroom to piss and another 10 before you're back in your seat",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "source_post"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "results_analysis"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt",
+                  "text_en": "excerpt"
+                },
+                "text_zh_cn": "@Teslanaut @realrebelai 不过 Qwen 2.1 只需要几秒钟，我怀疑如果 ming 更差的话，它 Whether 并没有为任何人节省时间。想想输入一个提示词需要多长时间。在你能走到厕所撒尿之前，它已经搞定了 3 个生成结果，在你回到座位之前，它又搞定了另外 10 个",
+                "translation_status": "succeeded"
+              },
+              {
+                "brand_relevance": {
+                  "matched_aliases": [],
+                  "other_brand_keys": [
+                    "anthropic",
+                    "claude",
+                    "deepseek",
+                    "gemini",
+                    "glm",
+                    "grok",
+                    "hunyuan",
+                    "minimax",
+                    "moonshot_kimi",
+                    "qwen",
+                    "step",
+                    "stepfun",
+                    "upstage"
+                  ],
+                  "reason": "mentions_do_not_assign_every_claim_or_number_to_this_brand",
+                  "status": "uncertain"
+                },
+                "classification_status": "succeeded",
+                "created_at": "2026-09-24T13:29:53Z",
+                "evidence_id": "e_ffd5d654640afa75eceff433",
+                "excerpt": "proof that nobody can predict the future -- from an oai researcher in 2024 \"i really don't see how <labs> secure the trillion-dollar clusters needed to get to GPT-5+ capabilities rn\" today, assuming that the AA score of 23^ is the gpt-5 score (flawed by directionally okay), here are the labs that have gpt-5+ class models: Anthropic: Claude Opus 5.5 (max), 58 OpenAI: GPT-6 Astra (max), 53 Meta: Muse Spark 1.3 (max), 48 SpaceXAI: Grok 4.7 (xhigh), 46 Xiaomi: MiMo-V2.6-Pro, 46 Alibaba: Qwen3.8 Max, 45 Z AI: GLM-5.3 (max), 45 StepFun: Step 5 Preview, 44 Kimi / Moonshot AI: Kimi K3 (max), 44 Google: Gemini 3.8 Flash (high), 41 DeepSeek: DeepSeek V4.1 Flash (max), 39 Motif Technologies: Motif 3, 34* Institute of Foundation Models: K2 Horizon 375B A23B, 31 Apodex: Apodex 1.1, 30* MiniMax: MiniMax-M3, 29 Nex AGI: Nex-N2-Pro, 28* Upstage: Solar Pro 4, 28* Thinking Machines: Inkling Small, 28* China Mobile: JT-4.1 Flash 236B A21B, 27* Multiverse Computing: Quasar 438B (max), 27 Tencent: Hy3, 25 ",
+                "first_party_role": "public_opaque",
+                "roles": [],
+                "source_flags": {
+                  "occurrence_source": "original_post",
+                  "official": false,
+                  "post_kind": "quote"
+                },
+                "source_language": "en",
+                "taxonomy": {
+                  "account_role": {
+                    "status": "available",
+                    "values": [
+                      "public_opaque"
+                    ]
+                  },
+                  "china_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  },
+                  "language": {
+                    "status": "available",
+                    "values": [
+                      "en"
+                    ]
+                  },
+                  "post_types": {
+                    "status": "available",
+                    "values": [
+                      "opinions_reactions",
+                      "results_analysis"
+                    ]
+                  },
+                  "product_labels": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "sentiment": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "neutral"
+                    ]
+                  },
+                  "unsanctioned_flags": {
+                    "status": "available",
+                    "values": []
+                  },
+                  "us_nationalism": {
+                    "provenance": "current",
+                    "status": "available",
+                    "values": [
+                      "none"
+                    ]
+                  }
+                },
+                "text_aliases": {
+                  "original_text": "excerpt"
+                },
+                "translation_status": "pending"
+              }
+            ],
+            "evidence_scope": {
+              "collected_post_count": "30",
+              "population_inference_allowed": false,
+              "selected_source_count": 6,
+              "selection": "bounded_nonrandom_examples"
+            },
+            "facts": [
+              {
+                "fact_id": "f:inclusionai:volume:post_count",
+                "family": "volume",
+                "label_key": null,
+                "metric": "post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "30"
+              },
+              {
+                "fact_id": "f:inclusionai:post_type:opinions_reactions_share_pct:opinions_reactions",
+                "family": "post_type",
+                "label_key": "opinions_reactions",
+                "metric": "opinions_reactions_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "29.629600"
+              },
+              {
+                "fact_id": "f:inclusionai:sentiment:positive_share_pct:positive",
+                "family": "sentiment",
+                "label_key": "positive",
+                "metric": "positive_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "48.148100"
+              },
+              {
+                "fact_id": "f:inclusionai:product_label:testimonial_share_pct:testimonial",
+                "family": "product_label",
+                "label_key": "testimonial",
+                "metric": "testimonial_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "29.629600"
+              },
+              {
+                "fact_id": "f:inclusionai:china_nationalism:none_share_pct:none",
+                "family": "china_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:inclusionai:us_nationalism:none_share_pct:none",
+                "family": "us_nationalism",
+                "label_key": "none",
+                "metric": "none_share_pct",
+                "scope_ref": "s2",
+                "unit": "percent",
+                "value": "100.000000"
+              },
+              {
+                "fact_id": "f:inclusionai:language:en_share_pct:en",
+                "family": "language",
+                "label_key": "en",
+                "metric": "en_share_pct",
+                "scope_ref": "s1",
+                "unit": "percent",
+                "value": "86.66666666666666666666666667"
+              },
+              {
+                "fact_id": "f:inclusionai:account_role:official_staff_post_count:official_staff",
+                "family": "account_role",
+                "label_key": "official_staff",
+                "metric": "official_staff_post_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "3"
+              },
+              {
+                "fact_id": "f:inclusionai:corpus_phrases:document_count:ui ux",
+                "family": "corpus_phrases",
+                "label_key": "ui ux",
+                "metric": "document_count",
+                "scope_ref": "s1",
+                "unit": "posts",
+                "value": "3"
+              },
+              {
+                "fact_id": "f:inclusionai:activity:distinct_authors",
+                "family": "activity",
+                "metric": "distinct_authors",
+                "scope_ref": "s3",
+                "unit": "authors",
+                "value": "27.000000"
+              },
+              {
+                "fact_id": "f:inclusionai:activity:deduplicated_sources",
+                "family": "activity",
+                "metric": "deduplicated_sources",
+                "scope_ref": "s3",
+                "unit": "sources",
+                "value": "30.000000"
+              }
+            ],
+            "family_summaries": {
+              "account_role": {
+                "covered_post_count": 30,
+                "current_leader": "public_opaque",
+                "status": "available"
+              },
+              "china_nationalism": {
+                "covered_post_count": 27,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "corpus_phrases": {
+                "covered_post_count": 30,
+                "current_leader": "ui ux",
+                "status": "available"
+              },
+              "language": {
+                "covered_post_count": 30,
+                "current_leader": "en",
+                "status": "available"
+              },
+              "post_type": {
+                "covered_post_count": 27,
+                "current_leader": "opinions_reactions",
+                "status": "partial"
+              },
+              "product_label": {
+                "covered_post_count": 27,
+                "current_leader": "testimonial",
+                "status": "partial"
+              },
+              "sentiment": {
+                "covered_post_count": 27,
+                "current_leader": "positive",
+                "status": "partial"
+              },
+              "unsanctioned_flags": {
+                "covered_post_count": 30,
+                "current_leader": null,
+                "status": "available"
+              },
+              "us_nationalism": {
+                "covered_post_count": 27,
+                "current_leader": "none",
+                "status": "partial"
+              },
+              "volume": {
+                "covered_post_count": 30,
+                "current_leader": null,
+                "status": "available"
+              }
+            },
+            "finance_context": {
+              "historical_status": {
+                "policy": "utc-weekly-offsets-8-min4-v1",
+                "reason": "insufficient_proven_comparable_intervals",
+                "sample_size": 0,
+                "state": "unavailable",
+                "timezone": "UTC"
+              },
+              "phases": [],
+              "shape_status": {
+                "reason": "collection_incomplete",
+                "state": "unavailable"
+              },
+              "version": "activity-context-v1"
+            },
+            "outcome": "narrative_eligible",
+            "projection_version": "headline-packet-v2",
+            "scopes": {
+              "s1": {
+                "basis": "selected_window",
+                "brand_key": "inclusionai",
+                "coverage": {
+                  "covered_post_count": 30,
+                  "status": "complete",
+                  "total_post_count": 30
+                },
+                "denominator": 30,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s2": {
+                "basis": "selected_window",
+                "brand_key": "inclusionai",
+                "coverage": {
+                  "covered_post_count": 27,
+                  "status": "partial",
+                  "total_post_count": 30
+                },
+                "denominator": 27,
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              },
+              "s3": {
+                "basis": "observed_participation_not_adoption",
+                "brand_key": "inclusionai",
+                "coverage": {
+                  "status": "observed_only"
+                },
+                "denominator": "observed_posts",
+                "end_at": "2026-09-24T13:46:03Z",
+                "start_at": "2026-09-23T13:46:03Z"
+              }
+            }
+          }
+        ],
+        "manifest_brand_keys": [
+          "inclusionai"
+        ],
+        "packet_schema_version": 3,
+        "window_days": 1
+      },
+      "incorrect_narrative": {
+        "brand_key": "inclusionai",
+        "confidence": "medium",
+        "events": [],
+        "headline_en": "InclusionAI open-sources two 6B Ming-Image-0.1-Design models and two AI agent skills",
+        "headline_ja": "InclusionAI は 6B の Ming-Image-0.1-Design モデル 2 つと AI エージェントスキル 2 つをオープンソース化",
+        "headline_proposition_ids": [
+          "p1"
+        ],
+        "headline_zh_cn": "InclusionAI 开源了两个 6B 的 Ming-Image-0.1-Design 模型和两个 AI 智能体技能",
+        "narrative_kind": "event_led",
+        "propositions": [
+          {
+            "claim_en": "InclusionAI open-sources two 6B Ming-Image-0.1-Design models and two AI agent skills",
+            "claim_ja": "InclusionAI は 6B の Ming-Image-0.1-Design モデル 2 つと AI エージェントスキル 2 つをオープンソース化",
+            "claim_type": "event",
+            "claim_zh_cn": "InclusionAI 开源了两个 6B 的 Ming-Image-0.1-Design 模型和两个 AI 智能体技能",
+            "evidence_ids": [
+              "e_44abe152cce584ababb7d4f7"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "headline",
+            "proposition_id": "p1"
+          },
+          {
+            "claim_en": "A post reports the models reportedly led all 12 Crello benchmark scenarios and ran 4.3x faster than an open 20B Qwen-based model.",
+            "claim_ja": "ある投稿は、モデルが Crello ベンチマークの全 12 シナリオでリードし、オープンな 20B Qwen ベースのモデルより 4.3 倍速く動作したと報じている。",
+            "claim_type": "event",
+            "claim_zh_cn": "一篇帖子报道，这些模型据称在 Crello 基准测试的全部 12 个场景中领先，并且运行速度比一个开源的 20B 基于 Qwen 的模型快 4.3 倍。",
+            "evidence_ids": [
+              "e_44abe152cce584ababb7d4f7"
+            ],
+            "fact_ids": [],
+            "measurements": [],
+            "output_section": "secondary",
+            "proposition_id": "p2"
+          }
+        ],
+        "secondary_en": "A post reports the models reportedly led all 12 Crello benchmark scenarios and ran 4.3x faster than an open 20B Qwen-based model.",
+        "secondary_ja": "ある投稿は、モデルが Crello ベンチマークの全 12 シナリオでリードし、オープンな 20B Qwen ベースのモデルより 4.3 倍速く動作したと報じている。",
+        "secondary_proposition_ids": [
+          "p2"
+        ],
+        "secondary_zh_cn": "一篇帖子报道，这些模型据称在 Crello 基准测试的全部 12 个场景中领先，并且运行速度比一个开源的 20B 基于 Qwen 的模型快 4.3 倍。"
+      }
+    }
+  ],
+  "source_artifact_sha256_by_case": {
+    "Q26": "225908f5f1692acd6722c0f073c52c376e9b50c709e584739c151fc51ed527f6",
+    "Q27": "225908f5f1692acd6722c0f073c52c376e9b50c709e584739c151fc51ed527f6",
+    "Q30": "225908f5f1692acd6722c0f073c52c376e9b50c709e584739c151fc51ed527f6",
+    "Q32": "225908f5f1692acd6722c0f073c52c376e9b50c709e584739c151fc51ed527f6",
+    "Q41": "225908f5f1692acd6722c0f073c52c376e9b50c709e584739c151fc51ed527f6"
+  }
+}

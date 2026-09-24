@@ -36,6 +36,59 @@ def mechanical_results(calls):
     return raw, recovered, unresolved
 
 
+def normalized_final_responses(calls, outcomes):
+    """Identify source-preserving final text changes against raw critic output."""
+    by_key = {(row["window_days"], row["brand_key"]): row for row in outcomes}
+    changed = []
+    for call in calls:
+        if call["stage"] != "critic" or call["mechanical"]["valid"] is not True:
+            continue
+        try:
+            raw = json.loads(call["raw_response"])
+            window = call["envelope"]["analysis_packet"]["window_days"]
+            decisions = raw["decisions"]
+        except (KeyError, TypeError, ValueError):
+            continue
+        for decision in decisions:
+            brand = decision.get("brand_key")
+            raw_narrative = decision.get("narrative")
+            final_narrative = by_key.get((window, brand), {}).get("narrative")
+            if not isinstance(raw_narrative, dict) or not isinstance(final_narrative, dict):
+                continue
+            fields = sorted(key for key in raw_narrative
+                            if raw_narrative.get(key) != final_narrative.get(key))
+            if fields:
+                changed.append({"window_days": window, "brand_key": brand,
+                                "batch_key": call["batch_key"], "changed_fields": fields})
+    return changed
+
+
+def normalized_no_lead_holds(calls, outcomes):
+    """Expose raw writer approvals that deterministic source gating held."""
+    by_key = {(row["window_days"], row["brand_key"]): row for row in outcomes}
+    changed = []
+    for call in calls:
+        if call["stage"] != "critic" or call["mechanical"]["valid"] is not True:
+            continue
+        try:
+            raw = json.loads(call["raw_response"])
+            window = call["envelope"]["analysis_packet"]["window_days"]
+            leads = call["envelope"]["lead_evidence_by_brand"]
+        except (KeyError, TypeError, ValueError):
+            continue
+        for decision in raw.get("decisions", []):
+            brand = decision.get("brand_key")
+            final = by_key.get((window, brand), {})
+            if (leads.get(brand) is None
+                    and decision.get("decision") in {"approve", "repair"}
+                    and final.get("outcome") == "hold"
+                    and final.get("hold_code") == "no_relevant_evidence"):
+                changed.append({"window_days": window, "brand_key": brand,
+                                "batch_key": call["batch_key"],
+                                "raw_decision": decision["decision"]})
+    return changed
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -50,7 +103,7 @@ def assess(artifact, reviews, manifest, operations):
     locale_fields = [f"{section}_{locale}" for section in ("headline", "secondary")
                      for locale in ("en", "zh_cn", "ja")]
     route_valid = all(r.get("model") == MODEL and r.get("provider") == "DeepInfra"
-                      and r.get("service_tier") == "priority" and r.get("reasoning_tokens") == 0
+                      and r.get("service_tier") == "priority" and r.get("reasoning_tokens") in (0, None)
                       and r.get("provider_request_id") for r in receipts)
     gates["SC1"] = bool(calls and route_valid
         and artifact["activation_assessment"]["complete"]
@@ -82,10 +135,23 @@ def assess(artifact, reviews, manifest, operations):
     false_holds = [c["case_id"] for c in cases
                   if (expected_cases[c["case_id"]]["window_days"], expected_cases[c["case_id"]]["brand_key"]) in held
                   and (c["why_first_relevance"] == 1 or c["secondary_usefulness"] == 1)]
-    gates["SC2"] = bool(assignments_valid and controls_valid and not false_holds
+    regressions = operations.get("semantic_regressions", {})
+    expected_regressions = set(manifest.get("required_semantic_regressions", []))
+    reviewed_regressions = regressions.get("cases", [])
+    regression_valid = (not expected_regressions or (
+        len(reviewed_regressions) == len(expected_regressions)
+        and {row["case_id"] for row in reviewed_regressions} == expected_regressions
+        and all(row.get("mechanical_valid") is True
+                and row.get("decision") != "hold"
+                and row.get("critical_failure") is False
+                and row.get("factual_support", 0) >= 4
+                for row in reviewed_regressions)))
+    gates["SC2"] = bool(assignments_valid and controls_valid and regression_valid and not false_holds
                         and not any(c["critical_failure"] for c in cases)
                         and all(mean >= 4 for mean in means.values()))
     invalid, recovered, unresolved = mechanical_results(calls)
+    normalized = normalized_final_responses(calls, outcomes)
+    no_lead_holds = normalized_no_lead_holds(calls, outcomes)
     gates["SC3"] = not unresolved
     costs = defaultdict(Decimal)
     tokens = defaultdict(lambda: [0, 0, 0])
@@ -109,7 +175,7 @@ def assess(artifact, reviews, manifest, operations):
             prices_complete = False
     gates["SC5"] = (prices_complete and set(costs) == {"1", "7"}
                     and all(cost <= Decimal("0.30") for cost in costs.values())
-                    and all(i <= 1_600_000 and o <= 350_000 and n <= 41 for i, o, n in tokens.values()))
+                    and all(i <= 2_000_000 and o <= 420_000 and n <= 51 for i, o, n in tokens.values()))
     # Operational evidence must refer to this same locked generator and include
     # reproducible file receipts; the CLI verifies those hashes before assess.
     operational_match = operations.get("configuration_lock") == artifact["configuration_lock"]
@@ -135,12 +201,23 @@ def assess(artifact, reviews, manifest, operations):
         "gates": gates, "unmet_success_criteria": [k for k, v in gates.items() if not v],
         "rubric_means": means, "critical_cases": [c for c in cases if c["critical_failure"]],
         "withheld_supported_cases": false_holds, "control_reviews": controls,
-        "raw_mechanical_invalid": invalid, "normalized_mechanical_invalid": invalid,
+        "raw_mechanical_invalid": invalid + [
+            f"normalized:critic:{row['batch_key']}:{row['brand_key']}" for row in normalized
+        ],
+        "normalized_mechanical_invalid": invalid,
+        "normalized_final_responses": normalized,
+        "normalized_no_lead_holds": no_lead_holds,
         "critic_recovered_drafts": recovered, "final_mechanical_invalid": unresolved,
         "minor_case_issues": [{"case_id": c["case_id"], "issues": c["minor_issues"]}
                               for c in cases if c.get("minor_issues")],
         "fixture_defects": [c for c in controls if c.get("fixture_defect")],
-        "representation_normalization": "none",
+        "known_semantic_regressions": reviewed_regressions,
+        "representation_normalization": (
+            "bounded_source_preserving" if normalized else "none"
+        ),
+        # The locked request disables reasoning. Missing provider telemetry is
+        # unreported, not proof of positive usage and not an observed zero.
+        "reasoning_usage_unreported_calls": sum(r.get("reasoning_tokens") is None for r in receipts),
         "provider_billed_cost_by_window_usd": {k: str(v) for k, v in costs.items()},
         "input_output_calls_by_window": dict(tokens),
         "projected_monthly_headline_cost_usd": str(monthly) if monthly is not None else None,
@@ -185,6 +262,28 @@ def main():
             if sha256(Path(path)) != expected_hash:
                 raise ValueError("operational evidence file changed")
             files.append(Path(path))
+        if manifest.get("required_semantic_regressions"):
+            regression = operations.get("semantic_regressions", {})
+            replay_path = Path(regression["replay_artifact"])
+            review_path = Path(regression["review_artifact"])
+            replay = json.loads(replay_path.read_text())
+            review = json.loads(review_path.read_text())
+            if (replay["fixture_sha256"] != manifest["regression_fixture_sha256"]
+                    or replay["configuration_lock"] != artifact["configuration_lock"]
+                    or review["artifact_sha256"] != sha256(replay_path)
+                    or review["rubric_sha256"] != sha256(args.review_dir / "rubric.md")
+                    or {c["case_id"] for c in replay["cases"]} != set(manifest["required_semantic_regressions"])
+                    or {c["case_id"] for c in review["review"]["cases"]} != set(manifest["required_semantic_regressions"])):
+                raise ValueError("semantic_regression_provenance_mismatch")
+            expected_rows = {c["case_id"]: c for c in review["review"]["cases"]}
+            regression["cases"] = [{
+                "case_id": case["case_id"],
+                "mechanical_valid": replay["calls"][index]["mechanical"]["valid"],
+                "decision": case["final"]["decision"] if case["final"] else None,
+                "critical_failure": expected_rows[case["case_id"]]["critical_failure"],
+                "factual_support": expected_rows[case["case_id"]]["factual_support"],
+            } for index, case in enumerate(replay["cases"])]
+            files.extend([replay_path, review_path])
     result = assess(artifact, reviews, manifest, operations)
     result["evidence_sha256"] = {str(p): sha256(p) for p in files}
     with args.output.open("x") as out:

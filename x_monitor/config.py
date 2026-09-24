@@ -549,7 +549,7 @@ class HeadlineNarrativeConfig(BaseModel):
     )
     rank_request_profile: Literal["headline_rank_v1", "headline_rank_v2"] = "headline_rank_v1"
     editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2", "headline_editor_v3", "headline_editor_v4"] = "headline_editor_v1"
-    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2", "headline_critic_v3", "headline_critic_v4", "headline_critic_v5"] = "headline_critic_v1"
+    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2", "headline_critic_v3", "headline_critic_v4", "headline_critic_v5", "headline_critic_v6"] = "headline_critic_v1"
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
@@ -682,12 +682,16 @@ class HeadlineNarrativeConfig(BaseModel):
             prompt_parts = getattr(self, f"{stage}_prompt_version").casefold().split("-")
             finance = "finance" in prompt_parts
             profile = getattr(self, f"{stage}_request_profile")
-            if finance != (profile in {f"headline_{stage}_v3", f"headline_{stage}_v4", "headline_critic_v5"}) or (
+            if finance != (profile in {f"headline_{stage}_v3", f"headline_{stage}_v4", "headline_critic_v5", "headline_critic_v6"}) or (
                 finance and (self.provider != "deepinfra" or "ja" not in prompt_parts)
             ):
                 raise ValueError("headline finance prompt requires its trilingual DeepInfra v3 schema")
-            if stage == "critic" and (("source-audit" in self.critic_prompt_version) != (profile == "headline_critic_v5")):
-                raise ValueError("headline source audit requires its v5 critic profile")
+            if stage == "critic" and (
+                ("source-audit" in self.critic_prompt_version) != (profile in {"headline_critic_v5", "headline_critic_v6"})
+                or ("source-ledger" in self.critic_prompt_version) != (profile == "headline_critic_v6")
+                or ("ledger-only" in self.critic_prompt_version and "source-ledger" not in self.critic_prompt_version)
+            ):
+                raise ValueError("headline source audit and ledger require matching critic profiles")
         windows = {1, 7, 30, 365}
         if set(self.cadence_minutes) != windows:
             raise ValueError("headline cadences must cover 1, 7, 30, and 365 days")

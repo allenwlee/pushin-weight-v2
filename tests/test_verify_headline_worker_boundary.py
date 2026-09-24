@@ -13,7 +13,10 @@ from scripts.verify_headline_worker_boundary import (
     assert_installed_version,
     bind_request,
     direct_anthropic_pin,
+    verify_headline_worker_boundary,
 )
+from x_monitor.config import HeadlineNarrativeConfig
+from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,7 +32,21 @@ def test_worker_boundary_proof_executes_without_transport():
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("headline_worker_boundary_ok ")
-    assert f"anthropic={direct_anthropic_pin()}" in result.stdout
+    assert "transport=anthropic" in result.stdout
+
+
+def test_direct_0731_worker_boundary_builds_all_three_wire_requests():
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra", model=DEEPSEEK_0731_MODEL,
+        base_url="https://api.deepinfra.com/v1/openai",
+        rank_prompt_version="headline-rank-0731-v3",
+        editor_prompt_version="headline-editor-finance-v9-ja",
+        critic_prompt_version="headline-critic-finance-source-audit-source-ledger-only-v31-ja",
+        rank_request_profile="headline_rank_v2",
+        editor_request_profile="headline_editor_v4",
+        critic_request_profile="headline_critic_v6",
+    )
+    assert verify_headline_worker_boundary(config) == ("deepinfra", DEEPSEEK_0731_MODEL)
 
 
 def test_worker_boundary_rejects_installed_version_drift():

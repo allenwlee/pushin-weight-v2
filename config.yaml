@@ -333,16 +333,16 @@ headline_narrative:
   evidence_excerpt_characters: 1000
   evidence_provider_packet_bytes: 131072
   call_cap: 4
-  per_brand_call_cap: 25
-  per_brand_input_token_cap: 700000
-  per_brand_output_token_cap: 180000
+  per_brand_call_cap: 51
+  per_brand_input_token_cap: 2000000
+  per_brand_output_token_cap: 420000
   # Conservative peak, cache-miss rates from DeepSeek's official 2026-09-02
   # pricing page. Off-peak/cache-hit billing can only reduce actual cost.
   per_brand_cost_cap_usd: "1.50"
   per_brand_input_usd_per_million: "0.44"
   per_brand_output_usd_per_million: "1.32"
   per_brand_pricing_version: "deepseek-v4-flash-peak-2026-09-02"
-  per_brand_expected_max_brands: 40
+  per_brand_expected_max_brands: 50
   per_brand_p95_latency_seconds: "45"
   per_brand_worker_concurrency: 3
   max_body_en_chars: 240

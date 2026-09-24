@@ -120,6 +120,213 @@ def test_source_relevance_does_not_treat_a_turkish_suffix_as_a_brand():
     assert both["other_brand_keys"] == ["deepseek"]
 
 
+def test_snapshot_aliases_skip_short_nonprimary_product_words(monkeypatch):
+    class Keywords:
+        def filter(self, **kwargs):
+            assert kwargs["is_regex"] is False
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            assert fields == ("brand_id", "pattern", "is_primary")
+            return [("inclusionai", "Ring", False),
+                    ("inclusionai", "Ming-Image", False),
+                    ("inclusionai", "Ling", True)]
+
+    monkeypatch.setattr(candidates.BrandKeyword, "objects", Keywords())
+    class Accounts:
+        def filter(self, **kwargs):
+            assert kwargs["role_id"] == "official"
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            assert fields == ("brand_id", "account__handle")
+            return [("inclusionai", "AntLingAGI"),
+                    ("inclusionai", "ParentCompanyNews")]
+
+    monkeypatch.setattr(candidates.BrandAccount, "objects", Accounts())
+    class Products:
+        def filter(self, **kwargs):
+            assert kwargs["hf_type"] == "model"
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            assert fields == ("brand_id", "display_name", "repo_id")
+            return [("inclusionai", "Ming-Image-0.1-Design",
+                     "inclusionAI/Ming-Image-0.1-Design"),
+                    ("inclusionai", "Ming-Video-1.0", "inclusionAI/Ming-Video-1.0")]
+
+    monkeypatch.setattr(candidates.Product, "objects", Products())
+    aliases = candidates._snapshot_brand_aliases([{
+        "candidate_key": {"brand_key": "inclusionai"},
+        "display_name_en": "InclusionAI", "display_name_zh_cn": "InclusionAI",
+    }], evidence_rows=[{"text": "Ant Group released Ming-Image-0.1-Design."}])
+    assert "Ring" not in aliases["inclusionai"]
+    assert {"inclusionai", "InclusionAI", "Ming-Image", "Ling"} <= set(aliases["inclusionai"])
+    assert "@AntLingAGI" in aliases["inclusionai"]
+    assert "@ParentCompanyNews" not in aliases["inclusionai"]
+    assert "Ming-Image-0.1-Design" in aliases["inclusionai"]
+    assert "Ming-Video-1.0" not in aliases["inclusionai"]
+    source = {"evidence_id": "e_model", "excerpt":
+              "Ant Group released Ming-Image-0.1-Design, ranked No. 1 among open UI/UX models.",
+              "first_party_role": "public_opaque"}
+    source["brand_relevance"] = candidates._source_brand_relevance(
+        source, "inclusionai", aliases,
+    )
+    assert source["brand_relevance"]["status"] == "explicit_mention"
+    from monitor.trend_narrative_generation import _lead_evidence_id
+    assert _lead_evidence_id({
+        "brand_key": "inclusionai", "display_name_en": "InclusionAI",
+        "display_name_zh_cn": "InclusionAI", "evidence": [source],
+    }) == "e_model"
+    relevance = candidates._source_brand_relevance(
+        {"excerpt": "@AntLingAGI Ling-3.0-flash-VL released a visual agent.",
+         "first_party_role": "public_opaque"}, "inclusionai", aliases,
+    )
+    assert "@AntLingAGI" in relevance["matched_aliases"]
+
+
+def test_secondary_product_word_does_not_turn_solar_wafers_into_upstage(monkeypatch):
+    class Keywords:
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            return [("upstage", "Solar", False),
+                    ("upstage", "Solar Pro 3", False)]
+
+    class Accounts:
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            return [("upstage", "upstageai")]
+
+    class Products:
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            return []
+
+    monkeypatch.setattr(candidates.BrandKeyword, "objects", Keywords())
+    monkeypatch.setattr(candidates.BrandAccount, "objects", Accounts())
+    monkeypatch.setattr(candidates.Product, "objects", Products())
+    unrelated = {"evidence_id": "e_reliance", "excerpt":
+                 "Reliance invested in sodium-ion batteries and ultra thin solar wafers.",
+                 "first_party_role": "public_opaque"}
+    aliases = candidates._snapshot_brand_aliases([{
+        "candidate_key": {"brand_key": "upstage"},
+        "display_name_en": "Upstage Solar", "display_name_zh_cn": "업스테이지",
+    }], evidence_rows=[{"text": unrelated["excerpt"]}])
+    assert "Solar" not in aliases["upstage"]
+    assert "Solar Pro 3" in aliases["upstage"]
+    unrelated["brand_relevance"] = candidates._source_brand_relevance(
+        unrelated, "upstage", aliases)
+    assert unrelated["brand_relevance"]["status"] == "uncertain"
+    from monitor.trend_narrative_generation import _lead_evidence_id
+    dossier = {"brand_key": "upstage", "display_name_en": "Upstage Solar",
+               "display_name_zh_cn": "업스테이지", "evidence": [unrelated]}
+    assert _lead_evidence_id(dossier) is None
+    actual = {"evidence_id": "e_product", "excerpt":
+              "Upstage released Solar Pro 3 for enterprise use.",
+              "first_party_role": "public_opaque"}
+    actual["brand_relevance"] = candidates._source_brand_relevance(actual, "upstage", aliases)
+    dossier["evidence"] = [actual]
+    assert _lead_evidence_id(dossier) == "e_product"
+
+
+def test_versioned_secondary_product_mentions_anchor_only_versioned_sources(monkeypatch):
+    from monitor.trend_narrative_generation import _lead_evidence_id
+
+    class Rows:
+        def __init__(self, values):
+            self.values = values
+
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            return self.values
+
+    monkeypatch.setattr(candidates.BrandKeyword, "objects", Rows([
+        ("nemo_megatron", "nemotron", False),
+    ]))
+    monkeypatch.setattr(candidates.BrandAccount, "objects", Rows([]))
+    monkeypatch.setattr(candidates.Product, "objects", Rows([]))
+    product_post = {"evidence_id": "e_product", "excerpt":
+                    "Nemotron 3 Diarization app in Rust, version 0.1 beta.",
+                    "first_party_role": "public_opaque"}
+    list_post = {"evidence_id": "e_list", "excerpt":
+                 "The list also mentions Nemotron among many other products.",
+                 "first_party_role": "public_opaque"}
+    aliases = candidates._snapshot_brand_aliases([{
+        "candidate_key": {"brand_key": "nemo_megatron"},
+        "display_name_en": "NVIDIA NeMo", "display_name_zh_cn": "NVIDIA NeMo",
+    }], evidence_rows=[{"text": product_post["excerpt"]}, {"text": list_post["excerpt"]}])
+    assert "nemotron 3" in aliases["nemo_megatron"]
+    assert "nemotron" not in aliases["nemo_megatron"]
+    for source in (product_post, list_post):
+        source["brand_relevance"] = candidates._source_brand_relevance(
+            source, "nemo_megatron", aliases)
+    assert product_post["brand_relevance"]["status"] == "explicit_mention"
+    assert list_post["brand_relevance"]["status"] == "uncertain"
+    assert _lead_evidence_id({"brand_key": "nemo_megatron",
+                              "display_name_en": "NVIDIA NeMo",
+                              "display_name_zh_cn": "NVIDIA NeMo",
+                              "evidence": [list_post, product_post]}) == "e_product"
+
+
+def test_long_secondary_model_name_with_size_is_a_contextual_product_alias(monkeypatch):
+    class Rows:
+        def __init__(self, values):
+            self.values = values
+
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *fields):
+            return self.values
+
+    monkeypatch.setattr(candidates.BrandKeyword, "objects", Rows([
+        ("nemo_megatron", "nemotron", False),
+    ]))
+    monkeypatch.setattr(candidates.BrandAccount, "objects", Rows([]))
+    monkeypatch.setattr(candidates.Product, "objects", Rows([]))
+    source = {"evidence_id": "e_agent", "excerpt":
+              "My agent uses OpenRouter's free 120B Nemotron as its second model.",
+              "first_party_role": "public_opaque"}
+    aliases = candidates._snapshot_brand_aliases([{
+        "candidate_key": {"brand_key": "nemo_megatron"},
+        "display_name_en": "NVIDIA NeMo", "display_name_zh_cn": "NVIDIA NeMo",
+    }], evidence_rows=[{"text": source["excerpt"]}])
+    assert "nemotron" in aliases["nemo_megatron"]
+    assert candidates._source_brand_relevance(source, "nemo_megatron", aliases)["status"] == "explicit_mention"
+
+
 def test_source_sample_is_not_presented_as_a_whole_window_census():
     from monitor.trend_narrative_packet import project_dossier
 
