@@ -132,3 +132,19 @@ def test_source_sample_is_not_presented_as_a_whole_window_census():
                                       "selection":"bounded_nonrandom_examples","population_inference_allowed":False}
     assert preview["evidence_scope"]["selected_source_count"] == 2
     assert preview["evidence_scope"]["collected_post_count"] == "100"
+
+
+def test_support_spans_preserve_long_multilingual_text_and_source_identity():
+    from monitor.trend_narrative_packet import evidence_support_spans
+
+    text = ("Explicit source text. 原文を保持する。保留原文。\n" * 40) + "final words"
+    source = {"evidence_id": "e1", "excerpt": text, "text_en": text,
+              "text_zh_cn": "不同的中文原文。" * 150}
+    spans = evidence_support_spans(source)
+    assert "".join(s["text"] for s in spans if s["source_field"] == "excerpt") == text
+    assert "".join(s["text"] for s in spans if s["source_field"] == "text_zh_cn") == source["text_zh_cn"]
+    assert all(len(s["text"]) <= 400 for s in spans)
+    assert not any(s["source_field"] == "text_en" for s in spans)
+    assert spans == evidence_support_spans(source)
+    other = evidence_support_spans({**source, "evidence_id": "e2"})
+    assert not {s["span_id"] for s in spans} & {s["span_id"] for s in other}

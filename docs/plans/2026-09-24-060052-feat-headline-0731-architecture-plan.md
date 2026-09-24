@@ -1141,3 +1141,37 @@ requires a ready configuration and the staging/production checks.
 
 Detailed receipts, changes and limitations:
 [0731 finance tuning report](../research/2026-09-24-195100-headline-finance-0731-tuning-cycle1.md).
+
+### U4/U9 corrective refinement — explicit critic source check
+
+Cycle 2 showed that correct citation IDs and additional instructions were not
+sufficient: the critic approved an unrelated company story and treated an
+adversarial instruction as news. Cycle 3 preserves the selected model, disabled
+reasoning, three stages and two-brand packets. Its critic response schema 4
+adds a bounded source assessment before the verdict: subject, target-brand
+relevance, up to four literal cited passages, and up to four draft errors.
+Keep these in audit storage only. Reject quote/citation mismatches, approval
+with listed errors, and publication when the model's own relevance assessment
+is absent/incidental. A valid literal quotation still does not establish
+entailment; SC2 remains unchanged. Re-run the diagnostic cycle, freeze the
+resulting profile, then use the reserved unseen corpus. Do not promote by
+changing the quality target or counting withheld useful narratives as success.
+
+The cycle-3 source check now cites deterministic passage IDs instead of asking
+the model to reproduce quotations. Each ID resolves to exact request text;
+no generated narrative text is added by code. Source fields are split into
+bounded, lossless passages only in the audited critic request. Tests prove
+text reconstruction, per-source identity, ownership and audit-only persistence.
+This is a request-shape correction for quote-copy failures; independent
+semantic review remains required. The full-message compaction experiment,
+including finance and this source check, measured 23.99% fewer bytes on the
+same archived workload; it does not establish a token reduction.
+
+Cycle 3 closed with the financial-amount correction working, but one invalid
+relevance/verdict combination and an unresolved source contradiction. Cycle 4
+is explicitly bounded to three correction rounds: assess relevance of the best
+supported replacement, preserve reviewed staff discussion, and require a short
+source-conflict audit before the verdict. Record disagreements with IDs from
+both passages; validate ID ownership and reject duplicate/invented support.
+Do not mistake these mechanical checks for semantic qualification. The reserved
+unseen set and independent review assignments are still sealed.

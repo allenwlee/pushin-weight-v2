@@ -201,6 +201,35 @@ for _headline_stage in ("editor", "critic"):
     _bound["response_format"]["json_schema"]["name"] = f"headline_{_headline_stage}_v4"
     _PROFILES[f"headline_{_headline_stage}_v4"] = _bound
 
+_audit_profile = deepcopy(_PROFILES["headline_critic_v4"])
+_audit_profile["temperature"] = 0
+_audit_format = _audit_profile["response_format"]["json_schema"]
+_audit_format["name"] = "headline_critic_v5"
+_audit_props = _audit_format["schema"]["properties"]
+_audit_props["critic_response_schema_version"]["enum"] = [4]
+_decision_props = _audit_props["decisions"]["items"]["properties"]
+_audit_props["decisions"]["items"] = _closed_object({
+    "brand_key": _decision_props["brand_key"],
+    "source_check": _closed_object({
+        "subject": {"type": "string"},
+        "brand_relevance": {"type": "string", "enum": ["direct", "incidental", "absent"]},
+        "span_ids": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+        "conflicts": {"type": "array", "maxItems": 3, "items": _closed_object({
+            "span_ids": {"type": "array", "minItems": 2, "maxItems": 4, "items": {"type": "string"}},
+            "description": {"type": "string"},
+        })},
+        "number_ownership": {"type": "array", "maxItems": 4, "items": _closed_object({
+            "figure": {"type": "string"}, "owner": {"type": "string"},
+            "meaning_and_status": {"type": "string"},
+        })},
+    }),
+    "draft_errors": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+    "narrative": _decision_props["narrative"],
+    "decision": _decision_props["decision"],
+    "hold_code": _decision_props["hold_code"],
+})
+_PROFILES["headline_critic_v5"] = _audit_profile
+
 
 def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Constrain each brand's citations without changing the response contract.
@@ -277,6 +306,18 @@ def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) ->
                 decision = deepcopy(array["items"])
                 decision["properties"]["brand_key"] = narrative["properties"]["brand_key"]
                 decision["properties"]["narrative"]["anyOf"] = [narrative, {"type": "null"}]
+                if "source_check" in decision["properties"]:
+                    span_refs = decision["properties"]["source_check"]["properties"]["span_ids"]
+                    brand_key = narrative["properties"]["brand_key"]["enum"][0]
+                    own_dossier = next(d for d in dossiers if d["brand_key"] == brand_key)
+                    ids = [span["span_id"] for source in own_dossier.get("evidence", [])
+                           for span in source.get("source_spans", [])]
+                    if ids:
+                        span_refs["items"]["enum"] = ids
+                        decision["properties"]["source_check"]["properties"]["conflicts"]["items"]["properties"]["span_ids"]["items"]["enum"] = ids
+                    else:
+                        span_refs["maxItems"] = 0
+                        decision["properties"]["source_check"]["properties"]["conflicts"]["maxItems"] = 0
                 decisions.append(decision)
             array["items"] = {"anyOf": decisions}
         array["minItems"] = array["maxItems"] = len(dossiers)
@@ -430,7 +471,7 @@ class DeepInfraChatCompletionsClient:
             request["service_tier"] = profile["service_tier"]
             request["response_format"] = (
                 _bound_headline_format(self.request_profile, messages)
-                if self.request_profile in {"headline_editor_v4", "headline_critic_v4"}
+                if self.request_profile in {"headline_editor_v4", "headline_critic_v4", "headline_critic_v5"}
                 else profile["response_format"]
             )
         # Deliberately omit response_format, provider, service_tier, thinking,

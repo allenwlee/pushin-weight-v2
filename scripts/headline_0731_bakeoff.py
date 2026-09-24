@@ -29,7 +29,7 @@ from x_monitor.config import HeadlineNarrativeConfig, load_config
 from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
 
 CANDIDATE_MODEL = DEEPSEEK_0731_MODEL
-CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v4/headline_critic_v4"
+CANDIDATE_PROFILE = "headline_rank_v2/headline_editor_v4/headline_critic_v5"
 CANDIDATE_INPUT_PRICE = Decimal("0.09")
 CANDIDATE_OUTPUT_PRICE = Decimal("0.27")
 CANDIDATE_TIMEOUT_SECONDS = 300
@@ -111,7 +111,11 @@ def configuration_lock(config: HeadlineNarrativeConfig) -> dict[str, Any]:
         "editor_max_tokens", "critic_max_tokens", "rank_prompt_version",
         "editor_prompt_version", "critic_prompt_version", "rank_request_profile",
         "editor_request_profile", "critic_request_profile", "per_brand_batch_size",
-        "per_brand_worker_concurrency",
+        "per_brand_worker_concurrency", "min_posts", "min_authors", "minimum_coverage",
+        "contested_ratio", "surging_ratio", "rising_ratio", "steady_ratio",
+        "episode_peak_ratio", "evidence_policy_version", "evidence_reservoir_rank_limit",
+        "evidence_floor", "evidence_lead_ceiling", "evidence_comparison_ceiling",
+        "evidence_excerpt_characters", "evidence_provider_packet_bytes",
     )
     serialized = config.model_dump(mode="json")
     root = Path(__file__).resolve().parents[1]
@@ -121,7 +125,8 @@ def configuration_lock(config: HeadlineNarrativeConfig) -> dict[str, Any]:
             file: _sha256(root / file) for file in (
                 "monitor/trend_narrative_packet.py", "monitor/trend_narrative_facts.py",
                 "monitor/trend_narrative_candidates.py", "monitor/trend_narrative_generation.py",
-                "x_monitor/deepinfra.py",
+                "x_monitor/deepinfra.py", "monitor/trend_narrative_evaluation.py",
+                "scripts/headline_0731_bakeoff.py",
             )
         },
     }
@@ -241,11 +246,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         editor_max_tokens=8_000,
         critic_max_tokens=8_000,
         rank_prompt_version="headline-rank-0731-v3",
-        editor_prompt_version="headline-editor-finance-v6-ja",
-        critic_prompt_version="headline-critic-finance-v6-ja",
+        editor_prompt_version="headline-editor-finance-v7-ja",
+        critic_prompt_version="headline-critic-finance-source-audit-v5-ja",
         rank_request_profile="headline_rank_v2",
         editor_request_profile="headline_editor_v4",
-        critic_request_profile="headline_critic_v4",
+        critic_request_profile="headline_critic_v5",
         per_brand_batch_size=2,
         per_brand_call_cap=41,
         per_brand_input_token_cap=1_600_000,

@@ -554,9 +554,7 @@ def evaluation_preflight(
             window_report["planned_call_count"] = 1 + 2 * len(batches)
         window_reports.append(window_report)
     if include_calibration_controls:
-        control_batch = _calibration_control_batch(
-            [build_synthetic_per_brand_snapshot(3)] if _finance_contract(config.editor_prompt_version) else snapshots
-        )
+        control_batch = _calibration_batch(snapshots, config)
         for (
             control,
             _expected,
@@ -739,9 +737,7 @@ def run_per_brand_evaluation(
                 "wall_ms": round((time.monotonic() - window_started) * 1000),
             })
         if include_calibration_controls:
-            control_batch = _calibration_control_batch(
-                [build_synthetic_per_brand_snapshot(3)] if _finance_contract(config.editor_prompt_version) else snapshots
-            )
+            control_batch = _calibration_batch(snapshots, config)
             controls = _run_calibration_controls(
                 control_batch,
                 config,
@@ -899,6 +895,21 @@ def _evaluate_batch(
         critic_call["mechanical"] = {"valid": False, "error_code": code}
         batch_outcomes = _held_batch_outcomes(batch, reviewer=reviewer, hold_code=code)
     return batch_calls, batch_outcomes
+
+
+def _calibration_batch(snapshots, config):
+    if not _finance_contract(config.editor_prompt_version):
+        return _calibration_control_batch(snapshots)
+    fixture = build_synthetic_per_brand_snapshot(3)
+    for dossier in fixture["dossiers"]:
+        # Synthetic gold must explicitly establish its subject. A bare search
+        # assignment is intentionally not sufficient under the live contract.
+        label = f"{dossier['display_name_en']} / {dossier['display_name_zh_cn']}: "
+        for source in dossier["evidence"]:
+            for field in ("excerpt", "original_text", "text_en", "text_zh_cn"):
+                if source.get(field):
+                    source[field] = label + source[field]
+    return _calibration_control_batch([fixture])
 
 
 def _calibration_control_batch(
@@ -1430,7 +1441,43 @@ def _supported_editor_response(envelope: Mapping[str, Any]) -> dict[str, Any]:
                          "unit": f["unit"], "scope_ref": f["scope_ref"]}
                         for f in dossier.get("facts", []) if f["fact_id"] in proposition["fact_ids"]
                     ]
+    if finance:
+        for narrative, dossier in zip(response["brands"], packet["dossiers"], strict=True):
+            narrative["headline_en"] = f"Selected posts discuss {dossier['display_name_en']} local inference."
+            narrative["headline_zh_cn"] = f"所选帖子讨论了{dossier['display_name_zh_cn']}的本地推理。"
+            name = dossier["display_name_en"]
+            narrative["headline_ja"] = f"選ばれた投稿は{name}のローカル推論について述べている。"
+            fact = next(iter(dossier.get("facts") or []), {})
+            value = str(fact.get("value", ""))
+            if fact.get("metric") == "post_count_change_pct":
+                quantity_ja = (f"投稿数は前期間の{fact.get('baseline_value', '')}件から"
+                               f"現在の{fact.get('current_value', '')}件へ{value}%増加した。")
+            else:
+                quantity_ja = f"対象期間の投稿数は{value}件であり、前期間との比較は利用できない。"
+            narrative["secondary_ja"] = (f"引用されたユーザー投稿は{name}のローカル推論と実際の導入を"
+                                         "関連付けている。これは利用に関する話題であり、リリース発表ではない。"
+                                         + quantity_ja)
+            for locale in ("en", "zh_cn", "ja"):
+                narrative["propositions"][0][f"claim_{locale}"] = narrative[f"headline_{locale}"]
+            content, quantity = narrative["propositions"][1:]
+            for locale in ("en", "zh_cn", "ja"):
+                content[f"claim_{locale}"] = narrative[f"secondary_{locale}"]
+            content["fact_ids"] = quantity["fact_ids"]
+            content["measurements"] = quantity["measurements"]
+            narrative["propositions"] = narrative["propositions"][:2]
+            narrative["secondary_proposition_ids"] = [content["proposition_id"]]
     return response
+
+
+def _fixture_value_labels(fact):
+    if not fact:
+        return "", ""
+    value = str(fact.get("value", fact.get("source_value", "")))
+    unit = fact.get("unit")
+    suffix_en = "%" if unit == "percent" else " posts" if unit == "posts" else ""
+    suffix_zh = "%" if unit == "percent" else "条帖子" if unit == "posts" else ""
+    return (str(fact.get("display_en") or value + suffix_en),
+            str(fact.get("display_zh_cn") or value + suffix_zh))
 
 
 def _supported_narrative(dossier: Mapping[str, Any]) -> dict[str, Any]:
@@ -1439,8 +1486,7 @@ def _supported_narrative(dossier: Mapping[str, Any]) -> dict[str, Any]:
     name_zh = str(dossier.get("display_name_zh_cn") or name_en)
     fact = next(iter(dossier.get("facts") or []), None)
     evidence = next(iter(dossier.get("evidence") or []), None)
-    value_en = str((fact or {}).get("display_en") or (fact or {}).get("value") or "")
-    value_zh = str((fact or {}).get("display_zh_cn") or (fact or {}).get("value") or "")
+    value_en, value_zh = _fixture_value_labels(fact)
     is_change = (fact or {}).get("metric") == "post_count_change_pct"
     headline_en = f"{name_en} conversation centered on local inference."
     headline_zh = f"{name_zh}的讨论集中在本地推理。"
@@ -1524,8 +1570,7 @@ def _adversarial_editor_response(envelope: Mapping[str, Any]) -> dict[str, Any]:
     dossier = envelope["analysis_packet"]["dossiers"][0]
     fact = next(iter(dossier.get("facts") or []), None)
     evidence = next(iter(dossier.get("evidence") or []), None)
-    value_en = str((fact or {}).get("display_en") or (fact or {}).get("value") or "")
-    value_zh = str((fact or {}).get("display_zh_cn") or (fact or {}).get("value") or "")
+    value_en, value_zh = _fixture_value_labels(fact)
     name_en = str(dossier.get("display_name_en") or dossier["brand_key"])
     name_zh = str(dossier.get("display_name_zh_cn") or name_en)
     headline_en = f"{name_en} launched Imaginary-One" + (

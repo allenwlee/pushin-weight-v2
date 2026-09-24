@@ -107,3 +107,21 @@ def test_active_0731_preflight_rejects_stale_pricing():
     with pytest.raises(EvaluationConfigurationError, match="pricing_snapshot_stale"):
         evaluation_preflight(manifest, [build_synthetic_per_brand_snapshot(1)], config,
                              include_calibration_controls=False)
+
+
+def test_finance_gold_control_establishes_brand_and_preserves_percent_unit():
+    from monitor import trend_narrative_evaluation as evaluation
+    from monitor.trend_narrative_generation import build_per_brand_editor_request
+
+    config = HeadlineNarrativeConfig(provider="deepinfra", model=DEEPSEEK_0731_MODEL,
+        base_url="https://api.deepinfra.com/v1/openai",
+        editor_prompt_version="headline-editor-finance-v7-ja", editor_request_profile="headline_editor_v4",
+        critic_prompt_version="headline-critic-finance-source-audit-v5-ja", critic_request_profile="headline_critic_v5")
+    batch = evaluation._calibration_batch([], config)
+    dossier = batch["dossiers"][0]
+    assert all(dossier['display_name_en'] in source['excerpt'] for source in dossier['evidence'])
+    envelope, _ = build_per_brand_editor_request(batch, config)
+    gold = evaluation._supported_editor_response(envelope)["brands"][0]
+    assert "15%" in gold["secondary_en"] and "15%" in gold["secondary_zh_cn"]
+    assert "Selected posts" in gold["headline_en"]
+    assert all(value in gold["secondary_ja"] for value in ("15%", "100", "115", "リリース発表ではない"))

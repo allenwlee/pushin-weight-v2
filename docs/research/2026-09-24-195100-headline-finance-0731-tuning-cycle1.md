@@ -141,3 +141,118 @@ six rounds is **$0.13364298**. The next finite cycle changes the critic contract
 identify the subject and quote source support before evaluating the draft.
 This adds a bounded, inspectable source check to the existing critic response;
 it does not add calls, hidden reasoning, retries, or another generator.
+
+## Cycle 3 — explicit source check before the critic verdict
+
+The new critic request profile is `headline_critic_v5`, with response schema 4
+and prompt `headline-critic-finance-source-audit-v1-ja`. Editor response schema 3
+and the two-brand call graph remain unchanged. Before its verdict, the critic
+must identify the source's subject, classify target-brand relevance, quote up
+to four literal source passages, and list any draft errors. These fields stay
+in the audit response, not the reader-facing headline.
+
+The validator rejects invented or cross-brand quote support, approval despite
+listed errors, and a publish decision when the critic itself says the target
+brand is absent or incidental. Whitespace folding is the only quote matching
+normalization. This proves literal source membership and self-consistency,
+not semantic entailment; independent review is still required. Six new tests
+failed before implementation and passed afterward, including fabricated quote,
+wrong-brand ID, absent brand, ignored error and missing support. The combined
+focused check passed 38 tests before the first paid cycle-3 run.
+
+The inference lock now also records numerical thresholds and evidence policy
+settings, in addition to prompt/profile choices and implementation hashes.
+No production or staging route has been changed. Commits `dc0cb44` and
+`0d38d05` preserve completed tuning infrastructure and safe status receipts;
+cycle-3 changes remain under evaluation.
+
+Cycle 3 round 1 recognized the unrelated Yi and Kuaishou sources and explicitly
+identified the SenseNova contradiction. It completed 20 transports for
+$0.01989387, but only 17 were mechanically valid: one editor measurement binding
+and two literal quote checks failed. Some quote text was translated or had
+spacing changed instead of being copied. Those results stay failed; they were
+not normalized into successes.
+
+Round 2 replaces model-written quotes with stable source-passage IDs. Code
+splits the supplied text into bounded passages without changing any character;
+concatenation reconstructs each original field exactly. The critic selects
+IDs from its own brand, and the exact text remains in its captured request.
+This avoids asking the model to copy or retranslate evidence. The critic still
+judges relevance and meaning. Forty-six focused tests passed, including three
+real PostgreSQL publication paths and checks that audit fields never appear
+in reader-facing output. Editor schema remains 3, critic schema 4; the prompt
+is `headline-critic-finance-source-audit-v2-ja`.
+
+## Complete-message compaction measurement
+
+A no-transport reconstruction compared the same archived 47 eligible brand/
+window cases and 50 stage requests. Writer and critic evidence IDs and their
+order were unchanged; critic draft prose was held fixed. New finance context,
+source passages, and current prompts are included. Dynamic response schemas
+are reported separately as wire bytes, not silently counted as message text.
+
+| Stage | Calls | Prior message bytes | Current message bytes | Reduction | Current wire bytes | Prior measured input tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Rank | 2 | 502,294 | 357,664 | 28.79% | 396,500 | 144,965 |
+| Editor | 24 | 1,497,194 | 1,063,514 | 28.97% | 1,437,418 | 408,036 |
+| Critic | 24 | 1,649,369 | 1,352,167 | 18.02% | 1,803,036 | 449,635 |
+
+Total message reduction is **23.99%**, meeting the diagnostic 20% target.
+This is a byte result, not a token-saving claim: no new tokens were bought for
+this reconstruction. The schema adds wire overhead; actual qualified tokens
+and costs still require the fresh paid run. Reproduction:
+`PYTHONPATH=. .venv/bin/python .context/headline-finance-cycle3/measure_packet_bytes.py`
+(using the shared root `.venv` when the linked worktree has no local one).
+
+### Cycle 3 final round and bounded cycle 4
+
+Cycle 3 round 2 completed 20/20 mechanically valid calls for $0.01981809
+(provider receipts), 189,316 input and 20,279 output tokens. It still assigned
+one investor's RMB 1.4 billion to two investors, and withheld useful staff
+content. Round 3 added numerical ownership checks, deterministic critic
+sampling, and corrected the synthetic control's missing brand identity and
+percent unit. Those fixture corrections do not retroactively pass earlier
+rounds. Round 3 completed 20 transports, 19 mechanically valid responses,
+191,297 input / 23,595 output tokens, billed $0.01741842. Window generation
+wall times were 64.063 seconds (1d) and 63.840 seconds (7d), excluding SQL.
+The supported control was approved and all seven unsupported controls repaired;
+independent semantic review of repairs remains required.
+
+The funding correction succeeded. The remaining invalid response classified
+its replacement as incidental but attempted to publish it. That whole batch
+was safely withheld, including an otherwise usable second brand. The critic
+also still repeated an open-source assertion despite a conflicting official
+reply. Artifact SHA-256:
+`620ccef63cc6f804c34c29c2034e652c03fd05933f36600a8df453335f54739e`.
+
+Cycle 4 is a new, explicit maximum-three-round correction cycle, keeping 0731,
+three stages, two-brand batches and three concurrent workers. Its first round
+clarifies that source relevance assesses the best supported replacement, not
+only the faulty draft. Reviewed staff AI-work discussion can be attributed to
+the staff account without inventing a person's identity or corporate title.
+The source audit now records up to three disagreements using exact passage IDs
+from both sides. This is a source-reading aid, not deterministic fact checking.
+The frozen unseen corpus and review assignments remain unused and unchanged.
+
+Cycle 4 round 1 completed 20/20 mechanically valid calls: 194,064 input /
+24,402 output tokens, provider-billed $0.01757430, generation wall times
+77.630 seconds (1d) / 86.997 seconds (7d). Artifact SHA-256:
+`56049ab5c42640dcbb7fdcc5cc478cd3b6414ad7c339708e147386b6f6ac656f`.
+It corrected staff attribution and the conflicting open-source assertions,
+while preserving the planned financial amounts. Manual inspection found a
+synthetic repair still overgeneralizing "conversation centered on" from two
+examples, incomplete Japanese clauses inherited from the supported-control
+fixture, and a literal Japanese rendering of "AI theater" in the Yi example.
+Round 2 corrects the fixture in all three languages and adds brief instructions
+for measured topic prevalence, equivalent factual clauses and idiomatic meaning.
+The earlier fixture errors are explicitly harness defects, not new model errors;
+the critic's failure to repair them remains recorded.
+
+The broader current test run executed 232 required PostgreSQL checks with no
+skips/errors: 465 passed, two failed. Both failures are the existing X-article
+routing failures in `tests/test_headlines.py`, also present in the separately
+run unchanged-main baseline. The round-2 focused regression run passed 41 tests.
+The standalone readiness reporter additionally has 13 passing gate tests for
+critical errors, missing/duplicate reviews, false holds, route/format failures,
+actual billing, latency, memory and missing operational evidence. It cannot
+emit `ready_0731` before every success criterion has supporting evidence.

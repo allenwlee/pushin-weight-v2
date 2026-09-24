@@ -13,6 +13,7 @@ from monitor.trend_narrative_generation import (
     validate_per_brand_critic_response,
     validate_per_brand_editor_response,
 )
+from monitor.trend_narrative_packet import evidence_support_spans
 from x_monitor.config import HeadlineNarrativeConfig
 from x_monitor.deepinfra import DEEPSEEK_0731_MODEL, DeepInfraChatCompletionsClient
 
@@ -126,7 +127,7 @@ def test_measurements_and_ambiguous_brand_mentions_always_get_a_critic():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("profile_version", [3, 4])
+@pytest.mark.parametrize("profile_version", [3, 4, 5])
 def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, profile_version):
     from datetime import UTC, datetime, timedelta
 
@@ -144,8 +145,10 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, pro
     config, _, _, template = finance_case()
     config = HeadlineNarrativeConfig.model_validate({
         **config.model_dump(), "activation_state": "reviewed", "serving_enabled": True,
-        "editor_request_profile": f"headline_editor_v{profile_version}",
+        "editor_request_profile": f"headline_editor_v{min(profile_version, 4)}",
         "critic_request_profile": f"headline_critic_v{profile_version}",
+        "critic_prompt_version": ("headline-critic-finance-source-audit-v5-ja"
+                                  if profile_version == 5 else config.critic_prompt_version),
         "materiality_policy_version": "reviewed-finance-v1",
         "enqueue_enabled": True, "provider_calls_enabled": True,
         "per_brand_batch_size": 2, "per_brand_call_cap": 41,
@@ -193,6 +196,14 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, pro
                 {"brand_key": row["brand_key"], "decision": "approve", "hold_code": None, "narrative": row["draft"]}
                 for row in envelope["review_bundles"]
             ]}
+            if profile_version == 5:
+                result["critic_response_schema_version"] = 4
+                for decision, bundle in zip(result["decisions"], envelope["review_bundles"], strict=True):
+                    source = bundle["dossier"]["evidence"][0]
+                    decision.update(draft_errors=[], source_check={
+                        "subject": "Alpha local tools", "brand_relevance": "direct", "number_ownership": [], "conflicts": [],
+                        "span_ids": [source["source_spans"][0]["span_id"]],
+                    })
         return PerBrandProviderResponse(raw_text=json.dumps(result), input_tokens=100, output_tokens=100,
                                        latency_ms=1, provider_usage={"cost_usd": 0.000036})
 
@@ -212,6 +223,9 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, pro
     assert run.status == TrendNarrativeRun.Status.ACTIVE
     assert [stage for stage, _ in captured] == ["rank", "editor", "critic"]
     assert TrendNarrativeProviderCall.objects.filter(run=run).count() == 3
+    if profile_version == 5:
+        critic_call = TrendNarrativeProviderCall.objects.get(run=run, stage="critic")
+        assert "source_check" in json.dumps(critic_call.response_payload)
     for _, envelope in captured:
         text = json.dumps(envelope)
         assert "_ranks" not in text and "prior_post_count" not in text
@@ -222,6 +236,7 @@ def test_real_snapshot_to_durable_stages_and_trilingual_serving(monkeypatch, pro
         locale_key = locale.replace("-", "_")
         assert projection["items"][0]["headline"] == template["brands"][0][f"headline_{locale_key}"]
         assert projection["items"][0]["secondary"] == template["brands"][0][f"secondary_{locale_key}"].replace("10", "1")
+        assert "source_check" not in json.dumps(projection)
 
 
 def test_bound_schema_cannot_reuse_another_requests_citations():
@@ -250,3 +265,51 @@ def test_bound_schema_cannot_reuse_another_requests_citations():
     assert "different-source" not in json.dumps(first)
     assert '"e1"' not in json.dumps(second_wire["response_format"])
     assert wire(request) == first
+
+
+def audited_critic_case():
+    config, editor, _request, draft = finance_case()
+    config = HeadlineNarrativeConfig.model_validate({**config.model_dump(),
+        "critic_request_profile": "headline_critic_v5",
+        "critic_prompt_version": "headline-critic-finance-source-audit-v5-ja"})
+    envelope, request = build_per_brand_critic_request(editor, json.dumps(draft),
+        {"status": "valid", "error_codes": [], "response": draft}, config)
+    decision = {"brand_key": "alpha", "decision": "approve", "hold_code": None,
+                "narrative": draft["brands"][0], "draft_errors": [],
+                "source_check": {"subject": "Alpha's local inference tools", "brand_relevance": "direct", "number_ownership": [], "conflicts": [],
+                                 "span_ids": [evidence_support_spans(editor["analysis_packet"]["dossiers"][0]["evidence"][0])[0]["span_id"]]}}
+    response = {"critic_response_schema_version": 4, "packet_hash": envelope["packet_hash"],
+                "batch_key": envelope["batch_key"], "decisions": [decision]}
+    return config, envelope, request, response
+
+
+def test_source_audit_precedes_decision_and_retains_exact_support():
+    config, envelope, request, response = audited_critic_case()
+    wire = DeepInfraChatCompletionsClient(api_key="test", model=config.model,
+        request_profile=config.critic_request_profile).build_request(model=request["model"],
+        system=request["system"], messages=request["messages"], max_tokens=request["max_tokens"])
+    branch = wire["response_format"]["json_schema"]["schema"]["properties"]["decisions"]["items"]["anyOf"][0]
+    assert list(branch["properties"]).index("source_check") < list(branch["properties"]).index("decision")
+    assert validate_per_brand_critic_response(response, envelope) == response
+
+
+@pytest.mark.parametrize("corruption", ["fabricated_span", "other_brand", "absent_brand", "ignored_error", "no_support", "fabricated_conflict", "duplicate_conflict"])
+def test_source_audit_cannot_approve_fabricated_or_contradictory_support(corruption):
+    _, envelope, _, response = audited_critic_case()
+    row = response["decisions"][0]
+    if corruption == "fabricated_span":
+        row["source_check"]["span_ids"] = ["s:invented"]
+    elif corruption == "other_brand":
+        row["source_check"]["span_ids"] = [evidence_support_spans({"evidence_id": "another-brand", "excerpt": "Alpha has useful local inference tools."})[0]["span_id"]]
+    elif corruption == "absent_brand":
+        row["source_check"]["brand_relevance"] = "absent"
+    elif corruption == "ignored_error":
+        row["draft_errors"] = ["Draft funding claim is unsupported."]
+    elif corruption in {"fabricated_conflict", "duplicate_conflict"}:
+        own = row["source_check"]["span_ids"][0]
+        row["source_check"]["conflicts"] = [{"description": "Conflicting release descriptions.",
+            "span_ids": [own, "s:invented" if corruption == "fabricated_conflict" else own]}]
+    else:
+        row["source_check"]["span_ids"] = []
+    with pytest.raises(HeadlineGenerationError, match="source_audit"):
+        validate_per_brand_critic_response(response, envelope)

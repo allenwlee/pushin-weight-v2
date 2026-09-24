@@ -6,6 +6,7 @@ cannot silently change provider input. Source text is never paraphrased here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from datetime import datetime
@@ -26,6 +27,34 @@ ENRICHMENT_FIELDS = (
     "total_post_count", "translation_succeeded_count", "classification_succeeded_count",
     "fully_enriched_count", "translation_status", "classification_status",
 )
+
+
+def evidence_support_spans(evidence: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Name exact source passages without asking the model to reproduce them.
+
+    Concatenating a field's spans recovers its text exactly. Equal translated
+    fields are represented once; existing text_aliases retain their provenance.
+    """
+    spans = []
+    seen_text = set()
+    for field in ("excerpt", "original_text", "text_en", "text_zh_cn"):
+        value = evidence.get(field)
+        if not isinstance(value, str) or not value or value in seen_text:
+            continue
+        seen_text.add(value)
+        start = 0
+        while start < len(value):
+            end = min(len(value), start + 400)
+            if end < len(value):
+                boundary = value.rfind(" ", start + 200, end)
+                if boundary >= 0:
+                    end = boundary + 1
+            text = value[start:end]
+            identity = json.dumps([evidence["evidence_id"], field, start, text], ensure_ascii=False)
+            spans.append({"span_id": "s:" + hashlib.sha256(identity.encode()).hexdigest()[:20],
+                          "source_field": field, "text": text})
+            start = end
+    return spans
 
 
 def pick(source: Mapping[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
