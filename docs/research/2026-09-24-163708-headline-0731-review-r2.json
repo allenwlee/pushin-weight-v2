@@ -1,0 +1,216 @@
+{
+  "reviewer": "R2",
+  "model": "google/gemini-3.8-flash",
+  "usage": {
+    "prompt_tokens": 63803,
+    "completion_tokens": 7422,
+    "total_tokens": 71225,
+    "cost": 0.07568475,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.07568475,
+      "upstream_inference_prompt_cost": 0.04785225,
+      "upstream_inference_completions_cost": 0.0278325
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 5385,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "review": {
+    "reviewer": "blind_evaluator",
+    "cases": [
+      {
+        "case_id": "H09",
+        "A": {
+          "factual_support": 5,
+          "proportionality": 5,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Accurately reports the official announcement of Seedance 2.5 Draft Mode by BytePlus based on the two available posts."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "Arm A generates a fully factual, proportionate narrative covering the product announcement, whereas Arm B is held."
+      },
+      {
+        "case_id": "H10",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 4,
+          "proportionality": 4,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Accurately synthesizes user reactions and comparison discussions regarding GLM 5.3 and agent workloads from the provided posts."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "Arm B provides a well-supported and relevant narrative summarizing model feedback, while Arm A is held."
+      },
+      {
+        "case_id": "H11",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 2,
+          "why_first_relevance": 3,
+          "secondary_usefulness": 2,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "Makes an incorrect mathematical claim that post count increased 28.6% from 84 to 97 (conflating the intra-window segment change with total volume change), while baseline comparison was suppressed."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "Arm B suffers from a critical failure due to an erroneous, fabricated mathematical claim (asserting 84 to 97 is a 28.6% rise) and violating suppressed comparison rules. Arm A's hold is preferred."
+      },
+      {
+        "case_id": "H12",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 5,
+          "proportionality": 5,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Factually captures the release and community discussion around NVIDIA's Nemotron 3 Diarization model and NeMo-AutoModel updates."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "Arm B provides a completely factual and well-supported narrative, while Arm A is held."
+      },
+      {
+        "case_id": "H13",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 5,
+          "proportionality": 4,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Accurately reports the viral post detailing alleged regulatory scrutiny alongside secondary context on SenseTime compute and SenseNova models."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "Arm B delivers a supported narrative capturing the key discussions in the window, whereas Arm A is held."
+      },
+      {
+        "case_id": "H14",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 5,
+          "proportionality": 5,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Thoroughly supported by the evidence and facts, integrating infrastructure explainers, open-weight tooling, policy friction, and metric shifts."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "Arm B produces a detailed, factually solid overview of diverse conversation themes, while Arm A is held."
+      },
+      {
+        "case_id": "H15",
+        "A": {
+          "factual_support": 4,
+          "proportionality": 4,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Correctly summarizes the main discussions around Moonshot AI under investigation and the Kimi K2.8 preview signal, with verified metrics."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "Arm A offers an informative, supported narrative on the major events driving volume, whereas Arm B is held."
+      },
+      {
+        "case_id": "H16",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Narrative held/unavailable."
+        },
+        "preferred_arm": "tie",
+        "preference_reason": "Both arms appropriately held the narrative."
+      }
+    ]
+  }
+}

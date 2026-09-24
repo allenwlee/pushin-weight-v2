@@ -675,3 +675,13 @@ history.
   dead code are removed; durable reports and hashes remain.
 - Commit, push, staging deployment, and production deployment follow the
   refreshed Ollija production guide and all qualification gates.
+
+## Qualification Outcome (2026-09-24)
+
+U5 recorded `retain_v41_flash`. The untouched holdout's 24-pair blind review
+found ten critical factual failures in the 0731 candidate, including claims
+from explicitly suppressed period comparisons and wrong-brand evidence. The
+candidate did not qualify under SC2, so U6 and the staging/production delivery
+steps are stopped. The measurements, review records, hashes, and remaining
+gate limitations are in
+[the qualification report](../research/2026-09-24-163708-headline-0731-qualification-no-go.md).

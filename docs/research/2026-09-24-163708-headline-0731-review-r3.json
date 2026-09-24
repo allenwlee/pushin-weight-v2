@@ -1,0 +1,216 @@
+{
+  "reviewer": "R3",
+  "model": "x-ai/grok-4.7",
+  "usage": {
+    "prompt_tokens": 65074,
+    "completion_tokens": 16913,
+    "total_tokens": 81987,
+    "cost": 0.1839184,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 1152,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.1839184,
+      "upstream_inference_prompt_cost": 0.102736,
+      "upstream_inference_completions_cost": 0.0811824
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 15353,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "review": {
+    "reviewer": "independent_reviewer",
+    "cases": [
+      {
+        "case_id": "H17",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable, so there is no supported headline or secondary to score."
+        },
+        "B": {
+          "factual_support": 4,
+          "proportionality": 4,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 4,
+          "critical_failure": false,
+          "concise_reason": "CLI v0.4.12, MIT, 23/30 and 76.7% claims are in posts, and the official H3/AMD item is separated; 'sparking discussion' is a bit strong, and Japanese '連携' is firmer than the official wording."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "B is a supported event-led headline; A has no narrative."
+      },
+      {
+        "case_id": "H18",
+        "A": {
+          "factual_support": 2,
+          "proportionality": 4,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "The VAST funding mention and irrelevant novel posts are handled carefully, but the proposition falsely says the post is classified as business/finance while the supplied post-type fact is other."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable, so usefulness fields are 1."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "A's main mention is real, but its business/finance classification is a material unsupported claim; the hold does not publish that error."
+      },
+      {
+        "case_id": "H19",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable."
+        },
+        "B": {
+          "factual_support": 2,
+          "proportionality": 2,
+          "why_first_relevance": 3,
+          "secondary_usefulness": 3,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "Staff posts support Boss AI and AI Native, but Kai-Fu Lee is not in the evidence; prior 91-to-82 comparison and 'within normal range' are disallowed."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "B invents the speaker and uses a suppressed comparison plus forbidden historic-norm wording; the hold is safer."
+      },
+      {
+        "case_id": "H20",
+        "A": {
+          "factual_support": 4,
+          "proportionality": 3,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Firefox integration, privacy, Pimento and the source-code listing are in the evidence and locales match; 'focus' and 'largely neutral/news-oriented' overstate partial 59% and 39% shares."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "A leads with a supported Mistral distribution event and does not invent a volume comparison; B provides nothing."
+      },
+      {
+        "case_id": "H21",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable."
+        },
+        "B": {
+          "factual_support": 3,
+          "proportionality": 2,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 3,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "U1.5, 10 official posts, 42% and 61% match the facts, but 'down from 129' asserts a comparison the source suppresses, and the SenseTime/CoT link is tighter than the excerpt."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "B's content is partly supported, but the disallowed prior-period drop is a material claim; prefer the hold."
+      },
+      {
+        "case_id": "H22",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable."
+        },
+        "B": {
+          "factual_support": 3,
+          "proportionality": 2,
+          "why_first_relevance": 4,
+          "secondary_usefulness": 4,
+          "translation_equivalence": 5,
+          "critical_failure": true,
+          "concise_reason": "Benchmark, Qwen3.8 variant and safety excerpts support the theme summary, but 'up from 5,211' and staff 48-to-34 are period comparisons while comparison is not allowed."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "The theme summary is useful, but B presents a suppressed volume change as fact; the hold avoids that claim."
+      },
+      {
+        "case_id": "H23",
+        "A": {
+          "factual_support": 1,
+          "proportionality": 2,
+          "why_first_relevance": 3,
+          "secondary_usefulness": 2,
+          "translation_equivalence": 4,
+          "critical_failure": true,
+          "concise_reason": "Investment and Odysseus details are supported, but the about-$500 million figure is DeepSeek's in the Rhodium post, not Kling's, so the revenue-gap conclusion is wrong in every locale."
+        },
+        "B": {
+          "factual_support": 4,
+          "proportionality": 5,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 4,
+          "critical_failure": false,
+          "concise_reason": "Covers the filmmaker post, reported 150-minute feature and reported RMB 1.4 billion investment, hedges the small partial sample and 74% neutral share, and does not misassign revenue."
+        },
+        "preferred_arm": "B",
+        "preference_reason": "B stays within the evidence and sample limits; A critically misattributes DeepSeek's revenue figure to Kling."
+      },
+      {
+        "case_id": "H24",
+        "A": {
+          "factual_support": 5,
+          "proportionality": 5,
+          "why_first_relevance": 5,
+          "secondary_usefulness": 5,
+          "translation_equivalence": 5,
+          "critical_failure": false,
+          "concise_reason": "Correctly treats the single low-base post as a list mention of Dots Studio in Yoniq Compute, with release/neutral classification and matching locales."
+        },
+        "B": {
+          "factual_support": 1,
+          "proportionality": 1,
+          "why_first_relevance": 1,
+          "secondary_usefulness": 1,
+          "translation_equivalence": 1,
+          "critical_failure": false,
+          "concise_reason": "Held narrative is unavailable."
+        },
+        "preferred_arm": "A",
+        "preference_reason": "A is proportional to one post and fully supported; B has no narrative."
+      }
+    ]
+  }
+}
