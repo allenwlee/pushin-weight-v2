@@ -364,14 +364,14 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
     fleet_arrival_rate = sum(
         fleet_calls * 60 / cadence for cadence in cadence_minutes
     )
-    worker_capacity = 3600 * 1 / 45
+    worker_capacity = 3600 * 3 / 45
     assert status["drain"] == {
         "eligible_brand_count": eligible_brands,
         "expected_call_count": expected_calls,
         "recorded_call_count": 2,
-        "worker_concurrency": 1,
+        "worker_concurrency": 3,
         "p95_latency_seconds": 45.0,
-        "estimated_run_drain_seconds": expected_calls * 45 / 1,
+        "estimated_run_drain_seconds": expected_calls * 45 / 3,
         "window_expected_arrival_calls_per_hour": expected_calls * 60 / 60,
         "fleet_expected_call_count_per_window": fleet_calls,
         "fleet_expected_arrival_calls_per_hour": pytest.approx(fleet_arrival_rate),

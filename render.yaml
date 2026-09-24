@@ -87,7 +87,7 @@ services:
     plan: starter
     buildCommand: ./build.sh
     startCommand: >-
-      celery -A project worker -l INFO -Q trend-narratives --concurrency=1
+      celery -A project worker -l INFO -Q trend-narratives --concurrency=3
       --prefetch-multiplier=1 --without-gossip --without-mingle
     envVars:
       - key: PYTHON_VERSION

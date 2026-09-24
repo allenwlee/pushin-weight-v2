@@ -26,7 +26,7 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
     worker = services["pushinweight-headlines"]
     command = worker["startCommand"]
     assert "-Q trend-narratives" in command
-    assert "--concurrency=1" in command
+    assert "--concurrency=3" in command
     assert "--prefetch-multiplier=1" in command
     assert " beat " not in f" {command} "
     assert {entry.get("key") for entry in worker["envVars"]} >= {

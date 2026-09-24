@@ -534,6 +534,27 @@ def test_headline_deepinfra_route_requires_known_stage():
         )
 
 
+def test_0731_forty_brand_graph_reserves_all_two_brand_calls():
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra", base_url="https://api.deepinfra.com/v1/openai",
+        model=DEEPSEEK_0731_MODEL,
+        per_brand_batch_size=2, per_brand_call_cap=41,
+        per_brand_input_token_cap=1_600_000,
+        per_brand_output_token_cap=350_000,
+        per_brand_cost_cap_usd=Decimal("0.30"),
+        per_brand_input_usd_per_million=Decimal("0.09"),
+        per_brand_output_usd_per_million=Decimal("0.27"),
+        per_brand_worker_concurrency=3,
+        provider_calls_enabled=True, activation_state="owner_override",
+    )
+
+    assert config.per_brand_batch_size == 2
+    assert config.per_brand_worker_concurrency == 3
+    assert 1 + 2 * ((config.per_brand_expected_max_brands + 1) // 2) == 41
+
+
 def test_u3_editor_rejects_a_proposition_citing_another_brands_evidence():
     brands = ["deepseek", "minimax"]
     packet = {

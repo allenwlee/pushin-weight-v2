@@ -623,7 +623,7 @@ class HeadlineNarrativeConfig(BaseModel):
     per_brand_expected_max_brands: int = Field(default=40, ge=1, le=100)
     per_brand_batch_size: int = Field(default=5, ge=1, le=5)
     per_brand_p95_latency_seconds: Decimal = Field(default=Decimal("45"), gt=0, le=120)
-    per_brand_worker_concurrency: Literal[1] = 1
+    per_brand_worker_concurrency: int = Field(default=1, ge=1, le=3)
     max_body_en_chars: int = Field(default=240, ge=80, le=500)
     max_body_zh_cn_chars: int = Field(default=120, ge=40, le=300)
     task_expiry_seconds: int = Field(default=1800, ge=60, le=3600)
@@ -731,9 +731,10 @@ class HeadlineNarrativeConfig(BaseModel):
             * self.per_brand_p95_latency_seconds
             / Decimal(3600 * self.per_brand_worker_concurrency)
         )
-        if self.provider_calls_active and drain_utilization >= Decimal("1"):
+        max_utilization = Decimal("0.75") if self.provider == "deepinfra" else Decimal("1")
+        if self.provider_calls_active and drain_utilization >= max_utilization:
             raise ValueError(
-                "headline concurrency-one drain rate must exceed the arrival rate"
+                "headline worker drain rate must exceed the configured arrival rate"
             )
         if (
             self.activation_state == "reviewed"

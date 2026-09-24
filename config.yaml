@@ -344,7 +344,7 @@ headline_narrative:
   per_brand_pricing_version: "deepseek-v4-flash-peak-2026-09-02"
   per_brand_expected_max_brands: 40
   per_brand_p95_latency_seconds: "45"
-  per_brand_worker_concurrency: 1
+  per_brand_worker_concurrency: 3
   max_body_en_chars: 240
   max_body_zh_cn_chars: 120
   task_expiry_seconds: 1800

@@ -290,8 +290,19 @@ def test_lost_snapshot_handoff_is_reclaimed_only_after_lease_expiry(monkeypatch)
     assert {attempt["fence"] for attempt in attempts[4:]} == {2}
 
 
-def test_twenty_brands_use_one_rank_four_editor_four_critic_calls(monkeypatch):
-    config = _config()
+@pytest.mark.parametrize("batch_size, expected_batches", [(5, 4), (2, 10)])
+def test_twenty_brands_use_one_rank_and_all_editor_critic_calls(
+    monkeypatch, batch_size, expected_batches
+):
+    overrides = {}
+    if batch_size == 2:
+        overrides = {
+            "per_brand_batch_size": 2,
+            "per_brand_call_cap": 41,
+            "per_brand_input_token_cap": 1_600_000,
+            "per_brand_output_token_cap": 350_000,
+        }
+    config = _config(**overrides)
     snapshot = _snapshot(20)
     Brand.objects.bulk_create(
         [
@@ -345,7 +356,7 @@ def test_twenty_brands_use_one_rank_four_editor_four_critic_calls(monkeypatch):
 
     run.refresh_from_db()
     assert run.status == TrendNarrativeRun.Status.ACTIVE
-    assert TrendNarrativeProviderCall.objects.filter(run=run).count() == 9
+    assert TrendNarrativeProviderCall.objects.filter(run=run).count() == 1 + 2 * expected_batches
     assert (
         list(
             TrendNarrativeProviderCall.objects.filter(run=run)
@@ -355,12 +366,16 @@ def test_twenty_brands_use_one_rank_four_editor_four_critic_calls(monkeypatch):
         == 1
     )
     assert (
-        TrendNarrativeProviderCall.objects.filter(run=run, stage="editor").count() == 4
+        TrendNarrativeProviderCall.objects.filter(run=run, stage="editor").count()
+        == expected_batches
     )
     assert (
-        TrendNarrativeProviderCall.objects.filter(run=run, stage="critic").count() == 4
+        TrendNarrativeProviderCall.objects.filter(run=run, stage="critic").count()
+        == expected_batches
     )
-    assert [len(batch["brand_keys"]) for batch in run.batch_manifest] == [5, 5, 5, 5]
+    assert [len(batch["brand_keys"]) for batch in run.batch_manifest] == [
+        batch_size
+    ] * expected_batches
     assert run.internal_order[0] == "brand-19"
     assert (
         BrandTrendNarrative.objects.filter(
