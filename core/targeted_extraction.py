@@ -41,6 +41,7 @@ from core.models import (
     ProductVerificationProposal,
     ProfileMovementCandidate,
     RareTypeCategoryAssignment,
+    RareTypeSearchHit,
     SearchQuery,
     TargetedExtractionAttempt,
     TargetedExtractionState,
@@ -2017,6 +2018,20 @@ def run_targeted_extractions(
             latency_ms=latency_ms,
             error_code=error_code,
         )
+    if (
+        roles
+        and not failed
+        and not deferred
+        and TargetedExtractionState.objects.filter(
+            post=post, role__in=roles, status="succeeded"
+        ).count() == len(set(roles))
+    ):
+        RareTypeSearchHit.objects.filter(
+            post=post,
+            gate_state=RareTypeSearchHit.GateState.KEPT,
+            extracted_at__isnull=True,
+        ).update(extracted_at=timezone.now())
+
     return TargetedExtractionResult(
         calls_made=calls_made,
         records_written=records_written,

@@ -27,7 +27,12 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 NOW = datetime(2026, 9, 24, 9, 0, tzinfo=UTC)
 
 
-def _hit(*, tweet_id="rare-kept", gate_state=RareTypeSearchHit.GateState.KEPT):
+def _hit(
+    *,
+    tweet_id="rare-kept",
+    gate_state=RareTypeSearchHit.GateState.KEPT,
+    created_at="2026-09-24T08:59:00Z",
+):
     query = SearchQuery.objects.create(query_id=f"query-{tweet_id}")
     reservation = reserve_search_run(
         lane="rare_types",
@@ -47,7 +52,7 @@ def _hit(*, tweet_id="rare-kept", gate_state=RareTypeSearchHit.GateState.KEPT):
             {
                 "id": tweet_id,
                 "text": "I joined Unknown AI",
-                "created_at": "2026-09-24T08:59:00Z",
+                "created_at": created_at,
                 "author_id": "author-1",
                 "author_handle": "researcher",
             }
@@ -84,6 +89,19 @@ def test_kept_unknown_company_enters_normal_post_queue_and_links_hit():
     assert PostBrand.objects.filter(post=post, brand_id="_unattributed").exists()
     enrichment = PostEnrichmentState.objects.get(post=post)
     assert enrichment.classification_status == "pending"
+    from monitor.views import HOME_WINDOW_DEFAULT, _feed_page_posts
+
+    feed_posts, _cursor, _has_more, _filters = _feed_page_posts(
+        window_days=HOME_WINDOW_DEFAULT,
+        filters={},
+        sort="created_at",
+        order="desc",
+        cursor=None,
+        limit=20,
+        now=NOW,
+    )
+    assert post.pk in {row.pk for row in feed_posts}
+    assert hit.first_visible_at == NOW
 
 
 def test_existing_post_is_linked_not_duplicated_and_junk_never_persists():
@@ -217,6 +235,47 @@ def test_completed_normal_classification_reconciles_to_hit():
     assert reconcile_classified_hits(now=NOW + timedelta(minutes=1), limit=20) == 1
     hit.refresh_from_db()
     assert hit.classified_at == NOW + timedelta(minutes=1)
+    assert hit.first_visible_at == NOW
+    assert reconcile_classified_hits(now=NOW + timedelta(minutes=2), limit=20) == 0
+    hit.refresh_from_db()
+    assert hit.first_visible_at == NOW
+
+
+def test_classified_hit_stays_unpublished_until_normal_feed_includes_it():
+    Brand.objects.create(
+        nickname="_unattributed", display_name="Unattributed", is_sentinel=True
+    )
+    hit = _hit(
+        tweet_id="older-classified-keeper",
+        created_at="2026-09-22T08:59:00Z",
+    )
+    _runner()._ingest_kept_rare_type_hits(run_id="classification")
+    hit.refresh_from_db()
+    from monitor.views import HOME_WINDOW_DEFAULT, _feed_page_posts
+
+    feed_posts, _cursor, _has_more, _filters = _feed_page_posts(
+        window_days=HOME_WINDOW_DEFAULT,
+        filters={},
+        sort="created_at",
+        order="desc",
+        cursor=None,
+        limit=20,
+        now=NOW,
+    )
+    assert hit.post_id not in {row.pk for row in feed_posts}
+    assert hit.first_visible_at is None
+    PostEnrichmentState.objects.filter(post_id=hit.post_id).update(
+        classification_status=PostEnrichmentState.Status.SUCCEEDED
+    )
+    assert reconcile_classified_hits(now=NOW + timedelta(minutes=1), limit=20) == 1
+    hit.refresh_from_db()
+    assert hit.classified_at == NOW + timedelta(minutes=1)
+    assert hit.first_visible_at is None
+
+    Post.objects.filter(pk=hit.post_id).update(created_at=NOW - timedelta(minutes=1))
+    assert reconcile_classified_hits(now=NOW + timedelta(minutes=2), limit=20) == 0
+    hit.refresh_from_db()
+    assert hit.first_visible_at == NOW + timedelta(minutes=2)
 
 
 def test_staging_reconciliation_does_not_touch_carryover():

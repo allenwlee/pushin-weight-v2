@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Case, F, Value, When
+from django.db.models import Case, F, Q, Value, When
 
 from core.models import (
     BrandDiscoveryCandidate,
@@ -1047,9 +1047,17 @@ def link_kept_hit_to_post(*, hit_id: int, post: Post, now: datetime) -> bool:
         raise ValueError("rare-type hit is already linked to another Post")
     hit.post = post
     hit.post_persisted_at = hit.post_persisted_at or now
+    if hit.first_visible_at is None and _post_in_default_feed(post.pk, now=now):
+        hit.first_visible_at = now
     hit.last_error_code = ""
     hit.save(
-        update_fields=["post", "post_persisted_at", "last_error_code", "updated_at"]
+        update_fields=[
+            "post",
+            "post_persisted_at",
+            "first_visible_at",
+            "last_error_code",
+            "updated_at",
+        ]
     )
     return True
 
@@ -1062,6 +1070,23 @@ def mark_hit_ingestion_failed(*, hit_id: int, error_code: str) -> None:
         gate_state=RareTypeSearchHit.GateState.KEPT,
         post_id__isnull=True,
     ).update(last_error_code=error_code[:128])
+
+
+def _post_in_default_feed(post_id: str, *, now: datetime) -> bool:
+    """Use the home feed's actual default queryset, including its time window."""
+
+    from monitor.views import (
+        HOME_WINDOW_DEFAULT,
+        _filter_home_posts_queryset,
+        _normalize_home_filters,
+    )
+
+    return _filter_home_posts_queryset(
+        HOME_WINDOW_DEFAULT,
+        _normalize_home_filters({}),
+        now=now,
+        queryset=Post.objects.filter(pk=post_id),
+    ).exists()
 
 
 def reconcile_classified_hits(
@@ -1082,20 +1107,41 @@ def reconcile_classified_hits(
     }
     if limit < 1:
         return 0
+    from monitor.views import (
+        HOME_WINDOW_DEFAULT,
+        _filter_home_posts_queryset,
+        _normalize_home_filters,
+    )
+
+    default_feed = _filter_home_posts_queryset(
+        HOME_WINDOW_DEFAULT,
+        _normalize_home_filters({}),
+        now=now,
+        queryset=Post.objects.all(),
+    )
     hits = RareTypeSearchHit.objects.filter(
         gate_state=RareTypeSearchHit.GateState.KEPT,
         post_id__isnull=False,
-        classified_at__isnull=True,
+        post_persisted_at__isnull=False,
         post__enrichment_state__classification_status=(
             PostEnrichmentState.Status.SUCCEEDED
         ),
+    ).filter(
+        Q(classified_at__isnull=True)
+        | Q(first_visible_at__isnull=True, post_id__in=default_feed.values("pk"))
     ).select_related("decision")
     if fetched_since is not None:
         hits = hits.filter(fetched_at__gte=fetched_since)
     if hit_ids is not None:
         hits = hits.filter(pk__in=hit_ids)
+    hits = list(hits.order_by("fetched_at", "id")[:limit])
+    visible_posts = set(
+        default_feed.filter(pk__in=[hit.post_id for hit in hits]).values_list(
+            "pk", flat=True
+        )
+    )
     reconciled = 0
-    for hit in hits.order_by("fetched_at", "id")[:limit]:
+    for hit in hits:
         classified_types = set(
             PostBrandSignal.objects.filter(post_id=hit.post_id).values_list(
                 "post_type_id", flat=True
@@ -1106,14 +1152,24 @@ def reconcile_classified_hits(
             for route in (hit.decision.derived_types if hit.decision else [])
             if route in route_to_post_type
         }
-        hit.classified_at = now
+        newly_classified = hit.classified_at is None
+        hit.classified_at = hit.classified_at or now
+        if hit.first_visible_at is None and hit.post_id in visible_posts:
+            hit.first_visible_at = now
         hit.last_error_code = (
             "jev_classifier_disagreement"
             if expected_types and expected_types.isdisjoint(classified_types)
             else ""
         )
-        hit.save(update_fields=["classified_at", "last_error_code", "updated_at"])
-        reconciled += 1
+        hit.save(
+            update_fields=[
+                "classified_at",
+                "first_visible_at",
+                "last_error_code",
+                "updated_at",
+            ]
+        )
+        reconciled += newly_classified
     return reconciled
 
 

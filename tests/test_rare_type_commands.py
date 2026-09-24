@@ -385,6 +385,7 @@ def test_replay_retries_targeted_extraction_for_already_classified_post(monkeypa
     post_type = PostTypeKey.objects.create(key="releases_updates")
     post = Post.objects.create(
         tweet_id="targeted-retry",
+        created_at=django_timezone.now() - timedelta(minutes=1),
         text="DeepSeek announces R2",
         text_en="DeepSeek announces R2",
         text_zh_cn="DeepSeek 发布 R2",
@@ -503,6 +504,9 @@ def test_replay_retries_targeted_extraction_for_already_classified_post(monkeypa
     assert selected_targeted.attempts == 2
     assert unrelated_targeted.status == "failed"
     assert unrelated_targeted.attempts == 1
+    hit.refresh_from_db()
+    assert hit.extracted_at is not None
+    assert hit.first_visible_at is not None
 
 
 def test_selected_persistence_failure_recovers_without_touching_other_hit(monkeypatch):
@@ -559,6 +563,8 @@ def test_explicit_targeted_retry_respects_deadline_before_provider_call():
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
+    hit = _hits(post.pk)[0]
+    _mark_kept_and_link(hit, post)
     cfg = load_config(Path("config.yaml"))
     cfg.targeted_extraction.enabled = True
     called = 0
@@ -587,6 +593,35 @@ def test_explicit_targeted_retry_respects_deadline_before_provider_call():
     assert result["calls"] == 0
     assert result["deferred_roles"] == ["event_extraction"]
     assert deadline.requested == cfg.targeted_extraction.request_timeout_seconds + 8
+    hit.refresh_from_db()
+    assert hit.extracted_at is None
+
+    runner._targeted_extraction_calls = {
+        "event_extraction": lambda *_args: (_ for _ in ()).throw(
+            RuntimeError("provider failed")
+        )
+    }
+    failed = runner._replay_targeted_extractions(post_ids={post.pk})
+    assert failed["failed_roles"] == ["event_extraction"]
+    hit.refresh_from_db()
+    assert hit.extracted_at is None
+
+
+def test_no_applicable_targeted_role_does_not_mark_extracted():
+    post = Post.objects.create(tweet_id="no-targeted-role", text="General AI update")
+    PostEnrichmentState.objects.create(
+        post=post,
+        classification_status=PostEnrichmentState.Status.SUCCEEDED,
+    )
+    hit = _hits(post.pk)[0]
+    _mark_kept_and_link(hit, post)
+    cfg = load_config(Path("config.yaml"))
+    cfg.targeted_extraction.enabled = True
+    result = CycleRunner(cfg=cfg)._replay_targeted_extractions(post_ids={post.pk})
+    assert result["selected_posts"] == 1
+    assert result["calls"] == 0
+    hit.refresh_from_db()
+    assert hit.extracted_at is None
 
 
 def test_explicit_post_scope_excludes_global_requeue_and_quarantine_side_effects():
