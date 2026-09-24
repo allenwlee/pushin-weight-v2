@@ -982,11 +982,7 @@ class SnapshotRestoreEngine:
         return self.policy.path.parents[1]
 
     def _run(
-        self,
-        command: list[str],
-        *,
-        environment: Mapping[str, str],
-        timeout_seconds: int = 60 * 30,
+        self, command: list[str], *, environment: Mapping[str, str]
     ) -> CommandResult:
         try:
             return self.runner(
@@ -995,7 +991,7 @@ class SnapshotRestoreEngine:
                 env=dict(environment),
                 text=True,
                 capture_output=True,
-                timeout=timeout_seconds,
+                timeout=60 * 30,
                 check=False,
             )
         except KeyboardInterrupt:
@@ -1187,9 +1183,7 @@ class SnapshotRestoreEngine:
                 name,
                 str(artifact.path),
             ]
-            result = self._run(
-                command, environment=environment, timeout_seconds=60 * 90
-            )
+            result = self._run(command, environment=environment)
             if result.returncode != 0:
                 raise RefreshError("pg_restore_failed")
             return ShadowCandidate(name=name, marker=marker, artifact=artifact)
