@@ -57,6 +57,7 @@ from core.classification_contract import (
     parse_stage1_classifications,
 )
 from core.discovery import (
+    RARE_EXTRA_CALL_ID,
     plan_discovery_calls,
     record_discovery_run,
     remaining_discovery_result_capacity,
@@ -854,7 +855,8 @@ class _BoundedClassifierClient:
                 remaining = self._reservations.pop(token, 0)
                 self._reserved_calls -= remaining
 
-    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+    def _start_physical_call(self, kwargs: dict[str, Any]) -> None:
+        """Consume one shared transport slot before calling the delegate."""
         reservation = kwargs.pop("_classifier_reservation", None)
         with self._lock:
             if reservation is not None:
@@ -873,7 +875,15 @@ class _BoundedClassifierClient:
                     self._sleep(wait_seconds)
             self._calls += 1
             self._last_started = self._monotonic()
+
+    def messages_create(self, **kwargs: Any) -> dict[str, Any]:
+        self._start_physical_call(kwargs)
         return self._delegate.messages_create(**kwargs)
+
+    def messages_create_text(self, **kwargs: Any) -> Any:
+        """Forward raw-text requests through the same physical-call budget."""
+        self._start_physical_call(kwargs)
+        return self._delegate.messages_create_text(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -3023,7 +3033,7 @@ class CycleRunner:
             item = dict(hit.public_payload or {})
             item["id"] = str(hit.provider_post_id)
             item["tweet_id"] = str(hit.provider_post_id)
-            item["source_query_id"] = "RARE_EXTRA"
+            item["source_query_id"] = RARE_EXTRA_CALL_ID
             item["_discovery_lane"] = "rare_types"
             item["_discovery_query_id"] = hit.run.source_query.query_id
             item["_rare_type_hit_id"] = hit.pk
@@ -4725,7 +4735,7 @@ class CycleRunner:
                     "daily_credit_ceiling": call.daily_credit_ceiling,
                 }
 
-            if call.call_id == "RARE_EXTRA":
+            if call.call_id == RARE_EXTRA_CALL_ID:
                 rare_result = self._run_rare_type_search(
                     call, api, now=self._wall_now()
                 )
@@ -5225,7 +5235,9 @@ class CycleRunner:
         summary["totals"]["n_persist_failed"] = self._posts_persist_failed
         summary["totals"]["n_attributed"] = self._posts_attributed
 
-        if any(call.get("call_id") == "RARE_EXTRA" for call in summary["calls"]):
+        if any(
+            call.get("call_id") == RARE_EXTRA_CALL_ID for call in summary["calls"]
+        ):
             try:
                 summary["rare_types"] = build_rare_type_cycle_summary(summary)
             except DatabaseError as exc:

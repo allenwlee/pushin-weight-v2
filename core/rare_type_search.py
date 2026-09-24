@@ -1031,7 +1031,9 @@ def kept_hits_pending_post(
         rows = rows.filter(fetched_at__gte=fetched_since)
     if hit_ids is not None:
         rows = rows.filter(pk__in=hit_ids)
-    return rows.select_related("run", "decision").order_by("fetched_at", "id")[:limit]
+    return rows.select_related("run__source_query", "decision").order_by(
+        "fetched_at", "id"
+    )[:limit]
 
 
 @transaction.atomic

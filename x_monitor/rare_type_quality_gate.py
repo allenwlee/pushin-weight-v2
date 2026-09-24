@@ -56,6 +56,10 @@ FUNCTIONAL_EXEMPLARS = {
 class QualityEvidenceError(ValueError):
     """The supplied evidence cannot be scored without guessing."""
 
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
 
 def _canonical_bytes(value: Any) -> bytes:
     return json.dumps(
@@ -83,17 +87,19 @@ def _ratio(numerator: int, denominator: int) -> float | None:
     return numerator / denominator if denominator else None
 
 
-def assessment_identity(
+def runtime_assessment_identity(
     *,
     query_version: str,
     planner_query: str,
     config: JevDecisionsConfig,
-    fixture_path: Path,
 ) -> dict[str, str]:
-    """Freeze every input that can change a gate result before inference."""
+    """Build the provider-free runtime portion of an assessment identity."""
 
     if question_content_hash() != config.question_content_sha256:
-        raise QualityEvidenceError("configured question content hash mismatch")
+        raise QualityEvidenceError(
+            "configured question content hash mismatch",
+            code="question_content_hash_mismatch",
+        )
     if (
         threshold_values_hash(
             config.no_threshold,
@@ -103,12 +109,10 @@ def assessment_identity(
         )
         != config.threshold_values_sha256
     ):
-        raise QualityEvidenceError("configured threshold values hash mismatch")
-    fixture_bytes = fixture_path.read_bytes()
-    try:
-        corpus = json.loads(fixture_bytes)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise QualityEvidenceError("fixture JSON invalid") from exc
+        raise QualityEvidenceError(
+            "configured threshold values hash mismatch",
+            code="threshold_values_hash_mismatch",
+        )
     return {
         "query_version": query_version,
         "planner_query_sha256": _sha256(planner_query.encode("utf-8")),
@@ -124,6 +128,30 @@ def assessment_identity(
         "no_threshold": format(config.no_threshold, "f"),
         "role_opening_threshold": format(config.role_opening_threshold, "f"),
         "attendance_event_threshold": format(config.attendance_event_threshold, "f"),
+    }
+
+
+def assessment_identity(
+    *,
+    query_version: str,
+    planner_query: str,
+    config: JevDecisionsConfig,
+    fixture_path: Path,
+) -> dict[str, str]:
+    """Freeze every input that can change a gate result before inference."""
+
+    identity = runtime_assessment_identity(
+        query_version=query_version,
+        planner_query=planner_query,
+        config=config,
+    )
+    fixture_bytes = fixture_path.read_bytes()
+    try:
+        corpus = json.loads(fixture_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise QualityEvidenceError("fixture JSON invalid") from exc
+    return {
+        **identity,
         "fixture_sha256": _sha256(fixture_bytes),
         "corpus_content_sha256": _sha256(_canonical_bytes(corpus)),
     }
@@ -562,6 +590,7 @@ def complete_assessment(
         reasons = []
     assessment: dict[str, Any] = {
         "schema_version": "rare-type-quality-assessment-v2",
+        "assessment_mode": "fresh_query",
         "identity": dict(identity),
         "status": status,
         "quality_gate_passed": status == "pass",
@@ -599,9 +628,173 @@ def validate_assessment(
     unsigned.pop("assessment_digest", None)
     if supplied_digest != _sha256(_canonical_bytes(unsigned)):
         raise QualityEvidenceError("assessment digest mismatch")
+    schema_version = assessment.get("schema_version")
+    assessment_mode = assessment.get("assessment_mode")
+    if schema_version == "rare-type-quality-assessment-v1":
+        if assessment_mode not in {None, "fresh_query"}:
+            raise QualityEvidenceError("assessment mode invalid")
+    elif schema_version == "rare-type-quality-assessment-v2":
+        if assessment_mode != "fresh_query":
+            raise QualityEvidenceError("assessment mode invalid")
+    elif schema_version == "rare-type-quality-assessment-v3":
+        if assessment_mode != "archived_deterministic_sample":
+            raise QualityEvidenceError("assessment mode invalid")
+        _validate_archived_sample_assessment(assessment)
+    else:
+        raise QualityEvidenceError("assessment schema version invalid")
     if (
         assessment.get("status") != "pass"
         or assessment.get("quality_gate_passed") is not True
     ):
         raise QualityEvidenceError("assessment quality gate did not pass")
     return True
+
+
+def _validate_archived_sample_assessment(assessment: Mapping[str, Any]) -> None:
+    """Fail closed on the v3 archive accounting runtime will trust."""
+
+    evidence = assessment.get("archived_sample_evidence")
+    decision = assessment.get("decision_basis")
+    budget = assessment.get("budget")
+    if not all(isinstance(value, Mapping) for value in (evidence, decision, budget)):
+        raise QualityEvidenceError("archived assessment evidence missing")
+    source = evidence.get("source_sample")
+    labels = evidence.get("independent_labels")
+    provider = evidence.get("provider_capture")
+    if not all(isinstance(value, Mapping) for value in (source, labels, provider)):
+        raise QualityEvidenceError("archived assessment evidence invalid")
+    if (
+        decision.get("numeric_quality_thresholds") is not None
+        or decision.get("functional_fixture_required") is not True
+        or decision.get("complete_archived_accounting_required") is not True
+    ):
+        raise QualityEvidenceError("archived assessment decision basis invalid")
+    for field in (
+        "historical_window_count",
+        "historical_raw_post_count",
+        "historical_unique_post_count",
+        "historical_estimated_credits",
+        "selected_post_count",
+        "incremental_credits_for_archived_sample",
+    ):
+        value = source.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise QualityEvidenceError("archived source accounting invalid")
+    if (
+        source["historical_window_count"] == 0
+        or source["selected_post_count"] == 0
+        or source["historical_raw_post_count"]
+        < source["historical_unique_post_count"]
+        or source["historical_unique_post_count"] < source["selected_post_count"]
+        or source["incremental_credits_for_archived_sample"] != 0
+    ):
+        raise QualityEvidenceError("archived source accounting invalid")
+    if (
+        labels.get("blind_to_provider_outputs") is not True
+        or labels.get("human_gold") is not False
+        or labels.get("externally_fact_verified") is not False
+    ):
+        raise QualityEvidenceError("archived independent-label status invalid")
+    counts = labels.get("counts")
+    if not isinstance(counts, Mapping) or set(counts) != {"keep", "drop", "uncertain"}:
+        raise QualityEvidenceError("archived independent-label counts invalid")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in counts.values()
+    ) or sum(counts.values()) != source["selected_post_count"]:
+        raise QualityEvidenceError("archived independent-label counts invalid")
+
+    attempts = provider.get("physical_attempts")
+    successes = provider.get("successful_responses")
+    errors = provider.get("accepted_http_errors")
+    unknown_usage = provider.get("unknown_usage_attempts")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in (attempts, successes, errors, unknown_usage)
+    ):
+        raise QualityEvidenceError("archived provider accounting invalid")
+    if (
+        attempts == 0
+        or attempts != successes + errors
+        or errors != unknown_usage
+        or provider.get("provider_capture_complete") is not (errors == 0)
+        or provider.get("successful_usage_complete") is not True
+        or provider.get("invoice_confirmed") is not False
+        or provider.get("http_retries") != 0
+    ):
+        raise QualityEvidenceError("archived provider accounting invalid")
+    frozen_run = provider.get("frozen_run")
+    live_run = provider.get("live_run")
+    if not isinstance(frozen_run, Mapping) or not isinstance(live_run, Mapping):
+        raise QualityEvidenceError("archived provider run accounting missing")
+    frozen_errors = frozen_run.get("errors")
+    live_errors = live_run.get("errors")
+    run_counts = (
+        frozen_run.get("attempts"),
+        live_run.get("attempts"),
+        frozen_run.get("successful_responses"),
+        live_run.get("successful_responses"),
+    )
+    if (
+        any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in run_counts
+        )
+        or not isinstance(frozen_errors, list)
+        or not isinstance(live_errors, list)
+    ):
+        raise QualityEvidenceError("archived provider run accounting invalid")
+    if (
+        frozen_run["attempts"] + live_run["attempts"] != attempts
+        or frozen_run["successful_responses"]
+        + live_run["successful_responses"]
+        != successes
+        or len(frozen_errors) + len(live_errors) != errors
+    ):
+        raise QualityEvidenceError("archived provider run accounting invalid")
+    accepted_ids = decision.get("owner_accepted_live_http_errors")
+    if (
+        frozen_errors
+        or not isinstance(accepted_ids, list)
+        or len(accepted_ids) != len(set(accepted_ids))
+        or any(not isinstance(case_id, str) for case_id in accepted_ids)
+        or sorted(accepted_ids)
+        != sorted(
+            row.get("case_id")
+            for row in live_errors
+            if isinstance(row, Mapping)
+        )
+        or any(
+            not isinstance(row, Mapping)
+            or row.get("usage") != "unknown"
+            or isinstance(row.get("http_status"), bool)
+            or not isinstance(row.get("http_status"), int)
+            or row.get("http_status") == 200
+            for row in live_errors
+        )
+    ):
+        raise QualityEvidenceError("archived accepted-error accounting invalid")
+    reservation = _decimal(
+        provider.get("conservative_all_attempt_reservation_usd"),
+        field="archived reservation",
+    )
+    estimated = _decimal(
+        provider.get("estimated_usd_from_successful_usage"),
+        field="archived estimated usage",
+    )
+    ceiling = _decimal(provider.get("ceiling_usd"), field="archived ceiling")
+    if ceiling != ASSESSMENT_BUDGET_USD or reservation > ceiling or estimated > ceiling:
+        raise QualityEvidenceError("archived provider budget invalid")
+    if (
+        budget.get("reserved_usd") != provider.get(
+            "conservative_all_attempt_reservation_usd"
+        )
+        or budget.get("estimated_usd_from_usage")
+        != provider.get("estimated_usd_from_successful_usage")
+        or budget.get("confirmed_usd") is not None
+        or budget.get("invoice_confirmed") is not False
+        or budget.get("usage_complete") is not (errors == 0)
+        or budget.get("successful_attempt_usage_complete") is not True
+        or budget.get("unknown_usage_attempts") != errors
+    ):
+        raise QualityEvidenceError("archived budget accounting invalid")

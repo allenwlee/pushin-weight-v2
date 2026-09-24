@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import contextmanager
 from io import StringIO
@@ -12,6 +13,7 @@ from django.core.management.base import CommandError
 
 from scripts.staging_refresh.policy import load_policy
 from x_monitor.config import Config, LlmConfig, SearchConfig
+from x_monitor.rare_type_extra_search import QUERY_VERSION, planned_query_string
 
 POLICY_PATH = "config/staging_refresh.yaml"
 
@@ -105,6 +107,56 @@ def _options(**overrides):
     }
     values.update(overrides)
     return values
+
+
+def _rare_config(tmp_path: Path) -> Config:
+    cfg = _config()
+    query = planned_query_string()
+    jev = cfg.discovery.rare_types.jev
+    identity = {
+        "query_version": QUERY_VERSION,
+        "planner_query_sha256": hashlib.sha256(query.encode()).hexdigest(),
+        "requested_model": jev.model,
+        "attested_model": jev.model,
+        "requested_provider": jev.provider,
+        "attested_provider": jev.provider,
+        "question_version": jev.question_set_version,
+        "question_content_sha256": jev.question_content_sha256,
+        "threshold_version": jev.threshold_version,
+        "threshold_values_sha256": jev.threshold_values_sha256,
+        "yes_threshold": format(jev.yes_threshold, "f"),
+        "no_threshold": format(jev.no_threshold, "f"),
+        "role_opening_threshold": format(jev.role_opening_threshold, "f"),
+        "attendance_event_threshold": format(
+            jev.attendance_event_threshold, "f"
+        ),
+        "fixture_sha256": "a" * 64,
+        "corpus_content_sha256": "b" * 64,
+    }
+    assessment = {
+        "schema_version": "rare-type-quality-assessment-v1",
+        "identity": identity,
+        "status": "pass",
+        "quality_gate_passed": True,
+        "enablement_eligible": False,
+        "enablement_approved": False,
+        "reasons": [],
+    }
+    assessment["assessment_digest"] = hashlib.sha256(
+        json.dumps(
+            assessment,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    path = tmp_path / "rare-type-assessment.json"
+    path.write_text(json.dumps(assessment), encoding="utf-8")
+    cfg.discovery.rare_types.enabled = True
+    cfg.discovery.rare_types.assessment_path = str(path)
+    cfg.discovery.rare_types.assessment_digest = assessment["assessment_digest"]
+    cfg.discovery.rare_types.product_verification_enabled = True
+    return cfg
 
 
 def _accepted_stats() -> dict:
@@ -261,6 +313,44 @@ def test_acceptance_requires_exact_inserted_current_cycle_terminal_cohort():
         "stage-post-1",
         "stage-post-2",
     ]
+
+
+def test_acceptance_understands_rare_extra_stored_result(tmp_path):
+    from monitor.staging_acceptance import (
+        evaluate_staging_acceptance,
+        prepare_staging_acceptance,
+    )
+
+    prepared = prepare_staging_acceptance(
+        "RARE_EXTRA",
+        options=_options(),
+        cfg=_rare_config(tmp_path),
+        environ=_environment(TYPESAFE_API_KEY="typesafe-fixture"),
+        database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+    stats = _accepted_stats()
+    stats["calls"][0].update(
+        call_id="RARE_EXTRA",
+        status="stored",
+        normalized_count=2,
+        provider_called=True,
+    )
+
+    evaluation = evaluate_staging_acceptance(prepared, stats)
+
+    assert evaluation.status == "accepted"
+    assert evaluation.reason_codes == ("terminal_complete",)
+
+    stats["calls"][0].update(
+        status="truncated_replay_queued",
+        coverage_transfer="transferred",
+        backlog_window_id=42,
+        cursor_advanced=True,
+    )
+    truncated = evaluate_staging_acceptance(prepared, stats)
+    assert truncated.status == "failed"
+    assert truncated.reason_codes == ("pipeline_or_bound_failure",)
 
 
 def test_acceptance_allows_bounded_truncation_after_coverage_is_durably_transferred():
@@ -570,6 +660,128 @@ def test_profile_derives_non_widenable_cycle_limits():
     }
 
 
+def test_rare_extra_preflight_requires_exact_assessment_and_rare_provider_key(
+    tmp_path,
+):
+    from monitor.staging_acceptance import (
+        StagingAcceptanceError,
+        prepare_staging_acceptance,
+    )
+
+    cfg = _rare_config(tmp_path)
+    missing_jev = _environment(TYPESAFE_API_KEY="")
+    database = _Connection()
+    with pytest.raises(
+        StagingAcceptanceError, match=r"^provider_credential_missing:jev$"
+    ):
+        prepare_staging_acceptance(
+            "RARE_EXTRA",
+            options=_options(),
+            cfg=cfg,
+            environ=missing_jev,
+            database=database,
+            policy=load_policy(POLICY_PATH),
+        )
+    assert not database.connected
+
+    cfg.discovery.rare_types.jev.threshold_version = "drifted-thresholds"
+    with pytest.raises(
+        StagingAcceptanceError, match=r"^rare_extra_assessment_mismatch$"
+    ):
+        prepare_staging_acceptance(
+            "RARE_EXTRA",
+            options=_options(),
+            cfg=cfg,
+            environ=_environment(TYPESAFE_API_KEY="typesafe-fixture"),
+            database=database,
+            policy=load_policy(POLICY_PATH),
+        )
+    assert not database.connected
+
+
+def test_rare_extra_profile_pins_staging_jev_hf_and_enrichment_caps(tmp_path):
+    from monitor.staging_acceptance import prepare_staging_acceptance
+
+    prepared = prepare_staging_acceptance(
+        "RARE_EXTRA",
+        options=_options(),
+        cfg=_rare_config(tmp_path),
+        environ=_environment(TYPESAFE_API_KEY="typesafe-fixture"),
+        database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+
+    rare = prepared.config.discovery.rare_types
+    assert prepared.profile.selected_call == "RARE_EXTRA"
+    assert rare.enabled is True
+    assert rare.jev.staging_decisions_per_cycle == 5
+    assert rare.product_verification_staging_requests == 1
+    assert rare.targeted_extraction_enabled is True
+    assert prepared.config.targeted_extraction.enabled is True
+    assert prepared.config.targeted_extraction.max_calls_per_cycle == 20
+    assert prepared.config.targeted_extraction.request_timeout_seconds == 30
+    assert prepared.config.metrics_refresh.enabled is False
+    assert prepared.config.harvest.enrichment.claim_per_cycle == 5
+    assert prepared.config.harvest.enrichment.current_cycle_claim_per_cycle == 5
+    assert prepared.config.harvest.enrichment.carryover_claim_per_cycle == 0
+    assert prepared.profile.as_dict()["caps"]["jev_decisions"] == 5
+    assert prepared.profile.as_dict()["caps"]["hf_requests"] == 1
+
+
+def test_rare_extra_staging_override_enables_only_the_pinned_assessment(tmp_path):
+    from monitor.staging_acceptance import (
+        RARE_ASSESSMENT_DIGEST_ENVIRONMENT,
+        RARE_ASSESSMENT_PATH_ENVIRONMENT,
+        StagingAcceptanceError,
+        prepare_staging_acceptance,
+    )
+
+    approved = _rare_config(tmp_path)
+    path = approved.discovery.rare_types.assessment_path
+    digest = approved.discovery.rare_types.assessment_digest
+    checked_in = _config()
+    environment = _environment(
+        TYPESAFE_API_KEY="typesafe-fixture",
+        **{
+            RARE_ASSESSMENT_PATH_ENVIRONMENT: path,
+            RARE_ASSESSMENT_DIGEST_ENVIRONMENT: digest,
+        },
+    )
+
+    prepared = prepare_staging_acceptance(
+        "RARE_EXTRA",
+        options=_options(),
+        cfg=checked_in,
+        environ=environment,
+        database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+
+    assert checked_in.discovery.rare_types.enabled is False
+    assert prepared.config.discovery.rare_types.enabled is True
+    assert prepared.config.discovery.rare_types.assessment_path == path
+    assert prepared.config.discovery.rare_types.assessment_digest == digest
+    assert prepared.config.discovery.rare_types.product_verification_enabled is True
+    assert prepared.config.discovery.rare_types.targeted_extraction_enabled is True
+    assert prepared.config.targeted_extraction.enabled is True
+
+    database = _Connection()
+    environment.pop(RARE_ASSESSMENT_DIGEST_ENVIRONMENT)
+    with pytest.raises(
+        StagingAcceptanceError,
+        match=r"^rare_extra_assessment_config_incomplete$",
+    ):
+        prepare_staging_acceptance(
+            "RARE_EXTRA",
+            options=_options(),
+            cfg=checked_in,
+            environ=environment,
+            database=database,
+            policy=load_policy(POLICY_PATH),
+        )
+    assert not database.connected
+
+
 def test_bounded_provider_client_clamps_arguments_results_and_retries():
     from monitor.staging_acceptance import BoundedTwitterApiClient
 
@@ -600,6 +812,56 @@ def test_bounded_provider_client_clamps_arguments_results_and_retries():
     assert truncated is True
     with pytest.raises(AttributeError):
         client.fetch_user_timeline("fixture")
+
+
+def test_bounded_provider_client_guards_rare_raw_page_caller():
+    from monitor.staging_acceptance import (
+        BoundedTwitterApiClient,
+        StagingAcceptanceError,
+    )
+
+    class Delegate:
+        max_retries = 2
+
+        def __init__(self):
+            self.calls = []
+
+        def run_search_page_with_raw(self, query, **kwargs):
+            self.calls.append((query, kwargs, self.max_retries))
+            raw = {"tweets": [{"id": str(i)} for i in range(9)]}
+            return b"{}", raw, list(raw["tweets"]), True, 0
+
+    delegate = Delegate()
+    client = BoundedTwitterApiClient(delegate)
+    _body, raw, normalized, continuation, errors = (
+        client.run_search_page_with_raw(
+            "fixture",
+            max_results=20,
+            max_pages=20,
+            max_per_page=20,
+        )
+    )
+
+    assert delegate.calls == [
+        (
+            "fixture",
+            {"max_results": 5, "max_pages": 1, "max_per_page": 5},
+            0,
+        )
+    ]
+    assert len(raw["tweets"]) == 9
+    assert len(normalized) == 5
+    assert continuation is True
+    assert errors == 0
+    with pytest.raises(
+        StagingAcceptanceError, match=r"^search_request_cap_exceeded$"
+    ):
+        client.run_search_page_with_raw("fixture")
+    assert len(delegate.calls) == 1
+    with pytest.raises(
+        StagingAcceptanceError, match=r"^search_retry_cap_exceeded$"
+    ):
+        client.max_retries = 1
 
 
 def test_database_connection_failure_is_a_secret_free_refusal():
@@ -661,6 +923,120 @@ def test_truncated_response_gets_only_one_search_pass():
 
     assert len(calls) == 1
     assert outcome == "truncated"
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
+    tmp_path, monkeypatch
+):
+    from core.discovery import plan_discovery_calls
+    from monitor.cycle import CycleRunner
+    from monitor.staging_acceptance import (
+        RARE_ASSESSMENT_DIGEST_ENVIRONMENT,
+        RARE_ASSESSMENT_PATH_ENVIRONMENT,
+        BoundedTwitterApiClient,
+        prepare_staging_acceptance,
+    )
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+    approved = _rare_config(tmp_path)
+    environment = _environment(
+        TYPESAFE_API_KEY="typesafe-fixture",
+        **{
+            RARE_ASSESSMENT_PATH_ENVIRONMENT: (
+                approved.discovery.rare_types.assessment_path
+            ),
+            RARE_ASSESSMENT_DIGEST_ENVIRONMENT: (
+                approved.discovery.rare_types.assessment_digest
+            ),
+        },
+    )
+    prepared = prepare_staging_acceptance(
+        "RARE_EXTRA",
+        options=_options(),
+        cfg=_config(),
+        environ=environment,
+        database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+    call = next(
+        call
+        for call in plan_discovery_calls(prepared.config, list_id=42)
+        if call.call_id == "RARE_EXTRA"
+    )
+
+    class Delegate:
+        timeout_s = 30
+        max_retries = 2
+
+        def __init__(self):
+            self.calls = []
+
+        def run_search_page_with_raw(self, query, **kwargs):
+            self.calls.append((query, kwargs, self.max_retries))
+            return b"{}", {"tweets": []}, [], False, 0
+
+    delegate = Delegate()
+    api = BoundedTwitterApiClient(delegate)
+    purposes = []
+    drain_cutoffs = []
+    metrics_configs = []
+    hf_limits = []
+
+    monkeypatch.setenv("RENDER_SERVICE_NAME", "pushinweight-staging-harvest")
+    monkeypatch.setattr(CycleRunner, "_plan_calls", lambda _self: [call])
+    monkeypatch.setattr("monitor.cycle._resolve_enabled_models", lambda *_a: [])
+    monkeypatch.setattr("monitor.cycle._build_brand_index", lambda *_a: (None, {}))
+    monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
+    monkeypatch.setattr("monitor.cycle._resolve_x_monitor_list_id", lambda *_a: None)
+    monkeypatch.setattr(
+        "monitor.cycle.TwitterApiClient.from_env",
+        lambda purpose: purposes.append(purpose) or api,
+    )
+
+    def drain(_self, **kwargs):
+        drain_cutoffs.append(kwargs["fetched_since"])
+        return {"selected": 0, "kept": 0, "junk": 0, "pending": 0}
+
+    monkeypatch.setattr(CycleRunner, "_drain_rare_type_hits", drain)
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *_a, **_kw: {})
+    monkeypatch.setattr(
+        CycleRunner, "_request_synthesis_prewarm", lambda *_a, **_kw: {}
+    )
+
+    def metrics(_api, cfg, **_kwargs):
+        metrics_configs.append(cfg.metrics_refresh.enabled)
+        return {"status": "disabled", "n_refreshed": 0}
+
+    monkeypatch.setattr("monitor.metrics_refresh.run_metrics_refresh", metrics)
+
+    def hf_drain(*, max_requests, deadline):
+        hf_limits.append(max_requests)
+        return SimpleNamespace(attempted=0, resolved=0, deferred=0)
+
+    monkeypatch.setattr("monitor.cycle.drain_pending_verifications", hf_drain)
+    monkeypatch.setattr(
+        "scripts.harvest_cost.emit.finalize_and_persist",
+        lambda summary, _api: summary,
+    )
+
+    stats = CycleRunner(
+        cfg=prepared.config,
+        cycle_kind="manual",
+        _backfill_call_ids=["RARE_EXTRA"],
+    ).run()
+
+    assert purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
+    assert len(delegate.calls) == 1
+    assert delegate.calls[0][1]["max_results"] == 5
+    assert delegate.calls[0][1]["max_pages"] == 1
+    assert delegate.calls[0][1]["max_per_page"] == 5
+    assert delegate.calls[0][2] == 0
+    assert drain_cutoffs and drain_cutoffs[0] is not None
+    assert metrics_configs == [False]
+    assert hf_limits == [1]
+    assert stats["calls"][0]["status"] == "no_results"
 
 
 def test_real_cycle_runner_filters_planning_to_the_selected_call():

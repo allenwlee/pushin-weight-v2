@@ -66,6 +66,10 @@ def _enabled_call(tmp_path: Path):
         "threshold_values_sha256": jev.threshold_values_sha256,
         "yes_threshold": format(jev.yes_threshold, "f"),
         "no_threshold": format(jev.no_threshold, "f"),
+        "role_opening_threshold": format(jev.role_opening_threshold, "f"),
+        "attendance_event_threshold": format(
+            jev.attendance_event_threshold, "f"
+        ),
         "fixture_sha256": "a" * 64,
         "corpus_content_sha256": "b" * 64,
     }

@@ -46,6 +46,7 @@ from core.models import (
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
+from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.profile_snapshots import person_id_for_account, person_id_for_handle
 from core.rare_type_search import record_unknown_name_tokens_from_movement
 from x_monitor.config import TargetedExtractionConfig
@@ -1715,6 +1716,7 @@ def _persist_model_releases(
         )
         candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
         if post.author_id:
+            source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
             ProductVerificationProposal.objects.get_or_create(
                 proposal_key=_hash(
                     {
@@ -1736,13 +1738,21 @@ def _persist_model_releases(
                     "account_evidence": {
                         "stable_account_id": str(post.author_id),
                         "handle": post.author_handle or "",
+                        "account_handle_at_extraction": post.author.handle or "",
+                        "account_verified_type": post.author.verified_type,
+                        "post_author_verified_type": post.author_verified_type,
+                        **source_identity_evidence,
                     },
-                    "policy_version": "product-x-hf-v1",
+                    "policy_version": POLICY_VERSION,
                     "hf_outcome": "pending" if candidate_repo_id else "deferred",
                     "rule_trace": [
-                        "awaiting_exact_public_hf_metadata"
+                        (
+                            "awaiting_exact_public_hf_metadata"
+                            if source_identity_evidence["exact_hf_repo_link"]
+                            else "source_exact_repo_link_missing_owner_review_required"
+                        )
                         if candidate_repo_id
-                        else "candidate_repo_id_missing_owner_review_required"
+                        else "candidate_repo_id_missing_owner_review_required",
                     ],
                 },
             )

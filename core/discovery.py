@@ -14,7 +14,11 @@ from core.models import JobDiscoveryRun, PersonnelDiscoveryRun, SearchQuery
 from x_monitor.config import Config, DiscoveryLaneConfig
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.rare_type_extra_search import QUERY_VERSION, planned_query_string
-from x_monitor.rare_type_quality_gate import QualityEvidenceError, validate_assessment
+from x_monitor.rare_type_quality_gate import (
+    QualityEvidenceError,
+    runtime_assessment_identity,
+    validate_assessment,
+)
 
 _RUN_MODELS = {
     "jobs": JobDiscoveryRun,
@@ -23,7 +27,7 @@ _RUN_MODELS = {
 RARE_EXTRA_CALL_ID = "RARE_EXTRA"
 
 
-def _rare_type_call(cfg: Config) -> PlannedCall | None:
+def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
     lane = cfg.discovery.rare_types
     if not lane.enabled:
         return None
@@ -38,20 +42,22 @@ def _rare_type_call(cfg: Config) -> PlannedCall | None:
         raise ValueError("rare-types assessment digest does not match config")
     identity = assessment.get("identity")
     query = planned_query_string()
-    expected = {
-        "query_version": QUERY_VERSION,
-        "planner_query_sha256": hashlib.sha256(query.encode()).hexdigest(),
-        "requested_model": lane.jev.model,
-        "attested_model": lane.jev.model,
-        "requested_provider": lane.jev.provider,
-        "attested_provider": lane.jev.provider,
-        "question_version": lane.jev.question_set_version,
-        "question_content_sha256": lane.jev.question_content_sha256,
-        "threshold_version": lane.jev.threshold_version,
-        "threshold_values_sha256": lane.jev.threshold_values_sha256,
-        "yes_threshold": format(lane.jev.yes_threshold, "f"),
-        "no_threshold": format(lane.jev.no_threshold, "f"),
-    }
+    try:
+        expected = runtime_assessment_identity(
+            query_version=QUERY_VERSION,
+            planner_query=query,
+            config=lane.jev,
+        )
+    except QualityEvidenceError as exc:
+        if exc.code == "question_content_hash_mismatch":
+            raise ValueError(
+                "rare-types question content hash does not match config"
+            ) from exc
+        if exc.code == "threshold_values_hash_mismatch":
+            raise ValueError(
+                "rare-types threshold values hash does not match config"
+            ) from exc
+        raise
     if not isinstance(identity, dict) or any(
         identity.get(key) != value for key, value in expected.items()
     ):
@@ -206,7 +212,7 @@ def plan_discovery_calls(
             now=now,
         ),
     ]
-    rare = _rare_type_call(cfg)
+    rare = plan_rare_type_call(cfg)
     if rare is not None:
         calls.append(rare)
     return calls

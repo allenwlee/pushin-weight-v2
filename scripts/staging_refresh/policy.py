@@ -312,7 +312,7 @@ def _migration_count_delta_mapping(
     raw: Mapping[str, Any], key: str, *, field: str, dotted_metrics: bool = False
 ) -> dict[str, dict[str, int]]:
     value = raw.get(key)
-    if not isinstance(value, Mapping) or not value:
+    if not isinstance(value, Mapping):
         raise PolicyError(f"policy_field_invalid:{field}.{key}")
     result: dict[str, dict[str, int]] = {}
     for migration, deltas in value.items():

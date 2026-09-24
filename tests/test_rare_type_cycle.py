@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,10 @@ def _enable(cfg, tmp_path: Path):
         "threshold_values_sha256": jev.threshold_values_sha256,
         "yes_threshold": format(jev.yes_threshold, "f"),
         "no_threshold": format(jev.no_threshold, "f"),
+        "role_opening_threshold": format(jev.role_opening_threshold, "f"),
+        "attendance_event_threshold": format(
+            jev.attendance_event_threshold, "f"
+        ),
         "fixture_sha256": "a" * 64,
         "corpus_content_sha256": "b" * 64,
     }
@@ -89,10 +94,152 @@ class FakeApi:
 def test_checked_in_config_keeps_seven_call_lane_optional():
     cfg = load_config(REPO / "config.yaml")
     assert cfg.discovery.rare_types.enabled is False
+    assert cfg.discovery.rare_types.product_verification_enabled is False
+    assert cfg.discovery.rare_types.targeted_extraction_enabled is False
+    assert cfg.targeted_extraction.enabled is False
+    assert len(CycleRunner(cfg=cfg)._plan_calls()) == 7
     assert RARE_EXTRA_CALL_ID not in [
         call.call_id for call in plan_discovery_calls(cfg, list_id=42, now=NOW)
     ]
     assert RARE_EXTRA_CALL_ID in _configured_call_ids(cfg)
+
+
+@pytest.mark.parametrize(
+    ("hf_value", "hf_enabled"), [("true", True), ("false", False)]
+)
+def test_production_runtime_activation_reaches_planner_without_old_packs(
+    tmp_path, monkeypatch, hf_value, hf_enabled
+):
+    seed = load_config(REPO / "config.yaml")
+    assessment = _enable(seed, tmp_path)
+    for name in (
+        "X_MONITOR_DISCOVERY_JOBS_ENABLED",
+        "X_MONITOR_DISCOVERY_PERSONNEL_ENABLED",
+        "X_MONITOR_TARGETED_EXTRACTION_ENABLED",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_ENABLED", "true")
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH",
+        seed.discovery.rare_types.assessment_path,
+    )
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST",
+        assessment["assessment_digest"],
+    )
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED", hf_value)
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED", "true"
+    )
+    monkeypatch.setenv(
+        "X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE", "5"
+    )
+
+    cfg = load_config(REPO / "config.yaml")
+    calls = CycleRunner(cfg=cfg)._plan_calls()
+
+    assert cfg.discovery.rare_types.enabled is True
+    assert cfg.discovery.rare_types.product_verification_enabled is hf_enabled
+    assert cfg.discovery.rare_types.targeted_extraction_enabled is True
+    assert cfg.targeted_extraction.enabled is True
+    assert cfg.targeted_extraction.max_calls_per_cycle == 5
+    assert cfg.targeted_extraction.request_timeout_seconds == 30
+    assert cfg.discovery.jobs.enabled is False
+    assert cfg.discovery.personnel.enabled is False
+    assert [call.call_id for call in calls[-1:]] == [RARE_EXTRA_CALL_ID]
+    assert len(calls) == 8
+
+
+@pytest.mark.parametrize("deployment", ["", "local", "preview"])
+def test_runtime_activation_rejects_unsupported_environment(
+    deployment, monkeypatch
+):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", deployment)
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_ENABLED", "true")
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED", "true"
+    )
+
+    with pytest.raises(ValueError, match="staging or production"):
+        load_config(REPO / "config.yaml")
+
+
+@pytest.mark.parametrize(
+    ("missing_name", "message"),
+    [
+        ("X_MONITOR_RARE_TYPES_ASSESSMENT_PATH", "pinned assessment evidence"),
+        ("X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST", "pinned assessment evidence"),
+        (
+            "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED",
+            "targeted extraction switch",
+        ),
+    ],
+)
+def test_runtime_activation_requires_complete_evidence_and_extraction(
+    tmp_path, monkeypatch, missing_name, message
+):
+    seed = load_config(REPO / "config.yaml")
+    assessment = _enable(seed, tmp_path)
+    environment = {
+        "X_MONITOR_DEPLOYMENT_ENVIRONMENT": "production",
+        "X_MONITOR_RARE_TYPES_ENABLED": "true",
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH": (
+            seed.discovery.rare_types.assessment_path
+        ),
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST": assessment["assessment_digest"],
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED": "true",
+    }
+    environment.pop(missing_name)
+    monkeypatch.delenv(missing_name, raising=False)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError, match=message):
+        load_config(REPO / "config.yaml")
+
+
+@pytest.mark.parametrize("cap", ["0", "21"])
+def test_runtime_activation_rejects_disabled_or_widened_extraction_cap(
+    tmp_path, monkeypatch, cap
+):
+    seed = load_config(REPO / "config.yaml")
+    assessment = _enable(seed, tmp_path)
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_ENABLED", "true")
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH",
+        seed.discovery.rare_types.assessment_path,
+    )
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST",
+        assessment["assessment_digest"],
+    )
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED", "true"
+    )
+    monkeypatch.setenv(
+        "X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE", cap
+    )
+
+    with pytest.raises(ValueError, match="positive cap|cap from 1 through 20"):
+        load_config(REPO / "config.yaml")
+
+
+def test_runtime_assessment_path_must_exist_before_planning(monkeypatch, tmp_path):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_ENABLED", "true")
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH", str(tmp_path / "missing.json")
+    )
+    monkeypatch.setenv("X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST", "a" * 64)
+    monkeypatch.setenv(
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED", "true"
+    )
+    cfg = load_config(REPO / "config.yaml")
+
+    with pytest.raises(ValueError, match="unreadable"):
+        plan_discovery_calls(cfg, list_id=42, now=NOW)
 
 
 def test_enabled_identity_plans_one_bounded_non_paginating_call(tmp_path):
@@ -113,6 +260,39 @@ def test_identity_mismatch_fails_before_planning_paid_call(tmp_path):
     Path(cfg.discovery.rare_types.assessment_path).write_text(json.dumps(assessment))
     cfg.discovery.rare_types.assessment_digest = assessment["assessment_digest"]
     with pytest.raises(ValueError, match="identity"):
+        plan_discovery_calls(cfg, list_id=42, now=NOW)
+
+
+def test_missing_provider_identity_fails_before_planning_paid_call(tmp_path):
+    cfg = load_config(REPO / "config.yaml")
+    assessment = _enable(cfg, tmp_path)
+    assessment["identity"].pop("requested_provider")
+    assessment["assessment_digest"] = hashlib.sha256(
+        _canonical({k: v for k, v in assessment.items() if k != "assessment_digest"})
+    ).hexdigest()
+    Path(cfg.discovery.rare_types.assessment_path).write_text(json.dumps(assessment))
+    cfg.discovery.rare_types.assessment_digest = assessment["assessment_digest"]
+
+    with pytest.raises(ValueError, match="identity"):
+        plan_discovery_calls(cfg, list_id=42, now=NOW)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("role_opening_threshold", Decimal("0.31"), "threshold values hash"),
+        ("attendance_event_threshold", Decimal("0.51"), "threshold values hash"),
+        ("question_content_sha256", "f" * 64, "question content hash"),
+    ],
+)
+def test_runtime_content_and_threshold_hashes_cannot_reuse_signed_assessment(
+    tmp_path, field, value, message
+):
+    cfg = load_config(REPO / "config.yaml")
+    _enable(cfg, tmp_path)
+    setattr(cfg.discovery.rare_types.jev, field, value)
+
+    with pytest.raises(ValueError, match=message):
         plan_discovery_calls(cfg, list_id=42, now=NOW)
 
 

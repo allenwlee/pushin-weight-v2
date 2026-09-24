@@ -15,6 +15,7 @@ from core.models import (
     SearchQuery,
 )
 from core.rare_type_search import (
+    kept_hits_pending_post,
     mark_search_dispatched,
     persist_hit_batch,
     reconcile_classified_hits,
@@ -136,6 +137,47 @@ def test_persistence_failure_remains_replayable_without_search(monkeypatch):
     assert runner._ingest_kept_rare_type_hits(run_id="second")["persisted"] == 1
     hit.refresh_from_db()
     assert hit.post_id == "retry-local" and hit.last_error_code == ""
+
+
+def test_later_attribution_failure_keeps_earlier_hit_committed(monkeypatch):
+    Brand.objects.create(
+        nickname="_unattributed", display_name="Unattributed", is_sentinel=True
+    )
+    successful = _hit(tweet_id="attribution-success")
+    failed = _hit(tweet_id="attribution-failure")
+    runner = _runner()
+    original_attribute = runner._attribute_items
+
+    def attribute_with_later_failure(items, index, search_terms):
+        if items[0]["tweet_id"] == failed.provider_post_id:
+            raise RuntimeError("later attribution failure")
+        return original_attribute(items, index, search_terms)
+
+    monkeypatch.setattr(runner, "_attribute_items", attribute_with_later_failure)
+
+    with pytest.raises(RuntimeError, match="later attribution failure"):
+        runner._ingest_kept_rare_type_hits(run_id="attribution")
+
+    successful.refresh_from_db()
+    failed.refresh_from_db()
+    assert successful.post_id == "attribution-success"
+    assert successful.last_error_code == ""
+    assert failed.post_id is None
+    assert failed.last_error_code == ""
+    assert Post.objects.filter(pk="attribution-success").exists()
+    assert not Post.objects.filter(pk="attribution-failure").exists()
+
+
+def test_kept_hit_selection_eager_loads_each_source_query(django_assert_num_queries):
+    _hit(tweet_id="query-one")
+    _hit(tweet_id="query-two")
+
+    with django_assert_num_queries(1):
+        hits = list(kept_hits_pending_post(limit=20))
+        source_query_ids = [hit.run.source_query.query_id for hit in hits]
+
+    assert len(source_query_ids) == 2
+    assert all(query_id.startswith("query-query-") for query_id in source_query_ids)
 
 
 def test_jev_unavailable_still_ingests_already_kept_hit(monkeypatch):

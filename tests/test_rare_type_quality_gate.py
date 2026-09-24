@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,62 @@ def _identity() -> dict:
         config=_cfg(),
         fixture_path=FIXTURE,
     )
+
+
+def test_runtime_identity_is_the_exact_provider_free_assessment_prefix():
+    from x_monitor.rare_type_quality_gate import (
+        assessment_identity,
+        runtime_assessment_identity,
+    )
+
+    runtime = runtime_assessment_identity(
+        query_version=QUERY_VERSION,
+        planner_query=planned_query_string(),
+        config=_cfg(),
+    )
+    complete = assessment_identity(
+        query_version=QUERY_VERSION,
+        planner_query=planned_query_string(),
+        config=_cfg(),
+        fixture_path=FIXTURE,
+    )
+
+    assert runtime == {
+        key: value
+        for key, value in complete.items()
+        if key not in {"fixture_sha256", "corpus_content_sha256"}
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        (
+            "question_content_sha256",
+            "f" * 64,
+            "configured question content hash mismatch",
+        ),
+        (
+            "attendance_event_threshold",
+            Decimal("0.51"),
+            "configured threshold values hash mismatch",
+        ),
+    ],
+)
+def test_runtime_identity_preserves_fail_closed_hash_errors(field, value, message):
+    from x_monitor.rare_type_quality_gate import (
+        QualityEvidenceError,
+        runtime_assessment_identity,
+    )
+
+    config = _cfg().model_copy(update={field: value})
+
+    with pytest.raises(QualityEvidenceError, match=rf"^{message}$"):
+        runtime_assessment_identity(
+            query_version=QUERY_VERSION,
+            planner_query=planned_query_string(),
+            config=config,
+        )
 
 
 def _probabilities(*types: str, junk: str | None = None) -> dict[str, float]:
@@ -741,6 +798,36 @@ def test_validate_assessment_rejects_identity_drift_and_tampering():
     tampered["fixture_metrics"]["keeper_precision"] = 0.1
     with pytest.raises(QualityEvidenceError, match="digest"):
         validate_assessment(tampered, expected_identity=_identity())
+
+
+def test_validate_assessment_rejects_unknown_mode_with_valid_digest():
+    from x_monitor.rare_type_quality_gate import (
+        QualityEvidenceError,
+        complete_assessment,
+        validate_assessment,
+    )
+
+    assessment = complete_assessment(
+        identity=_identity(),
+        corpus=_corpus(),
+        predictions=_predictions(),
+        config=_cfg(),
+        live_evidence=_live(),
+        budget={
+            "reserved_usd": "0.25",
+            "confirmed_usd": "0.0056",
+            "usage_complete": True,
+        },
+    )
+    assessment["assessment_mode"] = "invented-evidence-mode"
+    unsigned = {key: value for key, value in assessment.items() if key != "assessment_digest"}
+    assessment["assessment_digest"] = hashlib.sha256(
+        json.dumps(
+            unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    with pytest.raises(QualityEvidenceError, match="mode"):
+        validate_assessment(assessment, expected_identity=_identity())
 
 
 def test_assessment_rejects_corpus_identity_drift_and_impossible_live_counts():
