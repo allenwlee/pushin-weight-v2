@@ -1502,10 +1502,11 @@ def complete_funded_decision(
     cost_usd: Decimal,
     latency_ms: int,
     now: datetime,
+    cost_confirmed: bool = True,
 ) -> bool:
     """Atomically settle one funded attempt and publish its durable hit gate."""
 
-    if not response_id or not _valid_probabilities(probabilities):
+    if not _valid_probabilities(probabilities):
         return False
     if any(not isinstance(value, str) or not value for value in derived_types):
         return False
@@ -1560,16 +1561,18 @@ def complete_funded_decision(
         cycle.attempts_in_flight -= 1
         cycle.decision_usd_reserved -= attempt.reserved_usd
         cycle.decision_usd_accounted += cost_usd
-        cycle.decision_usd_confirmed += cost_usd
+        if cost_confirmed:
+            cycle.decision_usd_confirmed += cost_usd
         cycle.save()
         daily_budget.decision_usd_reserved -= attempt.reserved_usd
         daily_budget.decision_usd_accounted += cost_usd
-        daily_budget.decision_usd_confirmed += cost_usd
+        if cost_confirmed:
+            daily_budget.decision_usd_confirmed += cost_usd
         daily_budget.save()
 
         attempt.state = RareTypeDecisionAttempt.State.SETTLED
         attempt.accounted_usd = cost_usd
-        attempt.confirmed_usd = cost_usd
+        attempt.confirmed_usd = cost_usd if cost_confirmed else None
         attempt.response_id = response_id[:255]
         attempt.input_tokens = input_tokens
         attempt.output_tokens = output_tokens
@@ -1613,6 +1616,7 @@ def fail_funded_decision(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     cost_usd: Decimal | None = None,
+    cost_confirmed: bool = True,
 ) -> bool:
     """Record a failed call, settling known usage or retaining unknown spend."""
 
@@ -1626,8 +1630,7 @@ def fail_funded_decision(
     ) and not known_usage:
         raise ValueError("known failed usage must be supplied as one complete group")
     if known_usage and (
-        not response_id
-        or input_tokens < 0
+        input_tokens < 0
         or output_tokens < 0
         or cost_usd < 0
     ):
@@ -1670,14 +1673,16 @@ def fail_funded_decision(
             cycle.attempts_accounted += 1
             cycle.decision_usd_reserved -= attempt.reserved_usd
             cycle.decision_usd_accounted += cost_usd
-            cycle.decision_usd_confirmed += cost_usd
+            if cost_confirmed:
+                cycle.decision_usd_confirmed += cost_usd
             daily_budget.decision_usd_reserved -= attempt.reserved_usd
             daily_budget.decision_usd_accounted += cost_usd
-            daily_budget.decision_usd_confirmed += cost_usd
+            if cost_confirmed:
+                daily_budget.decision_usd_confirmed += cost_usd
             daily_budget.save()
             attempt.state = RareTypeDecisionAttempt.State.SETTLED
             attempt.accounted_usd = cost_usd
-            attempt.confirmed_usd = cost_usd
+            attempt.confirmed_usd = cost_usd if cost_confirmed else None
             attempt.response_id = response_id[:255]
             attempt.input_tokens = input_tokens
             attempt.output_tokens = output_tokens

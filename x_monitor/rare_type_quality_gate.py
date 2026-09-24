@@ -255,7 +255,11 @@ def evaluate_fixture_predictions(
             field=f"response usage cost: {case_id}",
         )
         evidence_kinds.add(evidence_kind)
-        outcome, derived_tuple = derive_gate_outcome(probabilities, config)
+        outcome, derived_tuple = derive_gate_outcome(
+            probabilities,
+            config,
+            state=public_post_state(case["public_payload"]),
+        )
         derived = set(derived_tuple)
         expected = set(case["reference"]["types"])
         predicted_keep = outcome == "kept"

@@ -6582,7 +6582,6 @@ class RareTypeDecision(models.Model):
                     models.Q(
                         status="completed",
                         completed_at__isnull=False,
-                        response_id__gt="",
                     )
                     | (~models.Q(status="completed") & models.Q(completed_at__isnull=True))
                 ),

@@ -1,4 +1,4 @@
-"""Direct, fail-closed adapter for the OpenRouter Jev Decisions gate."""
+"""Direct, fail-closed adapter for the TypeSafe Jev Decisions gate."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -302,43 +303,76 @@ def conservative_reservation_usd(
 
 
 def derive_gate_outcome(
-    probabilities: Mapping[str, float], config: JevDecisionsConfig
+    probabilities: Mapping[str, float],
+    config: JevDecisionsConfig,
+    *,
+    state: Mapping[str, Any] | None = None,
 ) -> tuple[str, tuple[str, ...]]:
     yes = float(config.yes_threshold)
     no = float(config.no_threshold)
-    if any(no < value < yes for value in probabilities.values()):
-        return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
     if any(probabilities[name] >= yes for name in JUNK_QUESTIONS):
         return RareTypeDecision.GateOutcome.JUNK, ()
 
-    route_facts = (
-        probabilities["person_identity"] >= yes and probabilities["role_change"] >= yes,
-        probabilities["role_opening"] >= yes,
-        probabilities["attendance_event"] >= yes,
-        probabilities["bounded_opportunity"] >= yes,
-        probabilities["model_release"] >= yes
-        and probabilities["source_announcement"] >= yes,
+    route_questions = (
+        "role_change",
+        "role_opening",
+        "attendance_event",
+        "bounded_opportunity",
+        "model_release",
     )
-    if probabilities["ai_related"] <= no and any(route_facts):
-        return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
-    if probabilities["role_change"] >= yes and probabilities["person_identity"] <= no:
-        return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
     if probabilities["ai_related"] <= no:
         return RareTypeDecision.GateOutcome.JUNK, ()
 
+    author = state.get("author") if isinstance(state, Mapping) else None
+    text = state.get("text") if isinstance(state, Mapping) else None
+    supported_first_person = bool(
+        isinstance(author, Mapping)
+        and author.get("id")
+        and (author.get("name") or author.get("handle"))
+        and isinstance(text, str)
+        and re.search(
+            r"(?:\bI(?:['’](?:m|ve)|\s+(?:am|have|joined|left))\b|我|本人|私|僕|"
+            r"本日.{0,24}(?:退職|入社)しました)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+    personnel_identity_supported = probabilities["person_identity"] >= yes or (
+        supported_first_person and probabilities["person_identity"] > no
+    )
+
     derived: list[str] = []
-    if route_facts[0]:
+    if probabilities["role_change"] >= yes and personnel_identity_supported:
         derived.append("personnel_changes")
-    if route_facts[1]:
+    if probabilities["role_opening"] >= yes:
         derived.append("job_listings")
-    if route_facts[2]:
+    if probabilities["attendance_event"] >= yes:
         derived.append("events")
-    if route_facts[3]:
+    if probabilities["bounded_opportunity"] >= yes:
         derived.append("opportunities")
-    if route_facts[4]:
+    if (
+        probabilities["model_release"] >= yes
+        and probabilities["source_announcement"] > no
+    ):
         derived.append("model_releases")
     if derived:
+        if probabilities["ai_related"] < yes:
+            return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
         return RareTypeDecision.GateOutcome.KEPT, tuple(derived)
+
+    route_uncertain = any(
+        no < probabilities[name] < yes for name in route_questions
+    )
+    dependency_uncertain = (
+        probabilities["role_change"] >= yes
+        and no < probabilities["person_identity"] < yes
+    ) or (
+        probabilities["model_release"] >= yes
+        and no < probabilities["source_announcement"] < yes
+    )
+    if route_uncertain or dependency_uncertain:
+        return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
     return RareTypeDecision.GateOutcome.JUNK, ()
 
 
@@ -356,15 +390,12 @@ def parse_response(data: Any, config: JevDecisionsConfig) -> JevResponse:
         raise JevDecisionError("response_shape_invalid")
     if data.get("model") != config.model:
         raise JevDecisionError("response_model_mismatch")
-    if data.get("provider") != config.provider:
-        raise JevDecisionError("response_provider_mismatch")
-    response_id = data.get("id")
-    if not isinstance(response_id, str) or not response_id:
+    response_id = data.get("id", "")
+    if not isinstance(response_id, str):
         raise JevDecisionError("response_id_invalid")
     usage = data.get("usage")
     if not isinstance(usage, Mapping):
         raise JevDecisionError("response_usage_invalid")
-    cost = _strict_number(usage.get("cost"), code="response_usage_invalid")
     input_tokens = usage.get("input_tokens")
     output_tokens = usage.get("output_tokens")
     if (
@@ -374,15 +405,19 @@ def parse_response(data: Any, config: JevDecisionsConfig) -> JevResponse:
         or isinstance(output_tokens, bool)
         or not isinstance(output_tokens, int)
         or output_tokens < 0
-        or cost < 0
     ):
         raise JevDecisionError("response_usage_invalid")
+    cost = (
+        Decimal(input_tokens) * config.input_price_per_million_usd
+        + Decimal(output_tokens) * config.output_price_per_million_usd
+    ) / Decimal(1_000_000)
+    cost = cost.quantize(Decimal("0.000000001"), rounding=ROUND_CEILING)
     known_usage = JevResponse(
         response_id=response_id,
         probabilities={},
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cost_usd=Decimal(str(cost)),
+        cost_usd=cost,
     )
     answers = data.get("answers")
     if not isinstance(answers, Mapping):
@@ -406,7 +441,7 @@ def parse_response(data: Any, config: JevDecisionsConfig) -> JevResponse:
         probabilities=probabilities,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cost_usd=Decimal(str(cost)),
+        cost_usd=cost,
     )
 
 
@@ -437,7 +472,7 @@ class JevDecisionsClient:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> JevDecisionsClient:
         return cls(
-            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            api_key=os.environ.get("TYPESAFE_API_KEY", ""),
             config=config,
             transport=transport,
         )
@@ -656,7 +691,7 @@ class JevDecisionGate:
         try:
             response = self.client.submit(request_bytes, deadline_monotonic=deadline)
             outcome, derived_types = derive_gate_outcome(
-                response.probabilities, self.config
+                response.probabilities, self.config, state=state
             )
             if response.cost_usd > reserved_usd:
                 raise JevDecisionError("usage_exceeds_reservation", usage=response)
@@ -674,6 +709,7 @@ class JevDecisionGate:
                 input_tokens=known_usage.input_tokens if known_usage else None,
                 output_tokens=known_usage.output_tokens if known_usage else None,
                 cost_usd=known_usage.cost_usd if known_usage else None,
+                cost_confirmed=False,
             )
             return JevGateResult(
                 outcome="pending",
@@ -694,6 +730,7 @@ class JevDecisionGate:
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
             cost_usd=response.cost_usd,
+            cost_confirmed=False,
             latency_ms=max(0, round((time.monotonic() - started) * 1000)),
             now=completed_at,
         )

@@ -210,12 +210,10 @@ class DiscoveryLaneConfig(BaseModel):
 class JevDecisionsConfig(BaseModel):
     """Pinned Decisions API, identity, pricing, and resource limits."""
 
-    endpoint: Literal["https://openrouter.ai/api/alpha/decisions"] = (
-        "https://openrouter.ai/api/alpha/decisions"
+    endpoint: Literal["https://api.typesafe.ai/v1/systemone"] = (
+        "https://api.typesafe.ai/v1/systemone"
     )
-    model: Literal["typesafe/jev-1.13-20260917"] = (
-        "typesafe/jev-1.13-20260917"
-    )
+    model: Literal["jev-1.13.0"] = "jev-1.13.0"
     provider: Literal["TypeSafe"] = "TypeSafe"
     question_set_version: str = Field(
         default="rare-types-jev-questions-v1", min_length=1, max_length=63
@@ -225,7 +223,7 @@ class JevDecisionsConfig(BaseModel):
         pattern=r"^[0-9a-f]{64}$",
     )
     threshold_version: str = Field(
-        default="rare-types-jev-thresholds-v1", min_length=1, max_length=63
+        default="rare-types-jev-routing-v2", min_length=1, max_length=63
     )
     threshold_values_sha256: str = Field(
         default="9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a",

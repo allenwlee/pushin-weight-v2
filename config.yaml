@@ -75,12 +75,12 @@ discovery:
     daily_credit_ceiling: 28800
     reserved_credits_per_call: 300
     jev:
-      endpoint: https://openrouter.ai/api/alpha/decisions
-      model: typesafe/jev-1.13-20260917
+      endpoint: https://api.typesafe.ai/v1/systemone
+      model: jev-1.13.0
       provider: TypeSafe
       question_set_version: rare-types-jev-questions-v1
       question_content_sha256: 2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df
-      threshold_version: rare-types-jev-thresholds-v1
+      threshold_version: rare-types-jev-routing-v2
       threshold_values_sha256: 9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a
       yes_threshold: '0.80'
       no_threshold: '0.20'
