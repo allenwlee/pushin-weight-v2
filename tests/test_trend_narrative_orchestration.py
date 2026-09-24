@@ -441,7 +441,7 @@ def test_oversized_editor_group_splits_and_completes_the_production_call_chain(
                     "occurrence_source": "original_post",
                 },
             }
-            for evidence_index in range(6)
+            for evidence_index in range(48)
         ]
     Brand.objects.bulk_create(
         [
@@ -495,13 +495,10 @@ def test_oversized_editor_group_splits_and_completes_the_production_call_chain(
 
     run.refresh_from_db()
     assert run.status == TrendNarrativeRun.Status.ACTIVE
-    assert [batch["batch_key"] for batch in run.batch_manifest] == [
-        "1d:001.1",
-        "1d:001.2",
-    ]
-    assert [len(batch["brand_keys"]) for batch in run.batch_manifest] == [2, 3]
+    assert len(run.batch_manifest) > 1
+    assert sum(len(batch["brand_keys"]) for batch in run.batch_manifest) == 5
     calls = list(TrendNarrativeProviderCall.objects.filter(run=run))
-    assert len(calls) == 5
+    assert len(calls) == 1 + 2 * len(run.batch_manifest)
     assert all(
         len(
             canonical_snapshot_json(

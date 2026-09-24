@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 PROJECTION_VERSION = "headline-packet-v1"
@@ -35,7 +36,7 @@ def project_evidence(evidence: Mapping[str, Any]) -> dict[str, Any]:
     row = pick(evidence, (
         "evidence_id", "excerpt", "created_at", "source_language",
         "translation_status", "classification_status", "first_party_role",
-        "role", "evidence_role", "occurrence_source", "is_quote", "is_retweet",
+        "roles", "role", "evidence_role", "occurrence_source", "is_quote", "is_retweet",
         "excerpt_truncated",
     ))
     aliases = {}
@@ -63,7 +64,13 @@ def project_evidence(evidence: Mapping[str, Any]) -> dict[str, Any]:
         row["brand_relevance"] = pick(evidence["brand_relevance"], (
             "status", "matched_aliases", "other_brand_keys", "reason",
         ))
+    if "source_flags" in evidence:
+        row["source_flags"] = pick(evidence["source_flags"], ("official", "post_kind", "occurrence_source"))
     return row
+
+
+def project_baseline_context(value: Mapping[str, Any]) -> dict[str, Any]:
+    return pick(value, ("kind", "start_at", "end_at", "historic_norm_wording_allowed"))
 
 
 def project_shape(shape: Mapping[str, Any]) -> dict[str, Any]:
@@ -131,6 +138,11 @@ def project_dossier(dossier: Mapping[str, Any], *, rank: bool = False) -> dict[s
             scope = pick(supplied_scope, ("brand_key", "start_at", "end_at", "basis", "denominator"))
             scope["coverage"] = pick(supplied_scope.get("coverage") or {},
                                      ("status", "covered_post_count", "total_post_count"))
+        elif is_change and scope.get("start_at") and scope.get("end_at"):
+            start = datetime.fromisoformat(str(scope["start_at"]))
+            end = datetime.fromisoformat(str(scope["end_at"]))
+            scope["baseline_start_at"] = (start - (end - start)).isoformat()
+            scope["baseline_end_at"] = scope["start_at"]
         scope_json = json.dumps(scope, sort_keys=True)
         scope_ref = scope_ids.setdefault(scope_json, f"s{len(scope_ids) + 1}")
         scopes[scope_ref] = scope

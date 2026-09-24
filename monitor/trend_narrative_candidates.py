@@ -33,7 +33,7 @@ from monitor.trend_narrative_facts import (
     fetch_finance_observations,
     fetch_trend_candidate_series,
 )
-from monitor.trend_narrative_packet import project_dossier
+from monitor.trend_narrative_packet import project_baseline_context, project_dossier
 
 TREND_SNAPSHOT_SCHEMA_VERSION = 1
 COMPACT_DOSSIER_SCHEMA_VERSION = 3
@@ -315,7 +315,7 @@ def _fit_or_split_editor_batch(
         "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
         "window_days": snapshot["window_days"],
         "as_of": snapshot["as_of"],
-        "baseline_context": dict(snapshot["baseline_context"]),
+        "baseline_context": project_baseline_context(snapshot["baseline_context"]),
         "batch_key": batch_key,
         "manifest_brand_keys": [str(row["brand_key"]) for row in members],
         "dossiers": [_provider_dossier(row) for row in members],
@@ -1744,7 +1744,7 @@ def _project_compact_ranking_packet(snapshot: Mapping[str, Any]) -> dict[str, An
         "packet_schema_version": COMPACT_DOSSIER_SCHEMA_VERSION,
         "window_days": snapshot["window_days"],
         "as_of": snapshot["as_of"],
-        "baseline_context": snapshot["baseline_context"],
+        "baseline_context": project_baseline_context(snapshot["baseline_context"]),
         "dossiers": dossiers,
     }
 

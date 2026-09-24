@@ -14,6 +14,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -173,6 +174,29 @@ for _headline_stage, _headline_schema in _HEADLINE_SCHEMAS.items():
             },
         },
     }
+
+# The finance contract binds every cited aggregate to its exact typed input.
+# Existing profiles stay readable for historical receipts and regression cases.
+_FINANCE_NARRATIVE_SCHEMA = deepcopy(_NARRATIVE_SCHEMA)
+_FINANCE_PROPOSITION_SCHEMA = _FINANCE_NARRATIVE_SCHEMA["properties"]["propositions"]["items"]
+_FINANCE_PROPOSITION_SCHEMA["properties"]["measurements"] = {
+    "type": "array", "items": _closed_object({
+        "fact_id": {"type": "string"}, "value": {"type": "string"},
+        "unit": {"type": "string"}, "scope_ref": {"type": "string"},
+    }),
+}
+_FINANCE_PROPOSITION_SCHEMA["required"].append("measurements")
+for _headline_stage in ("editor", "critic"):
+    _profile = deepcopy(_PROFILES[f"headline_{_headline_stage}_v2"])
+    _schema = _profile["response_format"]["json_schema"]
+    _schema["name"] = f"headline_{_headline_stage}_v3"
+    _properties = _schema["schema"]["properties"]
+    _properties[f"{_headline_stage}_response_schema_version"]["enum"] = [3]
+    if _headline_stage == "editor":
+        _properties["brands"]["items"] = _FINANCE_NARRATIVE_SCHEMA
+    else:
+        _properties["decisions"]["items"]["properties"]["narrative"]["anyOf"][0] = _FINANCE_NARRATIVE_SCHEMA
+    _PROFILES[f"headline_{_headline_stage}_v3"] = _profile
 
 
 def _json_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

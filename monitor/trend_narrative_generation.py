@@ -9,6 +9,7 @@ import os
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
 import anthropic
@@ -380,6 +381,30 @@ support_kind is first_party, independent_discussion, or
 first_party_plus_discussion. Both citation arrays must be nonempty and belong
 to the same brand. If the date is unknown, remove the event object and retain
 only supported narrative content. Never fabricate a date or combine events."""
+_MEASUREMENT_CONTRACT = """
+Each proposition also has measurements: an array with exactly one object per
+cited fact_id (empty when fact_ids is empty). Each object has exactly fact_id,
+value, unit, scope_ref. Copy these from that fact, including the sign; do not
+calculate a new value. scope_ref identifies this brand's supplied scopes entry,
+which fixes the interval, denominator, and comparison basis. A quantity claim
+requires a fact and measurement. Source-reported product numbers are attributed
+content_summary claims with evidence IDs, never invented corpus measurements.
+The claim in every language must agree with the measurement and its scope.
+Do not treat an uncertain brand_relevance match as evidence of this brand's
+activity without explicit support in the source. multiple_brands requires
+checking which entity owns each announcement or number. A dossier assignment
+alone establishes neither semantic relevance nor ownership of a claim.
+"""
+EDITOR_SYSTEM_PROMPT_0731_FINANCE = (
+    EDITOR_SYSTEM_PROMPT_0731_JA.replace("editor_response_schema_version: 2", "editor_response_schema_version: 3")
+    .replace("fact_ids, evidence_ids.", "fact_ids, evidence_ids, measurements.")
+    + _MEASUREMENT_CONTRACT
+)
+CRITIC_SYSTEM_PROMPT_0731_FINANCE = (
+    CRITIC_SYSTEM_PROMPT_0731_JA.replace("critic_response_schema_version: 2", "critic_response_schema_version: 3")
+    .replace("fact_ids, evidence_ids.", "fact_ids, evidence_ids, measurements.")
+    + _MEASUREMENT_CONTRACT
+)
 CRITIC_HOLD_CODES = frozenset(
     {
         "unsupported_event",
@@ -401,6 +426,10 @@ def _japanese_contract(prompt_version: object) -> bool:
     return "ja" in str(prompt_version or "").casefold().split("-")
 
 
+def _finance_contract(prompt_version: object) -> bool:
+    return "finance" in str(prompt_version or "").casefold().split("-")
+
+
 def build_per_brand_rank_request(
     packet: Mapping[str, Any], config: HeadlineNarrativeConfig
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -419,7 +448,9 @@ def build_per_brand_editor_request(
     if len(packet.get("manifest_brand_keys", [])) > config.per_brand_batch_size:
         raise HeadlineGenerationError("editor_batch_size_invalid")
     system = (
-        EDITOR_SYSTEM_PROMPT_0731_JA
+        EDITOR_SYSTEM_PROMPT_0731_FINANCE
+        if config.provider == "deepinfra" and _finance_contract(config.editor_prompt_version)
+        else EDITOR_SYSTEM_PROMPT_0731_JA
         if config.provider == "deepinfra"
         else EDITOR_SYSTEM_PROMPT_V3_JA
         if _japanese_contract(config.editor_prompt_version)
@@ -546,7 +577,9 @@ def build_per_brand_critic_request(
         model=config.model,
         max_tokens=config.critic_max_tokens,
         system=(
-            CRITIC_SYSTEM_PROMPT_0731_JA
+            CRITIC_SYSTEM_PROMPT_0731_FINANCE
+            if config.provider == "deepinfra" and _finance_contract(config.critic_prompt_version)
+            else CRITIC_SYSTEM_PROMPT_0731_JA
             if config.provider == "deepinfra"
             else
             CRITIC_SYSTEM_PROMPT_V2_JA
@@ -685,8 +718,9 @@ def validate_per_brand_editor_response(
             "editor_response_schema_invalid", transport_completed=True
         )
     require_ja = _japanese_contract(envelope.get("prompt_version"))
+    require_measurements = _finance_contract(envelope.get("prompt_version"))
     expected_schema = (
-        PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION_JA
+        3 if require_measurements else PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION_JA
         if require_ja
         else PER_BRAND_EDITOR_RESPONSE_SCHEMA_VERSION
     )
@@ -709,7 +743,8 @@ def validate_per_brand_editor_response(
             "editor_response_manifest_mismatch", transport_completed=True
         )
     for narrative in brands:
-        _validate_per_brand_narrative(narrative, packet, require_ja=require_ja)
+        _validate_per_brand_narrative(narrative, packet, require_ja=require_ja,
+                                      require_measurements=require_measurements)
     return _copy_json(response)
 
 
@@ -810,8 +845,9 @@ def validate_per_brand_critic_response(
     if envelope.get("packet_hash") != _packet_hash(packet):
         raise HeadlineGenerationError("per_brand_packet_hash_invalid")
     require_ja = _japanese_contract(envelope.get("prompt_version"))
+    require_measurements = _finance_contract(envelope.get("prompt_version"))
     expected_schema = (
-        PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION_JA
+        3 if require_measurements else PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION_JA
         if require_ja
         else PER_BRAND_CRITIC_RESPONSE_SCHEMA_VERSION
     )
@@ -863,7 +899,7 @@ def validate_per_brand_critic_response(
                 )
             try:
                 _validate_per_brand_narrative(
-                    narrative, packet, require_ja=require_ja
+                    narrative, packet, require_ja=require_ja, require_measurements=require_measurements
                 )
             except HeadlineGenerationError:
                 decision.update(
@@ -947,11 +983,49 @@ def _packet_hash(packet: Mapping[str, Any]) -> str:
     )
 
 
+def _validate_measurements(
+    proposition: Mapping[str, Any], dossier: Mapping[str, Any],
+    facts: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Reject changed values/units/scopes; prose entailment remains critic-owned."""
+    bindings = proposition.get("measurements")
+    cited = set(proposition["fact_ids"])
+    invalid = not isinstance(bindings, list) or len(bindings) != len(cited)
+    if not cited and not proposition.get("evidence_ids"):
+        invalid = True
+    if proposition.get("claim_type") == "quantity" and not cited:
+        invalid = True
+    if invalid:
+        raise HeadlineGenerationError("editor_response_measurement_invalid", transport_completed=True)
+    seen = set()
+    for binding in bindings:
+        if not isinstance(binding, Mapping) or set(binding) != {"fact_id", "value", "unit", "scope_ref"}:
+            raise HeadlineGenerationError("editor_response_measurement_invalid", transport_completed=True)
+        fact_id = binding.get("fact_id")
+        if not isinstance(fact_id, str) or fact_id not in cited or fact_id in seen:
+            raise HeadlineGenerationError("editor_response_measurement_invalid", transport_completed=True)
+        seen.add(fact_id)
+        fact = facts[fact_id]
+        scope = (dossier.get("scopes") or {}).get(fact.get("scope_ref")) or {}
+        try:
+            value = Decimal(str(binding.get("value")))
+            expected = Decimal(str(fact.get("value")))
+            valid_value = value.is_finite() and expected.is_finite() and value == expected
+        except (InvalidOperation, ValueError, TypeError):
+            valid_value = False
+        if (not valid_value or binding.get("unit") != fact.get("unit")
+                or binding.get("scope_ref") != fact.get("scope_ref")
+                or scope.get("brand_key") != dossier.get("brand_key")
+                or not scope.get("basis")):
+            raise HeadlineGenerationError("editor_response_measurement_invalid", transport_completed=True)
+
+
 def _validate_per_brand_narrative(
     narrative: Mapping[str, Any],
     packet: Mapping[str, Any],
     *,
     require_ja: bool = False,
+    require_measurements: bool = False,
 ) -> None:
     if (
         not isinstance(narrative, Mapping)
@@ -1047,6 +1121,8 @@ def _validate_per_brand_narrative(
         }
         if require_ja:
             proposition_keys.add("claim_ja")
+        if require_measurements:
+            proposition_keys.add("measurements")
         if set(proposition) != proposition_keys:
             raise HeadlineGenerationError(
                 "editor_response_propositions_invalid", transport_completed=True
@@ -1104,6 +1180,8 @@ def _validate_per_brand_narrative(
             raise HeadlineGenerationError(
                 "editor_response_ownership_invalid", transport_completed=True
             )
+        if require_measurements:
+            _validate_measurements(proposition, dossier, fact_values)
     events = narrative.get("events")
     if not isinstance(events, list):
         raise HeadlineGenerationError(

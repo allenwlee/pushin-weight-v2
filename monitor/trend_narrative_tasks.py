@@ -1095,8 +1095,15 @@ def _critic_risk_reasons(
                 "events"
             ):
                 reasons.add("event_led")
-            if "quantity" in claim_types:
+            if "quantity" in claim_types or any(
+                row.get("measurements") for row in narrative.get("propositions", [])
+            ):
                 reasons.add("fact_alignment")
+        if any(
+            (evidence.get("brand_relevance") or {}).get("status") in {"uncertain", "multiple_brands"}
+            for dossier in batch.get("dossiers", []) for evidence in dossier.get("evidence", [])
+        ):
+            reasons.add("brand_relevance")
         if any(
             (dossier.get("enrichment_coverage") or {}).get("classification_status")
             != "complete"

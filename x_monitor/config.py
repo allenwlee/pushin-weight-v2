@@ -548,8 +548,8 @@ class HeadlineNarrativeConfig(BaseModel):
         default="headline-critic-v6", min_length=1, max_length=64
     )
     rank_request_profile: Literal["headline_rank_v1", "headline_rank_v2"] = "headline_rank_v1"
-    editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2"] = "headline_editor_v1"
-    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2"] = "headline_critic_v1"
+    editor_request_profile: Literal["headline_editor_v1", "headline_editor_v2", "headline_editor_v3"] = "headline_editor_v1"
+    critic_request_profile: Literal["headline_critic_v1", "headline_critic_v2", "headline_critic_v3"] = "headline_critic_v1"
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
@@ -678,6 +678,14 @@ class HeadlineNarrativeConfig(BaseModel):
             raise ValueError(
                 "headline provider, exact base_url, and evaluated model must match"
             )
+        for stage in ("editor", "critic"):
+            prompt_parts = getattr(self, f"{stage}_prompt_version").casefold().split("-")
+            finance = "finance" in prompt_parts
+            profile = getattr(self, f"{stage}_request_profile")
+            if finance != (profile == f"headline_{stage}_v3") or (
+                finance and (self.provider != "deepinfra" or "ja" not in prompt_parts)
+            ):
+                raise ValueError("headline finance prompt requires its trilingual DeepInfra v3 schema")
         windows = {1, 7, 30, 365}
         if set(self.cadence_minutes) != windows:
             raise ValueError("headline cadences must cover 1, 7, 30, and 365 days")
