@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
@@ -155,13 +156,18 @@ class FakeRunner:
     def __init__(self, events: list[str]) -> None:
         self.events = events
         self.commands: list[tuple[list[str], dict[str, str]]] = []
+        self.timeouts: list[tuple[list[str], int]] = []
         self.fail: str | None = None
         self.interrupt_restore = False
+        self.timeout_restore = False
 
     def __call__(self, command: list[str], **options: object):
         environment = options["env"]
         assert isinstance(environment, dict)
+        timeout = options["timeout"]
+        assert isinstance(timeout, int)
         self.commands.append((command, environment))
+        self.timeouts.append((command, timeout))
         executable = Path(command[0]).name
         self.events.append(f"command:{executable}")
         if command[1:] == ["--version"]:
@@ -180,6 +186,8 @@ class FakeRunner:
         if executable == "pg_restore":
             if self.interrupt_restore:
                 raise KeyboardInterrupt
+            if self.timeout_restore:
+                raise subprocess.TimeoutExpired(command, timeout)
             if self.fail == "pg_restore":
                 return SimpleNamespace(
                     returncode=1, stdout="", stderr="contains-password"
@@ -373,6 +381,37 @@ def test_snapshot_census_and_dump_use_one_exported_snapshot(tmp_path: Path) -> N
     assert events.index("lock:target:acquire") < events.index(
         "shadow:create:" + candidate.name
     )
+
+
+def test_restore_has_longer_bounded_timeout_than_other_commands(tmp_path: Path) -> None:
+    engine, _adapter, runner, _events = _engine(tmp_path)
+
+    engine.preflight()
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        engine.restore_shadow(artifact)
+
+    assert any(
+        Path(command[0]).name == "pg_restore" and command[1:] != ["--version"]
+        for command, _timeout in runner.timeouts
+    )
+    for command, timeout in runner.timeouts:
+        executable = Path(command[0]).name
+        if executable == "pg_restore" and command[1:] != ["--version"]:
+            assert timeout == 60 * 90
+        else:
+            assert timeout == 60 * 30
+
+
+def test_restore_timeout_fails_closed_and_drops_shadow(tmp_path: Path) -> None:
+    engine, _adapter, runner, events = _engine(tmp_path)
+    artifact = engine.export_dump()
+    runner.timeout_restore = True
+
+    with engine.target_lock(), pytest.raises(RefreshError, match="subprocess_failed"):
+        engine.restore_shadow(artifact)
+
+    assert any(event.startswith("shadow:drop:") for event in events)
 
 
 def test_preflight_checks_clients_space_capacity_and_both_locks(tmp_path: Path) -> None:
