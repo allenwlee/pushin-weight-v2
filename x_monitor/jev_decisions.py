@@ -151,15 +151,16 @@ QUESTION_SET: dict[str, dict[str, Any]] = {
     },
 }
 
-JUNK_QUESTIONS = (
-    "junk_mill",
-    "junk_lineup",
-    "junk_f1",
-    "junk_joke",
-    "junk_static_bio",
-    "junk_price_only",
-    "junk_conference_ad",
-)
+# A junk answer only vetoes routes whose evidence it actually contradicts.
+# In particular, static-profile evidence is a personnel negative, not a reason
+# to discard a concrete event, opportunity, opening, or model release.
+ROUTE_JUNK_QUESTIONS = {
+    "personnel_changes": {"junk_lineup", "junk_f1", "junk_joke", "junk_static_bio"},
+    "job_listings": {"junk_mill", "junk_joke"},
+    "events": {"junk_joke", "junk_conference_ad"},
+    "opportunities": {"junk_mill", "junk_joke", "junk_conference_ad"},
+    "model_releases": {"junk_lineup", "junk_joke", "junk_price_only"},
+}
 _TRANSPORT_LIMIT = threading.BoundedSemaphore(2)
 
 
@@ -199,11 +200,18 @@ def question_content_hash() -> str:
     return _canonical_hash(QUESTION_SET)
 
 
-def threshold_values_hash(no_threshold: Decimal, yes_threshold: Decimal) -> str:
+def threshold_values_hash(
+    no_threshold: Decimal,
+    yes_threshold: Decimal,
+    role_opening_threshold: Decimal = Decimal("0.30"),
+    attendance_event_threshold: Decimal = Decimal("0.50"),
+) -> str:
     return _canonical_hash(
         {
             "no": format(no_threshold.normalize(), "f"),
             "yes": format(yes_threshold.normalize(), "f"),
+            "role_opening": format(role_opening_threshold.normalize(), "f"),
+            "attendance_event": format(attendance_event_threshold.normalize(), "f"),
         }
     )
 
@@ -310,16 +318,6 @@ def derive_gate_outcome(
 ) -> tuple[str, tuple[str, ...]]:
     yes = float(config.yes_threshold)
     no = float(config.no_threshold)
-    if any(probabilities[name] >= yes for name in JUNK_QUESTIONS):
-        return RareTypeDecision.GateOutcome.JUNK, ()
-
-    route_questions = (
-        "role_change",
-        "role_opening",
-        "attendance_event",
-        "bounded_opportunity",
-        "model_release",
-    )
     if probabilities["ai_related"] <= no:
         return RareTypeDecision.GateOutcome.JUNK, ()
 
@@ -337,32 +335,72 @@ def derive_gate_outcome(
             flags=re.IGNORECASE,
         )
     )
+    quoted_author = state.get("quoted_author") if isinstance(state, Mapping) else None
+    quoted_text = state.get("quoted_text") if isinstance(state, Mapping) else None
+    supported_quoted_first_person = bool(
+        isinstance(quoted_author, Mapping)
+        and (
+            quoted_author.get("id")
+            or quoted_author.get("name")
+            or quoted_author.get("handle")
+        )
+        and isinstance(quoted_text, str)
+        and re.search(
+            r"(?:\bI(?:['’](?:m|ve)|\s+(?:am|have|joined|left))\b|我|本人|私|僕|"
+            r"本日.{0,24}(?:退職|入社)しました)",
+            quoted_text,
+            flags=re.IGNORECASE,
+        )
+    )
 
     personnel_identity_supported = probabilities["person_identity"] >= yes or (
-        supported_first_person and probabilities["person_identity"] > no
+        (supported_first_person or supported_quoted_first_person)
+        and probabilities["person_identity"] > no
     )
 
     derived: list[str] = []
-    if probabilities["role_change"] >= yes and personnel_identity_supported:
-        derived.append("personnel_changes")
-    if probabilities["role_opening"] >= yes:
-        derived.append("job_listings")
-    if probabilities["attendance_event"] >= yes:
-        derived.append("events")
-    if probabilities["bounded_opportunity"] >= yes:
-        derived.append("opportunities")
-    if (
-        probabilities["model_release"] >= yes
-        and probabilities["source_announcement"] > no
-    ):
-        derived.append("model_releases")
+    route_candidates = {
+        "personnel_changes": (
+            probabilities["role_change"] >= yes and personnel_identity_supported
+        ),
+        "job_listings": (
+            probabilities["role_opening"] >= float(config.role_opening_threshold)
+            and probabilities["bounded_opportunity"] < yes
+        ),
+        "events": probabilities["attendance_event"]
+        >= float(config.attendance_event_threshold),
+        "opportunities": probabilities["bounded_opportunity"] >= yes,
+        "model_releases": (
+            probabilities["model_release"] >= yes
+            and probabilities["source_announcement"] > no
+        ),
+    }
+    for rare_type, supported in route_candidates.items():
+        veto_questions = ROUTE_JUNK_QUESTIONS[rare_type]
+        if rare_type == "personnel_changes" and (
+            supported_first_person or supported_quoted_first_person
+        ):
+            # A source-linked first-person transition is not merely a static bio.
+            veto_questions = veto_questions - {"junk_static_bio"}
+        contradicted = any(
+            probabilities[question] >= yes for question in veto_questions
+        )
+        if supported and not contradicted:
+            derived.append(rare_type)
     if derived:
         if probabilities["ai_related"] < yes:
             return RareTypeDecision.GateOutcome.REVIEW_NEEDED, ()
         return RareTypeDecision.GateOutcome.KEPT, tuple(derived)
 
     route_uncertain = any(
-        no < probabilities[name] < yes for name in route_questions
+        no < probabilities[name] < threshold
+        for name, threshold in (
+            ("role_change", yes),
+            ("role_opening", float(config.role_opening_threshold)),
+            ("attendance_event", float(config.attendance_event_threshold)),
+            ("bounded_opportunity", yes),
+            ("model_release", yes),
+        )
     )
     dependency_uncertain = (
         probabilities["role_change"] >= yes
@@ -573,7 +611,12 @@ class JevDecisionGate:
         if question_content_hash() != config.question_content_sha256:
             raise JevDecisionError("question_hash_mismatch")
         if (
-            threshold_values_hash(config.no_threshold, config.yes_threshold)
+            threshold_values_hash(
+                config.no_threshold,
+                config.yes_threshold,
+                config.role_opening_threshold,
+                config.attendance_event_threshold,
+            )
             != config.threshold_values_sha256
         ):
             raise JevDecisionError("threshold_hash_mismatch")

@@ -231,6 +231,8 @@ class JevDecisionsConfig(BaseModel):
     )
     yes_threshold: Decimal = Field(default=Decimal("0.80"), ge=0, le=1)
     no_threshold: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    role_opening_threshold: Decimal = Field(default=Decimal("0.30"), ge=0, le=1)
+    attendance_event_threshold: Decimal = Field(default=Decimal("0.50"), ge=0, le=1)
     input_price_per_million_usd: Decimal = Field(default=Decimal("0.042"), gt=0)
     output_price_per_million_usd: Decimal = Field(default=Decimal(0), ge=0)
     request_timeout_seconds: float = Field(default=10, gt=0, le=10)
@@ -247,6 +249,13 @@ class JevDecisionsConfig(BaseModel):
     def _validate_thresholds(self) -> JevDecisionsConfig:
         if self.no_threshold >= self.yes_threshold:
             raise ValueError("Jev no threshold must be below yes threshold")
+        if not (
+            self.no_threshold < self.role_opening_threshold <= self.yes_threshold
+            and self.no_threshold
+            < self.attendance_event_threshold
+            <= self.yes_threshold
+        ):
+            raise ValueError("Jev type thresholds must be above no and at most yes")
         if self.output_price_per_million_usd != 0:
             raise ValueError("pinned Jev output pricing must remain zero")
         return self

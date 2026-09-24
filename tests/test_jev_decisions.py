@@ -119,12 +119,15 @@ def test_checked_in_jev_config_fixture_is_pinned_and_disabled(monkeypatch):
     )
     assert cfg.discovery.rare_types.jev.input_price_per_million_usd == Decimal("0.042")
     assert cfg.discovery.rare_types.jev.output_price_per_million_usd == 0
-    assert cfg.discovery.rare_types.jev.threshold_version == "rare-types-jev-routing-v2"
-    assert fixture["threshold_version"] == "rare-types-jev-routing-v2"
+    assert cfg.discovery.rare_types.jev.threshold_version == "rare-types-jev-routing-v3"
+    assert fixture["threshold_version"] == "rare-types-jev-routing-v3"
     assert fixture["question_ids"] == list(QUESTION_SET)
     assert fixture["question_content_sha256"] == question_content_hash()
     assert fixture["threshold_values_sha256"] == threshold_values_hash(
-        Decimal(fixture["no_threshold"]), Decimal(fixture["yes_threshold"])
+        Decimal(fixture["no_threshold"]),
+        Decimal(fixture["yes_threshold"]),
+        Decimal(fixture["role_opening_threshold"]),
+        Decimal(fixture["attendance_event_threshold"]),
     )
     assert build_jev_decision_gate(cfg, environment="normal") is None
 
@@ -166,6 +169,7 @@ def test_claim_to_http_to_decision_and_hit_is_atomic_reusable_and_posts_nothing(
                 role_change=0.97,
                 attendance_event=0.91,
                 bounded_opportunity=0.92,
+                junk_static_bio=0.91,
             ),
         )
 
@@ -229,13 +233,11 @@ def test_claim_to_http_to_decision_and_hit_is_atomic_reusable_and_posts_nothing(
 
 
 def test_route_ignores_uncertainty_from_unrelated_questions():
-    probabilities = {
-        question_id: 0.1 for question_id in QUESTION_SET
-    }
+    probabilities = {question_id: 0.1 for question_id in QUESTION_SET}
     probabilities.update(
         ai_related=0.95,
         role_opening=0.91,
-        attendance_event=0.50,
+        attendance_event=0.49,
         model_release=0.45,
     )
 
@@ -246,9 +248,7 @@ def test_route_ignores_uncertainty_from_unrelated_questions():
 
 
 def test_definite_junk_still_wins_over_supported_route():
-    probabilities = {
-        question_id: 0.1 for question_id in QUESTION_SET
-    }
+    probabilities = {question_id: 0.1 for question_id in QUESTION_SET}
     probabilities.update(
         ai_related=0.95,
         role_opening=0.91,
@@ -261,13 +261,61 @@ def test_definite_junk_still_wins_over_supported_route():
     )
 
 
+def test_static_bio_junk_is_scoped_away_from_non_personnel_routes():
+    probabilities = {question_id: 0.1 for question_id in QUESTION_SET}
+    probabilities.update(
+        ai_related=0.95,
+        attendance_event=0.51,
+        bounded_opportunity=0.91,
+        model_release=0.88,
+        source_announcement=0.87,
+        junk_static_bio=0.91,
+    )
+
+    assert derive_gate_outcome(probabilities, _config()) == (
+        RareTypeDecision.GateOutcome.KEPT,
+        ("events", "opportunities", "model_releases"),
+    )
+
+
+def test_type_specific_thresholds_keep_jobs_and_events_but_review_lower_scores():
+    probabilities = {question_id: 0.1 for question_id in QUESTION_SET}
+    probabilities.update(ai_related=0.95, role_opening=0.31, attendance_event=0.51)
+    assert derive_gate_outcome(probabilities, _config()) == (
+        RareTypeDecision.GateOutcome.KEPT,
+        ("job_listings", "events"),
+    )
+
+    probabilities.update(role_opening=0.29, attendance_event=0.49)
+    assert derive_gate_outcome(probabilities, _config()) == (
+        RareTypeDecision.GateOutcome.REVIEW_NEEDED,
+        (),
+    )
+
+
+def test_quoted_first_person_identity_supports_personnel_route():
+    probabilities = {question_id: 0.1 for question_id in QUESTION_SET}
+    probabilities.update(ai_related=0.87, person_identity=0.61, role_change=0.89)
+    state = {
+        "text": "Congratulations to Priya on her next chapter.",
+        "author": {"id": "lab", "handle": "emberglasslab"},
+        "quoted_text": "After four years, I'm leaving Emberglass Lab.",
+        "quoted_author": {"id": None, "name": None, "handle": "priyamenon"},
+    }
+
+    assert derive_gate_outcome(probabilities, _config(), state=state) == (
+        RareTypeDecision.GateOutcome.KEPT,
+        ("personnel_changes",),
+    )
+
+
 def test_intermediate_answer_settles_once_as_review_and_reuses_without_retry():
     calls = 0
 
     def handler(_request):
         nonlocal calls
         calls += 1
-        return httpx.Response(200, json=_response(ai_related=0.9, role_opening=0.5))
+        return httpx.Response(200, json=_response(ai_related=0.9, role_opening=0.25))
 
     hit = _hits({"id": "review-1", "text": "Maybe hiring", "lang": "en"})[0]
     gate = _gate(handler)

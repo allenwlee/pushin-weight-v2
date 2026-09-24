@@ -58,9 +58,16 @@ def main() -> int:
         )
         if summary["complete"]:
             if args.live_evidence is None:
-                raise SystemExit(
-                    "complete provider capture requires --live-evidence with independent human labels"
+                print(
+                    json.dumps(
+                        {
+                            "provider_capture_complete": True,
+                            "assessment_status": "pending_independent_live_evidence",
+                        },
+                        sort_keys=True,
+                    )
                 )
+                return 0
             assessment = build_assessment(
                 fixture_path=FIXTURE,
                 predictions=summary["predictions"],

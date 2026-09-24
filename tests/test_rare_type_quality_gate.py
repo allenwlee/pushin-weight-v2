@@ -185,6 +185,8 @@ def test_identity_freezes_exact_query_model_question_threshold_and_fixture_bytes
         "threshold_values_sha256": cfg.threshold_values_sha256,
         "yes_threshold": "0.80",
         "no_threshold": "0.20",
+        "role_opening_threshold": "0.30",
+        "attendance_event_threshold": "0.50",
         "fixture_sha256": hashlib.sha256(FIXTURE.read_bytes()).hexdigest(),
         "corpus_content_sha256": hashlib.sha256(
             json.dumps(

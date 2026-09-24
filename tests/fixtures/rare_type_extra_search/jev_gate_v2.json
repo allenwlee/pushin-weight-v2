@@ -1,8 +1,8 @@
 {
   "question_set_version": "rare-types-jev-questions-v1",
   "question_content_sha256": "2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
-  "threshold_version": "rare-types-jev-routing-v2",
-  "threshold_values_sha256": "9cc114c093b8ee2d38311c81a01e76177e1c22c31e20af2b3a265e4abcd9511a",
+  "threshold_version": "rare-types-jev-routing-v3",
+  "threshold_values_sha256": "1c6dc92d61493569059ba2ea2de6a0a3dd2bf660080689b98617f3be40a808d8",
   "question_ids": [
     "ai_related",
     "person_identity",
@@ -21,5 +21,7 @@
     "junk_conference_ad"
   ],
   "yes_threshold": "0.80",
-  "no_threshold": "0.20"
+  "no_threshold": "0.20",
+  "role_opening_threshold": "0.30",
+  "attendance_event_threshold": "0.50"
 }

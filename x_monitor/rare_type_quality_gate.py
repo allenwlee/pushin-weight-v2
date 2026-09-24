@@ -95,7 +95,12 @@ def assessment_identity(
     if question_content_hash() != config.question_content_sha256:
         raise QualityEvidenceError("configured question content hash mismatch")
     if (
-        threshold_values_hash(config.no_threshold, config.yes_threshold)
+        threshold_values_hash(
+            config.no_threshold,
+            config.yes_threshold,
+            config.role_opening_threshold,
+            config.attendance_event_threshold,
+        )
         != config.threshold_values_sha256
     ):
         raise QualityEvidenceError("configured threshold values hash mismatch")
@@ -117,6 +122,8 @@ def assessment_identity(
         "threshold_values_sha256": config.threshold_values_sha256,
         "yes_threshold": format(config.yes_threshold, "f"),
         "no_threshold": format(config.no_threshold, "f"),
+        "role_opening_threshold": format(config.role_opening_threshold, "f"),
+        "attendance_event_threshold": format(config.attendance_event_threshold, "f"),
         "fixture_sha256": _sha256(fixture_bytes),
         "corpus_content_sha256": _sha256(_canonical_bytes(corpus)),
     }
@@ -361,10 +368,15 @@ def _validate_identity_for_assessment(
         "question_content_sha256": question_content_hash(),
         "threshold_version": config.threshold_version,
         "threshold_values_sha256": threshold_values_hash(
-            config.no_threshold, config.yes_threshold
+            config.no_threshold,
+            config.yes_threshold,
+            config.role_opening_threshold,
+            config.attendance_event_threshold,
         ),
         "yes_threshold": format(config.yes_threshold, "f"),
         "no_threshold": format(config.no_threshold, "f"),
+        "role_opening_threshold": format(config.role_opening_threshold, "f"),
+        "attendance_event_threshold": format(config.attendance_event_threshold, "f"),
         "corpus_content_sha256": _sha256(_canonical_bytes(corpus)),
     }
     mismatches = [key for key, value in expected.items() if identity.get(key) != value]
