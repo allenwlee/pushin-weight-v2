@@ -6,8 +6,8 @@ from django.db.migrations.executor import MigrationExecutor
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
-BEFORE = [("core", "0051_profile_movement_token_evidence")]
-AFTER = [("core", "0052_alter_product_options_product_product_key_and_more")]
+BEFORE = [("core", "0044_merge_20260918_1344")]
+AFTER = [("core", "0056_merge_hf_catalog_rare_types")]
 
 
 def test_populated_products_receive_distinct_keys_and_keep_ids_and_hf_metadata():
@@ -27,6 +27,7 @@ def test_populated_products_receive_distinct_keys_and_keep_ids_and_hf_metadata()
         assert [row.id for row in rows] == [first.id, second.id]
         assert [row.repo_id for row in rows] == ["org/one", "org/two"]
         assert [row.sha for row in rows] == ["sha-one", "sha-two"]
+        assert [row.hf_metadata for row in rows] == [{}, {}]
         assert rows[0].product_key != rows[1].product_key
         x_only = Product.objects.create(repo_id=None, display_name="X-only Product")
         assert x_only.product_key

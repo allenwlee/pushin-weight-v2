@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,9 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     RareTypeDecision,
+    RareTypeDecisionAttempt,
+    RareTypeDecisionProcessingCycle,
+    RareTypeSearchDailyBudget,
     RareTypeSearchHit,
     SearchQuery,
     SentimentKey,
@@ -177,6 +181,21 @@ def test_status_reports_query_cost_gate_latency_and_post_pipeline_without_text()
         "accounted_usd": "0E-9",
         "confirmed_usd": "0E-9",
     }
+    assert document["cost"]["jev_decision_attempts"] == {
+        "scope": "unique_decisions_referenced_by_run_hits",
+        "billing_attribution": "decision_attempt_evidence_not_search_run_billing",
+        "decision_count": 0,
+        "reused_decision_count": 0,
+        "attempt_count": 0,
+        "settled_attempt_count": 0,
+        "unknown_usage_attempt_count": 0,
+        "in_flight_attempt_count": 0,
+        "reservation_ceiling_usd": "0E-9",
+        "accounted_usd": "0E-9",
+        "estimated_unconfirmed_usd": "0E-9",
+        "confirmed_usd": None,
+        "confirmation_status": "not_applicable",
+    }
     assert document["counts"]["raw"] == 1
     assert document["counts"]["normalized"] == 1
     assert document["counts"]["persisted_posts"] == 0
@@ -186,6 +205,91 @@ def test_status_reports_query_cost_gate_latency_and_post_pipeline_without_text()
     assert document["hits"][0]["gate"]["state"] == "decision_pending"
     assert document["hits"][0]["classification"]["status"] is None
     assert "DeepSeek released" not in run_output.getvalue()
+
+
+def test_status_attributes_attempt_evidence_without_calling_it_run_billing():
+    hit = _hits("status-funded")[0]
+    other_hit = _hits("status-prior-source")[0]
+    decision = RareTypeDecision.objects.create(
+        provider_post_id=hit.provider_post_id,
+        content_hash="d" * 64,
+        model="jev-1.13.0",
+        question_version="jev-q-v1",
+        threshold_version="jev-threshold-v1",
+    )
+    RareTypeSearchHit.objects.filter(pk__in=[hit.pk, other_hit.pk]).update(
+        decision=decision
+    )
+    budget = RareTypeSearchDailyBudget.objects.create(
+        usage_date=NOW.date(), lane="rare_types-attempt-status"
+    )
+    cycle = RareTypeDecisionProcessingCycle.objects.create(
+        lane="rare_types-attempt-status",
+        environment="normal",
+        slot_start=NOW,
+        usage_date=NOW.date(),
+        daily_budget=budget,
+        allocation_started_at=NOW,
+        allocation_deadline=NOW + timedelta(minutes=1),
+    )
+    RareTypeDecisionAttempt.objects.create(
+        decision=decision,
+        processing_cycle=cycle,
+        fence=1,
+        state=RareTypeDecisionAttempt.State.SETTLED,
+        reserved_usd=Decimal("0.002000000"),
+        accounted_usd=Decimal("0.000050400"),
+        confirmed_usd=None,
+        reserved_at=NOW,
+        sent_at=NOW,
+        settled_at=NOW,
+    )
+    RareTypeDecisionAttempt.objects.create(
+        decision=decision,
+        processing_cycle=cycle,
+        fence=2,
+        state=RareTypeDecisionAttempt.State.SETTLED,
+        reserved_usd=Decimal("0.002000000"),
+        accounted_usd=Decimal("0.000060000"),
+        confirmed_usd=Decimal("0.000060000"),
+        reserved_at=NOW,
+        sent_at=NOW,
+        settled_at=NOW,
+    )
+    RareTypeDecisionAttempt.objects.create(
+        decision=decision,
+        processing_cycle=cycle,
+        fence=3,
+        state=RareTypeDecisionAttempt.State.RETAINED,
+        reserved_usd=Decimal("0.002000000"),
+        reserved_at=NOW,
+        sent_at=NOW,
+    )
+
+    output = StringIO()
+    call_command("rare_type_search_status", "--run-id", hit.run_id, stdout=output)
+
+    cost = json.loads(output.getvalue())["cost"]
+    assert cost["jev"] == {
+        "reserved_usd": "0E-9",
+        "accounted_usd": "0E-9",
+        "confirmed_usd": "0E-9",
+    }
+    assert cost["jev_decision_attempts"] == {
+        "scope": "unique_decisions_referenced_by_run_hits",
+        "billing_attribution": "decision_attempt_evidence_not_search_run_billing",
+        "decision_count": 1,
+        "reused_decision_count": 1,
+        "attempt_count": 3,
+        "settled_attempt_count": 2,
+        "unknown_usage_attempt_count": 1,
+        "in_flight_attempt_count": 0,
+        "reservation_ceiling_usd": "0.006000000",
+        "accounted_usd": "0.000110400",
+        "estimated_unconfirmed_usd": "0.000050400",
+        "confirmed_usd": "0.000060000",
+        "confirmation_status": "incomplete",
+    }
 
 
 def test_committed_replay_requires_explicit_bounded_llm_budget(monkeypatch):

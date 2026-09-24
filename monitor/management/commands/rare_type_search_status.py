@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count
@@ -10,10 +11,13 @@ from django.db.models import Count
 from core.intelligence_readers import rare_type_post_document
 from core.models import (
     PostEnrichmentState,
+    RareTypeDecisionAttempt,
     RareTypeSearchHit,
     RareTypeSearchRun,
     TargetedExtractionState,
 )
+
+USD_QUANTUM = Decimal("0.000000001")
 
 
 def _iso(value):
@@ -24,6 +28,85 @@ def _elapsed_ms(start, end):
     if start is None or end is None:
         return None
     return max(round((end - start).total_seconds() * 1000), 0)
+
+
+def _usd(value: Decimal) -> str:
+    return str(value.quantize(USD_QUANTUM))
+
+
+def _decision_attempt_cost(hits: list[RareTypeSearchHit], *, run_id: int) -> dict:
+    """Summarize physical attempts for decisions referenced by this run's hits."""
+
+    decision_ids = {hit.decision_id for hit in hits if hit.decision_id is not None}
+    attempts = list(
+        RareTypeDecisionAttempt.objects.filter(decision_id__in=decision_ids).values(
+            "state", "reserved_usd", "accounted_usd", "confirmed_usd"
+        )
+    )
+    settled = [
+        attempt
+        for attempt in attempts
+        if attempt["state"] == RareTypeDecisionAttempt.State.SETTLED
+    ]
+    confirmed = [
+        attempt for attempt in settled if attempt["confirmed_usd"] is not None
+    ]
+    unconfirmed = [
+        attempt for attempt in settled if attempt["confirmed_usd"] is None
+    ]
+    reused_decision_count = (
+        RareTypeSearchHit.objects.filter(decision_id__in=decision_ids)
+        .exclude(run_id=run_id)
+        .values("decision_id")
+        .distinct()
+        .count()
+        if decision_ids
+        else 0
+    )
+    confirmation_status = "not_applicable"
+    if attempts:
+        confirmation_status = (
+            "complete" if len(confirmed) == len(attempts) else "incomplete"
+        )
+    return {
+        "scope": "unique_decisions_referenced_by_run_hits",
+        "billing_attribution": "decision_attempt_evidence_not_search_run_billing",
+        "decision_count": len(decision_ids),
+        "reused_decision_count": reused_decision_count,
+        "attempt_count": len(attempts),
+        "settled_attempt_count": len(settled),
+        "unknown_usage_attempt_count": sum(
+            attempt["state"] == RareTypeDecisionAttempt.State.RETAINED
+            for attempt in attempts
+        ),
+        "in_flight_attempt_count": sum(
+            attempt["state"]
+            in {
+                RareTypeDecisionAttempt.State.RESERVED,
+                RareTypeDecisionAttempt.State.SENT,
+            }
+            for attempt in attempts
+        ),
+        "reservation_ceiling_usd": _usd(
+            sum((attempt["reserved_usd"] for attempt in attempts), Decimal(0))
+        ),
+        "accounted_usd": _usd(
+            sum((attempt["accounted_usd"] for attempt in settled), Decimal(0))
+        ),
+        "estimated_unconfirmed_usd": _usd(
+            sum((attempt["accounted_usd"] for attempt in unconfirmed), Decimal(0))
+        ),
+        "confirmed_usd": (
+            _usd(
+                sum(
+                    (attempt["confirmed_usd"] for attempt in confirmed), Decimal(0)
+                )
+            )
+            if confirmed
+            else None
+        ),
+        "confirmation_status": confirmation_status,
+    }
 
 
 def _hit_status(hit: RareTypeSearchHit) -> dict:
@@ -127,6 +210,7 @@ def run_status(run_id: int) -> dict:
                 "accounted_usd": str(run.decision_usd_accounted),
                 "confirmed_usd": str(run.decision_usd_confirmed),
             },
+            "jev_decision_attempts": _decision_attempt_cost(hits, run_id=run.pk),
         },
         "counts": {
             "requests": run.request_count,

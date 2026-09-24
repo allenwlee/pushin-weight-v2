@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from x_monitor.config import load_config
@@ -42,6 +43,133 @@ def test_preflight_is_bounded_and_secret_free(monkeypatch):
     assert result["case_count"] == result["max_physical_calls"] == 56
     assert float(result["reserved_usd"]) <= 0.25
     assert "do-not-print-this" not in json.dumps(result)
+
+
+def test_direct_send_posts_exact_contract_once_without_printing_secret(
+    monkeypatch, capsys
+):
+    from x_monitor.jev_assessment_runner import _direct_send
+
+    secret = "direct-secret-sentinel"
+    request_bytes = b'{"model":"jev-1.13.0"}'
+    calls = []
+    response_body = {
+        "model": _config().model,
+        "usage": {"input_tokens": 12, "output_tokens": 0},
+        "answers": {},
+    }
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(200, json=response_body)
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", secret)
+    monkeypatch.setattr("x_monitor.jev_assessment_runner.httpx.post", post)
+
+    result = _direct_send(request_bytes, _config())
+
+    assert result == {"http_status": 200, "body": response_body}
+    assert calls == [
+        (
+            _config().endpoint,
+            {
+                "content": request_bytes,
+                "headers": {
+                    "Authorization": f"Bearer {secret}",
+                    "Content-Type": "application/json",
+                },
+                "timeout": _config().request_timeout_seconds,
+            },
+        )
+    ]
+    captured = capsys.readouterr()
+    assert secret not in captured.out
+    assert secret not in captured.err
+
+
+def test_direct_send_redacts_non_200_body_and_never_retries(monkeypatch):
+    from x_monitor.jev_assessment_runner import _direct_send
+
+    secret = "provider-echoed-secret"
+    calls = 0
+
+    def post(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(529, content=f"error echoed {secret}".encode())
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "credential-sentinel")
+    monkeypatch.setattr("x_monitor.jev_assessment_runner.httpx.post", post)
+
+    result = _direct_send(b"{}", _config())
+
+    assert calls == 1
+    assert result["http_status"] == 529
+    assert result["error_body_bytes"] == len(f"error echoed {secret}".encode())
+    assert result["error_body_sha256"] == hashlib.sha256(
+        f"error echoed {secret}".encode()
+    ).hexdigest()
+    assert secret not in json.dumps(result)
+    assert "body" not in result
+
+
+def test_direct_send_hashes_malformed_200_body_without_retry(monkeypatch):
+    from x_monitor.jev_assessment_runner import _direct_send
+
+    malformed = b'{"model":'
+    calls = 0
+
+    def post(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, content=malformed)
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "credential-sentinel")
+    monkeypatch.setattr("x_monitor.jev_assessment_runner.httpx.post", post)
+
+    assert _direct_send(b"{}", _config()) == {
+        "http_status": 200,
+        "body": {
+            "unparseable_body_sha256": hashlib.sha256(malformed).hexdigest()
+        },
+    }
+    assert calls == 1
+
+
+def test_direct_send_sanitizes_request_error_and_never_retries(monkeypatch):
+    from x_monitor.jev_assessment_runner import AssessmentRunError, _direct_send
+
+    secret = "transport-secret-sentinel"
+    calls = 0
+
+    def post(url, **_kwargs):
+        nonlocal calls
+        calls += 1
+        request = httpx.Request("POST", url)
+        raise httpx.ConnectError(f"connection failed with {secret}", request=request)
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "credential-sentinel")
+    monkeypatch.setattr("x_monitor.jev_assessment_runner.httpx.post", post)
+
+    with pytest.raises(AssessmentRunError) as raised:
+        _direct_send(b"{}", _config())
+
+    assert str(raised.value) == "transport_error:ConnectError"
+    assert secret not in str(raised.value)
+    assert calls == 1
+
+
+def test_direct_send_missing_key_fails_before_transport(monkeypatch):
+    from x_monitor.jev_assessment_runner import AssessmentRunError, _direct_send
+
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "x_monitor.jev_assessment_runner.httpx.post",
+        lambda *_args, **_kwargs: pytest.fail("missing key must prevent transport"),
+    )
+
+    with pytest.raises(AssessmentRunError, match="direct TypeSafe credential missing"):
+        _direct_send(b"{}", _config())
 
 
 def test_runner_journals_then_resumes_without_more_calls(tmp_path, monkeypatch):

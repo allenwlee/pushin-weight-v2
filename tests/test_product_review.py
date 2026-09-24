@@ -111,6 +111,7 @@ def test_detail_escapes_hostile_source_and_renders_locale_copy():
     response = client.get(reverse("product_review_detail", args=[proposal.pk]))
     body = response.content.decode()
     assert response.status_code == 200
+    assert "box-sizing: border-box" in body
     assert "Release &lt;script&gt;alert(1)&lt;/script&gt;" in body
     assert "<script>alert(1)</script>" not in body
     client.cookies["pw_locale"] = "zh_hans"
