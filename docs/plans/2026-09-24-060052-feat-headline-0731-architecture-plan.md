@@ -101,17 +101,18 @@ once and then execute every request serially. The new route keeps one global
 ranking call, uses two-brand editor and critic packets, and lets three durable
 provider-call tasks run at the same time.
 
-The request format will be tuned for 0731 rather than copied from V4.1. That
+The request format will be tuned specifically for 0731. That
 includes stage-specific prompts, JSON mode or schema, output ceilings, sampler
 settings, and a critic packet that pairs each draft directly with its own brand
 evidence. Reasoning stays disabled. Existing last-good headlines, critic
 routing, one-call entitlements, and atomic publication remain intact.
 
-The switch happens only if the locked 0731 configuration equals or beats the
-current V4.1 route on blinded quality and mechanical reliability, completes
-inside the headline freshness budget, and costs no more than 35% of the V4.1
-control on the same frozen workload. A failed qualification leaves V4.1 in
-place. The owner selected production delivery after qualification.
+0731 is the committed headline model. There is no competing-model benchmark,
+model-selection gate, or alternative-model rollback path. If a configuration
+fails, diagnose the cause, improve its packets, prompts, or execution shape,
+and test 0731 again. Completion means meeting the product's own factual,
+availability, cost, and freshness requirements, then delivering through staging
+to production. The owner explicitly selected this direction on 2026-09-24.
 
 The first qualification failed on factual support. Before retesting, this plan
 now incorporates the owner's finance-context handoff: distinguish a temporary
@@ -133,9 +134,8 @@ failed run remains evidence and does not become a passing test retroactively.
 
 ## Goal Capsule
 
-- **Objective:** Publish current trilingual trend headlines at materially lower
-  LLM cost without reducing factual support, proportionality, usefulness, or
-  availability compared with the V4.1 Flash incumbent.
+- **Objective:** Make direct DeepInfra 0731 deliver useful, factually supported
+  trilingual trend headlines within the product's cost and freshness budgets.
 - **Means:** Adapt the provider request contract to 0731, reduce editor and
   critic packets to two brands, and execute the existing durable stage tasks at
   bounded concurrency three, with compact permitted facts and finance-informed
@@ -144,15 +144,15 @@ failed run remains evidence and does not become a passing test retroactively.
   Contract governs implementation. The generated Ollija Delivery Guide governs
   delivery authority and permits production only after the qualification and
   staging gates. The present amendment is planning work, not activation.
-- **Execution profile:** Characterize the incumbent first, add the candidate
-  route behind explicit configuration, tune on a diagnostic set, lock one
-  request profile, then run the untouched qualification set. After the first
-  no-go, execute U7 → U8 → U9, repeat U4 on diagnostics, then U5 on a new
-  unseen holdout; U6 remains conditional. Existing U1–U3 are retained.
-- **Stop conditions:** Stop activation if 0731 misses any quality, integrity,
-  completeness, cost, latency, memory, provider-attestation, or queue-drain
-  gate. Do not compensate with runtime retries, per-call V4.1 fallback, a larger
-  reasoning budget, or partial-run publication.
+- **Execution profile:** Execute U7 → U8 → U9, tune 0731 in U4, freeze the
+  resulting configuration, then validate it on new unseen data in U5. A failure
+  returns to the responsible implementation unit and another finite tuning
+  cycle. U6 follows readiness; existing U1–U3 are retained.
+- **Deployment conditions:** Do not activate a configuration that misses a
+  quality, integrity, completeness, cost, latency, memory, provider-attestation,
+  or queue-drain requirement. Keep improving 0731 instead of ending the project
+  or reopening model selection. Preserve zero runtime retries, the current
+  reasoning-disabled decision, and atomic publication.
 - **Landing ownership:** The owner selected production delivery. The release
   still requires qualification, staging, and exact-SHA production verification.
 
@@ -169,13 +169,12 @@ the same narrative fields; do not expand the public request/filter contract.
 
 ### Problem Frame
 
-The direct DeepInfra evaluation proved that 0731 can complete all 37 production-
-shaped calls for 84.5% less measured cost than V4.1, but the current request
-shape is unsuitable. Five-brand serial packets made the production-shaped
-workload 5.6 times slower in summed provider time. In blinded review, V4.1 won
-9 of 12 pairs; 0731's recurring errors were unsupported causal language,
+Direct DeepInfra testing established that 0731 can complete the headline call
+graph, but five-brand serial requests and the existing information contract
+need improvement. Recurring errors include unsupported causal language,
 claims broader than the sample, reversed volume direction, cross-brand
-conflation, and translated proper names.
+conflation, translated proper names, and prohibited historical comparisons.
+Those are defects to fix in the 0731 route, not reasons to select another model.
 
 The limitation was not hidden reasoning. The baseline ran with reasoning
 disabled, while a low-reasoning correction probe exhausted the 11,000-token
@@ -222,11 +221,14 @@ provider-specific request tuning.
   translation, or commentary changes in this work. Headline-only deterministic
   calculations and provider projections may change under R14–R19; source
   classifications and historical database rows are not rewritten.
-- R12. The candidate passes a locked comparison against the current V4.1
-  production route. Failure leaves V4.1 active and produces a reproducible
-  failure report rather than a partial switch.
-- R13. V4.1 remains a whole-route rollback configuration. Production never
-  retries an ambiguous 0731 call through V4.1.
+- R12. Validate a locked 0731 configuration against independent product
+  criteria on fresh data. Failure produces a reproducible diagnosis and the
+  next bounded correction cycle; it never selects a different headline model.
+- R13. Recovery uses the last qualified 0731 configuration, when one exists,
+  or disables new generation while serving last-good persisted headlines.
+  Never switch model/provider or resend an ambiguous call as recovery. Existing
+  stored headlines retain their original provenance; serving them is not a
+  new inference through a retired route.
 - R14. Every provider stage receives an explicit field allowlist. Preserve the
   rich immutable snapshot privately; omit selection internals and exact text
   duplicates from the model request. Do not trade away evidence cardinality,
@@ -256,13 +258,14 @@ provider-specific request tuning.
 
 ### Key Decisions
 
-- KD1. **0731 is the candidate model, and its request shape may differ from
-  V4.1.** (session-settled: user-directed — chosen over an identical-shape
-  comparison: the goal is to give 0731 its best reasonable chance to equal or
-  beat the incumbent.) Governs R4–R6, R12.
-- KD2. **Quality parity with V4.1 is the activation bar.** (session-settled:
-  user-directed — chosen over switching on cost or mechanical completion alone:
-  the first evaluation showed those signals can hide semantic failures.)
+- KD1. **0731 is the committed headline model.** (user-directed 2026-09-24:
+  "0731 no matter what. will have to improve it if it isn't good.") Optimize
+  its request shape and pipeline; no competing model is a benchmark or fallback.
+  Governs R4–R6, R12–R13.
+- KD2. **Product readiness replaces model parity.** The owner's decision retires
+  relative scores and percentage-of-incumbent cost gates. Factual support,
+  usefulness, availability, resource limits, and freshness remain testable
+  requirements. A failure changes the implementation, not the model choice.
   Governs R12.
 - KD3. **Reasoning remains disabled.** (session-settled: user-approved — chosen
   over low reasoning: every low-reasoning critic probe exhausted the response
@@ -274,25 +277,36 @@ provider-specific request tuning.
 - KD5. **Integrate finance context and packet cleanup before the next tuning
   campaign.** (user-directed on 2026-09-24.) Preserve the no-go and qualify the
   revised design on fresh data. Jev and semantic reason histories are deferred.
+- KD6. **Three rounds are a tuning-cycle boundary, not an abandonment rule.**
+  Continue with documented corrections and another budgeted cycle when needed;
+  do not stop merely because round three failed or ask to reopen model choice.
 
 ### Success Criteria
 
-- SC1. The locked 0731 arm completes every planned request and gives every
+- SC1. The locked 0731 configuration completes every planned request and gives every
   eligible brand a terminal outcome, with zero unsupported false approvals and
   zero missing locale fields.
-- SC2. In the blinded holdout, 0731 has no worse aggregate mean or rubric score
-  than V4.1, no more critical failures, and no pairwise loss majority. Factual
-  support and proportionality cannot be rescued by a less material rubric.
-  Three independent reviewers each score eight disjoint randomized A/B pairs
-  against the frozen five-part rubric: factual support, proportionality,
-  why-first relevance, secondary usefulness, and translation equivalence.
-- SC3. Symmetrically normalized mechanical-invalid calls are no higher than the
-  V4.1 control, and normalization supplies no model-written content.
+- SC2. Three independent reviewers each assess eight disjoint 0731 narratives
+  against the frozen source packet, without seeing configuration identity.
+  Review factual support, proportionality, why-first relevance, secondary
+  usefulness, and translation equivalence. The initial standalone quality
+  target is a mean of at least 4/5 on each dimension and zero critical factual
+  failures. Report all scores and reasons. A hold is acceptable only when the
+  source packet cannot support a substantive narrative; withholding supported
+  narratives cannot manufacture a zero-error result. These absolute targets
+  replace the former comparative gate and must be locked before output review.
+- SC3. The final validation run has zero unresolved mechanical-invalid results
+  after representation-only normalization. Report raw and normalized error
+  counts separately; normalization cannot supply model-written content.
 - SC4. One-day completion p95 is at most 12 minutes, seven-day completion p95 is
   at most 15 minutes, and arrival/drain utilization stays below 0.75 at
   concurrency three.
-- SC5. Actual provider-billed cost for the locked 0731 workload is at most 35%
-  of the V4.1 control cost on identical frozen inputs.
+- SC5. Actual provider-billed generation cost stays within the existing $0.30
+  maximum per bounded headline run and its token/call caps. Record observed
+  per-window cost and project monthly headline spending from measured run
+  frequency, showing its contribution to the owner's $150/month total LLM
+  budget. Review-model experiment spending is reported separately. No cost
+  ratio against another model is required.
 - SC6. Three concurrent worker processes remain below the Render memory ceiling
   with at least 25% headroom, and simultaneous due windows do not build an
   unbounded queue.
@@ -326,8 +340,8 @@ provider-specific request tuning.
   priority route qualifies.
 - Consider prompt-cache retention only after production prefix reuse is
   measured.
-- Revisit one-brand critics only if the two-brand design still shows cross-brand
-  conflation after all three bounded tuning rounds.
+- Revisit one-brand critics if cross-brand conflation persists after a bounded
+  tuning cycle; re-budget and validate any changed graph before adopting it.
 - Jev; semantic reason-history extraction/taxonomy; chart-image interpretation;
   financial forecasting; arbitrary date/country/post-language headline filters;
   and new statistical libraries such as `ruptures`.
@@ -338,6 +352,15 @@ provider-specific request tuning.
 ---
 
 ## Planning Contract
+
+### Draft prompt exhibit
+
+Read [the verbatim draft rank, writer, and critic prompts](../research/2026-09-24-175847-headline-finance-draft-prompts-exhibit.md)
+for the proposed complete system messages, user-message templates, and a
+fictional compact packet demonstrating historical elevation alongside cooling.
+This is an untested design exhibit, not the live prompt implementation or a
+qualified profile. U7/U8 must supply its facts and U4 must tune and lock it
+before fresh U5 qualification.
 
 ### Key Technical Decisions
 
@@ -356,8 +379,8 @@ provider-specific request tuning.
   three. Do not add an in-process thread pool: durable claims, fences, unique
   `(run, stage, batch_key)` rows, and the reconciler already provide safe fan-
   out and recovery across processes.
-- KTD5. Tune request shape in at most three diagnostic rounds, then lock one
-  immutable stage profile before touching the holdout. Candidate dimensions are
+- KTD5. Tune request shape in cycles of up to three diagnostic rounds, then
+  lock one immutable stage profile before touching a fresh holdout. Candidate dimensions are
   concise prompt wording, JSON schema versus JSON-object mode, temperature,
   top-p, fixed seed, brand-local projection, and output ceiling. Reasoning,
   retries, arbitrary evidence removal, and extra model calls are not tuning
@@ -365,6 +388,9 @@ provider-specific request tuning.
   projection; R18 permits auditable exclusion/replacement of demonstrably
   unrelated evidence without silently reducing the evidence target. The first
   reviewed holdout is now diagnostic material, never an unseen qualification.
+  A failed cycle or validation returns to implementation and another finite
+  cycle. Track cumulative experimental spending and preserve a bounded manifest
+  for each cycle; no unbounded API loop or automatic budget increase is implied.
 - KTD6. Reserve for `1 + 2 × ceil(N / 2)` calls. For 40 brands this is 41
   calls. Start with a 300-second timeout, the existing 900-second lease,
   concurrency three, a 1.6M input-token cap, 350k output-token cap, and $0.30
@@ -372,16 +398,15 @@ provider-specific request tuning.
   priority rates of $0.09 per million input tokens and $0.27 per million output
   tokens; qualification may lower these caps but may not raise them without a
   new finite preflight and refreshed price evidence.
-- KTD7. Compare optimized 0731 with the current V4.1 production route rather
-  than forcing identical parameters. For the revised packet, also run V4.1
-  with the same revised factual information: this separates packet benefit
-  from provider capability. Freeze three explicit evaluation arms and one
-  finite budget before paid execution; no three-arm runtime is introduced.
-  Apply SC1–SC3 to the revised candidate against both controls; SC5 retains
-  unchanged-production-route cost as its denominator. This applies KD1–KD2.
-- KTD8. Activate by committed route configuration only after qualification.
-  Keep the DeepSeek credential and V4.1 route valid for whole-route rollback,
-  but never mix them inside a run.
+- KTD7. Run 0731 alone as the headline generator. Compare its own configuration
+  revisions on diagnostics when useful, and qualify the locked revision against
+  SC1–SC9 on fresh data. No competing-model calls, paired model rankings, or
+  baseline billing run are required. Independent quality reviewers judge source
+  support; they are not alternative generator candidates. This applies KD1–KD2.
+- KTD8. Activate by committed 0731 configuration after readiness validation.
+  Recovery is a previous qualified 0731 profile or disabled generation plus
+  last-good serving. Remove alternate headline model fallback/rollback controls
+  during U6; do not delete shared credentials or change other enrichment roles.
 - KTD9. Use separate rank/editor/critic projections from a versioned canonical
   snapshot. Rank gets concise per-brand notability facts and two source
   previews. Editor gets the selected source evidence and permitted context.
@@ -440,15 +465,16 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[Candidate route inactive] --> F[U7 compact facts and evidence]
+    A[0731 selected] --> F[U7 compact facts and evidence]
     F --> C1[U8 historical and phase context]
     C1 --> R[U9 regression net]
-    R --> P[U4 three-round diagnostic tuning]
+    R --> P[U4 bounded diagnostic tuning cycle]
     P --> L[Lock profiles and prompt versions]
     L --> Q[Untouched full qualification]
     Q --> G{All gates pass?}
-    G -- No --> F[Keep V4.1 and write failure report]
-    G -- Yes --> C[Commit 0731 route and rollback config]
+    G -- No --> E[Record failures and correct the responsible unit]
+    E --> P
+    G -- Yes --> C[Commit ready 0731 route and recovery config]
     C --> D{Recorded delivery authority and gates satisfied?}
     D -- No --> H[Stop with deployable candidate]
     D -- Yes --> S[Follow exact-SHA Ollija guide]
@@ -598,8 +624,9 @@ projections, not only private aggregates. The durable research handoff is
 
 ### System-Wide Impact
 
-- **Provider:** Headlines move from the DeepSeek Anthropic-compatible client to
-  the existing direct DeepInfra transport. Other enrichment routes do not move.
+- **Provider:** Headlines use the existing direct DeepInfra 0731 transport.
+  Retire alternative headline model selection/fallback controls during U6;
+  other enrichment routes and their credentials do not move.
 - **Queue:** The isolated headline worker changes from one to three processes
   with prefetch one. Harvest and every non-headline queue remain untouched.
 - **Persistence:** Existing call identity and state remain authoritative. JSON
@@ -642,8 +669,9 @@ projections, not only private aggregates. The durable research handoff is
 - **Use an in-process thread pool:** weakens the one-task/one-entitlement failure
   boundary and complicates cancellation.
 - **Enable reasoning:** exhausted the response ceiling three times.
-- **Fallback to V4.1 per call:** can duplicate ambiguous sends and mix behavior
-  within one run; use whole-route rollback.
+- **Switch headline models after a failed test:** rejected by the owner. Fix
+  the 0731 route; recover operationally with a qualified 0731 profile or
+  disabled generation and last-good serving.
 
 ### Sources & Research
 
@@ -664,6 +692,9 @@ projections, not only private aggregates. The durable research handoff is
   and limitations; integration authorized by the owner after that handoff.
 - `docs/research/2026-09-24-170254-headline-packet-size-audit.md`:
   captured-message byte measurements and reproduction method, without paid calls.
+- `docs/research/2026-09-24-175847-headline-finance-draft-prompts-exhibit.md`:
+  full proposed prompt text for all three stages, exact user-message templates,
+  and an explicitly fictional packet example; not implemented or tested.
 
 ---
 
@@ -671,8 +702,9 @@ projections, not only private aggregates. The durable research handoff is
 
 For the revised campaign, reuse U1–U3, then execute **U7 → U8 → U9 → U4 → U5
 → U6**. U6 requires a new passing qualification; old unit IDs and the original
-failure record are preserved. This amendment does not initiate implementation
-or paid calls.
+failure record are preserved. U5 failures return to the responsible unit/U4
+until 0731 is ready; they do not end the plan or select another model. This
+amendment does not initiate implementation or paid calls.
 
 ### U1. Add strict 0731 headline transport profiles
 
@@ -781,8 +813,8 @@ monotonic activation; topology remains isolated from harvest and beat.
 
 ### U4. Tune and lock the best 0731 request shape
 
-**Goal:** Give each stage its best reasonable configuration without training on
-the qualification holdout.
+**Goal:** Improve 0731's configuration and request shape until it is ready for
+independent validation, without tuning on an unseen validation set.
 
 **Requirements:** R5, R10, R12.
 
@@ -792,11 +824,14 @@ the qualification holdout.
 `scripts/headline_0731_bakeoff.py`, `tests/test_trend_narrative_evaluation.py`,
 `tests/test_evaluate_trend_headlines_command.py`, `docs/research/`.
 
-**Approach:** Port the no-publication harness from commit `7e4523b`, then
-generalize it to explicit route, batch size, and bounded concurrency. Freeze a
-diagnostic set around the five observed semantic failures, run at most three
-correction rounds over KTD5's dimensions, record exact requests and receipts,
-then freeze one profile per stage.
+**Approach:** Reuse the no-publication harness, pinned to direct DeepInfra
+0731, with explicit batch size and bounded concurrency. Freeze a diagnostic
+set around the observed semantic failures. Run up to three correction rounds
+per finite experiment cycle over KTD5's dimensions; record exact requests,
+receipts, error categories, and the change addressing each failure. When a
+cycle is insufficient, amend the responsible implementation unit and continue
+with another bounded cycle instead of proposing another model. Freeze one
+profile per stage for the next independent validation.
 
 For the revised campaign, treat all first-qualification outputs and reviewer
 comments as diagnostic material. Include suppressed comparisons, unrelated
@@ -816,14 +851,18 @@ selected source IDs or document relevance replacement and insufficient supply.
   holdout start.
 - Every round preserves exact prompt/schema, receipt, errors, tokens, cost,
   latency, and artifact digest.
+- The third failed round records a next-cycle diagnosis and bounded manifest,
+  not an automatic abandonment or request to reopen the chosen model.
+- No competing headline model is called by the active tuning workflow.
 
-**Verification:** The tuning report names all attempted shapes, why each failed
-or won, and the exact locked configuration.
+**Verification:** The tuning report names all attempted shapes, their observed
+failures/improvements, cumulative spending, and the exact locked configuration
+or concrete next correction cycle.
 
-### U5. Qualify 0731 against V4.1
+### U5. Validate 0731 against product requirements
 
-**Goal:** Decide the switch from product quality, reliability, latency, and
-actual spending.
+**Goal:** Establish whether this 0731 revision is ready to deploy and identify
+the corrections needed when it is not.
 
 **Requirements:** R1, R8–R19; SC1–SC9.
 
@@ -834,52 +873,61 @@ actual spending.
 `tests/test_trend_narrative_evaluation.py`.
 
 **Approach:** Freeze a new unseen source corpus and historical inputs; do not
-reuse the first qualification as a holdout. Run the unchanged V4.1 route,
-V4.1 with revised facts, and optimized 0731 with revised facts under KTD7.
-Use the same source corpus, cutoff, and scope for all arms; document that the
-unchanged route has the old packet semantics. Apply symmetric
-representation-only normalization;
-blind 24 paired narratives across three reviewers, with eight disjoint pairs
-per reviewer for each comparison and randomized model-hidden A/B order;
-measure end-to-end
-concurrent wall time, queue drain, memory, tokens, and billed cost; then emit
-one hashed `qualify_0731` or `retain_v41_flash` result. Freeze the five-part
-rubric in SC2 and the complete review manifest before revealing any holdout
-output. Break down legacy-control versus revised-control results explicitly:
-better packets do not by themselves establish that 0731 equals V4.1.
+reuse already reviewed qualification outputs as a fresh holdout. Run only the
+locked 0731 configuration. Apply representation-only normalization; have three
+independent reviewers assess 24 narratives, eight disjoint items each, against
+their source packets and the five-part SC2 rubric. Hide configuration identity
+and freeze the review manifest before exposing output. Measure end-to-end
+concurrent wall time, queue drain, memory, tokens, actual billed spending, and
+supported-narrative availability. Emit one hashed `ready_0731` or
+`improve_0731` result with all unmet SC IDs. Remove comparative-model execution,
+paired-model scoring, and alternate-model decision requirements from the active
+validation command. Historical evaluation artifacts remain readable.
+
+For `improve_0731`, turn the failures into targeted diagnostic cases, amend the
+responsible implementation unit, and return to U4 under another finite budget.
+The next validation uses fresh unseen data; do not relabel the same examined
+cases as an independent pass. Model selection is closed.
 
 **Test scenarios:**
 
-- A cheaper or faster arm that loses quality cannot qualify.
-- A quality winner with a critical support error, tier mismatch, incomplete
-  brand, excessive memory, or unsafe drain cannot qualify.
-- Aggregate ties cannot hide factual-support or proportionality regressions.
+- Lower spending or faster completion cannot offset unsupported claims.
+- A critical support error, tier mismatch, incomplete brand, excessive memory,
+  or unsafe drain produces `improve_0731` and a correction plan.
+- High average usefulness cannot hide a critical factual error or withholding
+  narratives that the source packet supports.
 - A passing result uses provider receipts and verifies every success criterion
   mechanically before writing the decision.
+- No alternate-model API key, output, bill, or comparative score is required.
 
 **Verification:** The report includes raw counts, blinded judgments, bills,
-wall-clock distributions, route attestation, hashes, and one decision.
+wall-clock distributions, route attestation, hashes, and a readiness decision
+with the exact correction path for every unmet criterion.
 
-### U6. Activate the qualified route and preserve rollback
+### U6. Activate 0731 and preserve operational recovery
 
-**Goal:** Commit 0731 as the headline route only after U5 passes, with an
-auditable V4.1 rollback.
+**Goal:** Deliver the validated 0731 headline route with last-good serving and
+recovery that does not change the selected model.
 
 **Requirements:** R4–R5, R10–R13; SC7.
 
-**Dependencies:** U5 with `qualify_0731`.
+**Dependencies:** U5 with `ready_0731`.
 
 **Files:** `config.yaml`, `render.yaml`, `render-staging.yaml`,
-`monitor/trend_narrative_projection.py`, `monitor/views.py`,
+`monitor/trend_narrative_generation.py`, `monitor/trend_narrative_projection.py`,
+`monitor/views.py`, `x_monitor/config.py`, `tests/test_llm_config.py`,
 `tests/test_headline_status.py`, `tests/test_render_headline_topology.py`,
 `docs/reference/headline-trend-narratives.md`, `docs/deploy/render.md`.
 
 **Approach:** Pin the qualified route, profiles, prompt versions, priority
-prices, batch/concurrency controls, budgets, and publication epoch; add the
-DeepInfra worker secret while retaining the V4.1 rollback credential; expose
-route receipts and capacity in status; and, after fresh U5 qualification under
-the recorded delivery choice, stage the exact candidate disabled-first before
-a bounded canary.
+prices, batch/concurrency controls, budgets, and publication epoch; use the
+DeepInfra worker secret; remove alternate headline model/fallback controls from
+the active path while preserving credentials needed by other roles. Expose
+route receipts and capacity in status. Stage the exact candidate disabled-first
+before a bounded canary, then deliver through the recorded production guide.
+The first release recovers by disabling new generation and serving persisted
+last-good output; subsequent releases may also restore a previously qualified
+0731 configuration. Neither recovery mode invokes another headline model.
 
 **Test scenarios:**
 
@@ -888,12 +936,14 @@ a bounded canary.
 - Status distinguishes configured route from observed receipts without secrets
   or post text.
 - Disabled calls serve last-good copy and perform no transport.
-- Whole-route rollback affects new runs without erasing rows or retrying an
-  in-progress call.
+- Restoring a qualified 0731 configuration affects new runs without erasing
+  rows or retrying an in-progress call; disabling generation preserves serving.
+- No configuration or error handler silently routes headlines to another model.
+- Shared credentials and non-headline enrichment behavior are unchanged.
 - A bounded staged run publishes only after all brands are terminal and serves
   all three locales.
 
-**Verification:** Configuration, topology, status, projection, and rollback
+**Verification:** Configuration, topology, status, projection, and recovery
 tests pass; reference docs describe the live route rather than experiment
 history.
 
@@ -1011,7 +1061,7 @@ one-call, ambiguity, bypass-risk, atomic-publication, and last-good regressions.
 
 - Inspect representative rank, editor, critic, invalid-editor recovery, and
   bypass artifacts in all three locales.
-- Preserve every score and comment from the 24-pair blind review.
+- Preserve every score and comment from the 24-item source-grounded review.
 - Verify actual receipts show exact model, priority, tokens, cost, and zero
   reasoning tokens.
 - Verify SC4 and SC6 from wall-clock, queue, and process telemetry rather than
@@ -1023,24 +1073,29 @@ one-call, ambiguity, bypass-risk, atomic-publication, and last-good regressions.
 
 ### Release gates
 
-- U5 must record `qualify_0731`; otherwise U6 stops before changing the active
-  route.
+- U5 must record `ready_0731`; an `improve_0731` result returns to correction
+  and another bounded validation cycle before U6 changes the active route.
 - Before Git or deployment mutation, rerun Ollija's plan check and resolve its
   placement guidance or record an owner-directed Delivery Exception.
 - The staging run after fresh qualification must prove no harvest-call change, no queue
-  crossover, no partial publication, no route mismatch, and valid rollback.
+  crossover, no partial publication, no route mismatch, and valid operational
+  recovery within the 0731-only contract.
 
 ---
 
 ## Definition of Done
 
 - U1–U5 and U7–U9 are implemented and verified; U6 runs only after a fresh
-  `qualify_0731`. Original failure evidence remains unchanged.
+  `ready_0731`. Original failure evidence remains unchanged.
 - Every requirement and success criterion has automated or preserved evaluation
   evidence.
-- If switched, the route is exact-model direct DeepInfra 0731 priority with
+- The delivered route is exact-model direct DeepInfra 0731 priority with
   reasoning disabled, two-brand packets, and concurrency three.
-- V4.1 remains active if any qualification gate fails.
+- Failed revisions lead to corrections and retesting of 0731; they do not
+  complete the plan or select a replacement model.
+- No alternate headline-model benchmark, fallback, or rollback is required or
+  retained in the active delivery contract. Last-good persisted output remains
+  available with its original provenance.
 - Route identity, tier, latency, tokens, and cost are auditable without secrets
   or post text.
 - Last-good, call-entitlement, ambiguity, critic-routing, and atomic-publication
@@ -1051,16 +1106,17 @@ one-call, ambiguity, bypass-risk, atomic-publication, and last-good regressions.
 - Commit, push, staging deployment, and production deployment follow the
   refreshed Ollija production guide and all qualification gates.
 
-## Qualification Outcome (2026-09-24)
+## Prior validation evidence and current direction (2026-09-24)
 
-U5 recorded `retain_v41_flash`. The untouched holdout's 24-pair blind review
-found ten critical factual failures in the 0731 candidate, including claims
-from explicitly suppressed period comparisons and wrong-brand evidence. The
-candidate did not qualify under SC2, so U6 and the staging/production delivery
-steps are stopped. The measurements, review records, hashes, and remaining
-gate limitations are in
+The prior campaign exposed ten critical factual-support failures in 0731,
+including suppressed period comparisons and wrong-brand evidence. Its
+measurements, review records, hashes, and gate limitations remain unchanged in
 [the qualification report](../research/2026-09-24-163708-headline-0731-qualification-no-go.md).
 
-The owner subsequently requested finance-context integration and packet noise
-reduction before continuing. U7–U9 and the revised U4/U5 describe that next
-campaign. They do not reverse this no-go or authorize activation on the old run.
+The owner subsequently selected 0731 unconditionally as the model and retired
+the comparative benchmark/alternative-model decision. The old report is
+historical evidence, not the current decision policy. Its failures remain
+diagnostic input; they have not been rewritten as passing results. U7–U9 and
+the iterative U4/U5 workflow now address those failures until the 0731 route
+meets the product's own requirements. Model choice is settled; deployment still
+requires a ready configuration and the staging/production checks.
