@@ -100,7 +100,7 @@ def test_enabled_identity_plans_one_bounded_non_paginating_call(tmp_path):
     call = _call(cfg, tmp_path)
     assert call.query_string == planned_query_string()
     assert (call.max_results, call.max_pages, call.max_per_page) == (20, 1, 20)
-    assert call.daily_credit_ceiling == 6000
+    assert call.daily_credit_ceiling == 28800
 
 
 def test_identity_mismatch_fails_before_planning_paid_call(tmp_path):
@@ -223,6 +223,9 @@ def test_scheduled_cycle_call_chain_uses_scheduled_credential_and_no_replay(
 def test_daily_budget_exhaustion_skips_only_rare_provider_call(tmp_path):
     cfg = load_config(REPO / "config.yaml")
     call = _call(cfg, tmp_path)
+    # Exercise the exhaustion branch with a deliberately smaller test-only cap;
+    # the checked-in 28,800 cap admits all 96 normal quarter-hour slots.
+    call.daily_credit_ceiling = 6000
     api = FakeApi([])
     runner = CycleRunner(cfg=cfg, _clock=lambda: NOW)
     for index in range(20):

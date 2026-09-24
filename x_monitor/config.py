@@ -263,7 +263,7 @@ class RareTypeSearchConfig(BaseModel):
     max_results: Literal[20] = 20
     max_pages: Literal[1] = 1
     max_per_page: Literal[20] = 20
-    daily_credit_ceiling: Literal[6000] = 6000
+    daily_credit_ceiling: Literal[28800] = 28800
     reserved_credits_per_call: Literal[300] = 300
     jev: JevDecisionsConfig = JevDecisionsConfig()
     product_verification_enabled: bool = False

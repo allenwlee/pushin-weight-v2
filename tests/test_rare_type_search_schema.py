@@ -43,7 +43,7 @@ def _query(suffix: str = "base") -> SearchQuery:
     return SearchQuery.objects.create(query_id=f"rare-{suffix}")
 
 
-def _reserve(*, slot_start=NOW, query=None, lane=LANE):
+def _reserve(*, slot_start=NOW, query=None, lane=LANE, daily_credit_limit=6000):
     query = query or _query(str(slot_start.timestamp()))
     return reserve_search_run(
         lane=lane,
@@ -55,6 +55,7 @@ def _reserve(*, slot_start=NOW, query=None, lane=LANE):
         environment="test",
         release_sha="166f7bf",
         now=slot_start,
+        daily_credit_limit=daily_credit_limit,
     )
 
 
@@ -184,32 +185,30 @@ def test_return_settles_against_raw_paid_count_with_floor(
 
 def test_same_slot_race_reserves_once_and_different_slots_share_daily_gate():
     query = _query("races")
+    day_start = NOW.replace(hour=0, minute=0, second=0, microsecond=0)
 
     def reserve(slot):
         close_old_connections()
         try:
-            result = _reserve(slot_start=slot, query=query)
+            result = _reserve(
+                slot_start=slot, query=query, daily_credit_limit=28800
+            )
             return result.created, result.reason
         finally:
             close_old_connections()
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        same = list(pool.map(reserve, [NOW, NOW]))
+        same = list(pool.map(reserve, [day_start, day_start]))
     assert sorted(created for created, _ in same) == [False, True]
     assert RareTypeSearchDailyBudget.objects.get().search_credits_reserved == 300
 
-    slots = [NOW + timedelta(minutes=15 * index) for index in range(1, 22)]
+    slots = [day_start + timedelta(minutes=15 * index) for index in range(1, 96)]
     with ThreadPoolExecutor(max_workers=8) as pool:
         different = list(pool.map(reserve, slots))
-    assert sum(created for created, _ in different) == 19
-    assert RareTypeSearchRun.objects.count() == 20
+    assert all(created for created, _ in different)
+    assert RareTypeSearchRun.objects.count() == 96
     budget = RareTypeSearchDailyBudget.objects.get()
-    assert budget.search_credits_reserved == 6000
-    assert all(
-        reason == "daily_budget_exhausted"
-        for created, reason in different
-        if not created
-    )
+    assert budget.search_credits_reserved == 28800
 
 
 def test_hit_batch_is_allowlisted_linkable_and_post_delete_preserves_audit():

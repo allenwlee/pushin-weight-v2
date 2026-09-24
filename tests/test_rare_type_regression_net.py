@@ -291,16 +291,17 @@ def test_interrupted_post_insert_replays_saved_hit_without_second_search(
     assert hit.post_id == "resume-post"
 
 
-def test_daily_budget_race_retains_at_most_twenty_unknown_attempts(
+def test_daily_budget_race_permits_all_ninety_six_scheduled_attempts(
     tmp_path,
 ):
     cfg, call = _enabled_call(tmp_path)
     api = FakeApi(error=RuntimeError("ambiguous provider failure"))
+    day_start = NOW.replace(hour=0, minute=0, second=0, microsecond=0)
 
     def run_slot(index):
         close_old_connections()
         try:
-            now = NOW + timedelta(minutes=15 * index)
+            now = day_start + timedelta(minutes=15 * index)
             return CycleRunner(cfg=cfg, _clock=lambda: now)._run_rare_type_search(
                 call, api, now=now
             )
@@ -308,13 +309,13 @@ def test_daily_budget_race_retains_at_most_twenty_unknown_attempts(
             close_old_connections()
 
     with ThreadPoolExecutor(max_workers=10) as pool:
-        results = list(pool.map(run_slot, range(21)))
+        results = list(pool.map(run_slot, range(96)))
 
-    assert len(api.calls) == 20
-    assert sum(result["provider_called"] for result in results) == 20
-    assert sum(result["status"] == "daily_budget_exhausted" for result in results) == 1
+    assert len(api.calls) == 96
+    assert sum(result["provider_called"] for result in results) == 96
+    assert all(result["status"] != "daily_budget_exhausted" for result in results)
     budget = RareTypeSearchDailyBudget.objects.get()
-    assert budget.search_credits_reserved == 6000
+    assert budget.search_credits_reserved == 28800
 
 
 def test_shared_deadline_defers_jev_without_a_gate_provider_call(
