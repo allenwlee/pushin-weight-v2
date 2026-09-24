@@ -596,6 +596,8 @@ def execute_per_brand_stage(
         "output_tokens": response.output_tokens,
         "latency_ms": response.latency_ms,
     }
+    if response.provider_usage is not None:
+        payload["provider_usage"] = response.provider_usage
     complete_trend_narrative_provider_call(
         claimed.pk,
         owner=owner,

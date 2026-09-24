@@ -15,6 +15,11 @@ import anthropic
 from billiard.exceptions import SoftTimeLimitExceeded
 
 from x_monitor.config import HeadlineNarrativeConfig
+from x_monitor.deepinfra import (
+    DeepInfraChatCompletionsClient,
+    DeepInfraPermanentError,
+    DeepInfraRetryableError,
+)
 from x_monitor.provider_telemetry import (
     ProviderResponse,
     emit_attempt,
@@ -64,6 +69,7 @@ class PerBrandProviderResponse:
     input_tokens: int
     output_tokens: int
     latency_ms: int
+    provider_usage: dict[str, Any] | None = None
 
 
 def _anthropic_client(**kwargs):
@@ -71,6 +77,8 @@ def _anthropic_client(**kwargs):
 
 
 def _resolve_provider_credential(config: HeadlineNarrativeConfig) -> str | None:
+    if config.provider == "deepinfra":
+        return os.environ.get("DEEPINFRA_API_KEY")
     if config.provider == "deepseek":
         return os.environ.get("DEEPSEEK_API_KEY") or os.environ.get(
             "DEEPSEEK_API_TOKEN"
@@ -309,6 +317,48 @@ def execute_per_brand_provider_request(
     """Execute exactly one bounded stage transport and preserve its raw body."""
     if set(request) != {"model", "max_tokens", "thinking", "system", "messages"}:
         raise HeadlineGenerationError("headline_provider_request_binding_failed")
+    if config.provider == "deepinfra":
+        stage = str((telemetry_context or {}).get("stage") or "")
+        if stage not in {"rank", "editor", "critic"}:
+            raise HeadlineGenerationError("headline_stage_invalid")
+        credential = api_key or _resolve_provider_credential(config)
+        if not credential:
+            raise HeadlineGenerationError("headline_credential_unavailable")
+        factory = client_factory or DeepInfraChatCompletionsClient
+        client = factory(
+            api_key=credential,
+            model=config.model,
+            request_profile=f"headline_{stage}_v1",
+            base_url=config.base_url,
+        )
+        started = monotonic()
+        event_context = dict(telemetry_context or {})
+        event_context["provider_host_class"] = provider_host_class(config.base_url)
+        try:
+            response = client.messages_create_text(
+                model=str(request["model"]),
+                max_tokens=int(request["max_tokens"]),
+                system=str(request["system"]),
+                messages=list(request["messages"]),
+                timeout=float(config.timeout_seconds),
+            )
+        except SoftTimeLimitExceeded:
+            raise
+        except (DeepInfraPermanentError, DeepInfraRetryableError) as exc:
+            emit_attempt(logger, role="headline", model=config.model, attempt=1, outcome="error", started=started, error=exc, attempt_kind="initial", **event_context)
+            raise HeadlineGenerationError(
+                "headline_provider_response_invalid" if isinstance(exc, DeepInfraPermanentError) else "headline_provider_unavailable",
+                transport_completed=isinstance(exc, DeepInfraPermanentError) and exc.provider_usage is not None,
+            ) from None
+        usage = response.provider_usage or {}
+        emit_attempt(logger, role="headline", model=config.model, attempt=1, outcome="success", started=started, response=ProviderResponse({}, usage=usage), attempt_kind="initial", **event_context)
+        return PerBrandProviderResponse(
+            raw_text=response.text,
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            latency_ms=max(0, round((monotonic() - started) * 1000)),
+            provider_usage=dict(usage),
+        )
     credential = api_key or _resolve_provider_credential(config)
     if not credential:
         raise HeadlineGenerationError("headline_credential_unavailable")

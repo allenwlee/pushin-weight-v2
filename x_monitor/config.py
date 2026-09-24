@@ -535,7 +535,7 @@ class LlmConfig(BaseModel):
 class HeadlineNarrativeConfig(BaseModel):
     """Cost-bounded role configuration for shared V22 trend narratives."""
 
-    provider: Literal["anthropic", "deepseek", "minimax"] = "deepseek"
+    provider: Literal["anthropic", "deepseek", "minimax", "deepinfra"] = "deepseek"
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-flash"
     rank_prompt_version: str = Field(
@@ -550,7 +550,7 @@ class HeadlineNarrativeConfig(BaseModel):
     rank_max_tokens: int = Field(default=2_400, ge=256, le=16_000)
     editor_max_tokens: int = Field(default=8_000, ge=512, le=16_000)
     critic_max_tokens: int = Field(default=9_000, ge=512, le=16_000)
-    timeout_seconds: int = Field(default=60, ge=5, le=120)
+    timeout_seconds: int = Field(default=60, ge=5, le=300)
     prompt_version: str = Field(
         default="headline-v10-why-first-quantitative-color",
         min_length=1,
@@ -663,6 +663,10 @@ class HeadlineNarrativeConfig(BaseModel):
             "minimax": (
                 "https://api.minimax.io/anthropic",
                 "MiniMax-M3",
+            ),
+            "deepinfra": (
+                "https://api.deepinfra.com/v1/openai",
+                "deepseek-ai/DeepSeek-V4-Flash-0731",
             ),
         }
         required_url, required_model = routes[self.provider]

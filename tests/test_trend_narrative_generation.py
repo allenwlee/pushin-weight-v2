@@ -433,6 +433,68 @@ def test_u3_production_transport_maps_failures_without_retrying():
     assert captured.value.transport_completed is False
 
 
+def test_headline_deepinfra_route_uses_stage_profile_and_preserves_receipt():
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+    from x_monitor.provider_telemetry import ProviderTextResponse
+
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra",
+        base_url="https://api.deepinfra.com/v1/openai",
+        model=DEEPSEEK_0731_MODEL,
+        timeout_seconds=300,
+    )
+    request = {
+        "model": DEEPSEEK_0731_MODEL,
+        "max_tokens": 800,
+        "thinking": {"type": "disabled"},
+        "system": "editor",
+        "messages": [{"role": "user", "content": "packet"}],
+    }
+    created = []
+
+    class FakeDirectClient:
+        def __init__(self, **kwargs):
+            created.append(kwargs)
+
+        def messages_create_text(self, **kwargs):
+            created.append(kwargs)
+            return ProviderTextResponse(
+                "{draft}",
+                provider_usage={
+                    "input_tokens": 12, "output_tokens": 7,
+                    "cost_usd": 0.001, "service_tier": "priority",
+                    "model": DEEPSEEK_0731_MODEL, "provider_request_id": "call-1",
+                    "reasoning_tokens": 0,
+                },
+            )
+
+    result = execute_per_brand_provider_request(
+        request, config, api_key="direct-secret", client_factory=FakeDirectClient,
+        telemetry_context={"stage": "editor"}, monotonic=iter([1.0, 1.1]).__next__,
+    )
+    assert created[0]["request_profile"] == "headline_editor_v1"
+    assert created[0]["model"] == DEEPSEEK_0731_MODEL
+    assert created[1]["timeout"] == 300
+    assert "thinking" not in created[1]
+    assert result.raw_text == "{draft}"
+    assert result.provider_usage["cost_usd"] == 0.001
+
+
+def test_headline_deepinfra_route_requires_known_stage():
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+    config = HeadlineNarrativeConfig(
+        provider="deepinfra",
+        base_url="https://api.deepinfra.com/v1/openai",
+        model=DEEPSEEK_0731_MODEL,
+    )
+    with pytest.raises(HeadlineGenerationError, match="headline_stage_invalid"):
+        execute_per_brand_provider_request(
+            {"model": DEEPSEEK_0731_MODEL, "max_tokens": 500, "thinking": {"type": "disabled"}, "system": "x", "messages": []},
+            config, api_key="secret",
+        )
+
+
 def test_u3_editor_rejects_a_proposition_citing_another_brands_evidence():
     brands = ["deepseek", "minimax"]
     packet = {

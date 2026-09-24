@@ -149,3 +149,44 @@ def test_direct_client_rejects_non_deepinfra_base_url():
             model=DEEPSEEK_0731_MODEL,
             base_url="https://openrouter.ai/api/v1",
         )
+
+
+@pytest.mark.parametrize("profile", ["headline_rank_v1", "headline_editor_v1", "headline_critic_v1"])
+def test_headline_profile_pins_priority_json_and_no_reasoning(profile):
+    client = DeepInfraChatCompletionsClient(
+        api_key="secret", model=DEEPSEEK_0731_MODEL, request_profile=profile,
+    )
+
+    request = client.build_request(max_tokens=800, messages=[{"role": "user", "content": "packet"}])
+
+    assert request["model"] == DEEPSEEK_0731_MODEL
+    assert request["service_tier"] == "priority"
+    assert request["response_format"] == {"type": "json_object"}
+    assert request["reasoning_effort"] == "none"
+    with pytest.raises(DeepInfraPermanentError, match="profile_mismatch"):
+        client.build_request(max_tokens=800, messages=[], reasoning_effort="low")
+    with pytest.raises(DeepInfraPermanentError, match="unsupported_option"):
+        client.build_request(max_tokens=800, messages=[], provider={"only": ["elsewhere"]})
+
+
+def test_headline_profile_rejects_tier_and_usage_mismatch():
+    response = _response(DEEPSEEK_0731_MODEL, "headline")
+    response["service_tier"] = "standard"
+    client = DeepInfraChatCompletionsClient(
+        api_key="secret", model=DEEPSEEK_0731_MODEL,
+        request_profile="headline_editor_v1",
+        transport=lambda _request, _timeout: response,
+    )
+    with pytest.raises(DeepInfraPermanentError, match="service_tier_mismatch"):
+        client.messages_create_text(max_tokens=800, messages=[])
+
+    response["service_tier"] = "priority"
+    response["usage"]["completion_tokens_details"]["reasoning_tokens"] = 0
+    response["usage"]["estimated_cost"] = None
+    with pytest.raises(DeepInfraPermanentError, match="usage_invalid"):
+        client.messages_create_text(max_tokens=800, messages=[])
+
+    response["usage"]["estimated_cost"] = 0.001
+    result = client.messages_create_text(max_tokens=800, messages=[])
+    assert result.provider_usage["service_tier"] == "priority"
+    assert result.provider_usage["cost_usd"] == 0.001

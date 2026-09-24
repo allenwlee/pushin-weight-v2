@@ -15,6 +15,7 @@ import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlparse
 
@@ -64,6 +65,17 @@ _PROFILES: dict[str, dict[str, Any]] = {
     "gemma4_translation_v1": {
         # The qualifying direct translation run omitted samplers and
         # reasoning controls; keep DeepInfra/Gemma defaults for this lane.
+    },
+    **{
+        profile: {
+            "temperature": 0.2,
+            "top_p": 0.95,
+            "seed": 42,
+            "reasoning_effort": "none",
+            "service_tier": "priority",
+            "response_format": {"type": "json_object"},
+        }
+        for profile in ("headline_rank_v1", "headline_editor_v1", "headline_critic_v1")
     },
 }
 
@@ -132,6 +144,8 @@ class DeepInfraChatCompletionsClient:
             raise ValueError("deepinfra_base_url_unsupported")
         if self.request_profile is not None and self.request_profile not in _PROFILES:
             raise ValueError("deepinfra_request_profile_unsupported")
+        if self.request_profile and self.request_profile.startswith("headline_") and self.model != DEEPSEEK_0731_MODEL:
+            raise ValueError("deepinfra_headline_model_mismatch")
 
     @property
     def _base_url(self) -> str:
@@ -144,7 +158,7 @@ class DeepInfraChatCompletionsClient:
     @property
     def request_identity(self) -> str:
         settings = _PROFILES.get(self.request_profile or "", {})
-        material = f"{self.model}|DeepInfra|direct|{self.request_profile}|{sorted(settings.items())}"
+        material = f"{self.model}|DeepInfra|direct|{self.request_profile}|{json.dumps(settings, sort_keys=True)}"
         return f"deepinfra:{self.request_profile or 'default'}:{hashlib.sha256(material.encode()).hexdigest()[:16]}"
 
     @classmethod
@@ -195,12 +209,18 @@ class DeepInfraChatCompletionsClient:
         request_messages.extend(messages)
         request: dict[str, Any] = {"model": self.model, "max_tokens": max_tokens, "messages": request_messages}
         profile = _PROFILES.get(self.request_profile or "", {})
+        if self.request_profile and self.request_profile.startswith("headline_"):
+            if set(_ignored) - {"timeout"}:
+                raise DeepInfraPermanentError("deepinfra_headline_unsupported_option")
         for name, value in (("temperature", temperature), ("top_p", top_p), ("seed", seed), ("reasoning_effort", reasoning_effort)):
             selected = profile.get(name, value)
             if name in profile and value is not None and value != profile[name]:
                 raise DeepInfraPermanentError("deepinfra_request_profile_mismatch")
             if selected is not None:
                 request[name] = selected
+        if self.request_profile and self.request_profile.startswith("headline_"):
+            request["service_tier"] = profile["service_tier"]
+            request["response_format"] = profile["response_format"]
         # Deliberately omit response_format, provider, service_tier, thinking,
         # reasoning, and OpenRouter routing controls from the direct envelope.
         return request
@@ -251,6 +271,20 @@ class DeepInfraChatCompletionsClient:
         usage = _usage(decoded, model=self.model, request_identity=self.request_identity)
         if decoded.get("model") != self.model:
             raise DeepInfraPermanentError("deepinfra_response_model_mismatch", provider_usage=usage)
+        if self.request_profile and self.request_profile.startswith("headline_"):
+            if decoded.get("service_tier") != "priority":
+                raise DeepInfraPermanentError("deepinfra_service_tier_mismatch", provider_usage=usage)
+            raw = decoded.get("usage")
+            if not isinstance(raw, Mapping) or not isinstance(decoded.get("id"), str) or not decoded["id"]:
+                raise DeepInfraPermanentError("deepinfra_headline_usage_invalid", provider_usage=usage)
+            if any(not isinstance(raw.get(key), int) or isinstance(raw.get(key), bool) or raw[key] < 0 for key in ("prompt_tokens", "completion_tokens")):
+                raise DeepInfraPermanentError("deepinfra_headline_usage_invalid", provider_usage=usage)
+            try:
+                cost = Decimal(str(raw.get("estimated_cost")))
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise DeepInfraPermanentError("deepinfra_headline_usage_invalid", provider_usage=usage) from exc
+            if not cost.is_finite() or cost < 0 or usage["reasoning_tokens"] not in (0, None):
+                raise DeepInfraPermanentError("deepinfra_headline_usage_invalid", provider_usage=usage)
         choices = decoded.get("choices")
         if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
             raise DeepInfraPermanentError("deepinfra_response_choices_invalid", provider_usage=usage)
