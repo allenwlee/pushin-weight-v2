@@ -6,18 +6,18 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
-      - docs/reference/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
-      - docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
+      - docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
+      - docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
       - docs/ideation/2026-09-01-112352-country-flag-svg-reference.html
-      - docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md
-      - docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md
-      - docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md
-      - docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md
-      - docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md
-      - docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md
-      - docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md
-      - docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md
-      - docs/reference/2026-08-19-132714-v24-bridgewright-target.md
+      - docs/iterations/2026-08-31-221955-feed-country-geography-bridgewright-target.md
+      - docs/iterations/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md
+      - docs/iterations/2026-08-28-164425-feed-headline-usability-bridgewright-target.md
+      - docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md
+      - docs/iterations/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md
+      - docs/iterations/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md
+      - docs/iterations/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md
+      - docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md
+      - docs/iterations/2026-08-19-132714-v24-bridgewright-target.md
       - docs/plans/2026-08-08-001-feat-v22-homepage-production-plan.md
       - docs/plans/2026-08-12-121455-feat-v22-headline-trend-narratives.md
       - docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md
@@ -27,7 +27,7 @@ configuration:
       - monitor/views.py
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/reference/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
+    last_approved_contract: docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
   assurance:
     profile: stateful-ui-assurance/v1
     declaration: tests/fixtures/ui_assurance/declaration.json

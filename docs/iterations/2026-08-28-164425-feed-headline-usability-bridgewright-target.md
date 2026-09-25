@@ -9,7 +9,7 @@ Protected production baseline:
 `e1447569c4097f2abc6af110358f10afc33a5168`
 
 Prior approved icon contract:
-`docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`
+`docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`
 
 This target permits only Release A in
 `docs/plans/2026-08-19-043225-feat-mockup-v23-plan.md`. The production page at

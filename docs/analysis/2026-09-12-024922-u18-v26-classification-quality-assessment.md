@@ -82,7 +82,7 @@ selector experiment is outside the plan.
 ## Next architecture decision
 
 The next step is the frozen candidate-blind human ambiguity study described in
-`docs/reference/2026-09-12-030118-u18-human-ambiguity-study.md`. It determines
+`docs/analysis/2026-09-12-030118-u18-human-ambiguity-study.md`. It determines
 whether the current failures belong to the classifier, the model-generated
 reference, or underspecified taxonomy boundaries. No further provider
 transport is allowed until that study passes. A pass may authorize a small,

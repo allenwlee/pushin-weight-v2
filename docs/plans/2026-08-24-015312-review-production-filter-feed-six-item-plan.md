@@ -73,7 +73,7 @@ None.
 
 - **Objective:** Preserve and deliver the completed six-item localized-filter and feed-interaction candidate without absorbing the separate Chart.js batch or unrelated worktree changes.
 - **Means:** Treat `c2df3e2` as the source baseline, commit the finalized plan only after the owner selects a delivery target, then freeze and revalidate the resulting exact delivery-candidate SHA (KTD1, KTD2, KTD6).
-- **Authority:** `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md` owns the approved behavior boundary. The Product Contract below traces that boundary. The Ollija Delivery Guide owns delivery-location and authority guidance.
+- **Authority:** `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md` owns the approved behavior boundary. The Product Contract below traces that boundary. The Ollija Delivery Guide owns delivery-location and authority guidance.
 - **Execution profile:** Review and delivery preparation are ready. Git and deployment mutations remain unauthorized while `delivery_target` is `on-request`.
 - **Stop conditions:** Stop on candidate-SHA drift, a stale Ollija guide, a failed required regression, a migration conflict, scope contamination from the deferred Chart.js work, or missing owner delivery authority.
 - **Tail ownership:** The parent delivery workflow owns any commit, push, staging refresh, production promotion, and exact-SHA production verification. Ollija and Bridgewright remain advisory.
@@ -157,7 +157,7 @@ The candidate also introduces two nullable database columns and connects existin
 
 ### Product Contract Preservation
 
-R1-R11 preserve the behavior approved in `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md`; this plan restructures that scope into stable requirement and acceptance IDs without changing behavior. R12 adds a plan-local delivery guard and does not expand the product scope.
+R1-R11 preserve the behavior approved in `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md`; this plan restructures that scope into stable requirement and acceptance IDs without changing behavior. R12 adds a plan-local delivery guard and does not expand the product scope.
 
 ---
 
@@ -220,7 +220,7 @@ The candidate evidence set is valid only while its SHA, deployment identity, and
 
 ### Sources and Research
 
-- `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md` — approved target, explicit non-targets, and regression boundary.
+- `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md` — approved target, explicit non-targets, and regression boundary.
 - `docs/plans/2026-08-19-043225-feat-mockup-v23-plan.md` — implementation and historical verification record under “Production filter/feed batch (2026-08-19).”
 - `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` — locale tests must traverse the real browser path and validate the active language rather than relying on defaults.
 - `docs/solutions/architecture-patterns/posts-raw-denormalization.md` — schema changes require an explicit regression net and operational verification appropriate to PostgreSQL.
@@ -235,7 +235,7 @@ The candidate evidence set is valid only while its SHA, deployment identity, and
 - **Goal:** Establish one clean, reviewable candidate and prove that its diff matches the approved six-item boundary.
 - **Requirements:** R10-R12.
 - **Dependencies:** None.
-- **Files:** `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md`, `docs/plans/2026-08-19-043225-feat-mockup-v23-plan.md`, `docs/plans/2026-08-24-015312-review-production-filter-feed-six-item-plan.md`, `bridgewright.yaml`, `tests/test_bridgewright_v24_target.py`.
+- **Files:** `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md`, `docs/plans/2026-08-19-043225-feat-mockup-v23-plan.md`, `docs/plans/2026-08-24-015312-review-production-filter-feed-six-item-plan.md`, `bridgewright.yaml`, `tests/test_bridgewright_v24_target.py`.
 - **Approach:** Compare `c2df3e2` with the protected production baseline and classify every changed file against the target contract. Exclude uncommitted Chart.js and primary-checkout changes. After owner selection and the annotation check authorize Git mutation, commit the finalized plan/review artifact and freeze that branch head as the delivery candidate. Any later tracked correction creates a new candidate SHA per KTD2.
 - **Patterns to follow:** The target/non-target table in the Bridgewright target contract and the repo's exact-SHA Ollija delivery guidance.
 - **Test scenarios:**
@@ -285,7 +285,7 @@ The candidate evidence set is valid only while its SHA, deployment identity, and
 - **Goal:** Produce scope evidence that the green candidate matches the approved six-item delta and protected non-targets.
 - **Requirements:** R10-R12; AE6, AE9.
 - **Dependencies:** U2, U3.
-- **Files:** `bridgewright.yaml`, `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md`, `tests/test_bridgewright_v24_target.py`.
+- **Files:** `bridgewright.yaml`, `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md`, `tests/test_bridgewright_v24_target.py`.
 - **Approach:** Run the local contract harness and the installed Bridgewright validator/status commands against the same candidate identity. Record historical local-harness evidence and any new external result separately. Do not translate assessment success into approval or delivery authority per KTD5.
 - **Patterns to follow:** Bridgewright's target/non-target boundary and the generated Ollija guide's authority separation.
 - **Test scenarios:**

@@ -8,7 +8,7 @@ instruction in the 2026-08-19 session
 Protected production baseline: `d821c4b7188c7df8100efec7d21195d9e1277d58`
 
 Prior approved mockup contract:
-`docs/reference/2026-08-19-132714-v24-bridgewright-target.md`
+`docs/iterations/2026-08-19-132714-v24-bridgewright-target.md`
 
 This contract feeds a narrow production delta into Bridgewright. The live
 production behavior at the protected baseline remains authoritative for every

@@ -10,10 +10,10 @@ Protected production baseline:
 `91faac5b34a4eeed63a8590c88ea53fe29b6a103`
 
 Prior approved interaction contract:
-`docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md`
+`docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md`
 
 Approved glyph reference:
-`docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg`
+`docs/ideation/assets/2026-09-21-123711-selected-taxonomy-glyphs.svg`
 
 The production page at the protected SHA remains authoritative for every
 unnamed surface. This contract authorizes delivery through production.

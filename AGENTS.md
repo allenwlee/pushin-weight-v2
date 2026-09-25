@@ -3,6 +3,11 @@
 Rules for AI agents (and humans) working in this repo. Honor these unless
 explicitly told otherwise.
 
+For reference-document work, read and follow
+[the updating-reference-docs skill](.claude/skills/updating-reference-docs/SKILL.md).
+The same canonical skill is exposed at `.agents/skills/updating-reference-docs`
+for agents using that discovery path.
+
 ## UI fixes
 
 Before changing a visible UI surface, browser interaction, mockup fidelity,
@@ -161,12 +166,12 @@ implementing or debugging in documented areas.
 status concepts). Relevant when orienting to the codebase or
 discussing domain concepts.
 
-`docs/reference/2026-09-09-112957-classification-analysis-contract.md` —
+`docs/analysis/2026-09-09-112957-classification-analysis-contract.md` —
 agent-facing contract and copyable CLI examples for provenance-aware Stage 1
 analysis. Use it instead of inferring classification era from post dates or
 mixing exact Stage 1 counts with approximate unversioned dashboard rows.
 
-`docs/reference/2026-09-10-203138-stage1c-intelligence-analysis-contract.md` —
+`docs/analysis/2026-09-10-203138-stage1c-contracts.md` —
 agent-facing contract for taxonomy-v3, people, affiliation, job, event, and
 opportunity analysis. Use it to keep taxonomy-v2 combined event/opportunity
 history separate from taxonomy-v3 exact categories and to preserve observation

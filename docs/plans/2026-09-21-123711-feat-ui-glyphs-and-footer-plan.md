@@ -291,7 +291,7 @@ sequenceDiagram
 
 - Follow `.claude/skills/fix-ui/SKILL.md` before changing visible UI.
 - Follow `.agents/skills/avoiding-recurring-mistakes/SKILL.md` before code changes.
-- Copy the selected 24×24 symbol definitions unchanged from `docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg`; do not regenerate or approximate them during implementation.
+- Copy the selected 24×24 symbol definitions unchanged from `docs/ideation/assets/2026-09-21-123711-selected-taxonomy-glyphs.svg`; do not regenerate or approximate them during implementation.
 - Keep footer markup and version lookup shared; do not copy the version literal or footer sentence among templates.
 - Do not vendor Bridgewright, add it to the production runtime, or replace its immutable Git pin with a local path. Keep executable target commands in PushinWeight-owned gates, never in Bridgewright declarations.
 
@@ -306,7 +306,7 @@ Begin U7's target/declaration characterization before changing U1–U6, so the e
 - **Goal:** Render the eleven locked glyphs consistently everywhere their taxonomy values appear.
 - **Requirements:** R1–R4, R8, R12; KTD1, KTD4.
 - **Dependencies:** Use the final Stage 1 taxonomy keys on the resolved `origin/main` baseline.
-- **Files:** `docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg`, `monitor/static/pw-icons.js`, `monitor/static/pw-feed.js`, `monitor/templates/monitor/_feed_initial_v22.html`, `monitor/templates/monitor/home.html`, `monitor/static/home-v20.css`, `tests/test_pw_feed_formatter.js`, `tests/test_home_v22_feed_row_shape.py`, `tests/test_home_v22_browser.py`; revise this list after the target branch is frozen if the existing shared registry moves.
+- **Files:** `docs/ideation/assets/2026-09-21-123711-selected-taxonomy-glyphs.svg`, `monitor/static/pw-icons.js`, `monitor/static/pw-feed.js`, `monitor/templates/monitor/_feed_initial_v22.html`, `monitor/templates/monitor/home.html`, `monitor/static/home-v20.css`, `tests/test_pw_feed_formatter.js`, `tests/test_home_v22_feed_row_shape.py`, `tests/test_home_v22_browser.py`; revise this list after the target branch is frozen if the existing shared registry moves.
 - **Approach:** Copy the approved symbol definitions unchanged from the tracked design source into the existing `monitor/static/pw-icons.js` registry consumed by the current render paths; do not create a second registry unless the selected integration branch no longer contains this one. Map the final taxonomy keys to the locked symbols, keep decorative SVGs hidden from assistive technology where adjacent text already provides the label, and preserve existing row geometry.
 - **Execution note:** Start with regression coverage for initial-load and refresh parity because prior glyph defects appeared only after feed refresh.
 - **Test scenarios:**
@@ -461,7 +461,7 @@ Begin U7's target/declaration characterization before changing U1–U6, so the e
 - Every runtime requirement added before scope freeze is implemented and traced to at least one stable U-ID.
 - R9 is satisfied while extending this draft by assigning new stable R-IDs and U-IDs without renumbering existing ones.
 - The eleven selected glyphs are visually correct at 15×15 px and survive initial load, refresh, filtering, and feed pagination.
-- The production glyph definitions match `docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg` without path-geometry changes.
+- The production glyph definitions match `docs/ideation/assets/2026-09-21-123711-selected-taxonomy-glyphs.svg` without path-geometry changes.
 - Every PushinWeight-owned full page renders the unobtrusive footer exactly once with the canonical package version.
 - Role → Other aligns with Official, Staff, and Community through a blank icon column while remaining text-only and accessible.
 - Posts with absent optional metadata render no invented value or glyph; the explicit Role → Other filter behavior remains intact.

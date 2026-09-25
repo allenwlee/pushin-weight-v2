@@ -199,7 +199,7 @@ Changed: the prior archive-only requirements are replaced because the owner redi
 ### Sources and Research
 
 - `.context/compound-engineering/ce-prototype/2026-08-28-cyber-quan-svg-study-production/decisions.md` records the locked dossier decisions and prototype-only status. The exact inputs are `02-rough-svg-family/screens/005-PushinWeight-Cyber-Quan-SVG-System-Study.html` (`8c63f9c357cbe576e8ef5fc63b607820dfd0039125aeeacbc7ba668e14106f52`), `02-rough-svg-family/screens/006-PushinWeight-Cyber-Quan-SVG-System-Study-zh-CN.html` (`cc09e5c98be2cd1a42f81a143071cd63313b80691fd82ea00187e6e1a6ed7eaa`), and `02-rough-svg-family/screens/PushinWeight-Cyber-Quan-SVG-System.css` (`021a3d4bad44bdccc0bf3ae0579a17403c17608565170d1f8b6b26493c622eb1`), with SHA-256 digests shown in parentheses.
-- `docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md` protects current production pulse, feed, follower, and timezone behavior.
+- `docs/iterations/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md` protects current production pulse, feed, follower, and timezone behavior.
 - `monitor/templates/monitor/home.html`, `monitor/templates/monitor/_feed_initial_v22.html`, `monitor/static/pw-feed.js`, `monitor/static/pw-chart.js`, and `monitor/static/pw-tz.js` are the current server and client rendering seams on `origin/main`.
 - `docs/solutions/workflow-issues/2026-08-05-115349-mockup-06-dropdown-agent-failure-postmortem.md` requires visible geometry and real-browser proof rather than selector-only confidence.
 - `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` requires locale verification through the real user path.
@@ -262,7 +262,7 @@ flowchart TB
 - **Goal:** Make the approved Cyber-Quan source and its production boundary durable before runtime integration.
 - **Requirements:** R1, R3-R5, R15-R17.
 - **Dependencies:** None.
-- **Files:** `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system-en.html`, `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system-zh-cn.html`, `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system.css`, `docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`, `tests/test_cyber_quan_icon_contract.py`, `tests/golden/bridgewright/cyber-quan/prechange-desktop-en.png`, `tests/golden/bridgewright/cyber-quan/prechange-mobile-zh-cn.png`.
+- **Files:** `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system-en.html`, `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system-zh-cn.html`, `docs/ideation/mockups/qin-quan/2026-08-28-134649-cyber-quan-svg-system.css`, `docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`, `tests/test_cyber_quan_icon_contract.py`, `tests/golden/bridgewright/cyber-quan/prechange-desktop-en.png`, `tests/golden/bridgewright/cyber-quan/prechange-mobile-zh-cn.png`.
 - **Approach:**
   1. Start from the latest production baseline per KTD6.
   2. Verify the three exact input hashes, then promote the final bilingual rough-SVG studies and CSS with timestamped names.
@@ -348,7 +348,7 @@ flowchart TB
 - **Goal:** Make the icon-only visual delta durable and fail closed against behavioral or pictorial drift.
 - **Requirements:** R3-R4, R11-R17, AE1-AE6.
 - **Dependencies:** U1, U3, U4.
-- **Files:** `bridgewright.yaml`, `tests/fixtures/ui_assurance/declaration.json`, `tests/ui_assurance/gate.py`, `tests/test_ui_assurance_contract.py`, `tests/test_ui_assurance_reference.py`, `tests/test_ui_assurance_browser.py`, `tests/test_cyber_quan_visual_regression.py`, `tests/golden/bridgewright/cyber-quan/prechange-desktop-en.png`, `tests/golden/bridgewright/cyber-quan/prechange-mobile-zh-cn.png`, `tests/golden/bridgewright/cyber-quan/desktop-en.png`, `tests/golden/bridgewright/cyber-quan/mobile-zh-cn.png`, `docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`.
+- **Files:** `bridgewright.yaml`, `tests/fixtures/ui_assurance/declaration.json`, `tests/ui_assurance/gate.py`, `tests/test_ui_assurance_contract.py`, `tests/test_ui_assurance_reference.py`, `tests/test_ui_assurance_browser.py`, `tests/test_cyber_quan_visual_regression.py`, `tests/golden/bridgewright/cyber-quan/prechange-desktop-en.png`, `tests/golden/bridgewright/cyber-quan/prechange-mobile-zh-cn.png`, `tests/golden/bridgewright/cyber-quan/desktop-en.png`, `tests/golden/bridgewright/cyber-quan/mobile-zh-cn.png`, `docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md`.
 - **Approach:**
   1. Add the target contract and semantic anchor while retaining V24 as the approved mockup.
   2. Keep existing control values and state invariants unless the assurance schema requires an icon-specific visual invariant.

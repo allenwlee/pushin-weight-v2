@@ -230,7 +230,7 @@ flowchart TB
 - `monitor/static/pw-chart.js` owns the 24 fixed hourly positions, dual 1d category scales, pulse refresh renderer, and legend ordering.
 - `monitor/static/pw-tz.js` owns the persisted Local/CA mode, timezone clocks, and sub-24-hour feed timestamps.
 - `monitor/views.py`, `monitor/templates/monitor/_feed_initial_v22.html`, and `monitor/static/pw-feed.js` form the public feed projection/SSR/client parity path.
-- `docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md` protects the current production baseline and prior approved UI behavior.
+- `docs/iterations/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md` protects the current production baseline and prior approved UI behavior.
 - Chart.js 4 official axis documentation confirms scale weights, grid tick controls, local plugins, and `border.display` for suppressing one baseline.
 
 ---
@@ -247,7 +247,7 @@ flowchart TB
   1. Write the target against the current production baseline and list only R1-R15 as approved visual/behavioral deltas.
   2. Preserve all earlier approved product-intent documents and semantic anchors, then add one new semantic anchor and set the new document as `last_approved_contract`.
   3. Extend the manifest regression test so drift in the new target's key statements fails deterministically.
-- **Patterns to follow:** `docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md` and the existing manifest pin.
+- **Patterns to follow:** `docs/iterations/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md` and the existing manifest pin.
 - **Test scenarios:**
   - The manifest loads the new contract as the latest authority while retaining the prior V24, filter/feed, chart, and preferences contracts.
   - The contract names production as baseline and excludes staging appearance, `/internal/`, migrations, harvest, auth, and chart-library replacement.

@@ -29,7 +29,7 @@ The provider-free builder selected 45 cases from the consumed 120-row
 development cohort. Each of EN, JA, and ZH-CN contains five stable
 model-versus-reference disagreements, five model-run conflicts, and five
 model/reference agreement controls. The protocol and decision rule are in
-`docs/reference/2026-09-12-030118-u18-human-ambiguity-study.md`.
+`docs/analysis/2026-09-12-030118-u18-human-ambiguity-study.md`.
 
 - Source cohort SHA-256:
   `30ef30d3236984f6e6c00c8a427dcf4eeb25d32b1b7fdef4bf1f2c015fd0a12f`.

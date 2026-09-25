@@ -203,7 +203,7 @@ flowchart TB
 - `monitor/static/home-v20.css` owns the chart-card and responsive canvas geometry.
 - `tests/test_pw_chart_filter.js`, `tests/test_home_v22_browser.py`, and `tests/test_home_chart_pulse.py` are the existing JavaScript, browser, and PostgreSQL regression nets.
 - Commit `f683ce6` established the direct bounded 30-day join and covering index; the new work must preserve that query-shape protection.
-- `docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md` deferred this exact substantial chart batch and remains authoritative outside the new target.
+- `docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md` deferred this exact substantial chart batch and remains authoritative outside the new target.
 
 ---
 
@@ -214,7 +214,7 @@ flowchart TB
 - **Goal:** Make the owner's approved chart delta durable without weakening earlier production protections.
 - **Requirements:** R13-R15.
 - **Dependencies:** None.
-- **Files:** `docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md`, `bridgewright.yaml`, `tests/test_bridgewright_v24_target.py`.
+- **Files:** `docs/iterations/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md`, `bridgewright.yaml`, `tests/test_bridgewright_v24_target.py`.
 - **Approach:** Add an approved additive target contract for R1-R15. Point `last_approved_contract` and a new semantic anchor at it. Preserve the V24 mockup and prior filter/feed contract as authorities for unchanged surfaces.
 - **Test scenarios:**
   1. The manifest names the new contract as the latest approved contract and retains both earlier contracts.

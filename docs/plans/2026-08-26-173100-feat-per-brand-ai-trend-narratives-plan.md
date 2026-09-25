@@ -263,7 +263,7 @@ The replacement must send calculated summaries and a bounded dated evidence coll
 - `core/models.py` — current `TrendNarrative` publication-cache and call-ledger coupling.
 - `monitor/trend_narrative_tasks.py` — current sequential four-call envelope task and lifecycle seams.
 - `monitor/trend_narrative_projection.py`, `monitor/views.py`, `monitor/templates/monitor/home.html`, and `monitor/static/pw-chart.js` — current shared DTO and single-strip rendering path.
-- `docs/reference/2026-08-25-135300-why-first-headline-validation-and-event-anchors-reference.md` — detailed account of the mixed-evidence event-anchor failure and 43 rejection codes.
+- `docs/investigations/2026-08-25-135300-why-first-headline-validation-and-event-anchors-reference.md` — detailed account of the mixed-evidence event-anchor failure and 43 rejection codes.
 - `docs/solutions/architecture-patterns/2026-08-12-205000-cached-bilingual-trend-narratives.md` — immutable snapshot, isolated worker, last-good publication, and Redis coordination constraints.
 - `docs/solutions/logic-errors/2026-08-10-002-trend-narrative-translator-max-tokens-truncation.md` — measured output-budget calibration lesson.
 - `docs/solutions/logic-errors/2026-08-10-004-fix-translator-lang-detected-llm-compliance.md` — bounded AI repair precedent.

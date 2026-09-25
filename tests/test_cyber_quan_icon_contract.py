@@ -17,7 +17,7 @@ FULL_SPRITE_SHA256 = "9a5fd90add8e5d60baf87796054b0211fbb94d9ad92e952fc5133465eb
 ALTERNATE_SOURCE = REPO_ROOT / "docs/ideation/2026-08-29-161106-cyber-quan-icon-alts.html"
 ALTERNATE_SOURCE_SHA256 = "dae29084a247656169dd3e076f0d616390c4fe6f791c697a38a7f8076ad55d81"
 SPRITE = REPO_ROOT / "monitor/templates/monitor/_cyber_quan_sprite.html"
-SELECTED_SOURCE = REPO_ROOT / "docs/reference/2026-09-21-123711-selected-taxonomy-glyphs.svg"
+SELECTED_SOURCE = REPO_ROOT / "docs/ideation/assets/2026-09-21-123711-selected-taxonomy-glyphs.svg"
 HELPER = REPO_ROOT / "monitor/static/pw-icons.js"
 HOME_CSS = REPO_ROOT / "monitor/static/home-v20.css"
 

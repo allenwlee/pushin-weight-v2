@@ -36,7 +36,7 @@ NOW = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
 CONTRACT = json.loads(
     (
         Path(__file__).parents[1]
-        / "docs/reference/2026-09-10-203138-stage1c-intelligence-read-contract.json"
+        / "tests/fixtures/stage1c_intelligence_read_contract_v1.json"
     ).read_text(encoding="utf-8")
 )
 

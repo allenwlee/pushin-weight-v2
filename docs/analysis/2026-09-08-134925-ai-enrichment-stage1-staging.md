@@ -262,7 +262,7 @@ docs/analysis/2026-09-08-134925-ai-enrichment-stage1-evaluation.md
 docs/analysis/2026-09-08-194415-enrichment-stage0-baseline.md
 docs/operations/staging-data-refresh.md
 docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md
-docs/reference/2026-09-08-194415-enrichment-contracts.md
+docs/analysis/2026-09-08-194415-enrichment-contracts.md
 monitor/cycle.py
 monitor/management/commands/validate_cycle.py
 scripts/post_fetch_smoketest.py
