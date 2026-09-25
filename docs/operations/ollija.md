@@ -60,8 +60,8 @@ nothing.
 ## Set delivery authority once
 
 Ordinary plans remain `delivery_target: on-request` and require a later
-explicit delivery request. LFG and goal ask the owner once before
-implementation whether to stop at staging or continue through production.
+explicit delivery request. LFG and goal use the owner’s existing endpoint selection; ask only when it is genuinely absent.
+Commit-and-push alone does not select staging or production.
 They persist `delivery_target: staging|production` and
 `delivery_selected_by_user: true` in the plan, then annotate it. No later
 Ollija authorization or browser code exists.
@@ -77,8 +77,10 @@ ollija annotate-plan <plan-path> --check
 
 The parent workflow owns implementation, verification, commits,
 feature-branch pushes, exact-candidate staging, and production promotion. A
-production guide requires the unchanged candidate SHA to pass staging before
-that same SHA advances to `main`. A staging guide stops after staging checks.
+production guide defaults to staged delivery. An explicit owner-selected direct route
+reaches production without staging; exact-commit staging does not move the shared branch.
+A staging guide stops after its applicable checks. The deployed service revision is the
+completion evidence; ancestry alone cannot establish preserved behavior or deployment.
 
 Worktrees intended for delivery belong under
 `<authoritative-repo>/.worktrees/<branch>`. Outside worktrees receive
@@ -99,3 +101,20 @@ the standalone Ollija repository.
 For shell, SSH, environment, or multi-machine failures, use the repository's
 infra/multi-machine skill first. For a material PushinWeight delivery-policy
 change, add a concise advisory entry to `docs/ollija/CHANGES.md`.
+
+## Persist routes and opt-outs
+
+Use `--delivery-route direct --delivery-route-selected-by-user` with owner-selected production.
+For staging without a branch update, use `--delivery-route staged
+--delivery-route-selected-by-user --staging-transport commit`. These are arguments to
+`ollija annotate-plan <plan-path>`. Existing plans retain branch-based staged delivery.
+
+An opted-out plan retains only `ollija: {enabled: false, branch: <branch>}`; remove its old
+guide. Discovery, normal annotation and `--check` return disabled without rewriting the file
+or creating a replacement. Current owner exceptions supersede local defaults, including a
+saved continuation. Record them in the existing plan, not another approval ledger.
+
+When installing a tested Ollija branch before it lands on main, install from its authoritative
+fuchitalee worktree with `uv tool install --force <ollija-worktree>`, record the source commit,
+and run `ollija init` to refresh the managed skill. Do not overwrite unrelated local skill
+edits if initialization reports a conflict. Once landed, refresh from the canonical checkout.

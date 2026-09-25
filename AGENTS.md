@@ -50,20 +50,38 @@ Before selecting or creating a PushinWeight plan, run
 that same plan; do not create a parallel plan. After the final plan write or
 document review, rerun `ollija annotate-plan <plan-path>`.
 
-For LFG and goal, ask the owner once before implementation whether to stop
-after staging or continue through production. Persist that explicit choice in
-the plan's Ollija metadata (`delivery_target: staging|production` and
-`delivery_selected_by_user: true`) and annotate the same plan. Ordinary plans
-remain `delivery_target: on-request` and ask nothing.
+Read the installed `ollija` skill for the portable command contract.
+Delivery follows the user's current requested endpoint, including LFG and goal. Preserve an existing explicit
+selection across status questions and authorized continuations; ask only when the endpoint
+is genuinely missing. Commit-and-push requests finish at remote branch verification and do
+not imply staging, merge, or production. Record the request in the existing plan. Ordinary planning retains
+`delivery_target: on-request`; it grants no deployment authority.
 
-Before any Git or deployment mutation, the parent workflow must read the
-selected delivery target, generated Ollija Delivery Guide, and editable
-`Delivery Exceptions`, then run `ollija annotate-plan <plan-path>
---check`. Resolve conflicts instead of silently bypassing the guide. Ollija is
-guidance only: it does not approve, commit, push, deploy, move worktrees, or
-run a persistent release process. Read the installed `ollija` skill for the
-portable command contract; the rules here and `.ollija/` add PushinWeight's
-delivery policy.
+For managed staging/production delivery, record `delivery_target` and
+`delivery_selected_by_user: true`. The default route is staged through the staging branch.
+Explicit owner selection can instead use `delivery_route: direct` for production, or staged
+`staging_transport: commit`, with `delivery_route_selected_by_user: true`. Direct delivery
+omits `staging_transport`. An occupied staging branch is not a dependency between independent
+changes. Exact-commit staging still requires checking the service/database is available.
+
+Current explicit owner instructions override local delivery defaults. Record exceptions and
+reflect route changes in metadata; never recreate a waived requirement in a manual checklist.
+To opt out, retain `ollija: {enabled: false, branch: <branch>}` and remove the generated guide.
+Annotation/check and checkout discovery preserve that plan without creating a replacement.
+Disabled plans need no generated-guide gate. Re-enable only on explicit owner direction.
+
+Before following a managed guide for a Git or deployment mutation, read the selected scope,
+route, and Delivery Exceptions, then run `ollija annotate-plan <plan-path> --check`.
+Repair stale guidance within the authorized scope. An annotation result supplies no new
+permission and cannot cancel existing permission. Ollija does not execute delivery.
+
+Project delivery owns the endpoint after implementation. For an explicitly authorized
+production request, the parent continues through applicable review/checks, authorized merge
+or non-forced production push, and observed deployment. An open PR is an intermediate result.
+Carry scope and owner exceptions to child skills. If a plugin cannot carry the endpoint, use
+this documented project continuation after its implementation/review result; do not reopen a
+PR or ask for the same authorization. Missing credentials and occupied environments require
+cause-specific repair, not empty commits. Waived checks remain waived, never passed.
 
 After exact-SHA production verification, the generated guide directs the
 parent workflow to run guarded `git worktree remove` cleanup only for the

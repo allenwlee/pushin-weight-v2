@@ -19,11 +19,12 @@ keyboard/browser endpoint, not a second authoritative checkout.
 
 ### Ollija delivery guide
 
-The generated, read-only block in one shared Markdown plan, created by
-`ollija annotate-plan`. It resolves the worktree, Git branch,
-environment paths, delivery target, and parent-owned staging/production
-sequence from tracked configuration. Human changes belong in the plan's
-separate Delivery Exceptions section.
+The generated section of a shared plan that describes the parent workflow's
+delivery actions using Ollija's built-in defaults and project configuration.
+
+Ollija supplies instructions rather than executing releases. Owner exceptions
+belong outside the generated section; route choices are recorded in managed metadata, while an explicit plan opt-out
+leaves its content unmanaged. Exceptions remain subject to the current owner’s scope.
 
 ### Ollija release worktree area
 
@@ -33,10 +34,13 @@ relocation guidance in its delivery guide; Ollija does not move or reject it.
 
 ### Delivery target
 
-The preserved plan choice controlling delivery scope: `on-request` for normal
-planning, or `staging` or `production` when an LFG or goal owner selected one
-upfront. The parent workflow follows the selected target; Ollija does not
-approve or execute the delivery.
+The owner-selected endpoint for a change, such as staging or production,
+which determines when the parent workflow has finished delivery.
+
+The delivery route describes how that endpoint is reached. Selecting
+production alone does not waive staging, while an explicit owner exception
+can change the route without changing the endpoint. Opening a pull request
+does not fulfill a production target.
 
 ### Production worktree cleanup
 
@@ -46,6 +50,26 @@ emits `git worktree remove` only for the canonical linked worktree and requires
 it to remain registered, clean, unlocked, and at that SHA. Staging-only,
 failed, unsafe, or noncanonical worktrees are retained. Ollija supplies the
 guidance but performs no cleanup itself.
+
+### Exact-SHA candidate
+
+The immutable Git revision to which a release's verification and deployment
+evidence refer.
+
+A later release can contain that revision as an ancestor while deploying a
+different revision. Ancestry proves inclusion in history; it does not prove
+that subsequent changes preserved the feature or that a service deployed it.
+
+### Ops-preflight failure
+
+A failed release-readiness check attributed to deployment configuration,
+credentials, service availability, or acceptance-command setup rather than
+an established defect in the candidate's application behavior.
+
+This diagnosis does not establish that the code is correct or that production
+is ready. The same missing prerequisite may affect both staging and
+production; a staging-only obstacle may instead require a different
+authorized delivery route.
 
 ## Homepage visual system
 
@@ -126,6 +150,7 @@ The pattern matters because operators triaging failures want to grep a stable pr
 
 - "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the current short-code call ids (`A`, `B1`..`B3`, `C1`..`C3`). The short-code call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
+- "Through production" had been used for both a Git push and a verified deployment. It names the delivery endpoint; the selected route governs intermediate steps, and service deployment evidence establishes that the endpoint was reached.
 
 ## Enrichment provider routing
 

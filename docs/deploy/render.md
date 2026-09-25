@@ -77,6 +77,11 @@ procedure is
 
 ### Same-cycle zero-disruption release
 
+**Applicability:** this contract applies to changes to same-cycle harvest/enrichment behavior
+whose plan selects these continuity checks. UI, documentation, and unrelated deployment
+changes do not inherit it. The current owner-selected route and explicit exceptions decide
+which staging steps remain required; a waived step is not a passed acceptance.
+
 Staging and production run the same `CycleRunner`, claimant, translation,
 classification, persistence, and enriched-only feed predicate. Their only
 enrichment allocation difference is staging `5/5/0` versus production `100/50/50`

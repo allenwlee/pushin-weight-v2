@@ -27,6 +27,22 @@ Release impact: Application, database, production-data, staging, or approval eff
 Related: Optional issue, plan, or solution link.
 ```
 
+## 2026-09-25 — Preserve owner-selected delivery routes
+
+Type: Fix
+
+Problem: shared staging and inherited checklists blocked independent authorized releases.
+
+New behavior: current owner scope governs the parent workflow. Managed plans preserve
+staged/direct route selection and exact-commit staging; disabled plans are not regenerated.
+UI performance evidence distinguishes candidate measurements from production baselines.
+Project skills retain authorization across status questions and scope tests to the change.
+
+Proof: standalone route/discovery regressions, focused assurance-wrapper and consumer tests,
+and shared-guidance synchronization tests; see the release-guidance propagation plan.
+
+Release impact: workflow and test tooling only; no database or application deployment.
+
 ## 2026-09-04 — Adopt standalone Ollija
 
 Type: Refactor

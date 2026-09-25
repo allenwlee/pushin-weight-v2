@@ -50,7 +50,9 @@ def test_lfg_and_goal_delivery_contract_is_shared_with_current_guidance() -> Non
 
     for text in (agent_rules, operations):
         assert "LFG and goal" in text
-        assert "once" in text
+        assert "existing" in text
+        assert "enabled: false" in text
+        assert "direct" in text
         assert "staging" in text and "production" in text
         assert "delivery_selected_by_user" in text
         assert "on-request" in text

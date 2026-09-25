@@ -1,6 +1,6 @@
 ## Ollija Delivery Guide
 
-This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `ollija annotate-plan`. Put a user-directed exception in the editable Delivery Exceptions section below.
+This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `ollija annotate-plan`. Current explicit owner instructions govern this task. Record exceptions below and reflect route changes in metadata; removed requirements must not return through another checklist.
 
 ### Resolved locations
 
@@ -25,13 +25,14 @@ ${placement}
 - Workflow: `${workflow}`
 - Delivery target: `${delivery_target}`
 - Owner selection recorded: `${delivery_selected_by_user}`
+- Delivery route: `${delivery_route}`
 
 ${delivery_actions}
 
 ### Failure handling
 
-- Never promote a staging candidate whose automated checks failed.
-- Implementation failures return to the ${code_failure_route} for diagnosis, correction, recommit, and restaging.
+- Complete applicable, unwaived checks for the selected route. A waived check is waived, never passed. Owner-selected direct production does not require staging.
+- Product defects return to the ${code_failure_route}; repeat only checks invalidated by the fix. Environment failures require repairing the environment, not a new source commit. Retry only after a relevant fact changes.
 - SSH, shell, environment, or multi-machine failures use the ${infra_failure_route} first.
 - The change ledger is advisory; do not validate or enforce it.
 - Never force-remove a worktree. Retain staging-only, failed, dirty, locked,

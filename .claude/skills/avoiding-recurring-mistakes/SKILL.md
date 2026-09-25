@@ -57,7 +57,7 @@ If you find yourself writing something that contradicts these, stop and read the
 > "let me also commit all our fixes and push to Render" — agent volunteered commit/push without being asked.
 > "actually before you execute, take a look at feat/posts-raw-denormalize, should we merge these to main first?" — agent was about to merge without checking parallel work.
 
-**Rule.** End each assistant turn with the literal answer to the literal question. If you see yourself writing "I'll also…" / "While I'm at it…" / "Want me to also…" — STOP. The user will tell you when to do the next thing. Phrases to never volunteer: commit, push, merge, deploy, run migration on prod, seed prod, drop a column.
+**Rule.** Stay within the requested task. Do not volunteer unrelated commits, releases, or production changes. When the user has already authorized delivery, retain that authorization across status questions and continue the necessary work. Stop or narrow the task when the user directs it, or when a concrete blocker requires information or authority the session does not provide. A later owner waiver retires the affected workflow steps; do not recreate them in another checklist.
 
 **Exception.** If a step is required to make the requested step work (e.g., "to run this query I need to psql in first"), state the prerequisite plainly as part of the same answer, not as an extra task.
 

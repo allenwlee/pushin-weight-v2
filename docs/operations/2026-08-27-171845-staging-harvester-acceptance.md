@@ -62,8 +62,8 @@ command as a workaround.
 
 1. Run `ollija annotate-plan <plan-path> --check`; confirm the recorded
    target matches the owner's current selection and the candidate
-   worktree/branch are canonical. A production target still requires every
-   staging-first gate in the generated guide.
+   worktree/branch are canonical. Apply the selected delivery route and current owner exceptions.
+   Production selection alone does not waive staging; an explicit route exception can.
 2. Confirm the exact candidate SHA locally with `git rev-parse HEAD` and on
    staging with `printenv RENDER_GIT_COMMIT`. Record both; they must match.
 3. Confirm `printenv RENDER_SERVICE_NAME` is
@@ -102,9 +102,21 @@ match a production-deny host. A match on only one service is not sufficient.
 
 ## Manual Trigger Run
 
+Select the call named by the current plan's bounded acceptance contract. `A` is the original
+curated-list example; rare-type acceptance uses `RARE_EXTRA`. Wait for the existing dashboard
+value to load, then set and re-read the intended selector before triggering. Do not copy an
+old example's selector into a different feature's acceptance.
+
+A credential/identity/selector failure is an environment diagnosis, not proof of a product
+failure or proof that production is ready. Repair only the implicated setting, preserving all
+other keys; never reconstruct the full environment list from a dashboard snapshot. Retry the
+same source revision only after the cause changes and within the existing call/spend budget.
+Do not make empty commits to obtain another receipt. A production runtime prerequisite must
+be present even when staging was waived. Stop repeating an identical diagnosed failure.
+
 In the Render Dashboard open `pushinweight-staging-harvest`, verify the start
 command contains `--staging-acceptance` and the selected non-secret call value
-is `A`, then choose **Trigger Run** once. Do not trigger again after an empty,
+matches the plan (`A` for curated-list acceptance, `RARE_EXTRA` for rare-type acceptance), then choose **Trigger Run** once. Do not trigger again after an empty,
 filtered, rate-limited, or failed result.
 
 Capture only the command's structured JSON. It must report all caps, the stage

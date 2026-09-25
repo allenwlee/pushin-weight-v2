@@ -22,7 +22,8 @@ ollija --help
 ```
 
 The executable must resolve outside this repository. The installed
-distribution's `direct_url.json` must name the standalone checkout before an
+distribution's `direct_url.json` must name the tested standalone checkout or its
+authoritative linked worktree before an
 embedded-copy migration or standalone upgrade is accepted.
 
 Run `ollija init` from the primary PushinWeight checkout when the managed
@@ -48,8 +49,8 @@ After the final plan write or document review, refresh the same file:
 ollija annotate-plan <plan-path>
 ```
 
-Before any Git or deployment mutation, verify that the generated guide is
-current without changing the plan:
+Before following managed guidance for a Git or deployment mutation, verify it is
+current without changing the plan; opted-out plans require no generated guide:
 
 ```bash
 ollija annotate-plan <plan-path> --check
@@ -88,9 +89,14 @@ does not block Git; the hook prints an installation or recovery message.
 
 ## Delivery choices
 
-Ordinary planning uses `delivery_target: on-request`. LFG and goal ask the
-owner once whether to stop after staging or continue through production, then
-persist `delivery_selected_by_user: true` and the selected target.
+Ordinary planning uses `delivery_target: on-request`. LFG and goal preserve an existing
+owner selection and ask only when the endpoint is absent. Staging/production selections
+record `delivery_selected_by_user: true`. Commit-and-push alone authorizes neither.
+The default route is staged; an explicit owner choice can select direct production or
+exact-commit staging. See [operations](../operations/ollija.md#persist-routes-and-opt-outs).
+An opt-out retains `ollija: {enabled: false, branch: <branch>}` and removes the old guide.
+Discovery and check mode leave it untouched. Current owner exceptions override local
+defaults and must not reappear under another checklist.
 
 The parent workflow reads the selected target, generated guide, and Delivery
 Exceptions before acting. It owns tests, commits, feature-branch pushes,

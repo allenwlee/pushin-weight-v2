@@ -172,7 +172,10 @@ def test_ollija_documentation_classifies_current_guidance_and_superseded_history
 
     for relative_path in current_paths:
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        assert "annotate-plan" in text, relative_path
+        if relative_path == "CONCEPTS.md":
+            assert "Ollija delivery guide" in text
+        else:
+            assert "annotate-plan" in text, relative_path
         assert "./bin/ollija" not in text, relative_path
         for command in retired_commands:
             assert f"./bin/ollija {command}" not in text, relative_path

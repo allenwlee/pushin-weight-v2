@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from tests.ui_assurance.evidence import build_evidence
@@ -81,6 +82,13 @@ def _require_candidate_performance_args(
         return
     if not args.candidate_revision:
         parser.error("--candidate-revision is required for candidate scope")
+    if (
+        args.performance_mode != "candidate"
+        and not (args.performance_rationale or "").strip()
+    ):
+        parser.error(
+            "baseline/not-required performance requires --performance-rationale"
+        )
     performance_values = {
         "--performance-state-home": args.performance_state_home,
         "--performance-runtime": args.performance_runtime,
@@ -90,24 +98,46 @@ def _require_candidate_performance_args(
         "--performance-data-source-kind": args.performance_data_source_kind,
         "--performance-declaration": args.performance_declaration,
     }
+    if args.performance_mode == "not-required":
+        if any(performance_values.values()) or args.performance_fixture_digest:
+            parser.error("not-required performance cannot include measurement inputs")
+        return
     missing = [name for name, value in performance_values.items() if not value]
     if missing:
         parser.error("candidate performance gate requires: " + ", ".join(missing))
-    if args.performance_data_source_kind == "fixture" and not args.performance_fixture_digest:
+    if (
+        args.performance_data_source_kind == "fixture"
+        and not args.performance_fixture_digest
+    ):
         parser.error("fixture performance gates require --performance-fixture-digest")
+    if (
+        args.performance_mode == "candidate"
+        and args.performance_target_revision != args.candidate_revision
+    ):
+        parser.error(
+            "candidate performance must measure --candidate-revision; use baseline for other code"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", choices=("affected", "candidate"), required=True)
     parser.add_argument("--candidate-revision")
+    parser.add_argument(
+        "--performance-mode",
+        choices=("candidate", "baseline", "not-required"),
+        default="candidate",
+    )
+    parser.add_argument("--performance-rationale")
     parser.add_argument("--bridgewright", default="bridgewright")
     parser.add_argument("--performance-state-home")
     parser.add_argument("--performance-runtime")
     parser.add_argument("--performance-target-revision")
     parser.add_argument("--performance-installed-package-commit")
     parser.add_argument("--performance-data-source-identity")
-    parser.add_argument("--performance-data-source-kind", choices=("fixture", "environment"))
+    parser.add_argument(
+        "--performance-data-source-kind", choices=("fixture", "environment")
+    )
     parser.add_argument("--performance-fixture-digest")
     parser.add_argument("--performance-declaration")
     args = parser.parse_args(argv)
@@ -120,18 +150,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.scope == "candidate"
         else "tests/fixtures/performance_assurance/declaration.json"
     )
-    _run(
-        args.bridgewright,
-        "performance-validate",
-        "--project-root",
-        str(ROOT),
-        "--declaration",
-        performance_declaration,
-    )
+    if args.scope != "candidate" or args.performance_mode != "not-required":
+        _run(
+            args.bridgewright,
+            "performance-validate",
+            "--project-root",
+            str(ROOT),
+            "--declaration",
+            performance_declaration,
+        )
     tests = FOCUSED_TESTS + (FULL_ADDITIONAL_TESTS if args.scope == "candidate" else [])
     # The existing Django browser suites intentionally use HTTP live-server
     # URLs; isolate their test-only DEBUG setting from Bridgewright and Node.
     _run(
+        sys.executable,
+        "-m",
         "pytest",
         "-q",
         *tests,
@@ -150,7 +183,8 @@ def main(argv: list[str] | None = None) -> int:
         EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
         EVIDENCE_PATH.unlink(missing_ok=True)
         EVIDENCE_PATH.write_text(
-            json.dumps(evidence.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+            json.dumps(evidence.model_dump(mode="json"), indent=2, sort_keys=True)
+            + "\n",
             encoding="utf-8",
         )
         _run(
@@ -161,6 +195,15 @@ def main(argv: list[str] | None = None) -> int:
             "--evidence",
             str(EVIDENCE_RELATIVE_PATH),
         )
+        performance_summary = {
+            "product_source_revision": args.candidate_revision,
+            "performance_mode": args.performance_mode,
+            "rationale": args.performance_rationale,
+            "performance_target_revision": args.performance_target_revision,
+        }
+        if args.performance_mode == "not-required":
+            print(json.dumps({**performance_summary, "performance_status": "not-run"}))
+            return 0
         performance_run = _run_json(
             args.bridgewright,
             "performance-run",
@@ -180,7 +223,11 @@ def main(argv: list[str] | None = None) -> int:
             args.performance_data_source_kind,
             "--declaration",
             args.performance_declaration,
-            *((["--fixture-digest", args.performance_fixture_digest]) if args.performance_fixture_digest else []),
+            *(
+                (["--fixture-digest", args.performance_fixture_digest])
+                if args.performance_fixture_digest
+                else []
+            ),
         )
         attempt_id = performance_run.get("attempt_id")
         if not isinstance(attempt_id, str) or not attempt_id:
@@ -194,9 +241,34 @@ def main(argv: list[str] | None = None) -> int:
             attempt_id,
         )
         if performance_result.get("attempt_id") != attempt_id:
-            raise RuntimeError("performance-result did not return the performance-run attempt")
-        if performance_result.get("status") != "clean":
+            raise RuntimeError(
+                "performance-result did not return the performance-run attempt"
+            )
+        if (
+            args.performance_mode == "candidate"
+            and performance_result.get("status") != "clean"
+        ):
             raise RuntimeError("performance-result was not clean")
+        if performance_result.get("status") == "clean":
+            measured_revision = (
+                performance_result.get("payload", {})
+                .get("evidence", {})
+                .get("identity", {})
+                .get("target_revision")
+            )
+            if measured_revision != args.performance_target_revision:
+                raise RuntimeError(
+                    "sealed performance evidence does not match the measured revision"
+                )
+        print(
+            json.dumps(
+                {
+                    **performance_summary,
+                    "performance_status": performance_result.get("status"),
+                    "performance_attempt_id": attempt_id,
+                }
+            )
+        )
     return 0
 
 
