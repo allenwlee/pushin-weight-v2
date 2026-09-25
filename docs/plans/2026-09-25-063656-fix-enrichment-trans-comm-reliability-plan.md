@@ -16,7 +16,7 @@ ollija:
 
 Long posts currently consume the translation stage's shared time allowance, and a short post can use up retry attempts without ever reaching the model. Commentary also rejects posts whose prompt exceeds the current 4,000-character guard. This change gives long translations smaller, reusable pieces; stops counting a translation attempt that was never sent; raises commentary's input guard to 32,000 characters; and records safe reasons when either stage fails.
 
-The post text, translation model, commentary model, three output languages, and normal harvest search calls stay the same. The two historical short commentary failures are not special-cased or replayed by this plan. Streaming responses are not part of this change. Verification requires production-path tests, staging, then an exact-SHA production release and observation of a subsequent harvest cycle; no cron pause or paid X probe is authorized.
+The post text, translation model, commentary model, three output languages, and normal harvest search calls stay the same. The two historical short commentary failures are not special-cased or replayed by this plan. Streaming responses are not part of this change. Verification requires production-path tests, staging, then an exact-SHA production release and observation of a subsequent harvest cycle. The owner has authorized deployment prerequisites, the bounded staging acceptance call, and production delivery; production cron continues running.
 
 The main tradeoff is that long posts may require more model calls. Chunk caching and existing call/concurrency budgets must prevent an unbounded increase. Production is the owner-selected delivery target.
 
@@ -79,7 +79,11 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+Owner authorization on 2026-09-25: "i authorize everything to get to deployment. lfg", subsequently reaffirmed with a request to exercise judgment and complete production delivery.
+
+- Repair missing `staging_refresh_reader` privileges using only the existing reviewed `config/staging_refresh.yaml` policy. Grant SELECT on copied tables/sequences and MAINTAIN on excluded tables that already exist. Do not grant writes, default privileges, or access to excluded row data. A rejected preflight prevents refresh until repaired; it does not require another owner approval to perform this already authorized setup.
+- One bounded staging acceptance run is authorized: call A, one request/page, at most five results, existing enrichment limits, no headline provider work. The Render API equivalent of Dashboard Trigger Run may be used after verifying no active staging run and the unchanged guarded start command. Provider refusal remains a real failure; do not disable application caps or invent quota evidence.
+- Interpret operational evidence against the deployed literal-translation/lazy-commentary architecture. Commentary is generated on demand; absent commentary on an undemanded new post is not a release failure. Preserve production's normal scheduler and verify persisted translations/classification plus commentary worker health and focused commentary regression coverage.
 
 ## Goal
 
@@ -183,7 +187,7 @@ Touch translation orchestration, literal translation, chunk persistence, comment
 
 **Files:** `docs/plans/2026-09-25-063656-fix-enrichment-trans-comm-reliability-plan.md`, targeted tests above; no production data repair.
 
-**Approach:** Follow the generated Ollija guide. Run focused and broader regression tests, migration check, and `pytest tests/ollija`; verify clean worktree and exact SHA. Stage and verify the staging service and representative synthetic/fake-client behavior. The deployment runbook also requires one bounded, paid staging harvest attempt before production promotion; stop at staging until the owner explicitly authorizes that attempt or directs a recorded exception. If authorized and the runbook acceptance passes, promote the unchanged SHA to production. Use the enrichment-relevant latest-N health-check route: retain the initial cohort, wait its 30-minute grace window, inspect the same IDs. Confirm a subsequent real harvest cycle in logs and DB, including post insertion and translation/commentary states. Do not pause cron.
+**Approach:** Follow the generated Ollija guide. Run focused and broader regression tests, migration check, and `pytest tests/ollija`; verify clean worktree and exact SHA. Stage and verify the staging service and representative synthetic/fake-client behavior. Repair the documented staging snapshot reader grants, refresh staging, and run the owner-authorized bounded acceptance attempt. After staging passes, promote the unchanged SHA to production. Use the enrichment-relevant latest-N health-check route: retain the initial cohort, wait its 30-minute grace window, inspect the same IDs. Confirm a subsequent real harvest cycle in logs and DB, including post insertion and translation/commentary states. Do not pause cron.
 
 **Test scenarios:** Staging deployment failure or SHA mismatch blocks production; prod SHA mismatch blocks completion; latest-N fresh pending is inconclusive rather than failed.
 
@@ -196,7 +200,7 @@ Touch translation orchestration, literal translation, chunk persistence, comment
 - Chunking may multiply provider calls. Keep each call bounded, cache successes, enforce the existing cycle-wide call cap and a long-post per-cycle cap, and report call-count change.
 - A longer commentary prompt may exceed provider context or cost assumptions even though the app cap allows it. Observe errors and token usage; fail safely with a specific code rather than truncate.
 - DB migration and cache uniqueness can race with two workers. Use database constraints and fenced writes; test both the fresh migration and concurrent retry case.
-- The staging harvest acceptance gate needs paid provider calls that were excluded from the original plan scope. Production promotion waits for the owner's explicit budget decision or exception; staging deployment and provider-free checks may proceed.
+- The owner has authorized the bounded staging provider call. Existing request, result, concurrency, and cost limits still apply; a real provider or correctness failure must be diagnosed before promotion.
 - The root checkout has unrelated `monitor/cycle.py` edits on a different branch. Do not import, overwrite, or commit them. This worktree is isolated.
 
 ## Definition of Done
