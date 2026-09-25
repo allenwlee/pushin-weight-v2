@@ -5,74 +5,11 @@ date: 2026-09-25
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
-ollija:
-  change_id: feat-feed-processing-indicator-followup-2026-09-25-041204
-  branch: feat/feed-processing-indicator-followup
-  workflow: plan
-  delivery_target: production
-  delivery_selected_by_user: true
+delivery:
+  target: production
+  selected_by_user: true
+  method: manual-exact-commit
 ---
-<!-- BEGIN OLLIJA DELIVERY GUIDE -->
-## Ollija Delivery Guide
-
-This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `ollija annotate-plan`. Put a user-directed exception in the editable Delivery Exceptions section below.
-
-### Resolved locations
-
-- Authoritative host: `fuchitalee`
-- Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
-- Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
-- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup`
-- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup/docs/plans/2026-09-25-041204-feat-feed-processing-indicator-followup-plan.md`
-- Change: `feat-feed-processing-indicator-followup-2026-09-25-041204`
-- Branch: `feat/feed-processing-indicator-followup`
-- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup/render-staging.yaml`
-- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup/render.yaml`
-- Staging URL: `https://pushinweight-staging-web.onrender.com`
-- Production URL: `https://pushinweight-web.onrender.com`
-
-### Placement
-
-This worktree is inside the Ollija release worktree area. Reuse it for the whole change. Do not create a second worktree or plan for this branch.
-
-### Delivery scope
-
-- Workflow: `plan`
-- Delivery target: `production`
-- Owner selection recorded: `true`
-
-1. Complete implementation and the plan's verification contract.
-2. Run the configured focused checks:
-   - `pytest tests/ollija`
-3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/feed-processing-indicator-followup` without `--force`.
-    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
-
-### Failure handling
-
-- Never promote a staging candidate whose automated checks failed.
-- Implementation failures return to the parent implementation workflow for diagnosis, correction, recommit, and restaging.
-- SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
-- The change ledger is advisory; do not validate or enforce it.
-- Never force-remove a worktree. Retain staging-only, failed, dirty, locked,
-  noncanonical, or candidate-mismatched worktrees for diagnosis or later
-  delivery.
-- Do not run an endless retry loop or start a persistent Ollija process.
-<!-- END OLLIJA DELIVERY GUIDE -->
-
-## Delivery Exceptions
-
-None.
-
 # Feed Processing Indicator Follow-up - Plan
 
 ## Plain-English Summary
@@ -82,6 +19,24 @@ Each post will show at most one subdued spinning armillary while any of its proc
 The feed will leave the classification status cell empty for “Pending” and “Context missing.” It will show a precise two-letter language code for posts currently grouped under “other” when that code can be established. Old “other” rows have lost that detail, so the work includes a bounded language-only repair; unresolved rows will show the honest unknown-language glyph rather than a guessed code.
 
 The same result must appear on the initial page, after a feed refresh, and after a commentary status update. Browser tests will check English, Japanese and Chinese, keyboard hover behavior, reduced motion, and cached glyph assets. Changing language storage also needs a translator call-chain regression and a controlled rollout. The owner selected staging followed by production on 2026-09-25.
+
+## Delivery
+
+The owner selected production and directed a manual release for this plan on 2026-09-25. This section replaces generated release coordination for this plan only.
+
+1. Keep the completed product verification bound to source commit `5383560ebfe9166b7f33e98e502984f8b20ddaf6`. Documentation-only delivery edits do not require repeating the product test suites.
+2. Commit and push this plan update on `feat/feed-processing-indicator-followup`; record the final candidate SHA.
+3. Deploy that exact SHA directly to `pushinweight-staging-web` using Render's commit selection. Verify the deployed SHA, health, localized feed behavior, and cached glyph assets. The Git `staging` branch remains available to the independent enrichment release.
+4. After staging verification, require the candidate to contain the current remote `main`, push the candidate to `main`, and verify the production web deployment reports that exact SHA. Reconcile any concurrent change to `main` before promotion.
+5. Check production feed behavior in English and Japanese, the single pending marker, empty pending/context-missing classification labels, precise language tags, and cache headers.
+6. Restore the staging web service to the latest intended staging branch revision if it still serves this temporary UI candidate. Preserve a newer deployment started by another release.
+7. Do not launch the historical language repair or a paid harvest batch as part of this UI deployment. Retain the clean feature worktree until production verification is complete.
+
+## Completed verification
+
+- Product call-chain, feed rendering, and locale browser regressions passed.
+- The full candidate UI assurance gate completed cleanly with 4,466 obligations. Its performance assessment used the then-current production revision, not the undeployed UI candidate.
+- Exact deployed candidate checks remain required on staging and production.
 
 ---
 
