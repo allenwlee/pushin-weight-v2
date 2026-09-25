@@ -16,6 +16,29 @@ Single source of truth for the **dashboard feed table** (posts list under home /
 
 **Why this exists.** Feed rows are rendered **twice** (SSR + client). Labels come from **three** systems (DB, gettext, JS hardcodes). Locale codes collide (`zh_cn` / `zh-cn` / `zh_Hans`). Agents that fix one layer and not the others produce the 25-commit i18n churn documented in `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md`.
 
+### 2026-09-25 feed hover and processing update
+
+The current home feed uses `_feed_initial_v22.html` for its first batch and
+`pw-feed.js` for later or replaced rows. Both paths receive the same
+`processing_badges` wire field from `monitor/views.py`: translation,
+classification, and analysis each carry a `process`, `state`, and localized
+`message`. `pending` displays the animated armillary even after an attempted
+run returns to the queue. `failed` displays the stop marker only when the
+durable stage or demand is terminal. Ready, cancelled, and expired work has no
+status glyph. Hover and keyboard focus expose the specific message.
+
+When `lang_detected` is missing or undetected, a globe replaces the text
+language tag. While translation enrichment is pending, its hover says
+“Language detection pending” in English, with Japanese and Chinese equivalents
+for those locales. Other undetected states get a state-specific explanation.
+
+The shared inspection popover clones the trigger's trusted SVG, flag, or text
+badge at a slightly larger size. Follower hover shows the magnitude, an SVG X
+logo, and the localized word for followers (for example, “102k X followers”).
+The three new glyphs live in `pw-processing-glyphs.svg`, which Django's static
+manifest gives a content-hashed, cacheable URL in production. Japanese lookup
+labels are language rows seeded by `seed_i18n_labels`; no `ja` columns exist.
+
 ---
 
 ## Architecture (non-negotiable)

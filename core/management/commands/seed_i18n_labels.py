@@ -7,7 +7,10 @@ Usage:
 
 from __future__ import annotations
 
-from django.core.management.base import BaseCommand
+import json
+
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 
 from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
@@ -32,6 +35,8 @@ from core.models import (
     AudienceTopicConcept,
     AudienceTopicLabel,
     AudienceTopicScheme,
+    Country,
+    CountryLabel,
     DiscourseKey,
     DiscourseLabel,
     GeopoliticalModeKey,
@@ -44,6 +49,8 @@ from core.models import (
     PostTypeLabel,
     ProductLabelKey,
     ProductLabelLabel,
+    Region,
+    RegionLabel,
     Role,
     RoleLabel,
     SentimentKey,
@@ -51,6 +58,7 @@ from core.models import (
     UntrackedBrandPromotionKey,
     UntrackedBrandPromotionLabel,
 )
+from monitor.account_geography import COUNTRY_NAMES, REGION_NAMES
 
 # ---------------------------------------------------------------------------
 # Canonical taxonomy values (mirrors x_monitor/attribution.py constants)
@@ -102,7 +110,7 @@ _ROLES: list[str] = [
 ]
 
 _ACTIVE_LOCALES = ["en", "zh-cn", "ja"]
-_LEGACY_LOCALES = ["en", "zh-cn"]
+_LEGACY_LOCALES = _ACTIVE_LOCALES
 
 # ---------------------------------------------------------------------------
 # Command
@@ -280,6 +288,22 @@ class Command(BaseCommand):
                         }
                     )
 
+        catalog = json.loads(
+            (settings.BASE_DIR / "monitor/data/account_geography_ja.json").read_text()
+        )
+        if (set(catalog["countries"]) != set(COUNTRY_NAMES)
+                or set(catalog["regions"]) != set(REGION_NAMES)
+                or not all(catalog["countries"].values())
+                or not all(catalog["regions"].values())):
+            raise CommandError("Japanese geography labels do not cover the frozen taxonomy")
+        for family, model, labels in (
+            ("country", CountryLabel, catalog["countries"]),
+            ("region", RegionLabel, catalog["regions"]),
+        ):
+            for key, label in labels.items():
+                seeds.append({"family": family, "label_model": model,
+                              "key": key, "lang": "ja", "label": label})
+
         return seeds
 
     # -- apply ----------------------------------------------------------------
@@ -290,6 +314,19 @@ class Command(BaseCommand):
         label_inserted = 0
 
         for seed in seeds:
+            if seed["family"] in {"country", "region"}:
+                family = seed["family"]
+                key_field = "code" if family == "country" else "key"
+                key_model = Country if family == "country" else Region
+                if not key_model.objects.filter(**{key_field: seed["key"]}).exists():
+                    continue
+                _, created = seed["label_model"].objects.get_or_create(
+                    **{family + "_id": seed["key"], "lang": "ja"},
+                    defaults={"label": seed["label"]},
+                )
+                if created:
+                    label_inserted += 1
+                continue
             if seed["family"] == "audience_topic":
                 scheme, scheme_created = AudienceTopicScheme.objects.get_or_create(
                     key=_AUDIENCE_TOPIC_SCHEME_KEY,

@@ -82,8 +82,8 @@ def test_stage1_label_constants_match_the_frozen_taxonomy():
             for lang in ("en", "zh-cn", "ja")
         )
 
-    assert all("ja" not in labels for labels in DISCOURSE_LABELS.values())
-    assert all("ja" not in labels for labels in ROLE_LABELS.values())
+    assert all("ja" in labels for labels in DISCOURSE_LABELS.values())
+    assert all("ja" in labels for labels in ROLE_LABELS.values())
 
 
 def test_japanese_labels_match_the_reviewed_implementation_copy():
@@ -131,7 +131,7 @@ def test_japanese_labels_match_the_reviewed_implementation_copy():
     }
 
 
-def test_legacy_alias_labels_remain_english_chinese_only():
+def test_legacy_alias_labels_include_japanese():
     legacy_aliases = {
         "buzz_releases": POST_TYPE_LABELS,
         "performance_comparisons": POST_TYPE_LABELS,
@@ -141,7 +141,7 @@ def test_legacy_alias_labels_remain_english_chinese_only():
     }
 
     assert all(
-        set(labels[key]) == {"en", "zh-cn"}
+        set(labels[key]) == {"en", "zh-cn", "ja"}
         for key, labels in legacy_aliases.items()
     )
 
@@ -222,13 +222,13 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
             PostTypeLabel.objects.filter(post_type_id=key).values_list(
                 "lang", flat=True
             )
-        ) == {"en", "zh-cn"}
+        ) == {"en", "zh-cn", "ja"}
     for key in legacy_product_aliases:
         assert set(
             ProductLabelLabel.objects.filter(product_label_id=key).values_list(
                 "lang", flat=True
             )
-        ) == {"en", "zh-cn"}
+        ) == {"en", "zh-cn", "ja"}
     assert set(CANONICAL_PRODUCT_LABEL_KEYS).issubset(
         ProductLabelKey.objects.values_list("key", flat=True)
     )

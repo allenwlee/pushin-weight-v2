@@ -146,6 +146,9 @@ def _load_frozen_census() -> dict[str, Any]:
 
 
 def _verify_taxonomy_seed(manifest: dict[str, Any]) -> None:
+    japanese = json.loads(
+        (Path(settings.BASE_DIR) / "monitor/data/account_geography_ja.json").read_text()
+    )
     expected_regions = {
         (
             item["key"],
@@ -164,6 +167,9 @@ def _verify_taxonomy_seed(manifest: dict[str, Any]) -> None:
         for item in manifest["regions"]
         for lang, label in item["labels"].items()
     }
+    expected_region_labels.update(
+        (key, "ja", label) for key, label in japanese["regions"].items()
+    )
     actual_region_labels = set(
         RegionLabel.objects.values_list("region_id", "lang", "label")
     )
@@ -189,6 +195,9 @@ def _verify_taxonomy_seed(manifest: dict[str, Any]) -> None:
         for item in manifest["countries"]
         for lang, label in item["labels"].items()
     }
+    expected_country_labels.update(
+        (code, "ja", label) for code, label in japanese["countries"].items()
+    )
     actual_country_labels = set(
         CountryLabel.objects.values_list("country_id", "lang", "label")
     )

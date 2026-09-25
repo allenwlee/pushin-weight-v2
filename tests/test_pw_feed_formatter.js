@@ -160,14 +160,14 @@ assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO 
 
 console.log('\\n--- enrichmentStatusHtml ---');
 assertEq(
-  enrichmentStatusHtml({ enrichment_status: 'pending', enrichment_status_label: 'enrichment pending' }),
-  '<span class="enrichment-status enrichment-status-pending" role="status">enrichment pending</span>',
-  'pending state is visible and accessible'
+  enrichmentStatusHtml({ processing_badges: [{ process: 'translation', state: 'pending', message: 'Translation is waiting to run.' }] }).includes('processing-armillary'),
+  true,
+  'pending stage uses the armillary'
 );
 assertEq(
-  enrichmentStatusHtml({ enrichment_status: 'failed', enrichment_status_label: '<failed>' }),
-  '<span class="enrichment-status enrichment-status-failed" role="status">&lt;failed&gt;</span>',
-  'failed state escapes its accessible label'
+  enrichmentStatusHtml({ processing_badges: [{ process: 'translation', state: 'failed', message: '<failed>' }] }).includes('&lt;failed&gt;'),
+  true,
+  'terminal stage escapes its accessible hover message'
 );
 assertEq(
   enrichmentStatusHtml({ enrichment_status: 'succeeded', enrichment_status_label: 'done' }),
@@ -205,7 +205,7 @@ if (typeof renderRowHtml === 'function') {
       },
     },
     follower_bin: '50k-plus',
-    followers_label: '52.1k followers',
+    followers_label: '52.1k X followers',
     engagement_pretty: { followers: '52.1k', likes: '3', retweets: '2', replies: '1' },
   });
   assertEq(rowHtml.includes('class="follower-lead follower-bin-50k-plus has-account-metadata"'), true,
@@ -220,9 +220,9 @@ if (typeof renderRowHtml === 'function') {
   assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
     'follower count sits directly under the follower symbol');
   assertEq(rowHtml.includes('class="follower-magnitude pw-inspection-trigger"') &&
-    rowHtml.includes('data-pw-inspection="52.1k followers"') &&
+    rowHtml.includes('data-pw-inspection="52.1k X followers"') &&
     rowHtml.includes('aria-expanded="false"') &&
-    !rowHtml.includes('title="52.1k followers"'), true,
+    !rowHtml.includes('title="52.1k X followers"'), true,
     'follower magnitude uses the shared inspection popover without a native tooltip');
   assertEq(rowHtml.includes('class="account-role role-official pw-inspection-trigger"'), true,
     'feed row reserves and colors the official role slot');
@@ -256,7 +256,7 @@ if (typeof renderRowHtml === 'function') {
   const unknownFollowerHtml = renderRowHtml({
     account: { handle: '@unknown' },
     follower_bin: '0-1k',
-    followers_label: '0 followers',
+    followers_label: '0 X followers',
     engagement_pretty: { followers: '0' },
   });
   assertEq(unknownFollowerHtml.includes('class="follower-count">0</span>'), true,

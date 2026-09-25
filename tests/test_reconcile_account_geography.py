@@ -10,9 +10,26 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
 
-from core.models import Account, AccountBasedInMapping
+from core.models import Account, AccountBasedInMapping, CountryLabel, RegionLabel
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+@pytest.fixture(autouse=True)
+def _seed_japanese_geography():
+    from pathlib import Path
+
+    labels = json.loads(
+        (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
+    )
+    CountryLabel.objects.bulk_create([
+        CountryLabel(country_id=code, lang="ja", label=label)
+        for code, label in labels["countries"].items()
+    ], ignore_conflicts=True)
+    RegionLabel.objects.bulk_create([
+        RegionLabel(region_id=key, lang="ja", label=label)
+        for key, label in labels["regions"].items()
+    ], ignore_conflicts=True)
 
 
 def _seed_accounts() -> None:

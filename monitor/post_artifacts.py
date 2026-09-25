@@ -34,6 +34,8 @@ class PostContentProjection:
     literal_source: str
     synthesis_source: str
     synthesis_status: str
+    synthesis_attempts: int
+    synthesis_expired: bool
 
 
 def source_content_fingerprint(post: Post) -> str:
@@ -413,13 +415,15 @@ def read_post_content_many(
             Prefetch("texts", queryset=PostSynthesisText.objects.order_by("locale"))
         )
     }
-    demand_states = dict(
-        PostSynthesisDemand.objects.filter(post_id__in=post_ids)
+    demands = {
+        post_id: (state, attempts, expires_at)
+        for post_id, state, attempts, expires_at in PostSynthesisDemand.objects.filter(post_id__in=post_ids)
         .order_by("post_id", "-updated_at")
         .distinct("post_id")
-        .values_list("post_id", "state")
-    )
+        .values_list("post_id", "state", "attempts", "expires_at")
+    }
     projections = {}
+    inspected_at = timezone.now()
     for post in posts:
         post_id = str(post.pk)
         translation = translations.get(post_id)
@@ -435,11 +439,12 @@ def read_post_content_many(
             else _legacy_synthesis(post)
         )
         locale_complete = all(rich.get(locale) for locale in SUPPORTED_CONTENT_LOCALES)
+        demand_state, attempts, expires_at = demands.get(post_id, (None, 0, None))
         status = (
             "ready"
             if locale_complete
             else str(
-                demand_states.get(post_id)
+                demand_state
                 or ("legacy_partial" if rich else "not_requested")
             )
         )
@@ -449,6 +454,8 @@ def read_post_content_many(
             literal_source="normalized" if translation is not None else "legacy",
             synthesis_source="normalized" if synthesis is not None else "legacy",
             synthesis_status=status,
+            synthesis_attempts=attempts,
+            synthesis_expired=bool(expires_at and expires_at <= inspected_at),
         )
     return projections
 

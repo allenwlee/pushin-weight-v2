@@ -674,6 +674,9 @@ def _localize_classification_value(
     canonical = CLASSIFICATION_LABELS.get(family, {}).get(key, {})
     if canonical.get(display_locale):
         return canonical[display_locale]
+    if display_locale == "ja":
+        log.warning("missing Japanese feed label: family=%s key=%s", family, key)
+        return "翻訳未登録"
     if display_locale == "en":
         return key.replace("_", " ").replace("-", " ").title()
     return key
@@ -1204,23 +1207,78 @@ def _enrichment_status(
 def _enrichment_status_label(status: str, locale: str) -> str:
     """Return compact accessible copy without changing the feed layout."""
     if status == PostEnrichmentState.Status.PENDING:
-        return "补充处理中" if _is_zh_locale(locale) else "enrichment pending"
+        return "補完処理を待っています" if _is_ja_locale(locale) else "补充处理中" if _is_zh_locale(locale) else "enrichment pending"
     if status == PostEnrichmentState.Status.FAILED:
-        return "补充失败" if _is_zh_locale(locale) else "enrichment failed"
+        return "補完処理に失敗しました" if _is_ja_locale(locale) else "补充失败" if _is_zh_locale(locale) else "enrichment failed"
     return ""
 
 
 def _classification_status_label(status: str, locale: str) -> str:
     """Name semantic classification state without turning unknown into Other."""
     labels = {
-        "classified": ("已分类", "Classified"),
-        "context_missing": ("缺少上下文", "Context missing"),
-        "pending": ("待分类", "Pending"),
-        "failed": ("分类失败", "Failed"),
-        "historical_untyped": ("历史记录", "Historical"),
+        "classified": ("已分类", "Classified", "分類済み"),
+        "context_missing": ("缺少上下文", "Context missing", "文脈不足"),
+        "pending": ("待分类", "Pending", "分類待ち"),
+        "failed": ("分类失败", "Failed", "分類に失敗"),
+        "historical_untyped": ("历史记录", "Historical", "過去の投稿"),
+        "stale": ("已过期", "Stale", "期限切れ"),
     }
-    zh_label, en_label = labels.get(status, (status, status))
-    return zh_label if _is_zh_locale(locale) else en_label
+    zh_label, en_label, ja_label = labels.get(status, (status, status, "翻訳未登録"))
+    return ja_label if _is_ja_locale(locale) else zh_label if _is_zh_locale(locale) else en_label
+
+
+def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]]:
+    """Show queue-backed work separately from completed or cancelled work."""
+    names = {
+        "en": {"translation": "Translation", "classification": "Classification", "analysis": "Analysis"},
+        "zh": {"translation": "翻译", "classification": "分类", "analysis": "分析"},
+        "ja": {"translation": "翻訳", "classification": "分類", "analysis": "分析"},
+    }
+    messages = {
+        "en": {
+            "failed": "{name} failed. No more attempts are scheduled.",
+            "running_retry": "{name} is running again.",
+            "running": "{name} is running.",
+            "queued_retry": "{name} is queued for another attempt.",
+            "waiting": "{name} is waiting to run.",
+        },
+        "zh": {
+            "failed": "{name}失败。不会再重试。",
+            "running_retry": "{name}正在重试。",
+            "running": "{name}正在处理。",
+            "queued_retry": "{name}已排队重试。",
+            "waiting": "{name}正在等待处理。",
+        },
+        "ja": {
+            "failed": "{name}に失敗しました。再試行の予定はありません。",
+            "running_retry": "{name}を再試行中です。",
+            "running": "{name}を処理中です。",
+            "queued_retry": "{name}の再試行を待っています。",
+            "waiting": "{name}の処理を待っています。",
+        },
+    }
+    language = "ja" if _is_ja_locale(locale) else "zh" if _is_zh_locale(locale) else "en"
+    badges: list[dict[str, str]] = []
+
+    def append(process: str, state: str, attempts: int) -> None:
+        if state not in {"pending", "processing", "failed"}:
+            return
+        if state == "failed":
+            phase = "failed"
+        elif state == "processing":
+            phase = "running_retry" if attempts > 1 else "running"
+        else:
+            phase = "queued_retry" if attempts else "waiting"
+        message = messages[language][phase].format(name=names[language][process])
+        badges.append({"process": process, "state": "failed" if state == "failed" else "pending", "message": message})
+
+    for process, (state, attempts) in post.get("enrichment_stages", {}).items():
+        if process in {"translation", "classification"}:
+            append(process, state, attempts)
+    synthesis_status = post.get("synthesis_status")
+    if not post.get("synthesis_expired") or synthesis_status == "failed":
+        append("analysis", synthesis_status, post.get("synthesis_attempts", 0))
+    return badges
 
 
 _DISPLAY_ROLE_PRECEDENCE = ("official", "staff", "community")
@@ -1246,24 +1304,24 @@ def _display_role_label(
     if localized and localized != role_key:
         return localized
     fallback = {
-        "official": ("官方", "Official"),
-        "staff": ("员工", "Staff"),
-        "community": ("社区", "Community"),
+        "official": ("官方", "Official", "公式"),
+        "staff": ("员工", "Staff", "社員"),
+        "community": ("社区", "Community", "コミュニティ"),
     }
-    zh_label, en_label = fallback[role_key]
-    return zh_label if _is_zh_locale(locale) else en_label
+    zh_label, en_label, ja_label = fallback[role_key]
+    return ja_label if _is_ja_locale(locale) else zh_label if _is_zh_locale(locale) else en_label
 
 
 def _geography_label(labels: dict[str, str], locale: str) -> str:
     """Select a complete seeded label without exposing taxonomy keys."""
 
-    key = "zh_cn" if _is_zh_locale(locale) else "en"
+    key = "ja" if _is_ja_locale(locale) else "zh_cn" if _is_zh_locale(locale) else "en"
     label = labels.get(key)
     return label.strip() if isinstance(label, str) else ""
 
 
 def _geography_accessible_label(label: str, locale: str) -> str:
-    language = "zh-hans" if _is_zh_locale(locale) else "en"
+    language = "ja" if _is_ja_locale(locale) else "zh-hans" if _is_zh_locale(locale) else "en"
     with override(language):
         return gettext("X reports this account is based in %(place)s") % {
             "place": label
@@ -1294,6 +1352,19 @@ def _compact_language_display(lang_detected: str | None, locale: str) -> str:
     return _COMPACT_LANG_NAMES_ZH_CN.get(primary, "其他")
 
 
+def _language_undetected(lang_detected: str | None) -> bool:
+    return (lang_detected or "").strip().casefold() in {"", "und", "unknown", "undetected"}
+
+
+def _language_inspection(stages: dict[str, tuple[str, int]], locale: str) -> str:
+    translation = stages.get("translation", ("", 0))[0]
+    if _is_ja_locale(locale):
+        return "言語判定を待っています" if translation in {"pending", "processing"} else "言語を判定できませんでした" if translation == "failed" else "言語は未判定です"
+    if _is_zh_locale(locale):
+        return "语言检测待处理" if translation in {"pending", "processing"} else "语言检测失败" if translation == "failed" else "语言未检测"
+    return "Language detection pending" if translation in {"pending", "processing"} else "Language detection failed" if translation == "failed" else "Language undetected"
+
+
 _LEADING_REGION_COMPOUND_DIRECTION = re.compile(
     r"^(north(?:ern)?|south(?:ern)?)[ -]?(east(?:ern)?|west(?:ern)?)(?:[ -]+)?",
     re.IGNORECASE,
@@ -1307,7 +1378,7 @@ _LEADING_REGION_SINGLE_DIRECTION = re.compile(
 def _compact_region_label(label: str, locale: str) -> str:
     """Abbreviate only the leading direction in English region display text."""
 
-    if _is_zh_locale(locale):
+    if _is_zh_locale(locale) or _is_ja_locale(locale):
         return label
 
     compound = _LEADING_REGION_COMPOUND_DIRECTION.match(label)
@@ -1464,9 +1535,9 @@ def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, 
     }
     for code, lang, label in CountryLabel.objects.filter(
         country_id__in=all_country_codes,
-        lang__in=("en", "zh-cn"),
+        lang__in=("en", "zh-cn", "ja"),
     ).values_list("country_id", "lang", "label"):
-        country_labels[code]["zh_cn" if lang == "zh-cn" else "en"] = label
+        country_labels[code]["zh_cn" if lang == "zh-cn" else lang] = label
 
     fallback_region_keys = {
         row["region_mapping__region_id"]
@@ -1479,9 +1550,9 @@ def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, 
     }
     for key, lang, label in RegionLabel.objects.filter(
         region_id__in=all_region_keys,
-        lang__in=("en", "zh-cn"),
+        lang__in=("en", "zh-cn", "ja"),
     ).values_list("region_id", "lang", "label"):
-        region_labels[key]["zh_cn" if lang == "zh-cn" else "en"] = label
+        region_labels[key]["zh_cn" if lang == "zh-cn" else lang] = label
 
     result: dict[str, dict[str, Any]] = {}
     for author_id, account in accounts.items():
@@ -1527,18 +1598,21 @@ def _feed_signal_inspections(
     """Keep every brand contributor behind each deduplicated visual signal."""
 
     use_zh = _is_zh_locale(locale)
-    family_labels = {
-        "sentiment": "情感" if use_zh else "Sentiment",
-        "post_type": "帖子类型" if use_zh else "Post Type",
-        "product_label": "产品信号" if use_zh else "Product signal",
-        "nat_cn": "中国国家立场" if use_zh else "China national stance",
-        "nat_us": "美国国家立场" if use_zh else "U.S. national stance",
-        "legacy_nat_cn": "旧版中国民族主义" if use_zh else "Legacy China nationalism",
-        "legacy_nat_us": "旧版美国民族主义" if use_zh else "Legacy U.S. nationalism",
-        "audience_topic": "受众主题" if use_zh else "Audience topic",
-        "geopolitical_mode": "地缘政治模式" if use_zh else "Geopolitical mode",
-        "classification_status": "分类状态" if use_zh else "Classification status",
+    use_ja = _is_ja_locale(locale)
+    family_copy = {
+        "sentiment": ("Sentiment", "情感", "感情"),
+        "post_type": ("Post Type", "帖子类型", "投稿の種類"),
+        "product_label": ("Product signal", "产品信号", "製品シグナル"),
+        "nat_cn": ("China national stance", "中国国家立场", "中国に対する立場"),
+        "nat_us": ("U.S. national stance", "美国国家立场", "米国に対する立場"),
+        "legacy_nat_cn": ("Legacy China nationalism", "旧版中国民族主义", "旧分類の中国ナショナリズム"),
+        "legacy_nat_us": ("Legacy U.S. nationalism", "旧版美国民族主义", "旧分類の米国ナショナリズム"),
+        "audience_topic": ("Audience topic", "受众主题", "読者の関心分野"),
+        "geopolitical_mode": ("Geopolitical mode", "地缘政治模式", "地政学的な論調"),
+        "classification_status": ("Classification status", "分类状态", "分類状態"),
     }
+    family_labels = {key: copy[2 if use_ja else 1 if use_zh else 0]
+                     for key, copy in family_copy.items()}
     brand_names: dict[str, str] = {}
     for brand in brands:
         nickname = str(brand.get("nickname") or "")
@@ -1567,7 +1641,7 @@ def _feed_signal_inspections(
 
     def append_entry(family: str, key: str, nickname: str, value: str) -> None:
         brand = brand_names.get(nickname, nickname)
-        separator = "：" if use_zh else ": "
+        separator = "：" if use_zh or use_ja else ": "
         text = f"{brand} {family_labels[family]}{separator}{value}"
         result[family].setdefault(key, []).append({
             "brand": brand,
@@ -1595,6 +1669,7 @@ def _feed_signal_inspections(
                     value += (
                         "（可能误导；需要审核）"
                         if use_zh
+                        else "（誤解を招く可能性があり、確認が必要）" if use_ja
                         else " (potentially misleading; requires review)"
                     )
                 append_entry(
@@ -1646,7 +1721,7 @@ def _feed_signal_inspections(
             )
 
     if unsanctioned:
-        text = "未跟踪品牌推广" if use_zh else "Untracked Brand Promotion"
+        text = "未追跡ブランドのプロモーション" if use_ja else "未跟踪品牌推广" if use_zh else "Untracked Brand Promotion"
         entry = [
             {"brand": "", "value": text, "text": text}
         ]
@@ -1747,6 +1822,10 @@ def _v22_feed_display_fields(
         retweet_count or 0,
         reply_count or 0,
     )
+    followers_suffix = (
+        "关注者" if _is_zh_locale(locale) else
+        "フォロワー" if _is_ja_locale(locale) else "followers"
+    )
     display_now = now or _dashboard_now()
     return {
         "sentiment_keys": sentiment_keys,
@@ -1774,11 +1853,8 @@ def _v22_feed_display_fields(
         "avatar_color": _avatar_color(handle),
         "follower_bin": _follower_bin(followers_count),
         "followers_count": followers_count,
-        "followers_label": (
-            f"{engagement_pretty['followers']} 关注者"
-            if _is_zh_locale(locale)
-            else f"{engagement_pretty['followers']} followers"
-        ),
+        "followers_suffix": followers_suffix,
+        "followers_label": f"{engagement_pretty['followers']} X {followers_suffix}",
         "engagement_pretty": engagement_pretty,
     }
 
@@ -2113,7 +2189,9 @@ def _enrich_posts_with_classifications(
 
     enrichment_rows = list(
         PostEnrichmentState.objects.filter(post_id__in=tweet_ids).values(
-            "post_id", "translation_status", "classification_status"
+            "post_id", "translation_status", "translation_attempts",
+            "classification_status", "classification_attempts",
+            "claim_owner", "claim_expires_at",
         )
     )
     enrichment_by_tweet = {
@@ -2124,6 +2202,20 @@ def _enrich_posts_with_classifications(
     }
     classification_attempt_by_tweet = {
         state["post_id"]: state["classification_status"]
+        for state in enrichment_rows
+    }
+    enrichment_now = django_timezone.now()
+    enrichment_stages_by_tweet = {
+        state["post_id"]: {
+            stage: (
+                "processing" if state[f"{stage}_status"] == "pending"
+                and state["claim_owner"] and state["claim_expires_at"]
+                and state["claim_expires_at"] > enrichment_now
+                else state[f"{stage}_status"],
+                state[f"{stage}_attempts"],
+            )
+            for stage in ("translation", "classification")
+        }
         for state in enrichment_rows
     }
 
@@ -2279,6 +2371,8 @@ def _enrich_posts_with_classifications(
             "literal_source": content.literal_source,
             "synthesis_source": content.synthesis_source,
             "synthesis_status": content.synthesis_status,
+            "synthesis_attempts": content.synthesis_attempts,
+            "synthesis_expired": content.synthesis_expired,
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
@@ -2317,6 +2411,7 @@ def _enrich_posts_with_classifications(
             "enrichment_status": enrichment_by_tweet.get(
                 tid, PostEnrichmentState.Status.SUCCEEDED
             ),
+            "enrichment_stages": enrichment_stages_by_tweet.get(tid, {}),
             "brand_nicknames": [],
             "brands": [],
             "classifications_by_brand": {},
@@ -4314,6 +4409,8 @@ def _serialize_feed_row(
         "language_display": _compact_language_display(
             post.get("lang_detected"), locale
         ),
+        "language_undetected": _language_undetected(post.get("lang_detected")),
+        "language_inspection": _language_inspection(post.get("enrichment_stages", {}), locale),
         "text": text_original,
         "text_original": text_original,
         "text_translated": text_translated,
@@ -4330,6 +4427,7 @@ def _serialize_feed_row(
         "synthesis_status_label": _synthesis_status_label(
             post.get("synthesis_status", "not_requested"), locale
         ),
+        "processing_badges": _processing_badges(post, locale),
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
@@ -5005,6 +5103,8 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     post_ids = body.get("post_ids") if isinstance(body, dict) else None
     reason = body.get("reason", "visible") if isinstance(body, dict) else ""
     poll_only = body.get("poll_only", False) if isinstance(body, dict) else False
+    requested_locale = body.get("locale") if isinstance(body, dict) else None
+    locale = _normalize_locale(requested_locale if isinstance(requested_locale, str) else "en")
     if (
         not isinstance(post_ids, list)
         or any(not isinstance(post_id, str) or not post_id for post_id in post_ids)
@@ -5052,6 +5152,11 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
                 {
                     "post_id": post_id,
                     "status": projections[post_id].synthesis_status,
+                    "processing_badges": _processing_badges({
+                        "synthesis_status": projections[post_id].synthesis_status,
+                        "synthesis_attempts": projections[post_id].synthesis_attempts,
+                        "synthesis_expired": projections[post_id].synthesis_expired,
+                    }, locale),
                     "synthesis": dict(projections[post_id].synthesis),
                     "literal": dict(projections[post_id].literal),
                 }

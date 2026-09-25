@@ -3,6 +3,9 @@
   'use strict';
 
   var ALLOWED_SYMBOLS = Object.freeze({
+    'icon-pending-armillary-frame': true,
+    'icon-failed-stop': true,
+    'icon-language-globe': true,
     'mark-quiet': true,
     'icon-heart': true,
     'icon-reply': true,
@@ -150,8 +153,13 @@
   function render(symbolId, className) {
     if (!ALLOWED_SYMBOLS[symbolId]) return '';
     var classes = safeClasses(className);
+    var external = symbolId === 'icon-failed-stop' || symbolId === 'icon-language-globe' ||
+      symbolId === 'icon-pending-armillary-frame';
+    var sprite = external && global.document && global.document.body &&
+      global.document.body.getAttribute('data-pw-processing-glyph-sprite-url');
+    var href = (sprite || '') + '#' + symbolId;
     return '<svg class="pw-icon' + (classes ? ' ' + classes : '') +
-      '" aria-hidden="true" focusable="false"><use href="#' + symbolId +
+      '" aria-hidden="true" focusable="false"><use href="' + href.replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
       '"></use></svg>';
   }
 

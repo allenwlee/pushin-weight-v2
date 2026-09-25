@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from monitor.views import (
@@ -9,6 +12,7 @@ from monitor.views import (
     _compact_region_label,
     _feed_geography_wire,
     _feed_signal_inspections,
+    _language_inspection,
     _localize_classification_value,
     _post_matches_filter,
 )
@@ -34,6 +38,37 @@ GUIDING_COUNTRIES = {
     "AW": "NL",
     "BQ": "NL",
 }
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    (
+        ("en", "Language detection pending"),
+        ("zh_cn", "语言检测待处理"),
+        ("ja", "言語判定を待っています"),
+        ("ja-JP", "言語判定を待っています"),
+    ),
+)
+def test_undetected_language_awaiting_enrichment_has_pending_hover(locale, expected):
+    assert _language_inspection({"translation": ("pending", 0)}, locale) == expected
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_japanese_geography_seed_covers_every_existing_country_and_region():
+    from django.core.management import call_command
+
+    from core.models import Country, CountryLabel, Region, RegionLabel
+
+    catalog = json.loads(
+        (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
+    )
+    call_command("seed_i18n_labels", verbosity=0)
+    call_command("seed_i18n_labels", verbosity=0)
+    assert dict(CountryLabel.objects.filter(lang="ja").values_list("country_id", "label")) == catalog["countries"]
+    assert dict(RegionLabel.objects.filter(lang="ja").values_list("region_id", "label")) == catalog["regions"]
+    assert set(Country.objects.values_list("code", flat=True)) == set(catalog["countries"])
+    assert set(Region.objects.values_list("key", flat=True)) == set(catalog["regions"])
 
 
 @pytest.mark.parametrize(("child_code", "parent_code"), GUIDING_COUNTRIES.items())
@@ -76,6 +111,7 @@ def test_every_guiding_country_precedes_its_child_signal(
         ("original", "Europe", "X reports this account is based in Europe"),
         ("zh_cn", "欧洲", "X 显示此账号所在地为欧洲"),
         ("zh_hans", "欧洲", "X 显示此账号所在地为欧洲"),
+        ("ja", "ヨーロッパ", "Xによると、このアカウントの拠点はヨーロッパです"),
     ),
 )
 def test_direct_region_uses_the_requested_seeded_locale(
@@ -86,7 +122,7 @@ def test_direct_region_uses_the_requested_seeded_locale(
     geography = _feed_geography_wire(
         {
             "country_code": None,
-            "direct_region_labels": {"en": "Europe", "zh_cn": "欧洲"},
+            "direct_region_labels": {"en": "Europe", "zh_cn": "欧洲", "ja": "ヨーロッパ"},
         },
         locale,
     )
@@ -138,6 +174,7 @@ def test_english_region_direction_is_compact_presentation_only(
 ) -> None:
     assert _compact_region_label(source, "en") == expected
     assert _compact_region_label(source, "zh_cn") == source
+    assert _compact_region_label(source, "ja") == source
 
 
 @pytest.mark.parametrize(
@@ -206,6 +243,8 @@ def test_deduplicated_signal_inspection_retains_every_brand() -> None:
         ("post_type", "buzz_releases", "en", "Releases & Updates"),
         ("sentiment", "positive", "zh_cn", "正面"),
         ("post_type", "buzz_releases", "zh_cn", "发布与更新"),
+        ("post_type", "buzz_releases", "ja", "リリース・アップデート"),
+        ("sentiment", "positive", "ja", "ポジティブ"),
     ),
 )
 def test_signal_copy_has_canonical_fallback_when_seed_rows_are_missing(
@@ -215,6 +254,10 @@ def test_signal_copy_has_canonical_fallback_when_seed_rows_are_missing(
     expected: str,
 ) -> None:
     assert _localize_classification_value(family, key, locale, {}) == expected
+
+
+def test_unknown_japanese_signal_uses_unavailable_copy() -> None:
+    assert _localize_classification_value("post_type", "unknown_key", "ja", {}) == "翻訳未登録"
 
 
 @pytest.mark.parametrize(

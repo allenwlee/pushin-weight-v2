@@ -88,6 +88,29 @@ class TestDecodeCursor:
 
 
 class TestSerializeFeedRow:
+    @pytest.mark.parametrize(
+        ("stages", "synthesis_status", "synthesis_attempts", "expected"),
+        [
+            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("translation", "pending", "Translation is waiting to run.")]),
+            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("translation", "pending", "Translation is queued for another attempt."), ("analysis", "pending", "Analysis is queued for another attempt.")]),
+            ({"translation": ("failed", 3), "classification": ("succeeded", 1)}, "failed", 3, [("translation", "failed", "Translation failed. No more attempts are scheduled."), ("analysis", "failed", "Analysis failed. No more attempts are scheduled.")]),
+            ({}, "processing", 1, [("analysis", "pending", "Analysis is running.")]),
+            ({}, "processing", 2, [("analysis", "pending", "Analysis is running again.")]),
+            ({"translation": ("succeeded", 1), "classification": ("succeeded", 1)}, "cancelled", 1, []),
+        ],
+    )
+    def test_processing_badges_follow_durable_stage_and_demand(
+        self, stages, synthesis_status, synthesis_attempts, expected
+    ):
+        row = _serialize_feed_row(_make_post(
+            "100", "2026-07-20T10:00:00+00:00",
+            enrichment_stages=stages,
+            synthesis_status=synthesis_status,
+            synthesis_attempts=synthesis_attempts,
+        ), "en")
+        assert [(badge["process"], badge["state"], badge["message"])
+                for badge in row["processing_badges"]] == expected
+
     def test_basic_shape(self):
         post = _make_post("100", "2026-07-20T10:00:00+00:00")
         row = _serialize_feed_row(post, "en")
@@ -221,11 +244,11 @@ class TestSerializeFeedRow:
         assert "ts_abs_text" in row
         assert row["follower_bin"] == "10k-50k"
         assert row["followers_count"] == 12_800
-        assert row["followers_label"] == "12.8k followers"
+        assert row["followers_label"] == "12.8k X followers"
         assert row["engagement_pretty"]["followers"] == "12.8k"
 
         zh_row = _serialize_feed_row(post, "zh_cn")
-        assert zh_row["followers_label"] == "12.8k 关注者"
+        assert zh_row["followers_label"] == "12.8k X 关注者"
 
     @pytest.mark.parametrize(
         ("followers", "expected"),

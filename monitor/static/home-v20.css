@@ -1060,6 +1060,15 @@
     line-height: 1;
     text-transform: none;
   }
+  .feed-row .text .language-globe {
+    display: inline-flex;
+    vertical-align: -2px;
+    cursor: pointer;
+  }
+  .feed-row .text .language-globe-icon {
+    width: 12px;
+    height: 12px;
+  }
   .feed-row .engagement {
     color: var(--muted);
     font-size: 9.5px;
@@ -1150,8 +1159,66 @@
     line-height: 1.35;
     white-space: pre-line;
     pointer-events: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
   }
   .pw-feed-inspection-popover[hidden] { display: none; }
+  .pw-feed-inspection-popover .inspection-visual {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 19px;
+    min-height: 19px;
+  }
+  .pw-feed-inspection-popover .inspection-visual svg {
+    width: 19px;
+    height: 19px;
+  }
+  .pw-feed-inspection-popover .inspection-visual .account-country-flag {
+    width: 18px;
+    height: 10.125px;
+  }
+  .pw-feed-inspection-popover .inspection-visual .classification-state-label {
+    font-size: 11px;
+  }
+  .pw-feed-inspection-popover .inspection-text-visual {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .pw-feed-inspection-popover .inspection-words {
+    min-width: 0;
+    white-space: pre-line;
+  }
+  .pw-feed-inspection-popover .inspection-words .feed-x-icon {
+    width: 11px;
+    height: 11px;
+    vertical-align: -1px;
+  }
+  .feed-row .processing-status {
+    display: inline-flex;
+    vertical-align: middle;
+    align-items: center;
+    justify-content: center;
+    margin-left: 3px;
+  }
+  .feed-row .processing-status .processing-glyph {
+    width: 14px;
+    height: 14px;
+  }
+  .feed-row .enrichment-status-pending { color: #fbbf24; }
+  .feed-row .enrichment-status-failed { color: #fb7185; }
+  .processing-armillary .inner-ring {
+    transform-origin: 12px 11.1px;
+    animation: processing-inner-revolution 4s linear infinite;
+  }
+  @keyframes processing-inner-revolution {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .processing-armillary .inner-ring { animation: none; }
+  }
 
   /* CA mark — tiny monogram, not the letters "SV" */
   .tz-ca-icon,

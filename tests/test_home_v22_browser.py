@@ -4380,16 +4380,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 self.assertEqual(
                                     page.locator(
                                         '[data-tweet-id="v22-metadata-004"] '
-                                        ".enrichment-status-pending"
-                                    ).inner_text(),
-                                    "补充处理中",
+                                        '.enrichment-status-pending[data-process="classification"]'
+                                    ).get_attribute("data-pw-inspection"),
+                                    "分类正在等待处理。",
                                 )
                                 self.assertEqual(
                                     page.locator(
                                         '[data-tweet-id="v22-metadata-005"] '
-                                        ".enrichment-status-failed"
-                                    ).inner_text(),
-                                    "补充失败",
+                                        '.enrichment-status-failed[data-process="classification"]'
+                                    ).get_attribute("data-pw-inspection"),
+                                    "分类失败。不会再重试。",
                                 )
                         finally:
                             context.close()
@@ -5431,9 +5431,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             follower_magnitude.hover()
                             self.assertTrue(popover.is_visible())
                             self.assertEqual(
-                                popover.inner_text(),
-                                follower_magnitude.get_attribute("aria-label"),
+                                popover.locator(".inspection-words").inner_text().replace("  ", " "),
+                                follower_magnitude.get_attribute("aria-label").replace("X ", ""),
                             )
+                            self.assertEqual(popover.locator(".inspection-words .feed-x-icon").count(), 1)
                             follower_magnitude.click()
                             self.assertEqual(
                                 follower_magnitude.get_attribute("aria-expanded"),
@@ -5523,6 +5524,91 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_japanese_processing_language_and_hover_visuals_survive_feed_replacement(self) -> None:
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        from core.models import Account, PostEnrichmentState
+
+        self._seed_account_geography_fixture()
+        call_command("seed_i18n_labels", verbosity=0)
+        Account.objects.filter(author_id="v22-metadata-account-000").update(country_id="US")
+        Post.objects.filter(tweet_id=self.fixture["replacement_id"]).update(lang_detected="und")
+        PostEnrichmentState.objects.update_or_create(
+            post_id=self.fixture["replacement_id"],
+            defaults={"translation_status": "pending", "classification_status": "failed"},
+        )
+        PostEnrichmentState.objects.update_or_create(
+            post_id="v22-metadata-001",
+            defaults={
+                "translation_status": "pending",
+                "translation_attempts": 1,
+                "classification_status": "succeeded",
+                "claim_owner": "browser-fixture",
+                "claim_expires_at": timezone.now() + timedelta(minutes=5),
+            },
+        )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                try:
+                    page = context.new_page()
+                    page.goto(f"{self.live_server_url}/?locale=ja", wait_until="networkidle")
+
+                    def inspect(*, initial: bool) -> None:
+                        if initial:
+                            active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="translation"]')
+                            self.assertEqual(active.get_attribute('data-pw-inspection'), '翻訳を処理中です。')
+                        row = page.locator(f'[data-tweet-id="{self.fixture["replacement_id"]}"]')
+                        self.assertEqual(row.locator('.processing-status[data-process="translation"], .processing-status[data-process="classification"]').count(), 2)
+                        self.assertEqual(
+                            row.locator('[data-process="translation"]').get_attribute('data-pw-inspection'),
+                            '翻訳の処理を待っています。',
+                        )
+                        self.assertEqual(
+                            row.locator('[data-process="classification"]').get_attribute('data-pw-inspection'),
+                            '分類に失敗しました。再試行の予定はありません。',
+                        )
+                        globe = row.locator('.language-globe')
+                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定を待っています')
+                        self.assertIn('#icon-language-globe', globe.locator('use').get_attribute('href'))
+                        globe.hover()
+                        popover = page.locator('#pw-feed-inspection-popover')
+                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定を待っています')
+                        self.assertGreater(
+                            popover.locator('.inspection-visual svg').evaluate('node => node.getBoundingClientRect().width'),
+                            globe.locator('svg').evaluate('node => node.getBoundingClientRect().width'),
+                        )
+                        follower = row.locator('.follower-magnitude')
+                        follower.hover()
+                        self.assertEqual(popover.locator('.inspection-words .feed-x-icon').count(), 1)
+                        self.assertEqual(follower.get_attribute('aria-label'), '500 X フォロワー')
+                        self.assertEqual(row.locator('.account-geography-flag').first.get_attribute('data-pw-inspection'), 'アメリカ合衆国')
+                        sentiment = row.locator('.sig-sentiment .signal-inspection-trigger').first
+                        self.assertIn('感情', sentiment.get_attribute('data-pw-inspection'))
+                        sentiment.hover()
+                        self.assertEqual(popover.locator('.inspection-visual svg').count(), 1)
+
+                    inspect(initial=True)
+                    previous_row = page.locator(
+                        f'[data-tweet-id="{self.fixture["replacement_id"]}"]'
+                    ).element_handle()
+                    with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200):
+                        page.evaluate("""() => document.dispatchEvent(new CustomEvent('pw:filter-change',
+                          {detail: {filters: window.pwFilter.get()}}))""")
+                    page.wait_for_function("row => !row.isConnected", arg=previous_row)
+                    page.wait_for_function(
+                        "tweetId => document.querySelector(`[data-tweet-id=\"${tweetId}\"] .language-globe`)",
+                        arg=self.fixture['replacement_id'],
+                    )
+                    inspect(initial=False)
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_cyber_quan_symbols_cover_the_public_surface_without_layout_errors(self) -> None:
         expected_symbols = {
             "mark-quiet",
@@ -5571,9 +5657,24 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             )
                             broken_uses = page.locator("svg.pw-icon use").evaluate_all(
                                 """nodes => nodes.map(node => node.getAttribute('href'))
-                                  .filter(href => !href || !document.querySelector(href))"""
+                                  .filter(href => !href ||
+                                    (href.startsWith('#') && !document.querySelector(href)))"""
                             )
                             self.assertEqual(broken_uses, [])
+                            external_symbols = page.evaluate(
+                                """async () => {
+                                  const url = document.body.getAttribute('data-pw-processing-glyph-sprite-url');
+                                  const response = await fetch(url);
+                                  if (!response.ok) throw new Error(`glyph sprite HTTP ${response.status}`);
+                                  return [...new DOMParser().parseFromString(
+                                    await response.text(), 'image/svg+xml'
+                                  ).querySelectorAll('symbol')].map(node => node.id).sort();
+                                }"""
+                            )
+                            self.assertEqual(external_symbols, [
+                                "icon-failed-stop", "icon-language-globe",
+                                "icon-pending-armillary-frame",
+                            ])
                             self.assertEqual(
                                 page.locator(".app-name > .app-mark use").get_attribute("href"),
                                 "#mark-quiet",
@@ -5776,6 +5877,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 context = self._anonymous_context(browser)
                 page = context.new_page()
                 try:
+                    page.route(
+                        "**/api/v2/post-synthesis-demands/",
+                        lambda route: route.fulfill(
+                            status=200,
+                            content_type="application/json",
+                            body='{"results":[]}',
+                        ),
+                    )
                     page.goto(
                         f"{self.live_server_url}/?locale=zh_hans",
                         wait_until="networkidle",
@@ -5792,7 +5901,19 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         page.locator("[data-pw-locale-btn].is-active").all_inner_texts(),
                         ["en"],
                     )
-                    page.evaluate("window.pwApplyChrome('zh_cn')")
+                    with page.expect_response(
+                        lambda response: "/feed/?" in response.url
+                        and "locale=zh_cn" in response.url
+                        and response.status == 200
+                    ):
+                        page.evaluate("""() => {
+                          window.pwApplyChrome('zh_cn');
+                          document.dispatchEvent(new CustomEvent('pw:locale-change',
+                            {detail: {locale: 'zh_cn'}}));
+                        }""")
+                    page.wait_for_function(
+                        "() => document.querySelector('.feed-row[data-pw-feed-row] .text[data-text-cycle]')?.getAttribute('data-layer-key') === 'synthesis'"
+                    )
 
                     row = page.locator(".feed-row[data-pw-feed-row]").first
                     text = row.locator(".text[data-text-cycle]")

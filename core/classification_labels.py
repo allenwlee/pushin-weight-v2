@@ -8,7 +8,7 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "发布与更新",
         "ja": "リリース・アップデート",
     },
-    "buzz_releases": {"en": "Releases & Updates", "zh-cn": "发布与更新"},
+    "buzz_releases": {"en": "Releases & Updates", "zh-cn": "发布与更新", "ja": "リリース・アップデート"},
     "hands_on_usage": {
         "en": "Hands-On Usage",
         "zh-cn": "实际使用",
@@ -27,13 +27,14 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
     "performance_comparisons": {
         "en": "Results and Evaluations",
         "zh-cn": "结果与评测",
+        "ja": "結果・評価",
     },
     "questions_requests": {
         "en": "Questions & Requests",
         "zh-cn": "问题与请求",
         "ja": "質問・要望",
     },
-    "feedback_questions": {"en": "Questions & Requests", "zh-cn": "问题与请求"},
+    "feedback_questions": {"en": "Questions & Requests", "zh-cn": "问题与请求", "ja": "質問・要望"},
     "advertising_marketing": {
         "en": "Advertising & Marketing",
         "zh-cn": "广告营销",
@@ -64,7 +65,7 @@ POST_TYPE_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "人事变动",
         "ja": "人事異動",
     },
-    "event_announcement": {"en": "Events & Opportunities", "zh-cn": "活动与机会"},
+    "event_announcement": {"en": "Events & Opportunities", "zh-cn": "活动与机会", "ja": "イベント・機会"},
     "opinions_reactions": {
         "en": "Opinions & Reactions",
         "zh-cn": "观点与反应",
@@ -101,7 +102,7 @@ PRODUCT_LABEL_LABELS: dict[str, dict[str, str]] = {
         "zh-cn": "想法与请求",
         "ja": "アイデア・要望",
     },
-    "product_request": {"en": "Ideas & requests", "zh-cn": "想法与请求"},
+    "product_request": {"en": "Ideas & requests", "zh-cn": "想法与请求", "ja": "アイデア・要望"},
     "misinformation": {
         "en": "Misinformation",
         "zh-cn": "可能误导的信息",
@@ -196,16 +197,16 @@ SENTIMENT_LABELS: dict[str, dict[str, str]] = {
 }
 
 DISCOURSE_LABELS: dict[str, dict[str, str]] = {
-    "genuine_hype": {"en": "Genuine Hype", "zh-cn": "真实热度"},
-    "sarcasm": {"en": "Sarcasm", "zh-cn": "讽刺"},
-    "dunk_yingyang": {"en": "Dunk / Yingyang", "zh-cn": "阴阳怪气"},
-    "self_deprecation": {"en": "Self-Deprecation", "zh-cn": "自嘲"},
-    "cope": {"en": "Cope", "zh-cn": "自我安慰"},
-    "fud": {"en": "FUD", "zh-cn": "恐惧不确定怀疑"},
-    "distillation_accusation": {"en": "Distillation Accusation", "zh-cn": "蒸馏指控"},
-    "ai_slop_critique": {"en": "AI Slop Critique", "zh-cn": "AI垃圾批评"},
-    "absurdist_meme": {"en": "Absurdist Meme", "zh-cn": "荒诞梗"},
-    "advertising-marketing": {"en": "Advertising / Marketing", "zh-cn": "广告营销"},
+    "genuine_hype": {"en": "Genuine Hype", "zh-cn": "真实热度", "ja": "本物の盛り上がり"},
+    "sarcasm": {"en": "Sarcasm", "zh-cn": "讽刺", "ja": "皮肉"},
+    "dunk_yingyang": {"en": "Dunk / Yingyang", "zh-cn": "阴阳怪气", "ja": "当てこすり"},
+    "self_deprecation": {"en": "Self-Deprecation", "zh-cn": "自嘲", "ja": "自虐"},
+    "cope": {"en": "Cope", "zh-cn": "自我安慰", "ja": "自己慰め"},
+    "fud": {"en": "FUD", "zh-cn": "恐惧不确定怀疑", "ja": "不安・不確実性・疑念"},
+    "distillation_accusation": {"en": "Distillation Accusation", "zh-cn": "蒸馏指控", "ja": "蒸留への非難"},
+    "ai_slop_critique": {"en": "AI Slop Critique", "zh-cn": "AI垃圾批评", "ja": "粗製AIコンテンツへの批判"},
+    "absurdist_meme": {"en": "Absurdist Meme", "zh-cn": "荒诞梗", "ja": "不条理なミーム"},
+    "advertising-marketing": {"en": "Advertising / Marketing", "zh-cn": "广告营销", "ja": "広告・マーケティング"},
 }
 
 NATIONALISM_LABELS: dict[str, dict[str, str]] = {
@@ -222,9 +223,9 @@ NATIONALISM_LABELS: dict[str, dict[str, str]] = {
 }
 
 ROLE_LABELS: dict[str, dict[str, str]] = {
-    "official": {"en": "Official", "zh-cn": "官方"},
-    "staff": {"en": "Staff", "zh-cn": "员工"},
-    "community": {"en": "Community", "zh-cn": "社区"},
+    "official": {"en": "Official", "zh-cn": "官方", "ja": "公式"},
+    "staff": {"en": "Staff", "zh-cn": "员工", "ja": "社員"},
+    "community": {"en": "Community", "zh-cn": "社区", "ja": "コミュニティ"},
 }
 
 CLASSIFICATION_LABELS: dict[str, dict[str, dict[str, str]]] = {

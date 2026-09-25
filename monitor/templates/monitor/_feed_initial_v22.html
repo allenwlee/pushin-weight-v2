@@ -1,5 +1,6 @@
 {% load monitor_filters %}
 {% load i18n %}
+{% load static %}
 {% for row in feed.rows %}
   {# iter 14 (U5 feed row structure): mockup-canon 2-column grid. #}
   {# Layout (per docs/ideation/mockups/06-tier1-composed.v22-master.html): #}
@@ -54,7 +55,7 @@
         </div>
         {% else %}
         <div class="follower-lead follower-bin-{{ row.follower_bin }}{% if row.account.role or row.account.geography %} has-account-metadata{% endif %}">
-          <button type="button" class="follower-magnitude pw-inspection-trigger" data-pw-inspection="{{ row.followers_label }}" aria-label="{{ row.followers_label }}" aria-expanded="false">
+          <button type="button" class="follower-magnitude pw-inspection-trigger" data-pw-inspection="{{ row.followers_label }}" data-pw-follower-count="{{ row.engagement_pretty.followers }}" data-pw-follower-suffix="{{ row.followers_suffix }}" aria-label="{{ row.followers_label }}" aria-expanded="false">
             <span class="follower-glyph" aria-hidden="true"><svg class="pw-icon follower-icon" focusable="false"><use href="{% if row.follower_bin == '1k-10k' %}#icon-followers-2{% elif row.follower_bin == '10k-50k' %}#icon-followers-3{% elif row.follower_bin == '50k-plus' %}#icon-followers-4{% else %}#icon-followers-1{% endif %}"></use></svg></span>
             <span class="follower-count">{{ row.engagement_pretty.followers }}</span>
           </button>
@@ -81,16 +82,21 @@
               </span>
             {% endwith %}
             <span class="meta">· {{ row.meta_text|default:'' }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span>
-              {% if row.enrichment_status == 'pending' or row.enrichment_status == 'failed' %}
-                <span class="enrichment-status enrichment-status-{{ row.enrichment_status }}" role="status">{{ row.enrichment_status_label }}</span>
-              {% endif %}
-              {% if row.synthesis_status != 'ready' %}
-                <span class="enrichment-status synthesis-status synthesis-status-{{ row.synthesis_status }}" role="status" aria-live="polite">{{ row.synthesis_status_label }}</span>
-              {% endif %}
+              {% for badge in row.processing_badges %}
+                <button type="button" class="enrichment-status enrichment-status-{{ badge.state }} processing-status pw-inspection-trigger{% if badge.process == 'analysis' %} synthesis-status{% endif %}" data-process="{{ badge.process }}" data-pw-inspection="{{ badge.message }}" aria-label="{{ badge.message }}" aria-expanded="false">
+                  {% if badge.state == 'pending' %}
+                    <svg class="pw-icon processing-glyph processing-armillary" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-pending-armillary-frame"></use><g class="inner-ring" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="11.1" rx="3.1" ry="7.3"></ellipse><path d="M7.7 4.7 16.3 17.5"></path></g><circle cx="12" cy="11.1" r="1.1" fill="currentColor" stroke="none"></circle></svg>
+                  {% else %}
+                    <svg class="pw-icon processing-glyph" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-failed-stop"></use></svg>
+                  {% endif %}
+                </button>
+              {% endfor %}
             </span>
           </div>
           <div class="text" data-text-cycle role="button" tabindex="0"
                data-language-display="{{ row.language_display }}"
+               data-language-undetected="{% if row.language_undetected %}1{% else %}0{% endif %}"
+               data-language-inspection="{{ row.language_inspection }}"
                data-commentary-zh-cn="{{ row.commentary_zh_cn|default:'' }}"
                data-commentary-en="{{ row.commentary_en|default:'' }}"
                data-commentary-ja="{{ row.commentary_ja|default:'' }}"
@@ -100,28 +106,28 @@
                data-text-source="{{ row.text_original|default:row.text }}">
             {% if is_zh_chrome %}
               {% if row.commentary_zh_cn %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">{% trans "综合" %}</span>{{ row.commentary_zh_cn }}
               {% elif row.text_zh_cn %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">{% trans "直译" %}</span>{{ row.text_zh_cn }}
               {% else %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">{% trans "原文" %}</span>{{ row.text_original|default:row.text|default:'NULL' }}
               {% endif %}
             {% elif active_locale == 'ja' %}
               {% if row.commentary_ja %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">分析</span>{{ row.commentary_ja }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">分析</span>{{ row.commentary_ja }}
               {% elif row.text_ja %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">直訳</span>{{ row.text_ja }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">直訳</span>{{ row.text_ja }}
               {% else %}
-                <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">原文</span>{{ row.text_original|default:row.text|default:'NULL' }}
+                {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">原文</span>{{ row.text_original|default:row.text|default:'NULL' }}
               {% endif %}
             {% elif active_locale == 'original' %}
-              <span class="post-language-tag">{{ row.language_display }}</span>{{ row.text_original|default:row.text|default:'NULL' }}
+              {% include "monitor/_feed_language_tag.html" %}{{ row.text_original|default:row.text|default:'NULL' }}
             {% elif row.commentary_en %}
-              <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">synthesis</span>{{ row.commentary_en }}
+              {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">synthesis</span>{{ row.commentary_en }}
             {% elif row.text_en %}
-              <span class="post-language-tag">{{ row.language_display }}</span><span class="text-layer-tag">en</span>{{ row.text_en }}
+              {% include "monitor/_feed_language_tag.html" %}<span class="text-layer-tag">en</span>{{ row.text_en }}
             {% else %}
-              <span class="post-language-tag">{{ row.language_display }}</span>{{ row.text_original|default:row.text|default:'NULL' }}
+              {% include "monitor/_feed_language_tag.html" %}{{ row.text_original|default:row.text|default:'NULL' }}
             {% endif %}
           </div>
           <div class="engagement">

@@ -72,20 +72,6 @@
     return match ? decodeURIComponent(match[1]) : '';
   }
 
-  function synthesisLabel(status) {
-    var locale = currentLocale();
-    if (locale === 'ja' || locale === 'ja-JP') {
-      return status === 'failed' ? '分析を生成できませんでした' :
-        status === 'cancelled' ? '分析リクエストは期限切れです' : '分析を生成中';
-    }
-    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans') {
-      return status === 'failed' ? '分析生成失败' :
-        status === 'cancelled' ? '分析请求已过期' : '正在生成分析';
-    }
-    return status === 'failed' ? 'Analysis failed' :
-      status === 'cancelled' ? 'Analysis request expired' : 'Analysis pending';
-  }
-
   function resetSynthesisDemand() {
     synthesisGeneration += 1;
     if (synthesisVisibleObserver) synthesisVisibleObserver.disconnect();
@@ -123,19 +109,11 @@
       renderTextLayer(text);
     }
     var badge = $('.synthesis-status', row);
-    if (status === 'ready') {
-      if (badge) badge.remove();
-      return;
+    if (badge) badge.remove();
+    var meta = $('.meta', row);
+    if (meta && Array.isArray(result.processing_badges)) {
+      meta.insertAdjacentHTML('beforeend', synthesisStatusHtml(result));
     }
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.setAttribute('role', 'status');
-      badge.setAttribute('aria-live', 'polite');
-      var meta = $('.meta', row);
-      if (meta) meta.appendChild(badge);
-    }
-    badge.className = 'enrichment-status synthesis-status synthesis-status-' + status;
-    badge.textContent = synthesisLabel(status);
   }
 
   function requestSynthesis(postIds, reason, generation, pollAttempt) {
@@ -154,6 +132,7 @@
         post_ids: postIds,
         reason: reason,
         poll_only: pollAttempt > 0,
+        locale: currentLocale(),
       }),
     }).then(function (response) {
       if (!response.ok) throw new Error('synthesis request failed');
@@ -266,12 +245,15 @@
 
   // U2: absolute timestamp in the user's local timezone, for the
   // hover tooltip. Falls back to the raw ISO string if Intl is missing.
-  function formatLocalTooltip(isoOrDate) {
+  function formatLocalTooltip(isoOrDate, locale) {
     if (!isoOrDate) return '';
     var d = (isoOrDate instanceof Date) ? isoOrDate : new Date(isoOrDate);
     if (isNaN(d.getTime())) return '';
     try {
-      return d.toLocaleString(undefined, {
+      var dateLocale = locale === 'ja' || locale === 'ja-JP' ? 'ja-JP' :
+        locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans' ? 'zh-CN' :
+        locale === 'en' ? 'en' : undefined;
+      return d.toLocaleString(dateLocale, {
         dateStyle: 'medium',
         timeStyle: 'short',
       });
@@ -286,7 +268,7 @@
     var a = row.querySelector('a.feed-date-link');
     if (a) {
       a.textContent = formatRelative(iso, now);
-      a.setAttribute('title', formatLocalTooltip(iso));
+      a.setAttribute('title', formatLocalTooltip(iso, currentLocale()));
     }
   }
 
@@ -355,20 +337,36 @@
   }
 
   function enrichmentStatusHtml(row) {
-    var status = row.enrichment_status || 'succeeded';
-    if (status !== 'pending' && status !== 'failed') return '';
-    var label = row.enrichment_status_label || ('enrichment ' + status);
-    return '<span class="enrichment-status enrichment-status-' + status +
-      '" role="status">' + escapeHtml(label) + '</span>';
+    return processingBadgesHtml(row, false);
   }
 
   function synthesisStatusHtml(row) {
-    var status = row.synthesis_status || 'not_requested';
-    if (status === 'ready') return '';
-    var label = row.synthesis_status_label || synthesisLabel(status);
-    return '<span class="enrichment-status synthesis-status synthesis-status-' +
-      escapeHtml(status) + '" role="status" aria-live="polite">' +
-      escapeHtml(label) + '</span>';
+    return processingBadgesHtml(row, true);
+  }
+
+  function processingIconHtml(state) {
+    if (state === 'failed') return renderIcon('icon-failed-stop', 'processing-glyph');
+    var sprite = typeof document !== 'undefined' && document.body &&
+      document.body.getAttribute('data-pw-processing-glyph-sprite-url') || '';
+    return '<svg class="pw-icon processing-glyph processing-armillary" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<use href="' + escapeHtml(sprite) + '#icon-pending-armillary-frame"></use>' +
+      '<g class="inner-ring" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="11.1" rx="3.1" ry="7.3"></ellipse><path d="M7.7 4.7 16.3 17.5"></path></g>' +
+      '<circle cx="12" cy="11.1" r="1.1" fill="currentColor" stroke="none"></circle></svg>';
+  }
+
+  function processingBadgesHtml(row, analysisOnly) {
+    return (row.processing_badges || []).filter(function (badge) {
+      return (badge.process === 'analysis') === analysisOnly &&
+        ['pending', 'failed'].indexOf(badge.state) !== -1;
+    }).map(function (badge) {
+      var message = escapeHtml(badge.message || '');
+      return '<button type="button" class="enrichment-status enrichment-status-' +
+        badge.state + (analysisOnly ? ' synthesis-status' : '') +
+        ' processing-status pw-inspection-trigger" data-process="' +
+        escapeHtml(badge.process) + '" data-pw-inspection="' + message +
+        '" aria-label="' + message + '" aria-expanded="false">' +
+        processingIconHtml(badge.state) + '</button>';
+    }).join('');
   }
 
   // U3 helper: strip a leading "@" if present.
@@ -563,7 +561,8 @@
       : escapeHtml(handleLabel);
     var eng = row.engagement_pretty || {};
     var followersPretty = (row.account && row.account.followers_pretty) || eng.followers || '0';
-    var followersLabel = row.followers_label || (followersPretty || '0') + ' followers';
+    var followersSuffix = row.followers_suffix || 'followers';
+    var followersLabel = row.followers_label || (followersPretty || '0') + ' X ' + followersSuffix;
     var followerClass = followerBin(row);
     var tint = row.tint_class || 'tint-neutral';
     var metaText = row.meta_text || '';
@@ -576,6 +575,8 @@
     var englishText = row.text_en || '';
     var japaneseText = row.text_ja || '';
     var languageDisplay = row.language_display || 'undetected';
+    var languageUndetected = Boolean(row.language_undetected);
+    var languageInspection = row.language_inspection || '';
     var leadMetadata = accountLeadMetadataHtml(row);
     var locale = currentLocale();
     var initialText = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
@@ -592,6 +593,8 @@
             (leadMetadata ? ' has-account-metadata' : '') + '">' +
             '<button type="button" class="follower-magnitude pw-inspection-trigger"' +
               ' data-pw-inspection="' + escapeHtml(followersLabel) + '"' +
+              ' data-pw-follower-count="' + escapeHtml(followersPretty) + '"' +
+              ' data-pw-follower-suffix="' + escapeHtml(followersSuffix) + '"' +
               ' aria-label="' + escapeHtml(followersLabel) + '" aria-expanded="false">' +
               '<span class="follower-glyph" aria-hidden="true">' +
                 renderIcon(FOLLOWER_ICONS[followerClass], 'follower-icon') +
@@ -605,8 +608,10 @@
               '<span class="handle">' + handleHtml + '</span>' +
               '<span class="meta">· ' + escapeHtml(metaText) + ' <span class="ts-abs">' + escapeHtml(tsAbs) + '</span> ' + enrichmentStatusHtml(row) + synthesisStatusHtml(row) + '</span>' +
             '</div>' +
-            '<div class="text" data-text-cycle role="button" tabindex="0"' +
+              '<div class="text" data-text-cycle role="button" tabindex="0"' +
               ' data-language-display="' + escapeHtml(languageDisplay) + '"' +
+              ' data-language-undetected="' + (languageUndetected ? '1' : '0') + '"' +
+              ' data-language-inspection="' + escapeHtml(languageInspection) + '"' +
               ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
               ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
               ' data-commentary-ja="' + escapeHtml(commentaryJa) + '"' +
@@ -614,7 +619,7 @@
               ' data-text-en="' + escapeHtml(englishText) + '"' +
               ' data-text-ja="' + escapeHtml(japaneseText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
-              '<span class="post-language-tag">' + escapeHtml(languageDisplay) + '</span>' +
+              languageTagHtml(languageDisplay, languageUndetected, languageInspection) +
               escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
@@ -948,7 +953,40 @@
       pinned = Boolean(shouldPin);
       trigger.setAttribute('aria-expanded', 'true');
       trigger.setAttribute('aria-describedby', popover.id);
-      popover.textContent = content;
+      popover.textContent = '';
+      var visual = trigger.querySelector('svg.pw-icon, svg.account-country-flag, img.account-country-flag, .classification-state-label');
+      if (visual) {
+        var visualBox = document.createElement('span');
+        visualBox.className = 'inspection-visual';
+        var copy = visual.cloneNode(true);
+        copy.setAttribute('aria-hidden', 'true');
+        copy.removeAttribute('aria-label');
+        visualBox.appendChild(copy);
+        popover.appendChild(visualBox);
+      } else if (trigger.classList.contains('account-geography-text')) {
+        var textVisual = document.createElement('span');
+        textVisual.className = 'inspection-text-visual';
+        textVisual.textContent = trigger.textContent;
+        popover.appendChild(textVisual);
+      }
+      var words = document.createElement('span');
+      words.className = 'inspection-words';
+      if (trigger.classList.contains('follower-magnitude')) {
+        var count = trigger.getAttribute('data-pw-follower-count') || '';
+        var suffix = trigger.getAttribute('data-pw-follower-suffix') || '';
+        var row = trigger.closest('.feed-row');
+        var xLogo = row && row.querySelector('.feed-x-icon');
+        words.appendChild(document.createTextNode(count + ' '));
+        if (xLogo) {
+          var logoCopy = xLogo.cloneNode(true);
+          logoCopy.setAttribute('aria-hidden', 'true');
+          words.appendChild(logoCopy);
+        }
+        words.appendChild(document.createTextNode(' ' + suffix));
+      } else {
+        words.textContent = content;
+      }
+      popover.appendChild(words);
       popover.hidden = false;
       position();
     }
@@ -991,6 +1029,12 @@
       toggle(trigger);
     });
     document.addEventListener('keydown', function (event) {
+      var trigger = event.target.closest('.pw-inspection-trigger[role="button"]');
+      if (trigger && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        toggle(trigger);
+        return;
+      }
       if (event.key === 'Escape' && activeTrigger) {
         var prior = activeTrigger;
         close();
@@ -1060,11 +1104,23 @@
     ]);
   }
 
+  function languageTagHtml(display, undetected, inspection) {
+    if (!undetected) return '<span class="post-language-tag">' + escapeHtml(display) + '</span>';
+    var label = escapeHtml(inspection || 'Language undetected');
+    return '<span class="post-language-tag pw-inspection-trigger language-globe" role="button" tabindex="0"' +
+      ' data-pw-inspection="' + label + '" aria-label="' + label + '" aria-expanded="false">' +
+      renderIcon('icon-language-globe', 'language-globe-icon') + '</span>';
+  }
+
   function renderTextLayer(el) {
+    var languageTag = languageTagHtml(
+      el.getAttribute('data-language-display') || 'undetected',
+      el.getAttribute('data-language-undetected') === '1',
+      el.getAttribute('data-language-inspection') || ''
+    );
     var layers = textLayers(el);
     if (!layers.length) {
-      el.innerHTML = '<span class="post-language-tag">' +
-        escapeHtml(el.getAttribute('data-language-display') || 'undetected') + '</span>';
+      el.innerHTML = languageTag;
       el.removeAttribute('data-layer-key');
       return;
     }
@@ -1073,8 +1129,7 @@
     var layer = layers[index];
     el.setAttribute('data-layer-idx', String(index));
     el.setAttribute('data-layer-key', layer.key);
-    el.innerHTML = '<span class="post-language-tag">' +
-      escapeHtml(el.getAttribute('data-language-display') || 'undetected') + '</span>' +
+    el.innerHTML = languageTag +
       '<span class="text-layer-tag">' + escapeHtml(layer.label) + '</span>' +
       escapeHtml(layer.value);
   }
@@ -1220,6 +1275,7 @@
       el.setAttribute('data-layer-idx', '0');
       renderTextLayer(el);
       el.addEventListener('click', function (e) {
+        if (e.target.closest('.pw-inspection-trigger')) return;
         var row = el.closest('.feed-row');
         if (!row) return;
         if (!el.classList.contains('is-expanded')) {
@@ -1240,6 +1296,7 @@
         e.stopPropagation();
       });
       el.addEventListener('keydown', function (e) {
+        if (e.target.closest('.pw-inspection-trigger')) return;
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
         el.click();

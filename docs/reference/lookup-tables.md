@@ -1,7 +1,7 @@
 # Lookup Tables (v2 Django ORM)
 
 Version: v0.2.0-beta.1 (current write taxonomy `stage1-taxonomy-v4`)
-Last updated: 2026-09-21 12:39:30 JST
+Last updated: 2026-09-25 JST
 
 
 
@@ -11,10 +11,15 @@ emit; compatibility tables remain readable for older persisted rows.
 
 **Source of truth.** `core/models.py` defines the Django models (the schema).
 `monitor/management/commands/load_seed.py` seeds brands, companies, and roles.
-`core/management/commands/seed_i18n_labels.py` seeds the canonical taxonomy
-values with active en/zh-cn/ja labels for post types, product labels, Audience Topics,
-sentiments, geopolitical modes, national stance, and roles. Discourse,
-nationalism, and unsanctioned families remain compatibility data.
+`core/management/commands/seed_i18n_labels.py` seeds en/zh-cn/ja labels for
+active and feed-visible historical post types, product labels, Audience Topics,
+sentiments, geopolitical modes, national stance, roles, discourse, nationalism,
+and unsanctioned promotions. It also adds Japanese country and region labels
+from `monitor/data/account_geography_ja.json` to the existing geography keys.
+The catalog covers 249 countries and 31 regions, sourced from pinned Unicode
+CLDR Japanese territory names with reviewed overrides for three current region
+names. No Japanese schema columns are needed: each label is a row keyed by
+language. Run this command after deploying code that reads the new labels.
 
 **i18n label pattern.** The post type, product-label, Audience Topic,
 geopolitical, national-stance, and role key tables have corresponding `*Label` models with a
@@ -111,18 +116,18 @@ classifications and legacy narrative queries.
 
 10 values (pragmatic register vocabulary):
 
-| key | en | zh-cn |
-|---|---|---|
-| `genuine_hype` | Genuine Hype | 真实热度 |
-| `sarcasm` | Sarcasm | 讽刺 |
-| `dunk_yingyang` | Dunk / Yingyang | 阴阳怪气 |
-| `self_deprecation` | Self-Deprecation | 自嘲 |
-| `cope` | Cope | 自我安慰 |
-| `fud` | FUD | 恐惧不确定怀疑 |
-| `distillation_accusation` | Distillation Accusation | 蒸馏指控 |
-| `ai_slop_critique` | AI Slop Critique | AI垃圾批评 |
-| `absurdist_meme` | Absurdist Meme | 荒诞梗 |
-| `advertising-marketing` | Advertising / Marketing | 广告营销 |
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `genuine_hype` | Genuine Hype | 真实热度 | 本物の盛り上がり |
+| `sarcasm` | Sarcasm | 讽刺 | 皮肉 |
+| `dunk_yingyang` | Dunk / Yingyang | 阴阳怪气 | 当てこすり |
+| `self_deprecation` | Self-Deprecation | 自嘲 | 自虐 |
+| `cope` | Cope | 自我安慰 | 自己慰め |
+| `fud` | FUD | 恐惧不确定怀疑 | 不安・不確実性・疑念 |
+| `distillation_accusation` | Distillation Accusation | 蒸馏指控 | 蒸留への非難 |
+| `ai_slop_critique` | AI Slop Critique | AI垃圾批评 | 粗製AIコンテンツへの批判 |
+| `absurdist_meme` | Absurdist Meme | 荒诞梗 | 不条理なミーム |
+| `advertising-marketing` | Advertising / Marketing | 广告营销 | 広告・マーケティング |
 
 `advertising-marketing` is **hyphenated** (unlike `advertising_marketing` in
 post types -- underscored). Both were introduced in the same migration (U2a).
@@ -194,11 +199,11 @@ silently relabeled.
 
 3 values:
 
-| key | en | zh-cn |
-|---|---|---|
-| `official` | Official | 官方 |
-| `staff` | Staff | 员工 |
-| `community` | Community | 社区 |
+| key | en | zh-cn | ja |
+|---|---|---|---|
+| `official` | Official | 官方 | 公式 |
+| `staff` | Staff | 员工 | 社員 |
+| `community` | Community | 社区 | コミュニティ |
 
 The dashboard filter panel exposes a fourth runtime option (`other`) for
 accounts with no role or an unrecognized role, but `other` is not a persisted
