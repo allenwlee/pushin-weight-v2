@@ -180,10 +180,10 @@ def test_english_region_direction_is_compact_presentation_only(
 @pytest.mark.parametrize(
     ("language", "en", "zh_cn"),
     (
-        ("en-US", "en", "英语"),
+        ("en-US", "en", "en"),
         ("zh-Hans", "zh-Hans", "zh-Hans"),
         ("zh-Hant", "zh-Hant", "zh-Hant"),
-        ("other", "other", "其他"),
+        ("other", "undetected", "未检测"),
         (None, "undetected", "未检测"),
     ),
 )

@@ -11,7 +11,12 @@ from django.core.management.base import CommandError
 from django.core.signing import salted_hmac
 from django.test import Client, RequestFactory
 
-from core.models import Post, PostSynthesisDemand, PostSynthesisRateLimitBucket
+from core.models import (
+    Post,
+    PostEnrichmentState,
+    PostSynthesisDemand,
+    PostSynthesisRateLimitBucket,
+)
 from monitor.views import _accept_synthesis_rate
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -74,6 +79,39 @@ def test_synthesis_demand_api_creates_once_and_poll_only_does_not_mutate():
     assert created.json()["results"][0]["status"] == "pending"
     assert polled.status_code == 200
     assert PostSynthesisDemand.objects.get().request_count == 1
+
+
+def test_synthesis_demand_refresh_returns_one_complete_pending_projection():
+    post = Post.objects.create(tweet_id="api-pending-projection", text="Bonjour", lang_detected=None)
+    PostEnrichmentState.objects.create(
+        post=post, translation_status="pending", classification_status="pending"
+    )
+    client = Client()
+    created = client.post(
+        "/api/v2/post-synthesis-demands/",
+        data=json.dumps({"post_ids": [post.pk], "reason": "visible", "locale": "en"}),
+        content_type="application/json",
+        secure=True,
+    )
+    assert created.status_code == 200
+    badges = created.json()["results"][0]["processing_badges"]
+    assert len([badge for badge in badges if badge["state"] == "pending"]) == 1
+    assert badges[0]["position"] == "language"
+    assert badges[0]["message"] == "Language detection, translation, analysis and commentary pending."
+
+    PostEnrichmentState.objects.filter(post=post).update(
+        translation_status="failed", classification_status="succeeded"
+    )
+    polled = client.post(
+        "/api/v2/post-synthesis-demands/",
+        data=json.dumps({"post_ids": [post.pk], "reason": "visible", "locale": "en", "poll_only": True}),
+        content_type="application/json",
+        secure=True,
+    )
+    assert polled.status_code == 200
+    badges = polled.json()["results"][0]["processing_badges"]
+    assert [badge["state"] for badge in badges] == ["pending", "failed"]
+    assert badges[0]["position"] == "meta"
 
 
 def test_synthesis_demand_api_rejects_unknown_post_and_oversized_batch():

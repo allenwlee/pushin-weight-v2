@@ -62,11 +62,11 @@ def test_allowlist_members_pinned():
         ("ja", "ja"),
         ("ko", "ko"),
         ("other", "other"),
-        ("fr", "other"),
-        ("ar", "other"),
-        ("de", "other"),
-        ("es-MX", "other"),
-        ("pt_BR", "other"),
+        ("fr", "fr"),
+        ("ar", "ar"),
+        ("de", "de"),
+        ("es-MX", "es"),
+        ("pt_BR", "pt"),
         ("und", None),
         ("zz", None),
         ("xx", None),
@@ -93,9 +93,7 @@ def test_prompt_language_first_and_no_280_hard_cap():
     )
     assert "lang_detected" in prompt
     assert "REQUIRED" in prompt or "required" in prompt.lower()
-    assert "en | zh-Hans | zh-Hant | ja | ko | other" in prompt or (
-        "zh-Hans" in prompt and "other" in prompt
-    )
+    assert "ISO 639-1 two-letter" in prompt and "zh-Hans/zh-Hant" in prompt
     # Language-first JSON shape
     assert '"lang_detected": str' in prompt
     idx_lang = prompt.find('"lang_detected": str')
@@ -161,8 +159,8 @@ def test_all_valid_first_response_single_llm_call():
     assert all(not r.get("translation_failed") for r in out)
 
 
-def test_valid_non_target_iso_language_uses_other_without_repair():
-    """Production pin: a real ISO code outside the named families is `other`."""
+def test_valid_non_target_iso_language_preserves_code_without_repair():
+    """A real ISO code outside the named families remains precise."""
     tweets = [
         {"tweet_id": "fr-post", "text": "Une nouvelle version est disponible"}
     ]
@@ -181,7 +179,7 @@ def test_valid_non_target_iso_language_uses_other_without_repair():
     out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
 
     assert client.call_count == 1
-    assert out[0]["lang_detected"] == "other"
+    assert out[0]["lang_detected"] == "fr"
     assert out[0]["text_en"] == "A new version is available"
     assert out[0]["text_zh_cn"] == "新版本现已推出"
     assert out[0]["en_equivalent"] == (
@@ -220,7 +218,7 @@ def test_non_english_source_echo_uses_one_repair_for_real_translation():
     out = translate_batch_pragmatics(tweets, ["en", "zh_cn"], client=client)
 
     assert client.call_count == 2
-    assert out[0]["lang_detected"] == "other"
+    assert out[0]["lang_detected"] == "fr"
     assert out[0]["text_en"] == "A new version is available"
     assert out[0].get("translation_failed") is not True
 

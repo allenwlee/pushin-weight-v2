@@ -160,9 +160,14 @@ assertEq(formatLocalTooltip('2026-07-15T21:00:00+00:00').length > 0, true, 'ISO 
 
 console.log('\\n--- enrichmentStatusHtml ---');
 assertEq(
-  enrichmentStatusHtml({ processing_badges: [{ process: 'translation', state: 'pending', message: 'Translation is waiting to run.' }] }).includes('processing-armillary'),
+  enrichmentStatusHtml({ processing_badges: [{ process: 'pending', state: 'pending', position: 'meta', message: 'Translation and analysis pending.' }] }).includes('processing-armillary'),
   true,
-  'pending stage uses the armillary'
+  'aggregate pending state uses the armillary'
+);
+assertEq(
+  (enrichmentStatusHtml({ processing_badges: [{ process: 'pending', state: 'pending', position: 'language', message: 'Language detection pending.' }] }) || '').includes('processing-armillary'),
+  false,
+  'language pending marker is rendered only in the language tag'
 );
 assertEq(
   enrichmentStatusHtml({ processing_badges: [{ process: 'translation', state: 'failed', message: '<failed>' }] }).includes('&lt;failed&gt;'),

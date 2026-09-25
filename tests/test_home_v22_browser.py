@@ -3753,13 +3753,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
                             feed_rows = page.locator(".feed-row")
                             self.assertEqual(
-                                page.locator(
-                                    ".feed-row .enrichment-status:not(.synthesis-status)"
-                                ).count(),
-                                0,
-                            )
-                            self.assertEqual(
-                                page.locator(".feed-row .synthesis-status").count(),
+                                page.locator(".feed-row .processing-armillary").count(),
                                 feed_rows.count(),
                             )
                             initial_feed_stamp = feed_stamp.text_content()
@@ -4168,13 +4162,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         expected = {
             "v22-metadata-003": (
                 "context_missing",
-                "Context missing",
-                "缺少上下文",
+                "",
+                "",
             ),
             "v22-metadata-004": (
                 "pending",
-                "Pending",
-                "待分类",
+                "",
+                "",
             ),
             "v22-metadata-005": (
                 "failed",
@@ -4233,10 +4227,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 state = row.locator(
                                     f".classification-state-{status}"
                                 )
-                                self.assertTrue(state.is_visible())
-                                self.assertEqual(
-                                    state.inner_text(), labels[label_index - 1]
-                                )
+                                if status in {"pending", "context_missing"}:
+                                    self.assertEqual(state.count(), 0)
+                                else:
+                                    self.assertTrue(state.is_visible())
+                                    self.assertEqual(state.inner_text(), labels[label_index - 1])
                                 api_row = feed_rows[tweet_id]
                                 self.assertEqual(api_row["post_type_keys"], [])
                                 self.assertEqual(api_row["product_label_keys"], [])
@@ -4353,7 +4348,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 height_metrics["regular"]["delta"], 0
                             )
-                            for family in ("status", "product"):
+                            self.assertEqual(height_metrics["status"]["delta"], 0)
+                            for family in ("product",):
                                 self.assertGreater(
                                     height_metrics[family]["delta"], 0
                                 )
@@ -4380,9 +4376,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 self.assertEqual(
                                     page.locator(
                                         '[data-tweet-id="v22-metadata-004"] '
-                                        '.enrichment-status-pending[data-process="classification"]'
+                                        '.enrichment-status-pending[data-process="pending"]'
                                     ).get_attribute("data-pw-inspection"),
-                                    "分类正在等待处理。",
+                                    "分析、评论待处理。",
                                 )
                                 self.assertEqual(
                                     page.locator(
@@ -5559,24 +5555,25 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
                     def inspect(*, initial: bool) -> None:
                         if initial:
-                            active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="translation"]')
-                            self.assertEqual(active.get_attribute('data-pw-inspection'), '翻訳を処理中です。')
+                            active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="pending"]')
+                            self.assertEqual(active.get_attribute('data-pw-inspection'), '翻訳と解説を待っています。')
                         row = page.locator(f'[data-tweet-id="{self.fixture["replacement_id"]}"]')
-                        self.assertEqual(row.locator('.processing-status[data-process="translation"], .processing-status[data-process="classification"]').count(), 2)
+                        self.assertEqual(row.locator('.processing-armillary').count(), 1)
+                        self.assertEqual(row.locator('.processing-status[data-process="translation"]').count(), 0)
                         self.assertEqual(
-                            row.locator('[data-process="translation"]').get_attribute('data-pw-inspection'),
-                            '翻訳の処理を待っています。',
+                            row.locator('.processing-status[data-process="pending"]').get_attribute('data-pw-inspection'),
+                            '言語判定と翻訳と解説を待っています。',
                         )
                         self.assertEqual(
                             row.locator('[data-process="classification"]').get_attribute('data-pw-inspection'),
                             '分類に失敗しました。再試行の予定はありません。',
                         )
-                        globe = row.locator('.language-globe')
-                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定を待っています')
-                        self.assertIn('#icon-language-globe', globe.locator('use').get_attribute('href'))
+                        globe = row.locator('.post-language-tag.processing-status')
+                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定と翻訳と解説を待っています。')
+                        self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
                         popover = page.locator('#pw-feed-inspection-popover')
-                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定を待っています')
+                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定と翻訳と解説を待っています。')
                         self.assertGreater(
                             popover.locator('.inspection-visual svg').evaluate('node => node.getBoundingClientRect().width'),
                             globe.locator('svg').evaluate('node => node.getBoundingClientRect().width'),
@@ -5600,7 +5597,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                           {detail: {filters: window.pwFilter.get()}}))""")
                     page.wait_for_function("row => !row.isConnected", arg=previous_row)
                     page.wait_for_function(
-                        "tweetId => document.querySelector(`[data-tweet-id=\"${tweetId}\"] .language-globe`)",
+                        "tweetId => document.querySelector(`[data-tweet-id=\"${tweetId}\"] .post-language-tag.processing-status`)",
                         arg=self.fixture['replacement_id'],
                     )
                     inspect(initial=False)
@@ -5608,6 +5605,44 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     context.close()
             finally:
                 browser.close()
+
+    def test_specific_language_code_and_legacy_other_in_all_locales(self) -> None:
+        from core.models import PostEnrichmentState
+
+        post_id = self.fixture["replacement_id"]
+        for locale in ("en", "ja", "zh_cn"):
+            Post.objects.filter(tweet_id=post_id).update(lang_detected="fr")
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    context = self._anonymous_context(browser)
+                    try:
+                        page = context.new_page()
+                        page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                        code = page.locator(f'[data-tweet-id="{post_id}"] .post-language-tag').first
+                        self.assertEqual(code.inner_text(), "fr")
+                    finally:
+                        context.close()
+                finally:
+                    browser.close()
+            Post.objects.filter(tweet_id=post_id).update(lang_detected="other")
+            PostEnrichmentState.objects.update_or_create(
+                post_id=post_id,
+                defaults={"translation_status": "failed", "classification_status": "succeeded"},
+            )
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch()
+                try:
+                    context = self._anonymous_context(browser)
+                    try:
+                        page = context.new_page()
+                        page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                        unknown = page.locator(f'[data-tweet-id="{post_id}"] .post-language-tag').first
+                        self.assertEqual(unknown.locator('.language-globe-icon').count(), 1)
+                    finally:
+                        context.close()
+                finally:
+                    browser.close()
 
     def test_cyber_quan_symbols_cover_the_public_surface_without_layout_errors(self) -> None:
         expected_symbols = {

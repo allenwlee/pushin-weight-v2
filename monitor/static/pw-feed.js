@@ -108,11 +108,15 @@
       text.setAttribute('data-layer-idx', '0');
       renderTextLayer(text);
     }
-    var badge = $('.synthesis-status', row);
-    if (badge) badge.remove();
     var meta = $('.meta', row);
     if (meta && Array.isArray(result.processing_badges)) {
-      meta.insertAdjacentHTML('beforeend', synthesisStatusHtml(result));
+      $$('.processing-status', row).forEach(function (badge) { badge.remove(); });
+      meta.insertAdjacentHTML('beforeend', enrichmentStatusHtml(result) + synthesisStatusHtml(result));
+      if (text) {
+        var languagePending = result.processing_badges.find(function (badge) { return badge.position === 'language'; });
+        text.setAttribute('data-language-pending-message', languagePending ? languagePending.message : '');
+        renderTextLayer(text);
+      }
     }
   }
 
@@ -356,7 +360,7 @@
 
   function processingBadgesHtml(row, analysisOnly) {
     return (row.processing_badges || []).filter(function (badge) {
-      return (badge.process === 'analysis') === analysisOnly &&
+      return (badge.process === 'analysis') === analysisOnly && badge.position !== 'language' &&
         ['pending', 'failed'].indexOf(badge.state) !== -1;
     }).map(function (badge) {
       var message = escapeHtml(badge.message || '');
@@ -612,6 +616,7 @@
               ' data-language-display="' + escapeHtml(languageDisplay) + '"' +
               ' data-language-undetected="' + (languageUndetected ? '1' : '0') + '"' +
               ' data-language-inspection="' + escapeHtml(languageInspection) + '"' +
+              ' data-language-pending-message="' + escapeHtml((row.language_pending_badge || {}).message || '') + '"' +
               ' data-commentary-zh-cn="' + escapeHtml(commentaryZhCn) + '"' +
               ' data-commentary-en="' + escapeHtml(commentaryEn) + '"' +
               ' data-commentary-ja="' + escapeHtml(commentaryJa) + '"' +
@@ -619,7 +624,7 @@
               ' data-text-en="' + escapeHtml(englishText) + '"' +
               ' data-text-ja="' + escapeHtml(japaneseText) + '"' +
               ' data-text-source="' + escapeHtml(sourceText) + '">' +
-              languageTagHtml(languageDisplay, languageUndetected, languageInspection) +
+              languageTagHtml(languageDisplay, languageUndetected, languageInspection, (row.language_pending_badge || {}).message) +
               escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
@@ -833,6 +838,7 @@
     var elClassification = row.querySelector('[data-sig-classification-status]');
     if (elClassification) {
       elClassification.innerHTML = classificationStatuses.map(function (status, index) {
+        if (status === 'pending' || status === 'context_missing') return '';
         var inspection = signalInspectionText(
           inspections, 'classification_status', status
         );
@@ -844,7 +850,7 @@
         );
       }).join('');
       elClassification.classList.toggle(
-        'is-empty', classificationStatuses.length === 0
+        'is-empty', !elClassification.innerHTML
       );
     }
     var elN = row.querySelector('[data-sig-nat]');
@@ -1104,7 +1110,11 @@
     ]);
   }
 
-  function languageTagHtml(display, undetected, inspection) {
+  function languageTagHtml(display, undetected, inspection, pendingMessage) {
+    if (pendingMessage) {
+      var pending = escapeHtml(pendingMessage);
+      return '<span class="post-language-tag processing-status enrichment-status-pending pw-inspection-trigger" role="button" tabindex="0" data-process="pending" data-pw-inspection="' + pending + '" aria-label="' + pending + '" aria-expanded="false">' + processingIconHtml('pending') + '</span>';
+    }
     if (!undetected) return '<span class="post-language-tag">' + escapeHtml(display) + '</span>';
     var label = escapeHtml(inspection || 'Language undetected');
     return '<span class="post-language-tag pw-inspection-trigger language-globe" role="button" tabindex="0"' +
@@ -1116,7 +1126,8 @@
     var languageTag = languageTagHtml(
       el.getAttribute('data-language-display') || 'undetected',
       el.getAttribute('data-language-undetected') === '1',
-      el.getAttribute('data-language-inspection') || ''
+      el.getAttribute('data-language-inspection') || '',
+      el.getAttribute('data-language-pending-message') || ''
     );
     var layers = textLayers(el);
     if (!layers.length) {
