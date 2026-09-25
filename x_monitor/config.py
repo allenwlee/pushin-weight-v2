@@ -450,6 +450,8 @@ class EnrichmentConfig(BaseModel):
     claim_ttl_seconds: int = Field(default=660, ge=1)
     request_timeout_seconds: int = Field(default=90, ge=1)
     attempt_budget_seconds: int = Field(default=300, ge=1)
+    short_post_budget_seconds: int = Field(default=240, ge=1)
+    long_post_budget_seconds: int = Field(default=60, ge=1)
     terminalization_reserve_seconds: int = Field(default=30, ge=1)
 
     @model_validator(mode="after")
@@ -466,6 +468,8 @@ class EnrichmentConfig(BaseModel):
             raise ValueError(
                 "request_timeout_seconds must not exceed attempt_budget_seconds"
             )
+        if self.short_post_budget_seconds + self.long_post_budget_seconds > self.attempt_budget_seconds:
+            raise ValueError("short and long translation budgets exceed stage budget")
         if self.claim_ttl_seconds < self.claim_safe_envelope_seconds:
             raise ValueError(
                 "claim_ttl_seconds must cover both enrichment stage budgets "
@@ -478,10 +482,11 @@ class EnrichmentConfig(BaseModel):
         return 2 * self.attempt_budget_seconds + self.terminalization_reserve_seconds
 
     def start_attempt_deadline(
-        self, *, monotonic: Callable[[], float] = time.monotonic
+        self, *, monotonic: Callable[[], float] = time.monotonic,
+        budget_seconds: int | None = None,
     ) -> EnrichmentAttemptDeadline:
         return EnrichmentAttemptDeadline(
-            deadline_at=monotonic() + self.attempt_budget_seconds,
+            deadline_at=monotonic() + (budget_seconds or self.attempt_budget_seconds),
             request_timeout_seconds=self.request_timeout_seconds,
             monotonic=monotonic,
         )
@@ -869,7 +874,8 @@ class SynthesisConfig(BaseModel):
     lease_seconds: int = Field(default=600, ge=30, le=900)
     timeout_seconds: int = Field(default=300, ge=5, le=300)
     max_attempts: int = Field(default=3, ge=1, le=5)
-    max_input_tokens_per_post: int = Field(default=4_000, ge=256, le=16_000)
+    # Historical name; synthesis enforces this as a character count on the full prompt.
+    max_input_tokens_per_post: int = Field(default=32_000, ge=256, le=32_000)
     max_output_tokens_per_post: int = Field(default=1_024, ge=256, le=8_192)
     input_usd_per_million: Decimal = Field(default=Decimal("0.09"), ge=0)
     output_usd_per_million: Decimal = Field(default=Decimal("0.34"), ge=0)

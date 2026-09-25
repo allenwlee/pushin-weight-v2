@@ -253,6 +253,7 @@ def publish_claimed_synthesis(
             latency_ms=response.latency_ms,
             attempts=demand.attempts,
             now=current,
+            strict_validation=True,
         )
         if artifact is None:
             return _fail_locked(demand, "synthesis_validation_failed", config, current)
@@ -328,7 +329,7 @@ def _owns(demand, *, owner: str, fence: int, now) -> bool:
 
 def process_synthesis_batch(*, config, client, owner: str | None = None, now=None):
     """Perform provider work outside database locks, then publish by fence."""
-    from x_monitor.synthesis import synthesize_post
+    from x_monitor.synthesis import synthesis_failure_code, synthesize_post
 
     if not config.provider_calls_active:
         return {
@@ -375,7 +376,7 @@ def process_synthesis_batch(*, config, client, owner: str | None = None, now=Non
                 demand_id=demand.pk,
                 owner=demand.lease_owner,
                 fence=demand.lease_fence,
-                error_code=type(exc).__name__,
+                error_code=synthesis_failure_code(exc),
                 config=config,
             )
             artifact = None

@@ -288,6 +288,8 @@ harvest:
     claim_ttl_seconds: 660
     request_timeout_seconds: 90
     attempt_budget_seconds: 300
+    short_post_budget_seconds: 240
+    long_post_budget_seconds: 60
     terminalization_reserve_seconds: 30
 
 # One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
@@ -411,7 +413,7 @@ synthesis:
   lease_seconds: 600
   timeout_seconds: 300
   max_attempts: 3
-  max_input_tokens_per_post: 4000
+  max_input_tokens_per_post: 32000
   # Production's first 48 successful Gemma calls used 143-317 output tokens.
   # Keep more than 3x headroom without reserving 16x the observed maximum.
   max_output_tokens_per_post: 1024

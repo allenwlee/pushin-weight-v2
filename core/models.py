@@ -1548,6 +1548,7 @@ class PostEnrichmentState(models.Model):
     translation_last_attempt_at = models.DateTimeField(blank=True, null=True)
     translation_next_attempt_at = models.DateTimeField(blank=True, null=True)
     translation_error_code = models.CharField(max_length=128, blank=True, default="")
+    translation_diagnostics = models.JSONField(default=dict, db_default={})
     classification_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PENDING
     )
@@ -1686,6 +1687,50 @@ class PostTranslationText(models.Model):
                 condition=~models.Q(text=""), name="ck_post_translation_text"
             ),
         ]
+
+
+class PostTranslationChunk(models.Model):
+    """A validated locale slice retained across literal-translation attempts."""
+
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="translation_chunks",
+        db_column="post_id",
+        to_field="tweet_id",
+    )
+    source_content_fingerprint = models.CharField(max_length=64)
+    source_chunk_fingerprint = models.CharField(max_length=64)
+    source_language = models.CharField(max_length=16)
+    prompt_version = models.CharField(max_length=64)
+    model = models.CharField(max_length=128)
+    target_language = models.CharField(max_length=8)
+    chunk_index = models.PositiveSmallIntegerField()
+    translated_text = models.TextField()
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "post_translation_chunks"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "post", "source_content_fingerprint", "source_language",
+                    "prompt_version", "model", "target_language", "chunk_index",
+                ],
+                name="uq_post_translation_chunk_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(target_language__in=["en", "zh-Hans", "ja"]),
+                name="ck_post_translation_chunk_target",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(translated_text=""),
+                name="ck_post_translation_chunk_text",
+            ),
+        ]
+
 
 
 class PostSynthesisArtifact(models.Model):

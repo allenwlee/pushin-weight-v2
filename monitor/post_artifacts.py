@@ -19,6 +19,7 @@ from core.models import (
     PostSynthesisDemand,
     PostSynthesisText,
     PostTranslationArtifact,
+    PostTranslationChunk,
     PostTranslationText,
 )
 from monitor.post_enrichment import commentary_is_distinct, present_text
@@ -44,6 +45,79 @@ def source_content_fingerprint(post: Post) -> str:
 
 def source_text_fingerprint(text: object) -> str:
     return _hash({"text": str(text or "")})
+
+
+def load_literal_translation_chunks(
+    tweets: Sequence[Mapping[str, Any]], *, model: str, prompt_version: str
+) -> dict[str, dict[str, dict[str, dict[int, str]]]]:
+    """Use only chunks matching the exact current source and deterministic split."""
+    from x_monitor.literal_translation import _split_translation_chunks
+
+    by_id = {
+        str(tweet.get("tweet_id") or tweet.get("id")): tweet
+        for tweet in tweets
+    }
+    chunks_by_id = {
+        post_id: _split_translation_chunks(str(tweet.get("text") or ""))
+        for post_id, tweet in by_id.items()
+    }
+    fingerprints = {
+        post_id: source_text_fingerprint(tweet.get("text"))
+        for post_id, tweet in by_id.items()
+    }
+    cached: dict[str, dict[str, dict[str, dict[int, str]]]] = {}
+    for row in PostTranslationChunk.objects.filter(
+        post_id__in=by_id, model=model, prompt_version=prompt_version
+    ):
+        parts = chunks_by_id[str(row.post_id)]
+        if (
+            row.source_content_fingerprint != fingerprints[str(row.post_id)]
+            or row.chunk_index >= len(parts)
+            or row.source_chunk_fingerprint != source_text_fingerprint(parts[row.chunk_index])
+        ):
+            continue
+        cached.setdefault(str(row.post_id), {}).setdefault(row.source_language, {}).setdefault(
+            row.target_language, {}
+        )[row.chunk_index] = row.translated_text
+    return cached
+
+
+def persist_literal_translation_chunk(
+    *, tweet: Mapping[str, Any], source_language: str,
+    target_language: str, chunk_index: int,
+    source_chunk: str, translated_text: str, model: str, prompt_version: str,
+    usage: Mapping[str, Any], expected_claim_run_id: str,
+) -> bool:
+    """Retain a validated chunk only while the claim and original text agree."""
+    post_id = str(tweet.get("tweet_id") or tweet.get("id") or "")
+    expected_fingerprint = source_text_fingerprint(tweet.get("text"))
+    with transaction.atomic():
+        claim = PostEnrichmentState.objects.select_for_update().filter(
+            post_id=post_id, claim_run_id=str(expected_claim_run_id)[:128],
+            translation_status=PostEnrichmentState.Status.PENDING,
+            claim_expires_at__gt=timezone.now(),
+        ).first()
+        if claim is None:
+            return False
+        post = Post.objects.select_for_update().filter(pk=post_id).first()
+        if post is None or source_content_fingerprint(post) != expected_fingerprint:
+            return False
+        PostTranslationChunk.objects.get_or_create(
+            post=post,
+            source_content_fingerprint=expected_fingerprint,
+            source_chunk_fingerprint=source_text_fingerprint(source_chunk),
+            source_language=source_language,
+            prompt_version=prompt_version,
+            model=model,
+            target_language=target_language,
+            chunk_index=chunk_index,
+            defaults={
+                "translated_text": translated_text,
+                "input_tokens": max(0, int(usage.get("input_tokens") or 0)),
+                "output_tokens": max(0, int(usage.get("output_tokens") or 0)),
+            },
+        )
+        return True
 
 
 def literal_translation_artifact_complete(post: Post) -> bool:
@@ -272,13 +346,17 @@ def publish_post_synthesis(
     latency_ms: int | None = None,
     attempts: int = 1,
     now=None,
+    strict_validation: bool = False,
 ) -> PostSynthesisArtifact | None:
     current = now or timezone.now()
     normalized = {
         locale: present_text(values.get(locale)) for locale in SUPPORTED_CONTENT_LOCALES
     }
-    if any(value is None for value in normalized.values()):
-        return None
+    for locale, value in normalized.items():
+        if value is None:
+            if strict_validation:
+                raise ValueError(f"synthesis_commentary_empty:{locale.replace('-', '_')}")
+            return None
     normalized_literal = tuple(
         PostTranslationText.objects.filter(
             artifact__post=post,
@@ -292,15 +370,18 @@ def publish_post_synthesis(
         post.text_zh_cn,
         *normalized_literal,
     )
-    if not all(
-        commentary_is_distinct(
+    for locale, value in normalized.items():
+        if not commentary_is_distinct(value, *base_comparisons):
+            if strict_validation:
+                raise ValueError(f"synthesis_commentary_copies_literal:{locale.replace('-', '_')}")
+            return None
+        if not commentary_is_distinct(
             value,
-            *base_comparisons,
             *(other for other_locale, other in normalized.items() if other_locale != locale),
-        )
-        for locale, value in normalized.items()
-    ):
-        return None
+        ):
+            if strict_validation:
+                raise ValueError(f"synthesis_commentary_duplicate_locale:{locale.replace('-', '_')}")
+            return None
     with transaction.atomic():
         locked_post = Post.objects.select_for_update().get(pk=post.pk)
         artifact, _created = PostSynthesisArtifact.objects.get_or_create(

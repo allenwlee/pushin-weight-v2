@@ -110,6 +110,7 @@ GRANT MAINTAIN ON
   post_enrichment_states,
   post_synthesis_daily_budgets, post_synthesis_demands,
   post_synthesis_rate_limit_buckets,
+  post_translation_chunks,
   product_verification_proposals, profile_movement_candidates,
   rare_type_decision_attempts, rare_type_decision_processing_cycles,
   rare_type_decisions, rare_type_search_daily_budgets, rare_type_search_hits,
@@ -141,7 +142,7 @@ GRANT SELECT ON
   post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
   post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
   post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
-  post_translation_texts_id_seq,
+  post_translation_chunks_id_seq, post_translation_texts_id_seq,
   posts_brands_classification_judgments_id_seq,
   people_brand_affiliation_evidence_id_seq,
   people_brand_affiliations_id_seq, personnel_discovery_runs_id_seq,
@@ -382,6 +383,7 @@ UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
 UNION ALL SELECT 'post_synthesis_daily_budgets', count(*) FROM post_synthesis_daily_budgets
 UNION ALL SELECT 'post_synthesis_demands', count(*) FROM post_synthesis_demands
 UNION ALL SELECT 'post_synthesis_rate_limit_buckets', count(*) FROM post_synthesis_rate_limit_buckets
+UNION ALL SELECT 'post_translation_chunks', count(*) FROM post_translation_chunks
 UNION ALL SELECT 'product_verification_proposals', count(*) FROM product_verification_proposals
 UNION ALL SELECT 'profile_movement_candidates', count(*) FROM profile_movement_candidates
 UNION ALL SELECT 'rare_type_decision_attempts', count(*) FROM rare_type_decision_attempts

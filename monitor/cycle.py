@@ -975,6 +975,7 @@ def _claim_enrichment_states(
     now: datetime | None = None,
     prefer_created_before: datetime | None = None,
     post_ids: set[str] | None = None,
+    defer_translation_attempts: bool = False,
 ) -> EnrichmentClaimBatch:
     """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
@@ -1175,6 +1176,8 @@ def _claim_enrichment_states(
                     continue
                 attempts_name = f"{prefix}_attempts"
                 first_name = f"{prefix}_first_attempt_at"
+                if prefix == "translation" and defer_translation_attempts:
+                    continue
                 setattr(state, attempts_name, getattr(state, attempts_name) + 1)
                 if getattr(state, first_name) is None:
                     setattr(state, first_name, now)
@@ -1211,6 +1214,10 @@ def _finish_enrichment_stage(
     error_code: str,
     cfg: Any,
     now: datetime | None = None,
+    called_ids: set[str] | None = None,
+    progressed_ids: set[str] | None = None,
+    error_codes: dict[str, str] | None = None,
+    diagnostics: dict[str, dict[str, str]] | None = None,
 ) -> int:
     """Resolve one claimed stage and return new terminal failures."""
 
@@ -1231,6 +1238,20 @@ def _finish_enrichment_stage(
                 continue
             next_name = f"{stage}_next_attempt_at"
             error_name = f"{stage}_error_code"
+            update_fields = [status_name, next_name, error_name, "updated_at"]
+            if stage == "translation" and called_ids is not None:
+                if str(state.post_id) in called_ids:
+                    state.translation_last_attempt_at = now
+                    if state.translation_first_attempt_at is None:
+                        state.translation_first_attempt_at = now
+                    if str(state.post_id) not in (progressed_ids or set()):
+                        state.translation_attempts += 1
+                    update_fields.extend([
+                        "translation_attempts", "translation_first_attempt_at",
+                        "translation_last_attempt_at",
+                    ])
+                state.translation_diagnostics = (diagnostics or {}).get(str(state.post_id), {})
+                update_fields.append("translation_diagnostics")
             if str(state.post_id) in succeeded_ids:
                 setattr(state, status_name, PostEnrichmentState.Status.SUCCEEDED)
                 setattr(state, next_name, None)
@@ -1249,9 +1270,20 @@ def _finish_enrichment_stage(
                     failed += 1
                 else:
                     setattr(state, next_name, now)
-                    setattr(state, error_name, str(error_code or "stage_failed")[:128])
-            state.save(update_fields=[status_name, next_name, error_name, "updated_at"])
+                    selected_error = (error_codes or {}).get(str(state.post_id), error_code)
+                    setattr(state, error_name, str(selected_error or "stage_failed")[:128])
+            state.save(update_fields=update_fields)
     return failed
+
+
+def _literal_translation_error_code(row: dict[str, Any]) -> str:
+    reasons = row.get("failure_reasons")
+    if isinstance(reasons, dict):
+        for target in ("detection", "en", "zh-Hans", "ja", "post"):
+            value = reasons.get(target)
+            if isinstance(value, str) and value:
+                return value[:128]
+    return "translation_incomplete"
 
 
 @dataclass(frozen=True)
@@ -3574,6 +3606,7 @@ class CycleRunner:
             run_id=run_id,
             prefer_created_before=prefer_created_before,
             post_ids=selected_post_ids,
+            defer_translation_attempts=self.cfg.llm.literal_translation_v2_enabled,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -3722,7 +3755,9 @@ class CycleRunner:
         # The feature flag preserves the prior combined translator as the
         # rollback lane until the split literal contract passes staging.
         from x_monitor.literal_translation import (
+            CHUNK_TRANSLATION_PROMPT_VERSION,
             LITERAL_TRANSLATION_PROMPT_VERSION,
+            LONG_POST_THRESHOLD,
             translate_batch_literal_plaintext,
         )
         from x_monitor.translator import translate_batch_pragmatics
@@ -3752,20 +3787,72 @@ class CycleRunner:
                 pause_seconds=0,
                 monotonic=self._monotonic,
             )
-            translation_deadline = enrichment_cfg.start_attempt_deadline(
-                monotonic=self._monotonic
-            )
             try:
                 if self.cfg.llm.literal_translation_v2_enabled:
-                    translation_rows = translate_batch_literal_plaintext(
-                        translation_tweets,
-                        bounded_translator_client,
-                        cfg=self.cfg,
-                        deadline=translation_deadline,
-                        max_workers=3,
-                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    from monitor.post_artifacts import (
+                        load_literal_translation_chunks,
+                        persist_literal_translation_chunk,
                     )
+                    short_tweets = [
+                        tweet for tweet in translation_tweets
+                        if len(tweet["text"]) <= LONG_POST_THRESHOLD
+                    ]
+                    long_tweets = [
+                        tweet for tweet in translation_tweets
+                        if len(tweet["text"]) > LONG_POST_THRESHOLD
+                    ]
+                    telemetry = {"stage": "post_fetch", "run_id": run_id}
+                    translation_rows = []
+                    if short_tweets:
+                        short_budget = (
+                            enrichment_cfg.short_post_budget_seconds
+                            if long_tweets else enrichment_cfg.attempt_budget_seconds
+                        )
+                        translation_rows.extend(translate_batch_literal_plaintext(
+                            short_tweets, bounded_translator_client, cfg=self.cfg,
+                            deadline=enrichment_cfg.start_attempt_deadline(
+                                monotonic=self._monotonic, budget_seconds=short_budget
+                            ),
+                            max_workers=3, telemetry_context=telemetry,
+                        ))
+                    if long_tweets:
+                        long_budget = (
+                            enrichment_cfg.long_post_budget_seconds
+                            if short_tweets else enrichment_cfg.attempt_budget_seconds
+                        )
+                        current_long = long_tweets[:1]
+                        cached = load_literal_translation_chunks(
+                            current_long, model=self.cfg.llm.translator_model,
+                            prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION,
+                        )
+                        translation_rows.extend(translate_batch_literal_plaintext(
+                            current_long, bounded_translator_client, cfg=self.cfg,
+                            deadline=enrichment_cfg.start_attempt_deadline(
+                                monotonic=self._monotonic, budget_seconds=long_budget
+                            ),
+                            max_workers=1, telemetry_context=telemetry,
+                            cached_chunks=cached,
+                            on_chunk_success=lambda **kwargs: persist_literal_translation_chunk(
+                                **kwargs, expected_claim_run_id=run_id
+                            ),
+                        ))
+                        if len(long_tweets) > 1:
+                            from x_monitor.config import EnrichmentAttemptDeadline
+
+                            no_call_deadline = EnrichmentAttemptDeadline(
+                                deadline_at=self._monotonic(),
+                                request_timeout_seconds=enrichment_cfg.request_timeout_seconds,
+                                monotonic=self._monotonic,
+                            )
+                            translation_rows.extend(translate_batch_literal_plaintext(
+                                long_tweets[1:], bounded_translator_client, cfg=self.cfg,
+                                deadline=no_call_deadline, max_workers=1,
+                                telemetry_context=telemetry,
+                            ))
                 else:
+                    translation_deadline = enrichment_cfg.start_attempt_deadline(
+                        monotonic=self._monotonic
+                    )
                     translation_rows = translate_batch_pragmatics(
                         translation_tweets,
                         ["en", "zh_cn"],
@@ -3790,12 +3877,12 @@ class CycleRunner:
 
         # Publish immutable normalized artifacts when the split lane is active;
         # otherwise preserve the existing combined compatibility writer.
+        translation_input_text = {
+            str(tweet.get("tweet_id") or tweet.get("id") or ""): tweet.get("text")
+            for tweet in translation_tweets
+        }
         if translation_rows:
             tids = [r.get("tweet_id") for r in translation_rows if r.get("tweet_id")]
-            translation_input_text = {
-                str(tweet.get("tweet_id") or tweet.get("id") or ""): tweet.get("text")
-                for tweet in translation_tweets
-            }
             posts_by_tid: dict[str, Any] = {}
             if tids:
                 posts_by_tid = {
@@ -3810,6 +3897,8 @@ class CycleRunner:
                     continue
                 if r.get("translation_failed"):
                     if self.cfg.llm.literal_translation_v2_enabled:
+                        if int(r.get("provider_calls") or 0) == 0:
+                            continue
                         from monitor.post_artifacts import (
                             record_literal_translation_failure,
                             source_text_fingerprint,
@@ -3824,7 +3913,7 @@ class CycleRunner:
                                 translation_input_text.get(str(tid))
                             ),
                             source_language=r.get("lang_detected"),
-                            error_code="translation_incomplete",
+                            error_code=_literal_translation_error_code(r),
                             input_tokens=int(r.get("input_tokens") or 0),
                             output_tokens=int(r.get("output_tokens") or 0),
                             latency_ms=r.get("latency_ms"),
@@ -3930,6 +4019,19 @@ class CycleRunner:
                     "revision"
                 ]
 
+        translation_row_by_id = {
+            str(row.get("tweet_id")): row for row in translation_rows
+            if row.get("tweet_id")
+        }
+        literal_called_ids = {
+            post_id for post_id, row in translation_row_by_id.items()
+            if int(row.get("provider_calls") or 0) > 0
+        }
+        literal_progressed_ids = {
+            post_id for post_id, row in translation_row_by_id.items()
+            if int(row.get("new_chunks") or 0) > 0
+            and len(str(translation_input_text.get(post_id) or "")) > LONG_POST_THRESHOLD
+        } if self.cfg.llm.literal_translation_v2_enabled else set()
         newly_failed = _finish_enrichment_stage(
             post_ids=claimed_post_ids,
             run_id=run_id,
@@ -3941,6 +4043,20 @@ class CycleRunner:
                 else "translation_incomplete"
             ),
             cfg=enrichment_cfg,
+            called_ids=literal_called_ids if self.cfg.llm.literal_translation_v2_enabled else None,
+            progressed_ids=literal_progressed_ids,
+            error_codes={
+                post_id: _literal_translation_error_code(row)
+                for post_id, row in translation_row_by_id.items()
+            } if self.cfg.llm.literal_translation_v2_enabled else None,
+            diagnostics={
+                post_id: {
+                    target: str(reason)[:128]
+                    for target, reason in (row.get("failure_reasons") or {}).items()
+                    if target in {"detection", "en", "zh-Hans", "ja", "post"}
+                }
+                for post_id, row in translation_row_by_id.items()
+            } if self.cfg.llm.literal_translation_v2_enabled else None,
         )
         counters["n_enrichment_quarantined"] += newly_failed
 

@@ -211,15 +211,15 @@ _TAGGED_RESPONSE_GEMMA_BOUNDARY_RE = re.compile(
 def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[str, str]:
     text = getattr(response, "text", None)
     if not isinstance(text, str):
-        raise ValueError("synthesis_response_tagged_text_invalid")
+        raise ValueError("synthesis_response_tagged_text_invalid:non_text")
     match = _TAGGED_RESPONSE_RE.fullmatch(text)
     if match is None:
         match = _TAGGED_RESPONSE_GEMMA_BOUNDARY_RE.fullmatch(text)
     if match is None:
-        raise ValueError("synthesis_response_tagged_text_invalid")
+        raise ValueError(f"synthesis_response_tagged_text_invalid:{_tagged_format_reason(text)}")
     values = match.groups()
     if any("[[" in value or "]]" in value for value in values):
-        raise ValueError("synthesis_response_tagged_text_invalid")
+        raise ValueError("synthesis_response_tagged_text_invalid:embedded_tag")
     if values[0] != post_id:
         raise ValueError("synthesis_response_identity_mismatch")
     normalized = {
@@ -232,3 +232,51 @@ def _validate_tagged_text_response(response: object, *, post_id: str) -> dict[st
     if len({value.casefold() for value in normalized.values()}) != len(normalized):
         raise ValueError("synthesis_response_locale_duplication")
     return normalized
+
+
+def _tagged_format_reason(text: str) -> str:
+    """Classify shape only; never include provider text in diagnostics."""
+    for marker, name in (
+        ("[[POST_ID]]", "post_id"),
+        ("[[EN]]", "en"),
+        ("[[ZH_CN]]", "zh_cn"),
+        ("[[JA]]", "ja"),
+    ):
+        if marker not in text:
+            return f"missing_{name}_open"
+    if "[[/JA]]" not in text:
+        return "missing_ja_close"
+    if not text.startswith("[[POST_ID]]"):
+        return "leading_text"
+    if not text.endswith("[[/JA]]"):
+        return "trailing_text"
+    return "malformed_boundary"
+
+
+def synthesis_failure_code(exc: Exception) -> str:
+    """Expose known safe codes, never provider-supplied exception messages."""
+    if isinstance(exc, TimeoutError):
+        return "transport_timeout"
+    if isinstance(exc, ValueError):
+        code = str(exc)
+        if code in {
+            "synthesis_input_cap_exceeded",
+            "synthesis_response_schema_invalid",
+            "synthesis_response_identity_mismatch",
+            "synthesis_response_incomplete",
+            "synthesis_response_locale_duplication",
+        }:
+            return code
+        if re.fullmatch(
+            r"synthesis_response_tagged_text_invalid:"
+            r"(?:non_text|missing_(?:post_id|en|zh_cn|ja)_open|missing_ja_close|"
+            r"leading_text|trailing_text|malformed_boundary|embedded_tag)",
+            code,
+        ):
+            return code
+        if re.fullmatch(
+            r"synthesis_commentary_(?:empty|copies_literal|duplicate_locale):(?:en|zh_cn|ja)",
+            code,
+        ):
+            return code
+    return type(exc).__name__[:128]

@@ -141,6 +141,7 @@ relations:
     - post_synthesis_daily_budgets
     - post_synthesis_demands
     - post_synthesis_rate_limit_buckets
+    - post_translation_chunks
     - product_verification_proposals
     - profile_movement_candidates
     - rare_type_decision_attempts
@@ -201,6 +202,7 @@ relations:
     - post_synthesis_rate_limit_buckets
     - post_synthesis_texts
     - post_translation_artifacts
+    - post_translation_chunks
     - post_translation_texts
     - posts_untracked_brand_promotions
     - product_label_keys
@@ -261,6 +263,7 @@ relations:
     - post_synthesis_rate_limit_buckets_id_seq
     - post_synthesis_texts_id_seq
     - post_translation_artifacts_id_seq
+    - post_translation_chunks_id_seq
     - post_translation_texts_id_seq
     - posts_brands_classification_judgments_id_seq
     - people_brand_affiliation_evidence_id_seq
@@ -317,6 +320,7 @@ relations:
     - post_synthesis_rate_limit_buckets_id_seq
     - post_synthesis_texts_id_seq
     - post_translation_artifacts_id_seq
+    - post_translation_chunks_id_seq
     - post_translation_texts_id_seq
     - posts_brands_classification_judgments_id_seq
     - product_verification_proposals_id_seq
@@ -360,6 +364,7 @@ scrub:
     - post_synthesis_daily_budgets
     - post_synthesis_demands
     - post_synthesis_rate_limit_buckets
+    - post_translation_chunks
     - product_verification_proposals
     - profile_movement_candidates
     - rare_type_decision_attempts

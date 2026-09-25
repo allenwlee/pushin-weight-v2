@@ -441,8 +441,53 @@ def test_worker_failure_persists_artifact_state_and_keeps_demand_retryable():
     assert demand.state == PostSynthesisDemand.State.PENDING
     assert artifact.state == PostSynthesisArtifact.State.FAILED
     assert artifact.attempts == 1
-    assert artifact.error_code == "TimeoutError"
+    assert artifact.error_code == "transport_timeout"
     assert artifact.is_current is False
+
+
+def test_worker_persists_safe_tagged_formatter_reason():
+    post = Post.objects.create(tweet_id="worker-invalid-tag", text="A release")
+    config = _config()
+    request_post_synthesis(post_ids=[post.pk], reason="visible", config=config)
+    client = _SynthesisClient()
+    client.messages_create_text = lambda **_kwargs: ProviderTextResponse(
+        text="[[POST_ID]]worker-invalid-tag[[/POST_ID]]\n[[EN]]A summary[[/EN]]\n[[ZH_CN]]摘要[[/ZH_CN]]\n[[JA]]要約",
+        provider_usage={"input_tokens": 10, "output_tokens": 5},
+    )
+
+    result = process_synthesis_batch(config=config, client=client, owner="worker")
+
+    assert result["failed"] == 1
+    assert PostSynthesisDemand.objects.get().last_error == (
+        "synthesis_response_tagged_text_invalid:missing_ja_close"
+    )
+    assert PostSynthesisArtifact.objects.get().error_code == (
+        "synthesis_response_tagged_text_invalid:missing_ja_close"
+    )
+
+
+def test_worker_persists_specific_publication_validator_reason():
+    post = Post.objects.create(tweet_id="worker-copy", text="A release")
+    config = _config()
+    request_post_synthesis(post_ids=[post.pk], reason="visible", config=config)
+
+    class CopyClient:
+        def messages_create_text(self, **_kwargs):
+            return ProviderTextResponse(
+                text=(
+                    "[[POST_ID]]worker-copy[[/POST_ID]]\n"
+                    "[[EN]]A release[[/EN]]\n"
+                    "[[ZH_CN]]作者宣布发布。[[/ZH_CN]]\n"
+                    "[[JA]]著者が発表しています。[[/JA]]"
+                ),
+                provider_usage={"input_tokens": 10, "output_tokens": 5},
+            )
+
+    result = process_synthesis_batch(config=config, client=CopyClient(), owner="worker")
+
+    assert result["failed"] == 1
+    assert PostSynthesisDemand.objects.get().last_error == "synthesis_commentary_copies_literal:en"
+    assert PostSynthesisArtifact.objects.get().error_code == "synthesis_commentary_copies_literal:en"
 
 
 def test_expired_visible_demand_is_cancelled_without_provider_call():

@@ -303,6 +303,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "post_synthesis_rate_limit_buckets",
         "post_synthesis_texts",
         "post_translation_artifacts",
+        "post_translation_chunks",
         "post_translation_texts",
         "product_verification_proposals",
         "profile_movement_candidates",

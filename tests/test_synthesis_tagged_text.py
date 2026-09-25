@@ -2,10 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from x_monitor.config import SynthesisConfig
 from x_monitor.provider_telemetry import ProviderTextResponse
 from x_monitor.synthesis import (
     SynthesisResponse,
     build_tagged_synthesis_prompt,
+    synthesis_failure_code,
     synthesize_post,
 )
 
@@ -163,3 +165,57 @@ def test_legacy_json_path_remains_unchanged():
         config=_config(response_format="json"),
     )
     assert result.texts == {"en": "English", "zh-cn": "中文", "ja": "日本語"}
+
+
+def test_commentary_cap_accepts_complete_prompt_up_to_32000_characters():
+    config = SynthesisConfig(max_input_tokens_per_post=32_000)
+    client = _TextClient(_answer())
+    system, user = build_tagged_synthesis_prompt(
+        post_id="p1", context={"post": "x" * 5_000}
+    )
+    assert 4_000 < len(system + "\n" + user) < 32_000
+
+    synthesize_post(post_id="p1", context={"post": "x" * 5_000}, client=client, config=config)
+
+    assert len(client.calls) == 1
+
+
+def test_commentary_cap_rejects_over_32000_characters_before_call():
+    config = SynthesisConfig(max_input_tokens_per_post=32_000)
+    client = _TextClient(_answer())
+
+    with pytest.raises(ValueError, match="synthesis_input_cap_exceeded"):
+        synthesize_post(
+            post_id="p1", context={"post": "x" * 32_000}, client=client, config=config
+        )
+
+    assert client.calls == []
+
+
+def test_commentary_cap_boundary_counts_entire_serialized_prompt():
+    config = SynthesisConfig(max_input_tokens_per_post=32_000)
+    system, user = build_tagged_synthesis_prompt(post_id="p1", context={"post": ""})
+    overhead = len(system + "\n" + user)
+    source = "x" * (32_000 - overhead)
+    at_cap = _TextClient(_answer())
+    synthesize_post(post_id="p1", context={"post": source}, client=at_cap, config=config)
+    assert len(at_cap.calls) == 1
+
+    above_cap = _TextClient(_answer())
+    with pytest.raises(ValueError, match="synthesis_input_cap_exceeded"):
+        synthesize_post(
+            post_id="p1", context={"post": source + "x"}, client=above_cap, config=config
+        )
+    assert above_cap.calls == []
+
+
+def test_formatter_reason_is_specific_and_cannot_leak_response_text():
+    response = _answer().replace("[[/JA]]", "") + "PRIVATE_PROVIDER_OUTPUT"
+    with pytest.raises(ValueError, match="synthesis_response_tagged_text_invalid:missing_ja_close") as failure:
+        synthesize_post(post_id="p1", context={"post": "x"}, client=_TextClient(response), config=_config())
+
+    code = synthesis_failure_code(failure.value)
+    assert code == "synthesis_response_tagged_text_invalid:missing_ja_close"
+    assert "PRIVATE_PROVIDER_OUTPUT" not in code
+    assert synthesis_failure_code(ValueError("PRIVATE_PROVIDER_OUTPUT")) == "ValueError"
+    assert synthesis_failure_code(ValueError("synthesis_private_data")) == "ValueError"

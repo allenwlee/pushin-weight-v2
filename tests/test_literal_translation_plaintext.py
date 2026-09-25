@@ -113,6 +113,21 @@ def test_unknown_language_uses_tiny_detection_then_translates_all_locales():
     assert row["output_tokens"] == 16
 
 
+def test_local_provider_request_rejection_is_not_a_sent_attempt():
+    from x_monitor.deepinfra import DeepInfraPermanentError
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([DeepInfraPermanentError("deepinfra_model_mismatch")])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "bad-config", "text": "An update", "lang": "en"}], client,
+        deadline=type("OneCallDeadline", (), {"request_timeout": lambda self: 0 if len(client.calls) else 10})(),
+    )[0]
+
+    assert row["translation_failed"] is True
+    assert row["provider_calls"] == 0
+    assert row["failure_reasons"]["zh-Hans"] == "not_sent_configuration"
+
+
 def test_detector_rejects_unrequested_iso_code_instead_of_silently_mapping_it():
     from x_monitor.literal_translation import translate_batch_literal_plaintext
 
@@ -245,6 +260,79 @@ def test_blank_source_fails_without_calling_the_provider():
     assert client.calls == []
     assert row["translation_failed"] is True
     assert row["text_en"] is None
+
+
+def test_long_post_chunks_are_bounded_and_resume_only_missing_pieces():
+    from x_monitor.literal_translation import (
+        CHUNK_TRANSLATION_PROMPT_VERSION,
+        _split_translation_chunks,
+        translate_batch_literal_plaintext,
+    )
+
+    source = ("alpha " * 800 + "\n\n") * 5
+    assert 23_000 < len(source) < 25_000
+    chunks = _split_translation_chunks(source)
+    assert len(chunks) > 2
+    assert "".join(chunks) == source
+    assert max(map(len, chunks)) <= 5_000
+    saved: dict[str, dict[str, dict[str, dict[int, str]]]] = {"long": {}}
+
+    class ChunkClient:
+        def __init__(self, *, fail_at: int | None = None):
+            self.calls = []
+            self.fail_at = fail_at
+
+        def messages_create_text(self, **kwargs):
+            self.calls.append(kwargs)
+            prompt = _prompt(kwargs)
+            assert CHUNK_TRANSLATION_PROMPT_VERSION in prompt
+            chunk = prompt.split("CHUNK:\n", 1)[1]
+            assert len(chunk) <= 5_000
+            if self.fail_at == len(self.calls):
+                raise TimeoutError("socket timeout")
+            return TextResponse("译" + chunk)
+
+    def persist(**kwargs):
+        saved["long"].setdefault(kwargs["source_language"], {}).setdefault(kwargs["target_language"], {})[
+            kwargs["chunk_index"]
+        ] = kwargs["translated_text"]
+        return True
+
+    tweet = {"tweet_id": "long", "text": source, "lang": "en"}
+    first = ChunkClient(fail_at=3)
+    row = translate_batch_literal_plaintext(
+        [tweet], first, on_chunk_success=persist
+    )[0]
+    assert row["translation_failed"] is True
+    assert row["provider_calls"] >= 3
+    assert row["new_chunks"] >= 2
+    completed_before = sum(len(locale) for language in saved["long"].values() for locale in language.values())
+
+    second = ChunkClient()
+    resumed = translate_batch_literal_plaintext(
+        [tweet], second, cached_chunks=saved, on_chunk_success=persist
+    )[0]
+    assert resumed["translation_failed"] is False
+    assert resumed["text_en"] == source
+    assert len(second.calls) == (2 * len(chunks)) - completed_before
+
+
+def test_long_unknown_source_language_detection_uses_only_first_chunk():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "English words " * 800
+    client = PlaintextClient([TextResponse("en")])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "detect-long", "text": source}],
+        client,
+        deadline=type("OneCallDeadline", (), {"request_timeout": lambda self: 0 if len(client.calls) else 10})(),
+    )[0]
+
+    assert len(client.calls) == 1
+    assert len(_prompt(client.calls[0]).split("SOURCE:\n", 1)[1]) == 5_000
+    assert row["lang_detected"] == "en"
+    assert row["provider_calls"] == 1
+    assert row["translation_failed"] is True
 
 
 def _payload_markers_and_paragraphs(call: dict[str, Any]) -> tuple[list[str], list[str]]:
