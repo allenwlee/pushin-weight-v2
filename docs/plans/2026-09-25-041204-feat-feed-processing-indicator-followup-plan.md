@@ -18,7 +18,7 @@ Each post will show at most one subdued spinning armillary while any of its proc
 
 The feed will leave the classification status cell empty for “Pending” and “Context missing.” It will show a precise two-letter language code for posts currently grouped under “other” when that code can be established. Old “other” rows have lost that detail, so the work includes a bounded language-only repair; unresolved rows will show the honest unknown-language glyph rather than a guessed code.
 
-The same result must appear on the initial page, after a feed refresh, and after a commentary status update. Browser tests will check English, Japanese and Chinese, keyboard hover behavior, reduced motion, and cached glyph assets. Changing language storage also needs a translator call-chain regression and a controlled rollout. The owner selected staging followed by production on 2026-09-25.
+The same result must appear on the initial page, after a feed refresh, and after a commentary status update. Browser tests will check English, Japanese and Chinese, keyboard hover behavior, reduced motion, and cached glyph assets. Changing language storage also needs a translator call-chain regression and a controlled rollout. The owner selected production and removed generated release coordination for this plan on 2026-09-25.
 
 ## Delivery
 
@@ -26,17 +26,16 @@ The owner selected production and directed a manual release for this plan on 202
 
 1. Keep the completed product verification bound to source commit `5383560ebfe9166b7f33e98e502984f8b20ddaf6`. Documentation-only delivery edits do not require repeating the product test suites.
 2. Commit and push this plan update on `feat/feed-processing-indicator-followup`; record the final candidate SHA.
-3. Deploy that exact SHA directly to `pushinweight-staging-web` using Render's commit selection. Verify the deployed SHA, health, localized feed behavior, and cached glyph assets. The Git `staging` branch remains available to the independent enrichment release.
-4. After staging verification, require the candidate to contain the current remote `main`, push the candidate to `main`, and verify the production web deployment reports that exact SHA. Reconcile any concurrent change to `main` before promotion.
-5. Check production feed behavior in English and Japanese, the single pending marker, empty pending/context-missing classification labels, precise language tags, and cache headers.
-6. Restore the staging web service to the latest intended staging branch revision if it still serves this temporary UI candidate. Preserve a newer deployment started by another release.
-7. Do not launch the historical language repair or a paid harvest batch as part of this UI deployment. Retain the clean feature worktree until production verification is complete.
+3. Fetch the current remote `main`, require the candidate to contain it, and push the exact candidate to `main`. Reconcile concurrent production changes first. No staging-branch ancestry or staging-first requirement applies to this owner-directed manual release.
+4. Verify the production web deployment reports that exact SHA. Check the real page in English and Japanese, one pending marker per post, empty pending/context-missing classification labels, precise language tags, hover enlargement, and immutable glyph cache headers.
+5. Preserve the independent enrichment staging branch and database refresh. The temporary UI staging deploy `dep-dar3ajfavr4c73fjso70` was cancelled while waiting for the refresh lock; it did not become live.
+6. Do not launch the historical language repair or a paid harvest batch as part of this UI deployment. Retain the clean feature worktree until production verification is complete.
 
 ## Completed verification
 
 - Product call-chain, feed rendering, and locale browser regressions passed.
 - The full candidate UI assurance gate completed cleanly with 4,466 obligations. Its performance assessment used the then-current production revision, not the undeployed UI candidate.
-- Exact deployed candidate checks remain required on staging and production.
+- Exact deployed candidate checks remain required on production.
 
 ---
 
@@ -74,7 +73,7 @@ The current feed creates one armillary per pending translation, classification, 
 
 - Feed display, translator language normalization, language-only historical repair, and the language filter compatibility needed for those changes are in scope.
 - Harvest query shape, scheduling, provider choice, translation prose, taxonomy classifications, follower hover, and unrelated glyphs are outside scope.
-- No production batch, provider call, release or cron pause is authorized by this plan.
+- The owner authorized this UI production release. A historical provider batch or cron pause requires separate scope.
 
 ### Acceptance Examples
 
