@@ -136,7 +136,7 @@ def test_staging_worker_is_queue_only_and_provider_scoped() -> None:
     assert service["branch"] == "staging"
     assert "celery -A project worker" in command
     assert "-Q trend-narratives" in command
-    assert "--concurrency=3" in command
+    assert "--concurrency=1" in command
     assert "--prefetch-multiplier=1" in command
     assert " beat " not in f" {command} "
     assert environment["X_MONITOR_DEPLOYMENT_ENVIRONMENT"]["value"] == "staging"
