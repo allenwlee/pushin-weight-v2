@@ -47,8 +47,8 @@
       "web_vitals_metrics": ["lcp","cls","inp"],
       "lighthouse_assertions": [{"id":"lcp-advisory-desktop","audit":"largest-contentful-paint","operator":"lte","threshold":5000,"enforcement":"advisory"},{"id":"cls-advisory-desktop","audit":"cumulative-layout-shift","operator":"lte","threshold":0.5,"enforcement":"advisory"}],
       "budgets": [{"metric":"dom-elements","max_value":6000,"enforcement":"blocking"}],
-      "network_expectations": [{"path":"/static/country-flags.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
-      "cache_expectations": [{"path":"/static/country-flags.svg","policy":"no_store","min_max_age_seconds":0,"must_reuse":false}]
+      "network_expectations": [{"path":"/static/pw-processing-glyphs.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
+      "cache_expectations": [{"path":"/static/pw-processing-glyphs.svg","policy":"reusable","min_max_age_seconds":0,"must_reuse":false}]
     },
     {
       "id": "homepage-mobile",
@@ -62,8 +62,8 @@
       "web_vitals_metrics": ["lcp","cls","inp"],
       "lighthouse_assertions": [{"id":"lcp-advisory-mobile","audit":"largest-contentful-paint","operator":"lte","threshold":6000,"enforcement":"advisory"},{"id":"cls-advisory-mobile","audit":"cumulative-layout-shift","operator":"lte","threshold":0.5,"enforcement":"advisory"}],
       "budgets": [{"metric":"dom-elements","max_value":6000,"enforcement":"blocking"}],
-      "network_expectations": [{"path":"/static/country-flags.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
-      "cache_expectations": [{"path":"/static/country-flags.svg","policy":"no_store","min_max_age_seconds":0,"must_reuse":false}]
+      "network_expectations": [{"path":"/static/pw-processing-glyphs.svg","max_requests":2,"max_bytes":600000},{"path":"/feed/","max_requests":0,"max_bytes":0},{"path":"/chart.html","max_requests":0,"max_bytes":0}],
+      "cache_expectations": [{"path":"/static/pw-processing-glyphs.svg","policy":"reusable","min_max_age_seconds":0,"must_reuse":false}]
     }
   ]
 }

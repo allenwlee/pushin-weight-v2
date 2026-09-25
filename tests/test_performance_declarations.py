@@ -48,7 +48,7 @@ def test_local_candidate_declaration_is_isolated_and_keeps_both_workloads() -> N
         "homepage-mobile",
     ]
     assert all(
-        expectation["path"] == "/static/country-flags.svg"
+        expectation["path"] == "/static/pw-processing-glyphs.svg"
         for scenario in local["scenarios"]
         for expectation in scenario["cache_expectations"]
     )
