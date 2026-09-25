@@ -24,7 +24,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 CONTRACT = (
     Path(__file__).resolve().parents[1]
-    / "docs/reference/2026-09-24-220000-rare-type-intelligence-read-contract.json"
+    / "tests/fixtures/rare_type_intelligence_read_contract_v1.json"
 )
 
 

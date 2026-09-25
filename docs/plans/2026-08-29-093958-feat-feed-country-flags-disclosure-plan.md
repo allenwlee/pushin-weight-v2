@@ -1005,7 +1005,7 @@ U5-U9 produced the validated About-user foundation, and the owner accepts U10 as
   - Modify `tests/test_home_v22_browser.py`.
   - Modify `tests/ui_assurance/evidence.py`.
   - Modify `tests/fixtures/ui_assurance/declaration.json`.
-  - Create `docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md`.
+  - Create `docs/iterations/2026-08-31-221955-feed-country-geography-bridgewright-target.md`.
   - Modify `bridgewright.yaml`.
 - **Approach:**
   1. Remove the secondary-copy button semantics and the second hide button from both render paths.

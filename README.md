@@ -371,6 +371,9 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Database schema](docs/reference/db-schema.md)
 - [Lookup tables](docs/reference/lookup-tables.md)
 - [Classifier prompts](docs/reference/classifier-prompts.md)
+- [Post commentary](docs/reference/commenter.md)
+- [Post translation](docs/reference/translator-output.md)
+- [Rare-type intelligence](docs/reference/rare-types.md)
 - [Trend narrative contract](docs/reference/headline-trend-narratives.md)
 - [Render deployment runbook](docs/deploy/render.md)
 - Production database access is documented in the project memory and Render runbook.

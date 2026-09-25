@@ -109,4 +109,4 @@ category. It is not an identifier alias for taxonomy-v3 `events` or
 `opportunities`. Exact event/opportunity analysis must filter to taxonomy v3;
 a compatibility query that includes all three keys must report the stored key
 and taxonomy for every row or group. See
-`docs/reference/2026-09-10-203138-stage1c-intelligence-analysis-contract.md`.
+`docs/analysis/2026-09-10-203138-stage1c-contracts.md`.

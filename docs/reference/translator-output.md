@@ -1,8 +1,9 @@
 # Post translation output
 The current Django post-fetch pipeline separates literal translation from
-analyst synthesis. Literal translation is eager and makes a post readable in
-English, Simplified Chinese, and Japanese. Rich synthesis is generated later
-only when there is bounded reader or operator demand.
+analyst commentary. Literal translation is eager and makes a post readable in
+English, Simplified Chinese, and Japanese. Commentary is generated later only
+when there is bounded reader or operator demand; its separate contract is in
+[`commenter.md`](commenter.md).
 
 The normalized artifact contract is documented in
 [`post-content-artifacts.md`](post-content-artifacts.md). The legacy columns on
@@ -39,19 +40,6 @@ in the normalized locale child; no new `posts.text_ja` column is required.
 Failed attempts are stored on the artifact parent with a safe error code and
 never replace the current successful artifact. Batch token usage is allocated
 across the rows once, so a twenty-post request is not counted twenty times.
-
-## Rich synthesis
-
-Rich commentary no longer comes from the literal translator. The synthesis
-worker writes one immutable, locale-complete artifact with distinct EN,
-ZH-CN, and JA commentary. It rejects blank, partial, or copied translation
-text. The legacy `posts.commentary_en` and `posts.commentary_zh_cn` fields are
-updated only as rollback projections.
-
-Synthesis is requested through the authenticated demand service and processed
-outside the web request. See
-[`post-content-artifacts.md`](post-content-artifacts.md) for queue identity,
-leases, caps, API behavior, and read precedence.
 
 ## Registry translation
 

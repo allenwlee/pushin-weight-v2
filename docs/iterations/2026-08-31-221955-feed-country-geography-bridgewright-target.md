@@ -10,7 +10,7 @@ Protected production baseline:
 `41af58ea3775f5741b21dc01a792c93b5739bc35`
 
 Prior approved interaction contract:
-`docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md`
+`docs/iterations/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md`
 
 The production page at the protected SHA remains authoritative for every
 unnamed surface.

@@ -8,7 +8,7 @@ instructions in the 2026-08-26 session
 Protected production baseline: `2184d58fa718cdc7bde2eb30861dd1f388aa3523`
 
 Prior approved chart contract:
-`docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md`
+`docs/iterations/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md`
 
 This contract supersedes the prior chart contract only for the targets below.
 The protected production baseline and earlier filter/feed and V24 contracts

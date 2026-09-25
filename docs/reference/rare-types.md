@@ -4,8 +4,10 @@ The combined rare-type lane saves paid X results before any Jev decision,
 classification, or extraction. Operators can therefore inspect each stage and
 retry selected saved hits without buying the X search again.
 
-The machine-readable output contract is
-`2026-09-24-220000-rare-type-intelligence-read-contract.json`. Counts use
+The machine-readable output contract, including root keys, nested paths, and
+complete examples, is
+[`tests/fixtures/rare_type_intelligence_read_contract_v1.json`](../../tests/fixtures/rare_type_intelligence_read_contract_v1.json).
+Contract tests compare the reader output with that fixture. Counts use
 different denominators deliberately: raw provider rows, normalized hits,
 distinct persisted posts, classified hits, extracted hits, visible hits,
 canonical records, and evidence rows are never interchangeable.

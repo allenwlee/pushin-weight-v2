@@ -6,17 +6,17 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 V24_MOCKUP = "docs/ideation/mockups/v24.html"
-V24_CONTRACT = "docs/reference/2026-08-19-132714-v24-bridgewright-target.md"
-PRODUCTION_CONTRACT = "docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md"
-CHART_CONTRACT = "docs/reference/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md"
-PREFERENCES_UI_CONTRACT = "docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md"
-PULSE_FEED_TIMEZONE_CONTRACT = "docs/reference/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md"
-CYBER_QUAN_CONTRACT = "docs/reference/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md"
-FEED_HEADLINE_CONTRACT = "docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md"
-HOVER_FREEZE_CONTRACT = "docs/reference/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
-GEOGRAPHY_CONTRACT = "docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
-FEED_INSPECTION_CONTRACT = "docs/reference/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
-UI_POLISH_CONTRACT = "docs/reference/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md"
+V24_CONTRACT = "docs/iterations/2026-08-19-132714-v24-bridgewright-target.md"
+PRODUCTION_CONTRACT = "docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md"
+CHART_CONTRACT = "docs/iterations/2026-08-24-162449-home-chart-time-axes-bridgewright-target.md"
+PREFERENCES_UI_CONTRACT = "docs/iterations/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md"
+PULSE_FEED_TIMEZONE_CONTRACT = "docs/iterations/2026-08-26-202742-pulse-feed-timezone-polish-bridgewright-target.md"
+CYBER_QUAN_CONTRACT = "docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md"
+FEED_HEADLINE_CONTRACT = "docs/iterations/2026-08-28-164425-feed-headline-usability-bridgewright-target.md"
+HOVER_FREEZE_CONTRACT = "docs/iterations/2026-08-28-181416-chart-hover-freeze-bridgewright-target.md"
+GEOGRAPHY_CONTRACT = "docs/iterations/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
+FEED_INSPECTION_CONTRACT = "docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
+UI_POLISH_CONTRACT = "docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md"
 STAGE1_PLAN = "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md"
 
 

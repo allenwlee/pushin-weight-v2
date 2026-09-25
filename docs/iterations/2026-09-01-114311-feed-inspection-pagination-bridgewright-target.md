@@ -10,7 +10,7 @@ Protected production baseline:
 `05552d030ab7369f3c9cc4b1464fc707868f88a0`
 
 Prior approved interaction contract:
-`docs/reference/2026-08-31-221955-feed-country-geography-bridgewright-target.md`
+`docs/iterations/2026-08-31-221955-feed-country-geography-bridgewright-target.md`
 
 Approved flag and inspection-card visual reference:
 `docs/ideation/2026-09-01-112352-country-flag-svg-reference.html`

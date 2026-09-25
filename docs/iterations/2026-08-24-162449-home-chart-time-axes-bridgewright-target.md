@@ -8,7 +8,7 @@ time-axis instruction in the 2026-08-24 session
 Protected production baseline: `e290ba67ef0cd382a34fc774cd3cc173e5a00b1f`
 
 Prior approved production contract:
-`docs/reference/2026-08-19-174833-production-filter-feed-bridgewright-target.md`
+`docs/iterations/2026-08-19-174833-production-filter-feed-bridgewright-target.md`
 
 This contract adds a narrow production Chart.js delta to Bridgewright. It
 supersedes the prior contract's Chart.js non-target only for the approved

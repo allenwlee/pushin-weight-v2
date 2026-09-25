@@ -9,7 +9,7 @@ Generated 2026-09-13T07:25:21.593895+09:00. Translations are agent-generated for
 - Frozen cases: `.context/u18/human-ambiguity-study-v1/selection-manifest.json`
 - Grok audit: `.context/u18/human-ambiguity-study-v1/grok-independent-audit.json`
 - Classifications: candidate v26, gold/v25, v18 base/secondary, v25 primary, and pending owner reference artifacts
-- Owner rationale: `docs/reference/2026-09-12-030118-u18-human-ambiguity-study.md`
+- Owner rationale: `docs/analysis/2026-09-12-030118-u18-human-ambiguity-study.md`
 
 ## H0040D161174
 

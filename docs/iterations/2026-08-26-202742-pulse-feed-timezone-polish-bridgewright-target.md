@@ -9,7 +9,7 @@ corrections on 2026-08-27
 Protected production baseline: `c2c713d07f6fb7c9659ae70f4d4d03dcf414ac7b`
 
 Prior approved UI contract:
-`docs/reference/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md`
+`docs/iterations/2026-08-26-141113-home-preferences-ui-regressions-bridgewright-target.md`
 
 This contract supersedes the prior preferences/UI contract only for the
 targets below. Every unnamed surface remains protected by the production

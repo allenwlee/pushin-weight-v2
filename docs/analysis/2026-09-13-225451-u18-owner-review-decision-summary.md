@@ -6,7 +6,7 @@
 - Human-review policy: the owner's review is the only human review for this 45-case development cohort
 - Owner source plus prevalence appendix: `docs/analysis/2026-09-13-203542-u18-owner-human-review-comments.md`
 - Machine-readable prevalence evidence: `docs/analysis/2026-09-14-075314-u18-owner-edge-prevalence.json`
-- Earlier owner calibration: `docs/reference/2026-09-12-030118-u18-human-ambiguity-study.md`
+- Earlier owner calibration: `docs/analysis/2026-09-12-030118-u18-human-ambiguity-study.md`
 - Review packet: `docs/analysis/2026-09-13-072308-u18-human-review-packet.md`
 
 ## Plain-English outcome

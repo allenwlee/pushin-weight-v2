@@ -9,7 +9,7 @@ Protected production baseline:
 `e2d48a2c642ccbf03407a7a1ecfd36161ab0f018`
 
 Prior approved usability contract:
-`docs/reference/2026-08-28-164425-feed-headline-usability-bridgewright-target.md`
+`docs/iterations/2026-08-28-164425-feed-headline-usability-bridgewright-target.md`
 
 This target permits only Release B in
 `docs/plans/2026-08-19-043225-feat-mockup-v23-plan.md`. The production page at

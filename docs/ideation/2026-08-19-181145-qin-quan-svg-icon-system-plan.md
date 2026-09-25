@@ -151,7 +151,7 @@ Contemporary mainland apps provide strong evidence for familiar social semantics
 ### Sources and Research
 
 - `docs/ideation/2026-08-19-154623-qin-quan-production-graphic-elements-inventory.md` — preserved deployed-graphics research and code-location baseline.
-- `docs/reference/2026-08-19-132714-v24-bridgewright-target.md` — approved additive V24 behavior and geometry target on current `main`.
+- `docs/iterations/2026-08-19-132714-v24-bridgewright-target.md` — approved additive V24 behavior and geometry target on current `main`.
 - `monitor/templates/monitor/home.html`, `monitor/templates/monitor/brand_home.html`, and `monitor/templates/monitor/home_internal.html` — current route and asset boundaries.
 - `monitor/templates/monitor/_feed_initial_v22.html`, `monitor/templates/monitor/_feed_initial_legacy.html`, and `monitor/static/pw-feed.js` — SSR and shared client-rendering paths.
 - `monitor/static/pw-tz.js`, `monitor/static/pw-chart.js`, `monitor/static/home-v20.css`, and `monitor/static/dashboard.css` — dynamic chrome, pseudo-content, and two customer style contexts.
@@ -295,7 +295,7 @@ flowchart TD
 - **Dependencies:** None.
 - **Goal:** Produce a durable, rights-aware baseline that cleanly separates semantic conventions from Qin-quan visual geometry.
 - **Requirements:** R1-R6, R11-R12, R18-R19.
-- **Files:** `docs/ideation/2026-08-19-154623-qin-quan-production-graphic-elements-inventory.md`, `docs/investigations/2026-08-19-181145-mainland-icon-semantics-and-qin-quan-geometry.md`, `docs/reference/2026-08-19-132714-v24-bridgewright-target.md`, `bridgewright.yaml`.
+- **Files:** `docs/ideation/2026-08-19-154623-qin-quan-production-graphic-elements-inventory.md`, `docs/investigations/2026-08-19-181145-mainland-icon-semantics-and-qin-quan-geometry.md`, `docs/iterations/2026-08-19-132714-v24-bridgewright-target.md`, `bridgewright.yaml`.
 - **Approach:** Begin with `./bin/ollija status --json`, current branch/worktree inspection, and a fresh main-based worktree after the overlapping UI work is settled. Re-run the browser-first inventory on `/`, the authenticated brand route, and `/internal/`. Build a semantic manifest for every fixed glyph and record its route, meaning, state, renderer, accessibility owner, and disposition. In a separate evidence table, record each quan artifact's period, material, museum or owner source, collection identifier, rights, observed geometry, and permitted abstract derivation. Preserve the production inventory as deployed truth; put candidate differences in the investigation.
 - **Execution note:** Characterize current browser behavior before editing source. Do not treat the stale checkout or temporary owner-image directory as the canonical baseline.
 - **Test Scenarios:**
