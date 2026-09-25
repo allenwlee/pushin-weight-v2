@@ -110,6 +110,7 @@ from core.product_verification import ProductReviewError, decide_product_proposa
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
+from x_monitor.translator import normalize_lang_detected
 
 log = logging.getLogger(__name__)
 
@@ -276,37 +277,6 @@ _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
     "pl": "波兰语",
     "undetected": "未检测",
     "other": "其他",
-}
-
-_COMPACT_LANG_NAMES_ZH_CN: dict[str, str] = {
-    "ar": "阿拉伯语",
-    "cs": "捷克语",
-    "da": "丹麦语",
-    "de": "德语",
-    "el": "希腊语",
-    "en": "英语",
-    "es": "西班牙语",
-    "fa": "波斯语",
-    "fi": "芬兰语",
-    "fr": "法语",
-    "he": "希伯来语",
-    "hi": "印地语",
-    "hu": "匈牙利语",
-    "id": "印度尼西亚语",
-    "it": "意大利语",
-    "ja": "日语",
-    "ko": "韩语",
-    "nl": "荷兰语",
-    "no": "挪威语",
-    "pl": "波兰语",
-    "pt": "葡萄牙语",
-    "ro": "罗马尼亚语",
-    "ru": "俄语",
-    "sv": "瑞典语",
-    "th": "泰语",
-    "tr": "土耳其语",
-    "uk": "乌克兰语",
-    "vi": "越南语",
 }
 
 # Presentation-only V22 lens. Brand has no open/closed schema field, and these
@@ -1215,10 +1185,10 @@ def _enrichment_status_label(status: str, locale: str) -> str:
 
 def _classification_status_label(status: str, locale: str) -> str:
     """Name semantic classification state without turning unknown into Other."""
+    if status in {"pending", "context_missing"}:
+        return ""
     labels = {
         "classified": ("已分类", "Classified", "分類済み"),
-        "context_missing": ("缺少上下文", "Context missing", "文脈不足"),
-        "pending": ("待分类", "Pending", "分類待ち"),
         "failed": ("分类失败", "Failed", "分類に失敗"),
         "historical_untyped": ("历史记录", "Historical", "過去の投稿"),
         "stale": ("已过期", "Stale", "期限切れ"),
@@ -1228,56 +1198,58 @@ def _classification_status_label(status: str, locale: str) -> str:
 
 
 def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]]:
-    """Show queue-backed work separately from completed or cancelled work."""
+    """Use one pending marker and retain separate terminal failure markers."""
     names = {
         "en": {"translation": "Translation", "classification": "Classification", "analysis": "Analysis"},
         "zh": {"translation": "翻译", "classification": "分类", "analysis": "分析"},
         "ja": {"translation": "翻訳", "classification": "分類", "analysis": "分析"},
     }
     messages = {
-        "en": {
-            "failed": "{name} failed. No more attempts are scheduled.",
-            "running_retry": "{name} is running again.",
-            "running": "{name} is running.",
-            "queued_retry": "{name} is queued for another attempt.",
-            "waiting": "{name} is waiting to run.",
-        },
-        "zh": {
-            "failed": "{name}失败。不会再重试。",
-            "running_retry": "{name}正在重试。",
-            "running": "{name}正在处理。",
-            "queued_retry": "{name}已排队重试。",
-            "waiting": "{name}正在等待处理。",
-        },
-        "ja": {
-            "failed": "{name}に失敗しました。再試行の予定はありません。",
-            "running_retry": "{name}を再試行中です。",
-            "running": "{name}を処理中です。",
-            "queued_retry": "{name}の再試行を待っています。",
-            "waiting": "{name}の処理を待っています。",
-        },
+        "en": "{name} failed. No more attempts are scheduled.",
+        "zh": "{name}失败。不会再重试。",
+        "ja": "{name}に失敗しました。再試行の予定はありません。",
     }
     language = "ja" if _is_ja_locale(locale) else "zh" if _is_zh_locale(locale) else "en"
     badges: list[dict[str, str]] = []
+    pending: set[str] = set()
+    language_pending = _language_undetected(post.get("lang_detected"))
 
-    def append(process: str, state: str, attempts: int) -> None:
+    def append(process: str, state: str) -> None:
         if state not in {"pending", "processing", "failed"}:
             return
-        if state == "failed":
-            phase = "failed"
-        elif state == "processing":
-            phase = "running_retry" if attempts > 1 else "running"
-        else:
-            phase = "queued_retry" if attempts else "waiting"
-        message = messages[language][phase].format(name=names[language][process])
-        badges.append({"process": process, "state": "failed" if state == "failed" else "pending", "message": message})
+        if state != "failed":
+            pending.add(process)
+            return
+        message = messages[language].format(name=names[language][process])
+        badges.append({"process": process, "state": "failed", "message": message})
 
-    for process, (state, attempts) in post.get("enrichment_stages", {}).items():
+    for process, (state, _attempts) in post.get("enrichment_stages", {}).items():
         if process in {"translation", "classification"}:
-            append(process, state, attempts)
+            append(process, state)
     synthesis_status = post.get("synthesis_status")
     if not post.get("synthesis_expired") or synthesis_status == "failed":
-        append("analysis", synthesis_status, post.get("synthesis_attempts", 0))
+        append("analysis", synthesis_status)
+    if pending:
+        pending_names = {
+            "en": {"translation": "translation", "classification": "analysis", "analysis": "commentary"},
+            "zh": {"translation": "翻译", "classification": "分析", "analysis": "评论"},
+            "ja": {"translation": "翻訳", "classification": "分析", "analysis": "解説"},
+        }
+        ordered = [pending_names[language][key] for key in ("translation", "classification", "analysis") if key in pending]
+        if language_pending and "translation" in pending:
+            detection = {"en": "language detection", "zh": "语言检测", "ja": "言語判定"}[language]
+            if len(pending) == 1:
+                ordered[0] = detection
+            else:
+                ordered.insert(0, detection)
+        if language == "en":
+            joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
+            message = joined.capitalize() + " pending."
+        else:
+            joined = ("と" if language == "ja" else "、").join(ordered)
+            message = joined + ("を待っています。" if language == "ja" else "待处理。")
+        badges.insert(0, {"process": "pending", "state": "pending", "message": message,
+                          "position": "language" if language_pending and "translation" in pending else "meta"})
     return badges
 
 
@@ -1331,29 +1303,15 @@ def _geography_accessible_label(label: str, locale: str) -> str:
 def _compact_language_display(lang_detected: str | None, locale: str) -> str:
     """Project persisted language metadata without guessing from post text."""
 
-    normalized = (lang_detected or "").strip().replace("_", "-").casefold()
+    normalized = normalize_lang_detected(lang_detected)
     use_zh = _is_zh_locale(locale)
-    if not normalized:
+    if not normalized or normalized == "other":
         return "未检测" if use_zh else "undetected"
-    if normalized == "other":
-        return "其他" if use_zh else "other"
-    if normalized in {"und", "unknown", "undetected"}:
-        return "未检测" if use_zh else "undetected"
-    if normalized in {"zh", "zh-cn", "zh-hans"}:
-        return "zh-Hans"
-    if normalized in {"zh-hant", "zh-tw", "zh-hk", "zh-mo"}:
-        return "zh-Hant"
-
-    primary = normalized.split("-", 1)[0]
-    if not re.fullmatch(r"[a-z]{2}", primary):
-        return "其他" if use_zh else "other"
-    if not use_zh:
-        return primary
-    return _COMPACT_LANG_NAMES_ZH_CN.get(primary, "其他")
+    return normalized
 
 
 def _language_undetected(lang_detected: str | None) -> bool:
-    return (lang_detected or "").strip().casefold() in {"", "und", "unknown", "undetected"}
+    return normalize_lang_detected(lang_detected) in {None, "other"}
 
 
 def _language_inspection(stages: dict[str, tuple[str, int]], locale: str) -> str:
@@ -4401,6 +4359,7 @@ def _serialize_feed_row(
         unsanctioned=unsanctioned,
     )
 
+    processing_badges = _processing_badges(post, locale)
     return {
         "tweet_id": post["tweet_id"],
         "created_at": post.get("created_at"),
@@ -4427,7 +4386,8 @@ def _serialize_feed_row(
         "synthesis_status_label": _synthesis_status_label(
             post.get("synthesis_status", "not_requested"), locale
         ),
-        "processing_badges": _processing_badges(post, locale),
+        "processing_badges": processing_badges,
+        "language_pending_badge": next((badge for badge in processing_badges if badge.get("position") == "language"), None),
         "like_count": post.get("like_count", 0),
         "retweet_count": post.get("retweet_count", 0),
         "reply_count": post.get("reply_count", 0),
@@ -5136,7 +5096,8 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     # explicit boundary so a future scoped feed cannot accidentally expose
     # demand or content for an unseen row.
     posts = list(Post.objects.filter(pk__in=unique_ids).order_by("pk"))
-    allowed = {str(post.pk) for post in posts}
+    posts_by_id = {str(post.pk): post for post in posts}
+    allowed = set(posts_by_id)
     if allowed != set(unique_ids):
         return JsonResponse({"error": "post not visible"}, status=404)
     if not poll_only:
@@ -5146,6 +5107,10 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
             config=config,
         )
     projections = read_post_content_many(posts)
+    states = {
+        state.post_id: state
+        for state in PostEnrichmentState.objects.filter(post_id__in=unique_ids)
+    }
     return JsonResponse(
         {
             "results": [
@@ -5153,6 +5118,12 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
                     "post_id": post_id,
                     "status": projections[post_id].synthesis_status,
                     "processing_badges": _processing_badges({
+                        "lang_detected": posts_by_id[post_id].lang_detected,
+                        "enrichment_stages": {
+                            stage: (getattr(states[post_id], f"{stage}_status"),
+                                    getattr(states[post_id], f"{stage}_attempts"))
+                            for stage in ("translation", "classification")
+                        } if post_id in states else {},
                         "synthesis_status": projections[post_id].synthesis_status,
                         "synthesis_attempts": projections[post_id].synthesis_attempts,
                         "synthesis_expired": projections[post_id].synthesis_expired,

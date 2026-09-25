@@ -1,5 +1,7 @@
 {% load static %}
-{% if row.language_undetected %}
+{% if row.language_pending_badge %}
+  <span class="post-language-tag processing-status enrichment-status-pending pw-inspection-trigger" role="button" tabindex="0" data-process="pending" data-pw-inspection="{{ row.language_pending_badge.message }}" aria-label="{{ row.language_pending_badge.message }}" aria-expanded="false"><svg class="pw-icon processing-glyph processing-armillary" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-pending-armillary-frame"></use><g class="inner-ring" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="11.1" rx="3.1" ry="7.3"></ellipse><path d="M7.7 4.7 16.3 17.5"></path></g><circle cx="12" cy="11.1" r="1.1" fill="currentColor" stroke="none"></circle></svg></span>
+{% elif row.language_undetected %}
   <span class="post-language-tag pw-inspection-trigger language-globe" role="button" tabindex="0" data-pw-inspection="{{ row.language_inspection }}" aria-label="{{ row.language_inspection }}" aria-expanded="false"><svg class="pw-icon language-globe-icon" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-language-globe"></use></svg></span>
 {% else %}
   <span class="post-language-tag">{{ row.language_display }}</span>

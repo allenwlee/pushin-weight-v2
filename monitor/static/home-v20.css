@@ -1207,7 +1207,7 @@
     width: 14px;
     height: 14px;
   }
-  .feed-row .enrichment-status-pending { color: #fbbf24; }
+  .feed-row .enrichment-status-pending { color: rgba(245, 158, 11, 0.58); }
   .feed-row .enrichment-status-failed { color: #fb7185; }
   .processing-armillary .inner-ring {
     transform-origin: 12px 11.1px;

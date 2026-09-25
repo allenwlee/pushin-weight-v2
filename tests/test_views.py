@@ -91,11 +91,11 @@ class TestSerializeFeedRow:
     @pytest.mark.parametrize(
         ("stages", "synthesis_status", "synthesis_attempts", "expected"),
         [
-            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("translation", "pending", "Translation is waiting to run.")]),
-            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("translation", "pending", "Translation is queued for another attempt."), ("analysis", "pending", "Analysis is queued for another attempt.")]),
+            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending.")]),
+            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending.")]),
             ({"translation": ("failed", 3), "classification": ("succeeded", 1)}, "failed", 3, [("translation", "failed", "Translation failed. No more attempts are scheduled."), ("analysis", "failed", "Analysis failed. No more attempts are scheduled.")]),
-            ({}, "processing", 1, [("analysis", "pending", "Analysis is running.")]),
-            ({}, "processing", 2, [("analysis", "pending", "Analysis is running again.")]),
+            ({}, "processing", 1, [("pending", "pending", "Commentary pending.")]),
+            ({}, "processing", 2, [("pending", "pending", "Commentary pending.")]),
             ({"translation": ("succeeded", 1), "classification": ("succeeded", 1)}, "cancelled", 1, []),
         ],
     )
@@ -121,6 +121,19 @@ class TestSerializeFeedRow:
         assert "classifications" in row
         assert "account" in row
         assert row["enrichment_status"] == "succeeded"
+
+    def test_language_detection_alone_uses_the_only_pending_marker(self):
+        row = _serialize_feed_row(_make_post(
+            "100", "2026-07-20T10:00:00+00:00",
+            lang_detected=None,
+            enrichment_stages={"translation": ("pending", 0)},
+            synthesis_status="ready",
+        ), "en")
+        assert row["processing_badges"] == [{
+            "process": "pending", "state": "pending",
+            "message": "Language detection pending.", "position": "language",
+        }]
+        assert row["language_pending_badge"] == row["processing_badges"][0]
 
     def test_account_display_name_prefers_account_then_snapshot_then_handle(self):
         named = _serialize_feed_row(_make_post(

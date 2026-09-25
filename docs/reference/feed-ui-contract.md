@@ -20,17 +20,23 @@ Single source of truth for the **dashboard feed table** (posts list under home /
 
 The current home feed uses `_feed_initial_v22.html` for its first batch and
 `pw-feed.js` for later or replaced rows. Both paths receive the same
-`processing_badges` wire field from `monitor/views.py`: translation,
-classification, and analysis each carry a `process`, `state`, and localized
-`message`. `pending` displays the animated armillary even after an attempted
-run returns to the queue. `failed` displays the stop marker only when the
-durable stage or demand is terminal. Ready, cancelled, and expired work has no
-status glyph. Hover and keyboard focus expose the specific message.
+`processing_badges` wire field from `monitor/views.py`. All pending translation,
+classification, and commentary work shares one animated armillary and one
+localized hover message per post, including work returned to the queue. If
+language detection is pending, the armillary occupies the language tag slot.
+Terminal failures retain separate stop markers. Ready, cancelled, and expired
+work has no status glyph. Hover and keyboard focus expose the specific message.
 
-When `lang_detected` is missing or undetected, a globe replaces the text
-language tag. While translation enrichment is pending, its hover says
-“Language detection pending” in English, with Japanese and Chinese equivalents
-for those locales. Other undetected states get a state-specific explanation.
+When `lang_detected` is missing, undetected, or the historical lossy value
+`other`, a globe replaces the text language tag after processing ends. Its
+hover describes the state. New translation results preserve validated ISO
+639-1 primary codes and display the two-letter code in every locale; Chinese
+script tags retain `zh-Hans` and `zh-Hant`. The bounded
+`repair_post_language_codes` command can resolve historical `other` rows
+without touching their translations or analysis.
+It defaults to a dry run; `--apply` requires the exact database name and
+provider-call count from that dry run. `--max-posts` caps each batch and
+`--after-post-id` resumes after the last reported `resume_after` cursor.
 
 The shared inspection popover clones the trigger's trusted SVG, flag, or text
 badge at a slightly larger size. Follower hover shows the magnitude, an SVG X

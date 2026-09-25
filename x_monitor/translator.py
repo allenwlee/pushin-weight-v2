@@ -520,7 +520,7 @@ _LANG_SYNONYMS: dict[str, str] = {
 
 
 def normalize_lang_detected(raw: object) -> str | None:
-    """Map raw LLM lang_detected to an allowlist form, or None if invalid."""
+    """Return a validated primary code or Chinese script tag, or None."""
     if raw is None:
         return None
     if not isinstance(raw, str):
@@ -547,19 +547,15 @@ def normalize_lang_detected(raw: object) -> str | None:
         return "zh-Hans"
     if s in LANG_DETECTED_ALLOWLIST:
         return s
-    # The persisted vocabulary groups every real language outside the named
-    # EN/ZH/JA/KO families into ``other``. Providers commonly return the more
-    # precise registered language tag (for example ``fr`` or ``es-MX``) even
-    # when the prompt requests that bucket. Accept an ISO 639-1 primary code
-    # with conservative region/script subtags; free-form, reserved, private,
-    # and undetermined values still take the bounded repair path.
+    # Preserve valid ISO 639-1 primary codes. Reject reserved, private, and
+    # undetermined tags through the existing bounded repair path.
     parts = s.split("-")
     if parts[0] in _ISO_639_1_PRIMARY_CODES and all(
         2 <= len(part) <= 8 and part.isascii() and part.isalnum()
         for part in parts[1:]
     ):
-        return "other"
-    # Case-sensitive allowlist members already covered; reject freeform.
+        return parts[0]
+    # Reject freeform, reserved, and private language tags.
     return None
 
 
@@ -585,7 +581,7 @@ def build_literal_translation_prompt(tweets: list[dict[str, Any]]) -> str:
         "same meaning in English, Simplified Chinese, and Japanese. Preserve "
         "names, model names, @mentions, URLs, emojis, numbers, and uncertainty. "
         "Do not add analysis, commentary, or facts. Detect the source language "
-        "as en, zh-Hans, zh-Hant, ja, ko, or other. Return JSON only with one "
+        "as an ISO 639-1 two-letter code (or zh-Hans/zh-Hant). Return JSON only with one "
         "result per input, in input order, using exactly this shape: "
         '{"results":[{"tweet_id":"...","lang_detected":"...",'
         '"text_en":"...","text_zh_cn":"...","text_ja":"..."}]}. '
@@ -755,9 +751,9 @@ _PRAGMATICS_SYSTEM_PROMPT: str = (
     "expressions such as 阴阳怪气 / 抽象话 / 套壳 / 蒸馏 / 舔狗 / 翻车 / 整活.\n\n"
     "For EACH input tweet, set fields in this order. "
     "`lang_detected` is REQUIRED and must never be omitted.\n\n"
-    "  lang_detected:    REQUIRED. One of: en | zh-Hans | zh-Hant | ja | ko | other. "
-    "Detect from the tweet text (not optional). Use `other` when none of the "
-    "named codes fit. Never leave blank.\n"
+    "  lang_detected:    REQUIRED. Use the source language's ISO 639-1 two-letter "
+    "code, or zh-Hans/zh-Hant for Chinese script. Detect from the tweet text "
+    "(not optional). Never leave blank.\n"
     "  text_en:          English text. Best interpretation of the source "
     "(English posts may echo source; non-English get a translation).\n"
     "  literal_zh:       Best-interpretation Simplified Chinese rendering. "
@@ -1106,7 +1102,7 @@ def _build_pragmatics_repair_prompt(
         "or copied a required output. For EVERY tweet below, return the full "
         "results array again, including distinct non-empty en_equivalent and "
         "cn_equivalent commentary. lang_detected is REQUIRED and must be one of: "
-        "en | zh-Hans | zh-Hant | ja | ko | other. Put lang_detected "
+        "a valid ISO 639-1 two-letter code or zh-Hans/zh-Hant. Put lang_detected "
         "first on each object. Do not omit it."
     )
     return base + addendum

@@ -83,6 +83,7 @@
             {% endwith %}
             <span class="meta">· {{ row.meta_text|default:'' }} <span class="ts-abs">{{ row.ts_abs_text|default:'' }}</span>
               {% for badge in row.processing_badges %}
+                {% if badge.position != 'language' %}
                 <button type="button" class="enrichment-status enrichment-status-{{ badge.state }} processing-status pw-inspection-trigger{% if badge.process == 'analysis' %} synthesis-status{% endif %}" data-process="{{ badge.process }}" data-pw-inspection="{{ badge.message }}" aria-label="{{ badge.message }}" aria-expanded="false">
                   {% if badge.state == 'pending' %}
                     <svg class="pw-icon processing-glyph processing-armillary" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-pending-armillary-frame"></use><g class="inner-ring" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="11.1" rx="3.1" ry="7.3"></ellipse><path d="M7.7 4.7 16.3 17.5"></path></g><circle cx="12" cy="11.1" r="1.1" fill="currentColor" stroke="none"></circle></svg>
@@ -90,6 +91,7 @@
                     <svg class="pw-icon processing-glyph" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-failed-stop"></use></svg>
                   {% endif %}
                 </button>
+                {% endif %}
               {% endfor %}
             </span>
           </div>
@@ -97,6 +99,7 @@
                data-language-display="{{ row.language_display }}"
                data-language-undetected="{% if row.language_undetected %}1{% else %}0{% endif %}"
                data-language-inspection="{{ row.language_inspection }}"
+               data-language-pending-message="{{ row.language_pending_badge.message|default:'' }}"
                data-commentary-zh-cn="{{ row.commentary_zh_cn|default:'' }}"
                data-commentary-en="{{ row.commentary_en|default:'' }}"
                data-commentary-ja="{{ row.commentary_ja|default:'' }}"
