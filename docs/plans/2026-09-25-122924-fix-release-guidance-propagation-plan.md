@@ -57,9 +57,10 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 
 ## Delivery Exceptions
 
-The owner explicitly requested implementation, commit, and push to the relevant repositories.
-This task ends at verified remote feature branches and installed local guidance. It does not
-request merge or application deployment. `on-request` does not cancel this explicit Git scope.
+The owner requested implementation, commit, and push, then on 2026-09-26 explicitly requested
+merging all four branches to their repositories' `main`. The current endpoint is verified
+remote-main integration and the previously installed local guidance. `on-request` does not
+cancel this explicit Git scope. No additional application deployment operation is requested.
 Unrelated dirty work stays in its original checkouts. No staging or production acceptance is
 applicable to these workflow and assurance-wrapper changes.
 
@@ -162,6 +163,10 @@ with the PushinWeight commit, so its own commit ID is supplied by Git rather tha
 
 ### Remaining integration scope
 
-This request ends at pushed feature branches and local tool installation. Main branches and
-application deployment are outside the request. Retain the tool source checkouts/worktrees
-while installations point at them. Preserve unrelated dirty files in primary checkouts.
+The initial commit-and-push request finished at the recorded feature branches and local tool
+installation. The 2026-09-26 continuation authorizes merging those four branches to remote
+`main`. Use ordinary non-forced integration, satisfying actual repository protection and PR
+policy. All four remote bases were ancestors of their feature candidates at intake; the CE
+fork includes its upstream 3.28.2 baseline update. Verify candidate ancestry in remote-main,
+or the equivalent merged tree for repositories requiring squash merges. Retain source checkouts/worktrees while installations point at them
+and preserve unrelated local-main commits and dirty files in primary checkouts.
