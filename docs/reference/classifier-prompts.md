@@ -1,9 +1,9 @@
 # Stage 1 classifier prompts — v4 two-role contract
 
 Version: v0.2.0-beta.1 (classifier taxonomy `stage1-taxonomy-v4`)
-Last updated: 2026-09-21 12:39:30 JST
+Last updated: 2026-09-28 21:57:05 JST
 
-This is the current production classifier snapshot. The selected route uses
+This describes the current classifier code; deployment may lag the selected revision. The selected route uses
 DeepSeek V4 Flash 0731 directly through DeepInfra's OpenAI-compatible endpoint
 (`deepseek-ai/DeepSeek-V4-Flash-0731`) with reasoning disabled. Each batch has
 at most 20 posts and makes exactly two concurrent calls: `content` and
@@ -16,7 +16,7 @@ call in this topology.
 | --- | --- |
 | Contract | `stage1-v1` |
 | Taxonomy | `stage1-taxonomy-v4` |
-| Prompt | `stage1-prompt-v4` |
+| Prompt | `stage1-prompt-v4`; selected role revisions: content `stage1-content-0731-v6`, brand `stage1-brand-interpretation-0731-v5`, final `stage1-two-role-merge-0731-v6` |
 | Provider route | DeepInfra OpenAI-compatible API |
 | Model | `deepseek-ai/DeepSeek-V4-Flash-0731` |
 | Request profile | `deepseek_0731` |
@@ -80,6 +80,12 @@ proof that the post's advertising, praise, criticism, results, or sentiment
 belongs to it. Reviewed staff/official affiliation is authorship evidence, not
 a content predicate.
 
+For advertising, the tracked brand must itself be the marketed offering or
+beneficiary. A prize brand on Token Machine's daily spin, or GLM featured in a
+B.AI platform guide, does not inherit that untracked subject's promotion.
+Independent tracked-brand and untracked promotions can both be recorded when
+the visible source supports each one.
+
 ## Content-role prompt
 
 ```text
@@ -98,7 +104,7 @@ POST TYPES:
 - hands_on_usage: the author or quoted firsthand actor explicitly used, set up, demonstrated, tested, or built something with this brand. Reporting, affiliation, recommendation, or architectural commentary alone is insufficient.
 - results_analysis: source-visible product performance or quality evidence: observed output, measurement, benchmark, ranking, comparison, or substantive reasoned evaluation. Generic praise, unsupported superiority claims, and unseen media/link contents are insufficient.
 - questions_requests: a genuine question, support/correction request, or desired product change.
-- advertising_marketing: a pitch, call to action, showcase, discount, or promotional launch for this brand. A comparison foil cannot inherit another brand's promotion.
+- advertising_marketing: a pitch, call to action, showcase, discount, or promotional launch whose marketed offering or marketing beneficiary is this tracked brand. Identify the promoted subject and beneficiary before labeling each brand. Mere mention of this brand inside another subject's pitch is not this brand's advertising, even when the brand/model is praised, featured, usable on the platform, or named in a call to action for that other subject. A prize, token denomination, spin option, compatibility ingredient, benchmark participant, or comparison foil cannot inherit another subject's promotion. For example, a Token Machine daily-spin pitch offering DeepSeek/Qwen/Hunyuan tokens promotes Token Machine, not those prize brands. A B.AI guide/platform pitch featuring GLM promotes B.AI, not Zhipu merely because GLM is highlighted. Still label this tracked brand when the visible source independently pitches its own product or includes a separate direct call to action for it; tracked and untracked promotions may coexist when both have independent evidence.
 - events: an organized past/current/future occurrence requiring attendance at a physical, live-online, or hybrid venue/session.
 - opportunities: bounded availability requiring action for a concrete benefit or chance of benefit. A hackathon can be both events and opportunities.
 - job_listings: a concrete vacancy plus an actionable application route.
@@ -211,8 +217,3 @@ classifier topology.
 - `x_monitor/config.py` and `config.yaml` — provider/model/request profile.
 - `tests/test_classify_batch_pragmatics_full.py` and focused prompt tests —
   regression coverage for batching, parsing, contract identity, and merge.
-
-Last reviewed: 2026-09-21 12:39:30 JST — Current v4 two-role prompt contract
-reconciled against source constants, route configuration, and merge/parser
-code. Historical prompt versions remain readable for compatibility but are not
-part of the production route.

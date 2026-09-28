@@ -145,6 +145,7 @@ from x_monitor.attribution import (
     LLMCallBudgetExhausted,
     MentionRow,
     _two_role_fingerprint,
+    _two_role_revisions,
     attribute_to_brands,
     compile_keyword_index,
 )
@@ -884,6 +885,29 @@ class _BoundedClassifierClient:
         """Forward raw-text requests through the same physical-call budget."""
         self._start_physical_call(kwargs)
         return self._delegate.messages_create_text(**kwargs)
+
+
+class _RepairRetryLimitedClient:
+    """Allow one provider retry per Stage 1 role during an exact-ID repair."""
+
+    def __init__(self, delegate: Any) -> None:
+        self._delegate = delegate
+        self._attempts: dict[str, int] = defaultdict(int)
+        self._lock = threading.Lock()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._delegate, name)
+
+    def messages_create(self, **kwargs: Any) -> Any:
+        from x_monitor.deepinfra import DeepInfraPermanentError
+
+        system = str(kwargs.get("system") or "")
+        role = "content" if "CONTENT ROLE:" in system else "brand_interpretation"
+        with self._lock:
+            self._attempts[role] += 1
+            if self._attempts[role] > 2:
+                raise DeepInfraPermanentError("repair_transport_attempt_cap")
+        return self._delegate.messages_create(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -2352,7 +2376,38 @@ def _persist_attribution(
 # ============================================================================
 
 
-def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
+def _repair_result_matches_manifest(
+    result: Any, expected: dict[str, Any],
+) -> bool:
+    """Fail closed unless a selected result is the reviewed complete judgment."""
+    if not isinstance(result, dict) or result.get("valid") is not True:
+        return False
+    trace = result.get("classification_trace")
+    if not isinstance(trace, dict):
+        return False
+    content = trace.get("content")
+    brand = trace.get("brand_interpretation")
+    final = trace.get("final")
+    if not all(isinstance(stage, dict) for stage in (content, brand, final)):
+        return False
+    content_revision, brand_revision, merge_revision = _two_role_revisions("deepseek_0731")
+    return (
+        content.get("role_revision") == content_revision
+        and brand.get("role_revision") == brand_revision
+        and final.get("role_revision") == merge_revision
+        and final.get("input_context_fingerprint")
+        == expected.get("input_context_fingerprint")
+        and final.get("by_brand") == expected.get("by_brand")
+        and result.get("by_brand") == expected.get("by_brand")
+        and result.get("untracked_brand_promotions")
+        == expected.get("untracked_brand_promotions")
+        and result.get("promoted_subjects") == expected.get("promoted_subjects")
+    )
+
+
+def plan_calls_for_cycle(
+    cfg: Config | None = None, *, scheduled_exclusions: bool = False,
+) -> list[PlannedCall]:
     """Plan harvest calls from settings — shared by CycleRunner and backfill.
 
     Reads X_MONITOR_LIST_ID, brand filter, primary keywords, and
@@ -2377,7 +2432,7 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         )
         return []
 
-    from x_monitor.harvest_policy import load_policy
+    from x_monitor.harvest_policy import active_excluded_author_handles, load_policy
     from x_monitor.specs_from_policy import (
         primary_keywords_from_policy,
         specs_from_policy,
@@ -2411,6 +2466,9 @@ def plan_calls_for_cycle(cfg: Config | None = None) -> list[PlannedCall]:
         list_id,
         x_query_specs,
         primary_keywords=primary_keywords,
+        excluded_author_handles=(
+            active_excluded_author_handles(policy) if scheduled_exclusions else ()
+        ),
     )
     calls.extend(plan_discovery_calls(cfg, list_id=int(list_id)))
     return calls
@@ -2595,7 +2653,9 @@ class CycleRunner:
     def _plan_calls(self) -> list[PlannedCall]:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
-            calls = plan_calls_for_cycle(self.cfg)
+            calls = plan_calls_for_cycle(
+                self.cfg, scheduled_exclusions=self.cycle_kind == "scheduled",
+            )
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
             self._errors.append(f"plan: {exc}")
@@ -3532,6 +3592,7 @@ class CycleRunner:
         deadline: Any | None = None,
         prefer_created_before: datetime | None = None,
         post_ids: set[str] | None = None,
+        repair_manifest: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -4083,7 +4144,10 @@ class CycleRunner:
                 else max(0, self._max_llm_calls - self._llm_call_count)
             )
             bounded_classifier_client = _BoundedClassifierClient(
-                classifier_client,
+                (
+                    _RepairRetryLimitedClient(classifier_client)
+                    if repair_manifest is not None else classifier_client
+                ),
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=pause_sec,
                 monotonic=self._monotonic,
@@ -4117,8 +4181,30 @@ class CycleRunner:
             finally:
                 self._llm_call_count += bounded_classifier_client.calls
 
+        if repair_manifest is not None:
+            # A repair is an exact-set operation. Inspect every complete result
+            # before the first current judgment can be replaced; a model drift
+            # on any axis aborts publication for the whole selected batch.
+            observed_ids = {str(tweet["tweet_id"]) for tweet in classification_tweets}
+            expected_ids = set(repair_manifest)
+            results_match = (
+                observed_ids == expected_ids
+                and len(results) == len(classification_tweets)
+                and all(
+                    _repair_result_matches_manifest(result, repair_manifest[str(tweet["tweet_id"])])
+                    for tweet, result in zip(classification_tweets, results)
+                )
+            )
+            if not results_match:
+                self._errors.append("post_fetch.repair_manifest_mismatch")
+                classification_error_code = "repair_manifest_mismatch"
+                results = []
+
         classification_succeeded: set[str] = set()
-        targeted_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
+        targeted_calls_remaining = (
+            0 if repair_manifest is not None
+            else self.cfg.targeted_extraction.max_calls_per_cycle
+        )
         counters["n_targeted_extraction_calls"] = 0
         counters["n_targeted_records_written"] = 0
         counters["n_targeted_evidence_written"] = 0
@@ -4146,6 +4232,12 @@ class CycleRunner:
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
+                if repair_manifest is not None:
+                    # Exact Stage 1 repair is not a targeted-extraction run.
+                    counters["n_classifications_published"] = (
+                        counters.get("n_classifications_published", 0) + 1
+                    )
+                    continue
                 from core.targeted_extraction import run_targeted_extractions
 
                 post_types = {

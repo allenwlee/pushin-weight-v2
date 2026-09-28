@@ -15,7 +15,7 @@ from pathlib import Path
 
 from scripts.harvest_cost.engine import cost_cycle_from_summary
 from scripts.harvest_cost.pricing import PricingRates
-from x_monitor.harvest_policy import load_policy
+from x_monitor.harvest_policy import active_excluded_author_handles, load_policy
 from x_monitor.query_plan import plan_calls
 from x_monitor.specs_from_policy import (
     primary_keywords_from_policy,
@@ -84,6 +84,7 @@ def _planned_calls():
         2067062923525275922,
         specs,
         primary_keywords=primary_keywords_from_policy(policy),
+        excluded_author_handles=active_excluded_author_handles(policy),
     )
 
 
@@ -91,8 +92,12 @@ def test_current_planner_order_and_exact_queries_match_exhibit() -> None:
     """The exact strings sent by the policy-derived planner stay reviewable."""
     calls = _planned_calls()
     assert tuple(call.call_id for call in calls) == EXPECTED_PLANNER_CALL_ORDER
-    assert {call.call_id: call.query_string for call in calls} == EXPECTED_QUERY_EXHIBIT
+    assert {call.call_id: call.query_string for call in calls} == {
+        call_id: f"{query} -from:xxyweb3"
+        for call_id, query in EXPECTED_QUERY_EXHIBIT.items()
+    }
     assert all(call.query_length == len(call.query_string) for call in calls)
+    assert all(call.query_string.count("-from:xxyweb3") == 1 for call in calls)
 
 
 def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:

@@ -113,7 +113,7 @@ def test_real_cycle_persists_db_only_aliases_including_production_kimi_miss(
         ]
     )
     monkeypatch.setattr(
-        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
@@ -165,7 +165,7 @@ def test_real_cycle_normalizes_quoted_literal_before_compilation(
         ]
     )
     monkeypatch.setattr(
-        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
@@ -200,7 +200,7 @@ def test_missing_policy_mapping_blocks_provider_construction(
         raise AssertionError("provider must not be constructed")
 
     monkeypatch.setattr(
-        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient, "from_env", classmethod(_provider)
@@ -239,7 +239,7 @@ def test_unknown_enabled_brand_blocks_provider_construction(
     cfg.enabled_models.append("not_in_policy")
     constructed: list[object] = []
     monkeypatch.setattr(
-        cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [_planned()]
+        cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,

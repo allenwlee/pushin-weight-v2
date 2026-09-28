@@ -56,7 +56,7 @@ def _translation_response(tweets):
                     "text_en": "Synthetic English translation",
                     "literal_zh": "合成翻译",
                     "text_zh_cn": "合成翻译",
-                    "lang_detected": "fr",
+                    "lang_detected": "other",
                     "en_equivalent": "A concise equivalent.",
                     "cn_equivalent": "简洁等价表达。",
                     "annotation": "",
@@ -362,7 +362,10 @@ def test_cycle_post_fetch_uses_real_factories_and_bounded_workers(caplog, monkey
     assert len(requests) == 6
     assert {request["host"] for request in requests} == {"api.deepseek.com"}
     assert all(request["headers"]["x-api-key"] == "test-key" for request in requests)
-    assert all(state.translation_status == "succeeded" for state in states)
+    assert all(state.translation_status == "succeeded" for state in states), [
+        (state.post_id, state.translation_status, state.translation_error_code)
+        for state in states if state.translation_status != "succeeded"
+    ]
     assert all(state.classification_status == "succeeded" for state in states)
     events = _events(caplog)
     assert len(events) == 6

@@ -98,7 +98,7 @@ def cycle(monkeypatch, seeded_policy_keywords):
         monkeypatch.setattr(
             cycle_mod,
             "plan_calls_for_cycle",
-            lambda cfg=None: list(calls if calls is not None else _full_cycle_plan()),
+            lambda cfg=None, **_kwargs: list(calls if calls is not None else _full_cycle_plan()),
         )
         monkeypatch.setattr(
             cycle_mod.TwitterApiClient,

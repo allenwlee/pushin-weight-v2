@@ -48,7 +48,7 @@ def test_all_seven_tip_pages_are_persisted_before_any_deep_work(monkeypatch):
             ], False
 
     api = Api()
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: calls)
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: calls)
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",

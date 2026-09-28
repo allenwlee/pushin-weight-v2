@@ -74,7 +74,7 @@ def _check_transition(
         expected = ALL if value == ALL else [value]
         assert state["filters"][control] == expected
     elif control == "untracked_brand_promotions":
-        expected = "off" if value == "off" else [value]
+        expected = value if value in {"off", "only", "any"} else [value]
         assert state["filters"][control] == expected
     elif control in {"unsanctioned", "window"}:
         expected = int(value) if control == "window" else value
@@ -115,7 +115,7 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
             expected = ALL if value == ALL else [value]
             assert observed["controls"][control] == expected
         elif control == "untracked_brand_promotions":
-            expected = "off" if value == "off" else [value]
+            expected = value if value in {"off", "only", "any"} else [value]
             assert observed["controls"][control] == expected
         elif control in {"unsanctioned", "window"}:
             expected = int(value) if control == "window" else value
@@ -162,6 +162,7 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert after["controls"] == before
     elif invariant_id == "flagged-partition-is-exact":
         state = set_control(initial_state(), "window", 365)
+        state = set_control(state, "untracked_brand_promotions", "any")
         off = filter_posts(fixture, set_control(state, "unsanctioned", "off"))
         only = filter_posts(fixture, set_control(state, "unsanctioned", "only"))
         off_ids = {row["id"] for row in off}
@@ -330,6 +331,7 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert explicit_other["post_types"] == ["other"]
     elif invariant_id == "residual-filter-partitions-stay-distinct":
         state = set_control(initial_state(), "window", 365)
+        state = set_control(state, "untracked_brand_promotions", "any")
 
         def complete_feed(control: str, value: str) -> set[str]:
             selected = set_control(state, control, value)
@@ -478,12 +480,19 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         assert observed["network"]["pagination_exhausted"] is True
     elif seed_id == "stage1-empty-products-and-statuses-remain-visible":
         _check_invariant(fixture, "stage1-classification-states-stay-distinct")
-        default_feed = projection(fixture, initial_state())["feed"]
+        default_feed = projection(
+            fixture,
+            set_control(initial_state(), "untracked_brand_promotions", "any"),
+        )["feed"]
         assert "p03" in default_feed
         assert "p05" in default_feed
         with_products = projection(
             fixture,
-            set_control(initial_state(), "product_labels", "bug"),
+            set_control(
+                set_control(initial_state(), "untracked_brand_promotions", "any"),
+                "product_labels",
+                "bug",
+            ),
         )["feed"]
         assert with_products == ["p01", "p09"]
     elif seed_id == "other-only-keeps-residual-states-distinct":

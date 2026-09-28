@@ -8,10 +8,11 @@
   var LEGACY_STORAGE_PREFIX = 'pushinweight.home.preferences.v1:';
   var MULTI_VALUE_KEYS = [
     'brands', 'product_labels', 'post_types', 'audience_topics',
+    'geopolitical_modes', 'china_national_stance', 'us_national_stance',
     'role', 'lang', 'sentiment', 'cn_nationalism', 'us_nationalism',
   ];
   var FILTER_QUERY_KEYS = MULTI_VALUE_KEYS.concat([
-    'unsanctioned', 'window'
+    'untracked_brand_promotions', 'unsanctioned', 'window'
   ]);
   var ALLOWED_WINDOWS = [1, 7, 30, 365];
   var body = document.body;
@@ -31,12 +32,16 @@
       product_labels: '__all__',
       post_types: '__all__',
       audience_topics: '__all__',
+      geopolitical_modes: '__all__',
+      china_national_stance: '__all__',
+      us_national_stance: '__all__',
       role: '__all__',
       lang: '__all__',
       sentiment: '__all__',
       cn_nationalism: '__all__',
       us_nationalism: '__all__',
-      unsanctioned: 'off',
+      untracked_brand_promotions: 'off',
+      unsanctioned: 'any',
       window: 1,
     };
   }
@@ -88,6 +93,12 @@
       return inputs.some(function (input) { return input.checked && input.value === 'only'; })
         ? 'only' : 'off';
     }
+    if (group === 'untracked_brand_promotions') {
+      var selectedPromotions = inputs.filter(function (input) { return input.checked; })
+        .map(function (input) { return input.value; });
+      return !selectedPromotions.length ? 'off' :
+        selectedPromotions.length === inputs.length ? 'only' : selectedPromotions;
+    }
     var selected = inputs.filter(function (input) { return input.checked; })
       .map(function (input) { return input.value; });
     if (selected.length === inputs.length) return '__all__';
@@ -97,7 +108,7 @@
   function hydrateFromControlPanel(initial) {
     var panel = getFilterPanel();
     if (!panel) return initial;
-    MULTI_VALUE_KEYS.concat(['unsanctioned']).forEach(function (group) {
+    MULTI_VALUE_KEYS.concat(['untracked_brand_promotions', 'unsanctioned']).forEach(function (group) {
       var value = valueFromControls(panel, group);
       if (value !== undefined) initial[group] = value;
     });
@@ -160,6 +171,9 @@
             if (MULTI_VALUE_KEYS.indexOf(key) !== -1) {
               return parsed[key] === '__all__' || Array.isArray(parsed[key]) || typeof parsed[key] === 'string';
             }
+            if (key === 'untracked_brand_promotions') {
+              return ['off', 'only', 'any'].indexOf(parsed[key]) !== -1 || Array.isArray(parsed[key]);
+            }
             if (key === 'unsanctioned') return ['off', 'only', 'any'].indexOf(parsed[key]) !== -1;
             return ALLOWED_WINDOWS.indexOf(Number(parsed[key])) !== -1;
           });
@@ -170,6 +184,7 @@
       if (!params.has(key)) return false;
       var value = params.get(key);
       if (MULTI_VALUE_KEYS.indexOf(key) !== -1) return Boolean(value);
+      if (key === 'untracked_brand_promotions') return Boolean(value);
       if (key === 'unsanctioned') return ['off', 'only', 'any'].indexOf(value) !== -1;
       return ALLOWED_WINDOWS.indexOf(Number(value)) !== -1;
     });
@@ -181,6 +196,9 @@
     if (!Array.isArray(value)) return clone(fallback);
     var allowed = controlsForGroup(getFilterPanel(), group)
       .map(function (input) { return input.value; });
+    if (group === 'brands' && allowed.indexOf('stepfun') !== -1) {
+      value = value.map(function (item) { return item === 'step' ? 'stepfun' : item; });
+    }
     if (!allowed.length) return clone(value);
     var seen = [];
     value.forEach(function (item) {
@@ -197,6 +215,14 @@
         normalized[group] = normalizeMultiValue(group, candidate[group], fallback[group]);
       }
     });
+    if (Array.isArray(candidate.untracked_brand_promotions)) {
+      normalized.untracked_brand_promotions = normalizeMultiValue(
+        'untracked_brand_promotions', candidate.untracked_brand_promotions,
+        fallback.untracked_brand_promotions
+      );
+    } else if (['off', 'only', 'any'].indexOf(candidate.untracked_brand_promotions) !== -1) {
+      normalized.untracked_brand_promotions = candidate.untracked_brand_promotions;
+    }
     if (candidate.unsanctioned === 'only' || candidate.unsanctioned === 'off' || candidate.unsanctioned === 'any') {
       normalized.unsanctioned = candidate.unsanctioned;
     }
@@ -316,7 +342,8 @@
       if (group === 'unsanctioned') {
         input.checked = value === 'only' && input.value === 'only';
       } else if (group === 'untracked_brand_promotions') {
-        input.checked = Array.isArray(value) && value.indexOf(input.value) !== -1;
+        input.checked = value === 'only' ||
+          (Array.isArray(value) && value.indexOf(input.value) !== -1);
       } else if (value === '__all__') {
         input.checked = true;
       } else {
@@ -384,7 +411,7 @@
   function wireControlPanel() {
     var panel = getFilterPanel();
     if (panel) {
-      MULTI_VALUE_KEYS.concat(['unsanctioned']).forEach(syncControlPanelGroup);
+      MULTI_VALUE_KEYS.concat(['untracked_brand_promotions', 'unsanctioned']).forEach(syncControlPanelGroup);
       panel.querySelectorAll('input[type="checkbox"][data-pw-filter-group]').forEach(function (input) {
         input.addEventListener('change', function () {
           syncFromControls(input.getAttribute('data-pw-filter-group'));

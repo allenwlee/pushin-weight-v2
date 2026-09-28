@@ -44,6 +44,7 @@ assert(california.iconClass === 'tz-bj-icon' && california.iconSymbol === 'icon-
 assert(timezoneCopy('en', california).shortLabel === 'Beijing', 'English chart row says Beijing');
 assert(timezoneCopy('zh_cn', california).shortLabel === '北京', 'Chinese chart row says 北京');
 assert(timezoneCopy('zh_cn', tokyo).shortLabel === '加州', 'Chinese California row says 加州');
+assert(timezoneCopy('ja', tokyo).localLabel === '現地', 'Japanese local timestamp says 現地');
 assert(
   timezoneCopy('en', california).toggleTitle === 'Toggle local ⇄ Beijing time',
   'English Beijing toggle has an accessible name'

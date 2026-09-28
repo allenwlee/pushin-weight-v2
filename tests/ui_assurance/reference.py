@@ -15,6 +15,9 @@ MULTI_CONTROLS = {
     "role": "role",
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
+    "geopolitical_modes": "geopolitical_modes",
+    "china_national_stance": "china_national_stance",
+    "us_national_stance": "us_national_stance",
     "product_labels": "product_labels",
     "audience_topics": "audience_topics",
 }
@@ -47,9 +50,13 @@ def initial_state() -> dict[str, Any]:
             "role": ALL,
             "nationalism_cn": ALL,
             "nationalism_us": ALL,
+            "geopolitical_modes": ALL,
+            "china_national_stance": ALL,
+            "us_national_stance": ALL,
             "product_labels": ALL,
             "audience_topics": ALL,
             "unsanctioned": "off",
+            "untracked_brand_promotions": "off",
             "window": 1,
         },
         "locale": "en",
@@ -207,11 +214,14 @@ def filter_posts(
         if filters["unsanctioned"] == "only" and not post["flagged"]:
             continue
         promotions = filters.get("untracked_brand_promotions", "off")
-        if promotions != "off" and promotions != "any":
+        actual_promotions = post.get("untracked_brand_promotions", [])
+        if promotions == "off" and actual_promotions:
+            continue
+        if promotions == "only" and not actual_promotions:
+            continue
+        if not isinstance(promotions, str) or promotions not in {"off", "any", "only"}:
             selected_promotions = promotions if isinstance(promotions, list) else [promotions]
-            if not set(selected_promotions).intersection(
-                post.get("untracked_brand_promotions", [])
-            ):
+            if not set(selected_promotions).intersection(actual_promotions):
                 continue
         if not all(
             _matches_value(post, control, field, filters[control])

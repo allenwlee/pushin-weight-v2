@@ -6,13 +6,18 @@ import pytest
 from django.test import override_settings
 
 from monitor.views import (
+    _feed_abs_stamp,
     _decode_cursor,
     _feed_tint_class,
     _follower_bin,
     _parse_filters_from_request,
+    _normalize_home_filters,
+    _processing_badges,
+    _feed_signal_inspections,
     _partition_home_brands,
     _serialize_feed_row,
 )
+from datetime import datetime, timezone
 
 
 def test_home_brand_partition_keeps_authored_closed_tier():
@@ -26,6 +31,76 @@ def test_home_brand_partition_keeps_authored_closed_tier():
     assert [brand["nickname"] for brand in closed_brands] == [
         "gemini", "gpt",
     ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(["step"], ["stepfun"]), (["step", "stepfun"], ["stepfun"]),
+     (["stepping"], ["stepping"]), ("step", ["stepfun"]),
+     ("__all__", "__all__")],
+)
+@pytest.mark.django_db
+def test_retired_step_filter_normalizes_only_exact_value(raw, expected):
+    from core.models import Brand
+
+    Brand.objects.create(nickname="stepfun", display_name="StepFun")
+    assert _normalize_home_filters({"brands": raw})["brands"] == expected
+
+
+@pytest.mark.parametrize(
+    ("locale", "translation", "analysis", "commentary"),
+    [
+        ("en", "about 5 minutes", "about 15 minutes", "about 1 minute"),
+        ("zh_cn", "约5分钟", "约15分钟", "约1分钟"),
+        ("ja", "約5分", "約15分", "約1分"),
+    ],
+)
+def test_pending_averages_are_localized_and_lifecycle_specific(
+    locale, translation, analysis, commentary
+):
+    badges = _processing_badges({
+        "lang_detected": None,
+        "enrichment_stages": {
+            "translation": ("pending", 0),
+            "classification": ("pending", 0),
+        },
+        "synthesis_status": "pending",
+    }, locale)
+    assert [badge["position"] for badge in badges] == ["language", "meta"]
+    assert translation in badges[0]["message"]
+    assert analysis not in badges[0]["message"]
+    assert commentary not in badges[0]["message"]
+    assert translation not in badges[1]["message"]
+    assert analysis in badges[1]["message"]
+    assert commentary in badges[1]["message"]
+    failed = _processing_badges({
+        "lang_detected": "en",
+        "enrichment_stages": {"translation": ("failed", 3)},
+        "synthesis_status": "failed",
+    }, locale)
+    assert all("average" not in badge["message"] for badge in failed)
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("en", ("Geopolitical mode", "China: Supportive", "U.S.: Critical")),
+        ("zh_cn", ("地缘政治模式", "中国: 支持", "美国: 批评")),
+        ("ja", ("地政学的な論調", "中国: 支持", "米国: 批判")),
+    ],
+)
+def test_geopolitical_inspection_includes_mode_and_both_stances(locale, expected):
+    inspections = _feed_signal_inspections({
+        "glm": {
+            "geopolitical_modes": [{"key": "framework", "label": "Framework"}],
+            "china_national_stance": {"key": "pro", "label": expected[1].split(": ", 1)[1]},
+            "china_national_stance_status": "available",
+            "us_national_stance": {"key": "constructive_critical", "label": expected[2].split(": ", 1)[1]},
+            "us_national_stance_status": "available",
+        }
+    }, [{"nickname": "glm", "display_name": "Zhipu", "display_name_en": "Zhipu"}], locale, unsanctioned=False)
+    text = inspections["geopolitical_mode"]["framework"][0]["text"]
+    assert all(part in text for part in expected)
 
 
 # ============================================================================
@@ -88,14 +163,25 @@ class TestDecodeCursor:
 
 
 class TestSerializeFeedRow:
+    @pytest.mark.parametrize(("locale", "label"), [
+        ("en", "local"), ("zh_cn", "本地"), ("ja", "現地"),
+    ])
+    def test_absolute_stamp_fallback_uses_request_locale(self, locale, label):
+        when = datetime(2026, 9, 28, 8, 7, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 28, 9, 7, tzinfo=timezone.utc)
+        assert _feed_abs_stamp(when, locale=locale, now=now) == f"(08:07 {label})"
+        assert _feed_abs_stamp(when, locale=locale, tz_mode="ca", now=now) == "(01:07 CA)"
+        assert _feed_abs_stamp(when, locale=locale, now=now.replace(day=29)) == ""
+        assert _feed_abs_stamp("not-a-date", locale=locale, now=now) == ""
+
     @pytest.mark.parametrize(
         ("stages", "synthesis_status", "synthesis_attempts", "expected"),
         [
-            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending.")]),
-            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending.")]),
+            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending. Historical first-attempt translation average: about 5 minutes.")]),
+            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt commentary average: about 1 minute.")]),
             ({"translation": ("failed", 3), "classification": ("succeeded", 1)}, "failed", 3, [("translation", "failed", "Translation failed. No more attempts are scheduled."), ("analysis", "failed", "Analysis failed. No more attempts are scheduled.")]),
-            ({}, "processing", 1, [("pending", "pending", "Commentary pending.")]),
-            ({}, "processing", 2, [("pending", "pending", "Commentary pending.")]),
+            ({}, "processing", 1, [("pending", "pending", "Commentary pending. Historical first-attempt commentary average: about 1 minute.")]),
+            ({}, "processing", 2, [("pending", "pending", "Commentary pending. Historical first-attempt commentary average: about 1 minute.")]),
             ({"translation": ("succeeded", 1), "classification": ("succeeded", 1)}, "cancelled", 1, []),
         ],
     )
@@ -131,8 +217,21 @@ class TestSerializeFeedRow:
         ), "en")
         assert row["processing_badges"] == [{
             "process": "pending", "state": "pending",
-            "message": "Language detection pending.", "position": "language",
+            "message": "Language detection pending. Historical first-attempt translation average: about 5 minutes.", "position": "language",
         }]
+        assert row["language_pending_badge"] == row["processing_badges"][0]
+
+    def test_language_and_analysis_pending_have_independent_positions(self):
+        row = _serialize_feed_row(_make_post(
+            "101", "2026-07-20T10:00:00+00:00",
+            lang_detected=None,
+            enrichment_stages={"translation": ("pending", 0), "classification": ("pending", 0)},
+            synthesis_status="processing",
+        ), "en")
+        assert [(badge["position"], badge["message"]) for badge in row["processing_badges"]] == [
+            ("language", "Language detection pending. Historical first-attempt translation average: about 5 minutes."),
+            ("meta", "Analysis and commentary pending. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."),
+        ]
         assert row["language_pending_badge"] == row["processing_badges"][0]
 
     def test_account_display_name_prefers_account_then_snapshot_then_handle(self):

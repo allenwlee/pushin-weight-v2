@@ -204,12 +204,14 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertIn('data-tier-grid="open"', body)
         self.assertIn('data-tier-grid="closed"', body)
 
-    def test_shadow_only_geopolitical_pill_is_not_rendered(self):
+    def test_geopolitical_pill_exposes_independent_v4_dimensions(self):
         r = self._get_home()
         body = r.content.decode("utf-8")
-        self.assertNotIn('data-group="geopolitical_modes"', body)
-        self.assertNotIn('data-pw-filter-group="china_national_stance"', body)
-        self.assertNotIn('data-pw-filter-group="us_national_stance"', body)
+        self.assertIn('data-group="geopolitical_modes"', body)
+        self.assertIn('data-pw-filter-group="china_national_stance"', body)
+        self.assertIn('data-pw-filter-group="us_national_stance"', body)
+        self.assertIn('class="filter-help-trigger pw-inspection-trigger"', body)
+        self.assertNotIn('data-group="nationalism"', body)
 
     def test_scoped_all_clear_buttons(self):
         r = self._get_home()
@@ -305,8 +307,8 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             "api_developer_surface",
         ):
             self.assertIn(f'value="{key}"', audience)
-        self.assertNotIn('data-group="geopolitical_modes"', body)
-        self.assertNotIn('data-group="untracked_brand_promotions"', body)
+        self.assertIn('data-group="geopolitical_modes"', body)
+        self.assertIn('data-group="untracked_brand_promotions"', body)
 
     def test_u18a_positive_filters_do_not_match_pre_v4_unavailable_rows(self):
         pre_v4 = {
@@ -326,6 +328,12 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         }
         self.assertFalse(_post_matches_filter(
             pre_v4, {"audience_topics": ["local_inference"]}
+        ))
+        self.assertFalse(_post_matches_filter(
+            pre_v4, {"geopolitical_modes": ["framework"]}
+        ))
+        self.assertFalse(_post_matches_filter(
+            pre_v4, {"china_national_stance": ["pro"]}
         ))
 
     def test_u18a_available_filters_match_current_brand_assignments(self):
@@ -347,6 +355,15 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertTrue(_post_matches_filter(
             current, {"audience_topics": ["local_inference"]}
         ))
+        self.assertTrue(_post_matches_filter(current, {
+            "geopolitical_modes": ["framework"],
+            "china_national_stance": ["pro"],
+            "us_national_stance": ["anti"],
+        }))
+        self.assertFalse(_post_matches_filter(current, {
+            "geopolitical_modes": ["framework"],
+            "china_national_stance": ["anti"],
+        }))
 
     def test_all_stage1_types_and_product_labels_use_stable_machine_values(self):
         body = self._get_home().content.decode("utf-8")
@@ -781,18 +798,26 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         self.assertFalse(_post_matches_filter(sample, {"unsanctioned": "only"}))
         self.assertTrue(_post_matches_filter(sample, {"unsanctioned": "any"}))
 
-    def test_shadow_only_promotion_family_is_absent_and_legacy_is_separate(self):
+    def test_promotion_family_is_visible_and_legacy_is_separate(self):
         body = self._get_home().content.decode("utf-8")
-        self.assertNotIn('data-group="untracked_brand_promotions"', body)
+        self.assertIn('data-group="untracked_brand_promotions"', body)
         normalized = _normalize_home_filters({
             "untracked_brand_promotions": ["general"]
         })
-        self.assertEqual(normalized["untracked_brand_promotions"], "any")
-        self.assertEqual(
-            normalized["_unavailable_filters"], ["untracked_brand_promotions"]
-        )
+        self.assertEqual(normalized["untracked_brand_promotions"], ["general"])
+        self.assertEqual(normalized["_unavailable_filters"], [])
         legacy = {"untracked_brand_promotions": [], "legacy_unsanctioned": True}
         self.assertTrue(_post_matches_filter(legacy, {"unsanctioned": "only"}))
+        self.assertFalse(_post_matches_filter(legacy, {"untracked_brand_promotions": ["general"]}))
+        both = _normalize_home_filters({
+            "untracked_brand_promotions": ["general"], "unsanctioned": "only",
+        })
+        self.assertEqual(both["untracked_brand_promotions"], ["general"])
+        self.assertEqual(both["unsanctioned"], "only")
+        self.assertFalse(_post_matches_filter(legacy, both))
+        self.assertTrue(_post_matches_filter({
+            "untracked_brand_promotions": ["general"], "legacy_unsanctioned": True,
+        }, both))
 
     def test_invalid_current_values_are_removed_and_reported(self):
         normalized = _normalize_home_filters({
@@ -800,7 +825,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             "untracked_brand_promotions": ["bogus", "general"],
         })
         self.assertEqual(normalized["audience_topics"], ["local_inference"])
-        self.assertEqual(normalized["untracked_brand_promotions"], "any")
+        self.assertEqual(normalized["untracked_brand_promotions"], ["general"])
         self.assertEqual(
             normalized["_unavailable_filters"],
             ["audience_topics", "untracked_brand_promotions"],
@@ -808,7 +833,7 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
         retired_only = _normalize_home_filters({"audience_topics": ["retired_topic"]})
         self.assertIsNone(retired_only["audience_topics"])
 
-    def test_valid_shadow_only_values_are_removed_and_reported(self):
+    def test_only_unactivated_values_are_removed_and_reported(self):
         normalized = _normalize_home_filters({
             "post_types": ["news_reporting"],
             "product_labels": ["investigate_claim"],
@@ -817,22 +842,18 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             "us_national_stance": ["anti"],
             "untracked_brand_promotions": ["general"],
         })
-        for key in (
-            "post_types", "product_labels", "geopolitical_modes",
-            "china_national_stance", "us_national_stance",
-        ):
+        for key in ("post_types", "product_labels"):
             self.assertIsNone(normalized[key])
-        self.assertEqual(normalized["untracked_brand_promotions"], "any")
+        self.assertEqual(normalized["geopolitical_modes"], ["framework"])
+        self.assertEqual(normalized["china_national_stance"], ["pro"])
+        self.assertEqual(normalized["us_national_stance"], ["anti"])
+        self.assertEqual(normalized["untracked_brand_promotions"], ["general"])
         self.assertEqual(
             normalized["_unavailable_filters"],
-            [
-                "china_national_stance", "geopolitical_modes", "post_types",
-                "product_labels", "untracked_brand_promotions",
-                "us_national_stance",
-            ],
+            ["post_types", "product_labels"],
         )
 
-    def test_shadow_only_promotion_row_does_not_hide_post_by_default(self):
+    def test_promotion_row_is_hidden_by_default_until_selected(self):
         now = datetime.now(timezone.utc)
         post = Post.objects.create(
             tweet_id="shadow-promotion-visible",
@@ -850,10 +871,15 @@ class HomeV22FilterPillsTests(PostgreSQLV22TestCase):
             provider_role="content",
         )
         normalized = _normalize_home_filters({})
-        self.assertEqual(normalized["untracked_brand_promotions"], "any")
+        self.assertEqual(normalized["untracked_brand_promotions"], "off")
         visible = _filter_home_posts_queryset(
             1,
             normalized,
             now=now + timedelta(seconds=1),
         )
-        self.assertTrue(visible.filter(tweet_id=post.tweet_id).exists())
+        self.assertFalse(visible.filter(tweet_id=post.tweet_id).exists())
+        selected = _filter_home_posts_queryset(
+            1, {**normalized, "untracked_brand_promotions": ["general"]},
+            now=now + timedelta(seconds=1),
+        )
+        self.assertTrue(selected.filter(tweet_id=post.tweet_id).exists())

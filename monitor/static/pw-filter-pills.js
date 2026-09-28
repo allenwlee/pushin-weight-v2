@@ -142,12 +142,46 @@
   // Open/close is deferred to click so a drag does not toggle a pill and
   // touch browsers can use their semantic activation event.
   var drag = {
-    active: false, moved: false, startX: 0, scrollLeft: 0,
+    active: false, moved: false, startX: 0, startY: 0, scrollLeft: 0,
+    touch: false,
     pointerId: null, pressPill: null,
   };
   var DRAG_THRESHOLD = 6; // px
 
   if (scroller) {
+    // A horizontal overflow element can consume a vertical touch that starts
+    // on pill chrome in Chromium/iOS. Hand that axis to the page explicitly;
+    // leave horizontal touches to native overflow/momentum scrolling.
+    var touchScroll = null;
+    scroller.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1 || e.target.closest('.filter-dropdown')) return;
+      touchScroll = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        lastY: e.touches[0].clientY,
+        axis: null,
+      };
+    }, { passive: true });
+    scroller.addEventListener('touchmove', function (e) {
+      if (!touchScroll || e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      var dx = touch.clientX - touchScroll.x;
+      var dy = touch.clientY - touchScroll.y;
+      if (!touchScroll.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= DRAG_THRESHOLD) {
+        touchScroll.axis = Math.abs(dy) > Math.abs(dx) ? 'vertical' : 'horizontal';
+      }
+      if (touchScroll.axis === 'vertical') {
+        if (!drag.moved) closeAll();
+        drag.moved = true;
+        drag._justFinishedDrag = true;
+        e.preventDefault();
+        window.scrollBy(0, touchScroll.lastY - touch.clientY);
+      }
+      touchScroll.lastY = touch.clientY;
+    }, { passive: false });
+    scroller.addEventListener('touchend', function () { touchScroll = null; });
+    scroller.addEventListener('touchcancel', function () { touchScroll = null; });
+
     scroller.addEventListener("pointerdown", function (e) {
       // Don't start a bar-drag from inside a dropdown panel
       if (e.target.closest && e.target.closest(".filter-dropdown")) return;
@@ -155,7 +189,9 @@
       drag.active = true;
       drag.moved = false;
       drag.startX = e.clientX;
+      drag.startY = e.clientY;
       drag.scrollLeft = scroller.scrollLeft;
+      drag.touch = e.pointerType === "touch";
       drag.pointerId = e.pointerId;
       drag._justFinishedDrag = false;
       var el = document.elementFromPoint(e.clientX, e.clientY);
@@ -166,28 +202,34 @@
     });
 
     scroller.addEventListener("pointermove", function (e) {
-      if (!drag.active) return;
+      if (!drag.active || e.pointerId !== drag.pointerId) return;
       var dx = e.clientX - drag.startX;
-      if (!drag.moved && Math.abs(dx) >= DRAG_THRESHOLD) {
+      var dy = e.clientY - drag.startY;
+      if (!drag.moved && Math.abs(dx) >= DRAG_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
         drag.moved = true;
         scroller.classList.add("is-dragging");
         closeAll();
-        try { scroller.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        if (!drag.touch) {
+          try { scroller.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        }
       }
-      if (drag.moved) {
+      if (drag.moved && !drag.touch) {
         scroller.scrollLeft = drag.scrollLeft - dx;
         e.preventDefault();
       }
     });
 
-    function endDrag() {
-      if (!drag.active) return;
-      var wasMoved = drag.moved;
+    function endDrag(e) {
+      if (!drag.active || e.pointerId !== drag.pointerId) return;
+      var wasMoved = drag.moved || Math.abs(scroller.scrollLeft - drag.scrollLeft) >= DRAG_THRESHOLD;
       drag.active = false;
       scroller.classList.remove("is-dragging");
-      try {
-        if (drag.pointerId != null) scroller.releasePointerCapture(drag.pointerId);
-      } catch (err) { /* ignore */ }
+      if (!drag.touch) {
+        try {
+          if (drag.pointerId != null) scroller.releasePointerCapture(drag.pointerId);
+        } catch (err) { /* ignore */ }
+      }
+      drag.moved = wasMoved;
       drag._justFinishedDrag = wasMoved;
     }
 
@@ -199,8 +241,10 @@
     // only when no click arrived.
     scroller.addEventListener("touchend", function (e) {
       var t = e.target;
-      if (!t || !t.closest || t.closest(".filter-dropdown")) return;
-      if (drag.moved || drag._justFinishedDrag) return;
+      if (!t || !t.closest || t.closest(".filter-dropdown") ||
+          t.closest(".filter-help-trigger")) return;
+      if (drag.moved || drag._justFinishedDrag ||
+          Math.abs(scroller.scrollLeft - drag.scrollLeft) >= DRAG_THRESHOLD) return;
       var pill = t.closest(".filter-pill");
       if (!pill || !bar.contains(pill)) return;
       cancelTouchFallback();
@@ -236,6 +280,7 @@
     cancelTouchFallback();
     var t = e.target;
     if (!t || !t.closest) return;
+    if (t.closest(".filter-help-trigger")) return;
     var clickedPill = t.closest(".filter-pill");
     if (suppressedClickPill && clickedPill === suppressedClickPill && !t.closest(".filter-dropdown")) {
       clearSuppressedClick();
@@ -270,6 +315,7 @@
 
   // Keyboard: Enter/Space toggle; Escape closes
   bar.addEventListener("keydown", function (e) {
+    if (e.target && e.target.closest && e.target.closest(".filter-help-trigger")) return;
     var pill = e.target && e.target.closest ? e.target.closest(".filter-pill") : null;
     if (!pill || !bar.contains(pill)) return;
     if (e.key === "Enter" || e.key === " ") {

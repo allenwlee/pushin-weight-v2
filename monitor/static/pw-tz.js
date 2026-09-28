@@ -30,12 +30,13 @@
 
   function timezoneCopy(locale, comparison) {
     var zh = isZhLocale(locale);
+    var ja = ['ja', 'ja-jp'].indexOf(String(locale || '').toLowerCase()) !== -1;
     var beijing = comparison.key === 'beijing';
     var comparisonName = beijing
       ? (zh ? '北京' : 'Beijing')
       : (zh ? '加州' : 'California');
     return {
-      localLabel: zh ? '本地' : 'local',
+      localLabel: zh ? '本地' : ja ? '現地' : 'local',
       shortLabel: beijing ? comparisonName : (zh ? '加州' : 'CA'),
       comparisonName: comparisonName,
       toggleTitle: zh
@@ -223,6 +224,9 @@
     }
   });
   document.addEventListener('pw:chrome-change', function () { render(true); });
+  document.addEventListener('pw:feed-rows-mounted', function () {
+    renderFeedStamps(timezoneCopy(currentLocale(), comparison));
+  });
   window.__pwTz = {
     get mode() { return active; },
     getComparison: function () {
