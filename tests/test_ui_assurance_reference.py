@@ -81,6 +81,7 @@ def test_aborts_never_surface_a_failure_warning() -> None:
 
 def test_unsanctioned_only_and_off_are_an_exact_partition() -> None:
     state = set_control(initial_state(), "window", 365)
+    state = set_control(state, "untracked_brand_promotions", "any")
     off = filter_posts(FIXTURE, set_control(state, "unsanctioned", "off"))
     only = filter_posts(FIXTURE, set_control(state, "unsanctioned", "only"))
     in_window = {
@@ -93,6 +94,22 @@ def test_unsanctioned_only_and_off_are_an_exact_partition() -> None:
     assert off_ids | only_ids == in_window
     assert all(not post["flagged"] for post in off)
     assert all(post["flagged"] for post in only)
+
+
+def test_current_promotion_and_legacy_flag_are_independent_relations() -> None:
+    posts = {post["id"]: post for post in FIXTURE["posts"]}
+    assert not posts["p01"].get("untracked_brand_promotions") and not posts["p01"]["flagged"]
+    assert not posts["p02"].get("untracked_brand_promotions") and posts["p02"]["flagged"]
+    assert posts["p09"]["untracked_brand_promotions"] == ["general"] and not posts["p09"]["flagged"]
+    assert posts["p11"]["untracked_brand_promotions"] == ["spam"] and posts["p11"]["flagged"]
+
+    state = set_control(initial_state(), "window", 365)
+    state = set_control(state, "unsanctioned", "only")
+    assert "p02" in {post["id"] for post in filter_posts(FIXTURE, state)}
+    assert "p11" not in {post["id"] for post in filter_posts(FIXTURE, state)}
+    state = set_control(state, "untracked_brand_promotions", "spam")
+    assert "p11" in {post["id"] for post in filter_posts(FIXTURE, state)}
+    assert "p02" not in {post["id"] for post in filter_posts(FIXTURE, state)}
 
 
 def test_locale_change_preserves_filters_window_timezone_and_lenses() -> None:
@@ -135,6 +152,7 @@ def test_other_only_selects_exact_residual_values() -> None:
 
 def test_residual_filter_partitions_distinguish_empty_from_unclassified() -> None:
     state = set_control(initial_state(), "window", 365)
+    state = set_control(state, "untracked_brand_promotions", "any")
 
     def complete_feed(control: str, value: str) -> set[str]:
         selected = set_control(state, control, value)

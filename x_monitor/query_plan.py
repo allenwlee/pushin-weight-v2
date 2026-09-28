@@ -72,6 +72,7 @@ Tests assert their absence (see test_query_plan_uniform.py).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Literal
 
 from .queries import assert_under_length_cap
@@ -342,6 +343,7 @@ def plan_calls(
     x_query_specs: list[XQuerySpec] | None = None,
     *,
     primary_keywords: dict[str, list[str]] | None = None,
+    excluded_author_handles: tuple[str, ...] = (),
 ) -> list[PlannedCall]:
     """Build the per-cycle call list.
 
@@ -392,6 +394,16 @@ def plan_calls(
             "list-based; no fallback to per-brand account calls)."
         )
 
+    # The policy loader validates entries, but keep this public planner safe
+    # when a caller supplies handles directly. A suffix is applied only here,
+    # after each query kind has used the uniform renderer.
+    if len(excluded_author_handles) != len(set(excluded_author_handles)) or any(
+        not isinstance(handle, str) or not re.fullmatch(r"[a-z0-9_]{1,15}", handle)
+        for handle in excluded_author_handles
+    ):
+        raise ValueError("excluded_author_handles must be unique normalized X handles")
+    exclusion_suffix = "".join(f" -from:{handle}" for handle in excluded_author_handles)
+
     result: list[PlannedCall] = []
 
     # Call A — synthesized from the configured list ID. It is NOT
@@ -404,7 +416,7 @@ def plan_calls(
     )
     call_a_query = _build_query(
         call_a_spec, x_monitor_list_id=x_monitor_list_id
-    )
+    ) + exclusion_suffix
     assert_under_length_cap(call_a_query)
     result.append(
         PlannedCall(
@@ -422,7 +434,7 @@ def plan_calls(
             spec,
             x_monitor_list_id=x_monitor_list_id,
             primary_keywords=primary_keywords,
-        )
+        ) + exclusion_suffix
         assert_under_length_cap(call_query)
         # Pick a placeholder brand_id for raw-file naming
         # (one raw file per call) — prefer an explicit `call_id` from

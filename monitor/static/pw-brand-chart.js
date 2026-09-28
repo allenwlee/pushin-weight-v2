@@ -90,6 +90,8 @@
           legend: { display: false },
           tooltip: {
             enabled: true,
+            position: 'pwCursorClear',
+            caretPadding: 12,
             mode: 'index',
             intersect: false,
             callbacks: {

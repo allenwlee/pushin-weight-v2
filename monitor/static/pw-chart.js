@@ -3,6 +3,12 @@
 (function () {
   'use strict';
 
+  if (typeof Chart !== 'undefined' && Chart.Tooltip && Chart.Tooltip.positioners) {
+    Chart.Tooltip.positioners.pwCursorClear = function (items) {
+      return Chart.Tooltip.positioners.average.call(this, items);
+    };
+  }
+
   var HOME_CHART_REGION_SELECTOR = '.home-chart-wrap[data-pw-chart]';
   var REFRESH_INTERVAL_MS = 60000;
   var REQUEST_TIMEOUT_MS = 12000;
@@ -633,6 +639,8 @@
           legend: { display: false },
           pwTimezoneRowLabels: { display: granularity === 'minute' },
           tooltip: {
+            position: 'pwCursorClear',
+            caretPadding: 12,
             enabled: true,
             mode: 'index',
             intersect: false,

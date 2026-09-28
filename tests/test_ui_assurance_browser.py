@@ -43,9 +43,13 @@ RUNTIME_FILTER_KEYS = {
     "role": "role",
     "nationalism_cn": "cn_nationalism",
     "nationalism_us": "us_nationalism",
+    "geopolitical_modes": "geopolitical_modes",
+    "china_national_stance": "china_national_stance",
+    "us_national_stance": "us_national_stance",
     "product_labels": "product_labels",
     "audience_topics": "audience_topics",
     "unsanctioned": "unsanctioned",
+    "untracked_brand_promotions": "untracked_brand_promotions",
     "window": "window",
 }
 PRESENTATION_CONTROLS = {
@@ -195,7 +199,7 @@ def test_stateful_filter_actions_keep_browser_and_reference_model_aligned() -> N
                         "([key, nextValue]) => window.pwFilter.set(key, nextValue)",
                         [
                             RUNTIME_FILTER_KEYS[control],
-                            "off" if value == "off" else [value],
+                            value if value in {"off", "only", "any"} else [value],
                         ],
                     )
                 elif control == "unsanctioned":
@@ -274,7 +278,7 @@ def test_every_covering_row_executes_against_the_browser_store() -> None:
                       );
                     } else if (control === 'untracked_brand_promotions') {
                       window.pwFilter.set(
-                        runtimeKeys[control], value === 'off' ? 'off' : [value]
+                        runtimeKeys[control], ['off', 'only', 'any'].includes(value) ? value : [value]
                       );
                     } else if (control === 'unsanctioned') {
                       window.pwFilter.set('unsanctioned', value);

@@ -922,15 +922,20 @@
         return;
       }
       var margin = 8;
-      var gap = 6;
+      var gap = 12;
       var rect = activeTrigger.getBoundingClientRect();
       var width = popover.offsetWidth;
       var height = popover.offsetHeight;
       var left = rect.left + (rect.width - width) / 2;
       left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
       var top = rect.bottom + gap;
-      if (top + height > window.innerHeight - margin) {
-        top = rect.top - height - gap;
+      if (top + height > window.innerHeight - margin) top = rect.top - height - gap;
+      if (top < margin && rect.right + gap + width <= window.innerWidth - margin) {
+        left = rect.right + gap;
+        top = rect.top + (rect.height - height) / 2;
+      } else if (top < margin && rect.left - gap - width >= margin) {
+        left = rect.left - gap - width;
+        top = rect.top + (rect.height - height) / 2;
       }
       top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
       popover.style.left = Math.round(left) + 'px';
@@ -1162,6 +1167,9 @@
       formatRowTimestamp(row, now);
     });
     observeSynthesisRows(rows);
+    if (typeof document.dispatchEvent === 'function') {
+      document.dispatchEvent(new CustomEvent('pw:feed-rows-mounted'));
+    }
   }
 
   function appendRows(body, rows) {

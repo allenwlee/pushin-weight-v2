@@ -86,7 +86,7 @@ def wired(monkeypatch, seeded_policy_keywords):
         calls = calls or [_planned()]
         api = FakeApi(results=results, raise_exc=raise_exc)
         monkeypatch.setattr(
-            cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls)
+            cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: list(calls)
         )
         # run() builds its client via TwitterApiClient.from_env(); replace that
         # classmethod so no test ever reaches the network while retaining the
@@ -238,7 +238,7 @@ def test_one_failing_call_does_not_block_the_others(wired):
     import pytest as _pytest
 
     with _pytest.MonkeyPatch.context() as mp:
-        mp.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: list(calls))
+        mp.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: list(calls))
         mp.setattr(
             monkeypatch_target, "from_env", classmethod(lambda cls, _purpose: api)
         )
@@ -481,7 +481,7 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
             ], True
 
     api = TruncatingApi()
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",
@@ -535,7 +535,7 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
             ], True
 
     api = TruncatingApi()
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",
@@ -569,7 +569,7 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
             seen["max_pages"] = kwargs.get("max_pages")
             return [], False
 
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",
@@ -607,7 +607,7 @@ def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
             return [], True  # 0 items, truncated=True
 
     api = TruncatedEmpty()
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",
@@ -646,7 +646,7 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
             ], False  # 50 items, truncated=False (window exhausted)
 
     api = CappedButExhausted()
-    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None: [call])
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
     monkeypatch.setattr(
         cycle_mod.TwitterApiClient,
         "from_env",

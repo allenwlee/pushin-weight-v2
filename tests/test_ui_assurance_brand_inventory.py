@@ -19,11 +19,47 @@ from monitor.views import (
     _clear_home_pulse_cache,
     _enrich_posts_with_classifications,
     _post_to_wire,
+    _home_visible_brand_rows,
+    _normalize_home_filters,
     _serialize_feed_row,
 )
 from x_monitor.config import HeadlineNarrativeConfig
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+def test_step_history_remains_stored_while_only_stepfun_is_selectable() -> None:
+    from core.models import SearchQuery
+
+    step, _ = Brand.objects.update_or_create(
+        nickname="step", defaults={"display_name": "Step", "is_sentinel": False},
+    )
+    Brand.objects.update_or_create(
+        nickname="stepfun", defaults={"display_name": "StepFun", "is_sentinel": False},
+    )
+    query = SearchQuery.objects.create(query_id="historical-step-query", brand=step)
+    _clear_home_pulse_cache()
+
+    assert "step" not in {row["nickname"] for row in _build_brands_context()}
+    assert "stepfun" in {row["nickname"] for row in _build_brands_context()}
+    pulse = _build_home_pulse_payload(1, now=datetime(2026, 8, 27, 12, 0, tzinfo=UTC))
+    assert "step" not in {row["nickname"] for row in pulse["entries"]}
+    chart = _build_home_chart_payload(
+        1, {"brands": "__all__", "unsanctioned": "off"},
+        now=datetime(2026, 8, 27, 12, 0, tzinfo=UTC),
+    )
+    assert "step" not in chart["series"]
+    assert "stepfun" in chart["series"]
+    assert Brand.objects.filter(nickname__in=["step", "stepfun"]).count() == 2
+    query.refresh_from_db()
+    assert query.brand_id == "step"
+
+
+def test_step_is_not_hidden_without_canonical_stepfun() -> None:
+    rows = [{"nickname": "step"}, {"nickname": "other"}]
+    assert _home_visible_brand_rows(rows) == rows
+    Brand.objects.create(nickname="step", display_name="Step")
+    assert _normalize_home_filters({"brands": ["step"]})["brands"] == ["step"]
 
 
 def test_fixture_only_brand_is_excluded_from_controls_and_chart_series() -> None:

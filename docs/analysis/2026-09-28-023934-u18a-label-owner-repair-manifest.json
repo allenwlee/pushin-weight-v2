@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "kind": "bounded_source_review",
+    "gold": false,
+    "database_id": "dpg-d9koekqjobas73fvjqng-a",
+    "database_name": "pushinweight_shadow",
+    "production_web_database_association_verified_at_utc": "2026-09-28T13:08:25Z",
+    "reviewed_at_utc": "2026-09-28T13:03:13Z",
+    "provider_calls": 0,
+    "production_writes": 0
+  },
+  "selected_content_revision": "stage1-content-0731-v6",
+  "selected_brand_revision": "stage1-brand-interpretation-0731-v5",
+  "selected_merge_revision": "stage1-two-role-merge-0731-v6",
+  "posts": {
+    "2101798119298277764": {
+      "input_context_fingerprint": "ed4401bf2e1419f9ab0d935833527c8ef37c18235c9b3aba21ac44d08497bab9",
+      "by_brand": {
+        "qwen": {
+          "outcome": "classified",
+          "post_types": ["other"],
+          "audience_topics": [],
+          "audience_topics_state": "none",
+          "product_labels": [],
+          "sentiment": "neutral",
+          "geopolitical_modes": [],
+          "geopolitical_modes_state": "none",
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      },
+      "untracked_brand_promotions": ["general"],
+      "promoted_subjects": [
+        {
+          "name": "Token Machine",
+          "handle": null,
+          "domain": null,
+          "account_handle": null,
+          "evidence": "Token Machine Day 1"
+        }
+      ]
+    },
+    "2102033817418748243": {
+      "input_context_fingerprint": "9b7c7a77d6741414ef5ea1e09a79728776b3980e93f78637f3322f380c67a9fe",
+      "by_brand": {
+        "hunyuan": {
+          "outcome": "classified",
+          "post_types": ["other"],
+          "audience_topics": [],
+          "audience_topics_state": "none",
+          "product_labels": [],
+          "sentiment": "neutral",
+          "geopolitical_modes": [],
+          "geopolitical_modes_state": "none",
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      },
+      "untracked_brand_promotions": ["general"],
+      "promoted_subjects": [
+        {
+          "name": "Token Machine",
+          "handle": null,
+          "domain": null,
+          "account_handle": null,
+          "evidence": "Token Machine Day 1"
+        }
+      ]
+    },
+    "2103615895600017738": {
+      "input_context_fingerprint": "235373422cd5cbbb1f03d245203ae84033dfac8d7507587b143c7fa2ad3d110a",
+      "by_brand": {
+        "hunyuan": {
+          "outcome": "classified",
+          "post_types": ["other"],
+          "audience_topics": [],
+          "audience_topics_state": "none",
+          "product_labels": [],
+          "sentiment": "neutral",
+          "geopolitical_modes": [],
+          "geopolitical_modes_state": "none",
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      },
+      "untracked_brand_promotions": ["general"],
+      "promoted_subjects": [
+        {
+          "name": "Token Machine",
+          "handle": null,
+          "domain": null,
+          "account_handle": null,
+          "evidence": "Token Machine Day 2"
+        }
+      ]
+    },
+    "2104375726627790944": {
+      "input_context_fingerprint": "946a845a9a490d7acbcae4bfca4d34138677ed4f49c65b4f5fbb62d623eb752f",
+      "by_brand": {
+        "deepseek": {
+          "outcome": "classified",
+          "post_types": ["other"],
+          "audience_topics": [],
+          "audience_topics_state": "none",
+          "product_labels": [],
+          "sentiment": "neutral",
+          "geopolitical_modes": [],
+          "geopolitical_modes_state": "none",
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      },
+      "untracked_brand_promotions": ["general"],
+      "promoted_subjects": [
+        {
+          "name": "Token Machine",
+          "handle": null,
+          "domain": null,
+          "account_handle": null,
+          "evidence": "Token Machine Day 1"
+        }
+      ]
+    },
+    "2104483144233853085": {
+      "input_context_fingerprint": "11487444497d6d155be0a1de43b37b123340d8aea5938ae9bf4ca308efaa8c2f",
+      "by_brand": {
+        "glm": {
+          "outcome": "classified",
+          "post_types": ["opinions_reactions"],
+          "audience_topics": [],
+          "audience_topics_state": "none",
+          "product_labels": ["testimonial"],
+          "sentiment": "positive",
+          "geopolitical_modes": [],
+          "geopolitical_modes_state": "none",
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      },
+      "untracked_brand_promotions": ["general"],
+      "promoted_subjects": [
+        {
+          "name": "B.AI",
+          "handle": "@BAI_AGI",
+          "domain": null,
+          "account_handle": null,
+          "evidence": "@BAI_AGI"
+        }
+      ]
+    }
+  }
+}

@@ -226,6 +226,7 @@
       {% if geopolitical_mode_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="geopolitical_modes">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_geopolitical">{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}</span>
+        <span class="filter-help-trigger pw-inspection-trigger" role="button" tabindex="0" aria-expanded="false" aria-label="{% if is_zh_chrome %}查看地缘政治模式及中美立场说明{% elif is_ja_chrome %}地政学的な論調と中国・米国への立場を説明{% else %}Explain geopolitical modes and China/U.S. stances{% endif %}" data-pw-inspection="{% if is_zh_chrome %}地缘政治模式描述帖文如何呈现议题；中国和美国国家立场分别记录帖文对各国的态度。{% elif is_ja_chrome %}地政学的な論調は投稿の枠組みを示し、中国と米国への国家的立場はそれぞれ別に記録します。{% else %}Geopolitical mode describes how the post frames an issue. China and U.S. national stances record separate attitudes toward each country.{% endif %}">?</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}">
           <div class="dd-grid cols-3">

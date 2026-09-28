@@ -145,7 +145,11 @@ def _upsert_demand(*, post: Post, fingerprint: str, reason: str, config, now):
                         artifact=artifact,
                     )
                 demand.request_count += 1
-                demand.last_requested_at = now
+                # Repeated browser polls can arrive across a tiny wall-clock
+                # correction; preserve the database's request-order invariant.
+                demand.last_requested_at = max(
+                    now, demand.first_requested_at, demand.last_requested_at
+                )
                 if priority >= demand.priority:
                     demand.priority = priority
                     demand.reason = reason

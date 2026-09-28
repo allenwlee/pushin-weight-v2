@@ -292,7 +292,11 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     cursor: grab;
-    touch-action: pan-y; /* horizontal drag handled in JS */
+    touch-action: auto;
+  }
+  @media (max-width: 899px) {
+    .filter-bar-scroller { scroll-snap-type: x mandatory; }
+    .filter-bar-scroller > .filter-pill { scroll-snap-align: start; }
   }
   .filter-bar-scroller.is-dragging { cursor: grabbing; }
   .filter-bar-scroller::-webkit-scrollbar { display: none; }
@@ -332,6 +336,20 @@
   }
   .filter-pill .title,
   .filter-pill .carat { pointer-events: none; }
+  .filter-pill .filter-help-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border: 1px solid var(--muted);
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1;
+    cursor: help;
+  }
+  .filter-pill .filter-help-trigger:focus-visible { outline: 2px solid var(--accent); }
   .filter-pill .carat {
     display: inline-block;
     width: 4.453125px;

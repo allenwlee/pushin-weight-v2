@@ -37,7 +37,9 @@ in 4/5.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+import re
 from typing import Any, Literal
 
 import yaml
@@ -206,6 +208,41 @@ class CoPack:
             raise ValueError("CoPack must contain at least one brand nickname")
 
 
+_AUTHOR_HANDLE_RE = re.compile(r"[a-z0-9_]{1,15}\Z")
+
+
+@dataclass(frozen=True)
+class ExcludedAuthor:
+    """Auditable author-level exclusion for recurring search queries."""
+
+    handle: str
+    author_id: str
+    active: bool
+    reason: str
+    observed_on: date
+    evidence_post_ids: tuple[str, ...]
+    evidence_campaign: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.handle, str) or not _AUTHOR_HANDLE_RE.fullmatch(self.handle):
+            raise ValueError("excluded author handle must be a normalized X handle")
+        if not isinstance(self.author_id, str) or not self.author_id.isdecimal():
+            raise ValueError("excluded author author_id must be a decimal string")
+        if not isinstance(self.active, bool):
+            raise TypeError("excluded author active must be a boolean")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("excluded author reason must be non-empty")
+        if not isinstance(self.observed_on, date):
+            raise TypeError("excluded author observed_on must be an ISO date")
+        if not self.evidence_post_ids or any(
+            not isinstance(post_id, str) or not post_id.isdecimal()
+            for post_id in self.evidence_post_ids
+        ):
+            raise ValueError("excluded author evidence_post_ids must contain post IDs")
+        if not isinstance(self.evidence_campaign, str) or not self.evidence_campaign.strip():
+            raise ValueError("excluded author evidence_campaign must be non-empty")
+
+
 @dataclass(frozen=True)
 class HarvestPolicy:
     """The whole loaded policy document.
@@ -216,6 +253,7 @@ class HarvestPolicy:
     """
     brands: dict[str, BrandPolicy]
     co_packs: tuple[CoPack, ...] = ()
+    excluded_authors: tuple[ExcludedAuthor, ...] = ()
 
     def brand(self, nickname: str) -> BrandPolicy:
         try:
@@ -225,6 +263,11 @@ class HarvestPolicy:
                 f"brand {nickname!r} not present in policy. Known: "
                 f"{sorted(self.brands)}"
             ) from e
+
+
+def active_excluded_author_handles(policy: HarvestPolicy) -> tuple[str, ...]:
+    """Stable active handles for the shared scheduled-query renderer."""
+    return tuple(sorted(author.handle for author in policy.excluded_authors if author.active))
 
 
 # -------------------------------------------------------------------------
@@ -348,6 +391,54 @@ def _load_co_packs(raw: Any) -> tuple[CoPack, ...]:
     return tuple(packs)
 
 
+def _load_excluded_authors(raw: Any) -> tuple[ExcludedAuthor, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise TypeError("excluded_authors must be a list")
+    authors: list[ExcludedAuthor] = []
+    seen_handles: set[str] = set()
+    seen_ids: set[str] = set()
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise TypeError(f"excluded_authors[{index}] must be a mapping")
+        required = {
+            "handle", "author_id", "active", "reason", "observed_on",
+            "evidence_post_ids", "evidence_campaign",
+        }
+        missing = required - entry.keys()
+        extra = entry.keys() - required
+        if missing or extra:
+            raise ValueError(
+                f"excluded_authors[{index}] fields mismatch: "
+                f"missing={sorted(missing)}, extra={sorted(extra)}"
+            )
+        observed_on = entry["observed_on"]
+        if isinstance(observed_on, str):
+            try:
+                observed_on = date.fromisoformat(observed_on)
+            except ValueError as exc:
+                raise ValueError(f"excluded_authors[{index}] invalid observed_on") from exc
+        post_ids = entry["evidence_post_ids"]
+        if not isinstance(post_ids, list):
+            raise TypeError(f"excluded_authors[{index}] evidence_post_ids must be a list")
+        author = ExcludedAuthor(
+            handle=entry["handle"],
+            author_id=entry["author_id"],
+            active=entry["active"],
+            reason=entry["reason"],
+            observed_on=observed_on,
+            evidence_post_ids=tuple(post_ids),
+            evidence_campaign=entry["evidence_campaign"],
+        )
+        if author.handle in seen_handles or author.author_id in seen_ids:
+            raise ValueError(f"duplicate excluded author: {author.handle}")
+        seen_handles.add(author.handle)
+        seen_ids.add(author.author_id)
+        authors.append(author)
+    return tuple(authors)
+
+
 def load_policy(path: str | Path) -> HarvestPolicy:
     """Load harvest policy from a YAML file.
 
@@ -381,6 +472,7 @@ def load_policy(path: str | Path) -> HarvestPolicy:
         brands[nickname] = _load_brand_policy(nickname, entry)
 
     co_packs = _load_co_packs(raw.get("co_packs"))
+    excluded_authors = _load_excluded_authors(raw.get("excluded_authors"))
 
     # Cross-check: every brand listed in a co_pack must exist in brands.
     for pack in co_packs:
@@ -408,4 +500,8 @@ def load_policy(path: str | Path) -> HarvestPolicy:
             "(3/5 has fixed co packs; 4/5 may auto-pack.)"
         )
 
-    return HarvestPolicy(brands=brands, co_packs=co_packs)
+    return HarvestPolicy(
+        brands=brands,
+        co_packs=co_packs,
+        excluded_authors=excluded_authors,
+    )

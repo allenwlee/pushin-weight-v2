@@ -314,7 +314,6 @@ _HOME_CHART_BRAND_PRIORITY: tuple[str, ...] = (
     "kwaiyii",
     "seed",
     "sensenova",
-    "step",
     "wenxin",
     "gemini",
     "gpt",
@@ -363,12 +362,20 @@ def _home_chart_brand_sort_key(nickname: str) -> tuple[int, str]:
     )
 
 
+def _home_visible_brand_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep historical Step data while offering its canonical homepage choice."""
+    if any(row["nickname"] == "stepfun" for row in rows):
+        return [row for row in rows if row["nickname"] != "step"]
+    return rows
+
+
 def _live_brand_projection(locale: str | None = None) -> list[dict[str, str]]:
-    """Load every non-sentinel brand in the chart's presentation order."""
+    """Load selectable homepage brands in the chart's presentation order."""
     brands = [
         _brand_projection_fields(brand, locale)
         for brand in Brand.objects.filter(is_sentinel=False)
     ]
+    brands = _home_visible_brand_rows(brands)
     brands.sort(key=lambda brand: _home_chart_brand_sort_key(brand["nickname"]))
     return brands
 
@@ -1037,11 +1044,9 @@ def _feed_abs_stamp(
     when,
     tz_mode: str = "local",
     now: datetime | None = None,
+    locale: str = "en",
 ) -> str:
-    """Absolute HH:MM stamp for the meta line. Empty when >= 24h old.
-
-    Mockup pattern: <24h → "(10:21 本地)" or "(10:21 CA)"; >=24h → "".
-    """
+    """Locale-aware absolute HH:MM fallback; empty when at least 24h old."""
     if not when:
         return ""
     from datetime import datetime as _dt
@@ -1063,7 +1068,8 @@ def _feed_abs_stamp(
             return f"({t.strftime('%H:%M')} CA)"
         except Exception:
             pass
-    return f"({when.strftime('%H:%M')} 本地)"
+    label = "現地" if _is_ja_locale(locale) else "本地" if _is_zh_locale(locale) else "local"
+    return f"({when.strftime('%H:%M')} {label})"
 
 
 def _feed_signal_keys(
@@ -1197,8 +1203,17 @@ def _classification_status_label(status: str, locale: str) -> str:
     return ja_label if _is_ja_locale(locale) else zh_label if _is_zh_locale(locale) else en_label
 
 
+# Frozen 2026-09-28 production 72-hour first-attempt means. See the checked-in
+# pending-processing-time-baseline receipt; never query these on a feed request.
+_FIRST_ATTEMPT_PROCESSING_MINUTES = {
+    "translation": 5,
+    "classification": 15,
+    "analysis": 1,
+}
+
+
 def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]]:
-    """Use one pending marker and retain separate terminal failure markers."""
+    """Keep language detection separate from other pending work."""
     names = {
         "en": {"translation": "Translation", "classification": "Classification", "analysis": "Analysis"},
         "zh": {"translation": "翻译", "classification": "分类", "analysis": "分析"},
@@ -1210,6 +1225,22 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
         "ja": "{name}に失敗しました。再試行の予定はありません。",
     }
     language = "ja" if _is_ja_locale(locale) else "zh" if _is_zh_locale(locale) else "en"
+    pending_names = {
+        "en": {"translation": "translation", "classification": "analysis", "analysis": "commentary"},
+        "zh": {"translation": "翻译", "classification": "分析", "analysis": "评论"},
+        "ja": {"translation": "翻訳", "classification": "分析", "analysis": "解説"},
+    }
+
+    def average_note(process: str) -> str:
+        minutes = _FIRST_ATTEMPT_PROCESSING_MINUTES[process]
+        name = pending_names[language][process]
+        if language == "zh":
+            return f"{name}首次成功处理的历史平均时间：约{minutes}分钟。"
+        if language == "ja":
+            return f"{name}の初回成功処理の過去平均：約{minutes}分。"
+        unit = "minute" if minutes == 1 else "minutes"
+        return f"Historical first-attempt {name} average: about {minutes} {unit}."
+
     badges: list[dict[str, str]] = []
     pending: set[str] = set()
     language_pending = _language_undetected(post.get("lang_detected"))
@@ -1229,27 +1260,24 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
     synthesis_status = post.get("synthesis_status")
     if not post.get("synthesis_expired") or synthesis_status == "failed":
         append("analysis", synthesis_status)
+    language_marker_added = language_pending and "translation" in pending
+    if language_marker_added:
+        detection = {"en": "Language detection pending.", "zh": "语言检测待处理。", "ja": "言語判定を待っています。"}[language]
+        badges.insert(0, {"process": "pending", "state": "pending", "message": detection + " " + average_note("translation"),
+                          "position": "language"})
+        pending.remove("translation")
     if pending:
-        pending_names = {
-            "en": {"translation": "translation", "classification": "analysis", "analysis": "commentary"},
-            "zh": {"translation": "翻译", "classification": "分析", "analysis": "评论"},
-            "ja": {"translation": "翻訳", "classification": "分析", "analysis": "解説"},
-        }
         ordered = [pending_names[language][key] for key in ("translation", "classification", "analysis") if key in pending]
-        if language_pending and "translation" in pending:
-            detection = {"en": "language detection", "zh": "语言检测", "ja": "言語判定"}[language]
-            if len(pending) == 1:
-                ordered[0] = detection
-            else:
-                ordered.insert(0, detection)
         if language == "en":
             joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
             message = joined.capitalize() + " pending."
         else:
             joined = ("と" if language == "ja" else "、").join(ordered)
             message = joined + ("を待っています。" if language == "ja" else "待处理。")
-        badges.insert(0, {"process": "pending", "state": "pending", "message": message,
-                          "position": "language" if language_pending and "translation" in pending else "meta"})
+        message += " " + " ".join(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
+        badges.insert(1 if language_marker_added else 0,
+                      {"process": "pending", "state": "pending", "message": message,
+                       "position": "meta"})
     return badges
 
 
@@ -1645,6 +1673,23 @@ def _feed_signal_inspections(
                     "geopolitical_mode", str(item["key"]), nickname,
                     str(item.get("label") or item["key"]),
                 )
+                stance_parts = []
+                for field, status_field, region_copy in (
+                    ("china_national_stance", "china_national_stance_status", ("China", "中国", "中国")),
+                    ("us_national_stance", "us_national_stance_status", ("U.S.", "美国", "米国")),
+                ):
+                    stance = classification.get(field)
+                    region = region_copy[2 if use_ja else 1 if use_zh else 0]
+                    if classification.get(status_field) == "available" and isinstance(stance, dict):
+                        value = str(stance.get("label") or stance.get("key") or "")
+                    else:
+                        value = {"en": "not classified", "zh": "未分类", "ja": "未分類"}[
+                            "ja" if use_ja else "zh" if use_zh else "en"
+                        ]
+                    stance_parts.append(f"{region}: {value}")
+                result["geopolitical_mode"][str(item["key"])][-1]["text"] += (
+                    " · " + " · ".join(stance_parts)
+                )
         for family, field_name, status_field in (
             ("nat_cn", "china_national_stance", "china_national_stance_status"),
             ("nat_us", "us_national_stance", "us_national_stance_status"),
@@ -1806,7 +1851,7 @@ def _v22_feed_display_fields(
         "legacy_nat_us": legacy_nat_us,
         "tint_class": _feed_tint_class(sentiment_keys),
         "meta_text": _feed_relative_age(created_at, now=display_now),
-        "ts_abs_text": _feed_abs_stamp(created_at, now=display_now),
+        "ts_abs_text": _feed_abs_stamp(created_at, now=display_now, locale=locale),
         "avatar_initials": _avatar_initials(handle),
         "avatar_color": _avatar_color(handle),
         "follower_bin": _follower_bin(followers_count),
@@ -2593,7 +2638,7 @@ def _parse_filters_from_request(request: HttpRequest) -> dict[str, Any]:
         out["untracked_brand_promotions"] = _bounded_filter_values(
             promotion_mode.split(",")
         )
-    elif legacy_mode in ("off", "only", "any"):
+    if legacy_mode in ("off", "only", "any"):
         # Preserve the old filter family.  Its rows have a broader historical
         # meaning and must not be silently interpreted as current promotions.
         out["unsanctioned"] = legacy_mode
@@ -2704,6 +2749,8 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
             normalized[key] = "__all__"
             continue
         values = _bounded_filter_values(value)
+        if key == "brands" and "step" in values and Brand.objects.filter(nickname="stepfun").exists():
+            values = ["stepfun" if item == "step" else item for item in values]
         family = _HOME_FILTER_TAXONOMY_FAMILIES.get(key)
         if family is not None:
             canonical_values: list[str] = []
@@ -2755,21 +2802,19 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
         else:
             unavailable.append(_HOME_PROMOTION_FILTER)
             normalized[_HOME_PROMOTION_FILTER] = "off"
-    elif "unsanctioned" in source:
-        legacy_mode = source["unsanctioned"]
-        if legacy_mode in {"off", "only", "any"}:
-            normalized["unsanctioned"] = legacy_mode
-            # An old URL asks for the old relation only; current promotion
-            # filtering is intentionally left open for compatibility.
-            normalized[_HOME_PROMOTION_FILTER] = "any"
-        else:
-            unavailable.append("unsanctioned")
-            normalized["unsanctioned"] = "off"
-            normalized[_HOME_PROMOTION_FILTER] = "any"
     else:
         normalized[_HOME_PROMOTION_FILTER] = (
             "off" if u18a_enabled("untracked_brand_promotions") else "any"
         )
+    if "unsanctioned" in source:
+        legacy_mode = source["unsanctioned"]
+        if legacy_mode in {"off", "only", "any"}:
+            normalized["unsanctioned"] = legacy_mode
+            if _HOME_PROMOTION_FILTER not in source:
+                # Historical URLs inspect only the historical relation.
+                normalized[_HOME_PROMOTION_FILTER] = "any"
+        else:
+            unavailable.append("unsanctioned")
     if "window" in source:
         try:
             window = int(source["window"])
@@ -3791,6 +3836,7 @@ def _build_home_pulse_payload(
                 prior_count=Coalesce(Subquery(prior_counts), 0),
             )
         )
+        rows = _home_visible_brand_rows(rows)
         rows.sort(key=lambda row: _home_chart_brand_sort_key(row["nickname"]))
         entries: list[dict[str, Any]] = []
         for row in rows:

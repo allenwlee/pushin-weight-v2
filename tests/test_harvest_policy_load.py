@@ -15,6 +15,7 @@ from x_monitor.harvest_policy import (
     CoPack,
     HarvestPolicy,
     VersionFamily,
+    active_excluded_author_handles,
     load_policy,
 )
 
@@ -62,6 +63,65 @@ NONE_OPT_OUT_DOC = {
         },
     },
 }
+
+
+EXCLUDED_AUTHOR = {
+    "handle": "xxyweb3",
+    "author_id": "1902753573395652608",
+    "active": True,
+    "reason": "Repeated unrelated campaign promotion",
+    "observed_on": "2026-09-28",
+    "evidence_post_ids": ["2104483144233853085"],
+    "evidence_campaign": "B.AI",
+}
+
+
+def test_excluded_author_registry_retains_inactive_evidence(tmp_path):
+    inactive = {**EXCLUDED_AUTHOR, "handle": "old_source", "author_id": "22", "active": False}
+    path = _write(
+        tmp_path,
+        "policy.yaml",
+        {**NONE_OPT_OUT_DOC, "excluded_authors": [inactive, EXCLUDED_AUTHOR]},
+    )
+    policy = load_policy(path)
+    assert len(policy.excluded_authors) == 2
+    assert policy.excluded_authors[0].active is False
+    assert active_excluded_author_handles(policy) == ("xxyweb3",)
+    assert policy.excluded_authors[1].evidence_post_ids == ("2104483144233853085",)
+
+
+@pytest.mark.parametrize(
+    ("changed", "error"),
+    [
+        ({"handle": "@xxyweb3"}, "normalized X handle"),
+        ({"handle": "XXYWEB3"}, "normalized X handle"),
+        ({"author_id": "BAI_AGI"}, "decimal string"),
+        ({"active": "yes"}, "must be a boolean"),
+        ({"reason": " "}, "reason must be non-empty"),
+        ({"observed_on": "2026-13-99"}, "invalid observed_on"),
+        ({"evidence_post_ids": []}, "must contain post IDs"),
+        ({"evidence_campaign": ""}, "must be non-empty"),
+    ],
+)
+def test_excluded_author_registry_rejects_malformed_entries(tmp_path, changed, error):
+    path = _write(
+        tmp_path,
+        "policy.yaml",
+        {**NONE_OPT_OUT_DOC, "excluded_authors": [{**EXCLUDED_AUTHOR, **changed}]},
+    )
+    with pytest.raises((TypeError, ValueError), match=error):
+        load_policy(path)
+
+
+@pytest.mark.parametrize("changed", [{}, {"handle": "second"}, {"author_id": "22"}])
+def test_excluded_author_registry_rejects_duplicate_identity(tmp_path, changed):
+    path = _write(
+        tmp_path,
+        "policy.yaml",
+        {**NONE_OPT_OUT_DOC, "excluded_authors": [EXCLUDED_AUTHOR, {**EXCLUDED_AUTHOR, **changed}]},
+    )
+    with pytest.raises(ValueError, match="duplicate excluded author"):
+        load_policy(path)
 
 
 # -------------------------------------------------------------------------

@@ -11,6 +11,7 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
+from monitor import cycle as cycle_mod  # Import before tests patch x_monitor.config.
 from x_monitor.config import Config, DiscoveryLaneConfig, DiscoveryQueryConfig
 from x_monitor.query_plan import PlannedCall
 

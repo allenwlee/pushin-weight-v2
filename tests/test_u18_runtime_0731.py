@@ -102,6 +102,9 @@ def test_selected_prompts_render_the_v4_fixed_slot_contract():
     assert "news_reporting" in CONTENT_PROMPT
     assert "investigate_claim" in BRAND_PROMPT
     assert "general is an exclusive fallback" in CONTENT_PROMPT
+    assert "marketing beneficiary" in CONTENT_PROMPT
+    assert "Token Machine" in CONTENT_PROMPT
+    assert "B.AI" in CONTENT_PROMPT
 
     transport = FixedSlotTransport()
     classify_batch_pragmatics_full(_tweets(1), [], transport)
@@ -180,9 +183,9 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
     assert [rows[0]["classification_trace"][stage]["role_revision"] for stage in (
         "content", "brand_interpretation", "final"
     )] == [
-        "stage1-content-0731-v5",
+        "stage1-content-0731-v6",
         "stage1-brand-interpretation-0731-v5",
-        "stage1-two-role-merge-0731-v5",
+        "stage1-two-role-merge-0731-v6",
     ]
     for call in transport.calls:
         request = call["request"]

@@ -287,6 +287,23 @@ def test_repeated_demand_coalesces_and_upgrades_priority():
     assert second.request_count == 2
 
 
+def test_repeated_browser_request_does_not_move_request_clock_backwards():
+    post = Post.objects.create(tweet_id="demand-clock-jitter", text="A post")
+    config = _config()
+    first_at = timezone.now()
+    request_post_synthesis(
+        post_ids=[post.pk], reason="visible", config=config, now=first_at
+    )
+    repeated = request_post_synthesis(
+        post_ids=[post.pk], reason="visible", config=config,
+        now=first_at - timedelta(milliseconds=2),
+    )[0]
+    repeated.refresh_from_db()
+    assert repeated.request_count == 2
+    assert repeated.last_requested_at == first_at
+    assert repeated.last_requested_at >= repeated.first_requested_at
+
+
 def test_claim_stays_batch_bounded_without_stopping_at_historical_daily_totals():
     posts = [
         Post.objects.create(tweet_id=f"budget-{index}", text=f"post {index}")

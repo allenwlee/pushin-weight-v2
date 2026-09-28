@@ -1,9 +1,8 @@
 """Frozen U18A user-facing activation decisions.
 
-The classifier may persist every v4 field for shadow analysis.  Readers and
-filters expose the seven Audience Topics selected by the owner after reviewing
-the independently scored R94A evidence. Other families still require their own
-activation decision; missing keys fail closed as ``shadow_only``.
+The classifier may persist every v4 field for shadow analysis. Readers and
+filters expose the seven owner-selected Audience Topics, Geopolitical, and
+Untracked Brand Promotions. Other families remain ``shadow_only``.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from typing import Final, Literal
 
 ActivationState = Literal["enabled", "shadow_only"]
 
-ACTIVATION_REVISION: Final = "u18a-owner-all-audience-topics-20260921-v1"
+ACTIVATION_REVISION: Final = "u18a-owner-geopolitical-promotions-20260928-v2"
 EVALUATOR_SHA256: Final = (
     "cf1ec56b963fe687eb0abb6a5d5e23d88ebf6475adc48b5b0818617cb4ac9678"
 )
@@ -34,8 +33,8 @@ FAMILY_DECISIONS: Final[dict[str, ActivationState]] = {
     "api_developer_surface": "enabled",
     "news_reporting": "shadow_only",
     "investigate_claim": "shadow_only",
-    "geopolitical": "shadow_only",
-    "untracked_brand_promotions": "shadow_only",
+    "geopolitical": "enabled",
+    "untracked_brand_promotions": "enabled",
 }
 
 

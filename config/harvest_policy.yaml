@@ -1,3 +1,16 @@
+excluded_authors:
+  - handle: xxyweb3
+    author_id: '1902753573395652608'
+    active: true
+    reason: Repeated unrelated B.AI campaign promotion in tracked-brand searches.
+    observed_on: '2026-09-28'
+    evidence_post_ids:
+      - '2104483144233853085'
+      - '2104489140083703850'
+      - '2104505996618109073'
+      - '2104511602477432878'
+    evidence_campaign: B.AI
+
 brands:
   minimax:
     paths:

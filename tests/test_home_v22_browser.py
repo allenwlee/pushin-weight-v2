@@ -67,7 +67,6 @@ _HOME_CHART_BRAND_PRIORITY = (
     "kwaiyii",
     "seed",
     "sensenova",
-    "step",
     "wenxin",
     "gemini",
     "gpt",
@@ -3524,6 +3523,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             initial_stamp = page.locator(
                                 ".feed-row[data-created-at-iso] .ts-abs"
                             ).first.inner_text()
+                            self.assertIn(" local)", initial_stamp)
 
                             pill.click()
                             page.wait_for_function(
@@ -3542,6 +3542,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 ).first.inner_text(),
                                 initial_stamp,
                             )
+                            with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200):
+                                page.evaluate("""() => document.dispatchEvent(new CustomEvent('pw:filter-change',
+                                  {detail: {filters: window.pwFilter.get()}}))""")
+                            self.assertEqual(
+                                page.locator(".feed-row[data-created-at-iso] .ts-abs .tz-ca-icon").first.count(),
+                                1,
+                            )
                             axis_colors = page.evaluate(
                                 """() => {
                                   const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
@@ -3559,6 +3566,68 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 axis_colors["comparison"].replace(" ", ""),
                                 "rgba(251,191,36,1)",
                             )
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
+    def test_mobile_filter_bar_native_swipe_does_not_activate_a_pill(self) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for width in (320, 390):
+                    with self.subTest(width=width):
+                        context = browser.new_context(
+                            viewport={"width": width, "height": 844},
+                            is_mobile=True, has_touch=True, timezone_id="Asia/Tokyo",
+                        )
+                        page = context.new_page()
+                        try:
+                            page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                            scroller = page.locator(".filter-bar-scroller")
+                            pulse = page.locator(".pulse-bar")
+                            self.assertGreater(scroller.evaluate("el => el.scrollWidth - el.clientWidth"), 0)
+                            self.assertEqual(scroller.evaluate("el => getComputedStyle(el).touchAction"), "auto")
+                            self.assertEqual(pulse.evaluate("el => getComputedStyle(el).overflowX"), "auto")
+                            first = scroller.locator(".filter-pill").first
+                            rect = first.bounding_box()
+                            self.assertIsNotNone(rect)
+                            x = rect["x"] + rect["width"] / 2
+                            y = rect["y"] + rect["height"] / 2
+                            session = context.new_cdp_session(page)
+                            session.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
+                            for distance in (25, 55, 90, 130, 170):
+                                session.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x - distance, "y": y}]})
+                            session.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+                            page.wait_for_timeout(250)
+                            self.assertGreater(scroller.evaluate("el => el.scrollLeft"), 0)
+                            self.assertEqual(page.locator(".filter-pill.is-open").count(), 0)
+                            first.tap()
+                            self.assertEqual(first.get_attribute("aria-expanded"), "true")
+                            dropdown = page.locator('.filter-dropdown:visible').first
+                            box = dropdown.bounding_box()
+                            self.assertIsNotNone(box)
+                            self.assertGreaterEqual(box['x'], 0)
+                            self.assertLessEqual(box['x'] + box['width'], width + 1)
+                            first.press("Escape")
+
+                            before_y = page.evaluate('window.scrollY')
+                            rect = first.bounding_box()
+                            x = rect['x'] + rect['width'] / 2
+                            y = rect['y'] + rect['height'] / 2
+                            session.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
+                            for distance in (25, 65, 105, 145):
+                                session.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x, "y": y - distance}]})
+                                page.wait_for_timeout(30)
+                            session.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+                            page.wait_for_timeout(250)
+                            self.assertGreater(page.evaluate('window.scrollY'), before_y)
+                            self.assertEqual(page.locator('.filter-pill.is-open').count(), 0)
+
+                            pulse.scroll_into_view_if_needed()
+                            pulse_chip = pulse.locator('[data-pw-pulse-entry]').first
+                            pulse_chip.tap()
+                            self.assertEqual(pulse_chip.get_attribute('aria-pressed'), 'true')
                         finally:
                             context.close()
             finally:
@@ -3862,6 +3931,136 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         return response.json()
+
+    def test_stepfun_is_single_nonempty_browser_identity(self) -> None:
+        from django.utils import timezone
+        from core.models import SearchQuery
+
+        step = Brand.objects.create(nickname="step", display_name="Step")
+        legacy_query = SearchQuery.objects.create(query_id="step-browser-history", brand=step)
+        brand = Brand.objects.create(
+            nickname="stepfun", display_name="StepFun", display_name_en="StepFun"
+        )
+        post = Post.objects.create(
+            tweet_id="stepfun-browser-row",
+            text="StepFun browser evidence",
+            text_en="StepFun browser evidence",
+            lang_detected="en",
+            created_at=timezone.now() - timedelta(minutes=2),
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    self.assertEqual(page.locator('[data-pw-pulse-entry="stepfun"]').count(), 1)
+                    self.assertEqual(page.locator('[data-pw-pulse-entry="step"]').count(), 0)
+                    self.assertEqual(page.locator('input[data-pw-filter-group="brands"][value="stepfun"]').count(), 1)
+                    self.assertEqual(page.locator('input[data-pw-filter-group="brands"][value="step"]').count(), 0)
+                    self.assertEqual(page.locator('.feed-row[data-tweet-id="stepfun-browser-row"]').count(), 1)
+                    initial = page.evaluate("JSON.parse(document.querySelector('canvas.home-chart').dataset.home)")
+                    self.assertGreater(initial['totals']['stepfun'], 0)
+                    with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200) as feed_info:
+                        page.locator('[data-pw-pulse-entry="stepfun"]').click()
+                    response = feed_info.value
+                    self.assertEqual(json.loads(parse_qs(urlparse(response.url).query)['filters'][0])['brands'], ['stepfun'])
+                    self.assertEqual(page.evaluate('window.pwFilter.get().brands'), ['stepfun'])
+                    self.assertIn('stepfun-browser-row', [row['tweet_id'] for row in response.json()['rows']])
+                    page.wait_for_function("JSON.parse(document.querySelector('canvas.home-chart').dataset.home).applied_filters.brands?.[0] === 'stepfun'")
+                    chart = page.evaluate("JSON.parse(document.querySelector('canvas.home-chart').dataset.home)")
+                    self.assertGreater(chart['totals']['stepfun'], 0)
+                    self.assertEqual(page.locator('.feed-row[data-tweet-id="stepfun-browser-row"]').count(), 1)
+                    stale = urlencode({'locale': 'en', 'filters': json.dumps({'brands': ['step', 'stepfun']})})
+                    page.goto(f"{self.live_server_url}/?{stale}", wait_until="networkidle")
+                    self.assertEqual(page.evaluate('window.pwFilter.get().brands'), ['stepfun'])
+                    self.assertEqual(page.locator('input[data-pw-filter-group="brands"][value="step"]').count(), 0)
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+        self.assertTrue(Brand.objects.filter(nickname="step").exists())
+        legacy_query.refresh_from_db()
+        self.assertEqual(legacy_query.brand_id, "step")
+
+    def test_activated_geopolitical_and_promotion_controls_round_trip_in_browser(self) -> None:
+        from django.utils import timezone
+        from core.classification_contract import CONTRACT_VERSION
+        from core.models import (
+            GeopoliticalModeKey, NationalStanceKey,
+            PostBrandClassificationState, PostBrandGeopoliticalMode,
+        )
+
+        brand = Brand.objects.create(nickname="geo-browser", display_name="Geo Browser")
+        post = Post.objects.create(
+            tweet_id="geo-browser-row", text="Geopolitical evidence",
+            text_en="Geopolitical evidence", lang_detected="en",
+            created_at=timezone.now() - timedelta(minutes=3),
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+        GeopoliticalModeKey.objects.get_or_create(key="framework")
+        NationalStanceKey.objects.get_or_create(key="pro")
+        NationalStanceKey.objects.get_or_create(key="constructive_critical")
+        PostBrandClassificationState.objects.create(
+            post=post, brand=brand, contract_version=CONTRACT_VERSION,
+            taxonomy_version="stage1-taxonomy-v4", prompt_version="browser-test",
+            model="browser-test", source_language="en",
+            input_context_fingerprint="g" * 64, outcome="classified",
+            china_national_stance_id="pro",
+            us_national_stance_id="constructive_critical",
+        )
+        PostBrandGeopoliticalMode.objects.create(
+            post=post, brand=brand, geopolitical_mode_id="framework",
+            taxonomy_version="stage1-taxonomy-v4", prompt_version="browser-test",
+            model="browser-test", provider_role="primary",
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    geopolitical = page.locator('.filter-pill[data-group="geopolitical_modes"]')
+                    promotions = page.locator('.filter-pill[data-group="untracked_brand_promotions"]')
+                    self.assertEqual(geopolitical.count(), 1)
+                    self.assertEqual(promotions.count(), 1)
+                    self.assertEqual(page.locator('.filter-pill[data-group="nationalism"]').count(), 0)
+                    glyph = page.locator('[data-tweet-id="geo-browser-row"] [data-sig-geopolitical] .signal-inspection-trigger').first
+                    self.assertEqual(glyph.count(), 1)
+                    glyph.hover()
+                    evidence = page.locator('#pw-feed-inspection-popover .inspection-words').inner_text()
+                    self.assertIn('Geopolitical mode', evidence)
+                    self.assertIn('China:', evidence)
+                    self.assertIn('U.S.:', evidence)
+                    help_trigger = geopolitical.locator('.filter-help-trigger')
+                    help_trigger.hover()
+                    self.assertIn(
+                        'China and U.S. national stances',
+                        page.locator('#pw-feed-inspection-popover .inspection-words').inner_text(),
+                    )
+                    help_trigger.click()
+                    self.assertEqual(geopolitical.get_attribute('aria-expanded'), 'false')
+                    geopolitical.click()
+                    self.assertEqual(geopolitical.get_attribute('aria-expanded'), 'true')
+                    with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200):
+                        page.locator('input[data-pw-filter-group="geopolitical_modes"][value="reporting"]').uncheck()
+                    self.assertEqual(
+                        page.evaluate('window.pwFilter.get().geopolitical_modes'),
+                        ['framework', 'nationalism'],
+                    )
+                    geopolitical.click()
+                    promotions.click()
+                    with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200):
+                        page.locator('input[data-pw-filter-group="untracked_brand_promotions"][value="general"]').check()
+                    self.assertEqual(page.evaluate('window.pwFilter.get().untracked_brand_promotions'), ['general'])
+                    self.assertEqual(page.evaluate('window.pwFilter.get().unsanctioned'), 'any')
+                finally:
+                    context.close()
+            finally:
+                browser.close()
 
     def test_old_taxonomy_url_hydrates_canonical_controls_and_visible_icons(
         self,
@@ -4253,15 +4452,15 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 )
                                 self.assertEqual(
                                     api_row["geopolitical_modes_status"],
-                                    "unavailable",
+                                    expected_v4_metadata_status[tweet_id],
                                 )
                                 self.assertEqual(
                                     api_row["china_national_stance_status"],
-                                    "unavailable",
+                                    expected_v4_metadata_status[tweet_id],
                                 )
                                 self.assertEqual(
                                     api_row["us_national_stance_status"],
-                                    "unavailable",
+                                    expected_v4_metadata_status[tweet_id],
                                 )
 
                             classified_other = page.locator(
@@ -4378,7 +4577,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                         '[data-tweet-id="v22-metadata-004"] '
                                         '.enrichment-status-pending[data-process="pending"]'
                                     ).get_attribute("data-pw-inspection"),
-                                    "分析、评论待处理。",
+                                    "分析、评论待处理。 分析首次成功处理的历史平均时间：约15分钟。 评论首次成功处理的历史平均时间：约1分钟。",
                                 )
                                 self.assertEqual(
                                     page.locator(
@@ -4531,8 +4730,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(row["sentiment_keys"], ["positive", "mixed"])
         self.assertEqual(row["post_type_keys"], ["releases_updates", "hands_on_usage"])
         self.assertEqual(row["product_label_keys"], ["bug"])
-        self.assertEqual(row["nat_cn"], "pro")
-        self.assertEqual(row["nat_us"], "mild_pro")
+        self.assertEqual(row["nat_cn"], "")
+        self.assertEqual(row["nat_us"], "")
         self.assertNotIn("discourse", str(row["classifications"]))
         self.assertTrue(row["engagement_pretty"]["followers"])
 
@@ -4783,6 +4982,35 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         point["index"],
                     )
                 )
+                tooltip_clearance = page.evaluate(
+                    """point => {
+                      const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                      const canvas = chart.canvas.getBoundingClientRect();
+                      const tip = chart.tooltip;
+                      const box = {left: canvas.left + tip.x, top: canvas.top + tip.y,
+                        right: canvas.left + tip.x + tip.width,
+                        bottom: canvas.top + tip.y + tip.height};
+                      return Math.max(box.left - point.x, point.x - box.right,
+                        box.top - point.y, point.y - box.bottom);
+                    }""",
+                    point,
+                )
+                self.assertGreaterEqual(tooltip_clearance, 11.5)
+                point_anchor = page.evaluate(
+                    """() => {
+                      const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
+                      const active = chart.tooltip.getActiveElements();
+                      const elements = active.map(item => ({
+                        element: chart.getDatasetMeta(item.datasetIndex).data[item.index]
+                      }));
+                      const positioner = Chart.Tooltip.positioners.pwCursorClear;
+                      return [
+                        positioner.call(chart.tooltip, elements, {x: 0, y: 0}),
+                        positioner.call(chart.tooltip, elements, {x: 999, y: 999})
+                      ];
+                    }"""
+                )
+                self.assertEqual(point_anchor[0], point_anchor[1])
 
                 page.mouse.move(8, 8)
                 page.wait_for_timeout(50)
@@ -4977,7 +5205,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 role.get_attribute("aria-label"),
                 "官方" if locale.startswith("zh") else "Official",
             )
-        for selector in ("[data-sig-sentiment]", "[data-sig-post-type]", "[data-sig-nat]"):
+        for selector in ("[data-sig-sentiment]", "[data-sig-post-type]"):
             marker = row.locator(selector)
             self.assertTrue(marker.is_visible(), f"marker is hidden: {selector}")
             box = marker.bounding_box()
@@ -4985,6 +5213,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             self.assertGreater(box["width"], 0, f"marker has zero width: {selector}")
             self.assertGreater(box["height"], 0, f"marker has zero height: {selector}")
             self.assertGreater(marker.locator("use").count(), 0, f"marker has no symbol: {selector}")
+        self.assertFalse(row.locator("[data-sig-nat]").is_visible())
 
     def _assert_selected_taxonomy_glyphs(self, page: Page) -> None:
         row = page.locator(
@@ -5551,29 +5780,49 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 context = self._anonymous_context(browser)
                 try:
                     page = context.new_page()
-                    page.goto(f"{self.live_server_url}/?locale=ja", wait_until="networkidle")
+                    page.goto(
+                        f"{self.live_server_url}/?locale=ja&"
+                        + urlencode({"filters": json.dumps({"untracked_brand_promotions": "any"})}),
+                        wait_until="networkidle",
+                    )
 
                     def inspect(*, initial: bool) -> None:
                         if initial:
                             active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="pending"]')
-                            self.assertEqual(active.get_attribute('data-pw-inspection'), '翻訳と解説を待っています。')
+                            self.assertIn('翻訳', active.get_attribute('data-pw-inspection') or '')
+                            self.assertIn('約5分', active.get_attribute('data-pw-inspection') or '')
                         row = page.locator(f'[data-tweet-id="{self.fixture["replacement_id"]}"]')
-                        self.assertEqual(row.locator('.processing-armillary').count(), 1)
+                        self.assertEqual(row.locator('.processing-armillary').count(), 2)
                         self.assertEqual(row.locator('.processing-status[data-process="translation"]').count(), 0)
                         self.assertEqual(
-                            row.locator('.processing-status[data-process="pending"]').get_attribute('data-pw-inspection'),
-                            '言語判定と翻訳と解説を待っています。',
+                            row.locator('.post-language-tag.processing-status').get_attribute('data-pw-inspection'),
+                            '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。',
+                        )
+                        self.assertEqual(
+                            row.locator('.meta .processing-status[data-process="pending"]').get_attribute('data-pw-inspection'),
+                            '解説を待っています。 解説の初回成功処理の過去平均：約1分。',
                         )
                         self.assertEqual(
                             row.locator('[data-process="classification"]').get_attribute('data-pw-inspection'),
                             '分類に失敗しました。再試行の予定はありません。',
                         )
                         globe = row.locator('.post-language-tag.processing-status')
-                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定と翻訳と解説を待っています。')
+                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。')
                         self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
                         popover = page.locator('#pw-feed-inspection-popover')
-                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定と翻訳と解説を待っています。')
+                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。')
+                        trigger_rect = globe.bounding_box()
+                        popover_rect = popover.bounding_box()
+                        self.assertIsNotNone(trigger_rect)
+                        self.assertIsNotNone(popover_rect)
+                        clearance = max(
+                            popover_rect["y"] - (trigger_rect["y"] + trigger_rect["height"]),
+                            trigger_rect["y"] - (popover_rect["y"] + popover_rect["height"]),
+                            popover_rect["x"] - (trigger_rect["x"] + trigger_rect["width"]),
+                            trigger_rect["x"] - (popover_rect["x"] + popover_rect["width"]),
+                        )
+                        self.assertGreaterEqual(clearance, 11.5)
                         self.assertGreater(
                             popover.locator('.inspection-visual svg').evaluate('node => node.getBoundingClientRect().width'),
                             globe.locator('svg').evaluate('node => node.getBoundingClientRect().width'),
@@ -5732,7 +5981,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 ),
                                 ["pw-icon", "zh", "en"],
                             )
-                            self.assertEqual(page.locator(".filter-pill .carat use").count(), 7)
+                            self.assertEqual(page.locator(".filter-pill .carat use").count(), 9)
                             self.assertEqual(
                                 page.locator(".filter-pill .carat use").evaluate_all(
                                     "nodes => [...new Set(nodes.map(node => node.getAttribute('href')))]"
@@ -6016,7 +6265,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
                     language_tag = text.locator(".post-language-tag")
                     self.assertEqual(language_tag.count(), 1)
-                    self.assertEqual(language_tag.inner_text(), "英语")
+                    self.assertEqual(language_tag.inner_text(), "en")
 
                     with page.expect_response(lambda response: "/feed/?" in response.url):
                         page.evaluate("window.pwFilter.set('sentiment', '__all__')")
@@ -6034,7 +6283,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(
                         refreshed_text.locator(".post-language-tag").inner_text(),
-                        "英语",
+                        "en",
                     )
                 finally:
                     context.close()
@@ -6905,7 +7154,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         revealed.locator(
                             ".enrichment-status:not(.synthesis-status)"
                         ).count(),
-                        0,
+                        1,
+                    )
+                    self.assertIn(
+                        "Commentary pending",
+                        revealed.locator(".enrichment-status:not(.synthesis-status)").get_attribute("data-pw-inspection"),
                     )
                     self.assertEqual(
                         page.locator(

@@ -57,6 +57,46 @@ def _classification_results(tweets):
     ]
 
 
+def test_exact_repair_manifest_mismatch_blocks_all_publication(monkeypatch):
+    from core.models import PostBrandClassificationState, PostEnrichmentState
+    from monitor import cycle
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution, reattribute
+
+    states = [_state("repair-1"), _state("repair-2")]
+    for state in states:
+        state.translation_status = PostEnrichmentState.Status.SUCCEEDED
+        state.save(update_fields=["translation_status"])
+    monkeypatch.setattr(reattribute, "build_classifier_client_from_env", lambda cfg: object())
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: None)
+    monkeypatch.setattr(cycle, "_requeue_recent_incomplete_translations", lambda **kwargs: 0)
+    monkeypatch.setattr(
+        attribution, "classify_batch_pragmatics_full",
+        lambda tweets, brands, client, **kwargs: _classification_results(tweets),
+    )
+    manifest = {
+        state.pk: {
+            "input_context_fingerprint": "x" * 64,
+            "by_brand": {"deepseek": {"outcome": "classified", "post_types": ["other"]}},
+            "untracked_brand_promotions": [],
+            "promoted_subjects": [],
+        }
+        for state in states
+    }
+    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+        [], run_id="repair-mismatch", post_ids=set(manifest), repair_manifest=manifest,
+    )
+
+    assert counters.get("n_classifications_published", 0) == 0
+    assert not PostBrandClassificationState.objects.filter(post_id__in=manifest).exists()
+    assert all(
+        status == PostEnrichmentState.Status.PENDING
+        for status in PostEnrichmentState.objects.filter(post_id__in=manifest).values_list(
+            "classification_status", flat=True,
+        )
+    )
+
+
 def test_claims_are_bounded_and_active_claims_are_not_double_owned():
     from monitor.cycle import _claim_enrichment_states
 

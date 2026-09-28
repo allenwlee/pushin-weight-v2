@@ -12,6 +12,8 @@ def test_owner_activation_exposes_all_audience_topics():
         "openness_license",
         "agents_tools",
         "api_developer_surface",
+        "geopolitical",
+        "untracked_brand_promotions",
     }
     assert len(FAMILY_DECISIONS) == 11
 
