@@ -141,8 +141,8 @@ python manage.py runserver 0.0.0.0:8000
 # Run one harvest cycle
 python manage.py run_cycle --dry-run --limit-per-call 20
 
-# Run tests (Django test runner)
-pytest
+# Run tests with pytest temporary files kept in this worktree
+scripts/pytest-local
 
 # Run Django system checks
 python manage.py check --deploy
@@ -234,7 +234,7 @@ Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loa
 - `feedback_reattribute_with_llm_required.md` — x-monitor v1.8 reattribute defaults anthropic_client=None; must pass explicitly
 - `feedback_xmonitor_cron_v17_list_gate.md` — x-monitor v1.7 RunPipeline raises ValueError unless x_monitor_list_id set
 - `feedback_xmonitor_fk_hot_path_2026-06-20.md` — x-monitor hot path IntegrityError FK; fix via OR IGNORE / SELECT-then-INSERT
-- `feedback_fuchitalee_pytest_tmpdir_cleaned.md` — macOS cleans TMPDIR mid-run; use --basetemp=$HOME/...
+- `feedback_fuchitalee_pytest_tmpdir_cleaned.md` — macOS cleaned TMPDIR mid-run; use `scripts/pytest-local` so pytest keeps a bounded set of temporary runs in this worktree's ignored `.pytest-tmp/`. Do not create `$HOME/pytest-*` directories.
 - `minimax_marketing_harness_layout.md` — .harness/ at minimax-marketing root is local-only, no git; do not commit
 - `feedback_no_oversell.md` — test must exercise the differentiator; do not claim stacks-can-match wins
 - `feedback_artifact_arbiter.md` — for AI demos, artifact is final arbiter; skip pre-validation gates

@@ -353,7 +353,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 
 - Run a dry cycle with `python manage.py run_cycle --dry-run --limit-per-call 20`.
 - Run `python manage.py check --deploy` before a Render release.
-- Run `pytest` for the complete regression suite.
+- Run `scripts/pytest-local` for the complete regression suite. It keeps pytest's temporary files in the worktree's ignored `.pytest-tmp/` directory, where pytest retains recent runs automatically.
 - Use the Render CLI and the documented PostgreSQL route for production reads.
 - The Render cron is the only production scheduler; do not reactivate legacy
   worker or beat services.

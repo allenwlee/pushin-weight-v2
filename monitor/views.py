@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.signing import salted_hmac
 from django.db import DatabaseError, connection, transaction
 from django.db.models import (
@@ -4137,6 +4138,60 @@ _EACH_TABS = (
     ("product_labels", "product_label_entries"),
     ("untracked_brand_promotions", "untracked_brand_promotion_entries"),
 )
+_EACH_FIXED_BOTTOM = {
+    "sentiment": (_FILTER_UNCLASSIFIED, "neutral", "mixed", "negative", "positive"),
+    "post_types": (_FILTER_UNCLASSIFIED, "other"),
+    "lang": ("undetected", "other", "en"),
+    "role": ("other", "official", "staff", "community"),
+    "audience_topics": (_FILTER_UNCLASSIFIED, _FILTER_NO_AUDIENCE_TOPIC),
+    "product_labels": (_FILTER_UNCLASSIFIED, _FILTER_NO_PRODUCT_SIGNAL),
+}
+_EACH_FIXED_COLORS = {
+    _FILTER_UNCLASSIFIED: "#000000",
+    "undetected": "#000000",
+    "neutral": "#cbd5e1",
+    "other": "#cbd5e1",
+    _FILTER_NO_AUDIENCE_TOPIC: "#cbd5e1",
+    _FILTER_NO_PRODUCT_SIGNAL: "#cbd5e1",
+    "mixed": "#8b5cf6",
+    "negative": "#ef4444",
+    "positive": "#3b82f6",
+}
+
+
+def _each_reference_counts(tab: str, at: datetime, *, cache_result: bool) -> dict[str, int]:
+    """Rank variable categories from DeepSeek's latest three UTC calendar days."""
+    slot = int(at.timestamp() // 300)
+    cache_key = f"each:deepseek-rank:{tab}:{slot}"
+    if cache_result:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    reference = _each_chart_payload(
+        "deepseek", tab, 3, "en", now=at, bucket_timezone="UTC", _rank=False
+    )
+    counts = {key: sum(values) for key, values in reference["series"].items()}
+    if cache_result:
+        cache.set(cache_key, counts, timeout=300)
+    return counts
+
+
+def _each_ordered_entries(
+    tab: str, entries: list[dict[str, Any]], at: datetime, *, cache_result: bool,
+) -> list[dict[str, Any]]:
+    fixed = _EACH_FIXED_BOTTOM.get(tab, ())
+    reference = {} if all(entry["key"] in fixed for entry in entries) else _each_reference_counts(
+        tab, at, cache_result=cache_result
+    )
+    fixed_position = {key: index for index, key in enumerate(fixed)}
+    return sorted(entries, key=lambda entry: (
+        0 if entry["key"] in fixed_position else 1,
+        fixed_position.get(entry["key"], 0) if entry["key"] in fixed_position
+        else -reference.get(entry["key"], 0),
+        entry["key"],
+    ))
+
+
 def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
     entries = _dashboard_filter_entries(
         locale, list(SentimentKey.objects.order_by("key").values_list("key", flat=True))
@@ -4155,7 +4210,7 @@ def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
 
 def _each_chart_payload(
     brand: str, tab: str, window_days: int, locale: str,
-    *, now: datetime | None = None, bucket_timezone: str = "UTC",
+    *, now: datetime | None = None, bucket_timezone: str = "UTC", _rank: bool = True,
 ) -> dict[str, Any]:
     """Count one brand's current classification assignments without a feed row cap."""
     from itertools import islice
@@ -4297,11 +4352,16 @@ def _each_chart_payload(
                 if key in series:
                     series[key][index] += 1
 
+    original_colors = {entry["key"]: palette[i % len(palette)] for i, entry in enumerate(entries)}
+    if _rank:
+        entries = _each_ordered_entries(tab, entries, at, cache_result=now is None)
     return {
         "brand": brand, "tab": tab, "window_days": window_days,
         "bucket_timezone": timezone_name, "granularity": "minute" if window_days == 1 else "day",
         "days": labels, "series": series, "totals": totals,
-        "entries": [{"key": entry["key"], "label": entry["label"], "color": palette[i % len(palette)]} for i, entry in enumerate(entries)],
+        "entries": [{"key": entry["key"], "label": entry["label"],
+                     "color": _EACH_FIXED_COLORS.get(entry["key"], original_colors[entry["key"]])}
+                    for entry in entries],
         "counting_unit": "posts" if tab in {"sentiment", "lang", "role"} else "label_assignments",
         "computed_at": at.isoformat(),
     }

@@ -86,6 +86,27 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                         "Chart.getChart(document.querySelector('[data-each-canvas]')).data.datasets.every(dataset => dataset.fill === 'stack')"
                     )
                 )
+                self.assertEqual(page.get_by_role("tab", name="Product").count(), 1)
+                self.assertTrue(page.locator('[data-each-mode="percent"]').is_checked())
+                self.assertTrue(page.evaluate("""() => {
+                  const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                  const columns = chart.data.labels.map((_, index) =>
+                    chart.data.datasets.reduce((sum, dataset) => sum + (dataset.data[index] || 0), 0));
+                  return chart.options.scales.y.max === 100 &&
+                    columns.some(total => Math.abs(total - 100) < 0.001) &&
+                    columns.every(total => total === 0 || Math.abs(total - 100) < 0.001);
+                }"""))
+                chart_requests = []
+                page.on("request", lambda request: chart_requests.append(request.url)
+                        if "/dashboard/each/chart/" in request.url else None)
+                page.locator('[data-each-mode="volume"]').check()
+                self.assertTrue(page.evaluate("""() => {
+                  const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                  return chart.options.scales.y.max === undefined &&
+                    chart.data.datasets.every(dataset => dataset.data.every(value => Number.isInteger(value)));
+                }"""))
+                page.locator('[data-each-mode="percent"]').check()
+                self.assertEqual(chart_requests, [])
                 first_shot = (
                     Path(__file__).resolve().parents[1]
                     / ".pytest-tmp"
@@ -97,6 +118,16 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                 page.wait_for_function(
                     "document.querySelector('[data-pw-each-chart]').dataset.countingUnit === 'label_assignments'"
                 )
+                self.assertTrue(page.locator('[data-each-mode="percent"]').is_checked())
+                self.assertTrue(page.evaluate("""() => {
+                  const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                  return chart.options.scales.y.max === 100 &&
+                    chart.data.labels.every((_, index) => {
+                      const total = chart.data.datasets.reduce(
+                        (sum, dataset) => sum + (dataset.data[index] || 0), 0);
+                      return total === 0 || Math.abs(total - 100) < 0.001;
+                    });
+                }"""))
                 self.assertEqual(
                     page.locator('[data-each-tab][aria-selected="true"]').count(), 1
                 )
@@ -150,6 +181,8 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                 with page.expect_navigation():
                     page.locator('[data-pw-locale-btn="ja"]').click()
                 self.assertEqual(page.locator("body").get_attribute("data-pw-locale"), "ja")
+                self.assertEqual(page.get_by_role("radio", name="全体に占める割合").count(), 1)
+                self.assertEqual(page.get_by_role("tab", name="製品").count(), 1)
                 self.assertEqual(
                     page.locator('[data-each-tab="post_types"]').get_attribute("aria-selected"),
                     "true",
@@ -158,6 +191,10 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                     page.locator('[data-pw-pulse-entry][aria-pressed="true"]').get_attribute("data-pw-pulse-entry"),
                     "qwen",
                 )
+                with page.expect_navigation():
+                    page.locator('[data-pw-locale-btn="zh_cn"]').click()
+                self.assertEqual(page.get_by_role("radio", name="占总量百分比").count(), 1)
+                self.assertEqual(page.get_by_role("tab", name="产品").count(), 1)
                 page.evaluate(
                     """() => {
                       const nativeFetch = window.fetch.bind(window);

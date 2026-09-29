@@ -109,6 +109,7 @@ STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
 MAX_CHANGED_PIXEL_FRACTION = 0.45
 PIXEL_DELTA = 32
 DEFAULT_BROWSER_ARTIFACT_RETENTION = 10
+DEFAULT_BROWSER_REPORT_ROOT = Path(__file__).resolve().parents[1] / ".pytest-tmp" / "browser-artifacts"
 V22_BROWSER_TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
@@ -150,7 +151,7 @@ def _prune_default_artifact_runs(root: Path, *, keep: int) -> None:
 
 def _artifact_dir() -> Path:
     configured = os.environ.get("V22_BROWSER_REPORT_DIR")
-    root = Path(configured) if configured else Path.home() / ".pytest-v22-browser-artifacts"
+    root = Path(configured) if configured else DEFAULT_BROWSER_REPORT_ROOT
     root.mkdir(parents=True, exist_ok=True)
     if not configured:
         _prune_default_artifact_runs(root, keep=DEFAULT_BROWSER_ARTIFACT_RETENTION - 1)
@@ -162,8 +163,8 @@ def _artifact_dir() -> Path:
 def test_default_browser_artifact_retention_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The default report root remains inspectable without growing forever."""
     monkeypatch.delenv("V22_BROWSER_REPORT_DIR", raising=False)
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
-    root = tmp_path / ".pytest-v22-browser-artifacts"
+    root = tmp_path / "browser-artifacts"
+    monkeypatch.setitem(globals(), "DEFAULT_BROWSER_REPORT_ROOT", root)
     for index in range(10):
         (root / f"old-{index}").mkdir(parents=True)
 

@@ -9,11 +9,13 @@
   var legend = root.querySelector('[data-each-legend]');
   var status = root.querySelector('[data-each-status]');
   var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-each-tab]'));
+  var modes = Array.prototype.slice.call(root.querySelectorAll('[data-each-mode]'));
   var pulses = Array.prototype.slice.call(document.querySelectorAll('[data-pw-pulse-entry]'));
   var initial = document.getElementById('each-initial-chart');
   var payload = initial ? JSON.parse(initial.textContent) : null;
   var selected = payload && payload.brand || '';
   var activeTab = payload && payload.tab || (tabs[0] && tabs[0].dataset.eachTab) || 'sentiment';
+  var mode = (modes.find(function (input) { return input.checked; }) || {}).value || 'percent';
   var windowDays = Number(document.body.dataset.pwWindow || 7);
   var locale = document.body.dataset.pwLocale || 'en';
   var generation = 0;
@@ -72,12 +74,19 @@
     var unitText = next.counting_unit === 'posts' ?
       (/^zh/.test(locale) ? '帖子' : locale === 'ja' ? '投稿' : 'posts') :
       (/^zh/.test(locale) ? '标签分配' : locale === 'ja' ? 'ラベル割当' : 'label assignments');
-    canvas.setAttribute('aria-label', next.brand + ': ' + unitText);
+    canvas.setAttribute('aria-label', next.brand + ': ' + unitText + (mode === 'percent' ? ', % of total' : ', by volume'));
     var localeLabels = next.days.map(function (day) { return chartLabel(day, next.granularity); });
+    var stackTotals = next.days.map(function (_, index) {
+      return next.entries.reduce(function (sum, entry) {
+        return sum + Number((next.series[entry.key] || [])[index] || 0);
+      }, 0);
+    });
     var datasets = next.entries.map(function (entry) {
       return {
         label: entry.label,
-        data: next.series[entry.key] || [],
+        data: (next.series[entry.key] || []).map(function (count, index) {
+          return mode === 'percent' ? (stackTotals[index] ? count * 100 / stackTotals[index] : null) : count;
+        }),
         borderColor: entry.color,
         backgroundColor: entry.color + 'a8',
         borderWidth: 1.4,
@@ -114,8 +123,13 @@
           legend: { display: false },
           tooltip: {
             callbacks: {
+              label: function (item) {
+                var entry = next.entries[item.datasetIndex];
+                var count = next.series[entry.key][item.dataIndex];
+                return entry.label + ': ' + count + (mode === 'percent' ? ' (' + item.parsed.y.toFixed(1) + '%)' : '');
+              },
               footer: function (items) {
-                var total = items.reduce(function (sum, item) { return sum + Number(item.parsed.y || 0); }, 0);
+                var total = items.length ? stackTotals[items[0].dataIndex] : 0;
                 var words = /^zh/.test(locale) ? ['帖子', '标签分配'] :
                   locale === 'ja' ? ['投稿', 'ラベル割当'] : ['posts', 'label assignments'];
                 var noun = words[next.counting_unit === 'posts' ? 0 : 1];
@@ -133,7 +147,11 @@
           y: {
             stacked: true,
             beginAtZero: true,
-            ticks: { color: '#8f9bb2', precision: 0 },
+            max: mode === 'percent' ? 100 : undefined,
+            ticks: {
+              color: '#8f9bb2', precision: 0,
+              callback: mode === 'percent' ? function (value) { return value + '%'; } : undefined
+            },
             grid: { color: 'rgba(141,156,181,.14)' }
           }
         }
@@ -231,6 +249,14 @@
       var nextIndex = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
       tabs[nextIndex].focus();
       tabs[nextIndex].click();
+    });
+  });
+
+  modes.forEach(function (input) {
+    input.addEventListener('change', function () {
+      if (!input.checked || mode === input.value) return;
+      mode = input.value;
+      if (payload) render(payload);
     });
   });
 
