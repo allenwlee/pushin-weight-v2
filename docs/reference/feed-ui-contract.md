@@ -16,20 +16,35 @@ Single source of truth for the **dashboard feed table** (posts list under home /
 
 **Why this exists.** Feed rows are rendered **twice** (SSR + client). Labels come from **three** systems (DB, gettext, JS hardcodes). Locale codes collide (`zh_cn` / `zh-cn` / `zh_Hans`). Agents that fix one layer and not the others produce the 25-commit i18n churn documented in `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md`.
 
-### 2026-09-25 feed hover and processing update
+### Current homepage feed, hovers and processing
+
+Verified against product source `df787fb90c825897a600d05db187217e4c668396`
+on 2026-09-29. This section describes the current homepage; the table-era
+snapshot below retains its original scope and capture date.
 
 The current home feed uses `_feed_initial_v22.html` for its first batch and
 `pw-feed.js` for later or replaced rows. Both paths receive the same
 `processing_badges` wire field from `monitor/views.py`. All pending translation,
 classification, and commentary work shares one animated armillary and one
 localized hover message per post, including work returned to the queue. If
-language detection is pending, the armillary occupies the language tag slot.
+language detection is pending, the armillary occupies the language tag slot
+and includes all other pending jobs. Otherwise it appears in the row metadata.
+Its subdued amber color is `rgba(245, 158, 11, 0.58)`. The outer sphere and
+base stay fixed while the inner ring revolves; reduced-motion mode stops it.
+The hover lists language detection, translation, analysis and commentary in
+that order, with localized retry detail and historical duration notes.
 Terminal failures retain separate stop markers. Ready, cancelled, and expired
 work has no status glyph. Hover and keyboard focus expose the specific message.
 
 When `lang_detected` is missing, undetected, or the historical lossy value
-`other`, a globe replaces the text language tag after processing ends. Its
-hover describes the state. New translation results preserve validated ISO
+`other`, the stop glyph replaces the text language tag when translation is no
+longer pending. Its hover distinguishes failed detection from an unknown
+language with no queued work; unknown language alone does not establish a
+permanent failure. Another pending job may still have the row's one sphere.
+The synthesis-demand response carries `language_display`,
+`language_undetected`, `language_inspection` and `processing_badges`, so polling
+can update the language state without replacing the row.
+New translation results preserve validated ISO
 639-1 primary codes and display the two-letter code in every locale; Chinese
 script tags retain `zh-Hans` and `zh-Hant`. The bounded
 `repair_post_language_codes` command can resolve historical `other` rows
@@ -44,6 +59,19 @@ logo, and the localized word for followers (for example, “102k X followers”)
 The three new glyphs live in `pw-processing-glyphs.svg`, which Django's static
 manifest gives a content-hashed, cacheable URL in production. Japanese lookup
 labels are language rows seeded by `seed_i18n_labels`; no `ja` columns exist.
+
+The public headline keeps its narrative, disclosure and freshness details;
+it has no Top voices block. The chart API still includes `top_voices`, and the
+separate `/dashboard/each` headline retains its voices. Feed rows omit likes,
+reposts and replies while retaining follower magnitudes and original-post X
+links. Pending and context-missing classification cells remain blank.
+
+The geopolitical filter's help control uses the cached globe and supports
+keyboard focus and Escape. Country subtitles use accessible China/U.S. flags
+beside a localized national-stance label. Feed stance markers use `CN`/`US`
+in English and `中`/`美` in Japanese and Chinese at 14px. Signal hovers retain
+the specific geopolitical subtype, brand and stance. The English product
+filter is named `Product`, including after a locale change.
 
 ---
 
