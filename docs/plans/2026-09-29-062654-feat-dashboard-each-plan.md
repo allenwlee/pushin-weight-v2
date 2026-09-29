@@ -9,9 +9,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 
 ## Plain-English Summary
@@ -48,20 +47,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `plan`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/dashboard-each` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/dashboard-each` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -80,7 +75,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+On 2026-09-29, the owner selected direct production delivery. The staging branch contains two unrelated commits, so this change will fast-forward `main` directly from the verified feature candidate. Staging deployment and staging checks do not apply to this delivery.
 
 # Goal
 
@@ -92,7 +87,7 @@ Give visitors a dedicated, dependable way to examine one model's post classifica
 - **Means:** Add an isolated page and read endpoint using the approved prototype for the new tabs and chart treatment (KTD1–KTD3).
 - **Authority:** This session's approved prototype and explicit production target; the existing homepage is the source for elements the user directed to keep identical.
 - **Stop condition:** Do not claim delivery until the candidate revision is observed on the production web service and the route works there.
-- **Execution and delivery:** Implement on `feat/dashboard-each`; use Ollija's staged production route unless the owner later changes it.
+- **Execution and delivery:** Implement on `feat/dashboard-each`; use the owner-selected direct production route.
 
 ## Product Contract
 
@@ -191,7 +186,7 @@ The chart aggregate and API establish the data contract before the chart client.
 
 - **Goal / requirements:** R1–R6.
 - **Files:** This plan and implementation diff.
-- **Approach:** Review and simplify the diff, preserve the verified candidate SHA, follow Ollija's selected staged route, and inspect the production route after deployment. Follow owner exceptions if the owner changes the route.
+- **Approach:** Review and simplify the diff, preserve the verified product-source evidence, follow Ollija's owner-selected direct route, and inspect the production route after deployment.
 - **Verification:** Exact candidate SHA on remote production branch and production web service; browser check of `/dashboard/each`; guarded worktree cleanup only after the guide's conditions are met.
 
 ## Verification Contract
@@ -200,7 +195,7 @@ The chart aggregate and API establish the data contract before the chart client.
 - Before UI edits: run `uv run --extra dev bridgewright assurance-validate --project-root .` and `uv run --extra dev bridgewright assurance-prescribe --project-root .`.
 - During implementation: targeted `pytest` for the new page and `uv run --extra dev python -m tests.ui_assurance.gate --scope affected`; browser proof uses a disposable database and real URL.
 - Candidate: record the product-source SHA in the declaration, then run `uv run --extra dev python -m tests.ui_assurance.gate --scope candidate --candidate-revision <sha>` with the required candidate performance inputs and sealed evidence. A waiver or unperformed check is never a pass.
-- Delivery: follow the Ollija guide's staged production route, verify staging and production services/database availability, and observe the exact deployed SHA and route behavior. Do not conflate a pushed branch, PR, or staging deployment with production.
+- Delivery: follow the Ollija guide's direct production route and observe the exact deployed SHA and route behavior. Do not conflate a pushed branch or PR with production.
 
 ## Definition of Done
 
