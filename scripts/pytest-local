@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+mkdir -p "$project_root/.pytest-tmp"
+export PYTEST_DEBUG_TEMPROOT="$project_root/.pytest-tmp"
+
+python_bin="${PYTHON:-$project_root/.venv/bin/python}"
+exec "$python_bin" -m pytest "$@"
