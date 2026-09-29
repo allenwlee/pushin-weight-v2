@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from x_monitor.config import Config, load_config
@@ -163,3 +164,96 @@ def test_enrichment_claim_lease_covers_terminalization_reserve():
         )
 
     assert "claim_ttl_seconds" in str(exc_info.value)
+
+
+def test_user_about_lane_is_disabled_and_bounded_by_default():
+    lane = _config().harvest.user_about
+
+    assert not lane.enabled
+    assert (lane.max_accounts, lane.max_attempts, lane.max_credits) == (24, 32, 576)
+    assert (lane.max_wall_seconds, lane.concurrency) == (90, 4)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_accounts", 25),
+        ("max_attempts", 33),
+        ("max_credits", 577),
+        ("max_wall_seconds", 91),
+        ("concurrency", 5),
+        ("max_qps", 1.1),
+    ],
+)
+def test_user_about_lane_rejects_values_above_hard_caps(field, value):
+    with pytest.raises(ValidationError) as exc_info:
+        _config(user_about={field: value})
+
+    assert field in str(exc_info.value)
+
+
+def test_enabled_user_about_lane_requires_explicit_provider_qps():
+    with pytest.raises(ValidationError) as exc_info:
+        _config(user_about={"enabled": True})
+
+    assert "provider_qps" in str(exc_info.value)
+
+
+def test_user_about_pace_never_exceeds_verified_provider_qps():
+    lane = _config(
+        user_about={
+            "enabled": True,
+            "max_qps": 1.0,
+            "provider_qps": 0.5,
+        }
+    ).harvest.user_about
+
+    assert lane.effective_qps == 0.5
+
+
+def test_committed_production_user_about_stays_disabled_without_staging_override(
+    monkeypatch,
+):
+    monkeypatch.delenv("X_MONITOR_STAGING_USER_ABOUT_ENABLED", raising=False)
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+
+    lane = load_config(REPO / "config.yaml").harvest.user_about
+
+    assert lane.enabled is False
+    assert lane.provider_qps is None
+
+
+def test_dormant_staging_override_uses_published_minimum_qps(monkeypatch):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "staging")
+    monkeypatch.setenv("X_MONITOR_STAGING_USER_ABOUT_ENABLED", "True")
+
+    lane = load_config(REPO / "config.yaml").harvest.user_about
+
+    assert lane.enabled is True
+    assert lane.effective_qps == 0.2
+    assert lane.max_accounts == 24
+    assert lane.max_attempts == 32
+    assert lane.max_credits == 576
+
+
+def test_staging_user_about_override_fails_closed_outside_staging(monkeypatch):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setenv("X_MONITOR_STAGING_USER_ABOUT_ENABLED", "True")
+
+    with pytest.raises(ValueError, match="staging-only"):
+        load_config(REPO / "config.yaml")
+
+
+def test_staging_harvest_remains_dormant_with_local_only_user_about_flag():
+    blueprint = yaml.safe_load((REPO / "render-staging.yaml").read_text())
+    harvest = next(
+        service
+        for service in blueprint["services"]
+        if service["name"] == "pushinweight-staging-harvest"
+    )
+    env = {item["key"]: item.get("value") for item in harvest["envVars"]}
+
+    assert harvest["schedule"] == "0 0 31 2 *"
+    assert "--staging-acceptance" in harvest["startCommand"]
+    assert "--scheduled" not in harvest["startCommand"]
+    assert env["X_MONITOR_STAGING_USER_ABOUT_ENABLED"] == "True"

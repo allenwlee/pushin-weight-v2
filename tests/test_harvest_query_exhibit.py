@@ -45,6 +45,7 @@ EXPECTED_QUERY_EXHIBIT = {
     ),
     "C1": (
         "((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) OR "
+        '("Meta Muse" OR "Muse Spark" OR "Muse Glimmer" OR "Muse Realtime") OR '
         "(MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR "
         "(Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR "
         "(Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) "

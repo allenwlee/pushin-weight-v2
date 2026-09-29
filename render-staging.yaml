@@ -193,6 +193,10 @@ services:
         value: pushinweight-staging-harvest
       - key: X_MONITOR_STAGING_ACCEPTANCE_ENABLED
         value: "True"
+      # Enables config validation for the dormant manual-acceptance service;
+      # the command below does not launch a scheduled User About cycle.
+      - key: X_MONITOR_STAGING_USER_ABOUT_ENABLED
+        value: "True"
       - key: X_MONITOR_STAGING_ACCEPTANCE_CALL_ID
         value: A
       - key: X_MONITOR_LIST_ID

@@ -55,6 +55,7 @@ enabled_models:
   - ernie
   - hunyuan
   - llama
+  - muse
   - nemo_megatron
   - doubao
   - yi

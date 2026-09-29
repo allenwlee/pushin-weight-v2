@@ -4907,6 +4907,23 @@ class CycleRunner:
             summary["degraded"]["api_client"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
+        user_about_watermark = None
+        if self.cycle_kind == "scheduled" and self.cfg.harvest.user_about.enabled:
+            # Persist the activation boundary before collecting the first post
+            # that could make an account eligible. A failed write must not
+            # silently let a search run without durable coverage state.
+            try:
+                from monitor.twitterapi.user_about_service import (
+                    activate_scheduled_user_about,
+                )
+
+                user_about_watermark = activate_scheduled_user_about()
+            except Exception as exc:
+                logger.exception("CycleRunner.run: User About activation failed")
+                summary["status"] = "aborted"
+                summary["degraded"]["user_about_activation"] = type(exc).__name__
+                return self._finish_summary(summary, started_monotonic=t0, api=api)
+
         search_terms = _load_brand_search_terms()
         list_id = _resolve_x_monitor_list_id(self.cfg)
 
@@ -5384,6 +5401,23 @@ class CycleRunner:
             summary.setdefault("n_errors_by_type", {}).update(
                 dict(self._error_counts)
             )
+
+        if user_about_watermark is not None and summary["status"] != "aborted":
+            from monitor.account_user_about_lane import run_scheduled_user_about_lane
+
+            user_about_result = run_scheduled_user_about_lane(
+                cfg=self.cfg,
+                deadline=deadline,
+                watermark=user_about_watermark,
+                cycle_kind=self.cycle_kind,
+                dry_run=self.dry_run,
+                primary_aborted=False,
+            )
+            summary["account_user_about"] = user_about_result
+            if user_about_result["status"] in {"failed", "degraded", "credential_unavailable"}:
+                summary["degraded"]["account_user_about"] = user_about_result[
+                    "stop_reason"
+                ] or user_about_result["status"]
 
         if self.cycle_kind == "scheduled":
             if list_id is not None:

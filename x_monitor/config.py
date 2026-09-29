@@ -35,6 +35,7 @@ KNOWN_MODELS: frozenset[str] = frozenset(
         "ernie",
         "hunyuan",
         "llama",
+        "muse",
         "nemo_megatron",
         "doubao",
         "yi",
@@ -492,6 +493,31 @@ class EnrichmentConfig(BaseModel):
         )
 
 
+class UserAboutLaneConfig(BaseModel):
+    """Hard ceilings for scheduled first-post geography lookups."""
+
+    enabled: bool = False
+    max_accounts: int = Field(default=24, ge=1, le=24)
+    max_attempts: int = Field(default=32, ge=1, le=32)
+    max_credits: int = Field(default=576, ge=18, le=576)
+    max_wall_seconds: int = Field(default=90, ge=1, le=90)
+    concurrency: int = Field(default=4, ge=1, le=4)
+    max_qps: float = Field(default=1.0, gt=0, le=1.0)
+    provider_qps: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _require_verified_quota_when_enabled(self) -> UserAboutLaneConfig:
+        if self.enabled and self.provider_qps is None:
+            raise ValueError("provider_qps is required when User About is enabled")
+        return self
+
+    @property
+    def effective_qps(self) -> float:
+        if self.provider_qps is None:
+            raise ValueError("provider_qps has not been verified")
+        return min(self.max_qps, self.provider_qps)
+
+
 class HarvestConfig(BaseModel):
     """Bounded recovery and one-deadline scheduling contract."""
 
@@ -502,6 +528,7 @@ class HarvestConfig(BaseModel):
     backlog: BacklogConfig = BacklogConfig()
     list_membership: ListMembershipConfig = ListMembershipConfig()
     enrichment: EnrichmentConfig = EnrichmentConfig()
+    user_about: UserAboutLaneConfig = UserAboutLaneConfig()
 
     @model_validator(mode="after")
     def _validate_deadline_budget(self) -> HarvestConfig:
@@ -1153,6 +1180,33 @@ def load_config(path: Path) -> Config:
     # fields. Non-null YAML values remain authoritative, so shared provider
     # environment variables cannot redirect scheduled enrichment.
     import os
+
+    staging_user_about = os.environ.get("X_MONITOR_STAGING_USER_ABOUT_ENABLED")
+    if staging_user_about not in {None, "True", "False"}:
+        raise ValueError("X_MONITOR_STAGING_USER_ABOUT_ENABLED must be True or False")
+    if staging_user_about == "True":
+        if os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") != "staging":
+            raise ValueError("scheduled User About override is staging-only")
+        harvest = raw.get("harvest", {})
+        if not isinstance(harvest, dict):
+            raise ValueError("harvest config must be an object")
+        user_about = harvest.get("user_about", {})
+        if not isinstance(user_about, dict):
+            raise ValueError("harvest.user_about config must be an object")
+        raw = {
+            **raw,
+            "harvest": {
+                **harvest,
+                "user_about": {
+                    **user_about,
+                    "enabled": True,
+                    # Current published minimum tier is 0.2 QPS; this is
+                    # below every documented account tier, not a paid probe.
+                    "provider_qps": 0.2,
+                    "max_qps": 0.2,
+                },
+            },
+        }
 
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
     env_llm_overrides = {

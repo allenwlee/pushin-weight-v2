@@ -712,6 +712,7 @@ async def fetch_user_about_batch(
     max_attempts: int,
     max_credits: int,
     max_wall_seconds: float,
+    min_request_window_seconds: float = 0,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> FetchBatchResult:
@@ -722,6 +723,8 @@ async def fetch_user_about_batch(
         raise ValueError("all User About budgets must be positive")
     if concurrency <= 0:
         raise ValueError("concurrency must be positive")
+    if min_request_window_seconds < 0:
+        raise ValueError("min_request_window_seconds must be non-negative")
     started = clock()
     attempts = 0
     retries = 0
@@ -743,6 +746,8 @@ async def fetch_user_about_batch(
     def budget_stop() -> str | None:
         if remaining_wall() <= 0:
             return "wall_time_budget"
+        if remaining_wall() < min_request_window_seconds:
+            return "deadline_envelope"
         if attempts + 1 > max_attempts:
             return "attempt_budget"
         if projected_credits + 18 > max_credits:

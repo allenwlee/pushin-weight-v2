@@ -1328,6 +1328,54 @@ class Account(models.Model):
         )
 
 
+class AccountUserAboutActivation(models.Model):
+    """Persistent start of scheduled first-post User About eligibility."""
+
+    key = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    activated_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "account_user_about_activation"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(key=1), name="ck_aua_singleton")
+        ]
+
+
+class AccountUserAboutClaim(models.Model):
+    """One owner at a time for scheduled and manual User About requests."""
+
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RETRY_DUE = "retry_due", "Retry due"
+        UNCERTAIN = "uncertain", "Uncertain"
+        QUARANTINED = "quarantined", "Quarantined"
+        FETCHED = "fetched", "Fetched"
+
+    account = models.OneToOneField(
+        Account,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="user_about_claim",
+        db_column="author_id",
+        to_field="author_id",
+    )
+    state = models.CharField(max_length=16, choices=State.choices)
+    owner = models.CharField(max_length=128, blank=True, default="")
+    lease_expires_at = models.DateTimeField(blank=True, null=True)
+    next_eligible_at = models.DateTimeField(blank=True, null=True)
+    admissions = models.PositiveIntegerField(default=0)
+    last_reason = models.CharField(max_length=64, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "account_user_about_claims"
+        indexes = [
+            models.Index(
+                fields=["state", "next_eligible_at"], name="idx_aua_claim_due"
+            )
+        ]
+
+
 class TwitterListMembership(models.Model):
     """Durable membership snapshot keyed by Twitter list and account."""
 
@@ -1505,6 +1553,9 @@ class Post(models.Model):
         db_table = "posts"
         indexes = [
             models.Index(fields=["author"], name="idx_posts_author_id"),
+            models.Index(
+                fields=["author", "fetched_at"], name="idx_posts_author_fetch"
+            ),
             models.Index(fields=["created_at"], name="idx_posts_created_at"),
             models.Index(
                 fields=["created_at"],

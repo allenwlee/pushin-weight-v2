@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import binascii
 import hashlib
@@ -26,12 +25,13 @@ from django.db.models import Q
 from django.utils import timezone
 from psycopg import sql
 
-from core.models import Account
+from core.models import Account, AccountUserAboutClaim
 from monitor.twitterapi.user_about import (
     ACCOUNT_QUARANTINE_REASONS,
     FetchSelection,
     fetch_user_about_batch,
 )
+from monitor.twitterapi.user_about_service import fetch_apply_user_about_batch
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
@@ -60,6 +60,7 @@ REQUIRED_MIGRATIONS = {
     "0023_account_user_about_unavailable",
     "0024_account_identity_profile_label_long_description",
     "0025_account_verification_override_year",
+    "0059_account_user_about_and_muse",
 }
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _TWITTER_SNOWFLAKE_EPOCH_MS = 1_288_834_974_657
@@ -105,7 +106,12 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     return round(ordered[index], 3)
 
 
-def _eligible_accounts(*, refresh: bool, eligible_before: datetime | None = None):
+def _eligible_accounts(
+    *,
+    refresh: bool,
+    eligible_before: datetime | None = None,
+    claimable: bool = True,
+):
     queryset = (
         Account.objects.filter(author_id__regex=r"^[0-9]+$")
         .exclude(handle__isnull=True)
@@ -115,6 +121,19 @@ def _eligible_accounts(*, refresh: bool, eligible_before: datetime | None = None
         queryset = queryset.filter(account_based_in_fetched_at__isnull=True)
     if eligible_before is not None:
         queryset = queryset.filter(first_seen_at__lte=eligible_before)
+    if claimable:
+        now = timezone.now()
+        available_claim = Q(user_about_claim__isnull=True) | Q(
+            user_about_claim__state=AccountUserAboutClaim.State.RETRY_DUE,
+        ) & (
+            Q(user_about_claim__next_eligible_at__isnull=True)
+            | Q(user_about_claim__next_eligible_at__lte=now)
+        )
+        if refresh:
+            available_claim |= Q(
+                user_about_claim__state=AccountUserAboutClaim.State.FETCHED
+            )
+        queryset = queryset.filter(available_claim)
     return queryset
 
 
@@ -652,57 +671,36 @@ class Command(BaseCommand):
                     break
 
                 chunk = selections[offset : offset + options["chunk_size"]]
-                batch = asyncio.run(
-                    fetch_user_about_batch(
-                        chunk,
-                        api_key=api_key,
-                        rate_qps=effective_qps,
-                        concurrency=options["concurrency"],
-                        max_attempts=remaining_attempts,
-                        max_credits=remaining_credits,
-                        max_wall_seconds=remaining_wall,
-                    )
+                applied_batch = fetch_apply_user_about_batch(
+                    chunk,
+                    api_key=api_key,
+                    rate_qps=effective_qps,
+                    concurrency=options["concurrency"],
+                    max_attempts=remaining_attempts,
+                    max_credits=remaining_credits,
+                    max_wall_seconds=remaining_wall,
+                    refresh=options["refresh"],
+                    fetcher=fetch_user_about_batch,
                 )
+                batch = applied_batch.batch
                 attempts += batch.attempts
                 retries += batch.retries
                 projected_credits += batch.projected_credits
                 attempted_accounts += len(batch.outcomes)
                 latencies_ms.extend(batch.latencies_ms)
 
-                chunk_ids = {selection.author_id for selection in chunk}
-                chunk_handles = {
-                    selection.author_id: selection.handle for selection in chunk
-                }
                 accepted_before = accepted
                 changed_before = changed
-                for fetched in batch.outcomes:
+                for fetched, outcome in applied_batch.applications:
                     provider_reasons[fetched.reason] += 1
                     if fetched.schema_diagnostic:
                         schema_diagnostics.update(fetched.schema_diagnostic)
-                    if (
-                        fetched.reason in ACCOUNT_QUARANTINE_REASONS
-                        and fetched.author_id in chunk_ids
-                    ):
+                    if fetched.reason in ACCOUNT_QUARANTINE_REASONS:
                         quarantined_author_ids.add(fetched.author_id)
                         quarantined_reasons[fetched.reason] += 1
                     observation = fetched.observation
-                    if observation is None or fetched.author_id not in chunk_ids:
+                    if observation is None or outcome is None:
                         continue
-                    outcome = Account.apply_observation(
-                        author_id=fetched.author_id,
-                        observed_author_id=observation.author_id,
-                        source="user_about",
-                        observed_at=observation.candidates[
-                            "account_based_in_fetched_at"
-                        ],
-                        candidates=observation.candidates,
-                        present_fields=observation.present_fields,
-                        expected_handle=(
-                            chunk_handles[fetched.author_id]
-                            if observation.candidates.get("unavailable") is True
-                            else None
-                        ),
-                    )
                     if outcome.identity_rejected:
                         provider_reasons["identity_mismatch"] += 1
                         quarantined_author_ids.add(fetched.author_id)
@@ -729,6 +727,7 @@ class Command(BaseCommand):
                 chunk_receipt = {
                     "chunk": chunk_number,
                     "selected": len(chunk),
+                    "claimed": len(chunk) - applied_batch.deferred_claims,
                     "attempted": len(batch.outcomes),
                     "accepted": accepted - accepted_before,
                     "changed": changed - changed_before,
@@ -753,6 +752,7 @@ class Command(BaseCommand):
         remaining_queryset = _eligible_accounts(
             refresh=options["refresh"],
             eligible_before=eligible_before,
+            claimable=False,
         )
         remaining_eligible = remaining_queryset.count()
         quarantined_remaining = remaining_queryset.filter(

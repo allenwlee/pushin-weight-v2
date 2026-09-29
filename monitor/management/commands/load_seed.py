@@ -3,7 +3,7 @@
 Plan: docs/plans/2026-07-22-150000-feat-x-probe-new-open-model-discovery-harvest-onboard-plan.md
 Unit 5 of N (U5 — seed command).
 
-Loads the 20 enabled brands from project.settings.KNOWN_MODELS, their
+Loads enabled brands from config.yaml (or a test/operator settings override), their
 associated companies, brand-company links, roles, and a curated set of
 known official/staff accounts. Modeled on the pushin_weight reference
 seed scripts (2026-06-25-005-seed-companies-brands-from-csv.py and
@@ -18,6 +18,7 @@ after a successful seed produces no net new rows.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -25,12 +26,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Account, Brand, BrandAccount, BrandCompany, Company, Role
+from x_monitor.config import load_config
 
 # ---------------------------------------------------------------------------
 # Curated data
 # ---------------------------------------------------------------------------
 
-# Brand -> Company mapping for the 20 enabled brands. Company nickname is the
+# Brand -> Company mapping for the enabled brands. Company nickname is the
 # canonical slug used in brands_companies and other junction tables.
 # Values sourced from the v1.7 x-monitoring DB and the pushin_weight reference.
 BRAND_TO_COMPANY: dict[str, str] = {
@@ -46,6 +48,7 @@ BRAND_TO_COMPANY: dict[str, str] = {
     "ernie":         "baidu",
     "hunyuan":       "tencent",
     "llama":         "meta",
+    "muse":          "meta",
     "nemo_megatron": "nvidia",
     "doubao":        "bytedance",
     "yi":            "01ai",
@@ -56,7 +59,7 @@ BRAND_TO_COMPANY: dict[str, str] = {
     "upstage":       "upstage_inc",
 }
 
-# Display names for the 20 enabled brands. Used when upserting Brand rows.
+# Display names for enabled brands. Used when upserting Brand rows.
 BRAND_DISPLAY: dict[str, str] = {
     "minimax":       "MiniMax",
     "qwen":          "Qwen",
@@ -70,6 +73,7 @@ BRAND_DISPLAY: dict[str, str] = {
     "ernie":         "ERNIE",
     "hunyuan":       "Hunyuan",
     "llama":         "Llama",
+    "muse":          "Meta Muse",
     "nemo_megatron": "NeMo / Megatron",
     "doubao":        "Doubao",
     "yi":            "Yi",
@@ -180,7 +184,7 @@ class Command(BaseCommand):
             "--brands",
             type=str,
             default=None,
-            help="Comma-separated list of brand nicknames to seed (default: all 20).",
+            help="Comma-separated brand nicknames to seed (default: all enabled).",
         )
         parser.add_argument(
             "--no-accounts",
@@ -193,7 +197,12 @@ class Command(BaseCommand):
         brands_filter: str | None = options["brands"]
         no_accounts: bool = options["no_accounts"]
 
-        target_brands = list(getattr(settings, "KNOWN_MODELS", frozenset()))
+        configured_models = getattr(settings, "KNOWN_MODELS", None)
+        target_brands = list(
+            configured_models
+            if configured_models is not None
+            else load_config(Path(settings.BASE_DIR) / "config.yaml").enabled_models
+        )
         if not target_brands:
             self.stderr.write("error: KNOWN_MODELS is empty in settings")
             sys.exit(1)
@@ -365,6 +374,10 @@ class Command(BaseCommand):
                         for brand_nickname in linked_brands:
                             # Skip if brand not in our target set (if filtering)
                             if brands_filter and brand_nickname not in requested:
+                                continue
+                            # Meta's existing curated source account is Llama
+                            # staff, not staff of every sibling Meta brand.
+                            if brand_nickname == "muse":
                                 continue
                             try:
                                 BrandAccount.objects.get_or_create(

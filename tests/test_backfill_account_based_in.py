@@ -11,8 +11,9 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
+from django.utils import timezone
 
-from core.models import Account
+from core.models import Account, AccountUserAboutClaim
 from monitor.management.commands.backfill_account_based_in import (
     _is_authorized_staging_executor,
     _select_accounts,
@@ -148,6 +149,42 @@ def test_default_dry_run_selects_without_http_or_writes():
         Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 0
     )
     assert '"mode": "dry_run"' in stdout.getvalue()
+
+
+@pytest.mark.parametrize("strategy", ["deterministic_hash", "diversity_stratified"])
+@pytest.mark.parametrize(
+    ("state", "retry_delay"),
+    [
+        (AccountUserAboutClaim.State.ACTIVE, None),
+        (AccountUserAboutClaim.State.UNCERTAIN, None),
+        (AccountUserAboutClaim.State.QUARANTINED, None),
+        (AccountUserAboutClaim.State.RETRY_DUE, timedelta(days=1)),
+    ],
+)
+def test_manual_selection_skips_fenced_account_before_limit(
+    strategy, state, retry_delay
+):
+    fenced = Account.objects.create(
+        author_id="100", handle="fenced", created_at=datetime(2022, 1, 1, tzinfo=UTC)
+    )
+    eligible = Account.objects.create(
+        author_id="200", handle="eligible", created_at=datetime(2022, 1, 1, tzinfo=UTC)
+    )
+    AccountUserAboutClaim.objects.create(
+        account=fenced,
+        state=state,
+        next_eligible_at=timezone.now() + retry_delay if retry_delay else None,
+    )
+    seed = next(
+        str(candidate)
+        for candidate in range(100)
+        if hashlib.sha256(f"{candidate}:{fenced.author_id}".encode()).hexdigest()
+        < hashlib.sha256(f"{candidate}:{eligible.author_id}".encode()).hexdigest()
+    )
+
+    selections = _select_accounts(limit=1, seed=seed, refresh=False, strategy=strategy)
+
+    assert [selection.author_id for selection in selections] == [eligible.author_id]
 
 
 def test_diversity_stratified_selection_balances_age_size_and_location_proxy():
@@ -708,7 +745,7 @@ def test_production_apply_excludes_nonnumeric_account_ids_before_provider_call(
 
 
 @override_settings(OLLIJA_STAGING_MODE=False)
-def test_production_chunk_checkpoint_survives_crash_and_restart(
+def test_production_chunk_checkpoint_preserves_uncertain_claim_on_restart(
     monkeypatch,
     tmp_path,
 ):
@@ -765,7 +802,13 @@ def test_production_chunk_checkpoint_survives_crash_and_restart(
         call_command("backfill_account_based_in", **common)
 
     completed_id = fetched_ids[0][0]
+    uncertain_id = fetched_ids[1][0]
+    unattempted_id = ({"0", "1", "2"} - {completed_id, uncertain_id}).pop()
     assert Account.objects.get(author_id=completed_id).account_based_in_fetched_at
+    uncertain_account = Account.objects.get(author_id=uncertain_id)
+    assert uncertain_account.account_based_in_fetched_at is None
+    uncertain_claim = AccountUserAboutClaim.objects.get(account=uncertain_account)
+    assert uncertain_claim.state == "uncertain"
     remaining_ids: list[str] = []
 
     async def finish_remaining(selections, **_kwargs):
@@ -794,15 +837,17 @@ def test_production_chunk_checkpoint_survives_crash_and_restart(
     ):
         call_command("backfill_account_based_in", **{**common, "limit": 3})
 
-    assert completed_id not in remaining_ids
+    assert remaining_ids == [unattempted_id]
     assert (
-        Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 3
+        Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 2
     )
+    uncertain_claim.refresh_from_db()
+    assert uncertain_claim.state == "uncertain"
     report = (tmp_path / "report.json").read_text()
     assert "managed-secret" not in report
     assert recovery_receipt not in report
     assert all(f"user{index}" not in report for index in range(3))
-    assert '"remaining_eligible": 0' in report
+    assert '"remaining_eligible": 1' in report
 
 
 @override_settings(OLLIJA_STAGING_MODE=False)

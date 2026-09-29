@@ -262,6 +262,21 @@ brands:
     versioned_tokens:
     - Llama 4
     - Llama 3
+  muse:
+    paths:
+    - co
+    tokens:
+    - '"Meta Muse"'
+    - '"Muse Spark"'
+    - '"Muse Glimmer"'
+    - '"Muse Realtime"'
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: 'Owning pack: C1. No bare Muse token or unverified handle.'
   nemo_megatron:
     paths:
     - handle
@@ -383,6 +398,7 @@ brands:
     handle_tier: other
 co_packs:
 - - llama
+  - muse
   - mimo
   - mistral
   - moonshot_kimi

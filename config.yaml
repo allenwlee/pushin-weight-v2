@@ -25,6 +25,7 @@ enabled_models:
   - ernie
   - hunyuan
   - llama
+  - muse
   - nemo_megatron
   - doubao
   - yi
@@ -291,6 +292,16 @@ harvest:
     short_post_budget_seconds: 240
     long_post_budget_seconds: 60
     terminalization_reserve_seconds: 30
+  user_about:
+    enabled: false
+    max_accounts: 24
+    max_attempts: 32
+    max_credits: 576
+    max_wall_seconds: 90
+    concurrency: 4
+    max_qps: 1.0
+    # Set provider_qps from a verified quota before enabling paid lookups.
+    provider_qps: null
 
 # One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
 # refreshed exactly once after delay_hours from first fetched_at.
