@@ -66,13 +66,10 @@ def test_pending_averages_are_localized_and_lifecycle_specific(
         },
         "synthesis_status": "pending",
     }, locale)
-    assert [badge["position"] for badge in badges] == ["language", "meta"]
+    assert [badge["position"] for badge in badges] == ["language"]
     assert translation in badges[0]["message"]
-    assert analysis not in badges[0]["message"]
-    assert commentary not in badges[0]["message"]
-    assert translation not in badges[1]["message"]
-    assert analysis in badges[1]["message"]
-    assert commentary in badges[1]["message"]
+    assert analysis in badges[0]["message"]
+    assert commentary in badges[0]["message"]
     failed = _processing_badges({
         "lang_detected": "en",
         "enrichment_stages": {"translation": ("failed", 3)},
@@ -178,10 +175,10 @@ class TestSerializeFeedRow:
         ("stages", "synthesis_status", "synthesis_attempts", "expected"),
         [
             ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending. Historical first-attempt translation average: about 5 minutes.")]),
-            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt commentary average: about 1 minute.")]),
+            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending. Translation is queued for another attempt. Commentary is queued for another attempt. Historical first-attempt translation average: about 5 minutes. Historical first-attempt commentary average: about 1 minute.")]),
             ({"translation": ("failed", 3), "classification": ("succeeded", 1)}, "failed", 3, [("translation", "failed", "Translation failed. No more attempts are scheduled."), ("analysis", "failed", "Analysis failed. No more attempts are scheduled.")]),
             ({}, "processing", 1, [("pending", "pending", "Commentary pending. Historical first-attempt commentary average: about 1 minute.")]),
-            ({}, "processing", 2, [("pending", "pending", "Commentary pending. Historical first-attempt commentary average: about 1 minute.")]),
+            ({}, "processing", 2, [("pending", "pending", "Commentary pending. Commentary is being retried. Historical first-attempt commentary average: about 1 minute.")]),
             ({"translation": ("succeeded", 1), "classification": ("succeeded", 1)}, "cancelled", 1, []),
         ],
     )
@@ -217,11 +214,11 @@ class TestSerializeFeedRow:
         ), "en")
         assert row["processing_badges"] == [{
             "process": "pending", "state": "pending",
-            "message": "Language detection pending. Historical first-attempt translation average: about 5 minutes.", "position": "language",
+            "message": "Language detection and translation pending. Historical first-attempt translation average: about 5 minutes.", "position": "language",
         }]
         assert row["language_pending_badge"] == row["processing_badges"][0]
 
-    def test_language_and_analysis_pending_have_independent_positions(self):
+    def test_language_and_analysis_pending_share_one_indicator(self):
         row = _serialize_feed_row(_make_post(
             "101", "2026-07-20T10:00:00+00:00",
             lang_detected=None,
@@ -229,8 +226,7 @@ class TestSerializeFeedRow:
             synthesis_status="processing",
         ), "en")
         assert [(badge["position"], badge["message"]) for badge in row["processing_badges"]] == [
-            ("language", "Language detection pending. Historical first-attempt translation average: about 5 minutes."),
-            ("meta", "Analysis and commentary pending. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."),
+            ("language", "Language detection, translation, analysis and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."),
         ]
         assert row["language_pending_badge"] == row["processing_badges"][0]
 

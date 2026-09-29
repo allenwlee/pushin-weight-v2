@@ -95,11 +95,9 @@ def test_synthesis_demand_refresh_returns_one_complete_pending_projection():
     )
     assert created.status_code == 200
     badges = created.json()["results"][0]["processing_badges"]
-    assert len([badge for badge in badges if badge["state"] == "pending"]) == 2
+    assert len([badge for badge in badges if badge["state"] == "pending"]) == 1
     assert badges[0]["position"] == "language"
-    assert badges[0]["message"] == "Language detection pending. Historical first-attempt translation average: about 5 minutes."
-    assert badges[1]["position"] == "meta"
-    assert badges[1]["message"] == "Analysis and commentary pending. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."
+    assert badges[0]["message"] == "Language detection, translation, analysis and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."
 
     PostEnrichmentState.objects.filter(post=post).update(
         translation_status="failed", classification_status="succeeded"
@@ -114,6 +112,7 @@ def test_synthesis_demand_refresh_returns_one_complete_pending_projection():
     badges = polled.json()["results"][0]["processing_badges"]
     assert [badge["state"] for badge in badges] == ["pending", "failed"]
     assert badges[0]["position"] == "meta"
+    assert polled.json()["results"][0]["language_inspection"] == "Language detection failed"
 
 
 def test_synthesis_demand_api_rejects_unknown_post_and_oversized_batch():

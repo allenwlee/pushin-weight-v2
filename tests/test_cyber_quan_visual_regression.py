@@ -26,6 +26,12 @@ STATES = (
     ("desktop-en", {"width": 1440, "height": 960}, "en"),
     ("mobile-zh-cn", {"width": 390, "height": 844}, "zh_cn"),
 )
+# Bounds of the headline cards in the immutable reviewed PNGs. Removing the
+# voices shortens these cards; compare both their old and current footprints.
+REVIEWED_HEADLINE_RECTS = {
+    (1440, 960): [182, 519, 611, 112],
+    (390, 844): [12, 445, 366, 130],
+}
 
 
 def _outside_mask_report(
@@ -163,7 +169,7 @@ def _icon_mask(page: Page) -> bytes:
 def _release_a_mask(page: Page) -> bytes:
     """Mask only later owner-approved feed, headline, and chart surfaces."""
     data_url = page.evaluate(
-        """() => {
+        """reviewedHeadline => {
           const canvas = document.createElement('canvas');
           canvas.width = innerWidth;
           canvas.height = innerHeight;
@@ -186,6 +192,7 @@ def _release_a_mask(page: Page) -> bytes:
           // Cyber-Quan-only golden therefore does not own pulse-strip pixels.
           document.querySelectorAll('.pulse-bar-wrap, .filter-bar, .home-chart-wrap, .headline-strip, .feed-strip')
             .forEach(node => paint(node));
+          context.fillRect(...reviewedHeadline);
           // Stage 1 and U18A replace, add, and activation-gate taxonomy
           // controls. Removed controls leave no current DOM box to mask, so
           // the filter row is the smallest complete intentional surface.
@@ -201,7 +208,8 @@ def _release_a_mask(page: Page) -> bytes:
           document.querySelectorAll('.tz-choice.is-selected')
             .forEach(node => paint(node, 0, 2));
           return canvas.toDataURL('image/png');
-        }"""
+        }""",
+        REVIEWED_HEADLINE_RECTS[(page.viewport_size['width'], page.viewport_size['height'])],
     )
     return base64.b64decode(data_url.split(",", 1)[1])
 

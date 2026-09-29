@@ -177,11 +177,11 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
         self.assertIn('class="text"', body)
         self.assertIn('class="post-language-tag">en</span>', body)
         self.assertIn('class="text-layer-tag"', body)
-        # Follower count moved out of engagement, leaving interaction stats.
+        # Keep the original-post link without interaction counts or icons.
         self.assertIn('class="engagement"', body)
         self.assertNotIn('class="followers"', body)
         for stat in ("likes", "rts", "replies"):
-            self.assertIn(f'class="{stat}"', body, f"missing engagement stat .{stat}")
+            self.assertNotIn(f'class="{stat}"', body)
         self.assertIn('class="feed-x-link"', body)
         self.assertIn('href="https://x.com/i/web/status/1"', body)
 

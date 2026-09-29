@@ -219,9 +219,9 @@ if (typeof renderRowHtml === 'function') {
     'feed row shows a size-binned follower symbol');
   assertEq(rowHtml.includes('href="#icon-followers-4"'), true,
     'highest follower bin uses the approved four-person symbol');
-  assertEq(rowHtml.includes('href="#icon-heart"') && rowHtml.includes('href="#icon-repost"') &&
-    rowHtml.includes('href="#icon-reply"'), true,
-    'client-created rows use the approved engagement symbols');
+  assertEq(rowHtml.includes('href="#icon-heart"') || rowHtml.includes('href="#icon-repost"') ||
+    rowHtml.includes('href="#icon-reply"'), false,
+    'client-created rows omit engagement counters and symbols');
   assertEq(rowHtml.includes('class="follower-count">52.1k</span>'), true,
     'follower count sits directly under the follower symbol');
   assertEq(rowHtml.includes('class="follower-magnitude pw-inspection-trigger"') &&

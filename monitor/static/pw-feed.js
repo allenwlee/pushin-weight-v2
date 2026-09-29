@@ -99,6 +99,11 @@
     var synthesis = result.synthesis || {};
     var literal = result.literal || {};
     if (text) {
+      if (typeof result.language_undetected === 'boolean') {
+        text.setAttribute('data-language-display', result.language_display || '');
+        text.setAttribute('data-language-undetected', result.language_undetected ? '1' : '0');
+        text.setAttribute('data-language-inspection', result.language_inspection || '');
+      }
       if (synthesis.en) text.setAttribute('data-commentary-en', synthesis.en);
       if (synthesis['zh-cn']) text.setAttribute('data-commentary-zh-cn', synthesis['zh-cn']);
       if (synthesis.ja) text.setAttribute('data-commentary-ja', synthesis.ja);
@@ -628,9 +633,6 @@
               escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
-              '<span class="likes">' + renderIcon('icon-heart', 'engagement-icon') + escapeHtml(eng.likes || '') + '</span>' +
-              '<span class="rts">' + renderIcon('icon-repost', 'engagement-icon') + escapeHtml(eng.retweets || '') + '</span>' +
-              '<span class="replies">' + renderIcon('icon-reply', 'engagement-icon') + escapeHtml(eng.replies || '') + '</span>' +
               '<a class="feed-x-link" href="https://x.com/i/web/status/' +
                 encodeURIComponent(row.tweet_id || '') + '" target="_blank"' +
                 ' rel="noopener noreferrer" aria-label="' +
@@ -858,9 +860,11 @@
       if (!showCn && !showUs) { elN.innerHTML = ''; elN.classList.add('is-empty'); }
       else {
         elN.classList.remove('is-empty');
+        var countryLocale = currentLocale();
+        var useCountryCharacters = ['ja', 'ja-JP', 'zh_cn', 'zh-CN', 'zh_hans'].indexOf(countryLocale) !== -1;
         var regions = (showCn
           ? inspectionTriggerHtml(
-              renderIcon('icon-nationalism', 'signal-icon') + '<b>中</b>',
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>' + (useCountryCharacters ? '中' : 'CN') + '</b>',
               signalInspectionText(
                 inspections,
                 legacyNatCn.length ? 'legacy_nat_cn' : 'nat_cn',
@@ -871,7 +875,7 @@
             )
           : '') + (showUs
           ? inspectionTriggerHtml(
-              renderIcon('icon-nationalism', 'signal-icon') + '<b>美</b>',
+              renderIcon('icon-nationalism', 'signal-icon') + '<b>' + (useCountryCharacters ? '美' : 'US') + '</b>',
               signalInspectionText(
                 inspections,
                 legacyNatUs.length ? 'legacy_nat_us' : 'nat_us',
@@ -1122,9 +1126,9 @@
     }
     if (!undetected) return '<span class="post-language-tag">' + escapeHtml(display) + '</span>';
     var label = escapeHtml(inspection || 'Language undetected');
-    return '<span class="post-language-tag pw-inspection-trigger language-globe" role="button" tabindex="0"' +
+    return '<span class="post-language-tag pw-inspection-trigger language-unsuccessful" role="button" tabindex="0"' +
       ' data-pw-inspection="' + label + '" aria-label="' + label + '" aria-expanded="false">' +
-      renderIcon('icon-language-globe', 'language-globe-icon') + '</span>';
+      processingIconHtml('failed') + '</span>';
   }
 
   function renderTextLayer(el) {

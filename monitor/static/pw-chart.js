@@ -757,7 +757,7 @@
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
-  function renderHeadline(narrative, topVoices) {
+  function renderHeadline(narrative) {
     var strip = document.querySelector('[data-pw-headline]');
     if (!strip) return;
     var perBrand = Number(narrative.schema_version) === 3;
@@ -817,45 +817,6 @@
         observations.appendChild(item);
       });
       observations.hidden = !narrative.observations || narrative.observations.length === 0;
-    }
-    var voices = strip.querySelector('[data-pw-headline-voice-entries]');
-    if (voices) {
-      var signature = JSON.stringify(topVoices.entries.map(function (entry) {
-        return [entry.handle, entry.voice_star];
-      }));
-      if (voices.getAttribute('data-pw-voice-signature') !== signature) {
-        clearChildren(voices);
-        if (topVoices.entries.length === 0) {
-          var emptyVoices = document.createElement('span');
-          emptyVoices.className = 'muted';
-          emptyVoices.textContent = voices.getAttribute('data-pw-empty-text') || '';
-          voices.appendChild(emptyVoices);
-        }
-        topVoices.entries.forEach(function (entry, index) {
-          if (index > 0) {
-            var separator = document.createElement('span');
-            separator.className = 'voice-separator';
-            separator.textContent = ', ';
-            voices.appendChild(separator);
-          }
-          var link = document.createElement('a');
-          link.className = 'voice-chip';
-          link.href = 'https://x.com/' + String(entry.handle || '').replace(/^@/, '');
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          var handle = document.createElement('span');
-          handle.className = 'voice-handle';
-          handle.textContent = '@' + String(entry.handle || '').replace(/^@/, '');
-          var score = document.createElement('span');
-          score.className = 'voice-star';
-          score.innerHTML = ' (' + renderIcon('icon-star', 'voice-star-icon') + ' ' +
-            escapeHtml(entry.voice_star) + ')';
-          link.appendChild(handle);
-          link.appendChild(score);
-          voices.appendChild(link);
-        });
-        voices.setAttribute('data-pw-voice-signature', signature);
-      }
     }
     strip.setAttribute('data-pw-window', String(narrative.window_days));
     strip.setAttribute('data-pw-computed-at', narrative.computed_at);
@@ -1052,7 +1013,7 @@
       renderOne(canvas);
       renderLegend(region, payload);
       renderPulse(region, payload.pulse);
-      renderHeadline(payload.trend_narrative, payload.top_voices);
+      renderHeadline(payload.trend_narrative);
       updateProjectionStates(region, payload, true);
     } catch (error) {
       // A valid response must replace all four projections together. Restore
@@ -1167,7 +1128,7 @@
         renderOne(canvas);
         renderLegend(region, payload);
         renderPulse(region, payload.pulse);
-        renderHeadline(payload.trend_narrative, payload.top_voices);
+        renderHeadline(payload.trend_narrative);
         updateProjectionStates(region, payload, false);
         if ((payload.granularity || 'day') === 'day' &&
             payload.bucket_timezone !== BROWSER_TIMEZONE) {

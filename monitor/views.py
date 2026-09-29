@@ -1212,8 +1212,19 @@ _FIRST_ATTEMPT_PROCESSING_MINUTES = {
 }
 
 
+def _enrichment_stage_states(state: dict[str, Any], now: datetime) -> dict[str, tuple[str, int]]:
+    active = bool(state["claim_owner"] and state["claim_expires_at"] and state["claim_expires_at"] > now)
+    return {
+        stage: (
+            "processing" if active and state[f"{stage}_status"] == "pending" else state[f"{stage}_status"],
+            state[f"{stage}_attempts"],
+        )
+        for stage in ("translation", "classification")
+    }
+
+
 def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]]:
-    """Keep language detection separate from other pending work."""
+    """Project all queued work into one indicator, preserving terminal failures."""
     names = {
         "en": {"translation": "Translation", "classification": "Classification", "analysis": "Analysis"},
         "zh": {"translation": "翻译", "classification": "分类", "analysis": "分析"},
@@ -1243,41 +1254,51 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
 
     badges: list[dict[str, str]] = []
     pending: set[str] = set()
+    retry_notes: dict[str, str] = {}
     language_pending = _language_undetected(post.get("lang_detected"))
 
-    def append(process: str, state: str) -> None:
+    def append(process: str, state: str, attempts: int = 0) -> None:
         if state not in {"pending", "processing", "failed"}:
             return
         if state != "failed":
             pending.add(process)
+            if attempts > (1 if state == "processing" else 0):
+                name = pending_names[language][process]
+                if language == "ja":
+                    retry_notes[process] = name + ("を再試行しています。" if state == "processing" else "は再試行待ちです。")
+                elif language == "zh":
+                    retry_notes[process] = f"正在重试{name}。" if state == "processing" else f"{name}等待重试。"
+                else:
+                    retry_notes[process] = name.capitalize() + (" is being retried." if state == "processing" else " is queued for another attempt.")
             return
         message = messages[language].format(name=names[language][process])
         badges.append({"process": process, "state": "failed", "message": message})
 
-    for process, (state, _attempts) in post.get("enrichment_stages", {}).items():
+    for process, (state, attempts) in post.get("enrichment_stages", {}).items():
         if process in {"translation", "classification"}:
-            append(process, state)
+            append(process, state, attempts)
     synthesis_status = post.get("synthesis_status")
     if not post.get("synthesis_expired") or synthesis_status == "failed":
-        append("analysis", synthesis_status)
-    language_marker_added = language_pending and "translation" in pending
-    if language_marker_added:
-        detection = {"en": "Language detection pending.", "zh": "语言检测待处理。", "ja": "言語判定を待っています。"}[language]
-        badges.insert(0, {"process": "pending", "state": "pending", "message": detection + " " + average_note("translation"),
-                          "position": "language"})
-        pending.remove("translation")
+        append("analysis", synthesis_status, post.get("synthesis_attempts", 0))
     if pending:
+        language_marker = language_pending and "translation" in pending
         ordered = [pending_names[language][key] for key in ("translation", "classification", "analysis") if key in pending]
+        if language_marker:
+            ordered.insert(0, {"en": "language detection", "zh": "语言检测", "ja": "言語判定"}[language])
         if language == "en":
             joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
             message = joined.capitalize() + " pending."
         else:
-            joined = ("と" if language == "ja" else "、").join(ordered)
+            joined = "、".join(ordered)
+            if language == "ja" and len(ordered) > 1:
+                joined = "、".join(ordered[:-1]) + "と" + ordered[-1]
             message = joined + ("を待っています。" if language == "ja" else "待处理。")
-        message += " " + " ".join(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
-        badges.insert(1 if language_marker_added else 0,
+        notes = [retry_notes[key] for key in ("translation", "classification", "analysis") if key in retry_notes]
+        notes.extend(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
+        message += " " + " ".join(notes)
+        badges.insert(0,
                       {"process": "pending", "state": "pending", "message": message,
-                       "position": "meta"})
+                       "position": "language" if language_marker else "meta"})
     return badges
 
 
@@ -2209,16 +2230,7 @@ def _enrich_posts_with_classifications(
     }
     enrichment_now = django_timezone.now()
     enrichment_stages_by_tweet = {
-        state["post_id"]: {
-            stage: (
-                "processing" if state[f"{stage}_status"] == "pending"
-                and state["claim_owner"] and state["claim_expires_at"]
-                and state["claim_expires_at"] > enrichment_now
-                else state[f"{stage}_status"],
-                state[f"{stage}_attempts"],
-            )
-            for stage in ("translation", "classification")
-        }
+        state["post_id"]: _enrichment_stage_states(state, enrichment_now)
         for state in enrichment_rows
     }
 
@@ -5388,9 +5400,13 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
             config=config,
         )
     projections = read_post_content_many(posts)
+    inspected_at = django_timezone.now()
     states = {
-        state.post_id: state
-        for state in PostEnrichmentState.objects.filter(post_id__in=unique_ids)
+        state["post_id"]: _enrichment_stage_states(state, inspected_at)
+        for state in PostEnrichmentState.objects.filter(post_id__in=unique_ids).values(
+            "post_id", "translation_status", "translation_attempts",
+            "classification_status", "classification_attempts", "claim_owner", "claim_expires_at",
+        )
     }
     return JsonResponse(
         {
@@ -5398,13 +5414,12 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
                 {
                     "post_id": post_id,
                     "status": projections[post_id].synthesis_status,
+                    "language_display": _compact_language_display(posts_by_id[post_id].lang_detected, locale),
+                    "language_undetected": _language_undetected(posts_by_id[post_id].lang_detected),
+                    "language_inspection": _language_inspection(states.get(post_id, {}), locale),
                     "processing_badges": _processing_badges({
                         "lang_detected": posts_by_id[post_id].lang_detected,
-                        "enrichment_stages": {
-                            stage: (getattr(states[post_id], f"{stage}_status"),
-                                    getattr(states[post_id], f"{stage}_attempts"))
-                            for stage in ("translation", "classification")
-                        } if post_id in states else {},
+                        "enrichment_stages": states.get(post_id, {}),
                         "synthesis_status": projections[post_id].synthesis_status,
                         "synthesis_attempts": projections[post_id].synthesis_attempts,
                         "synthesis_expired": projections[post_id].synthesis_expired,

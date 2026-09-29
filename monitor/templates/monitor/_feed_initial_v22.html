@@ -134,9 +134,6 @@
             {% endif %}
           </div>
           <div class="engagement">
-            <span class="likes"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-heart"></use></svg>{{ row.engagement_pretty.likes }}</span>
-            <span class="rts"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-repost"></use></svg>{{ row.engagement_pretty.retweets }}</span>
-            <span class="replies"><svg class="pw-icon engagement-icon" aria-hidden="true" focusable="false"><use href="#icon-reply"></use></svg>{{ row.engagement_pretty.replies }}</span>
             <a class="feed-x-link" href="https://x.com/i/web/status/{{ row.tweet_id }}" target="_blank" rel="noopener noreferrer" aria-label="{% if is_zh_chrome %}在 X 查看原帖{% elif is_ja_chrome %}Xで元の投稿を表示{% else %}Open original post on X{% endif %}"><svg class="feed-x-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg></a>
           </div>
         </div>

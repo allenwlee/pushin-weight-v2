@@ -44,7 +44,7 @@
       pill_post_type: 'Post Type',
       pill_audience_topics: 'Audience Topics',
       pill_geopolitical: 'Geopolitical',
-      pill_product_labels: 'Products',
+      pill_product_labels: 'Product',
       pill_role: 'Role',
       pill_lang: 'Lang',
       pill_sentiment: 'Sentiment',

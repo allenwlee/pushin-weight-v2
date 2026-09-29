@@ -834,15 +834,8 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'headline commits both analytical observations from the matching response');
   assert(!base.headline.observations.hidden,
     'headline exposes its observation list when observations are present');
-  const refreshedVoiceNodes = base.headline.voices.children;
-  assert(refreshedVoiceNodes.length === 5,
-    'refresh inserts one separator sibling between each pair of voice links');
-  assert(refreshedVoiceNodes.filter((node) => node.tagName === 'A').length === 3,
-    'refresh keeps every voice as a separate link');
-  assert(refreshedVoiceNodes.filter((node) => node.className === 'voice-separator').length === 2,
-    'voice separators are non-link siblings');
-  assert(refreshedVoiceNodes[1].textContent === ', ' && refreshedVoiceNodes[3].textContent === ', ',
-    'voice separators preserve readable punctuation and spacing');
+  assert(base.headline.voices.children.length === 0,
+    'homepage refresh does not recreate the removed Top Voices content');
   assert(base.charts[0].destroyed, 'replacing a chart fragment destroys the detached Chart.js instance');
   assert(base.intervals.length === 1 && base.intervals[0].ms === 60000,
     'pw-chart owns one 60-second refresh timer');
@@ -991,17 +984,15 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'valid empty chart renders localized no-data state');
   assert(empty.pulseStatus.textContent === 'No pulse data' && !empty.pulseStatus.hidden,
     'valid empty pulse renders localized no-data state');
-  assert(empty.headline.voices.children.length === 1 &&
-    empty.headline.voices.children[0].className === 'muted' &&
-    empty.headline.voices.children[0].textContent === 'no top voices this period',
-    'valid empty voices render the localized SSR-equivalent fallback');
+  assert(empty.headline.voices.children.length === 0,
+    'empty homepage refresh does not insert Top Voices content');
   assert(empty.headline.observations.children.length === 0 && empty.headline.observations.hidden,
     'valid empty narrative hides an empty observation list');
   empty.fetchQueue.push(response(payload(1, 0, null)));
   empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));
   await flush();
-  assert(empty.headline.voices.children.length === 1,
-    'repeated empty refresh does not duplicate the Top Voices fallback');
+  assert(empty.headline.voices.children.length === 0,
+    'repeated refresh keeps Top Voices absent');
   const emptyHtml = empty.region.innerHTML;
   empty.fetchQueue.push(response('<canvas class="home-chart" data-home=\'{"bad":true}\'></canvas>'));
   empty.document.dispatchEvent(new empty.sandbox.CustomEvent('pw:filter-change', { detail: {} }));

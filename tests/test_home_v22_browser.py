@@ -794,7 +794,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             browser = playwright.chromium.launch()
             try:
                 for locale, product_title in (
-                    ("en", "Products"),
+                    ("en", "Product"),
                     ("zh_hans", "产品"),
                 ):
                     with self.subTest(locale=locale):
@@ -1370,30 +1370,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         refreshed_legend.locator("span").count(),
                         len(projection["chart"]["series"]),
                     )
-                    voice_shape = page.evaluate(
-                        """() => {
-                          const root = document.querySelector('[data-pw-headline-voice-entries]');
-                          const children = [...(root?.children || [])];
-                          const links = children.filter((node) => node.matches('a.voice-chip'));
-                          const separators = children.filter((node) => node.matches('span.voice-separator'));
-                          return {
-                            links: links.length,
-                            separators: separators.length,
-                            adjacentLinks: children.some((node, index) =>
-                              node.matches('a.voice-chip') && children[index + 1]?.matches('a.voice-chip')
-                            ),
-                          };
-                        }"""
-                    )
-                    self.assertEqual(
-                        voice_shape["separators"],
-                        max(voice_shape["links"] - 1, 0),
-                        "client refresh preserves readable Top Voices separators",
-                    )
-                    self.assertFalse(
-                        voice_shape["adjacentLinks"],
-                        "client refresh never concatenates adjacent voice links",
-                    )
+                    self.assertEqual(page.locator('[data-pw-headline-voices]').count(), 0)
                 finally:
                     context.close()
             finally:
@@ -1732,8 +1709,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_top_voices_refresh_keeps_separator_parity_on_mobile(self) -> None:
-        """Client-rendered Top Voices remain readable at the narrow V22 width."""
+    def test_headline_refresh_preserves_narrative_without_voices_on_mobile(self) -> None:
+        """A window refresh retains the narrative without restoring removed voices."""
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -1746,33 +1723,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     with page.expect_response(lambda response: "/chart.html?" in response.url) as response_info:
                         page.locator("[data-pw-window-btn='7']").click()
                     self.assertEqual(response_info.value.status, 200)
-                    page.wait_for_function(
-                        "() => document.querySelector('[data-pw-headline-voice-entries]')"
-                    )
-                    voice_shape = page.evaluate(
-                        """() => {
-                          const root = document.querySelector('[data-pw-headline-voice-entries]');
-                          const children = [...(root?.children || [])];
-                          const links = children.filter((node) => node.matches('a.voice-chip'));
-                          const separators = children.filter((node) => node.matches('span.voice-separator'));
-                          const box = root?.getBoundingClientRect();
-                          return {
-                            links: links.length,
-                            separators: separators.length,
-                            adjacentLinks: children.some((node, index) =>
-                              node.matches('a.voice-chip') && children[index + 1]?.matches('a.voice-chip')
-                            ),
-                            width: box?.width || 0,
-                            height: box?.height || 0,
-                            overflow: document.documentElement.scrollWidth > innerWidth,
-                          };
-                        }"""
-                    )
-                    self.assertEqual(voice_shape["separators"], max(voice_shape["links"] - 1, 0))
-                    self.assertFalse(voice_shape["adjacentLinks"])
-                    self.assertGreater(voice_shape["width"], 0)
-                    self.assertGreater(voice_shape["height"], 0)
-                    self.assertFalse(voice_shape["overflow"])
+                    page.wait_for_function("() => document.querySelector('[data-pw-headline]').dataset.pwWindow === '7'")
+                    self.assertEqual(page.locator('[data-pw-headline-voices]').count(), 0)
+                    narrative = page.locator('[data-pw-headline]')
+                    self.assertTrue(narrative.is_visible())
+                    self.assertGreater(narrative.bounding_box()['height'], 0)
+                    self.assertFalse(page.evaluate('document.documentElement.scrollWidth > innerWidth'))
                 finally:
                     context.close()
             finally:
@@ -3986,11 +3942,15 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(legacy_query.brand_id, "step")
 
     def test_activated_geopolitical_and_promotion_controls_round_trip_in_browser(self) -> None:
+        from django.core.management import call_command
         from django.utils import timezone
+
         from core.classification_contract import CONTRACT_VERSION
         from core.models import (
-            GeopoliticalModeKey, NationalStanceKey,
-            PostBrandClassificationState, PostBrandGeopoliticalMode,
+            GeopoliticalModeKey,
+            NationalStanceKey,
+            PostBrandClassificationState,
+            PostBrandGeopoliticalMode,
         )
 
         brand = Brand.objects.create(nickname="geo-browser", display_name="Geo Browser")
@@ -4016,6 +3976,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             taxonomy_version="stage1-taxonomy-v4", prompt_version="browser-test",
             model="browser-test", provider_role="primary",
         )
+        call_command('seed_i18n_labels', verbosity=0)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -4033,6 +3994,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     glyph.hover()
                     evidence = page.locator('#pw-feed-inspection-popover .inspection-words').inner_text()
                     self.assertIn('Geopolitical mode', evidence)
+                    self.assertIn('Framework', evidence)
                     self.assertIn('China:', evidence)
                     self.assertIn('U.S.:', evidence)
                     help_trigger = geopolitical.locator('.filter-help-trigger')
@@ -5787,31 +5749,33 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     )
 
                     def inspect(*, initial: bool) -> None:
+                        page.screenshot(path=str(_artifact_dir() / 'next-ui-processing-ja.png'))
                         if initial:
                             active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="pending"]')
                             self.assertIn('翻訳', active.get_attribute('data-pw-inspection') or '')
                             self.assertIn('約5分', active.get_attribute('data-pw-inspection') or '')
                         row = page.locator(f'[data-tweet-id="{self.fixture["replacement_id"]}"]')
-                        self.assertEqual(row.locator('.processing-armillary').count(), 2)
+                        self.assertEqual(row.locator('.processing-armillary').count(), 1)
                         self.assertEqual(row.locator('.processing-status[data-process="translation"]').count(), 0)
                         self.assertEqual(
                             row.locator('.post-language-tag.processing-status').get_attribute('data-pw-inspection'),
-                            '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。',
+                            '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。',
                         )
                         self.assertEqual(
-                            row.locator('.meta .processing-status[data-process="pending"]').get_attribute('data-pw-inspection'),
-                            '解説を待っています。 解説の初回成功処理の過去平均：約1分。',
+                            row.locator('.meta .processing-status[data-process="pending"]').count(),
+                            0,
                         )
                         self.assertEqual(
                             row.locator('[data-process="classification"]').get_attribute('data-pw-inspection'),
                             '分類に失敗しました。再試行の予定はありません。',
                         )
                         globe = row.locator('.post-language-tag.processing-status')
-                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。')
+                        self.assertEqual(globe.evaluate('node => getComputedStyle(node).color'), 'rgba(245, 158, 11, 0.58)')
+                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。')
                         self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
                         popover = page.locator('#pw-feed-inspection-popover')
-                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定を待っています。 翻訳の初回成功処理の過去平均：約5分。')
+                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。')
                         trigger_rect = globe.bounding_box()
                         popover_rect = popover.bounding_box()
                         self.assertIsNotNone(trigger_rect)
@@ -5855,6 +5819,124 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_polish_controls_and_rows_survive_refresh_in_all_locales_and_sizes(self) -> None:
+        from django.core.management import call_command
+
+        from core.models import PostBrandClassificationState
+
+        call_command('seed_i18n_labels', verbosity=0)
+        PostBrandClassificationState.objects.filter(post_id=self.fixture['replacement_id']).update(
+            taxonomy_version='stage1-taxonomy-v4',
+            china_national_stance_id='pro', us_national_stance_id='constructive_critical',
+        )
+        artifacts = _artifact_dir()
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, product, countries, stance in (
+                    ('en', 'Product', ('China', 'U.S.'), 'national stance'),
+                    ('ja', '製品', ('中国', '米国'), '国家的立場'),
+                    ('zh_hans', '产品', ('中国', '美国'), '国家立场'),
+                ):
+                    for size in ('desktop', 'mobile'):
+                        with self.subTest(locale=locale, size=size):
+                            context = browser.new_context(viewport=VIEWPORTS[size], timezone_id='Asia/Tokyo')
+                            _freeze_clock(context)
+                            try:
+                                page = context.new_page()
+                                page.goto(f'{self.live_server_url}/?locale={locale}', wait_until='networkidle')
+                                self.assertEqual(page.locator('[data-i18n="pill_product_labels"]').inner_text(), product)
+                                geopolitical = page.locator('.filter-pill[data-group="geopolitical_modes"]')
+                                help_trigger = geopolitical.locator('.filter-help-trigger')
+                                self.assertEqual(help_trigger.inner_text(), '')
+                                self.assertTrue(help_trigger.locator('svg').is_visible())
+                                self.assertIn('#icon-language-globe', help_trigger.locator('use').get_attribute('href'))
+                                help_trigger.focus()
+                                popover = page.locator('#pw-feed-inspection-popover')
+                                self.assertTrue(popover.is_visible())
+                                self.assertGreater(len(popover.locator('.inspection-words').inner_text()), 10)
+                                self.assertEqual(popover.locator('.inspection-visual svg').count(), 1)
+                                page.keyboard.press('Escape')
+                                self.assertFalse(popover.is_visible())
+                                geopolitical.locator('.title').click()
+                                subtitles = page.locator('.filter-dropdown.is-portaled .dd-subtitle')
+                                self.assertEqual(subtitles.all_inner_texts(), [stance, stance])
+                                for index, country in enumerate(countries):
+                                    flag = subtitles.nth(index).locator('svg')
+                                    self.assertEqual(flag.get_attribute('aria-label'), country)
+                                    self.assertTrue(flag.is_visible())
+                                    self.assertGreater(flag.bounding_box()['width'], 0)
+                                geopolitical.locator('.title').click()
+
+                                def inspect_rows(page: Page = page, locale: str = locale) -> None:
+                                    self.assertEqual(page.locator('[data-pw-headline-voices]').count(), 0)
+                                    self.assertEqual(page.locator('.engagement .likes, .engagement .rts, .engagement .replies').count(), 0)
+                                    self.assertGreater(page.locator('.feed-x-link').count(), 0)
+                                    self.assertGreater(page.locator('.follower-magnitude').count(), 0)
+                                    for region, expected in (('cn', 'CN' if locale == 'en' else '中'), ('us', 'US' if locale == 'en' else '美')):
+                                        marker = page.locator(f'.nationalism-{region}').first
+                                        self.assertGreater(marker.count(), 0)
+                                        self.assertEqual(marker.locator('b').inner_text(), expected)
+                                        self.assertEqual(marker.locator('b').evaluate('node => getComputedStyle(node).fontSize'), '14px')
+                                        self.assertEqual(marker.locator('svg').bounding_box()['height'], 14)
+                                    self.assertFalse(page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+
+                                inspect_rows()
+                                old_row = page.locator('[data-pw-feed-row]').first.element_handle()
+                                with page.expect_response(lambda response: '/feed/?' in response.url and response.status == 200):
+                                    page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change', {detail: {filters: window.pwFilter.get()}}))")
+                                page.wait_for_function('row => !row.isConnected', arg=old_row)
+                                inspect_rows()
+                                page.screenshot(path=str(artifacts / f'next-ui-{locale}-{size}.png'))
+                                if locale == 'en' and size == 'desktop':
+                                    for target, title in (('ja', '製品'), ('en', 'Product')):
+                                        with page.expect_navigation(wait_until='networkidle'):
+                                            page.locator(f'[data-pw-locale-btn="{target}"]').click()
+                                        self.assertEqual(page.locator('[data-i18n="pill_product_labels"]').inner_text(), title)
+                            finally:
+                                context.close()
+            finally:
+                browser.close()
+
+    def test_synthesis_poll_refreshes_language_without_replacing_row(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from core.models import PostEnrichmentState
+
+        post_id = self.fixture['replacement_id']
+        Post.objects.filter(pk=post_id).update(lang_detected=None)
+        PostEnrichmentState.objects.create(post_id=post_id, translation_status='pending', classification_status='succeeded')
+
+        def update_language(status: str, code: str | None = None) -> None:
+            try:
+                PostEnrichmentState.objects.filter(post_id=post_id).update(translation_status=status)
+                if code:
+                    Post.objects.filter(pk=post_id).update(lang_detected=code)
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=1) as pool, sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                try:
+                    page = context.new_page()
+                    page.goto(f'{self.live_server_url}/?locale=ja', wait_until='networkidle')
+                    row = page.locator(f'[data-tweet-id="{post_id}"]')
+                    initial_row = row.element_handle()
+                    self.assertEqual(row.locator('.processing-armillary').count(), 1)
+                    pool.submit(update_language, 'failed').result()
+                    page.wait_for_function("id => document.querySelector(`[data-tweet-id=\"${id}\"] .language-unsuccessful`)?.dataset.pwInspection === '言語を判定できませんでした'", arg=post_id)
+                    self.assertEqual(row.locator('.processing-armillary').count(), 1)
+                    pool.submit(update_language, 'succeeded', 'fr').result()
+                    page.wait_for_function("id => document.querySelector(`[data-tweet-id=\"${id}\"] .post-language-tag`)?.textContent === 'fr'", arg=post_id)
+                    self.assertTrue(initial_row.evaluate('node => node.isConnected'))
+                    self.assertEqual(row.locator('.processing-armillary').count(), 1)
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_specific_language_code_and_legacy_other_in_all_locales(self) -> None:
         from core.models import PostEnrichmentState
 
@@ -5887,7 +5969,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         page = context.new_page()
                         page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
                         unknown = page.locator(f'[data-tweet-id="{post_id}"] .post-language-tag').first
-                        self.assertEqual(unknown.locator('.language-globe-icon').count(), 1)
+                        self.assertEqual(unknown.locator('use[href$="#icon-failed-stop"]').count(), 1)
+                        self.assertEqual(unknown.locator('.processing-armillary').count(), 0)
+                        self.assertEqual(unknown.inner_text(), '')
                     finally:
                         context.close()
                 finally:
@@ -5992,10 +6076,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 page.locator("[data-tz-comparison-icon] use").get_attribute("href"),
                                 "#icon-california",
                             )
-                            self.assertGreater(page.locator(".headline-voices use[href='#icon-star']").count(), 0)
-                            self.assertGreater(page.locator(".engagement use[href='#icon-heart']").count(), 0)
-                            self.assertGreater(page.locator(".engagement use[href='#icon-repost']").count(), 0)
-                            self.assertGreater(page.locator(".engagement use[href='#icon-reply']").count(), 0)
+                            self.assertEqual(page.locator('.headline-voices').count(), 0)
+                            self.assertEqual(page.locator('.engagement .likes, .engagement .rts, .engagement .replies').count(), 0)
+                            self.assertGreater(page.locator('.feed-x-link .feed-x-icon').count(), 0)
                             semantic_slots = page.locator("[data-pw-semantic-icon] svg")
                             self.assertGreater(semantic_slots.count(), 20)
                             self.assertEqual(

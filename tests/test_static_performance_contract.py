@@ -16,7 +16,7 @@ PRODUCTION_STORAGES = {
 }
 
 
-def test_country_sprite_collectstatic_is_hashed_and_immutable(tmp_path: Path) -> None:
+def test_feed_sprites_collectstatic_are_hashed_and_immutable(tmp_path: Path) -> None:
     declaration = json.loads(
         (
             Path(__file__).parent / "fixtures/performance_assurance/declaration.json"
@@ -32,16 +32,18 @@ def test_country_sprite_collectstatic_is_hashed_and_immutable(tmp_path: Path) ->
         STORAGES=PRODUCTION_STORAGES,
     ):
         call_command("collectstatic", interactive=False, verbosity=0, clear=True)
-        hashed = next(static_root.glob("country-flags.*.svg"))
-        response = Client().get(f"/static/{hashed.name}")
+        for sprite in ("country-flags", "pw-processing-glyphs"):
+            hashed = next(static_root.glob(f"{sprite}.*.svg"))
+            response = Client().get(f"/static/{hashed.name}")
+            assert response.status_code == 200
+            cache_control = response.headers["Cache-Control"]
+            assert "immutable" in cache_control
+            match = re.search(r"(?:^|,\s*)max-age=(\d+)", cache_control)
+            assert match is not None
+            assert int(match.group(1)) >= 31_536_000
 
-    assert response.status_code == 200
-    cache_control = response.headers["Cache-Control"]
-    assert "immutable" in cache_control
-    match = re.search(r"(?:^|,\s*)max-age=(\d+)", cache_control)
-    assert match is not None
-    assert int(match.group(1)) >= 31_536_000
-    expected_path = f"/static/{hashed.name}"
+    country_sprite = next(static_root.glob("country-flags.*.svg"))
+    expected_path = f"/static/{country_sprite.name}"
     for scenario in declaration["scenarios"]:
         network_paths = [
             expectation["path"]

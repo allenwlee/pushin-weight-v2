@@ -60,3 +60,34 @@
 @media (prefers-reduced-motion: reduce) {
   .each-chart-face.is-turning-out, .each-chart-face.is-turning-in { animation: none; }
 }
+
+/* Dashboard headline voices. */
+.headline-voices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  align-items: center;
+}
+.headline-voices .voice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(124, 58, 237, 0.18);
+  color: #e9d5ff;
+  text-decoration: none;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.headline-voices .voice-chip:hover {
+  background: rgba(124, 58, 237, 0.32);
+  color: #fff;
+}
+.headline-voices .voice-star {
+  color: #fbbf24;
+  font-weight: 600;
+}

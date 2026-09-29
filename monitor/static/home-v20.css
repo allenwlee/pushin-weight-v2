@@ -342,14 +342,13 @@
     justify-content: center;
     width: 15px;
     height: 15px;
-    border: 1px solid var(--muted);
-    border-radius: 50%;
     color: var(--muted);
-    font-size: 10px;
     line-height: 1;
     cursor: help;
   }
   .filter-pill .filter-help-trigger:focus-visible { outline: 2px solid var(--accent); }
+  .filter-pill .filter-help-trigger .pw-icon { width: 14px; height: 14px; }
+  .filter-dropdown .dd-subtitle .country-flag { width: 18px; height: 12px; vertical-align: -2px; margin-right: 4px; }
   .filter-pill .carat {
     display: inline-block;
     width: 4.453125px;
@@ -851,8 +850,9 @@
   }
   .feed-signals .nationalism-region .signal-icon { width: 14px; height: 14px; }
   .feed-signals .nationalism-region b {
-    margin-left: -2px;
-    font-size: 8px;
+    margin-left: 1px;
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1;
   }
 
@@ -1078,12 +1078,12 @@
     line-height: 1;
     text-transform: none;
   }
-  .feed-row .text .language-globe {
+  .feed-row .text .language-unsuccessful {
     display: inline-flex;
     vertical-align: -2px;
     cursor: pointer;
   }
-  .feed-row .text .language-globe-icon {
+  .feed-row .text .language-unsuccessful .processing-glyph {
     width: 12px;
     height: 12px;
   }
@@ -1225,7 +1225,8 @@
     width: 14px;
     height: 14px;
   }
-  .feed-row .enrichment-status-pending { color: rgba(245, 158, 11, 0.58); }
+  .feed-row .enrichment-status-pending,
+  .feed-row .text .post-language-tag.enrichment-status-pending { color: rgba(245, 158, 11, 0.58); }
   .feed-row .enrichment-status-failed { color: #fb7185; }
   .processing-armillary .inner-ring {
     transform-origin: 12px 11.1px;
@@ -1578,37 +1579,6 @@ body.desktop-shell .pw-v20 .home-chart-wrap[data-pw-chart-granularity="minute"] 
 .feed-engagement .engagement-icon {
   font-size: 12px;
   line-height: 1;
-}
-
-/* v22 iter 4: top voices body */
-.headline-voices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 7px;
-  font-size: 11px;
-  color: var(--muted);
-  align-items: center;
-}
-.headline-voices .voice-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: rgba(124, 58, 237, 0.18);
-  color: #e9d5ff;
-  text-decoration: none;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.headline-voices .voice-chip:hover {
-  background: rgba(124, 58, 237, 0.32);
-  color: #fff;
-}
-.headline-voices .voice-star {
-  color: #fbbf24;
-  font-weight: 600;
 }
 
 /* v22 iter 5: visual-drift fix — pin pulse-chip-name and feed-handle-link to mockup values */
