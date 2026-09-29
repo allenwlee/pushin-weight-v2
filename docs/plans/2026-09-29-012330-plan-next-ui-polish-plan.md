@@ -10,8 +10,11 @@ ollija:
   change_id: plan-next-ui-polish-2026-09-29-012330
   branch: plan/next-ui-polish
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 # Feed and Homepage UI Polish - Plan
 
@@ -21,7 +24,7 @@ This plan combines the headline, filter, engagement and geography changes with t
 
 Earlier processing and hover work is carried forward as behavior to preserve and repair only where a current gap is demonstrated. The newer language-state decision governs: an undetected language uses the sphere while work is pending and the existing unsuccessful glyph otherwise, with wording that distinguishes an actual failure from an unknown language. Historical language repair remains a separately bounded, deferred operation.
 
-The owner invoked LFG on 2026-09-29, authorizing implementation, verification and review of this combined plan. Work uses the existing isolated branch, reconciles current main, and checks the rendered homepage in English, Simplified Chinese and Japanese across initial load and live updates. The delivery endpoint is recorded below after the owner's requested staging/production selection. The main regression risk is disagreement between initial HTML, feed replacement and commentary polling.
+The owner invoked LFG on 2026-09-29, authorizing implementation, verification and review of this combined plan, then explicitly selected production. Work uses the existing isolated branch, reconciles current main, and checks the rendered homepage in English, Simplified Chinese and Japanese across initial load and live updates. Delivery verifies the candidate on staging and promotes the same revision to production. The main regression risk is disagreement between initial HTML, feed replacement and commentary polling.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -49,11 +52,25 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/plan/next-ui-polish` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/plan/next-ui-polish` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -69,7 +86,7 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 
 ## Delivery Exceptions
 
-The 2026-09-29 LFG request lifts this draft's previous implementation/review hold. It authorizes normal implementation, verification, review, commits and branch/PR delivery under LFG; it does not authorize historical provider batches, production data repair, or a harvest pause. The repository-required staging/production endpoint question was asked before implementation. Local implementation and verification can proceed under the LFG grant while that answer is pending; record the explicit answer in the Ollija metadata before deployment. Preserve the independent quality-sweep and country/Muse branches and their resources.
+The 2026-09-29 LFG request lifts this draft's previous implementation/review hold. The owner's subsequent “deploy to production” instruction authorizes release of PR #48 through production, including ordinary branch promotion and deployment. The staged route remains selected. Historical provider batches, production data repair, and a harvest pause remain outside scope. Preserve the independent quality-sweep and country/Muse branches and their resources. Reuse the recorded verification where the relevant product code and environment assumptions are unchanged; documentation of this delivery selection does not require repeating the product suite.
 
 ## Goal Capsule
 
