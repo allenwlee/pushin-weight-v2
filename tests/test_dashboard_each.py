@@ -38,7 +38,7 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         super().setUpTestData()
         for key in ("positive", "mixed", "neutral", "negative"):
             SentimentKey.objects.get_or_create(key=key)
-        for key in ("other", "releases_updates"):
+        for key in ("other", "releases_updates", "opinions_reactions"):
             PostTypeKey.objects.get_or_create(key=key)
         for key in ("bug", "complaint"):
             ProductLabelKey.objects.get_or_create(key=key)
@@ -53,6 +53,10 @@ class DashboardEachTests(PostgreSQLV22TestCase):
             display_name="Qwen",
             display_name_en="Qwen",
             accent_color="#ff8833",
+        )
+        cls.deepseek = Brand.objects.create(
+            nickname="deepseek", display_name="DeepSeek", display_name_en="DeepSeek",
+            accent_color="#10b981",
         )
         specs = (
             ("positive", ("releases_updates", "other"), ("bug", "complaint")),
@@ -104,6 +108,67 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         self.assertEqual(sum(chart["series"]["__unclassified__"]), 1)
         self.assertEqual(sum(sum(values) for values in chart["series"].values()), 3)
         self.assertEqual(chart["counting_unit"], "posts")
+        self.assertEqual(
+            [(entry["key"], entry["color"]) for entry in chart["entries"]],
+            [
+                ("__unclassified__", "#000000"), ("neutral", "#cbd5e1"),
+                ("mixed", "#8b5cf6"), ("negative", "#ef4444"),
+                ("positive", "#3b82f6"),
+            ],
+        )
+
+    def test_deepseek_three_day_ranking_is_shared_by_other_models(self):
+        for index, (kind, age) in enumerate((
+            ("releases_updates", 1), ("releases_updates", 2),
+            ("opinions_reactions", 1), ("opinions_reactions", 4),
+        )):
+            post = Post.objects.create(
+                tweet_id=f"each-reference-{index}", created_at=NOW - timedelta(days=age),
+                lang_detected="ja" if index < 2 else "es",
+            )
+            PostBrand.objects.create(post=post, brand=self.deepseek)
+            PostBrandSignal.objects.create(
+                post=post, brand=self.deepseek, post_type_id=kind,
+                sentiment_id="neutral",
+            )
+            PostBrandClassificationState.objects.create(
+                post=post, brand=self.deepseek, contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION, prompt_version=PROMPT_VERSION,
+                model="test", input_context_fingerprint=f"{index + 20:064x}",
+                outcome="classified",
+            )
+            PostBrandProductLabel.objects.create(
+                post=post, brand=self.deepseek,
+                product_label_id="bug" if index < 2 else "complaint",
+            )
+        for days in (1, 7):
+            chart = _each_chart_payload(
+                self.minimax.nickname, "post_types", days, "en", now=NOW
+            )
+            keys = [entry["key"] for entry in chart["entries"]]
+            self.assertEqual(keys[:2], ["__unclassified__", "other"])
+            self.assertLess(keys.index("releases_updates"), keys.index("opinions_reactions"))
+            self.assertEqual(chart["entries"][0]["color"], "#000000")
+            self.assertEqual(chart["entries"][1]["color"], "#cbd5e1")
+        lang = _each_chart_payload(self.minimax.nickname, "lang", 7, "en", now=NOW)
+        self.assertEqual([entry["key"] for entry in lang["entries"][:3]],
+                         ["undetected", "other", "en"])
+        self.assertLess(
+            [entry["key"] for entry in lang["entries"]].index("ja"),
+            [entry["key"] for entry in lang["entries"]].index("es"),
+        )
+        role = _each_chart_payload(self.minimax.nickname, "role", 7, "en", now=NOW)
+        self.assertEqual([entry["key"] for entry in role["entries"]],
+                         ["other", "official", "staff", "community"])
+        product = _each_chart_payload(
+            self.minimax.nickname, "product_labels", 7, "en", now=NOW
+        )
+        self.assertEqual([entry["key"] for entry in product["entries"][:2]],
+                         ["__unclassified__", "__no_product_signal__"])
+        self.assertLess(
+            [entry["key"] for entry in product["entries"]].index("bug"),
+            [entry["key"] for entry in product["entries"]].index("complaint"),
+        )
 
     def test_multilabel_stack_counts_assignments(self):
         types = _each_chart_payload(
@@ -179,6 +244,7 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         self.assertContains(page, 'data-pw-page="each"')
         self.assertContains(page, 'data-pw-brand-scope="each-minimax"')
         self.assertContains(page, 'role="tablist"')
+        self.assertContains(page, 'name="each-chart-mode" value="percent" data-each-mode="percent" checked')
         self.assertNotContains(page, 'class="filter-bar"')
         self.assertNotContains(page, "model-select")
         data = client.get(

@@ -130,12 +130,16 @@
               {% elif tab == 'role' %}{% if is_zh_chrome %}角色{% elif is_ja_chrome %}役割{% else %}Role{% endif %}
               {% elif tab == 'audience_topics' %}{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}
               {% elif tab == 'geopolitical_modes' %}{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}
-              {% elif tab == 'product_labels' %}{% if is_zh_chrome %}产品{% elif is_ja_chrome %}製品{% else %}Products{% endif %}
+              {% elif tab == 'product_labels' %}{% if is_zh_chrome %}产品{% elif is_ja_chrome %}製品{% else %}Product{% endif %}
               {% elif tab == 'untracked_brand_promotions' %}{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}{% endif %}
             </button>
           {% endfor %}
         </div>
         <div class="each-chart-panel" id="each-chart-panel" role="tabpanel" aria-label="{% if is_zh_chrome %}分类图表{% elif is_ja_chrome %}分類グラフ{% else %}Classification chart{% endif %}">
+          <fieldset class="each-chart-mode" aria-label="{% if is_zh_chrome %}图表显示方式{% elif is_ja_chrome %}グラフの表示方法{% else %}Chart display{% endif %}">
+            <label><input type="radio" name="each-chart-mode" value="percent" data-each-mode="percent" checked> {% if is_zh_chrome %}占总量百分比{% elif is_ja_chrome %}全体に占める割合{% else %}% of total{% endif %}</label>
+            <label><input type="radio" name="each-chart-mode" value="volume" data-each-mode="volume"> {% if is_zh_chrome %}按帖子数量{% elif is_ja_chrome %}投稿数{% else %}By volume of posts{% endif %}</label>
+          </fieldset>
           <div class="each-chart-face">
             <canvas class="home-chart" data-each-canvas aria-label="{% if is_zh_chrome %}按分类堆叠的帖子数{% elif is_ja_chrome %}分類別の積み上げ投稿数{% else %}Stacked posts by classification{% endif %}"></canvas>
             <div class="legend" data-each-legend></div>
