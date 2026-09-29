@@ -1,0 +1,230 @@
+{% load static %}
+{% load i18n %}
+<!doctype html>
+<html lang="{{ active_locale|slice:':2'|default:'zh' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name_zh }} {{ app_name_en }}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
+  <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=feed-inspection1">
+  <link rel="stylesheet" href="{% static 'site-footer.css' %}">
+  <link rel="stylesheet" href="{% static 'pw-each-chart.css' %}">
+  <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+  <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
+  <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
+  <script src="{% static 'pw-tz.js' %}?v=staging-clock1" defer></script>
+  <script src="{% static 'pw-each-chart.js' %}" defer></script>
+  <script src="{% static 'pw-feed.js' %}?v=staging-clock1" defer></script>
+  <script src="{% static 'pw-locale-toggle.js' %}?v=preferences1" defer></script>
+</head>
+{% csrf_token %}
+<!-- pw-shell:v20 -->
+<body class="pw-v20 desktop-shell"
+      data-pw-filters='{{ applied_filters_json }}'
+      data-pw-canonical-url="{{ canonical_home_url|default:'' }}"
+      data-pw-brands='{{ brand_nicknames_json }}'
+      data-pw-locale="{{ active_locale }}"
+      data-pw-feed-now="{{ feed_now_iso }}"
+      data-pw-preferences-namespace="{{ home_preferences_namespace }}"
+      data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
+      data-pw-processing-glyph-sprite-url="{% static 'pw-processing-glyphs.svg' %}"
+      data-pw-country-flag-codes='{{ country_flag_codes_json }}'
+      data-pw-window="{{ home_window_days }}"
+      data-pw-page="each"
+      data-pw-shell="v20"
+      data-tz-active="local"
+      data-pw-layout="desktop"
+      data-pw-variant="v20">
+
+{% include "monitor/_cyber_quan_sprite.html" %}
+
+<div class="app-shell">
+
+  <header class="topbar tz-hitch">
+    <div class="topbar-title-row">
+      <h1 class="app-name">
+        <svg class="pw-icon app-mark" aria-hidden="true" focusable="false"><use href="#mark-quiet"></use></svg>
+        <span class="zh">{{ app_name_zh }}</span>
+        <span class="en"><span class="en-line">Pushin'</span><span class="en-line">Weight</span></span>
+      </h1>
+      <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% elif is_ja_chrome %}表示言語{% else %}Display language{% endif %}" data-i18n-aria="locale">
+        <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
+                data-pw-locale-btn="en">en</button>
+        <button type="button"{% if is_zh_chrome %} class="is-active"{% endif %}
+                data-pw-locale-btn="zh_cn">中文</button>
+        <button type="button"{% if active_locale == 'ja' %} class="is-active"{% endif %}
+                data-pw-locale-btn="ja">日本語</button>
+      </nav>
+    </div>
+    <div class="topbar-controls">
+      <nav class="window-toggle" aria-label="{% if is_zh_chrome %}时间窗口{% elif is_ja_chrome %}期間{% else %}Time-period selector{% endif %}" data-i18n-aria="window">
+        {% for n in allowed_home_windows %}
+          <button type="button"
+                  {% if home_window_days == n %}class="is-active"{% endif %}
+                  data-pw-window-btn="{{ n }}" data-window="{{ n }}"
+                  {% if n == 1 %}data-label-en="1d" data-label-zh="1天" data-label-ja="1日"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天" data-label-ja="7日"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天" data-label-ja="30日"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天" data-label-ja="365日"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d" data-label-ja="{{ n }}日"{% endif %}>
+            {% if active_locale == 'en' %}
+              {% if n == 1 %}1d{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
+            {% elif active_locale == 'ja' %}
+              {% if n == 1 %}1日{% elif n == 7 %}7日{% elif n == 30 %}30日{% elif n == 365 %}365日{% else %}{{ n }}日{% endif %}
+            {% else %}
+              {% if n == 1 %}1天{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
+            {% endif %}
+          </button>
+        {% endfor %}
+      </nav>
+      <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
+              title="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% elif is_ja_chrome %}現地時間 ⇄ カリフォルニア時間{% else %}Toggle local ⇄ California time{% endif %}"
+              aria-label="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% elif is_ja_chrome %}現地時間 ⇄ カリフォルニア時間{% else %}Toggle local ⇄ California time{% endif %}">
+        <span class="tz-choice is-selected" data-tz-choice="local">
+          <span class="tz-emoji" data-tz-local-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-day"></use></svg></span>
+          <span class="tz-time" data-tz-local-time data-tz-time>00:00</span>
+          <span class="tz-label tz-zone" data-tz-local-label data-tz-zone data-i18n-tz-local="1">{% if is_zh_chrome %}本地{% elif is_ja_chrome %}現地{% else %}local{% endif %}</span>
+        </span>
+        <span class="tz-divider" aria-hidden="true"></span>
+        <span class="tz-choice" data-tz-choice="ca">
+          <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-night"></use></svg></span>
+          <span class="tz-time" data-tz-comparison-time data-tz-ca-time>00:00</span>
+          <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California"><svg class="pw-icon tz-place-icon" aria-hidden="true" focusable="false"><use href="#icon-california"></use></svg></span>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <section class="pulse-bar-wrap" aria-label="{% trans 'Trending models' %}" data-pw-pulse-shell>
+    <div class="pulse-bar" role="list" data-pw-pulse data-pw-window="{{ pulse.window_days }}" data-pw-computed-at="{{ pulse.computed_at }}">
+      {% for entry in pulse.entries %}
+        <li>
+          <button type="button" class="pulse-chip" data-pw-pulse-entry="{{ entry.nickname }}" aria-pressed="{% if entry.nickname == selected_brand %}true{% else %}false{% endif %}"
+                  aria-label="{% if is_zh_chrome %}{{ entry.display_name_zh_cn }}，{% if entry.status == 'new' %}新{% elif entry.direction == 'up' %}上升 {{ entry.delta_magnitude }}%{% elif entry.direction == 'down' %}下降 {{ entry.delta_magnitude }}%{% else %}持平 {{ entry.delta_magnitude }}%{% endif %}{% elif is_ja_chrome %}{{ entry.display_name_en }}、{% if entry.status == 'new' %}新規{% elif entry.direction == 'up' %}上昇 {{ entry.delta_magnitude }}%{% elif entry.direction == 'down' %}低下 {{ entry.delta_magnitude }}%{% else %}横ばい {{ entry.delta_magnitude }}%{% endif %}{% else %}{{ entry.display_name_en }}, {% if entry.status == 'new' %}NEW{% else %}{{ entry.direction }} {{ entry.delta_magnitude }} percent{% endif %}{% endif %}"
+                  style="--chip-color:{{ entry.accent_color }}">
+            <span class="pulse-chip-name">{% if is_zh_chrome %}{{ entry.display_name_zh_cn }}{% else %}{{ entry.display_name_en }}{% endif %}</span>
+            {% if entry.status == "new" %}
+              <span class="delta new">{% if is_zh_chrome %}新{% elif is_ja_chrome %}新規{% else %}NEW{% endif %}</span>
+            {% else %}
+              <span class="delta {{ entry.direction }}"><svg class="pw-icon pulse-trend-icon" aria-hidden="true" focusable="false"><use href="{% if entry.direction == 'up' %}#icon-rise{% elif entry.direction == 'down' %}#icon-fall{% else %}#icon-flat{% endif %}"></use></svg>{{ entry.delta_magnitude }}%</span>
+            {% endif %}
+          </button>
+        </li>
+      {% empty %}
+        <li class="muted">{% if is_zh_chrome %}本窗口暂无脉冲数据{% elif is_ja_chrome %}この期間には動向データがありません{% else %}No pulse data in this window{% endif %}</li>
+      {% endfor %}
+    </div>
+    <span class="pulse-state muted" data-pw-pulse-status hidden></span>
+  </section>
+
+  <div class="desktop-grid">
+    <div class="desktop-col-main">
+      <section class="home-chart-wrap each-chart-wrap" data-pw-each-chart data-chart-url="{% url 'dashboard_each_chart' %}"
+               data-chart-empty="{% if is_zh_chrome %}本窗口暂无图表数据{% elif is_ja_chrome %}この期間にはグラフデータがありません{% else %}No chart data in this window{% endif %}"
+               data-chart-error="{% if is_zh_chrome %}图表刷新失败{% elif is_ja_chrome %}グラフの更新に失敗しました{% else %}Chart refresh failed{% endif %}">
+        <div class="each-tabs" role="tablist" aria-label="{% if is_zh_chrome %}分类图表{% elif is_ja_chrome %}分類グラフ{% else %}Classification charts{% endif %}">
+          {% for tab, entries in each_tabs.items %}
+            <button type="button" class="each-tab{% if tab == selected_tab %} is-active{% endif %}" role="tab"
+                    data-each-tab="{{ tab }}" aria-controls="each-chart-panel"
+                    aria-selected="{% if tab == selected_tab %}true{% else %}false{% endif %}" tabindex="{% if tab == selected_tab %}0{% else %}-1{% endif %}">
+              {% if tab == 'sentiment' %}{% if is_zh_chrome %}情绪{% elif is_ja_chrome %}感情{% else %}Sentiment{% endif %}
+              {% elif tab == 'post_types' %}{% if is_zh_chrome %}帖子类型{% elif is_ja_chrome %}投稿タイプ{% else %}Post Type{% endif %}
+              {% elif tab == 'lang' %}{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Lang{% endif %}
+              {% elif tab == 'role' %}{% if is_zh_chrome %}角色{% elif is_ja_chrome %}役割{% else %}Role{% endif %}
+              {% elif tab == 'audience_topics' %}{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}
+              {% elif tab == 'geopolitical_modes' %}{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}
+              {% elif tab == 'product_labels' %}{% if is_zh_chrome %}产品{% elif is_ja_chrome %}製品{% else %}Products{% endif %}
+              {% elif tab == 'untracked_brand_promotions' %}{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}{% endif %}
+            </button>
+          {% endfor %}
+        </div>
+        <div class="each-chart-panel" id="each-chart-panel" role="tabpanel" aria-label="{% if is_zh_chrome %}分类图表{% elif is_ja_chrome %}分類グラフ{% else %}Classification chart{% endif %}">
+          <div class="each-chart-face">
+            <canvas class="home-chart" data-each-canvas aria-label="{% if is_zh_chrome %}按分类堆叠的帖子数{% elif is_ja_chrome %}分類別の積み上げ投稿数{% else %}Stacked posts by classification{% endif %}"></canvas>
+            <div class="legend" data-each-legend></div>
+          </div>
+          <p class="chart-state muted" data-each-status role="status" aria-live="polite" hidden></p>
+        </div>
+        {{ each_chart_payload|json_script:"each-initial-chart" }}
+      </section>
+
+      <section class="headline-strip" role="region" aria-label="{% trans 'Trend summary' %}"
+               data-pw-headline data-pw-window="{{ trend_narrative.window_days }}"
+               data-pw-computed-at="{{ trend_narrative.computed_at }}">
+        <div class="kicker">
+          <span class="pulse" aria-hidden="true"></span>
+          <span>{% trans "Trend summary" %}</span>
+          <span class="headline-state" data-pw-headline-state>{{ trend_narrative.state_label }}</span>
+        </div>
+        <p class="headline-selection muted" data-pw-headline-selection{% if not trend_narrative.selection.summary %} hidden{% endif %}>{{ trend_narrative.selection.summary }}</p>
+        <div class="headline-items" data-pw-headline-items{% if trend_narrative.schema_version != 3 %} hidden{% endif %}>
+          {% for item in trend_narrative.items %}
+            <article class="headline-item" data-pw-headline-item data-pw-brand-key="{{ item.brand.key }}"
+                     data-pw-state="{{ item.state }}" data-pw-verified-at="{{ item.verified_at|default:'' }}"
+                     aria-labelledby="trend-narrative-{{ forloop.counter }}">
+              <div class="headline-item-meta">
+                {% if item.brand.url %}<a class="brand" data-pw-headline-item-brand href="{{ item.brand.url }}">{{ item.brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-item-brand>{{ item.brand.display_name }}</span>{% endif %}
+                <span class="headline-item-state" data-pw-headline-item-state
+                      {% if item.freshness.absolute %}title="{{ item.freshness.absolute }}"{% endif %}
+                      aria-label="{{ item.state_label }}{% if item.freshness.absolute %}. {{ item.freshness.absolute }}{% endif %}">{{ item.state_label }}</span>
+              </div>
+              <h2 class="headline-item-title" data-pw-headline-item-title id="trend-narrative-{{ forloop.counter }}">{{ item.headline }} <button type="button" class="headline-disclosure" data-pw-headline-detail aria-controls="trend-narrative-{{ forloop.counter }}-detail" aria-expanded="false">{% if is_zh_chrome %}更多{% elif is_ja_chrome %}詳細{% else %}more{% endif %}</button></h2>
+              <div class="headline-item-secondary" data-pw-headline-item-secondary id="trend-narrative-{{ forloop.counter }}-detail" hidden><span data-pw-headline-secondary-copy>{{ item.secondary }}</span></div>
+            </article>
+          {% empty %}
+            <p class="headline-empty" data-pw-headline-empty>{{ trend_narrative.body }}</p>
+          {% endfor %}
+        </div>
+        <div data-pw-headline-legacy{% if trend_narrative.schema_version == 3 %} hidden{% endif %}>
+          <div class="body">
+            <span data-pw-headline-prefix>{{ trend_narrative.body_prefix }}</span>{% if trend_narrative.primary_brand %}{% if trend_narrative.primary_brand.url %}<a class="brand" data-pw-headline-brand href="{{ trend_narrative.primary_brand.url }}">{{ trend_narrative.primary_brand.display_name }}</a>{% else %}<span class="brand" data-pw-headline-brand>{{ trend_narrative.primary_brand.display_name }}</span>{% endif %}{% endif %}<span data-pw-headline-body>{{ trend_narrative.body_remainder }}</span>
+          </div>
+          <ul class="headline-observations" data-pw-headline-observations{% if not trend_narrative.observations %} hidden{% endif %}>
+            {% for observation in trend_narrative.observations %}
+              <li>{{ observation }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <p class="headline-status muted" data-pw-headline-status role="status" aria-live="polite" aria-atomic="true" hidden></p>
+        <div class="headline-voices" data-pw-headline-voices>
+          <span class="headline-label">{% trans "Top voices" %}</span>
+          <span class="headline-meta muted"><svg class="pw-icon voice-star-icon" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg> {% trans "by followers" %}</span>
+          <span class="headline-voice-entries" data-pw-headline-voice-entries
+                data-pw-empty-text="{% trans 'no top voices this period' %}">
+            {% for voice in top_voices %}
+              <a class="voice-chip" href="https://x.com/{{ voice.handle|cut:'@' }}" target="_blank" rel="noopener noreferrer">
+                <span class="voice-handle">@{{ voice.handle }}</span>
+                <span class="voice-star">(<svg class="pw-icon voice-star-icon" aria-hidden="true" focusable="false"><use href="#icon-star"></use></svg> {{ voice.voice_star }})</span>
+              </a>{% if not forloop.last %}, {% endif %}
+            {% empty %}
+              <span class="muted">{% trans "no top voices this period" %}</span>
+            {% endfor %}
+          </span>
+        </div>
+      </section>
+    </div>
+
+    <div class="desktop-col-feed">
+      <section class="feed-strip" data-pw-feed data-pw-brand-scope="{{ selected_brand }}" data-pw-locale="{{ active_locale }}"
+               data-pw-next-cursor="{{ feed.next_cursor|default:'' }}"
+               data-pw-has-more="{{ feed.has_more|yesno:'true,false' }}"
+               data-pw-default-title-en="Latest in window"
+               data-pw-default-title-zh="本窗口最新"
+               data-pw-default-title-ja="この期間の最新投稿"
+               data-pw-empty-text="{% trans 'no posts in window' %}"
+               data-pw-loading-text="{% trans 'loading more…' %}"
+               data-pw-error-text="{% if is_zh_chrome %}信息流刷新失败，显示上次结果{% elif active_locale == 'ja' %}フィードの更新に失敗しました。前回の結果を表示しています{% else %}Feed refresh failed; showing last result{% endif %}">
+        <h3 data-pw-feed-title data-i18n="feed_title">{% if is_zh_chrome %}本窗口最新{% elif active_locale == 'ja' %}この期間の最新投稿{% else %}Latest in window{% endif %}</h3>
+        <div class="feed-scroll" id="feed-scroll" data-feed-scroll data-pw-feed-scroll>
+          <div class="feed-rows" id="feed-rows" data-feed-rows data-pw-feed-body>
+            {% include "monitor/_feed_initial_v22.html" %}
+          </div>
+          <div class="feed-scroll-sentinel" data-pw-feed-sentinel data-feed-sentinel aria-hidden="true"></div>
+          <div class="feed-scroll-status" data-pw-feed-status data-feed-status hidden>{% trans "loading more…" %}</div>
+          <div class="feed-end" data-pw-feed-end hidden>{% trans "end of feed" %}</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  {% include "monitor/_site_footer.html" %}
+</div>
+</body>
+</html>

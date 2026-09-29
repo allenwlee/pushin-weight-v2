@@ -4069,6 +4069,241 @@ def home(request: HttpRequest) -> HttpResponse:
     return render(request, "monitor/home.html", context)
 
 
+_EACH_TABS = (
+    ("sentiment", "sentiment_entries"),
+    ("post_types", "post_type_entries"),
+    ("lang", "lang_entries"),
+    ("role", "role_entries"),
+    ("audience_topics", "audience_topic_entries"),
+    ("geopolitical_modes", "geopolitical_mode_entries"),
+    ("product_labels", "product_label_entries"),
+    ("untracked_brand_promotions", "untracked_brand_promotion_entries"),
+)
+def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
+    entries = _dashboard_filter_entries(
+        locale, list(SentimentKey.objects.order_by("key").values_list("key", flat=True))
+    )
+    enabled = {
+        "audience_topics": bool(_DASHBOARD_AUDIENCE_TOPIC_KEYS),
+        "geopolitical_modes": bool(_DASHBOARD_GEOPOLITICAL_MODE_KEYS),
+        "untracked_brand_promotions": bool(_DASHBOARD_UNTRACKED_PROMOTION_KEYS),
+    }
+    return {
+        tab: entries[source]
+        for tab, source in _EACH_TABS
+        if entries[source] and enabled.get(tab, True)
+    }
+
+
+def _each_chart_payload(
+    brand: str, tab: str, window_days: int, locale: str,
+    *, now: datetime | None = None, bucket_timezone: str = "UTC",
+) -> dict[str, Any]:
+    """Count one brand's current classification assignments without a feed row cap."""
+    from itertools import islice
+
+    at = now or _dashboard_now()
+    timezone_name, tzinfo = _resolve_chart_timezone(
+        bucket_timezone if window_days > 1 else "UTC"
+    )
+    local_today = at.astimezone(tzinfo).date()
+    if window_days == 1:
+        start = at - timedelta(days=1)
+        labels = [(start + timedelta(minutes=5 * i)).isoformat() for i in range(288)]
+    else:
+        first = local_today - timedelta(days=window_days - 1)
+        start = datetime(first.year, first.month, first.day, tzinfo=tzinfo).astimezone(UTC)
+        labels = [(first + timedelta(days=i)).isoformat() for i in range(window_days)]
+    entries = _each_tab_entries(locale)[tab]
+    keys = [entry["key"] for entry in entries]
+    # Use the same ordered accent palette that colors the homepage model lines.
+    palette = [item["accent_color"] for item in _build_brands_context()] or [_DEFAULT_BRAND_ACCENT]
+    series = {key: [0] * len(labels) for key in keys}
+    totals = [0] * len(labels)
+    day_index = {day: index for index, day in enumerate(labels)} if window_days > 1 else {}
+
+    def bucket_index(created: datetime) -> int | None:
+        if window_days == 1:
+            index = max(0, int((created - start).total_seconds() // 300))
+            return index if index < len(labels) else None
+        return day_index.get(created.astimezone(tzinfo).date().isoformat())
+
+    rows = PostBrand.objects.filter(
+        brand_id=brand, post__created_at__gte=start, post__created_at__lt=at,
+    ).order_by("post_id").values_list(
+        "post_id", "post__created_at", "post__lang_detected", "post__author_id",
+    ).iterator(chunk_size=1000)
+    audience_revision = None
+    if tab == "audience_topics":
+        audience_revision = AudienceTopicScheme.objects.filter(
+            key="ai_audience_topics/v1"
+        ).values_list("revision", flat=True).first()
+
+    while batch := list(islice(rows, 1000)):
+        post_ids = [row[0] for row in batch]
+        assigned: dict[str, set[str]] = {post_id: set() for post_id in post_ids}
+        state: dict[str, tuple[str, str, str]] = {}
+        if tab in {"post_types", "product_labels", "audience_topics"}:
+            state = {
+                row["post_id"]: (row["contract_version"], row["taxonomy_version"], row["outcome"])
+                for row in PostBrandClassificationState.objects.filter(
+                    brand_id=brand, post_id__in=post_ids,
+                ).values("post_id", "contract_version", "taxonomy_version", "outcome")
+            }
+        if tab == "sentiment":
+            reads = read_brand_scalars_many([(post_id, brand) for post_id in post_ids])
+            for post_id in post_ids:
+                assigned[post_id].add(reads[(post_id, brand)].sentiment or _FILTER_UNCLASSIFIED)
+        elif tab == "post_types":
+            edges = PostBrandSignal.objects.filter(brand_id=brand, post_id__in=post_ids).values_list("post_id", "post_type_id")
+            for post_id, raw_key in edges:
+                current = state.get(post_id)
+                if current and current[0] == CONTRACT_VERSION and current[1] in COMPATIBLE_TAXONOMY_VERSIONS and current[2] == "classified":
+                    # The v2 combined concept cannot become an exact v3 event
+                    # or opportunity assignment on this chart.
+                    if raw_key == "events_opportunities":
+                        continue
+                    key = _dashboard_canonical_key("post_type", raw_key)
+                    if key in series:
+                        assigned[post_id].add(key)
+            for post_id in post_ids:
+                if not assigned[post_id]:
+                    assigned[post_id].add(_FILTER_UNCLASSIFIED)
+        elif tab == "product_labels":
+            edges = PostBrandProductLabel.objects.filter(brand_id=brand, post_id__in=post_ids).values_list("post_id", "product_label_id")
+            for post_id, raw_key in edges:
+                current = state.get(post_id)
+                if current and current[0] == CONTRACT_VERSION and current[1] in COMPATIBLE_TAXONOMY_VERSIONS and current[2] == "classified":
+                    key = canonicalize_taxonomy_key("product_label", raw_key)
+                    if key in series:
+                        assigned[post_id].add(key)
+            for post_id in post_ids:
+                if not assigned[post_id]:
+                    current = state.get(post_id)
+                    classified = current and current[0] == CONTRACT_VERSION and current[1] in COMPATIBLE_TAXONOMY_VERSIONS and current[2] == "classified"
+                    assigned[post_id].add(_FILTER_NO_PRODUCT_SIGNAL if classified else _FILTER_UNCLASSIFIED)
+        elif tab == "audience_topics" and audience_revision is not None:
+            edges = PostBrandAudienceTopic.objects.filter(
+                brand_id=brand, post_id__in=post_ids,
+                scheme_id="ai_audience_topics/v1", scheme_revision=audience_revision,
+            ).values_list("post_id", "concept__key")
+            for post_id, raw_key in edges:
+                key = _dashboard_canonical_key("audience_topic", raw_key)
+                if key in series:
+                    assigned[post_id].add(key)
+            for post_id in post_ids:
+                if not assigned[post_id]:
+                    current = state.get(post_id)
+                    available = current and ("v4" in current[1].lower() or "u18a" in current[1].lower())
+                    assigned[post_id].add(_FILTER_NO_AUDIENCE_TOPIC if available else _FILTER_UNCLASSIFIED)
+        elif tab == "audience_topics":
+            for post_id in post_ids:
+                assigned[post_id].add(_FILTER_UNCLASSIFIED)
+        elif tab == "geopolitical_modes":
+            edges = PostBrandGeopoliticalMode.objects.filter(
+                brand_id=brand, post_id__in=post_ids,
+            ).filter(Q(taxonomy_version__icontains="v4") | Q(taxonomy_version__icontains="u18a")).values_list("post_id", "geopolitical_mode_id")
+            for post_id, raw_key in edges:
+                key = _dashboard_canonical_key("geopolitical_mode", raw_key)
+                if key in series:
+                    assigned[post_id].add(key)
+        elif tab == "untracked_brand_promotions":
+            for post_id, raw_keys in PostUntrackedBrandPromotion.objects.filter(post_id__in=post_ids).values_list("post_id", "promotion_keys"):
+                for raw_key in raw_keys if isinstance(raw_keys, list) else []:
+                    key = _dashboard_canonical_key("untracked_brand_promotion", str(raw_key))
+                    if key in series:
+                        assigned[post_id].add(key)
+        elif tab == "role":
+            authors = {author_id for _, _, _, author_id in batch if author_id}
+            role_by_author = dict(BrandAccount.objects.filter(brand_id=brand, account_id__in=authors).values_list("account_id", "role_id"))
+            for post_id, _, _, author_id in batch:
+                role = role_by_author.get(author_id)
+                assigned[post_id].add(role if role in series and role != "other" else "other")
+        elif tab == "lang":
+            for post_id, _, detected, _ in batch:
+                normalized = normalize_lang_detected(detected) if detected else None
+                key = _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE.get(normalized, normalized)
+                if key in series:
+                    assigned[post_id].add(key)
+                elif not key:
+                    assigned[post_id].add("undetected")
+                else:
+                    assigned[post_id].add("other")
+
+        for post_id, created, _, _ in batch:
+            index = bucket_index(created)
+            if index is None:
+                continue
+            totals[index] += 1
+            for key in assigned[post_id]:
+                if key in series:
+                    series[key][index] += 1
+
+    return {
+        "brand": brand, "tab": tab, "window_days": window_days,
+        "bucket_timezone": timezone_name, "granularity": "minute" if window_days == 1 else "day",
+        "days": labels, "series": series, "totals": totals,
+        "entries": [{"key": entry["key"], "label": entry["label"], "color": palette[i % len(palette)]} for i, entry in enumerate(entries)],
+        "counting_unit": "posts" if tab in {"sentiment", "lang", "role"} else "label_assignments",
+        "computed_at": at.isoformat(),
+    }
+
+
+@ensure_csrf_cookie
+def dashboard_each(request: HttpRequest) -> HttpResponse:
+    locale = _resolve_locale(request)
+    window_days = _resolve_home_window(request)
+    brands = _build_brands_context(locale)
+    brand_keys = [item["nickname"] for item in brands]
+    selected = request.GET.get("brand")
+    if selected not in brand_keys:
+        selected = brand_keys[0] if brand_keys else None
+    filters = {"brands": [selected] if selected else [], "window": window_days, "unsanctioned": "any"}
+    feed_rows, cursor, has_more, _ = _feed_page_wire(
+        locale=locale, window_days=window_days, filters=filters,
+        brand_nickname=selected, include_geography=True,
+    )
+    home_payload = _build_home_chart_payload(
+        window_days, filters, locale=locale, brand_projection=brands,
+    )
+    tabs = _each_tab_entries(locale)
+    selected_tab = request.GET.get("tab", "sentiment")
+    if selected_tab not in tabs:
+        selected_tab = next(iter(tabs), "sentiment")
+    chart = _each_chart_payload(selected, selected_tab, window_days, locale) if selected and tabs else None
+    context = {
+        "active_locale": locale, "is_zh_chrome": _is_zh_locale(locale),
+        "is_ja_chrome": _is_ja_locale(locale), "app_name_zh": APP_DISPLAY_NAME_ZH,
+        "app_name_en": APP_DISPLAY_NAME_EN, "app_title_zh": APP_TITLE_ZH,
+        "home_window_days": window_days, "allowed_home_windows": list(ALLOWED_HOME_WINDOWS),
+        "home_preferences_namespace": _home_preferences_namespace(request),
+        "brand_nicknames_json": json.dumps(brand_keys), "applied_filters_json": json.dumps(filters),
+        "country_flag_codes_json": json.dumps(sorted(COUNTRY_FLAG_CODES)),
+        "feed_now_iso": home_payload["computed_at"],
+        "feed": {"rows": feed_rows, "next_cursor": cursor, "has_more": has_more},
+        "pulse": home_payload["pulse"], "top_voices": home_payload["top_voices"]["entries"],
+        "trend_narrative": home_payload["trend_narrative"],
+        "selected_brand": selected, "selected_tab": selected_tab,
+        "each_tabs": tabs, "each_chart_payload": chart,
+    }
+    return render(request, "monitor/dashboard_each.html", context)
+
+
+def dashboard_each_chart_json(request: HttpRequest) -> JsonResponse:
+    locale = _resolve_locale(request)
+    brand = request.GET.get("brand", "")
+    tab = request.GET.get("tab", "sentiment")
+    if brand not in {item["nickname"] for item in _build_brands_context(locale)}:
+        return JsonResponse({"error": "invalid brand"}, status=400)
+    if tab not in _each_tab_entries(locale):
+        return JsonResponse({"error": "invalid tab"}, status=400)
+    window_days = _resolve_home_window(request)
+    return JsonResponse(_each_chart_payload(
+        brand, tab, window_days, locale,
+        bucket_timezone=request.GET.get("tz", "UTC"),
+    ))
+
+
 # ============================================================================
 # Views — Single-brand home
 # ============================================================================
