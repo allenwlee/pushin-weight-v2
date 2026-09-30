@@ -8,6 +8,20 @@ For reference-document work, read and follow
 The same canonical skill is exposed at `.agents/skills/updating-reference-docs`
 for agents using that discovery path.
 
+## General-page launch coordination
+
+Before general-launch work, read the shared
+[General Launch Index](docs/brainstorms/2026-09-30-104924-general-launch-index.md)
+and its linked charter. Sessions in linked worktrees must use the authoritative
+copies under `/Users/fuchitalee/development/pushin-weight-v2/docs/brainstorms/`
+on fuchitalee. Follow the index's session rules: claim a bounded G1–G4 task,
+record active ownership, and append timestamped ON/OFF log entries with a
+one-line work summary when starting/resuming and pausing/switching/finishing.
+Keep detailed progress in the linked task plan. Preserve other sessions' claims
+and edits; investigate stale claims rather than assuming a session stopped.
+Update the charter in place as owner decisions change. These documents provide
+context and coordination, not additional collection or deployment authority.
+
 ## UI fixes
 
 Before changing a visible UI surface, browser interaction, mockup fidelity,
