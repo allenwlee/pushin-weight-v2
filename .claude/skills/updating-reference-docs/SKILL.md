@@ -13,6 +13,11 @@ the system in plain language, retain the technical detail needed to use it,
 and keep each document grounded in the codebase as it exists at the time of
 writing.
 
+The human-facing explanation of this standard is
+[`Updating reference documents`](../../../docs/reference/updating-reference-docs.md).
+This skill remains the canonical agent procedure; keep both aligned when
+changing the standard.
+
 Apply this skill when asked to create, refresh, edit, review, verify, rename,
 move, or organize a document in `docs/reference/`. Read
 [`docs/docs-taxonomy.md`](../../../docs/docs-taxonomy.md) when deciding
@@ -22,6 +27,21 @@ owner's specific direction if it conflicts with the draft.
 
 ## Rules for Reference Prose
 
+- Organize by stable subjects and the reader's questions, not implementation
+  phases, migration order, or when a feature was added. A core entity such as
+  `people` belongs under an obvious people/job-history subject. Do not bury it
+  in a mixed “Current intelligence tables” appendix. Renaming an era-based
+  catch-all is insufficient; integrate its entries into the subject structure.
+- Make the stated scope discoverable. A reference to a finite collection needs
+  a complete linked inventory near the beginning and a detailed section for
+  every item. A mention or summary-only row does not count as full coverage.
+  Use both subject navigation and an alphabetical index when readers need to
+  find exact names. State exclusions and the verified total explicitly.
+- Apply one consistent level of detail to every item. Explain what one record
+  represents and distinguish entities, links, interpreted claims, source
+  evidence, vocabularies, and processing records within their subject. Generated
+  field lists support completeness; they do not replace human explanations of
+  purpose, relationships, dates, provenance, and current behavior.
 - Keep every reference comprehensive, detailed, and at least as useful as the
   material it replaces. Do not summarize, shorten, or remove examples,
   conditions, caveats, source maps, or exact contracts merely to make a file
@@ -73,6 +93,13 @@ For production database structure, use `core/models.py` and the ordered
 read-only access is authorized. Do not use the retired `schema.dot`, the
 retired schema image, or the historical SQLite database as current truth.
 
+For a complete schema reference, reconcile the set of concrete application
+tables with the final migration state. Identify framework tables, abstract
+models, and views separately rather than silently mixing them into the count.
+Inspect migration-only SQL as well as model metadata. State whether the review
+verified repository structure or a particular live deployment; do not claim
+the latter from source inspection alone.
+
 For a literal prompt, compare the whole document block with the source
 constant. For a request or output contract, check both the caller and its
 parser/validator. For an external call, verify endpoint, model, parameters,
@@ -91,6 +118,24 @@ the classifier prompt, generated post commentary, literal post translation,
 shared post-artifact lifecycle, rare-type search, and trend headline system
 are separate subjects. Cross-link them where their behavior meets; do not
 blend their prompts or outputs into one vague “AI” description.
+
+For `db-schema.md`, give every table the same minimum contract:
+
+- one-row meaning, exact SQL table name, model name, and source link;
+- primary key, including composite components without inventing a `pk` column;
+- every physical column, including inherited columns, SQL type, nullability,
+  meaningful defaults and choices, and differing model/SQL names;
+- linked FK targets and deletion behavior, distinguishing Django `on_delete`
+  from PostgreSQL clauses;
+- named indexes and constraints, field-level uniqueness, and relevant
+  migration-only rules, with explanations of their practical effect;
+- source versus observation dates, precision, language/normalization boundaries,
+  review state, evidence relationships, and counting units where relevant.
+
+Preserve useful existing detail while integrating additions into the correct
+subject. Core tables must not receive only a catch-all summary while other
+tables retain full column documentation. Proposed names, fields, and translation
+behavior stay in plans until the code and migrations implement them.
 
 Use one captured JST timestamp for the review pass when the document uses a
 `Last updated` line. Do not add a change-history footer. A date may identify
@@ -145,6 +190,14 @@ Before reporting completion:
    test execution.
 6. Report verified changes, untouched related documents, unresolved drift,
    and any check that could not be completed.
+
+For schema references, also verify exact set equality between source tables,
+inventory entries, and detailed sections; reject omissions and duplicates even
+if the total happens to match. Compare every table's columns, types, nullability,
+keys, defaults, indexes, and constraints. Check internal anchors and inbound
+links after reorganization. Record the source revision, migration boundary, and
+one review timestamp. Completeness checks do not authorize running migrations
+or changing production data.
 
 ## Existing Reference Boundaries
 
