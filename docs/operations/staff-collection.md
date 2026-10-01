@@ -130,6 +130,58 @@ not an identity-verified photograph. Request/asset counts are distinct.
 
 ## Recovery and activation evidence
 
+### Schema release and rollback
+
+Migrations 0059–0061 physically rename `people.sexs` to `people.sex`. Old and new
+application revisions cannot safely share this column during a rolling release.
+For a separately authorized release, take a database backup and coordinate the
+web, harvest and other Person readers so old code stops before migration and new
+code starts afterward. Keep network collection disabled throughout that change.
+This pull request does not activate or schedule that release.
+
+Before migrating, save these read-only results with the selected database and
+revision. Repeat the counts after migration, before importing any new staff; use
+`sex` in the second query afterward. Counts and the value distribution must match.
+
+```sql
+SELECT 'people' AS relation, count(*) FROM people
+UNION ALL SELECT 'people_accounts', count(*) FROM people_accounts
+UNION ALL SELECT 'people_brand_affiliations', count(*) FROM people_brand_affiliations
+UNION ALL SELECT 'people_brand_affiliation_evidence', count(*) FROM people_brand_affiliation_evidence;
+SELECT sexs, count(*) FROM people GROUP BY sexs ORDER BY sexs NULLS FIRST;
+```
+
+After migration, these checks must return zero invalid selections and zero legacy
+names without their unknown-source evidence. The backfill intentionally leaves
+both display selections empty until a name is reviewed.
+
+```sql
+SELECT count(*) AS invalid_selections
+FROM people p
+LEFT JOIN people_names n ON n.id = p.primary_name_id
+LEFT JOIN people_names e ON e.id = p.english_name_id
+WHERE (p.primary_name_id IS NOT NULL AND
+       (n.person_id IS DISTINCT FROM p.id OR n.review_status IS DISTINCT FROM 'confirmed'))
+   OR (p.english_name_id IS NOT NULL AND
+       (e.person_id IS DISTINCT FROM p.id OR e.review_status IS DISTINCT FROM 'confirmed'
+        OR e.language NOT IN ('en', 'en-Latn')));
+SELECT count(*) AS legacy_names_without_evidence
+FROM people_names n
+WHERE n.origin = 'legacy' AND NOT EXISTS (
+  SELECT 1 FROM people_name_evidence e
+  WHERE e.name_id = n.id AND e.source_kind = 'legacy_unknown'
+);
+```
+
+A rollback must coordinate code and schema too. Before any new intake, restoring
+the pre-release database backup together with the old code restores the old
+column contract. After new intake, reversing these migrations would drop collected
+names, evidence and media records: preserve that data and use a forward repair or
+an explicitly planned data-preserving rollback. Keep stored media bytes with the
+database backup; database rows alone cannot restore them.
+
+### Collection recovery
+
 Reservations are written before sending a paid request. Complete identical query
 fingerprints reuse their saved response. Failures and interrupted reservations
 count against the caps and require review, because the provider may already have

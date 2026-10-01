@@ -31,6 +31,7 @@ from core.staff_assets.intake import ingest_record
 from core.staff_assets.manifest import import_manifest
 from core.staff_assets.media import (
     local_bytes,
+    media_storage,
     public_addresses,
     record_media,
     store_image,
@@ -234,6 +235,37 @@ def test_path_escape_and_private_network_are_rejected(staff_storage, monkeypatch
     )
     with pytest.raises(ValueError, match="Non-public"):
         public_addresses("https://example.com/a.png")
+
+
+def test_store_image_restores_missing_bytes(staff_storage):
+    data = png_bytes()
+    obj = store_image(data)
+    media_storage().delete(obj.storage_name)
+    restored = store_image(data)
+    assert restored.pk == obj.pk
+    with media_storage().open(restored.storage_name, "rb") as stored:
+        assert stored.read() == data
+    assert StaffMediaObject.objects.count() == 1
+
+
+def test_reimport_restores_missing_bytes(staff_storage):
+    (staff_storage / "portrait.png").write_bytes(png_bytes())
+    person = Person.objects.create(display_name="Subject")
+    entry = {
+        "path": "portrait.png",
+        "source_url": "https://example.com/bio",
+        "source_kind": "company_bio",
+        "kind": "image",
+    }
+    row = record_media(person, entry, asset_root=staff_storage)
+    media_storage().delete(row.media.storage_name)
+    restored = record_media(person, entry, asset_root=staff_storage)
+    assert restored.pk == row.pk
+    assert restored.availability == "available"
+    with media_storage().open(restored.media.storage_name, "rb") as stored:
+        assert stored.read() == png_bytes()
+    assert StaffMediaObject.objects.count() == 1
+    assert PersonMedia.objects.count() == 1
 
 
 def test_lease_contention_expiry_and_stale_results():

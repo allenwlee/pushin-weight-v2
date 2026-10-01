@@ -33,7 +33,14 @@ def dossier_records(*, brand_id):
     result = []
     for person in people:
         intakes = sorted(person.staff_intakes.all(), key=lambda row: row.pk)
-        payload = intakes[-1].payload if intakes else {}
+        payload = next(
+            (
+                row.payload
+                for row in reversed(intakes)
+                if row.payload.get("source_dossier")
+            ),
+            {},
+        )
         dossier = payload.get("source_dossier", {})
         presentation = dossier.get("presentation", {})
         roles = [

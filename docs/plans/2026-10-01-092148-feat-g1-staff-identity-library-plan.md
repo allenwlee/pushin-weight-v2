@@ -148,12 +148,24 @@ acquisition process and its activation have not started.
   PostgreSQL. Repeat import preserves counts and source evidence. The database
   export has 11 current portrait gaps and no unavailable stored image objects.
   Receipt: root `.context/g1-lfg-20261001/pilot-verification.json`.
-- 108 focused PostgreSQL tests passed with zero skips/errors, covering migration,
+- 111 focused PostgreSQL tests passed with zero skips/errors, covering migration,
   name rules, shared intake, storage, request/lease handling, real personnel and
   profile writers, onboarding, read contracts, dossier and explicit activation.
 - Browser checks exercised current/history/name filters and decoded all 35
   referenced image attributions; mobile Tianyi view has no horizontal overflow.
-  Final quality/review and PR delivery are still in progress.
+  Final browser verification and PR delivery are still in progress.
+- Review reproduced and fixed two recovery defects: a later account-only intake
+  hid saved dossier detail, and reimport did not restore missing stored bytes.
+  Three regression checks failed before the fixes and passed afterward. Scoped
+  Ruff and whitespace checks pass. Full-repository Ruff remains non-green with
+  1,656 findings across the existing repository; it is not claimed as passed.
+  Local review lenses and validation ran sequentially under the user AGENTS
+  mapping. The Claude cross-model attempt returned HTTP 402 insufficient balance,
+  so the adversarial lens ran locally with no independent-model corroboration.
+  Review receipt: `/tmp/compound-engineering-501/ce-code-review/20261001-191014-g1-library/review.json`.
+- The operating runbook includes before/after SQL checks and coordinated-release
+  and rollback instructions for the physical `sexs` to `sex` rename. No production
+  migration or collection activation ran.
 - Video sources are retained as attributed page references in this scaffolding;
   video streams are not downloaded. Image bytes are validated and stored.
 

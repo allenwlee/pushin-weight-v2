@@ -6,7 +6,7 @@ from django.core.management import call_command
 
 from core.models import Person, PersonName, StaffCollectionWork, StaffProviderRequest
 from core.person_names import record_name
-from core.staff_assets.dossier import export_dossier
+from core.staff_assets.dossier import dossier_records, export_dossier
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.manifest import from_deepseek_dossier
 from core.staff_assets.queue import enqueue
@@ -76,6 +76,43 @@ def test_adapter_keeps_profile_location_separate_and_excludes_contributors():
     assert result[0]["names"][0]["origin"] == "owner"
     assert result[0]["texts"] == []  # a summary is not original Chinese text
     assert result[1]["eligibility"] == "unestablished" and result[1]["names"] == []
+
+
+def test_later_account_observation_preserves_dossier():
+    intake, _ = ingest_record(
+        record(
+            source_dossier={
+                "location": "Beijing",
+                "presentation": {
+                    "fields": {
+                        "job_title_zh": {
+                            "value": "研究员",
+                            "source": "https://example.com/bio",
+                        }
+                    },
+                    "chinese_web": {
+                        "attempts": [
+                            {"query": "测试人 DeepSeek", "provider": "SerpApi"}
+                        ]
+                    },
+                },
+            }
+        )
+    )
+    ingest_record(
+        record(
+            source_key="account-only:later",
+            person_id=str(intake.person_id),
+            eligibility="db_staff",
+            names=[],
+            affiliations=[],
+        )
+    )
+    result = dossier_records(brand_id="deepseek")[0]
+    assert result["titles"][0]["value"] == "研究员"
+    assert result["titles"][0]["source"] == "https://example.com/bio"
+    assert result["profile_location"] == "Beijing"
+    assert result["searches"][0]["query"] == "测试人 DeepSeek"
 
 
 def test_review_command_previews_then_selects_and_retains_history():

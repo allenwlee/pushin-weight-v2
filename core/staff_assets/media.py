@@ -138,9 +138,6 @@ def store_image(data):
             ]
             content_type = Image.MIME[image.format]
     sha = hashlib.sha256(data).hexdigest()
-    existing = StaffMediaObject.objects.filter(pk=sha).first()
-    if existing:
-        return existing
     storage = media_storage()
     path = f"sha256/{sha[:2]}/{sha}.{extension}"
     # Serialize local/storage writes by content hash, retaining every attribution.
@@ -151,9 +148,14 @@ def store_image(data):
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", [int(sha[:15], 16)])
         existing = StaffMediaObject.objects.filter(pk=sha).first()
         if existing:
-            return existing
+            path = existing.storage_name
         if not storage.exists(path):
             path = storage.save(path, ContentFile(data))
+        if existing:
+            if existing.storage_name != path:
+                existing.storage_name = path
+                existing.save(update_fields=["storage_name"])
+            return existing
         return StaffMediaObject.objects.create(
             sha256=sha,
             storage_name=path,
@@ -185,7 +187,11 @@ def record_media(person, entry, *, asset_root=None, observed_at=None):
         fingerprint=fingerprint,
         defaults={**values, "observed_at": observed_at or timezone.now()},
     )
-    if entry.get("path") and not row.media_id:
+    if entry.get("path") and (
+        not row.media_id
+        or row.availability != "available"
+        or not media_storage().exists(row.media.storage_name)
+    ):
         if asset_root is None:
             raise ValueError("Explicit asset root required for local media")
         try:
