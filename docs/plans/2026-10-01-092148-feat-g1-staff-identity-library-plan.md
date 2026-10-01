@@ -153,7 +153,10 @@ acquisition process and its activation have not started.
   profile writers, onboarding, read contracts, dossier and explicit activation.
 - Browser checks exercised current/history/name filters and decoded all 35
   referenced image attributions; mobile Tianyi view has no horizontal overflow.
-  Final browser verification and PR delivery are still in progress.
+  Final desktop/mobile checks passed, with no browser errors; the current-staff
+  PDF includes Tianyi. Implementation and recovery fixes are in
+  [PR #49](https://github.com/allenwlee/pushin-weight-v2/pull/49). The authoritative
+  root General Launch Index carries the final delivery/CI session outcome.
 - Review reproduced and fixed two recovery defects: a later account-only intake
   hid saved dossier detail, and reimport did not restore missing stored bytes.
   Three regression checks failed before the fixes and passed afterward. Scoped
