@@ -1,0 +1,20 @@
+{
+  "command": [
+    "render",
+    "logs",
+    "--resources",
+    "job-dau72amk1f9s73akemig",
+    "--limit",
+    "5",
+    "--output",
+    "json",
+    "--direction",
+    "backward",
+    "--end",
+    "2026-09-30T02:17:39.630424851Z"
+  ],
+  "timed_out": false,
+  "returncode": 0,
+  "stdout": "{\n  \"id\": \"1dc0099e-b365-4ec9-b0da-d11cea7c77b1\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dau72amk1f9s73akemig\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"    spent+=cost\",\n  \"timestamp\": \"2026-09-30T02:17:30.162866565Z\"\n}{\n  \"id\": \"61a1299f-7eaf-4abb-9392-426812ca6f1a\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dau72amk1f9s73akemig\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"emit(\\\"complete\\\",{\\\"calls\\\":4,\\\"cost_usd\\\":str(spent),\\\"at\\\":datetime.now(timezone.utc).isoformat()})\",\n  \"timestamp\": \"2026-09-30T02:17:30.162869995Z\"\n}{\n  \"id\": \"dda3a632-6428-401c-a3be-1386057dfcfa\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dau72amk1f9s73akemig\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"''\\u001b(B\\u001b[m\",\n  \"timestamp\": \"2026-09-30T02:17:30.162873115Z\"\n}{\n  \"id\": \"6322a602-cafa-4a7b-8b12-264d4b6bed22\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dau72amk1f9s73akemig\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_JEV_REVIEW preflight:1/1:eJwVjkkOgzAQBP8y1+Bk2MHnKB9IlCuy8CRYOCxeuCD+nuFWUqure4fRTBokLI4+1nyHAAlsykYCuYMKnGSYVQJbkeMLM5nWMsdrVTRNmV4QJSIXekeapmCU7djjGUEGFymB36zJskQTLZ5oFMrc7szPk9+FeFjlB4F1nrLG0RrJh66f42koEvDkNtPzF56YhFb15vSqkUpf523ceo9wHH/tUD3A\",\n  \"timestamp\": \"2026-09-30T02:17:30.649113344Z\"\n}{\n  \"id\": \"e7f9047c-a2d2-48f8-89ca-225ca897e529\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dau72amk1f9s73akemig\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_JEV_REVIEW started_0:1/1:eJwdjUsOgzAMRO+SbQsyJh/IObpHsWNUVBRUEtgg7l7odmbem0N9phSVV7mEtUgcQD3VHuZNlD9UKFeDgLaCvmrhBegb51uorYHGmQeAhxuYbgOFLPOUZOAlFUnlylf5bpLLkN8Bjb02wfXCFB0SdVojYcAGhJwT4kitZoDY6ZF6MGxHRhay0o8jcsedNfR3Zln3UKYlDVu+j6GGFp1GdZ4/aow9DQ==\",\n  \"timestamp\": \"2026-09-30T02:17:30.65030566Z\"\n}",
+  "stderr": ""
+}

@@ -1,0 +1,9 @@
+{
+  "issued_at": "2026-09-30T07:06:03.261132+00:00",
+  "database_service": "dpg-d9koekqjobas73fvjqng-a",
+  "query_file": "language-census.sql",
+  "query_sha256": "a592ed0053733010a26565914572a74ed9bfc8430790ab1e683132d8b870f40a",
+  "provider": "Production PostgreSQL via Render CLI on authoritative fuchitalee",
+  "read_only": true,
+  "timeout_seconds": 45
+}

@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-01T05:49:33.247093+00:00",
+  "codec": "lzma+base64",
+  "packet_sha256": "ac929c1736226449c1ecc4ad725ff675c706477c8b6c437637712c85900349f6",
+  "remote_sha256": "1599a22b6a60f830324b306c9c41ab6a5734da10e6cc1e4f561e187510ad78f0",
+  "program_sha256": "749c757ef0d27dce34fbca44db86fbfcac85606467b990b9f5d3b42d3bc93d2f",
+  "start_command_bytes": 106410,
+  "round_trip_verified": true,
+  "provider_calls": 0
+}

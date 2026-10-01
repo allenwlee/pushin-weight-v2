@@ -1,0 +1,17 @@
+{
+  "scope": "Read-only comparison of persisted post language; no stored classifications; no provider calls, software tests, product code changes, classifier writes, deployment or spam deletions.",
+  "cohorts": {
+    "known_roles": "Any post by an account currently linked to a non-sentinel brand as official/staff/community. Role is metadata, not a ground-truth promotion or employment label.",
+    "bai_associated": "Body contains bounded, case-insensitive B.AI, BAI_AGI, or TRONEcostar; association is not itself a spam label.",
+    "other": "All remaining DB post bodies are an unlabelled collision-control population, not a genuine/legitimate ground-truth set."
+  },
+  "measurements_before_results": [
+    "Body length, link frequency, paragraph shape, first-person ownership language",
+    "Greeting; conversational fillers; game-changer; did-you-know; generic reassurance; generic CTA",
+    "Exact and URL/mention-normalized body reuse across distinct authors",
+    "Campaign markers and named destination versus transferable language rule",
+    "Co-occurrence of at least two distinct filler/reassurance families plus a link; do not declare spam solely from this",
+    "Compare overall and recent windows; inspect collisions in official/staff and a bounded deterministic sample outside cohorts"
+  ],
+  "limits": "At most two exploratory feature passes; preserve first-pass results. Do not turn discovery-cohort separation into held-out accuracy. No threshold tuning loop. This comparison can propose a rule, not certify safe automatic removal."
+}

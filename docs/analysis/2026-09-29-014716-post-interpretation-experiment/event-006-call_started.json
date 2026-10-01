@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 3,
+    "phase": "batch1:interpretation",
+    "request_sha256": "265a59e8ecc9d5b006919176a538d80b5cd965c53ab1116e601d0adb5beeb889",
+    "reserved_cost_usd": "0.24520"
+  }
+}

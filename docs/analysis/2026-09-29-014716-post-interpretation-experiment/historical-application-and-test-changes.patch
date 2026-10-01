@@ -1,0 +1,104 @@
+diff --git a/tests/test_u18_runtime_0731.py b/tests/test_u18_runtime_0731.py
+index 213b7a5..80d087c 100644
+--- a/tests/test_u18_runtime_0731.py
++++ b/tests/test_u18_runtime_0731.py
+@@ -102,9 +102,6 @@ def test_selected_prompts_render_the_v4_fixed_slot_contract():
+     assert "news_reporting" in CONTENT_PROMPT
+     assert "investigate_claim" in BRAND_PROMPT
+     assert "general is an exclusive fallback" in CONTENT_PROMPT
+-    assert "marketing beneficiary" in CONTENT_PROMPT
+-    assert "Token Machine" in CONTENT_PROMPT
+-    assert "B.AI" in CONTENT_PROMPT
+ 
+     transport = FixedSlotTransport()
+     classify_batch_pragmatics_full(_tweets(1), [], transport)
+@@ -114,6 +111,31 @@ def test_selected_prompts_render_the_v4_fixed_slot_contract():
+     assert "D01, D02" in prompts["brand_interpretation"]
+ 
+ 
++def test_selected_caller_sends_restored_advertising_definition():
++    from x_monitor.attribution import (
++        _TWO_ROLE_ALLOWED_REVISION_TRIPLETS,
++        classify_batch_pragmatics_full,
++    )
++
++    transport = FixedSlotTransport()
++    classify_batch_pragmatics_full(_tweets(1), [], transport)
++    content = next(call["request"]["system"] for call in transport.calls if call["role"] == "content")
++    definition = next(line for line in content.splitlines() if line.startswith("- advertising_marketing:"))
++    assert definition == (
++        "- advertising_marketing: a pitch, call to action, showcase, discount, "
++        "or promotional launch for this brand. A comparison foil cannot inherit "
++        "another brand's promotion."
++    )
++    assert "Token Machine" not in content
++    assert "B.AI guide/platform" not in content
++    # The rollback must not invalidate saved results from the rejected prompt.
++    assert (
++        "stage1-content-0731-v6",
++        "stage1-brand-interpretation-0731-v5",
++        "stage1-two-role-merge-0731-v6",
++    ) in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
++
++
+ def test_selected_profile_rejects_a_route_or_sampling_drift():
+     from x_monitor.openrouter import OpenRouterChatCompletionsClient, OpenRouterPermanentError
+ 
+@@ -183,9 +205,9 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
+     assert [rows[0]["classification_trace"][stage]["role_revision"] for stage in (
+         "content", "brand_interpretation", "final"
+     )] == [
+-        "stage1-content-0731-v6",
++        "stage1-content-0731-v5",
+         "stage1-brand-interpretation-0731-v5",
+-        "stage1-two-role-merge-0731-v6",
++        "stage1-two-role-merge-0731-v5",
+     ]
+     for call in transport.calls:
+         request = call["request"]
+diff --git a/tests/test_u18a_v4_classification_persistence.py b/tests/test_u18a_v4_classification_persistence.py
+index c49709a..38420aa 100644
+--- a/tests/test_u18a_v4_classification_persistence.py
++++ b/tests/test_u18a_v4_classification_persistence.py
+@@ -289,7 +289,7 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
+     promotion = PostUntrackedBrandPromotion.objects.get(post=post)
+     assert promotion.promotion_keys == ["general"]
+     assert promotion.provider_role == "content"
+-    assert promotion.prompt_version == "stage1-content-0731-v6"
++    assert promotion.prompt_version == "stage1-content-0731-v5"
+     evidence = UntrackedBrandPromotionEvidence.objects.get(promotion=promotion)
+     assert evidence.exact_matched_account_id == author.pk
+     assert evidence.handles == ["@example_promoter", "@exampleharness"]
+diff --git a/x_monitor/attribution.py b/x_monitor/attribution.py
+index 3bbbbad..9cce186 100644
+--- a/x_monitor/attribution.py
++++ b/x_monitor/attribution.py
+@@ -3503,11 +3503,11 @@ def _merge_stage1_selector_passes(
+ _TWO_ROLE_CONTENT_REVISION = "stage1-content-v2"
+ _TWO_ROLE_BRAND_REVISION = "stage1-brand-interpretation-v2"
+ _TWO_ROLE_MERGE_REVISION = "stage1-two-role-merge-v2"
+-_TWO_ROLE_PREVIOUS_CONTENT_REVISION = "stage1-content-0731-v5"
++_TWO_ROLE_PREVIOUS_CONTENT_REVISION = "stage1-content-0731-v6"
+ _TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v5"
+-_TWO_ROLE_PREVIOUS_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
+-_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v6"
+-_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v6"
++_TWO_ROLE_PREVIOUS_MERGE_REVISION = "stage1-two-role-merge-0731-v6"
++_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v5"
++_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
+ _TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
+     (
+         _TWO_ROLE_CONTENT_REVISION,
+diff --git a/x_monitor/classifier_0731_prompts.py b/x_monitor/classifier_0731_prompts.py
+index 6ac1974..8eeb8a7 100644
+--- a/x_monitor/classifier_0731_prompts.py
++++ b/x_monitor/classifier_0731_prompts.py
+@@ -25,7 +25,7 @@ POST TYPES:
+ - hands_on_usage: the author or quoted firsthand actor explicitly used, set up, demonstrated, tested, or built something with this brand. Reporting, affiliation, recommendation, or architectural commentary alone is insufficient.
+ - results_analysis: source-visible product performance or quality evidence: observed output, measurement, benchmark, ranking, comparison, or substantive reasoned evaluation. Generic praise, unsupported superiority claims, and unseen media/link contents are insufficient.
+ - questions_requests: a genuine question, support/correction request, or desired product change.
+-- advertising_marketing: a pitch, call to action, showcase, discount, or promotional launch whose marketed offering or marketing beneficiary is this tracked brand. Identify the promoted subject and beneficiary before labeling each brand. Mere mention of this brand inside another subject's pitch is not this brand's advertising, even when the brand/model is praised, featured, usable on the platform, or named in a call to action for that other subject. A prize, token denomination, spin option, compatibility ingredient, benchmark participant, or comparison foil cannot inherit another subject's promotion. For example, a Token Machine daily-spin pitch offering DeepSeek/Qwen/Hunyuan tokens promotes Token Machine, not those prize brands. A B.AI guide/platform pitch featuring GLM promotes B.AI, not Zhipu merely because GLM is highlighted. Still label this tracked brand when the visible source independently pitches its own product or includes a separate direct call to action for it; tracked and untracked promotions may coexist when both have independent evidence.
++- advertising_marketing: a pitch, call to action, showcase, discount, or promotional launch for this brand. A comparison foil cannot inherit another brand's promotion.
+ - events: an organized past/current/future occurrence requiring attendance at a physical, live-online, or hybrid venue/session.
+ - opportunities: bounded availability requiring action for a concrete benefit or chance of benefit. A hackathon can be both events and opportunities.
+ - job_listings: a concrete vacancy plus an actionable application route.

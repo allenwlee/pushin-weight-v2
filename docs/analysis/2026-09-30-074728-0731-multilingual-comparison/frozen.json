@@ -1,0 +1,38 @@
+{
+  "at": "2026-09-30T07:54:28.181848+00:00",
+  "max_calls": 185,
+  "max_model_usd": ".50",
+  "service": "crn-da7vrdqd0e5s739uvcs0",
+  "files": {
+    "contract.md": "ecfc74a75abb8a44e3bf526ebdb2438f040242cfc5598d46f5c34a6a8bf2b9dc",
+    "run.py": "30b23291997bd5057b55f78192b633788a9e47fdb1cdd51ad70428b2d43fc630",
+    "remote.py": "9e2047e8bcd942eb442914e6bea33409d7b559d166d5169bf7d6f4ae3022bb01",
+    "requests.json": "ed07cdfe75797bec9d589153972d1fa52b2b6aa54a19ea55c1946843e2da061f",
+    "packet.json": "9acaedb346dd162c6309ccd40fc88ef58dd2188b9b04c8ff3a15e2d625383838"
+  },
+  "dependencies": {
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/run.py": "e09bc7bea213db5f21e22964db93a7e72676d6ef65c6278308650539c936d717",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/questions.py": "9c7b3e2bcd0df88ccf1bb2a35ce5daa3b0c2759b73cac75df16f5947d757e166",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/frozen.json": "ebccabf6c78652e212655b48e99fdb73d56a1dae64569333129424687036b881",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/requests.json": "6bb4c6c58316af0d752d68339a5e88d44b52a69dc71bab265ffd8b7b063ca489",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/references.json": "aa9c8e778eacae9501a28ff0ff569057f2f402d330afa6d837d3341efcfa175e",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/reference_rows.json": "7d134c6a79829011c9375e62bbc4e736292042b4d42ac1eb574ffbfd0143ecf9",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/scores.json": "78d70e4a016a4556380363f39a738124de8ae01132222ef05d5ae4685d35e299",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/cohort.json": "8b2ef81974773fc53b9cc3059c638a266c2aef3ea1e4ac3f9cc77b0e7ebcb533",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/contract.md": "08d9f77fc70b05dcc3c0956eb2adba652992054b1377dfa7eb4be3ee53e6eb85",
+    "docs/analysis/2026-09-30-063633-0731-matched-primary-comparison/run.py": "d8e7203aa8e4cac975210d5593e23c96ac76fcf3baba9414374f2e31cf44c0eb",
+    "docs/analysis/2026-09-30-063633-0731-matched-primary-comparison/requests.json": "0111750822a255a286c320994cf2cc6082e133c2e0e268307ebecd29e0929a26",
+    "docs/analysis/2026-09-30-060237-jev-primary-classifier/run.py": "d8e081a166e9ce330ae649c9b487252b9b8472485ac1855ab39802cf586c45e8"
+  },
+  "protected_files": {
+    "config.yaml": "1f05eecd94fcc9a3a340c287e43ada5f5fa89422dae6f6dc2e78c26797bf659f",
+    "x_monitor/attribution.py": "9cb543131f32ac2773f43a5203355a0fee776da17352cd2b038828a5f395d48d",
+    "x_monitor/classifier_0731_prompts.py": "a922e2bed8b18e3b16b73007c4798e4b9d79529b9398e485229a2140bf149e33",
+    "tests/test_u18_runtime_0731.py": "e42fccce9fb4d37ee122452cc4ab9ae3517215a71a22bcbcf46c3058878d6708",
+    "tests/test_u18a_v4_classification_persistence.py": "c79fe4b572acbe3d9ce2bad0c5b202cf5bb321d7cb06aeebd6921fe17eaea15d",
+    "x_monitor/deepinfra.py": "6cdcaffa8423565f0c82e9b8917c3b7e35503d95805dc6dc2adc30a179580d58"
+  },
+  "provider_calls": 0,
+  "selfcheck_passed": true,
+  "input_parity_verified": true
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "started_1",
+  "value": {
+    "at": "2026-09-30T06:44:30.650225+00:00",
+    "id": "G01_B_probabilities",
+    "request_sha256": "a317e66e9fa5317c399d8fe900becddfb8fa526c46ee10963dc1ffea3cda2baf",
+    "reservation_usd": "0.00168660"
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "output": "BEGIN\nSET\n{\"observed_at\" : \"2026-09-29T06:27:53.856368+00:00\", \"fetched_before\" : \"2026-09-29T06:19:29.636718+00:00\", \"entity_value_types\" : [{\"value_type\":\"object\",\"posts\":20307}, \n {\"value_type\":\"SQL NULL\",\"posts\":256430}]}\nCOMMIT\n"
+}

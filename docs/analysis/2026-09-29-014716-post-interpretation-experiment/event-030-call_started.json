@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 14,
+    "phase": "batch3:baseline_cross_task_probe",
+    "request_sha256": "be8a98de9feeec4d0a6fbd57aca7d23ee159158de83fc19a94b7fc3ba71dfbd6",
+    "reserved_cost_usd": "0.20090"
+  }
+}

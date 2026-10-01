@@ -1,0 +1,10 @@
+{
+  "kind": "preflight",
+  "value": {
+    "at": "2026-09-30T07:56:42.845632+00:00",
+    "credential_present": true,
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "packet_sha256": "ae16d21f5fbb2140b983a399734ee762d16e947141bdff2b43b97b28e31b88c3",
+    "requests": 185
+  }
+}

@@ -1,0 +1,1278 @@
+{
+  "summary": {
+    "A_labels": {
+      "geopolitics": {
+        "correct": 12,
+        "total": 18,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 2,
+        "total": 4,
+        "posts_all_scored_fields_correct": 2,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 14,
+        "total": 22,
+        "posts_all_scored_fields_correct": 3,
+        "posts": 8
+      }
+    },
+    "B_probabilities": {
+      "geopolitics": {
+        "correct": 12,
+        "total": 18,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 4,
+        "total": 4,
+        "posts_all_scored_fields_correct": 4,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 16,
+        "total": 22,
+        "posts_all_scored_fields_correct": 5,
+        "posts": 8
+      }
+    }
+  },
+  "semantic_label_summary": {
+    "A_labels": {
+      "geopolitics": {
+        "correct": 12,
+        "total": 18,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 2,
+        "total": 4,
+        "posts_all_scored_fields_correct": 2,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 14,
+        "total": 22,
+        "posts_all_scored_fields_correct": 3,
+        "posts": 8
+      }
+    },
+    "B_probabilities": {
+      "geopolitics": {
+        "correct": 12,
+        "total": 18,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 4,
+        "total": 4,
+        "posts_all_scored_fields_correct": 4,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 16,
+        "total": 22,
+        "posts_all_scored_fields_correct": 5,
+        "posts": 8
+      }
+    }
+  },
+  "rows": [
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "framework",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.0,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "mixed": 0.0,
+        "none": 1.0,
+        "pro": 0.0,
+        "unknown": 0.0
+      },
+      "probabilities_valid": true,
+      "selected_probability": 1.0,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "framework",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.9,
+        "true": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.9,
+        "true": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.9,
+        "true": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.0,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "mixed": 0.0,
+        "none": 1.0,
+        "pro": 0.0,
+        "unknown": 0.0
+      },
+      "probabilities_valid": true,
+      "selected_probability": 1.0,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "pro",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.03,
+        "constructive_critical": 0.02,
+        "mild_pro": 0.2,
+        "mixed": 0.05,
+        "none": 0.05,
+        "pro": 0.6,
+        "unknown": 0.05
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.6,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "framework",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.8,
+        "false": 0.2
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.8,
+      "p_yes": 0.8,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.75,
+        "false": 0.25
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.75,
+      "p_yes": 0.75,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.15,
+        "false": 0.85
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.85,
+      "p_yes": 0.15,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.7,
+        "constructive_critical": 0.05,
+        "mild_pro": 0.0,
+        "mixed": 0.05,
+        "none": 0.15,
+        "pro": 0.0,
+        "unknown": 0.05
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.7,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "pro",
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "framework",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "china_national_stance",
+      "expected": "pro",
+      "assigned": "pro",
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "reporting",
+      "expected": true,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "china_national_stance",
+      "expected": "pro",
+      "assigned": "pro",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.02,
+        "constructive_critical": 0.02,
+        "mild_pro": 0.2,
+        "mixed": 0.01,
+        "none": 0.01,
+        "pro": 0.7,
+        "unknown": 0.04
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.7,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.1,
+        "true": 0.9
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.9,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.1,
+        "true": 0.9
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.9,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "reporting",
+      "expected": true,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.9,
+        "true": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "china_national_stance",
+      "expected": "anti",
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.7,
+        "constructive_critical": 0.1,
+        "mild_pro": 0.0,
+        "mixed": 0.1,
+        "none": 0.0,
+        "pro": 0.0,
+        "unknown": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.7,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.9,
+        "false": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.9,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.9,
+        "false": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.9,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "reporting",
+      "expected": true,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.1,
+        "false": 0.9
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "china_national_stance",
+      "expected": "anti",
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "reporting",
+      "expected": true,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "P01",
+      "issue": "promotion",
+      "arm": "A_labels",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "P01",
+      "issue": "promotion",
+      "arm": "B_probabilities",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.11,
+        "false": 0.89
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.89,
+      "p_yes": 0.11,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "P02",
+      "issue": "promotion",
+      "arm": "B_probabilities",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": false,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "false": 0.9,
+        "true": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.1,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "P02",
+      "issue": "promotion",
+      "arm": "A_labels",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "P03",
+      "issue": "promotion",
+      "arm": "A_labels",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "P03",
+      "issue": "promotion",
+      "arm": "B_probabilities",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.9,
+        "false": 0.1
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.9,
+      "p_yes": 0.9,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "P04",
+      "issue": "promotion",
+      "arm": "B_probabilities",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "true": 0.6,
+        "false": 0.4
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.6,
+      "p_yes": 0.6,
+      "correct": true,
+      "semantic_correct": true
+    },
+    {
+      "case_id": "P04",
+      "issue": "promotion",
+      "arm": "A_labels",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "label_valid": true,
+      "valid": true,
+      "correct": true,
+      "semantic_correct": true
+    }
+  ],
+  "unscored": [
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": "constructive_critical",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.15,
+        "constructive_critical": 0.4,
+        "mild_pro": 0.05,
+        "mixed": 0.1,
+        "none": 0.2,
+        "pro": 0.02,
+        "unknown": 0.08
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.4,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "B_probabilities",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": "pro",
+      "label_valid": true,
+      "valid": true,
+      "probabilities": {
+        "anti": 0.0,
+        "constructive_critical": 0.1,
+        "mild_pro": 0.3,
+        "mixed": 0.1,
+        "none": 0.1,
+        "pro": 0.4,
+        "unknown": 0.0
+      },
+      "probabilities_valid": true,
+      "selected_probability": 0.4,
+      "correct": false,
+      "semantic_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "arm": "A_labels",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": "anti",
+      "label_valid": true,
+      "valid": true,
+      "correct": false,
+      "semantic_correct": false
+    }
+  ],
+  "pair_changes": [
+    {
+      "case_id": "P01",
+      "field": "advertising_marketing",
+      "expected": false,
+      "labels_only": true,
+      "with_probabilities": false,
+      "a_correct": false,
+      "b_correct": true,
+      "b_selected_probability": 0.89
+    },
+    {
+      "case_id": "P02",
+      "field": "advertising_marketing",
+      "expected": false,
+      "labels_only": true,
+      "with_probabilities": false,
+      "a_correct": false,
+      "b_correct": true,
+      "b_selected_probability": 0.9
+    }
+  ],
+  "requests": [
+    {
+      "id": "G01_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 1.3872809559106827,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1533,
+        "total_tokens": 1568,
+        "completion_tokens": 35,
+        "estimated_cost": 9.828e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G01_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 2.5086887758225203,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1614,
+        "total_tokens": 1807,
+        "completion_tokens": 193,
+        "estimated_cost": 0.00013157999999999998,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G02_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 7.228956265375018,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1449,
+        "total_tokens": 1642,
+        "completion_tokens": 193,
+        "estimated_cost": 0.00012168,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G02_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 2.11565319634974,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1368,
+        "total_tokens": 1403,
+        "completion_tokens": 35,
+        "estimated_cost": 8.838e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G03_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 1.4933486972004175,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1626,
+        "total_tokens": 1661,
+        "completion_tokens": 35,
+        "estimated_cost": 5.778e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G03_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 3.3374413773417473,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 1707,
+        "total_tokens": 1903,
+        "completion_tokens": 196,
+        "estimated_cost": 9.162e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G04_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 3.000504044815898,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 2634,
+        "total_tokens": 2827,
+        "completion_tokens": 193,
+        "estimated_cost": 0.0001467,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "G04_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 2.5781900007277727,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 2553,
+        "total_tokens": 2588,
+        "completion_tokens": 35,
+        "estimated_cost": 0.00011339999999999999,
+        "prompt_tokens_details": {
+          "cached_tokens": 1024,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P01_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 0.5773937162011862,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 740,
+        "total_tokens": 752,
+        "completion_tokens": 12,
+        "estimated_cost": 4.656e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P01_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 1.6143269836902618,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 821,
+        "total_tokens": 850,
+        "completion_tokens": 29,
+        "estimated_cost": 5.448e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P02_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 0.6200136262923479,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 516,
+        "total_tokens": 545,
+        "completion_tokens": 29,
+        "estimated_cost": 3.618e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P02_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 0.339040070772171,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 435,
+        "total_tokens": 447,
+        "completion_tokens": 12,
+        "estimated_cost": 1.6740000000000002e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 256,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P03_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 2.7243894767016172,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 652,
+        "total_tokens": 664,
+        "completion_tokens": 12,
+        "estimated_cost": 2.9760000000000003e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 256,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P03_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 0.5382072050124407,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 733,
+        "total_tokens": 762,
+        "completion_tokens": 29,
+        "estimated_cost": 3.768e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 256,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P04_B_probabilities",
+      "arm": "B_probabilities",
+      "elapsed_seconds": 1.4365682806819677,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 509,
+        "total_tokens": 538,
+        "completion_tokens": 29,
+        "estimated_cost": 2.424e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 256,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "P04_A_labels",
+      "arm": "A_labels",
+      "elapsed_seconds": 0.5094116162508726,
+      "finish_reason": "stop",
+      "envelope_valid": true,
+      "usage": {
+        "prompt_tokens": 428,
+        "total_tokens": 440,
+        "completion_tokens": 12,
+        "estimated_cost": 1.632e-05,
+        "prompt_tokens_details": {
+          "cached_tokens": 256,
+          "cache_write_tokens": null
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "metrics": {
+    "A_labels": {
+      "calls": 8,
+      "median_seconds": 1.44031482655555,
+      "input_tokens": 9335,
+      "output_tokens": 188,
+      "estimated_cost_usd": "0.000467219999999999995"
+    },
+    "B_probabilities": {
+      "calls": 8,
+      "median_seconds": 2.061507879756391,
+      "input_tokens": 9983,
+      "output_tokens": 891,
+      "estimated_cost_usd": "0.00064415999999999998"
+    }
+  },
+  "sensitivity_excluding_G03_stance_intensity": {
+    "A_labels": {
+      "geopolitics": {
+        "correct": 11,
+        "total": 17,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 2,
+        "total": 4,
+        "posts_all_scored_fields_correct": 2,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 13,
+        "total": 21,
+        "posts_all_scored_fields_correct": 3,
+        "posts": 8
+      }
+    },
+    "B_probabilities": {
+      "geopolitics": {
+        "correct": 11,
+        "total": 17,
+        "posts_all_scored_fields_correct": 1,
+        "posts": 4
+      },
+      "promotion": {
+        "correct": 4,
+        "total": 4,
+        "posts_all_scored_fields_correct": 4,
+        "posts": 4
+      },
+      "combined": {
+        "correct": 15,
+        "total": 21,
+        "posts_all_scored_fields_correct": 5,
+        "posts": 8
+      }
+    }
+  },
+  "audit": {
+    "frozen_hashes_match": true,
+    "source_question_parity": true,
+    "protected_files_unchanged": true,
+    "prior_jev_experiment_unchanged": true,
+    "physical_calls": 16,
+    "retries": 0,
+    "estimated_cost_usd": "0.001111379999999999975",
+    "model_cost_cap_usd": ".05"
+  }
+}

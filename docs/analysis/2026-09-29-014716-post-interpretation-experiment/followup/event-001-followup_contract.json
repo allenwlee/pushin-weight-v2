@@ -1,0 +1,11 @@
+{
+  "kind": "followup_contract",
+  "value": {
+    "experiment": "post-interpretation-v1-quote-tolerant-diagnostic",
+    "max_calls": 6,
+    "prior_experiment_calls": 15,
+    "prior_result_sha256": "2909cc3d76a904e33d4cf46d4d9dbe5d5aef2ed2a30a43fc9445222996672b23",
+    "prior_task_calls": 28,
+    "scope": "Reuse the exact unedited model extractions for batches 1 and 2; bypass only verbatim quote admission. Original strict failures remain failures."
+  }
+}

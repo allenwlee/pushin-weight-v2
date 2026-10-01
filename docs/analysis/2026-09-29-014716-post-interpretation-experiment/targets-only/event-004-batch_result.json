@@ -1,0 +1,138 @@
+{
+  "kind": "batch_result",
+  "value": {
+    "batch": 1,
+    "case_ids": [
+      "token_machine_qwen_win",
+      "bai_glm_campaign",
+      "direct_deepseek_api_pitch",
+      "tracked_and_untracked_co_promotion",
+      "comparison_two_models"
+    ],
+    "promoter_classification": {
+      "reason": "author_relationship_out_of_scope",
+      "status": "not_evaluated"
+    },
+    "response": {
+      "value": {
+        "posts": {
+          "P01": {
+            "other_mentions": [
+              {
+                "evidence": "won $0.05 Qwen tokens on the Qwen spin",
+                "name": "Qwen",
+                "reason": "Qwen is referenced as what the prize is, but the post's action is the Token Machine spin.",
+                "role": "Mentioned as the prize won or the brand of the token spin, not the primary promotion."
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Token Machine Day 1 — won $0.05 Qwen tokens on the Qwen spin. Free AI tokens every day → https://t.co/ry1CvgQyNP",
+                "name": "Token Machine",
+                "offering": "daily free AI tokens via a spin game",
+                "reason": "The post promotes a daily token giveaway, inviting users to visit the link."
+              }
+            ],
+            "uncertainties": []
+          },
+          "P02": {
+            "other_mentions": [
+              {
+                "evidence": "@justinsuntron @BAI_AGI #TRONEcostar",
+                "name": "@justinsuntron",
+                "reason": "These may be related to the platform or campaign, but the post does not promote them as separate offerings.",
+                "role": "Mentioned in hashtags/mentions but not central to the promotion."
+              },
+              {
+                "evidence": "@justinsuntron @BAI_AGI #TRONEcostar",
+                "name": "@BAI_AGI",
+                "reason": "Ethically unclear if these are sponsor handles; the post does not promote them directly.",
+                "role": "Mentioned but not the target."
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "the https://t.co/RYAllLd3cM platform has just released a comprehensive guide that covers all aspects of their large model services",
+                "name": "https://t.co/RYAllLd3cM",
+                "offering": "platform's guide for large model services with GLM-5.3-Flash model",
+                "reason": "The post repeatedly urges readers to check out the guide on that platform."
+              },
+              {
+                "evidence": "the GLM-5.3-Flash model is a standout feature, and now there's an in-depth guide that explains how to get the most out of it.",
+                "name": "GLM-5.3-Flash",
+                "offering": "AI model as a standout feature of the platform's services",
+                "reason": "The model is highlighted as a key part of the promoted offering, though the main promotion is the guide."
+              }
+            ],
+            "uncertainties": [
+              "The identity of the platform behind the short URL is unknown; the promotion is attributed to that URL."
+            ]
+          },
+          "P03": {
+            "other_mentions": [],
+            "targets": [
+              {
+                "evidence": "DeepSeek V4 Flash is available now. Sign up for the official DeepSeek API today and get 20% off your first month.",
+                "name": "DeepSeek V4 Flash",
+                "offering": "API service with a 20% discount on first month",
+                "reason": "The post explicitly invites sign-ups and highlights a discount."
+              }
+            ],
+            "uncertainties": []
+          },
+          "P04": {
+            "other_mentions": [],
+            "targets": [
+              {
+                "evidence": "Try the official DeepSeek V4 API today,",
+                "name": "DeepSeek V4 API",
+                "offering": "official API service with sign-up",
+                "reason": "The post encourages trying this service."
+              },
+              {
+                "evidence": "join Token Machine's daily token spins at tokenmachine.example.",
+                "name": "Token Machine",
+                "offering": "daily token spins service",
+                "reason": "The post invites readers to join this service."
+              }
+            ],
+            "uncertainties": []
+          },
+          "P05": {
+            "other_mentions": [
+              {
+                "evidence": "DeepSeek extracted 12.",
+                "name": "DeepSeek",
+                "reason": "DeepSeek is presented as performing worse, so it is not endorsed.",
+                "role": "Mentioned as a comparative alternative, not promoted."
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Qwen is my pick for this job.",
+                "name": "Qwen",
+                "offering": "AI model for document processing (as preferred choice)",
+                "reason": "The post recommends Qwen based on performance in a comparison."
+              }
+            ],
+            "uncertainties": []
+          }
+        }
+      }
+    },
+    "validation_errors": {
+      "P01": [
+        "other_mentions:item_shape"
+      ],
+      "P02": [
+        "other_mentions:item_shape",
+        "other_mentions:item_shape"
+      ],
+      "P03": [],
+      "P04": [],
+      "P05": [
+        "other_mentions:item_shape"
+      ]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "at": "2026-09-30T06:10:02.283210+00:00",
+  "status": 200,
+  "elapsed_seconds": 0.19942299998365343,
+  "raw_body": "{\"model\":\"jev-1.13.0\",\"answers\":{\"china_national_stance\":{\"type\":\"choice\",\"choice\":\"anti\",\"confidence\":0.98,\"probabilities\":{\"anti\":0.99,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":0.01,\"pro\":0.0,\"unknown\":0.0}},\"framework\":{\"type\":\"noul\",\"noul\":0.95},\"nationalism\":{\"type\":\"noul\",\"noul\":0.94},\"reporting\":{\"type\":\"noul\",\"noul\":0.78},\"us_national_stance\":{\"type\":\"choice\",\"choice\":\"anti\",\"confidence\":0.8,\"probabilities\":{\"anti\":0.83,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.01,\"none\":0.15,\"pro\":0.01,\"unknown\":0.0}}},\"usage\":{\"input_tokens\":3304,\"output_tokens\":208}}"
+}

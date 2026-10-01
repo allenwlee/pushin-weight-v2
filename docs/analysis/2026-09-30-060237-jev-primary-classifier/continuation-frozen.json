@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-30T06:09:54.129972+00:00",
+  "already_submitted": [
+    "G01",
+    "G02",
+    "G03"
+  ],
+  "remaining_calls": 5,
+  "files": {
+    "continuation.md": "b15d5d8c2c5025751b5100783a0d15b030754e87a23e8df6824db74cae1c4f60",
+    "continue_run.py": "7545862687f0df69b19dbc5cd97e4691352f5a9301ccb5c1021bf49907d3dbe1"
+  },
+  "existing_receipts": {
+    "G03-response.json": "a101404758ac22ca371f408c2b4e98f2e9bda2c6d4fedf68bb7c02bb0df420fb",
+    "G02-response.json": "9ba4204d7540e2f5ac1e8124a56fb7915b469c86687ffe67cf464c9a37ce8440",
+    "G01-response.json": "8243b2f026271747ed3932d5e42989643f5f175f5f69649a66c60d659bfa3221"
+  },
+  "field_local_validation_checked": true
+}

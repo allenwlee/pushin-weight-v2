@@ -1,0 +1,2357 @@
+{
+  "scope": "Post-result error decomposition; no score/reference/payload repair or new model calls.",
+  "summary": {
+    "raw": {
+      "responses_with_invalid_fields": 23,
+      "defect_fields": {
+        "empty_answer_map": 190,
+        "invalid_json": 228,
+        "probability_format_or_label_consistency": 13,
+        "string_boolean_instead_of_json_boolean": 68
+      },
+      "total_errors": 939,
+      "invalid_errors": 499,
+      "valid_but_disagrees": 440,
+      "probability_exactly_one": 3118,
+      "probability_one_disagreements": 333
+    },
+    "translated": {
+      "responses_with_invalid_fields": 9,
+      "defect_fields": {
+        "empty_answer_map": 38,
+        "invalid_json": 76,
+        "probability_format_or_label_consistency": 5,
+        "string_boolean_instead_of_json_boolean": 68
+      },
+      "total_errors": 454,
+      "invalid_errors": 187,
+      "valid_but_disagrees": 267,
+      "probability_exactly_one": 1939,
+      "probability_one_disagreements": 186
+    }
+  },
+  "defects": [
+    {
+      "request_id": "ja_04_raw",
+      "arm": "raw",
+      "field": "type:hands_on_usage",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.0,
+          "true": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "ja_08_raw",
+      "arm": "raw",
+      "field": "type:releases_updates",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.0,
+          "true": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:releases_updates",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:hands_on_usage",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:results_analysis",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0.1,
+          "true": 0.9
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:questions_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:advertising_marketing",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:events",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:opportunities",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:job_listings",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:personnel_changes",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:opinions_reactions",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:research_explanations",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:business_finance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:news_reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "type:other",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:local_inference",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:cost_performance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:model_distillation",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:evals_benchmarks",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:openness_license",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:agents_tools",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "topic:api_developer_surface",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "product:bug",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "product:complaint",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "product:testimonial",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0.1,
+          "true": 0.9
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "product:ideas_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "product:investigate_claim",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "geo:reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 0.9,
+          "true": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "geo:framework",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 0.8,
+          "true": 0.2
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "geo:nationalism",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 0.9,
+          "true": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "promotion:general",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "promotion:spam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "promotion:scam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "promotion:crypto",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_translated",
+      "arm": "translated",
+      "field": "promotion:unauthorized",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ja_16_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3230 (char 3229)",
+      "content_end": "ti\":0.0,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":1.0,\"pro\":0.0,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "ja_18_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3231 (char 3230)",
+      "content_end": "ti\":0.0,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":1.0,\"pro\":0.0,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "zh_cn_02_raw",
+      "arm": "raw",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{}}"
+    },
+    {
+      "request_id": "zh_cn_04_translated",
+      "arm": "translated",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{}}"
+    },
+    {
+      "request_id": "zh_cn_08_raw",
+      "arm": "raw",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "zh_cn_08_raw",
+      "arm": "raw",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "zh_cn_09_raw",
+      "arm": "raw",
+      "field": "promotion:crypto",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.0,
+          "true": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "zh_cn_13_raw",
+      "arm": "raw",
+      "field": "type:opinions_reactions",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.5,
+          "true": 0.5
+        }
+      }
+    },
+    {
+      "request_id": "zh_cn_15_raw",
+      "arm": "raw",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{},\"errors\":{}}"
+    },
+    {
+      "request_id": "ko_10_raw",
+      "arm": "raw",
+      "field": "product:testimonial",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.0,
+          "true": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "ko_13_translated",
+      "arm": "translated",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.0,
+          "constructive_critical": 0.0,
+          "mild_pro": 0.0,
+          "mixed": 0.0,
+          "none": 0.0,
+          "pro": 0.0,
+          "unknown": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "ko_13_translated",
+      "arm": "translated",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.0,
+          "constructive_critical": 0.0,
+          "mild_pro": 0.0,
+          "mixed": 0.0,
+          "none": 0.0,
+          "pro": 0.0,
+          "unknown": 1.0
+        }
+      }
+    },
+    {
+      "request_id": "ko_14_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3234 (char 3233)",
+      "content_end": "ti\":0.1,\"constructive_critical\":0.1,\"mild_pro\":0.1,\"mixed\":0.1,\"none\":0.5,\"pro\":0.1,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:releases_updates",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:hands_on_usage",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:results_analysis",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:questions_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:advertising_marketing",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:events",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:opportunities",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:job_listings",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:personnel_changes",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:opinions_reactions",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:research_explanations",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:business_finance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:news_reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "type:other",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:local_inference",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:cost_performance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:model_distillation",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:evals_benchmarks",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:openness_license",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:agents_tools",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "topic:api_developer_surface",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "product:bug",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "product:complaint",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "product:testimonial",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "product:ideas_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "product:investigate_claim",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "geo:reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "geo:framework",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "geo:nationalism",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "promotion:general",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "promotion:spam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "promotion:scam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "promotion:crypto",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "ko_20_raw",
+      "arm": "raw",
+      "field": "promotion:unauthorized",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_04_raw",
+      "arm": "raw",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{}}"
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:releases_updates",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:hands_on_usage",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:results_analysis",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:questions_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:advertising_marketing",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:events",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:opportunities",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:job_listings",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:personnel_changes",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:opinions_reactions",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:research_explanations",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:business_finance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:news_reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "type:other",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:local_inference",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:cost_performance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:model_distillation",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:evals_benchmarks",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:openness_license",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:agents_tools",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "topic:api_developer_surface",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "product:bug",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "product:complaint",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "product:testimonial",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "product:ideas_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "product:investigate_claim",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "geo:reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "geo:framework",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "geo:nationalism",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "promotion:general",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "promotion:spam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "promotion:scam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "promotion:crypto",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_05_raw",
+      "arm": "raw",
+      "field": "promotion:unauthorized",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "en_06_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3236 (char 3235)",
+      "content_end": "ti\":0.1,\"constructive_critical\":0.1,\"mild_pro\":0.1,\"mixed\":0.1,\"none\":0.5,\"pro\":0.1,\"unknown\":0.1}}}"
+    },
+    {
+      "request_id": "es_10_raw",
+      "arm": "raw",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{}}"
+    },
+    {
+      "request_id": "es_12_raw",
+      "arm": "raw",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "pro",
+        "probabilities": {
+          "anti": 0.05,
+          "constructive_critical": 0.05,
+          "mild_pro": 0.4,
+          "mixed": 0.05,
+          "none": 0.05,
+          "pro": 0.35,
+          "unknown": 0.05
+        }
+      }
+    },
+    {
+      "request_id": "es_15_translated",
+      "arm": "translated",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "es_16_translated",
+      "arm": "translated",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.02,
+          "constructive_critical": 0.02,
+          "mild_pro": 0.02,
+          "mixed": 0.02,
+          "none": 0.9,
+          "pro": 0.02,
+          "unknown": 0.02
+        }
+      }
+    },
+    {
+      "request_id": "es_17_translated",
+      "arm": "translated",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3280 (char 3279)",
+      "content_end": "es\":{\"anti\":0,\"constructive_critical\":0,\"mild_pro\":0,\"mixed\":0,\"none\":0.85,\"pro\":0,\"unknown\":0.15}}}"
+    },
+    {
+      "request_id": "es_19_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3230 (char 3229)",
+      "content_end": "ti\":0.0,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":1.0,\"pro\":0.0,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "es_19_translated",
+      "arm": "translated",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3230 (char 3229)",
+      "content_end": "ti\":0.0,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":1.0,\"pro\":0.0,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "tr_01_raw",
+      "arm": "raw",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "tr_01_raw",
+      "arm": "raw",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "tr_03_raw",
+      "arm": "raw",
+      "field": "product:bug",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": false,
+        "probabilities": {
+          "false": 0.5,
+          "true": 0.5
+        }
+      }
+    },
+    {
+      "request_id": "tr_04_raw",
+      "arm": "raw",
+      "reason": "invalid_json",
+      "fields_affected": 38,
+      "parser_error": "Expecting ',' delimiter: line 1 column 3229 (char 3228)",
+      "content_end": "ti\":0.0,\"constructive_critical\":0.0,\"mild_pro\":0.0,\"mixed\":0.0,\"none\":1.0,\"pro\":0.0,\"unknown\":0.0}}}"
+    },
+    {
+      "request_id": "tr_06_raw",
+      "arm": "raw",
+      "reason": "empty_answer_map",
+      "fields_affected": 38,
+      "content": "{\"answers\":{}}"
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:releases_updates",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:hands_on_usage",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:results_analysis",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:questions_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:advertising_marketing",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:events",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:opportunities",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:job_listings",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:personnel_changes",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:opinions_reactions",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:research_explanations",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:business_finance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:news_reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "type:other",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:local_inference",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "true",
+        "probabilities": {
+          "false": 0,
+          "true": 1
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:cost_performance",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:model_distillation",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:evals_benchmarks",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:openness_license",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:agents_tools",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "topic:api_developer_surface",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "product:bug",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "product:complaint",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "product:testimonial",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "product:ideas_requests",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "product:investigate_claim",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "geo:reporting",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "geo:framework",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "geo:nationalism",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "promotion:general",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "promotion:spam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "promotion:scam",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "promotion:crypto",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_15_translated",
+      "arm": "translated",
+      "field": "promotion:unauthorized",
+      "reason": "string_boolean_instead_of_json_boolean",
+      "fields_affected": 1,
+      "answer": {
+        "label": "false",
+        "probabilities": {
+          "false": 1,
+          "true": 0
+        }
+      }
+    },
+    {
+      "request_id": "tr_20_translated",
+      "arm": "translated",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "unknown",
+        "probabilities": {
+          "anti": 0.05,
+          "constructive_critical": 0.05,
+          "mild_pro": 0.1,
+          "mixed": 0.05,
+          "none": 0.35,
+          "pro": 0.1,
+          "unknown": 0.3
+        }
+      }
+    },
+    {
+      "request_id": "tr_20_raw",
+      "arm": "raw",
+      "field": "china_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    },
+    {
+      "request_id": "tr_20_raw",
+      "arm": "raw",
+      "field": "us_national_stance",
+      "reason": "probability_format_or_label_consistency",
+      "fields_affected": 1,
+      "answer": {
+        "label": "none",
+        "probabilities": {
+          "anti": 0.1,
+          "constructive_critical": 0.1,
+          "mild_pro": 0.1,
+          "mixed": 0.1,
+          "none": 0.5,
+          "pro": 0.1,
+          "unknown": 0.1
+        }
+      }
+    }
+  ]
+}

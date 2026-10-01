@@ -1,0 +1,7 @@
+{
+  "question": "Besides B.AI, which recurring company/platform promotions appear in our stored posts, and what existing storage could support cheap daily mention discovery?",
+  "authority": "Read-only investigation. No classifier/software tests, provider/model calls, product code or schema changes, scheduling, blocklist changes, deployment, or database writes.",
+  "budget": "At most eight read-only SQL requests, including errors/retries, with statement_timeout <=45s and one query running at a time. Discovery rankers followed by bounded candidate verification; no exhaustive spam-label claim.",
+  "method": "Count distinct post IDs and authors per explicit body mention, independent of stored classes. Inspect examples before naming campaign candidates. Preserve B.AI overlap, tracked/untracked distinctions, and frequency-not-spam caveats.",
+  "coverage": "Current persisted database only; shortened URL destinations and implicit/no-alias company mentions may be missing. Discovery top lists are capped; not an exhaustive company census."
+}

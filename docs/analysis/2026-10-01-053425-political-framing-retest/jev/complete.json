@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-01T05:51:03.257314+00:00",
+  "calls": 117,
+  "estimated_input_cost_usd": "0.076853868",
+  "sum_of_sequential_reservations_usd": "0.612354120",
+  "input_tokens": 1829854,
+  "output_tokens": 107778,
+  "median_seconds": 0.31634887505788356,
+  "elapsed_seconds": 41.30459637497552,
+  "retry_calls": 0
+}

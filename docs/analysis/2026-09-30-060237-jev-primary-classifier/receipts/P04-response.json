@@ -1,0 +1,6 @@
+{
+  "at": "2026-09-30T06:10:03.292733+00:00",
+  "status": 200,
+  "elapsed_seconds": 0.20324354199692607,
+  "raw_body": "{\"model\":\"jev-1.13.0\",\"answers\":{\"advertising_marketing\":{\"type\":\"noul\",\"noul\":0.76}},\"usage\":{\"input_tokens\":564,\"output_tokens\":24}}"
+}

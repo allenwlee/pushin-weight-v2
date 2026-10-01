@@ -1,0 +1,1 @@
+{"error":"Error: exit status 1: ERROR:  column reference \"created_at\" is ambiguous\nLINE 125: ...number() OVER(PARTITION BY role_id,is_ad ORDER BY created_at...\n                                                               ^\n","query_fix":"Qualified sample ordering as k.created_at; both joined tables have created_at. Read-only transaction; no writes."}

@@ -1,0 +1,413 @@
+{
+  "summary": {
+    "geopolitics": {
+      "correct": 18,
+      "total": 18,
+      "posts_all_scored_fields_correct": 4,
+      "posts": 4
+    },
+    "promotion": {
+      "correct": 3,
+      "total": 4,
+      "posts_all_scored_fields_correct": 3,
+      "posts": 4
+    },
+    "combined": {
+      "correct": 21,
+      "total": 22,
+      "posts_all_scored_fields_correct": 7,
+      "posts": 8
+    }
+  },
+  "rows": [
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.06,
+      "selected_probability": 0.94,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.07,
+      "selected_probability": 0.9299999999999999,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.04,
+      "selected_probability": 0.96,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "selected_probability": 0.99,
+      "probabilities": {
+        "none": 0.99,
+        "mixed": 0.0,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "anti": 0.0,
+        "pro": 0.01,
+        "unknown": 0.0
+      },
+      "provider_confidence": 0.98,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "selected_probability": 1.0,
+      "probabilities": {
+        "none": 1.0,
+        "mild_pro": 0.0,
+        "constructive_critical": 0.0,
+        "mixed": 0.0,
+        "anti": 0.0,
+        "pro": 0.0,
+        "unknown": 0.0
+      },
+      "provider_confidence": 1.0,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.27,
+      "selected_probability": 0.73,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.19,
+      "selected_probability": 0.81,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.1,
+      "selected_probability": 0.9,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "selected_probability": 1.0,
+      "probabilities": {
+        "pro": 0.0,
+        "unknown": 0.0,
+        "mixed": 0.0,
+        "none": 1.0,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "anti": 0.0
+      },
+      "provider_confidence": 0.99,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": "none",
+      "assigned": "none",
+      "selected_probability": 1.0,
+      "probabilities": {
+        "pro": 0.0,
+        "unknown": 0.0,
+        "none": 1.0,
+        "mixed": 0.0,
+        "anti": 0.0,
+        "mild_pro": 0.0,
+        "constructive_critical": 0.0
+      },
+      "provider_confidence": 0.99,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.76,
+      "selected_probability": 0.76,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.92,
+      "selected_probability": 0.92,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.86,
+      "selected_probability": 0.86,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "pro",
+      "assigned": "pro",
+      "selected_probability": 0.96,
+      "probabilities": {
+        "mild_pro": 0.02,
+        "unknown": 0.0,
+        "constructive_critical": 0.0,
+        "none": 0.02,
+        "mixed": 0.0,
+        "anti": 0.0,
+        "pro": 0.96
+      },
+      "provider_confidence": 0.95,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.78,
+      "selected_probability": 0.78,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.95,
+      "selected_probability": 0.95,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.94,
+      "selected_probability": 0.94,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "anti",
+      "assigned": "anti",
+      "selected_probability": 0.99,
+      "probabilities": {
+        "anti": 0.99,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "mixed": 0.0,
+        "none": 0.01,
+        "pro": 0.0,
+        "unknown": 0.0
+      },
+      "provider_confidence": 0.98,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "P01",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": false,
+      "p_yes": 0.25,
+      "selected_probability": 0.75,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "P02",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": false,
+      "assigned": true,
+      "p_yes": 0.51,
+      "selected_probability": 0.51,
+      "valid": true,
+      "correct": false
+    },
+    {
+      "case_id": "P03",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.94,
+      "selected_probability": 0.94,
+      "valid": true,
+      "correct": true
+    },
+    {
+      "case_id": "P04",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": true,
+      "assigned": true,
+      "p_yes": 0.76,
+      "selected_probability": 0.76,
+      "valid": true,
+      "correct": true
+    }
+  ],
+  "unscored": [
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": null,
+      "valid": false,
+      "validation_error": "answer_violates_frozen_response_contract",
+      "correct": null
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": null,
+      "assigned": "anti",
+      "selected_probability": 0.83,
+      "probabilities": {
+        "anti": 0.83,
+        "constructive_critical": 0.0,
+        "mild_pro": 0.0,
+        "mixed": 0.01,
+        "none": 0.15,
+        "pro": 0.01,
+        "unknown": 0.0
+      },
+      "provider_confidence": 0.8,
+      "valid": true,
+      "correct": null
+    }
+  ],
+  "invalid_answers": [
+    {
+      "case_id": "G03",
+      "field": "us_national_stance",
+      "scored": false,
+      "raw_answer": {
+        "type": "choice",
+        "choice": "anti",
+        "confidence": 0.2,
+        "probabilities": {
+          "mild_pro": 0.06,
+          "unknown": 0.0,
+          "constructive_critical": 0.07,
+          "none": 0.23,
+          "mixed": 0.01,
+          "anti": 0.31,
+          "pro": 0.32
+        }
+      }
+    }
+  ],
+  "inconsistencies": [],
+  "sensitivity_excluding_G03_stance_intensity": {
+    "geopolitics": {
+      "correct": 17,
+      "total": 17,
+      "posts_all_scored_fields_correct": 4,
+      "posts": 4
+    },
+    "promotion": {
+      "correct": 3,
+      "total": 4,
+      "posts_all_scored_fields_correct": 3,
+      "posts": 4
+    },
+    "combined": {
+      "correct": 20,
+      "total": 21,
+      "posts_all_scored_fields_correct": 7,
+      "posts": 8
+    }
+  },
+  "usage": {
+    "calls": 8,
+    "input_tokens": 11567,
+    "output_tokens": 928,
+    "estimated_usd": "0.000485814",
+    "median_seconds": 0.2595145415398292,
+    "min_seconds": 0.19942299998365343,
+    "max_seconds": 0.287595291971229
+  },
+  "audit": {
+    "frozen_hashes_match": true,
+    "protected_files_unchanged": true,
+    "prior_experiment_unchanged": true,
+    "existing_receipts_unchanged": true,
+    "calls_and_cost_within_limits": true,
+    "retries": 0,
+    "valid_scored_answers": 22,
+    "invalid_unscored_answers": 1
+  }
+}

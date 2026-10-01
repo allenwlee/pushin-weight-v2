@@ -1,0 +1,167 @@
+{
+  "status": "partial_comparison_complete_no_more_calls",
+  "audited_at": "2026-09-30T02:27:09.844490+00:00",
+  "frozen_inputs_runner_and_application_sources_unchanged": true,
+  "paired_geo_requests_differ_only_by_basis": true,
+  "raw_decision_normalizations": [
+    {
+      "request_id": "baseline_brand_interpretation",
+      "slot": "D03",
+      "raw": {
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "framework"
+        ],
+        "china_national_stance": "mild_pro",
+        "us_national_stance": "none"
+      },
+      "accepted": {
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "mild_pro",
+        "us_national_stance": "none"
+      }
+    }
+  ],
+  "planned_field_summary_including_unavailable": {
+    "A_label_only": {
+      "promotion": {
+        "fields": 4,
+        "upstream_correct": 1,
+        "correct_reviews": 0,
+        "wrong_approved": 0,
+        "wrong_rejected": 0,
+        "correct_rejected": 0,
+        "correct_held": 1,
+        "uncertain": 4,
+        "missing": 0,
+        "planned_fields": 4,
+        "unavailable_before_review": 0
+      },
+      "geopolitics": {
+        "fields": 18,
+        "upstream_correct": 16,
+        "correct_reviews": 13,
+        "wrong_approved": 0,
+        "wrong_rejected": 0,
+        "correct_rejected": 0,
+        "correct_held": 3,
+        "uncertain": 5,
+        "missing": 0,
+        "planned_fields": 18,
+        "unavailable_before_review": 0
+      }
+    },
+    "B_basis_visible": {
+      "promotion": {
+        "fields": 0,
+        "upstream_correct": 0,
+        "correct_reviews": 0,
+        "wrong_approved": 0,
+        "wrong_rejected": 0,
+        "correct_rejected": 0,
+        "correct_held": 0,
+        "uncertain": 0,
+        "missing": 0,
+        "planned_fields": 4,
+        "unavailable_before_review": 4
+      },
+      "geopolitics": {
+        "fields": 18,
+        "upstream_correct": 14,
+        "correct_reviews": 11,
+        "wrong_approved": 0,
+        "wrong_rejected": 2,
+        "correct_rejected": 0,
+        "correct_held": 5,
+        "uncertain": 7,
+        "missing": 0,
+        "planned_fields": 18,
+        "unavailable_before_review": 0
+      }
+    },
+    "C_basis_hidden": {
+      "promotion": {
+        "fields": 0,
+        "upstream_correct": 0,
+        "correct_reviews": 0,
+        "wrong_approved": 0,
+        "wrong_rejected": 0,
+        "correct_rejected": 0,
+        "correct_held": 0,
+        "uncertain": 0,
+        "missing": 0,
+        "planned_fields": 4,
+        "unavailable_before_review": 4
+      },
+      "geopolitics": {
+        "fields": 18,
+        "upstream_correct": 14,
+        "correct_reviews": 11,
+        "wrong_approved": 0,
+        "wrong_rejected": 3,
+        "correct_rejected": 0,
+        "correct_held": 6,
+        "uncertain": 7,
+        "missing": 0,
+        "planned_fields": 18,
+        "unavailable_before_review": 0
+      }
+    }
+  },
+  "real_posts": 7,
+  "synthetic_posts": 1,
+  "physical_model_calls": 20,
+  "jev_questions_answered": 64,
+  "scored_field_reviews": 58,
+  "deepseek_by_arm": {
+    "baseline": {
+      "calls": 2,
+      "input_tokens": 9419,
+      "output_tokens": 1002,
+      "provider_reported_estimated_cost_usd": "0.0007339800000000001",
+      "serial_elapsed_seconds": 13.08735130354762
+    },
+    "justified": {
+      "calls": 2,
+      "input_tokens": 9831,
+      "output_tokens": 3884,
+      "provider_reported_estimated_cost_usd": "0.0012659400000000001",
+      "serial_elapsed_seconds": 57.26193316467106
+    }
+  },
+  "jev_by_arm": {
+    "A_label_only": {
+      "calls": 8,
+      "input_tokens": 13087,
+      "output_tokens": 492
+    },
+    "B_basis_visible": {
+      "calls": 4,
+      "input_tokens": 10649,
+      "output_tokens": 396
+    },
+    "C_basis_hidden": {
+      "calls": 4,
+      "input_tokens": 9664,
+      "output_tokens": 396
+    }
+  },
+  "deepseek_provider_reported_estimated_usd": "0.0019999200000000002",
+  "jev_list_price_estimate_usd": "0.001402800",
+  "combined_estimated_model_cost_usd": "0.0034027200000000002",
+  "jev_latency_seconds": {
+    "min": 0.19917787506710738,
+    "median": 0.254621687985491,
+    "max": 0.31555720907635987
+  }
+}

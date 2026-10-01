@@ -1,0 +1,28 @@
+{
+  "at": "2026-09-30T06:06:50.148146+00:00",
+  "model": "jev-1.13.0",
+  "max_calls": 8,
+  "max_usd": "0.02",
+  "input_price_per_million_usd": "0.042",
+  "files": {
+    "contract.md": "569da44d830b591199a06276508e57bef7ac7d2ffb5afc06beba88837a5abab3",
+    "run.py": "d8e081a166e9ce330ae649c9b487252b9b8472485ac1855ab39802cf586c45e8",
+    "cohort.json": "b27bfa30adafb4daf96fe7ed361bcf5248f895af384e97ba86616771e8693baa",
+    "requests.json": "0a2655d71098759d9cdde9e2bcbdf7136cb694824a9f72d0e184abd39d636b17",
+    "comparators.json": "e8c14e9bef75a9d622daae87db1698540405ad5ef048dfae3f0880194a8c4700"
+  },
+  "protected_files": {
+    "x_monitor/attribution.py": "9cb543131f32ac2773f43a5203355a0fee776da17352cd2b038828a5f395d48d",
+    "x_monitor/classifier_0731_prompts.py": "a922e2bed8b18e3b16b73007c4798e4b9d79529b9398e485229a2140bf149e33",
+    "tests/test_u18_runtime_0731.py": "e42fccce9fb4d37ee122452cc4ab9ae3517215a71a22bcbcf46c3058878d6708",
+    "tests/test_u18a_v4_classification_persistence.py": "c79fe4b572acbe3d9ce2bad0c5b202cf5bb321d7cb06aeebd6921fe17eaea15d"
+  },
+  "prior_files": {
+    "cohort.json": "cf40f61fd88f4f73e0cf8dc48c60749f5bf4e4ef34c1cf56c8d2b760e23d3340",
+    "scores.json": "e48a00b78f515d4989bc03526ad439358ea46c0d87883154f90164295f3fccbd",
+    "jev-requests.json": "837179d3aa0919771a163ce9546cceae74f31646d1799ea2f2ae5af0510230ce",
+    "run.py": "e0cb02f24c06646ed1586545eff64a9a86a75628089f73921f87b709428a7603"
+  },
+  "selfcheck_passed": true,
+  "provider_calls": 0
+}

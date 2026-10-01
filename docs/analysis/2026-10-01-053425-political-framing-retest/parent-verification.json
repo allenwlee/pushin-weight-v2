@@ -1,0 +1,53 @@
+{
+  "date_utc": "2026-10-01",
+  "shared_manifest_sha256": "4379fd74c33a30894f53b2d1fff6e54b0d3721bdebccb52dca320cebf609fe44",
+  "common_baseline_and_protected_hashes_verified_after_both_runs": true,
+  "preexisting_tracked_dirty_files_preserved": [
+    "tests/test_u18_runtime_0731.py",
+    "tests/test_u18a_v4_classification_persistence.py",
+    "x_monitor/attribution.py",
+    "x_monitor/classifier_0731_prompts.py"
+  ],
+  "comparison_offline_checks": [
+    "Historical raw geo confusion counts reproduced for both providers",
+    "Synthetic wrong-to-correct, correct-to-invalid and invalid-to-correct transitions checked",
+    "Historical sensitivity exclusions retain exactly 4407 of 4446 fields",
+    "Read-only subagent review found no scoring defects"
+  ],
+  "independent_receipt_checks": {
+    "jev": {
+      "calls": 117,
+      "direct_native_geo_probability_checks": 351,
+      "correct_geo_fields": 295,
+      "geo_true_positives": 20,
+      "geo_false_positives": 49,
+      "estimated_input_usd": "0.076853868"
+    },
+    "0731": {
+      "calls": 117,
+      "fields_redecoded_with_historical_decoder": 4446,
+      "all_assignments_and_validity_match": true,
+      "cost_reconciled_to_all_raw_usage_and_complete_event": true,
+      "provider_estimated_usd": "0.0716500800000000009"
+    }
+  },
+  "post_run_render_read_only_verification": {
+    "service": {
+      "id": "crn-da7vrdqd0e5s739uvcs0",
+      "name": "pushinweight-staging-harvest",
+      "type": "cron_job",
+      "suspended": "suspended",
+      "updatedAt": "2026-09-28T23:55:14.480255Z"
+    },
+    "job": {
+      "id": "job-dauv8rc1nsns73fsl7mg",
+      "status": "succeeded",
+      "createdAt": "2026-10-01T05:49:33.60262Z",
+      "finishedAt": "2026-10-01T06:11:47Z"
+    }
+  },
+  "model_retries": 0,
+  "model_estimates_are_not_invoices": true,
+  "render_compute_excluded_from_model_estimates": true,
+  "production_application_database_or_scheduler_changes": false
+}

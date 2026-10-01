@@ -1,0 +1,26 @@
+{
+  "request_id": "bai-followers",
+  "provider": "existing-production-PostgreSQL-via-Render-CLI",
+  "issued_at_utc": "2026-09-29 06:35:57 UTC",
+  "observed_at_utc": "2026-09-29T06:35:59.109217+00:00",
+  "arguments": {
+    "service": "dpg-d9koekqjobas73fvjqng-a",
+    "sql_file": "bai-followers.sql",
+    "output": "json",
+    "psql_args": [
+      "-X",
+      "-A",
+      "-t",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ]
+  },
+  "status": "completed",
+  "raw_response_path": "bai-followers-render-result.json",
+  "raw_count": 1,
+  "raw_count_unit": "aggregate SQL JSON result object",
+  "account_rows": 395,
+  "post_count": 7303,
+  "continuation": null,
+  "stop_reason": "query_complete"
+}

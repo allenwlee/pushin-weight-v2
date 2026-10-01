@@ -1,0 +1,9 @@
+{
+  "issued_at": "2026-09-30T07:08:00.904563+00:00",
+  "database_service": "dpg-d9koekqjobas73fvjqng-a",
+  "query_file": "cohort-candidates.sql",
+  "query_sha256": "68fc1c25aa5c4153c537fab0a719a3155f579c8286e09ba0c95d4c0ef680668e",
+  "provider": "Production PostgreSQL via Render CLI on authoritative fuchitalee",
+  "read_only": true,
+  "timeout_seconds": 45
+}

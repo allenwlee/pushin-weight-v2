@@ -1,0 +1,9 @@
+{
+  "kind": "started_0",
+  "value": {
+    "at": "2026-09-30T02:17:30.650175+00:00",
+    "id": "baseline_content",
+    "request_sha256": "a79ecbd72bb8442b2a210eb77ebcdb34c00d84fb905c6fc2ceb6e9ff2c8c865b",
+    "reservation_usd": "0.032742"
+  }
+}

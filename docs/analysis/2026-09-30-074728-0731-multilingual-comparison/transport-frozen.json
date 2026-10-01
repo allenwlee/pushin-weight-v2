@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-30T07:56:24.558261+00:00",
+  "codec": "lzma",
+  "transport_sha256": "dbbfea0c5fd9bf65e6f096c40bfc41ae2cc04f115beb353befd7e707e330970a",
+  "frozen_manifest_sha256": "4e2b9535be144de508194605361197b871c701250fec4fd74034882531ee53d0",
+  "packet_sha256": "ae16d21f5fbb2140b983a399734ee762d16e947141bdff2b43b97b28e31b88c3",
+  "round_trip_verified": true,
+  "start_command_bytes": 128701,
+  "provider_calls": 0,
+  "note": "Lossless transport compression only; frozen model inputs unchanged."
+}

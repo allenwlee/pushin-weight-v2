@@ -1,0 +1,1831 @@
+{
+  "frozen_selection_at": "2026-09-30T07:11:01.152787+00:00",
+  "eligible_counts": [
+    {
+      "posts": 196856,
+      "language": "en"
+    },
+    {
+      "posts": 4028,
+      "language": "es"
+    },
+    {
+      "posts": 21814,
+      "language": "ja"
+    },
+    {
+      "posts": 2083,
+      "language": "ko"
+    },
+    {
+      "posts": 2153,
+      "language": "tr"
+    },
+    {
+      "posts": 14608,
+      "language": "zh-cn"
+    }
+  ],
+  "candidate_counts": {
+    "en": 38,
+    "es": 33,
+    "ja": 31,
+    "ko": 32,
+    "tr": 31,
+    "zh-cn": 35
+  },
+  "selected_counts": {
+    "ja": 20,
+    "zh-cn": 20,
+    "ko": 20,
+    "en": 20,
+    "es": 20,
+    "tr": 20
+  },
+  "sampling_hints": [
+    {
+      "case_id": "ja_01",
+      "post_id": "2098963821369217086",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_02",
+      "post_id": "2091712099395461388",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_03",
+      "post_id": "2102595739474174316",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_04",
+      "post_id": "2085522812295643197",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_05",
+      "post_id": "2089442141751902272",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_06",
+      "post_id": "2089299406583726236",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_07",
+      "post_id": "2090270568532828380",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_08",
+      "post_id": "2090439924332032347",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_09",
+      "post_id": "2087298764583415883",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_10",
+      "post_id": "2087557406473744443",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_11",
+      "post_id": "2097846114489962944",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_12",
+      "post_id": "2086784629701521832",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ja_13",
+      "post_id": "2103244089747554662",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:bug",
+          "brand_id": "llama"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "llama"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "llama"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_14",
+      "post_id": "2102422720931844486",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_15",
+      "post_id": "2104928895627833438",
+      "sampling_labels_not_gold": [
+        {
+          "label": "type:job_listings",
+          "brand_id": "sakana_ai"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_16",
+      "post_id": "2105142699661652363",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:framework",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "geo:nationalism",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "mistral"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_17",
+      "post_id": "2104489492614942827",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "glm"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "glm"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_18",
+      "post_id": "2103649257026904529",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:complaint",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:events",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "minimax"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_19",
+      "post_id": "2102626239794356686",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "ja_20",
+      "post_id": "2102656351302541457",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:ideas_requests",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:questions_requests",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_01",
+      "post_id": "2101132893225656517",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_02",
+      "post_id": "2098964592680731131",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_03",
+      "post_id": "2095452004709732479",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_04",
+      "post_id": "2101120516278849859",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_05",
+      "post_id": "2096131230765105161",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_06",
+      "post_id": "2085587083029356715",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_07",
+      "post_id": "2094993005170286811",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_08",
+      "post_id": "2086763159180959889",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_09",
+      "post_id": "2094358567365300351",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_10",
+      "post_id": "2104885840367538431",
+      "sampling_labels_not_gold": [
+        {
+          "label": "type:releases_updates",
+          "brand_id": "minimax"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_11",
+      "post_id": "2100457097158885603",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_12",
+      "post_id": "2083807062325416243",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "zh_cn_13",
+      "post_id": "2104479508019745100",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:bug",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "product:complaint",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "mimo"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_14",
+      "post_id": "2103775174508061032",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:other",
+          "brand_id": "minimax"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_15",
+      "post_id": "2101868706532094095",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_16",
+      "post_id": "2103002792021594377",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_17",
+      "post_id": "2102965016924418336",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:scam",
+          "brand_id": null
+        },
+        {
+          "label": "type:other",
+          "brand_id": "ernie"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_18",
+      "post_id": "2102237798824902873",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:nationalism",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_19",
+      "post_id": "2105141166572454356",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:personnel_changes",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:personnel_changes",
+          "brand_id": "mimo"
+        }
+      ]
+    },
+    {
+      "case_id": "zh_cn_20",
+      "post_id": "2104881693706653733",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:job_listings",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_01",
+      "post_id": "2080523349114106360",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_02",
+      "post_id": "2104541211021525328",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:complaint",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_03",
+      "post_id": "2097823171068264906",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_04",
+      "post_id": "2101277345336463807",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_05",
+      "post_id": "2085941962327437459",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_06",
+      "post_id": "2084102241221517450",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_07",
+      "post_id": "2078455321065054291",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_08",
+      "post_id": "2084596474801782964",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_09",
+      "post_id": "2092525849564332104",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_10",
+      "post_id": "2099593854886563913",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_11",
+      "post_id": "2097644061775847486",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_12",
+      "post_id": "2083196878079041932",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "ko_13",
+      "post_id": "2104484668662055096",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "upstage"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "upstage"
+        },
+        {
+          "label": "type:events",
+          "brand_id": "upstage"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_14",
+      "post_id": "2102365680897335503",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:framework",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "geo:framework",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "geo:nationalism",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "geo:nationalism",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_15",
+      "post_id": "2101945590838178015",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:bug",
+          "brand_id": "llama"
+        },
+        {
+          "label": "product:bug",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "llama"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:questions_requests",
+          "brand_id": "llama"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_16",
+      "post_id": "2105068856465109486",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_17",
+      "post_id": "2101867764013240794",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:crypto",
+          "brand_id": null
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_18",
+      "post_id": "2104586940729204961",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_19",
+      "post_id": "2102253901692993948",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "ko_20",
+      "post_id": "2101910305882488899",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:complaint",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "product:testimonial",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "en_01",
+      "post_id": "2092479075990528429",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_02",
+      "post_id": "2086733218263249195",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_03",
+      "post_id": "2079499139642183942",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_04",
+      "post_id": "2091872180782923995",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_05",
+      "post_id": "2093858708514308215",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_06",
+      "post_id": "2099241739970072946",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_07",
+      "post_id": "2098073805113450594",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_08",
+      "post_id": "2094865755724509408",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_09",
+      "post_id": "2096553038433362425",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_10",
+      "post_id": "2100709210505826658",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_11",
+      "post_id": "2093650413983764672",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_12",
+      "post_id": "2097767041440567508",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "en_13",
+      "post_id": "2102211363586420906",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:evals_benchmarks",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "mimo"
+        }
+      ]
+    },
+    {
+      "case_id": "en_14",
+      "post_id": "2104269870560850346",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "en_15",
+      "post_id": "2105061978448572822",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:spam",
+          "brand_id": null
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "glm"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "hunyuan"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "mimo"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "en_16",
+      "post_id": "2103047860602495198",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:unauthorized",
+          "brand_id": null
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:events",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:events",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "en_17",
+      "post_id": "2104250069600116756",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "minimax"
+        }
+      ]
+    },
+    {
+      "case_id": "en_18",
+      "post_id": "2102393479766679876",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:bug",
+          "brand_id": "glm"
+        },
+        {
+          "label": "product:complaint",
+          "brand_id": "glm"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "glm"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "glm"
+        },
+        {
+          "label": "type:questions_requests",
+          "brand_id": "glm"
+        }
+      ]
+    },
+    {
+      "case_id": "en_19",
+      "post_id": "2102205025712058858",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:ideas_requests",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "product:testimonial",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "en_20",
+      "post_id": "2101906465418084591",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:crypto",
+          "brand_id": null
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "es_01",
+      "post_id": "2092566125871497468",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_02",
+      "post_id": "2076490444335448448",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_03",
+      "post_id": "2084965725501116494",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_04",
+      "post_id": "2085410129696948485",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_05",
+      "post_id": "2076497260678987988",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_06",
+      "post_id": "2085654783319236980",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_07",
+      "post_id": "2089872473198129488",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_08",
+      "post_id": "2091294372935438846",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_09",
+      "post_id": "2083235322167456092",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_10",
+      "post_id": "2091691673092768218",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_11",
+      "post_id": "2091997465830420516",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_12",
+      "post_id": "2086987211434594668",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "es_13",
+      "post_id": "2104174772862984256",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:framework",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:nationalism",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "es_14",
+      "post_id": "2104602365060071597",
+      "sampling_labels_not_gold": [
+        {
+          "label": "type:business_finance",
+          "brand_id": "llama"
+        },
+        {
+          "label": "type:personnel_changes",
+          "brand_id": "llama"
+        }
+      ]
+    },
+    {
+      "case_id": "es_15",
+      "post_id": "2105054738710417694",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "es_16",
+      "post_id": "2103525455748100373",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "minimax"
+        },
+        {
+          "label": "type:questions_requests",
+          "brand_id": "minimax"
+        }
+      ]
+    },
+    {
+      "case_id": "es_17",
+      "post_id": "2104125344055726117",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:api_developer_surface",
+          "brand_id": "llama"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "llama"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "llama"
+        },
+        {
+          "label": "type:opportunities",
+          "brand_id": "llama"
+        },
+        {
+          "label": "type:releases_updates",
+          "brand_id": "llama"
+        }
+      ]
+    },
+    {
+      "case_id": "es_18",
+      "post_id": "2104106091751608487",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:bug",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "es_19",
+      "post_id": "2104555313730932820",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:ideas_requests",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "es_20",
+      "post_id": "2105118835195961663",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:complaint",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:other",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_01",
+      "post_id": "2085391573672427937",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_02",
+      "post_id": "2090599728157249590",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_03",
+      "post_id": "2090827157593305387",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_04",
+      "post_id": "2092341276557394305",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_05",
+      "post_id": "2090915586184519870",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_06",
+      "post_id": "2068611963848905033",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_07",
+      "post_id": "2068751929107198091",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_08",
+      "post_id": "2090832112366538784",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_09",
+      "post_id": "2085657949033083095",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_10",
+      "post_id": "2089729529178673380",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_11",
+      "post_id": "2083147172489691204",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_12",
+      "post_id": "2068989747888837064",
+      "sampling_labels_not_gold": []
+    },
+    {
+      "case_id": "tr_13",
+      "post_id": "2105143897093538212",
+      "sampling_labels_not_gold": [
+        {
+          "label": "promotion:crypto",
+          "brand_id": null
+        },
+        {
+          "label": "type:business_finance",
+          "brand_id": "yi"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "yi"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_14",
+      "post_id": "2103566802970460365",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "promotion:general",
+          "brand_id": null
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:advertising_marketing",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_15",
+      "post_id": "2104141893483266390",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:testimonial",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "topic:local_inference",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:hands_on_usage",
+          "brand_id": "qwen"
+        },
+        {
+          "label": "type:results_analysis",
+          "brand_id": "qwen"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_16",
+      "post_id": "2105010970028343397",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:investigate_claim",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "topic:model_distillation",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "deepseek"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_17",
+      "post_id": "2103991937531511073",
+      "sampling_labels_not_gold": [
+        {
+          "label": "product:ideas_requests",
+          "brand_id": "hunyuan"
+        },
+        {
+          "label": "topic:cost_performance",
+          "brand_id": "hunyuan"
+        },
+        {
+          "label": "type:questions_requests",
+          "brand_id": "hunyuan"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_18",
+      "post_id": "2103784072757510238",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:framework",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "geo:reporting",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "topic:openness_license",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "mistral"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "mistral"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_19",
+      "post_id": "2105017603802407095",
+      "sampling_labels_not_gold": [
+        {
+          "label": "geo:nationalism",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "geo:nationalism",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "product:complaint",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "product:complaint",
+          "brand_id": "moonshot_kimi"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:opinions_reactions",
+          "brand_id": "moonshot_kimi"
+        }
+      ]
+    },
+    {
+      "case_id": "tr_20",
+      "post_id": "2104182137700106446",
+      "sampling_labels_not_gold": [
+        {
+          "label": "topic:agents_tools",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:news_reporting",
+          "brand_id": "deepseek"
+        },
+        {
+          "label": "type:research_explanations",
+          "brand_id": "deepseek"
+        }
+      ]
+    }
+  ],
+  "exclusions": [],
+  "covered_sampling_labels_not_gold": [
+    "geo:framework",
+    "geo:nationalism",
+    "geo:reporting",
+    "product:bug",
+    "product:complaint",
+    "product:ideas_requests",
+    "product:investigate_claim",
+    "product:testimonial",
+    "promotion:crypto",
+    "promotion:general",
+    "promotion:scam",
+    "promotion:spam",
+    "promotion:unauthorized",
+    "topic:agents_tools",
+    "topic:api_developer_surface",
+    "topic:cost_performance",
+    "topic:evals_benchmarks",
+    "topic:local_inference",
+    "topic:model_distillation",
+    "topic:openness_license",
+    "type:advertising_marketing",
+    "type:business_finance",
+    "type:events",
+    "type:hands_on_usage",
+    "type:job_listings",
+    "type:news_reporting",
+    "type:opinions_reactions",
+    "type:opportunities",
+    "type:other",
+    "type:personnel_changes",
+    "type:questions_requests",
+    "type:releases_updates",
+    "type:research_explanations",
+    "type:results_analysis"
+  ]
+}

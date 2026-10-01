@@ -1,0 +1,116 @@
+"""Submit/collect the single authorized staging experiment without deployment."""
+import argparse
+import base64
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import zlib
+
+from scripts import post_interpretation_experiment as experiment
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "docs/analysis/2026-09-29-014716-post-interpretation-experiment"
+SERVICE = "crn-da7vrdqd0e5s739uvcs0"
+EVIDENCE = re.compile(r"PW_INTERP (\d+):(\d+)/(\d+):([A-Za-z0-9+/=]+)")
+
+
+def write(path, value):
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def submit(followup=False, targets_only=False):
+    OUT.mkdir(parents=True, exist_ok=True)
+    # This marker forbids a duplicate submission even if the CLI times out.
+    marker = OUT / "submission.started.json"
+    with marker.open("x") as stream:
+        json.dump({"service": SERVICE, "planned_calls": 3 if targets_only else 6 if followup else 21,
+                   "max_new_calls": 3 if targets_only else 6 if followup else 27}, stream)
+    source = Path(experiment.__file__).read_bytes()
+    payload = base64.b64encode(zlib.compress(source)).decode()
+    watched = ["x_monitor/classifier_0731_prompts.py", "x_monitor/attribution.py", "x_monitor/deepinfra.py", "tests/fixtures/u18a_label_owner_regressions_v1.json"]
+    if targets_only:
+        # This task does not invoke classifier prompts or their restored lineage.
+        watched = ["x_monitor/deepinfra.py", "x_monitor/reattribute.py", "x_monitor/config.py", "tests/fixtures/u18a_label_owner_regressions_v1.json"]
+    hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in watched}
+    frozen = experiment.target_manifest() if targets_only else experiment.manifest()
+    write(OUT / "manifest.local.json", {**frozen, "runtime_source_hashes": hashes})
+    followup_setup = ""
+    if followup:
+        previous = OUT.parent / "result.json"
+        previous_data = base64.b64encode(zlib.compress(previous.read_bytes())).decode()
+        followup_setup = f"q=d/'previous.json'; q.write_bytes(zlib.decompress(base64.b64decode({previous_data!r}))); "
+    if targets_only:
+        previous = {
+            "main": json.loads((OUT.parent / "result.json").read_text()),
+            "followup": json.loads((OUT.parent / "followup/result.json").read_text()),
+        }
+        previous_data = base64.b64encode(zlib.compress(experiment.encoded(previous))).decode()
+        followup_setup = f"q=d/'previous.json'; q.write_bytes(zlib.decompress(base64.b64decode({previous_data!r}))); "
+    arguments = "sys.argv=[str(p),'--targets-only',str(q)]; " if targets_only else "sys.argv=[str(p),'--followup',str(q)]; " if followup else "sys.argv=[str(p),'--live']; "
+    bootstrap = (
+        "import base64,zlib,tempfile,pathlib,runpy,sys,hashlib; "
+        f"expected={hashes!r}; "
+        "assert all(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==h for p,h in expected.items()), 'runtime_source_drift'; "
+        "d=pathlib.Path(tempfile.mkdtemp(prefix='pw-interpretation-')); p=d/'experiment.py'; "
+        f"p.write_bytes(zlib.decompress(base64.b64decode({payload!r}))); "
+        + followup_setup
+        + arguments
+        + "runpy.run_path(str(p),run_name='__main__')"
+    )
+    result = subprocess.run(
+        ["render", "jobs", "create", SERVICE, "--plan-id", "plan-crn-003",
+         "--start-command", "python -c " + shlex.quote(bootstrap), "--output", "json", "--confirm"],
+        text=True, capture_output=True, timeout=45,
+    )
+    if result.returncode:
+        raise RuntimeError(f"Job submission failed; inspect marker before retry: {result.stderr}")
+    job = json.loads(result.stdout)
+    write(OUT / "job.json", job)
+    print(json.dumps({"job_id": job["id"], "status": job["status"], "evidence_dir": str(OUT)}))
+
+
+def collect():
+    job = json.loads((OUT / "job.json").read_text())
+    result = subprocess.run(
+        ["render", "logs", "--resources", job["id"], "--limit", "100", "--output", "text",
+         "--direction", "backward", "--end", datetime.now(timezone.utc).isoformat()],
+        text=True, capture_output=True, timeout=45, check=True,
+    )
+    (OUT / "render-logs-latest.txt").write_text(result.stdout)
+    archive = OUT / "evidence-chunks.json"
+    groups = json.loads(archive.read_text()) if archive.exists() else {}
+    for match in EVIDENCE.finditer(result.stdout):
+        event, part, count, chunk = match.groups()
+        group = groups.setdefault(event, {"count": int(count), "parts": {}})
+        group["parts"][part] = chunk
+    write(archive, groups)
+    kinds = []
+    for event, group in sorted(groups.items()):
+        if set(group["parts"]) != {str(i) for i in range(1, group["count"] + 1)}:
+            continue
+        blob = "".join(group["parts"][str(i)] for i in range(1, group["count"] + 1))
+        decoded = json.loads(zlib.decompress(base64.b64decode(blob)))
+        write(OUT / f"event-{int(event):03d}-{decoded['kind']}.json", decoded)
+        kinds.append(decoded["kind"])
+        if decoded["kind"] == "final_result":
+            write(OUT / "result.json", decoded["value"])
+    print(json.dumps({"events_complete": len(kinds), "calls_saved": kinds.count("call_finished"),
+                      "batches_saved": kinds.count("batch_result"), "final_saved": "final_result" in kinds}))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=["submit", "collect"])
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--followup", action="store_true")
+    mode.add_argument("--targets-only", action="store_true")
+    args = parser.parse_args()
+    if args.followup:
+        OUT = OUT / "followup"
+    if args.targets_only:
+        OUT = OUT / "targets-only"
+    submit(args.followup, args.targets_only) if args.action == "submit" else collect()

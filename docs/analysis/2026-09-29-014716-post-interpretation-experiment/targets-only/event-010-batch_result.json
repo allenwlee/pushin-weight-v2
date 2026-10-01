@@ -1,0 +1,138 @@
+{
+  "kind": "batch_result",
+  "value": {
+    "batch": 3,
+    "case_ids": [
+      "token_machine_hunyuan_win_day1",
+      "token_machine_hunyuan_win_day2",
+      "token_machine_deepseek_win",
+      "release_actor_owner",
+      "praise_model_complaint_platform"
+    ],
+    "promoter_classification": {
+      "reason": "author_relationship_out_of_scope",
+      "status": "not_evaluated"
+    },
+    "response": {
+      "value": {
+        "posts": {
+          "P01": {
+            "other_mentions": [
+              {
+                "evidence": "won $0.23 Hunyuan tokens on the Hunyuan spin",
+                "name": "Hunyuan",
+                "reason": "Hunyuan is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                "role": "Brand name used as the spin category and token type, not the main promoted offering"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Free AI tokens every day → https://t.co/Kvjh58qJwf",
+                "name": "Token Machine",
+                "offering": "A daily free AI token giveaway or promotion",
+                "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+              }
+            ],
+            "uncertainties": [
+              "Unresolved short URL https://t.co/Kvjh58qJwf; target name may be the platform or campaign."
+            ]
+          },
+          "P02": {
+            "other_mentions": [
+              {
+                "evidence": "won $3.01 Hunyuan tokens on the Hunyuan spin",
+                "name": "Hunyuan",
+                "reason": "Hunyuan is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                "role": "Brand name used as the spin category and token type, not the main promoted offering"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Free AI tokens every day → https://t.co/XlBDNXVAms",
+                "name": "Token Machine",
+                "offering": "A daily free AI token giveaway or promotion",
+                "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+              }
+            ],
+            "uncertainties": [
+              "Unresolved short URL https://t.co/XlBDNXVAms; target name may be the platform or campaign."
+            ]
+          },
+          "P03": {
+            "other_mentions": [
+              {
+                "evidence": "won $1.51 DeepSeek tokens on the DeepSeek spin",
+                "name": "DeepSeek",
+                "reason": "DeepSeek is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                "role": "Brand name used as the spin category and token type, not the main promoted offering"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Free AI tokens every day → https://t.co/NCYzU34HsO",
+                "name": "Token Machine",
+                "offering": "A daily free AI token giveaway or promotion",
+                "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+              }
+            ],
+            "uncertainties": [
+              "Unresolved short URL https://t.co/NCYzU34HsO; target name may be the platform or campaign."
+            ]
+          },
+          "P04": {
+            "other_mentions": [],
+            "targets": [
+              {
+                "evidence": "Zhipu released GLM-5.3-Flash today. The release adds a 128K context window.",
+                "name": "Zhipu",
+                "offering": "GLM-5.3-Flash model with a 128K context window",
+                "reason": "The post announces a new product release from Zhipu, which is a promotional announcement of the model."
+              },
+              {
+                "evidence": "Acme Cloud says it will host the model next month.",
+                "name": "Acme Cloud",
+                "offering": "Hosting services for GLM-5.3-Flash",
+                "reason": "The post mentions Acme Cloud's plan to host the model, which is a service offering related to the model."
+              }
+            ],
+            "uncertainties": []
+          },
+          "P05": {
+            "other_mentions": [
+              {
+                "evidence": "GLM's answers were excellent in my test",
+                "name": "GLM",
+                "reason": "GLM is mentioned positively but the post is primarily a complaint about B.AI, not an endorsement of GLM.",
+                "role": "Product praised in the post but not promoted; the post focuses on complaint"
+              },
+              {
+                "evidence": "B.AI charged me twice for the subscription and has not answered my refund request",
+                "name": "B.AI",
+                "reason": "B.AI is criticized, so it is not a target of promotion.",
+                "role": "Subject of complaint, not promoted"
+              }
+            ],
+            "targets": [],
+            "uncertainties": []
+          }
+        }
+      }
+    },
+    "validation_errors": {
+      "P01": [
+        "other_mentions:item_shape"
+      ],
+      "P02": [
+        "other_mentions:item_shape"
+      ],
+      "P03": [
+        "other_mentions:item_shape"
+      ],
+      "P04": [],
+      "P05": [
+        "other_mentions:item_shape",
+        "other_mentions:item_shape"
+      ]
+    }
+  }
+}

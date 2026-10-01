@@ -1,0 +1,8 @@
+{
+  "id": "P04_A_label_only",
+  "attempt": 1,
+  "at": "2026-09-30T02:24:56.112482+00:00",
+  "http_status": 200,
+  "raw_body": "{\"model\":\"jev-1.13.0\",\"answers\":{\"advertising_marketing\":{\"type\":\"noul\",\"noul\":0.79}},\"usage\":{\"input_tokens\":724,\"output_tokens\":24}}",
+  "elapsed_seconds": 0.2666892089182511
+}

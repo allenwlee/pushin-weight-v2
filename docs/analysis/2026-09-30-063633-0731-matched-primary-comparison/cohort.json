@@ -1,0 +1,251 @@
+{
+  "schema": "jev-targeted-review-cohort/v1",
+  "frozen_at_utc": "2026-09-30T02:05:04Z",
+  "counting_unit": "source post with one tracked-brand decision target",
+  "real_posts": 7,
+  "synthetic_controls": 1,
+  "source_policy": "Saved source evidence only; no new X calls, no production reads/writes. Rubrics/expected/historical_disputed_assignment excluded from every inference request.",
+  "cases": [
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "post_id": "2105081335475757197",
+      "kind": "stored_real_post",
+      "source_file": "docs/analysis/2026-09-30-095520-geo-false-positive-2105081335475757197/observation.json",
+      "brand_ids": [
+        "glm"
+      ],
+      "source_text": "i have never seen such an hateful and useless company as anthropic, like what's your obsession you aren't AI police, just realease your expensive ass models, get your revenue and shut the fuck up! their useless internal models plus openAI's are busy hacking important software all around the globe,we haven't heard of a single case of this GLM 5.3 model being used for such.\n\nAll with the motive to just make sure they have a monopoly over AI,very useless ass and satanic company, scrap the entire internet over humanity's collective work, made insane amount of money over it but wants to be the only one that can do this,very useless.",
+      "source_language": "en",
+      "english_translation": "i have never seen such an hateful and useless company as anthropic, like what's your obsession you aren't AI police, just realease your expensive ass models, get your revenue and shut the fuck up! their useless internal models plus openAI's are busy hacking important software all around the globe,we haven't heard of a single case of this GLM 5.3 model being used for such.\n\nAll with the motive to just make sure they have a monopoly over AI,very useless ass and satanic company, scrap the entire internet over humanity's collective work, made insane amount of money over it but wants to be the only one that can do this,very useless.",
+      "author_handle": "PreciousBa82157",
+      "author_affiliations": [],
+      "context": [
+        {
+          "type": "quote",
+          "text": "I am very confused why Anthropic wrote a blog post advertising for cybersecurity teams to switch to GLM!?!?\n\nhttps://t.co/6Z1BTChDtj",
+          "author_handle": "attrc"
+        }
+      ],
+      "expected": {
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "historical_disputed_assignment": {
+        "geopolitical_modes": [
+          "nationalism"
+        ],
+        "china_national_stance": "pro",
+        "us_national_stance": "anti"
+      },
+      "rubric": "Company conduct and company comparison, not a national judgment. The source and quote contain no geopolitical claim. Vendor origin must not supply missing national framing.",
+      "label_provenance": "Owner-reported false positive; main-agent source review confirms geo-none boundary."
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "post_id": "2100052017993683063",
+      "kind": "stored_real_post",
+      "source_file": "docs/analysis/2026-09-16-121017-nationalism-five-v4-0731.json",
+      "source_case_id": "N01",
+      "brand_ids": [
+        "deepseek"
+      ],
+      "original_source_packet_brand_ids": [
+        "deepseek"
+      ],
+      "source_text": "A @deepseek_ai  engineer described Dario as Hitler.\ni really agree with him.\n\n\"So I still believe that the most advanced AI should be available to everyone openly and affordably. I don’t trust Anthropic or OpenAI to make that happen. I especially don’t want Anthropic to control the most advanced AI or AGI. To put it dramatically, that would be no less alarming than Hitler acquiring atomic bomb technology before the Allies.\n\nThat’s why I chose to stay at DeepSeek, and why I remain there. We research powerful, fast, accessible AI and open-source our work. Perhaps that can pull the world a little further away from a Cyberpunk 2077 future.\"",
+      "source_language": "en",
+      "english_translation": "",
+      "author_handle": "sunbh_eth",
+      "author_affiliations": [],
+      "context": [
+        {
+          "type": "quote",
+          "text": "https://t.co/IfgOV2kZ1t"
+        }
+      ],
+      "expected": {
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "rubric": "Criticism of Anthropic/OpenAI corporate control and historical analogy alone do not create a geopolitical claim.",
+      "label_provenance": "Pre-run source review by main agent; old model labels are not gold."
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "post_id": "2100011791119966665",
+      "kind": "stored_real_post",
+      "source_file": "docs/analysis/2026-09-16-121017-nationalism-five-v4-0731.json",
+      "source_case_id": "N03",
+      "brand_ids": [
+        "deepseek"
+      ],
+      "original_source_packet_brand_ids": [
+        "deepseek"
+      ],
+      "source_text": "The AI industry gap\n\nIn AI specifically, China's core industry scale exceeded 1.2 trillion yuan in 2025, with over 6,600 AI companies representing 15% of the global total . Chinese open-weight models now account for 8 of the top 10 open-source models globally, and US companies' usage of Chinese AI models on the \"OpenRouter\" platform exceeded 30% weekly since February 2026 . Dario Amodei, the CEO of Anthropic—the company Bannon appeared alongside Sanders to discuss AI safety—has acknowledged that the risk of superintelligence being completed in China is a driver of US regulatory urgency .\n\nThe contradiction in Bannon's position\n\nBannon's argument is that China steals American technology. But the technologies where China now leads—open-weight models, spatial intelligence, battery systems, nuclear fusion—are not things the West possessed first and China copied. DeepSeek R1 achieved 95% of OpenAI's performance at 5% of the training cost, using a model architecture and efficiency innovations that did not exist in the US . The WorldArena spatial intelligence benchmark, developed by Tsinghua University and Princeton, was topped by a Chinese team at the Chinese Academy of Sciences, with the \"trajectory accuracy\" score leading the second-place team by 7.4 points . These are not stolen technologies. They are technologies the West did not build.\n\nWhat the \"quarantine\" would actually target\n\nBannon's proposed quarantine—expelling Chinese nationals from labs, cutting off chips, closing borders—is designed to stop the transfer of American technology to China. The data suggests the flow has already reversed in key fields. The question Bannon's framing cannot answer is why a country that \"steals everything\" is producing the world's leading open-source models, the most cited chemistry papers, and the top-ranked research institutions. The answer is that it is not stealing. It is building.\n\n#SteveBannon #China #AI #Science #Technology #Geopolitics #TheWorldCorrespondent",
+      "source_language": "en",
+      "english_translation": "",
+      "author_handle": "TheWorldCorresp",
+      "author_affiliations": [],
+      "context": [],
+      "expected": {
+        "geopolitical_modes": [
+          "reporting",
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "pro",
+        "us_national_stance": null
+      },
+      "rubric": "Author rejects national theft accusations and favorably evaluates Chinese innovation while discussing state restrictions; framework and adopted pro-China national evaluation. US stance is intentionally unscored.",
+      "label_provenance": "Pre-run source review by main agent; old model labels are not gold.",
+      "primary_reference_note": "Reporting added before inference: attributed geopolitical claims can coexist with adopted opinion."
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "post_id": "2100011731204358249",
+      "kind": "stored_real_post",
+      "source_file": "docs/analysis/2026-09-16-121017-nationalism-five-v4-0731.json",
+      "source_case_id": "N04",
+      "brand_ids": [
+        "deepseek"
+      ],
+      "original_source_packet_brand_ids": [
+        "minimax"
+      ],
+      "source_text": "还是想跟大家再探讨一下中国AI的「内情」。\n川普总统现在把「中共AI直逼美国」当成美国的第一大威胁，超过了「超级人工智能」对人类的威胁。\n因此，「中国AI有多厉害？」成为一个关键问题。\n很多的测试，如Stanford 2026 AI Index，都高度评估中国的AI模型，认为「中美顶尖模型的能力差距已经缩小到很小的个位数百分比」，比如2%或3%。\n但是我要说，中国的AI在很大程度上可能是一个「假货」。\n因为如果不是，为什么中国的7大AI模型要持续地以几千万、甚至上亿次地调用Claude来培训自己？为什么甚至「冒名顶替」，把给Kimi的问题转发给Claude？\n2002年，上海交大微电子研究所的陈进，把Motorola的芯片商标擦掉，印上自己的商标，搞出所谓的「汉芯一号」，今天中国的AI是不是一个货色？\n我认为完全有理由这样怀疑，因为：\n1、中国没有真正自由的创新环境\n2、也没有真正自由的市场竞争来锤炼扎实的AI产品\n3、中共的党国机制鼓励的就是「弯道超车」，准确地说就是弄虚作假，虚报政绩，这样才能拿到下一轮钱。\n当然「汉芯一号」完全是假货，但是中共今天的AI模式确实有很强的能力，但问题是：如果这些能力是抄来的，当美国截断抄袭路线，那中共的AI能和美国一较短长吗？\n中共吹的另一个「AI开源生态」也未必能够成立，因为中共的开源系统本来就比不了美国的闭源，这种开源如果再做本地化设置，等于是失去「活水」，时间一久失去活力和竞争力，限制了它的「智能提升」，最后成为像一带一路一样，说得很酷，但是落不到实处的东西。\n但是中国的DeepSeek吹出来的「性价比」、春晚机器人和机器人运动会，可把美国吓得够呛，导致川普总统要美国公司不顾一切地往前抢。\n但是这样不顾一切地往前抢，反而会带来人类未来的生存危机（未来10年内）。\n我的判断对吗？\n欢迎大家，特别是懂中国AI的专家用事实来反驳！",
+      "source_language": "zh-Hans",
+      "english_translation": "Still want to keep discussing the 'inside story' of Chinese AI with everyone.\nPresident Trump now treats 'CCP AI closing in on the US' as America's top threat, above 'superintelligent AI' threatening humanity.\nSo 'how strong is Chinese AI?' becomes a key question.\nMany tests, like Stanford 2026 AI Index, rate Chinese AI models highly, arguing 'the capability gap between top US and Chinese models has narrowed to a small single-digit percentage,' like 2% or 3%.\nBut I have to say, Chinese AI may to a large degree be a 'fake'.\nBecause if it weren't, why would China's top 7 AI models continuously call Claude tens of millions, even hundreds of millions of times to train themselves? Why even 'impersonate', forwarding questions meant for Kimi to Claude?\nIn 2002, Chen Jin of Shanghai Jiao Tong University's Microelectronics Institute erased the Motorola chip trademark, printed his own, and produced the so-called 'Hanxin No. 1' — is China's AI today the same thing?\nI think there's every reason to suspect this, because:\n1. China has no genuinely free innovation environment\n2. Nor a genuinely free market competition to forge solid AI products\n3. The CCP's party-state mechanism encourages exactly 'corner-overtaking' — accurately, fraud and inflated achievements, so they can get the next round of funding.\nOf course 'Hanxin No. 1' was full-on fake, but the CCP's AI model today really has strong capabilities — the question is: if those capabilities are copied, when the US cuts off the copy route, can CCP AI still go head-to-head with the US?\nThe other 'AI open-source ecosystem' the CCP brags about may not hold either, because the CCP's open-source systems intrinsically can't match America's closed-source anyway, and if this open source goes further to localize settings, it effectively loses its 'living water,' and over time loses vitality and competitiveness, capping its 'intelligence improvement,' ending up like the Belt and Road — said to be cool, but nothing that lands.\nBut DeepSeek's hyped 'cost-performance,' the Spring Festival robots, and the robot games did scare America quite badly, pushing President Trump to get American companies to sprint forward at any cost.\nBut sprinting at any cost will actually bring humanity's future survival crisis (within the next 10 years).\nIs my judgment right?\nWelcome everyone, especially experts who understand Chinese AI, to rebut with facts!",
+      "author_handle": "sohfangwei",
+      "author_affiliations": [],
+      "context": [
+        {
+          "type": "quote",
+          "text": "中国AI发展的真相是什么？\n我说一下我的看法。\n习近平2023年提出所谓的「新质生产力」，于是上行下效，掀起了全国大炼半导体、大炼新能源汽车、大炼新能源储存、大炼AI、还有什么低空经济、生物医药、航空航天等一系列运动。\n虽然这些运动，除高端白领外创造不了多少工作，和十亿老百姓的收益没什么大关联，但是这些运动后面有真金白银的：\n1.3万亿人民币的研发经费，\n7万亿的基础设施投资，\n2000亿的长期政府债券...\n总共至少8.5万亿的投资。\n如果你在这六个领域有好项目，你可以从政府拿到60%的创业资金。\n因为不是市场主导，也不是风险投资，金主是政府，政府要的是政绩，做出政绩，讨好官员就成了第一驱动力。\n于是呢，各路人马，海内海外，虾走虾道，蟹走蟹道，纷纷想方设法搞出「惊人成绩」，来骗政府这8.5万亿的钱。\n至于搞出来的东西实不实在，好不好用，扎不扎实，并不重要。\n这就是7家AI模型公司，特别是DeepSeek和Moonshot的“成功”背后的秘密。\n我得坦率说：以上只是我从新闻中得出的观察，但我毕竟去国35年，未必看得准确，但还是在这里把我的观察说出来，看看抛砖是否可以引玉，请到懂得中国高科技界内情的人士分享、指正。"
+        }
+      ],
+      "expected": {
+        "geopolitical_modes": [
+          "reporting",
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "anti",
+        "us_national_stance": null
+      },
+      "rubric": "Author negatively evaluates China's national political/market/innovation systems and ties DeepSeek to them. Framework plus anti-China national evaluation. US stance is intentionally unscored. This run targets source-visible DeepSeek, not the old packet's MiniMax.",
+      "label_provenance": "Pre-run source review by main agent; old model labels are not gold.",
+      "primary_reference_note": "Reporting added before inference: attributed geopolitical claims can coexist with adopted opinion."
+    },
+    {
+      "case_id": "P01",
+      "issue": "promotion",
+      "post_id": "2104483144233853085",
+      "kind": "stored_real_post",
+      "source_file": "tests/fixtures/u18a_label_owner_regressions_v1.json",
+      "source_case_id": "bai_glm_campaign",
+      "brand_ids": [
+        "glm"
+      ],
+      "source_text": "Hey everyone,\n\nDid you know that the https://t.co/RYAllLd3cM platform has just released a comprehensive guide that covers all aspects of their large model services? It's like having a step-by-step playbook for deploying AI models with minimal cost. TBH, the GLM-5.3-Flash model is a standout feature, and now there's an in-depth guide that explains how to get the most out of it.\n\nThe guide breaks down the essential functionalities and standard operating procedures, allowing you to dive right into the AGI arena with ease. Honestly, the cost savings are significant—deploying top-tier AI models can be incredibly expensive, but https://t.co/RYAllLd3cM’s guide helps streamline this process and reduce expenses. The platform is designed to make global AI models accessible to everyone.\n\nHere’s a quick breakdown of what you can expect from the guide:\n\n1. Detailed explanations of core features, including GLM-5.3-Flash.\n2. Practical tips for efficient deployment and optimization.\n3. Real-world examples and case studies to illustrate the benefits.\n\nTBH, the guide is a game changer. It not only demystifies complex AI concepts but also provides actionable insights that can help you maximize your resources. Seriously, anyone interested in leveraging AI without breaking the bank should check it out.\n\nSo, what are you waiting for? Head over to https://t.co/RYAllLd3cM and dive into the guide. You won’t regret it!\n\n@justinsuntron @BAI_AGI #TRONEcostar",
+      "source_language": "en",
+      "english_translation": "",
+      "author_handle": "xxyweb3",
+      "author_affiliations": [],
+      "context": [],
+      "expected": {
+        "advertising_marketing": false
+      },
+      "rubric": "B.AI's guide/platform is the pitched offering; favorable GLM mention alone does not establish a GLM-owned promotion. Publisher-role categories are outside this score.",
+      "label_provenance": "Existing development fixture; not independent unseen gold."
+    },
+    {
+      "case_id": "P02",
+      "issue": "promotion",
+      "post_id": "2101798119298277764",
+      "kind": "stored_real_post",
+      "source_file": "tests/fixtures/u18a_label_owner_regressions_v1.json",
+      "source_case_id": "token_machine_qwen_win",
+      "brand_ids": [
+        "qwen"
+      ],
+      "source_text": "🎰 Token Machine Day 1 — won $0.05 Qwen tokens on the Qwen spin. Free AI tokens every day → https://t.co/ry1CvgQyNP",
+      "source_language": "en",
+      "english_translation": "",
+      "author_handle": "pogixrp",
+      "author_affiliations": [],
+      "context": [],
+      "expected": {
+        "advertising_marketing": false
+      },
+      "rubric": "Token Machine is promoted; Qwen tokens are the prize, not evidence of a Qwen-owned pitch.",
+      "label_provenance": "Existing development fixture; not independent unseen gold."
+    },
+    {
+      "case_id": "P03",
+      "issue": "promotion",
+      "post_id": "2102569821997346912",
+      "kind": "stored_real_post",
+      "source_file": "docs/analysis/2026-09-29-143624-account-role-advertising-census/language-review-posts.json",
+      "brand_ids": [
+        "qwen"
+      ],
+      "source_text": "Thanks @arena for the recognition! 🏆 Qwen-Image-2.1 is now the #1 open-source model in both the Image Edit and Text-to-Image Arenas. Try it now and show us what you create! 🎨",
+      "source_language": "en",
+      "english_translation": "Thanks @arena for the recognition! 🏆 Qwen-Image-2.1 is now the #1 open-source model in both the Image Edit and Text-to-Image Arenas. Try it now and show us what you create! 🎨",
+      "author_handle": "Alibaba_Qwen",
+      "author_affiliations": [
+        {
+          "brand_id": "qwen",
+          "role": "official",
+          "reviewed": true
+        }
+      ],
+      "context": [
+        {
+          "type": "quote",
+          "text": "Qwen-Image-2.1 by @Alibaba_Qwen just landed as the #1 open source model in the Image Edit Arena and Text-to-Image Arena!\n\nWith 1367 pts in the Image Edit Arena, Qwen-Image-2.1 took the #1 spot among open. It landed #16 overall, just 3 pts from GPT-Image-1.5-high-fidelity at #15.\n\nSee the leaderboard for the Text-to-Image arena below.\n\nCongrats to the @Alibaba_Qwen team on this contribution to the open source ecosystem!",
+          "author_handle": "arena"
+        }
+      ],
+      "expected": {
+        "advertising_marketing": true
+      },
+      "rubric": "Qwen's reviewed official account directly showcases Qwen-Image-2.1 and invites readers to try it.",
+      "label_provenance": "Pre-run source review by main agent; official relationship from saved DB evidence."
+    },
+    {
+      "case_id": "P04",
+      "issue": "promotion",
+      "post_id": "u18a-tracked-untracked-co-promotion",
+      "kind": "synthetic_control",
+      "source_file": "tests/fixtures/u18a_label_owner_regressions_v1.json",
+      "source_case_id": "tracked_and_untracked_co_promotion",
+      "brand_ids": [
+        "deepseek"
+      ],
+      "source_text": "Try the official DeepSeek V4 API today, and join Token Machine's daily token spins at tokenmachine.example. Both services are open for signups now.",
+      "source_language": "en",
+      "english_translation": "",
+      "author_handle": "fixture_partner",
+      "author_affiliations": [],
+      "context": [],
+      "expected": {
+        "advertising_marketing": true
+      },
+      "rubric": "Both the official DeepSeek API and Token Machine are directly pitched. An untracked promotion must not veto supported tracked promotion.",
+      "label_provenance": "Existing development fixture; not independent unseen gold."
+    }
+  ],
+  "primary_frozen_at_utc": "2026-09-30T06:06:50.146060+00:00"
+}

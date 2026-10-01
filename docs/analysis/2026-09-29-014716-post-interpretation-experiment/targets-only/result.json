@@ -1,0 +1,405 @@
+{
+  "blocked": null,
+  "calls": 3,
+  "cost_usd": "0.00062286000000000001",
+  "experiment": "promotion-target-only-v1",
+  "input_tokens": 2017,
+  "manifest_sha256": "287f0e70424bb5a56011ba82b5b8efa25e0f3812d0ceb6f3a960fb0ac407de0c",
+  "output_tokens": 2788,
+  "results": [
+    {
+      "batch": 1,
+      "case_ids": [
+        "token_machine_qwen_win",
+        "bai_glm_campaign",
+        "direct_deepseek_api_pitch",
+        "tracked_and_untracked_co_promotion",
+        "comparison_two_models"
+      ],
+      "promoter_classification": {
+        "reason": "author_relationship_out_of_scope",
+        "status": "not_evaluated"
+      },
+      "response": {
+        "value": {
+          "posts": {
+            "P01": {
+              "other_mentions": [
+                {
+                  "evidence": "won $0.05 Qwen tokens on the Qwen spin",
+                  "name": "Qwen",
+                  "reason": "Qwen is referenced as what the prize is, but the post's action is the Token Machine spin.",
+                  "role": "Mentioned as the prize won or the brand of the token spin, not the primary promotion."
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Token Machine Day 1 — won $0.05 Qwen tokens on the Qwen spin. Free AI tokens every day → https://t.co/ry1CvgQyNP",
+                  "name": "Token Machine",
+                  "offering": "daily free AI tokens via a spin game",
+                  "reason": "The post promotes a daily token giveaway, inviting users to visit the link."
+                }
+              ],
+              "uncertainties": []
+            },
+            "P02": {
+              "other_mentions": [
+                {
+                  "evidence": "@justinsuntron @BAI_AGI #TRONEcostar",
+                  "name": "@justinsuntron",
+                  "reason": "These may be related to the platform or campaign, but the post does not promote them as separate offerings.",
+                  "role": "Mentioned in hashtags/mentions but not central to the promotion."
+                },
+                {
+                  "evidence": "@justinsuntron @BAI_AGI #TRONEcostar",
+                  "name": "@BAI_AGI",
+                  "reason": "Ethically unclear if these are sponsor handles; the post does not promote them directly.",
+                  "role": "Mentioned but not the target."
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "the https://t.co/RYAllLd3cM platform has just released a comprehensive guide that covers all aspects of their large model services",
+                  "name": "https://t.co/RYAllLd3cM",
+                  "offering": "platform's guide for large model services with GLM-5.3-Flash model",
+                  "reason": "The post repeatedly urges readers to check out the guide on that platform."
+                },
+                {
+                  "evidence": "the GLM-5.3-Flash model is a standout feature, and now there's an in-depth guide that explains how to get the most out of it.",
+                  "name": "GLM-5.3-Flash",
+                  "offering": "AI model as a standout feature of the platform's services",
+                  "reason": "The model is highlighted as a key part of the promoted offering, though the main promotion is the guide."
+                }
+              ],
+              "uncertainties": [
+                "The identity of the platform behind the short URL is unknown; the promotion is attributed to that URL."
+              ]
+            },
+            "P03": {
+              "other_mentions": [],
+              "targets": [
+                {
+                  "evidence": "DeepSeek V4 Flash is available now. Sign up for the official DeepSeek API today and get 20% off your first month.",
+                  "name": "DeepSeek V4 Flash",
+                  "offering": "API service with a 20% discount on first month",
+                  "reason": "The post explicitly invites sign-ups and highlights a discount."
+                }
+              ],
+              "uncertainties": []
+            },
+            "P04": {
+              "other_mentions": [],
+              "targets": [
+                {
+                  "evidence": "Try the official DeepSeek V4 API today,",
+                  "name": "DeepSeek V4 API",
+                  "offering": "official API service with sign-up",
+                  "reason": "The post encourages trying this service."
+                },
+                {
+                  "evidence": "join Token Machine's daily token spins at tokenmachine.example.",
+                  "name": "Token Machine",
+                  "offering": "daily token spins service",
+                  "reason": "The post invites readers to join this service."
+                }
+              ],
+              "uncertainties": []
+            },
+            "P05": {
+              "other_mentions": [
+                {
+                  "evidence": "DeepSeek extracted 12.",
+                  "name": "DeepSeek",
+                  "reason": "DeepSeek is presented as performing worse, so it is not endorsed.",
+                  "role": "Mentioned as a comparative alternative, not promoted."
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Qwen is my pick for this job.",
+                  "name": "Qwen",
+                  "offering": "AI model for document processing (as preferred choice)",
+                  "reason": "The post recommends Qwen based on performance in a comparison."
+                }
+              ],
+              "uncertainties": []
+            }
+          }
+        }
+      },
+      "validation_errors": {
+        "P01": [
+          "other_mentions:item_shape"
+        ],
+        "P02": [
+          "other_mentions:item_shape",
+          "other_mentions:item_shape"
+        ],
+        "P03": [],
+        "P04": [],
+        "P05": [
+          "other_mentions:item_shape"
+        ]
+      }
+    },
+    {
+      "batch": 2,
+      "case_ids": [
+        "token_machine_long_crypto_boundary",
+        "token_machine_hunyuan_no_luck_boundary",
+        "direct_zhipu_api_pitch",
+        "quoted_criticism_disputed",
+        "unresolved_subject_reply"
+      ],
+      "promoter_classification": {
+        "reason": "author_relationship_out_of_scope",
+        "status": "not_evaluated"
+      },
+      "response": {
+        "value": {
+          "posts": {
+            "P01": {
+              "other_mentions": [
+                {
+                  "evidence": "tokens tied to popular AI models such as GPT, Claude, Gemini, Llama, DeepSeek, Qwen and more",
+                  "name": "GPT, Claude, Gemini, Llama, DeepSeek, Qwen",
+                  "reason": "They are features of the platform, not targets of promotion.",
+                  "role": "Listed as examples of AI models whose tokens can be won, but not promoted themselves"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Token Machine is building a platform around daily spins where users can win small amounts of tokens tied to popular AI models such as GPT, Claude, Gemini, Llama, DeepSeek, Qwen and more. $MACHINE is bringing that idea on-chain.",
+                  "name": "Token Machine",
+                  "offering": "A platform for daily spins to win tokens tied to AI models, with $MACHINE token on-chain",
+                  "reason": "The post promotes the platform, its token, and invites participation via links to chart and website."
+                }
+              ],
+              "uncertainties": [
+                "The URLs are short links; cannot resolve their final destinations without browsing."
+              ]
+            },
+            "P02": {
+              "other_mentions": [
+                {
+                  "evidence": "no luck on the Hunyuan spin",
+                  "name": "Hunyuan",
+                  "reason": "It appears as a random outcome in the game, not a target.",
+                  "role": "A model name mentioned as part of the spin result, not promoted"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Token Machine Day 1 — no luck on the Hunyuan spin. Free AI tokens every day → https://t.co/WlETXp902E",
+                  "name": "Token Machine",
+                  "offering": "Daily free AI tokens via a spin game, with a link to participate",
+                  "reason": "It mentions the platform by name and invites engagement with the daily spins."
+                }
+              ],
+              "uncertainties": [
+                "The short URL points to a page not resolvable from the source."
+              ]
+            },
+            "P03": {
+              "other_mentions": [
+                {
+                  "evidence": "official GLM API on Z.ai",
+                  "name": "Z.ai",
+                  "reason": "It is part of the offer but not the central promoted item; model is the focus.",
+                  "role": "Platform hosting the API, but the main offer is the model and API access"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Zhipu GLM-5.3-Flash is available now. Start building with the official GLM API on Z.ai today; get 20% off your first month.",
+                  "name": "Zhipu GLM-5.3-Flash",
+                  "offering": "AI model available via official GLM API on Z.ai, with a 20% discount on first month",
+                  "reason": "It announces availability and encourages use with an incentive."
+                }
+              ],
+              "uncertainties": []
+            },
+            "P04": {
+              "other_mentions": [
+                {
+                  "evidence": "Qwen leaks every customer's private files. I have seen no evidence for that allegation. My Qwen account has worked normally.",
+                  "name": "Qwen",
+                  "reason": "It is a factual report and rebuttal, not an endorsement or invitation.",
+                  "role": "Discussed as an allegation and personal experience; no promotion"
+                },
+                {
+                  "evidence": "Mira said",
+                  "name": "Mira",
+                  "reason": "This is a source of a quote, not promoted.",
+                  "role": "Quoted speaker making an allegation, not a target"
+                }
+              ],
+              "targets": [],
+              "uncertainties": []
+            },
+            "P05": {
+              "other_mentions": [],
+              "targets": [],
+              "uncertainties": [
+                "The subject of the post (what was fixed and which 'other version' refers to) is unresolved from the text alone."
+              ]
+            }
+          }
+        }
+      },
+      "validation_errors": {
+        "P01": [
+          "targets:evidence_not_verbatim",
+          "other_mentions:item_shape"
+        ],
+        "P02": [
+          "other_mentions:item_shape"
+        ],
+        "P03": [
+          "other_mentions:item_shape"
+        ],
+        "P04": [
+          "other_mentions:item_shape",
+          "other_mentions:item_shape"
+        ],
+        "P05": []
+      }
+    },
+    {
+      "batch": 3,
+      "case_ids": [
+        "token_machine_hunyuan_win_day1",
+        "token_machine_hunyuan_win_day2",
+        "token_machine_deepseek_win",
+        "release_actor_owner",
+        "praise_model_complaint_platform"
+      ],
+      "promoter_classification": {
+        "reason": "author_relationship_out_of_scope",
+        "status": "not_evaluated"
+      },
+      "response": {
+        "value": {
+          "posts": {
+            "P01": {
+              "other_mentions": [
+                {
+                  "evidence": "won $0.23 Hunyuan tokens on the Hunyuan spin",
+                  "name": "Hunyuan",
+                  "reason": "Hunyuan is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                  "role": "Brand name used as the spin category and token type, not the main promoted offering"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Free AI tokens every day → https://t.co/Kvjh58qJwf",
+                  "name": "Token Machine",
+                  "offering": "A daily free AI token giveaway or promotion",
+                  "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+                }
+              ],
+              "uncertainties": [
+                "Unresolved short URL https://t.co/Kvjh58qJwf; target name may be the platform or campaign."
+              ]
+            },
+            "P02": {
+              "other_mentions": [
+                {
+                  "evidence": "won $3.01 Hunyuan tokens on the Hunyuan spin",
+                  "name": "Hunyuan",
+                  "reason": "Hunyuan is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                  "role": "Brand name used as the spin category and token type, not the main promoted offering"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Free AI tokens every day → https://t.co/XlBDNXVAms",
+                  "name": "Token Machine",
+                  "offering": "A daily free AI token giveaway or promotion",
+                  "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+                }
+              ],
+              "uncertainties": [
+                "Unresolved short URL https://t.co/XlBDNXVAms; target name may be the platform or campaign."
+              ]
+            },
+            "P03": {
+              "other_mentions": [
+                {
+                  "evidence": "won $1.51 DeepSeek tokens on the DeepSeek spin",
+                  "name": "DeepSeek",
+                  "reason": "DeepSeek is mentioned as the token source in the context of the spin, but the primary promotional hook is the free daily tokens via the link.",
+                  "role": "Brand name used as the spin category and token type, not the main promoted offering"
+                }
+              ],
+              "targets": [
+                {
+                  "evidence": "Free AI tokens every day → https://t.co/NCYzU34HsO",
+                  "name": "Token Machine",
+                  "offering": "A daily free AI token giveaway or promotion",
+                  "reason": "The post explicitly invites users to access a link for free daily AI tokens, indicating a promotional offer."
+                }
+              ],
+              "uncertainties": [
+                "Unresolved short URL https://t.co/NCYzU34HsO; target name may be the platform or campaign."
+              ]
+            },
+            "P04": {
+              "other_mentions": [],
+              "targets": [
+                {
+                  "evidence": "Zhipu released GLM-5.3-Flash today. The release adds a 128K context window.",
+                  "name": "Zhipu",
+                  "offering": "GLM-5.3-Flash model with a 128K context window",
+                  "reason": "The post announces a new product release from Zhipu, which is a promotional announcement of the model."
+                },
+                {
+                  "evidence": "Acme Cloud says it will host the model next month.",
+                  "name": "Acme Cloud",
+                  "offering": "Hosting services for GLM-5.3-Flash",
+                  "reason": "The post mentions Acme Cloud's plan to host the model, which is a service offering related to the model."
+                }
+              ],
+              "uncertainties": []
+            },
+            "P05": {
+              "other_mentions": [
+                {
+                  "evidence": "GLM's answers were excellent in my test",
+                  "name": "GLM",
+                  "reason": "GLM is mentioned positively but the post is primarily a complaint about B.AI, not an endorsement of GLM.",
+                  "role": "Product praised in the post but not promoted; the post focuses on complaint"
+                },
+                {
+                  "evidence": "B.AI charged me twice for the subscription and has not answered my refund request",
+                  "name": "B.AI",
+                  "reason": "B.AI is criticized, so it is not a target of promotion.",
+                  "role": "Subject of complaint, not promoted"
+                }
+              ],
+              "targets": [],
+              "uncertainties": []
+            }
+          }
+        }
+      },
+      "validation_errors": {
+        "P01": [
+          "other_mentions:item_shape"
+        ],
+        "P02": [
+          "other_mentions:item_shape"
+        ],
+        "P03": [
+          "other_mentions:item_shape"
+        ],
+        "P04": [],
+        "P05": [
+          "other_mentions:item_shape",
+          "other_mentions:item_shape"
+        ]
+      }
+    }
+  ],
+  "task_calls_total": 37
+}

@@ -1,0 +1,8 @@
+{
+  "list_price_estimate_usd": "0.000079296",
+  "provider_billed_cost_usd": null,
+  "usage": {
+    "input_tokens": 1888,
+    "output_tokens": 99
+  }
+}

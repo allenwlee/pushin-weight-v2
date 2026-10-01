@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 12,
+    "phase": "batch3:candidate_classifier",
+    "request_sha256": "29979459ab87275bbcb0e595b4ef368edf74f21de068a3e98fe521a201c1fbf9",
+    "reserved_cost_usd": "0.45036"
+  }
+}

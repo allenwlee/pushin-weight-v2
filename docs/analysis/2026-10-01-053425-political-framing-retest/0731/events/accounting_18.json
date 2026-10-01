@@ -1,0 +1,13 @@
+{
+  "kind": "accounting_18",
+  "value": {
+    "at": "2026-10-01T05:53:11.733969+00:00",
+    "completion_tokens": 1075,
+    "estimated_cost": "0.00060444",
+    "http_status": 200,
+    "id": "ja_19_raw",
+    "prompt_tokens": 12993,
+    "retained_reservation_usd": "0.00876012",
+    "status": "usage_present"
+  }
+}

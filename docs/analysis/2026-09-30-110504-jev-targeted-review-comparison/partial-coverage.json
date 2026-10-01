@@ -1,0 +1,119 @@
+{
+  "prepared_at": "2026-09-30T02:24:45.951833+00:00",
+  "planned_case_arms": 24,
+  "available_case_arms": 16,
+  "omitted": [
+    {
+      "case_id": "P01",
+      "arm": "B_basis_visible",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P01",
+      "arm": "C_basis_hidden",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P02",
+      "arm": "C_basis_hidden",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P02",
+      "arm": "B_basis_visible",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P03",
+      "arm": "B_basis_visible",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P03",
+      "arm": "C_basis_hidden",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P04",
+      "arm": "B_basis_visible",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    },
+    {
+      "case_id": "P04",
+      "arm": "C_basis_hidden",
+      "reason": "promotion_basis_invalid_paired_comparison_unavailable"
+    }
+  ],
+  "basis_issues": [
+    {
+      "case_id": "G01",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G02",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G03",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G04",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P01",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P02",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P03",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P04",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    }
+  ],
+  "invalid_rows": [
+    {
+      "request_id": "justified_content",
+      "case_id": "P01"
+    },
+    {
+      "request_id": "justified_content",
+      "case_id": "P04"
+    }
+  ],
+  "new_call_cap": 32,
+  "planned_physical_calls": 20,
+  "deviation_sha256": "8e1236691442e54fe6bbf17943e14dd044beaf894368f6880b89b877fc3ce89d",
+  "requests_sha256": "6c6f3255f92567498bfed83b2251266f55fefeb95406fd678f28bc00d7131101"
+}

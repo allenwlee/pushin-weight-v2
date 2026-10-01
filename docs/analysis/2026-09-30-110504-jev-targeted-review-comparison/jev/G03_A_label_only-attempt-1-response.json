@@ -1,0 +1,8 @@
+{
+  "id": "G03_A_label_only",
+  "attempt": 1,
+  "at": "2026-09-30T02:24:54.015214+00:00",
+  "http_status": 200,
+  "raw_body": "{\"model\":\"jev-1.13.0\",\"answers\":{\"china_national_stance\":{\"type\":\"noul\",\"noul\":0.61},\"framework\":{\"type\":\"noul\",\"noul\":0.82},\"nationalism\":{\"type\":\"noul\",\"noul\":0.74},\"reporting\":{\"type\":\"noul\",\"noul\":0.28},\"us_national_stance\":{\"type\":\"noul\",\"noul\":0.19}},\"usage\":{\"input_tokens\":2177,\"output_tokens\":99}}",
+  "elapsed_seconds": 0.31555720907635987
+}

@@ -1,0 +1,11 @@
+{
+  "usage": {
+    "input_tokens": 15347,
+    "output_tokens": 921
+  },
+  "estimated_usd": "0.000644574",
+  "provider_invoice_usd": null,
+  "invalid_fields": [],
+  "extra_fields": [],
+  "consistency_issues": []
+}

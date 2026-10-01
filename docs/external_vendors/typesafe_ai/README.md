@@ -5,6 +5,10 @@ looking up Jev's model specifications, HTTP API, question types, SDKs, and
 examples. The [documentation index](typesafe_index.md) links to every captured
 page.
 
+For PushinWeight's own experiments and classifier decision, start with the
+[Jev / 0731 evaluation closeout](../../analysis/2026-10-01-193945-jev-classification-closeout.md).
+That project record is separate from this captured vendor reference.
+
 **Source:** <https://docs.typesafe.ai/>  
 **Captured:** 2026-09-24 UTC  
 **Coverage:** 111 of 111 pages listed by both the vendor's documentation index

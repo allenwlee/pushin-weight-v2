@@ -1,0 +1,132 @@
+{
+  "at": "2026-09-30T08:30:41.260861+00:00",
+  "service": {
+    "id": "crn-da7vrdqd0e5s739uvcs0",
+    "name": "pushinweight-staging-harvest",
+    "type": "cron_job",
+    "suspended": "suspended",
+    "updatedAt": "2026-09-28T23:55:14.480255Z"
+  },
+  "jobs": [
+    {
+      "id": "job-dauc1alg1s2s73cbc27g",
+      "status": "succeeded",
+      "createdAt": "2026-09-30T07:56:26.307737Z",
+      "finishedAt": "2026-09-30T08:28:23Z"
+    },
+    {
+      "id": "job-dauavd1srm7s73bhf01g",
+      "status": "succeeded",
+      "createdAt": "2026-09-30T06:44:04.664724Z",
+      "finishedAt": "2026-09-30T06:45:03Z"
+    },
+    {
+      "id": "job-dau72amk1f9s73akemig",
+      "status": "succeeded",
+      "createdAt": "2026-09-30T02:17:14.492775Z",
+      "finishedAt": "2026-09-30T02:18:43Z"
+    },
+    {
+      "id": "job-datj68093c1s73aqtt7g",
+      "status": "succeeded",
+      "createdAt": "2026-09-29T03:40:16.799679Z",
+      "finishedAt": "2026-09-29T03:41:30Z"
+    },
+    {
+      "id": "job-dathneid0e5s73c5ct20",
+      "status": "succeeded",
+      "createdAt": "2026-09-29T02:00:26.07665Z",
+      "finishedAt": "2026-09-29T02:02:37Z"
+    },
+    {
+      "id": "job-dathl3093c1s73al21a0",
+      "status": "succeeded",
+      "createdAt": "2026-09-29T01:55:24.481714Z",
+      "finishedAt": "2026-09-29T01:58:24Z"
+    },
+    {
+      "id": "job-datg11navr4c73dd5n30",
+      "status": "succeeded",
+      "createdAt": "2026-09-29T00:04:22.726894Z",
+      "finishedAt": "2026-09-29T00:04:49Z"
+    },
+    {
+      "id": "job-datg0o6gekts73am5n90",
+      "status": "failed",
+      "createdAt": "2026-09-29T00:03:44.244037Z",
+      "finishedAt": "2026-09-29T00:04:06Z"
+    },
+    {
+      "id": "job-datfu6o93c1s73af5ra0",
+      "status": "succeeded",
+      "createdAt": "2026-09-28T23:58:19.978379Z",
+      "finishedAt": "2026-09-28T23:58:54Z"
+    },
+    {
+      "id": "job-datfsrad0e5s73buevfg",
+      "status": "succeeded",
+      "createdAt": "2026-09-28T23:55:25.75629Z",
+      "finishedAt": "2026-09-28T23:56:21Z"
+    },
+    {
+      "id": "job-datfr1navr4c73dcev1g",
+      "status": "succeeded",
+      "createdAt": "2026-09-28T23:51:34.448107Z",
+      "finishedAt": "2026-09-28T23:52:04Z"
+    },
+    {
+      "id": "job-datfovqd0e5s73bu0ijg",
+      "status": "failed",
+      "createdAt": "2026-09-28T23:47:11.89525Z",
+      "finishedAt": "2026-09-28T23:47:43Z"
+    },
+    {
+      "id": "job-dan51q6k1f9s73ffm980",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T09:07:52.475273Z",
+      "finishedAt": "2026-09-19T09:09:21Z"
+    },
+    {
+      "id": "job-damuo3jtqb8s739upnd0",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T01:57:34.659419Z",
+      "finishedAt": "2026-09-19T01:59:19Z"
+    },
+    {
+      "id": "job-damuncijnfac73enmmr0",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T01:56:02.395611Z",
+      "finishedAt": "2026-09-19T01:56:37Z"
+    },
+    {
+      "id": "job-damumm2jnfac73enkgq0",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T01:54:32.325951Z",
+      "finishedAt": "2026-09-19T01:55:10Z"
+    },
+    {
+      "id": "job-damulimgekts73f26qcg",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T01:52:10.221016Z",
+      "finishedAt": "2026-09-19T01:54:11Z"
+    },
+    {
+      "id": "job-damuk7ajnfac73encdk0",
+      "status": "failed",
+      "createdAt": "2026-09-19T01:49:17.395161Z",
+      "finishedAt": "2026-09-19T01:49:55Z"
+    },
+    {
+      "id": "job-damuj03m8hqs739d67kg",
+      "status": "succeeded",
+      "createdAt": "2026-09-19T01:46:40.340851Z",
+      "finishedAt": "2026-09-19T01:48:46Z"
+    },
+    {
+      "id": "job-damuhnjm8hqs739d20fg",
+      "status": "failed",
+      "createdAt": "2026-09-19T01:43:58.139343Z",
+      "finishedAt": "2026-09-19T01:44:27Z"
+    }
+  ]
+}

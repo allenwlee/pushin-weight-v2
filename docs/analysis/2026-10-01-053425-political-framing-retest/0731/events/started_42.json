@@ -1,0 +1,9 @@
+{
+  "kind": "started_42",
+  "value": {
+    "at": "2026-10-01T05:57:38.398232+00:00",
+    "id": "ko_04_raw",
+    "request_sha256": "30aede2fdbf20d8f8a446ef71f194d7be6538a376352ee6183e23d85926ac433",
+    "reservation_usd": "0.00863484"
+  }
+}

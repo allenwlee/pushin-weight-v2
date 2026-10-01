@@ -1,0 +1,20 @@
+{
+  "command": [
+    "render",
+    "logs",
+    "--resources",
+    "job-dauavd1srm7s73bhf01g",
+    "--limit",
+    "5",
+    "--output",
+    "json",
+    "--direction",
+    "backward",
+    "--end",
+    "2026-09-30T06:44:33.159353911Z"
+  ],
+  "timed_out": false,
+  "returncode": 0,
+  "stdout": "{\n  \"id\": \"2abc04c2-f445-4567-a14c-a1cbf7fbac37\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dauavd1srm7s73bhf01g\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"''\\u001b(B\\u001b[m\",\n  \"timestamp\": \"2026-09-30T06:44:28.74042515Z\"\n}{\n  \"id\": \"cac54b5c-960f-4bda-ad32-91b9cf013b9b\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dauavd1srm7s73bhf01g\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_0731_MATCH preflight:1/1:eJwVzMsOgjAQheF3ma1Up4XUMGvjC2jcmsaO0lAQe3FDeHfH3Z+cnG+FMcweCJbEzxheQ4EGvi5WBlrBFVkMGquwVy1e0VLXken3xmqrzQ6REOXwSOx5LsHFuzhZEqikyg1Mb89REM+8ZOZRuXA4SV/+fevUObo8KDy2WpjEn8q5ZCBtt+0HHvcvnw==\",\n  \"timestamp\": \"2026-09-30T06:44:29.261818054Z\"\n}{\n  \"id\": \"0ea88ada-0e7c-4dfb-bab1-4d225e3ea5be\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dauavd1srm7s73bhf01g\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_0731_MATCH started_0:1/1:eJwdjTsOwjAQRO/ilo/G608Sd1RcgN5a47WIiEDEDg3i7iQ0U8zTvPmo+/jIKqjaeG6SI9RevXlaRIWP4rYSAvkDhoPBBT5YG2g4kidHww4I2AbjZjhDx1OcOMlU126W1yK1xXpjcn7l6EmDnBCRK0PH19zBJZO6vuSSLFkmFPZwxpWkXVozFyNWeqN1If47q8xvbuPzEZe6neIIaG9hob7fH+gzOZA=\",\n  \"timestamp\": \"2026-09-30T06:44:29.262658571Z\"\n}{\n  \"id\": \"0d713605-4ef1-46ce-a8ad-9ffba38e2909\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dauavd1srm7s73bhf01g\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_0731_MATCH finished_0:1/1:eJyFU12PmzAQ/C9+LaQGEgK8Var6qby01VVqOVnGbIIbYyNskp4i/nvXzl3onSr1Bdkz3tnZsbmQo9Qtqcheamk7aBklETlxNQGpLoQ7pFKa5jEt44x+o3m1XlcZXeXrsijWryitqC8AxQeLxRaE0a0lVbLKim1a0HKzKROaF+k2Ip1zA7OOuwkPpJRGRPrO72nC3jDFG1AWpUZ+Zo1pH5C51MTCeJICmJMw1qSqSQt7PilXk6jG8gCJjjvRDyr+8oOe0sO028Nu2jUfm8/fPyUP5d2HcNg0v0C4W8FKGCwBJ40OtBiBO/CCybak2w3N8xLh3rSgHhsDjgjHmMvXb3H91a/v1vE7xW0X022WXHU6g34tlvxE+5gt/MY19VJgLT8A7pAYjYIgy62VmIm+ToTpOdBXl5e6RlrbM4zWL6sAiE5qzjT3xrnycWoBgfYfbXTYRP6zH3kPZzMeA73nykLAn4ql7V8wIwxmdFIfXuCT/W/HeQ4DYIrWaFRgyyh6UirybXtYds4YxQRXKkR1PyN0fYLsKhEisM4MQVaZwzCaxj7Wz/eRN3VLE7l+cMyZI2h/JtlkWejh0PBfaF6EjJ8ufqGyDRJgnez9I0Dv1hsvV0VaQEw9+awFa8FxGaxjd8GF/3FuYv6yA8bOo3SwEMH6vxw811syXCTnecaI/wCks0B6\",\n  \"timestamp\": \"2026-09-30T06:44:30.650163842Z\"\n}{\n  \"id\": \"3255024d-7bb5-411d-b6d3-8eb0125ec536\",\n  \"labels\": [\n    {\n      \"name\": \"resource\",\n      \"value\": \"job-dauavd1srm7s73bhf01g\"\n    },\n    {\n      \"name\": \"level\",\n      \"value\": \"info\"\n    },\n    {\n      \"name\": \"type\",\n      \"value\": \"app\"\n    }\n  ],\n  \"message\": \"PW_0731_MATCH started_1:1/1:eJwdjcGOAiEQRP+F66opYKYdOO5lf8A7aaCJRKO7A+PF+O/i3ip5Va+e6lJvWXnVOq9dctBqpx583UT5p+I+iIGhPdze4gTy0+QtDjTDmPkL8MAY1I/hBzp8h9/1HjnWa+1V2kCr/G3SemhnNjONGlt9FCJxhecRk3UuL0UcECXlXOIygKE0kYiGI5uTLkXYpswmcvl3Nlkf3Ov9Frb2+cYB0LQQQb1eb1jhPic=\",\n  \"timestamp\": \"2026-09-30T06:44:30.650353457Z\"\n}",
+  "stderr": ""
+}

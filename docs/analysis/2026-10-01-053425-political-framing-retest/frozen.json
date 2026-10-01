@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-01T05:39:31.070101+00:00",
+  "cases": 117,
+  "questions_per_case": 38,
+  "changed_question_fields": [
+    "geo:framework",
+    "geo:nationalism",
+    "geo:reporting"
+  ],
+  "state_parity_verified": true,
+  "unchanged_questions_per_case": 35,
+  "reference_bytes_identical": true,
+  "languages": {
+    "ja": 20,
+    "zh-cn": 19,
+    "ko": 20,
+    "en": 20,
+    "es": 19,
+    "tr": 19
+  },
+  "max_calls_per_provider": 117,
+  "max_combined_calls": 234,
+  "max_usd_per_provider": "0.25",
+  "max_combined_usd": "0.50",
+  "concurrency_per_provider": 1,
+  "retries": 0,
+  "deadline_seconds_per_provider": 3600,
+  "models": {
+    "jev": "jev-1.13.0",
+    "0731": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "files": {
+    "contract.md": "93ac522e5edb36bb46188157a90bcc3c6cdc530170b4c8daaf636f95b65e5307",
+    "prepare.py": "39005aa1a0eb0f61452bb782e20deaa794bfb382f22bbefed15d0d73f1096b10",
+    "questions.json": "14945d2d58a06b28d365af319ffe833c65f797d36e341567ed7f3165d9cb1262",
+    "requests.json": "16c7c5a1d4c575ad8195462b482ed8fdb7511282eeb387d2b6dc4f51ef0c34f4",
+    "references.json": "aa9c8e778eacae9501a28ff0ff569057f2f402d330afa6d837d3341efcfa175e",
+    "prompt-diff.json": "0ceecaca288d9b1800980c618fe43ec5aabf9b34052956520806d9f047a0c7d1"
+  },
+  "baseline_files": {
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/requests.json": "6bb4c6c58316af0d752d68339a5e88d44b52a69dc71bab265ffd8b7b063ca489",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/references.json": "aa9c8e778eacae9501a28ff0ff569057f2f402d330afa6d837d3341efcfa175e",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/scores.json": "78d70e4a016a4556380363f39a738124de8ae01132222ef05d5ae4685d35e299",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/questions.py": "9c7b3e2bcd0df88ccf1bb2a35ce5daa3b0c2759b73cac75df16f5947d757e166",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/run.py": "e09bc7bea213db5f21e22964db93a7e72676d6ef65c6278308650539c936d717",
+    "docs/analysis/2026-09-30-070427-jev-multilingual-classification/frozen.json": "ebccabf6c78652e212655b48e99fdb73d56a1dae64569333129424687036b881",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/requests.json": "ed07cdfe75797bec9d589153972d1fa52b2b6aa54a19ea55c1946843e2da061f",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/scores.json": "eda6fe6c7f7ba42e334694ba8437d443c51c0b09b28beb1ef39b3451c14b90e5",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/packet.json": "9acaedb346dd162c6309ccd40fc88ef58dd2188b9b04c8ff3a15e2d625383838",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/run.py": "30b23291997bd5057b55f78192b633788a9e47fdb1cdd51ad70428b2d43fc630",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/remote.py": "9e2047e8bcd942eb442914e6bea33409d7b559d166d5169bf7d6f4ae3022bb01",
+    "docs/analysis/2026-09-30-074728-0731-multilingual-comparison/frozen.json": "4e2b9535be144de508194605361197b871c701250fec4fd74034882531ee53d0"
+  },
+  "protected_files": {
+    "config.yaml": "1f05eecd94fcc9a3a340c287e43ada5f5fa89422dae6f6dc2e78c26797bf659f",
+    "render.yaml": "4c5670fea52520108ee64a802706938ff4d0e6f20a23d948261a827574a77e92",
+    "x_monitor/attribution.py": "9cb543131f32ac2773f43a5203355a0fee776da17352cd2b038828a5f395d48d",
+    "x_monitor/classifier_0731_prompts.py": "a922e2bed8b18e3b16b73007c4798e4b9d79529b9398e485229a2140bf149e33",
+    "x_monitor/deepinfra.py": "6cdcaffa8423565f0c82e9b8917c3b7e35503d95805dc6dc2adc30a179580d58",
+    "tests/test_u18_runtime_0731.py": "e42fccce9fb4d37ee122452cc4ab9ae3517215a71a22bcbcf46c3058878d6708",
+    "tests/test_u18a_v4_classification_persistence.py": "c79fe4b572acbe3d9ce2bad0c5b202cf5bb321d7cb06aeebd6921fe17eaea15d"
+  },
+  "provider_calls_at_freeze": 0
+}

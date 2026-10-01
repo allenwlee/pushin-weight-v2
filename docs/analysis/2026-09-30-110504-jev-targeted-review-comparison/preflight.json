@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-09-30T02:14:06.486661+00:00",
+  "owner_approved": true,
+  "new_call_cap": 32,
+  "planned_calls": 28,
+  "new_dollar_cap": "1.00",
+  "cases": 8,
+  "cohort_sha256": "81700209e26e5ef64dbeb31f8ac88c81c95a8169721922203185f61f121d6eb1",
+  "contract_sha256": "a72d994589b582893ff0de2689d3e9f636425bd73ef82f3756205e9cc7fa952f",
+  "source_sha256": {
+    "x_monitor/attribution.py": "9cb543131f32ac2773f43a5203355a0fee776da17352cd2b038828a5f395d48d",
+    "x_monitor/classifier_0731_prompts.py": "a922e2bed8b18e3b16b73007c4798e4b9d79529b9398e485229a2140bf149e33",
+    "x_monitor/deepinfra.py": "6cdcaffa8423565f0c82e9b8917c3b7e35503d95805dc6dc2adc30a179580d58"
+  },
+  "run_sha256": "e0cb02f24c06646ed1586545eff64a9a86a75628089f73921f87b709428a7603",
+  "network_calls": 0,
+  "requests_sha256": "806777a73989c28714c321b3bf359599b1517ff4273a0a8869dd984232d49123",
+  "readiness": "Exact payload and prompt snapshots created; transport availability remains a live prerequisite."
+}

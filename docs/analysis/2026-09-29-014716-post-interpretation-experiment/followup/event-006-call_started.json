@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 3,
+    "phase": "batch1:quote_tolerant_candidate_cross_task_probe",
+    "request_sha256": "3b665127883c7dbdc26424d586100f8fe4dd85d9e2f55370aa9fc30830933996",
+    "reserved_cost_usd": "0.33652"
+  }
+}

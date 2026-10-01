@@ -1,0 +1,9 @@
+{
+  "kind": "started_123",
+  "value": {
+    "at": "2026-09-30T08:18:27.191066+00:00",
+    "id": "en_18_raw",
+    "request_sha256": "1d9fa0fe63570f0dd0cfeb8c0335b9c1256f2f231ac00f8a9ed4308d78e66fc4",
+    "reservation_usd": "0.00863892"
+  }
+}

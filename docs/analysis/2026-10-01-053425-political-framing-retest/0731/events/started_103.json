@@ -1,0 +1,9 @@
+{
+  "kind": "started_103",
+  "value": {
+    "at": "2026-10-01T06:09:22.013060+00:00",
+    "id": "tr_06_raw",
+    "request_sha256": "ad207b6d3eb50e12b63af3a608f6cb3e91e51616aff00e566f9090b875c5a148",
+    "reservation_usd": "0.0086352"
+  }
+}

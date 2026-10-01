@@ -1,0 +1,15 @@
+{
+  "issued_at": "2026-09-30T00:53:45.637Z",
+  "observed_at": "2026-09-30T00:53:47.495954+00:00",
+  "provider": "Render-managed production PostgreSQL via Render CLI",
+  "database_service": "dpg-d9koekqjobas73fvjqng-a",
+  "mode": "REPEATABLE READ READ ONLY",
+  "statement_timeout": "20s",
+  "post_id": "2105081335475757197",
+  "sql_file": "inspection.sql",
+  "result_file": "render-result.json",
+  "model_calls": 0,
+  "x_calls": 0,
+  "tests_run": 0,
+  "limitations": "Stored source/current projection and canonical judgment records, not raw model request/response or chain of thought. Source inspected at origin/main 86fdda2 and local worktree 1edbc3a with earlier authorized experiment edits; relevant brand prompt/parser/persistence unchanged. No live browser rendering inspected."
+}

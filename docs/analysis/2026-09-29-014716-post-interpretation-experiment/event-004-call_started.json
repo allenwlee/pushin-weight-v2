@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 2,
+    "phase": "batch1:baseline_classifier",
+    "request_sha256": "5580a6dd017d3d059b07dbd3b5dffb7b2a757da15264b7effd8f374aa5bf9a7f",
+    "reserved_cost_usd": "0.34716"
+  }
+}

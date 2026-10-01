@@ -1,0 +1,24 @@
+{
+  "frozen_at": "2026-09-29T06:46:55Z",
+  "purpose": "Assess useful tracked-model information in the prior B.AI-associated post cohort without using classifier labels as truth.",
+  "scope": "Same 7,303 explicit B.AI-associated posts as the prior comparison, fetched before 2026-09-29T05:57:44.654358Z; raw marker prefilter plus the four saved Unicode-only IDs. Association does not itself establish spam.",
+  "sampling": {
+    "main": "First 40 by md5(tweet_id || 'bai-signal-2026-09-29'), tweet_id over the complete reconstructed cohort.",
+    "exceptions": "First 10 by the same ordering among posts without the joint #TRONEcoStar plus @justinsuntron signature, excluding the main sample. Never pool into the 40-post denominator."
+  },
+  "budget": {
+    "read_only_db_requests_max": 3,
+    "model_calls": 0,
+    "x_provider_calls": 0,
+    "review_passes": 1
+  },
+  "rubric": {
+    "A": "Concrete primary evidence about a tracked model: described firsthand test with specific input/result/failure, reproducible nontrivial workflow, or primary model-developer/partner information. Commercial language does not disqualify.",
+    "B": "Specific model facts or capability/benchmark/release claims, but without primary evidence demonstrated in the stored text. These claims are not externally fact-checked or assumed copied.",
+    "C": "Provider access/pricing/usage/integration news or benefit pitch, without substantive model information beyond generic capabilities/names. This can carry ecosystem/access signal without informing intrinsic model quality.",
+    "D": "Generic praise, conversational reply, or other text lacking concrete model/provider information."
+  },
+  "coding": "Assign highest evidence tier satisfied, rather than promotion motive. Add provider_signal, firsthand_evidence, primary_relationship_evidence and missing_context flags and short per-post rationale. Report stored text findings, not media unseen behind links. Repeated author appearances are preserved: unit is posts, not accounts.",
+  "limits": "No certainty about authenticity, unseen media, factual correctness, originality, or incremental novelty over other corpus posts. Cannot estimate semantic duplication across all 7,303. Sample percentages describe only the reviewed 40."
+}
+

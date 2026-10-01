@@ -1,0 +1,88 @@
+import json
+from decimal import Decimal
+
+import pytest
+
+from scripts import post_interpretation_experiment as exp
+from scripts.u18a_label_owner_candidate_eval import CaptureTransport, _registry
+from x_monitor.deepinfra import DeepInfraPermanentError
+
+
+def test_real_classifier_receives_source_and_interpretation_in_both_roles():
+    cases = exp.cohort()[0]
+    capture = CaptureTransport()
+    derived = {slot: {"test_marker": slot} for slot in exp.source_posts(cases)}
+    exp.invoke_classifier(cases, _registry(cases), exp.InterpretationClient(capture, derived))
+    assert len(capture.requests) == 2
+    for request in capture.requests:
+        packet = json.loads(request["messages"][1]["content"])
+        assert packet["post_interpretations"] == derived
+        assert packet["cases"]["P01"]["evidence"]["source_text"] == cases[0]["source_text"]
+        assert request["messages"][0]["content"].endswith(exp.DERIVED_INSTRUCTION)
+        assert "expected" not in packet
+        assert "rubric" not in packet
+
+
+def test_baseline_is_unchanged_and_has_no_interpretation():
+    cases = exp.cohort()[0]
+    capture = CaptureTransport()
+    exp.invoke_classifier(cases, _registry(cases), exp.InterpretationClient(capture))
+    for request in capture.requests:
+        assert "post_interpretations" not in request["messages"][1]["content"]
+        assert exp.DERIVED_INSTRUCTION not in request["messages"][0]["content"]
+
+
+def test_extraction_packet_omits_gold_and_tracked_target():
+    sources = exp.source_posts(exp.cohort()[0])
+    assert len(sources) == 5
+    assert all(set(row) == {"source_text", "context"} for row in sources.values())
+
+
+def test_quotes_are_checked_against_the_same_post():
+    value = {"posts": {"P01": {"entities": [{"name": "Qwen", "roles": ["product"], "evidence": "Qwen"}], "claims": [], "calls_to_action": [], "uncertainties": []}}}
+    assert exp.validate_interpretation(value, {"P01": {"source_text": "Qwen works"}}) == []
+    assert exp.validate_interpretation(value, {"P01": {"source_text": "DeepSeek works"}}) == ["P01:entities:evidence_not_verbatim"]
+
+
+def test_budget_rejects_before_any_network_call():
+    class Never:
+        def _send_request(self, *_args, **_kwargs):
+            pytest.fail("budget-exhausted call reached network")
+    transport = exp.RecordedTransport(Never(), call_limit=0, emit_fn=lambda *_: None)
+    with pytest.raises(DeepInfraPermanentError, match="budget"):
+        transport({"model": exp.MODEL, "max_tokens": 10}, 1)
+    assert transport.calls == 0
+
+
+def test_raw_invalid_content_still_has_usage_and_is_preserved():
+    class Raw:
+        def _send_request(self, *_args, **_kwargs):
+            return {"usage": {"estimated_cost": 0.01, "prompt_tokens": 10, "completion_tokens": 5}, "choices": [{"message": {"content": "bad json"}}]}
+    emitted = []
+    transport = exp.RecordedTransport(Raw(), emit_fn=lambda k, v: emitted.append((k, v)))
+    transport({"model": exp.MODEL, "max_tokens": 10}, 1)
+    assert transport.calls == 1
+    assert transport.cost == Decimal("0.01")
+    assert emitted[-1][1]["raw_response"]["choices"][0]["message"]["content"] == "bad json"
+
+
+def test_unknown_cost_stops_future_calls():
+    class Missing:
+        def _send_request(self, *_args, **_kwargs):
+            return {"usage": {}}
+    transport = exp.RecordedTransport(Missing(), emit_fn=lambda *_: None)
+    with pytest.raises(DeepInfraPermanentError):
+        transport({"model": exp.MODEL, "max_tokens": 10}, 1)
+    with pytest.raises(DeepInfraPermanentError):
+        transport({"model": exp.MODEL, "max_tokens": 10}, 1)
+    assert transport.calls == 1
+
+
+def test_frozen_cohort_and_invalid_score():
+    batches = exp.cohort()
+    assert [len(b) for b in batches] == [5, 5, 5]
+    cases = [c for b in batches for c in b]
+    assert len({c["case_id"] for c in cases}) == 15
+    assert sum("expected" in c for c in cases) == 10
+    assert not exp.score(cases[0], {"valid": False})["ownership_boundary_match"]
+    assert not exp.score(cases[4], {"valid": False})["boundary_match"]

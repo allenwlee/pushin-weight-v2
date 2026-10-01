@@ -1,0 +1,10 @@
+{
+  "attempt": 2,
+  "issued_at": "2026-09-29T06:48:20.999Z",
+  "observed_at": "2026-09-29T06:48:22.557026+00:00",
+  "exit_code": 0,
+  "posts": 50,
+  "credential_pattern_redactions": 0,
+  "record_format": "Render JSON response, with credential-like token patterns replaced if encountered.",
+  "sql_file": "bai-signal-sample-text.sql"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "finished_7",
+  "value": {
+    "at": "2026-09-30T06:44:52.916000+00:00",
+    "elapsed_seconds": 2.5781900007277727,
+    "http_status": 200,
+    "id": "G04_A_labels",
+    "raw_body": "{\"service_tier\":\"default\",\"id\":\"chatcmpl-R9At3amt7gSFYhxoUkV7kT2J\",\"object\":\"chat.completion\",\"created\":1790750690,\"model\":\"deepseek-ai/DeepSeek-V4-Flash-0731\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"answers\\\":{\\\"china_national_stance\\\":\\\"anti\\\",\\\"framework\\\":true,\\\"nationalism\\\":true,\\\"reporting\\\":false,\\\"us_national_stance\\\":\\\"anti\\\"}}\",\"reasoning_content\":null,\"name\":null,\"tool_calls\":[]},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":2553,\"total_tokens\":2588,\"completion_tokens\":35,\"estimated_cost\":0.00011339999999999999,\"prompt_tokens_details\":{\"cached_tokens\":1024,\"cache_write_tokens\":null},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+  }
+}

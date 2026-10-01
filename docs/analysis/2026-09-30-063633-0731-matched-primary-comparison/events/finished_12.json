@@ -1,0 +1,10 @@
+{
+  "kind": "finished_12",
+  "value": {
+    "at": "2026-09-30T06:44:58.793203+00:00",
+    "elapsed_seconds": 2.7243894767016172,
+    "http_status": 200,
+    "id": "P03_A_labels",
+    "raw_body": "{\"service_tier\":\"default\",\"id\":\"chatcmpl-RiTvve2ZnKvt3kDbn3Kpdqy2\",\"object\":\"chat.completion\",\"created\":1790750696,\"model\":\"deepseek-ai/DeepSeek-V4-Flash-0731\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"answers\\\":{\\\"advertising_marketing\\\":true}}\",\"reasoning_content\":null,\"name\":null,\"tool_calls\":[]},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":652,\"total_tokens\":664,\"completion_tokens\":12,\"estimated_cost\":2.9760000000000003e-05,\"prompt_tokens_details\":{\"cached_tokens\":256,\"cache_write_tokens\":null},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+  }
+}

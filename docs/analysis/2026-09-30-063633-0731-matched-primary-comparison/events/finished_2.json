@@ -1,0 +1,10 @@
+{
+  "kind": "finished_2",
+  "value": {
+    "at": "2026-09-30T06:44:40.388482+00:00",
+    "elapsed_seconds": 7.228956265375018,
+    "http_status": 200,
+    "id": "G02_B_probabilities",
+    "raw_body": "{\"service_tier\":\"default\",\"id\":\"chatcmpl-RpB8bMTwCPkAZtueXnZEu3jU\",\"object\":\"chat.completion\",\"created\":1790750673,\"model\":\"deepseek-ai/DeepSeek-V4-Flash-0731\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"answers\\\":{\\\"china_national_stance\\\":{\\\"label\\\":\\\"pro\\\",\\\"probabilities\\\":{\\\"anti\\\":0.03,\\\"constructive_critical\\\":0.02,\\\"mild_pro\\\":0.2,\\\"mixed\\\":0.05,\\\"none\\\":0.05,\\\"pro\\\":0.6,\\\"unknown\\\":0.05}},\\\"framework\\\":{\\\"label\\\":true,\\\"probabilities\\\":{\\\"true\\\":0.8,\\\"false\\\":0.2}},\\\"nationalism\\\":{\\\"label\\\":true,\\\"probabilities\\\":{\\\"true\\\":0.75,\\\"false\\\":0.25}},\\\"reporting\\\":{\\\"label\\\":false,\\\"probabilities\\\":{\\\"true\\\":0.15,\\\"false\\\":0.85}},\\\"us_national_stance\\\":{\\\"label\\\":\\\"anti\\\",\\\"probabilities\\\":{\\\"anti\\\":0.7,\\\"constructive_critical\\\":0.05,\\\"mild_pro\\\":0.0,\\\"mixed\\\":0.05,\\\"none\\\":0.15,\\\"pro\\\":0.0,\\\"unknown\\\":0.05}}}}\",\"reasoning_content\":null,\"name\":null,\"tool_calls\":[]},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":1449,\"total_tokens\":1642,\"completion_tokens\":193,\"estimated_cost\":0.00012168,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":null},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+  }
+}

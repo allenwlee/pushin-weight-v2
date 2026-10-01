@@ -1,0 +1,8 @@
+{
+  "attempt": 1,
+  "issued_at": "2026-09-29T06:47:38.738Z",
+  "exit_code": 0,
+  "original_token_count": 70123,
+  "result": "SQL succeeded but terminal output was truncated. No rows from this response used for scoring.",
+  "repair": "Repeat identical sample selection, replacing large stored media/card payloads with presence flags; still review text only."
+}

@@ -1,0 +1,1013 @@
+{
+  "kind": "batch_result",
+  "value": {
+    "admission_errors_retained": [
+      "P02:claims:evidence_not_verbatim"
+    ],
+    "batch": 1,
+    "candidate": [
+      {
+        "by_brand": {
+          "qwen": {
+            "audience_topics": [
+              "cost_performance"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "product_labels": [],
+            "sentiment": "neutral",
+            "us_national_stance": "none"
+          }
+        },
+        "classification_trace": {
+          "brand_interpretation": {
+            "by_brand": {
+              "qwen": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "none"
+                ],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "723dc86e1eb59b4f328500ac39106b1672814863ef75367cc3e4172b08415781",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-brand-interpretation-0731-v5",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "brand_interpretation",
+            "role_revision": "stage1-brand-interpretation-0731-v5",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "content": {
+            "by_brand": {
+              "qwen": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ]
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "723dc86e1eb59b4f328500ac39106b1672814863ef75367cc3e4172b08415781",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-content-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "content",
+            "role_revision": "stage1-content-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "final": {
+            "by_brand": {
+              "qwen": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "723dc86e1eb59b4f328500ac39106b1672814863ef75367cc3e4172b08415781",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-two-role-merge-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "classifier",
+            "role_revision": "stage1-two-role-merge-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "selector_version": "stage1-two-role-merge-0731-v6"
+        },
+        "promoted_subjects": [
+          {
+            "account_handle": null,
+            "domain": "t.co/ry1CvgQyNP",
+            "evidence": "Free AI tokens every day → https://t.co/ry1CvgQyNP",
+            "handle": null,
+            "name": "Token Machine"
+          }
+        ],
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "valid": true
+      },
+      {
+        "by_brand": {
+          "glm": {
+            "audience_topics": [
+              "cost_performance"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing",
+              "research_explanations"
+            ],
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "us_national_stance": "none"
+          }
+        },
+        "classification_trace": {
+          "brand_interpretation": {
+            "by_brand": {
+              "glm": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "74a782eb0ccdc42a476e1bc15662398a014058edeabf7c3b4ee8b87d4492b5ed",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-brand-interpretation-0731-v5",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "brand_interpretation",
+            "role_revision": "stage1-brand-interpretation-0731-v5",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "content": {
+            "by_brand": {
+              "glm": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing",
+                  "research_explanations"
+                ]
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "74a782eb0ccdc42a476e1bc15662398a014058edeabf7c3b4ee8b87d4492b5ed",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-content-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "content",
+            "role_revision": "stage1-content-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "final": {
+            "by_brand": {
+              "glm": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing",
+                  "research_explanations"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "74a782eb0ccdc42a476e1bc15662398a014058edeabf7c3b4ee8b87d4492b5ed",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-two-role-merge-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "classifier",
+            "role_revision": "stage1-two-role-merge-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "selector_version": "stage1-two-role-merge-0731-v6"
+        },
+        "promoted_subjects": [
+          {
+            "account_handle": null,
+            "domain": "t.co/RYAllLd3cM",
+            "evidence": "Head over to https://t.co/RYAllLd3cM and dive into the guide.",
+            "handle": null,
+            "name": "https://t.co/RYAllLd3cM platform"
+          }
+        ],
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "valid": true
+      },
+      {
+        "by_brand": {
+          "deepseek": {
+            "audience_topics": [
+              "api_developer_surface",
+              "cost_performance"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "releases_updates",
+              "advertising_marketing"
+            ],
+            "product_labels": [],
+            "sentiment": "neutral",
+            "us_national_stance": "none"
+          }
+        },
+        "classification_trace": {
+          "brand_interpretation": {
+            "by_brand": {
+              "deepseek": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "none"
+                ],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "1e275bfd8de35b92b8dd82d3d322c34f244273a0fda3b4b41343983c92517078",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-brand-interpretation-0731-v5",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "brand_interpretation",
+            "role_revision": "stage1-brand-interpretation-0731-v5",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "content": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface",
+                  "cost_performance"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "releases_updates",
+                  "advertising_marketing"
+                ]
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "1e275bfd8de35b92b8dd82d3d322c34f244273a0fda3b4b41343983c92517078",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-content-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "content",
+            "role_revision": "stage1-content-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "final": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface",
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "releases_updates",
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "1e275bfd8de35b92b8dd82d3d322c34f244273a0fda3b4b41343983c92517078",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-two-role-merge-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "classifier",
+            "role_revision": "stage1-two-role-merge-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "selector_version": "stage1-two-role-merge-0731-v6"
+        },
+        "promoted_subjects": [],
+        "untracked_brand_promotions": [],
+        "valid": true
+      },
+      {
+        "by_brand": {
+          "deepseek": {
+            "audience_topics": [
+              "api_developer_surface"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "product_labels": [],
+            "sentiment": "neutral",
+            "us_national_stance": "none"
+          }
+        },
+        "classification_trace": {
+          "brand_interpretation": {
+            "by_brand": {
+              "deepseek": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "none"
+                ],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "c2dee36bda0dff7a636d47042042330d6c31d4b0e0f2191fdc80e3bf98733b11",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-brand-interpretation-0731-v5",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "brand_interpretation",
+            "role_revision": "stage1-brand-interpretation-0731-v5",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "content": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ]
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "c2dee36bda0dff7a636d47042042330d6c31d4b0e0f2191fdc80e3bf98733b11",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-content-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "content",
+            "role_revision": "stage1-content-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "final": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "c2dee36bda0dff7a636d47042042330d6c31d4b0e0f2191fdc80e3bf98733b11",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-two-role-merge-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "classifier",
+            "role_revision": "stage1-two-role-merge-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "selector_version": "stage1-two-role-merge-0731-v6"
+        },
+        "promoted_subjects": [
+          {
+            "account_handle": null,
+            "domain": "tokenmachine.example",
+            "evidence": "join Token Machine's daily token spins at tokenmachine.example",
+            "handle": null,
+            "name": "Token Machine"
+          }
+        ],
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "valid": true
+      },
+      {
+        "by_brand": {
+          "deepseek": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "results_analysis"
+            ],
+            "product_labels": [],
+            "sentiment": "neutral",
+            "us_national_stance": "none"
+          },
+          "qwen": {
+            "audience_topics": [
+              "evals_benchmarks"
+            ],
+            "audience_topics_state": "selected",
+            "china_national_stance": "none",
+            "geopolitical_modes": [],
+            "geopolitical_modes_state": "none",
+            "outcome": "classified",
+            "post_types": [
+              "results_analysis"
+            ],
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "us_national_stance": "none"
+          }
+        },
+        "classification_trace": {
+          "brand_interpretation": {
+            "by_brand": {
+              "deepseek": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "none"
+                ],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              },
+              "qwen": {
+                "china_national_stance": "none",
+                "geopolitical_modes": [
+                  "none"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "3b4b34119e5a8b0b30fe39b84c9aa52019f3ccf6fe7868156772659fc4193085",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-brand-interpretation-0731-v5",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "brand_interpretation",
+            "role_revision": "stage1-brand-interpretation-0731-v5",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "content": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "evals_benchmarks"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "results_analysis"
+                ]
+              },
+              "qwen": {
+                "audience_topics": [
+                  "evals_benchmarks"
+                ],
+                "outcome": "classified",
+                "post_types": [
+                  "results_analysis"
+                ]
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "3b4b34119e5a8b0b30fe39b84c9aa52019f3ccf6fe7868156772659fc4193085",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-content-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "content",
+            "role_revision": "stage1-content-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "final": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "evals_benchmarks"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "results_analysis"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              },
+              "qwen": {
+                "audience_topics": [
+                  "evals_benchmarks"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "results_analysis"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "contract_version": "stage1-v1",
+            "input_context_fingerprint": "3b4b34119e5a8b0b30fe39b84c9aa52019f3ccf6fe7868156772659fc4193085",
+            "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "prompt_version": "stage1-two-role-merge-0731-v6",
+            "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f",
+            "provider_role": "classifier",
+            "role_revision": "stage1-two-role-merge-0731-v6",
+            "selector_version": "stage1-two-role-merge-0731-v6",
+            "taxonomy_version": "stage1-taxonomy-v4",
+            "validation_state": "validated"
+          },
+          "selector_version": "stage1-two-role-merge-0731-v6"
+        },
+        "promoted_subjects": [],
+        "untracked_brand_promotions": [],
+        "valid": true
+      }
+    ],
+    "case_ids": [
+      "token_machine_qwen_win",
+      "bai_glm_campaign",
+      "direct_deepseek_api_pitch",
+      "tracked_and_untracked_co_promotion",
+      "comparison_two_models"
+    ],
+    "interpretation_sha256": "8bcdfef6b37005e6b8e754fc62a9fbad240256ec7b1c16514ab114f101abf7e1",
+    "probe_candidate": {
+      "value": {
+        "posts": {
+          "P01": {
+            "commentary_en": "The author reports receiving $0.05 worth of Qwen tokens from a daily spin on Token Machine and promotes the free daily token offer.",
+            "headline_en": "Token Machine awards $0.05 Qwen tokens on first spin",
+            "literal_ja": "🎰 トークンマシン Day 1 — Qwenスピンで$0.05のQwenトークンを獲得しました。毎日無料のAIトークン → https://t.co/ry1CvgQyNP"
+          },
+          "P02": {
+            "commentary_en": "The author is promoting a guide from a platform that they claim covers large model services, highlighting GLM-5.3-Flash, cost savings, and accessibility.",
+            "headline_en": "Author promotes large model guide from https://t.co/RYAllLd3cM",
+            "literal_ja": "皆さん、こんにちは。\n\nhttps://t.co/RYAllLd3cM プラットフォームが、自社の大規模モデルサービスの全側面を網羅した包括的なガイドをリリースしたことをご存知ですか？まるで、最小限のコストでAIモデルを展開するためのステップバイステップのプレイブックのようです。正直なところ、GLM-5.3-Flashモデルは際立った特徴であり、それを最大限に活用する方法を説明する詳細なガイドが登場しました。\n\nこのガイドでは、基本的な機能と標準的な運用手順を分解して説明しており、簡単にAGI分野に飛び込むことができます。正直、コスト削減は重要です。最先端のAIモデルの導入は非常に高額になる可能性がありますが、https://t.co/RYAllLd3cM のガイドはこのプロセスを合理化し、費用を削減するのに役立ちます。このプラットフォームは、グローバルなAIモデルを誰もが利用できるように設計されています。\n\nこのガイドから期待できる内容の簡単な内訳は次のとおりです：\n\n1. GLM-5.3-Flashを含む中核機能の詳細な説明。\n2. 効率的な導入と最適化のための実践的なヒント。\n3. 利点を説明する実際の例とケーススタディ。\n\n正直なところ、このガイドは革新的です。複雑なAIの概念を明確にするだけでなく、リソースを最大限に活用するのに役立つ実用的な洞察も提供します。真剣に、お金をかけずにAIを活用したい人は、ぜひチェックしてみてください。\n\nでは、何を待っていますか？https://t.co/RYAllLd3cM にアクセスして、ガイドを読んでみてください。後悔はしないでしょう！\n\n@justinsuntron @BAI_AGI #TRONEcostar"
+          },
+          "P03": {
+            "commentary_en": "The author announces the availability of DeepSeek V4 Flash and offers a discount on the official API for new signups.",
+            "headline_en": "DeepSeek V4 Flash is now available with API discount",
+            "literal_ja": "DeepSeek V4 Flashが利用可能になりました。今すぐ公式DeepSeek APIに登録して、最初の1か月間20%割引を受けましょう。"
+          },
+          "P04": {
+            "commentary_en": "The author encourages trying the DeepSeek V4 API and joining Token Machine's daily token spins, both open for signups.",
+            "headline_en": "DeepSeek V4 API and Token Machine daily spins open for signups",
+            "literal_ja": "今すぐ公式DeepSeek V4 APIを試して、tokenmachine.exampleでToken Machineの毎日のトークンスピンに参加してください。両方のサービスが現在登録受付中です。"
+          },
+          "P05": {
+            "commentary_en": "The author shares their comparison test results, indicating Qwen outperformed DeepSeek on invoice extraction and states their personal preference.",
+            "headline_en": "Qwen beats DeepSeek in invoice extraction test",
+            "literal_ja": "同じ20件の請求書でQwenとDeepSeekを実行しました。Qwenは19件の合計を正しく抽出しましたが、DeepSeekは12件でした。この作業ではQwenを選びます。"
+          }
+        }
+      }
+    },
+    "scores": [
+      {
+        "candidate": {
+          "actual": {
+            "by_brand": {
+              "qwen": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": "t.co/ry1CvgQyNP",
+                "evidence": "Free AI tokens every day → https://t.co/ry1CvgQyNP",
+                "handle": null,
+                "name": "Token Machine"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "expected": {
+            "by_brand": {
+              "qwen": {
+                "audience_topics": [],
+                "audience_topics_state": "none",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "other"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": null,
+                "evidence": "Token Machine Day 1",
+                "handle": null,
+                "name": "Token Machine"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "full_result_match": false,
+          "ownership": {
+            "promoted_subjects_actual": [
+              "token machine"
+            ],
+            "promoted_subjects_expected": [
+              "token machine"
+            ],
+            "tracked_advertising_actual": true,
+            "tracked_advertising_expected": false,
+            "untracked_promotions_actual": [
+              "general"
+            ],
+            "untracked_promotions_expected": [
+              "general"
+            ]
+          },
+          "ownership_boundary_match": false,
+          "valid": true
+        },
+        "case_id": "token_machine_qwen_win"
+      },
+      {
+        "candidate": {
+          "actual": {
+            "by_brand": {
+              "glm": {
+                "audience_topics": [
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing",
+                  "research_explanations"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": "t.co/RYAllLd3cM",
+                "evidence": "Head over to https://t.co/RYAllLd3cM and dive into the guide.",
+                "handle": null,
+                "name": "https://t.co/RYAllLd3cM platform"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "expected": {
+            "by_brand": {
+              "glm": {
+                "audience_topics": [],
+                "audience_topics_state": "none",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "opinions_reactions"
+                ],
+                "product_labels": [
+                  "testimonial"
+                ],
+                "sentiment": "positive",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": null,
+                "evidence": "@BAI_AGI",
+                "handle": "@BAI_AGI",
+                "name": "B.AI"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "full_result_match": false,
+          "ownership": {
+            "promoted_subjects_actual": [
+              "https://t.co/ryallld3cm platform"
+            ],
+            "promoted_subjects_expected": [
+              "b.ai"
+            ],
+            "tracked_advertising_actual": true,
+            "tracked_advertising_expected": false,
+            "untracked_promotions_actual": [
+              "general"
+            ],
+            "untracked_promotions_expected": [
+              "general"
+            ]
+          },
+          "ownership_boundary_match": false,
+          "valid": true
+        },
+        "case_id": "bai_glm_campaign"
+      },
+      {
+        "candidate": {
+          "actual": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface",
+                  "cost_performance"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "releases_updates",
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [],
+            "untracked_brand_promotions": []
+          },
+          "expected": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing",
+                  "releases_updates"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [],
+            "untracked_brand_promotions": []
+          },
+          "full_result_match": false,
+          "ownership": {
+            "promoted_subjects_actual": [],
+            "promoted_subjects_expected": [],
+            "tracked_advertising_actual": true,
+            "tracked_advertising_expected": true,
+            "untracked_promotions_actual": [],
+            "untracked_promotions_expected": []
+          },
+          "ownership_boundary_match": true,
+          "valid": true
+        },
+        "case_id": "direct_deepseek_api_pitch"
+      },
+      {
+        "candidate": {
+          "actual": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": "tokenmachine.example",
+                "evidence": "join Token Machine's daily token spins at tokenmachine.example",
+                "handle": null,
+                "name": "Token Machine"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "expected": {
+            "by_brand": {
+              "deepseek": {
+                "audience_topics": [
+                  "api_developer_surface"
+                ],
+                "audience_topics_state": "selected",
+                "china_national_stance": "none",
+                "geopolitical_modes": [],
+                "geopolitical_modes_state": "none",
+                "outcome": "classified",
+                "post_types": [
+                  "advertising_marketing"
+                ],
+                "product_labels": [],
+                "sentiment": "neutral",
+                "us_national_stance": "none"
+              }
+            },
+            "promoted_subjects": [
+              {
+                "account_handle": null,
+                "domain": "tokenmachine.example",
+                "evidence": "join Token Machine's daily token spins",
+                "handle": null,
+                "name": "Token Machine"
+              }
+            ],
+            "untracked_brand_promotions": [
+              "general"
+            ]
+          },
+          "full_result_match": false,
+          "ownership": {
+            "promoted_subjects_actual": [
+              "token machine"
+            ],
+            "promoted_subjects_expected": [
+              "token machine"
+            ],
+            "tracked_advertising_actual": true,
+            "tracked_advertising_expected": true,
+            "untracked_promotions_actual": [
+              "general"
+            ],
+            "untracked_promotions_expected": [
+              "general"
+            ]
+          },
+          "ownership_boundary_match": true,
+          "valid": true
+        },
+        "case_id": "tracked_and_untracked_co_promotion"
+      },
+      {
+        "candidate": {
+          "boundary_match": true,
+          "checks": {
+            "deepseek:post_types_contains": true,
+            "deepseek:post_types_excludes": true,
+            "qwen:post_types_contains": true,
+            "qwen:post_types_excludes": true,
+            "qwen:sentiment": true
+          },
+          "valid": true
+        },
+        "case_id": "comparison_two_models"
+      }
+    ]
+  }
+}

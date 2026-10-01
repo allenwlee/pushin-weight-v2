@@ -1,0 +1,177 @@
+{
+  "observed_at": "2026-09-30T00:53:47.495954+00:00",
+  "post": {
+    "tweet_id": "2105081335475757197",
+    "author_id": "1874471449890639874",
+    "author_handle": "PreciousBa82157",
+    "text": "i have never seen such an hateful and useless company as anthropic, like what's your obsession you aren't AI police, just realease your expensive ass models, get your revenue and shut the fuck up! their useless internal models plus openAI's are busy hacking important software all around the globe,we haven't heard of a single case of this GLM 5.3 model being used for such.\n\nAll with the motive to just make sure they have a monopoly over AI,very useless ass and satanic company, scrap the entire internet over humanity's collective work, made insane amount of money over it but wants to be the only one that can do this,very useless.",
+    "text_en": "i have never seen such an hateful and useless company as anthropic, like what's your obsession you aren't AI police, just realease your expensive ass models, get your revenue and shut the fuck up! their useless internal models plus openAI's are busy hacking important software all around the globe,we haven't heard of a single case of this GLM 5.3 model being used for such.\n\nAll with the motive to just make sure they have a monopoly over AI,very useless ass and satanic company, scrap the entire internet over humanity's collective work, made insane amount of money over it but wants to be the only one that can do this,very useless.",
+    "lang": "en",
+    "lang_detected": "en",
+    "created_at": "2026-09-29T23:44:35+00:00",
+    "fetched_at": "2026-09-29T23:45:39.51675+00:00",
+    "is_reply": false,
+    "is_quote": true,
+    "in_reply_to_id": null,
+    "quoted_status_id": null,
+    "quoted_text": "I am very confused why Anthropic wrote a blog post advertising for cybersecurity teams to switch to GLM!?!?\n\nhttps://t.co/6Z1BTChDtj",
+    "quoted_author_handle": "attrc"
+  },
+  "states": [
+    {
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "stage1-two-role-merge-0731-v6",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "source_language": "en",
+      "input_context_fingerprint": "bee6c1329acd901410e8a5e8937f244cbf81eccce8923a2466d71a580237b110",
+      "outcome": "classified",
+      "classified_at": "2026-09-29T23:49:39.759479+00:00",
+      "brand_id": "glm",
+      "china_nationalism": "pro",
+      "post_id": "2105081335475757197",
+      "sentiment": "positive",
+      "us_nationalism": "anti",
+      "selected_final_judgment_id": 124095,
+      "china_national_stance": "pro",
+      "us_national_stance": "anti"
+    }
+  ],
+  "geo_modes": [
+    {
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "evidence": {
+        "axis": "geopolitical_modes",
+        "value": "nationalism",
+        "input_context_fingerprint": "bee6c1329acd901410e8a5e8937f244cbf81eccce8923a2466d71a580237b110"
+      },
+      "prompt_version": "stage1-brand-interpretation-0731-v5",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "provider_role": "brand_interpretation",
+      "assigned_at": "2026-09-29T23:49:39.767003+00:00",
+      "brand_id": "glm",
+      "final_judgment_id": 124095,
+      "geopolitical_mode_key": "nationalism",
+      "post_id": "2105081335475757197"
+    }
+  ],
+  "signals": [
+    {
+      "brand_id": "glm",
+      "post_id": "2105081335475757197",
+      "post_type_key": "opinions_reactions",
+      "sentiment": "positive"
+    }
+  ],
+  "judgments": [
+    {
+      "id": 124093,
+      "revision_id": "794af3c4e3d1e504c0d688d7f2e0a85ef71d2e8de3d7d9b87f578000b428a8bd",
+      "stage": "content",
+      "canonical_judgment": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "openness_license"
+        ]
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "stage1-content-0731-v6",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "provider_role": "content",
+      "input_context_fingerprint": "bee6c1329acd901410e8a5e8937f244cbf81eccce8923a2466d71a580237b110",
+      "selector_version": "stage1-two-role-merge-0731-v6",
+      "validation_state": "validated",
+      "changes_json": {
+        "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f"
+      },
+      "created_at": "2026-09-29T23:49:39.732396+00:00",
+      "updated_at": "2026-09-29T23:49:39.732406+00:00",
+      "brand_id": "glm",
+      "parent_judgment_id": null,
+      "post_id": "2105081335475757197",
+      "content_judgment_id": null,
+      "brand_interpretation_judgment_id": null
+    },
+    {
+      "id": 124094,
+      "revision_id": "794af3c4e3d1e504c0d688d7f2e0a85ef71d2e8de3d7d9b87f578000b428a8bd",
+      "stage": "brand_interpretation",
+      "canonical_judgment": {
+        "sentiment": "positive",
+        "product_labels": [
+          "testimonial"
+        ],
+        "geopolitical_modes": [
+          "nationalism"
+        ],
+        "us_national_stance": "anti",
+        "china_national_stance": "pro"
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "stage1-brand-interpretation-0731-v5",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "provider_role": "brand_interpretation",
+      "input_context_fingerprint": "bee6c1329acd901410e8a5e8937f244cbf81eccce8923a2466d71a580237b110",
+      "selector_version": "stage1-two-role-merge-0731-v6",
+      "validation_state": "validated",
+      "changes_json": {
+        "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f"
+      },
+      "created_at": "2026-09-29T23:49:39.735271+00:00",
+      "updated_at": "2026-09-29T23:49:39.735282+00:00",
+      "brand_id": "glm",
+      "parent_judgment_id": null,
+      "post_id": "2105081335475757197",
+      "content_judgment_id": null,
+      "brand_interpretation_judgment_id": null
+    },
+    {
+      "id": 124095,
+      "revision_id": "794af3c4e3d1e504c0d688d7f2e0a85ef71d2e8de3d7d9b87f578000b428a8bd",
+      "stage": "final",
+      "canonical_judgment": {
+        "outcome": "classified",
+        "sentiment": "positive",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "audience_topics": [
+          "openness_license"
+        ],
+        "geopolitical_modes": [
+          "nationalism"
+        ],
+        "us_national_stance": "anti",
+        "audience_topics_state": "selected",
+        "china_national_stance": "pro",
+        "geopolitical_modes_state": "selected"
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "stage1-two-role-merge-0731-v6",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "provider_role": "classifier",
+      "input_context_fingerprint": "bee6c1329acd901410e8a5e8937f244cbf81eccce8923a2466d71a580237b110",
+      "selector_version": "stage1-two-role-merge-0731-v6",
+      "validation_state": "validated",
+      "changes_json": {
+        "provider_request_identity": "deepinfra:deepseek_0731:772dd6eefcf6d02f"
+      },
+      "created_at": "2026-09-29T23:49:39.754237+00:00",
+      "updated_at": "2026-09-29T23:49:39.754249+00:00",
+      "brand_id": "glm",
+      "parent_judgment_id": null,
+      "post_id": "2105081335475757197",
+      "content_judgment_id": 124093,
+      "brand_interpretation_judgment_id": 124094
+    }
+  ]
+}

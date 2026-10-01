@@ -1,0 +1,6 @@
+{
+  "completed_at": "2026-09-30T07:08:03.055678+00:00",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: exit status 1: ERROR:  syntax error at or near \"natural\"\nLINE 20: natural AS (SELECT * FROM natural_ranked WHERE rank<=12),\n         ^\n"
+}

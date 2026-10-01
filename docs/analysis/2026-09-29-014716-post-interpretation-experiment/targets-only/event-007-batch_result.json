@@ -1,0 +1,126 @@
+{
+  "kind": "batch_result",
+  "value": {
+    "batch": 2,
+    "case_ids": [
+      "token_machine_long_crypto_boundary",
+      "token_machine_hunyuan_no_luck_boundary",
+      "direct_zhipu_api_pitch",
+      "quoted_criticism_disputed",
+      "unresolved_subject_reply"
+    ],
+    "promoter_classification": {
+      "reason": "author_relationship_out_of_scope",
+      "status": "not_evaluated"
+    },
+    "response": {
+      "value": {
+        "posts": {
+          "P01": {
+            "other_mentions": [
+              {
+                "evidence": "tokens tied to popular AI models such as GPT, Claude, Gemini, Llama, DeepSeek, Qwen and more",
+                "name": "GPT, Claude, Gemini, Llama, DeepSeek, Qwen",
+                "reason": "They are features of the platform, not targets of promotion.",
+                "role": "Listed as examples of AI models whose tokens can be won, but not promoted themselves"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Token Machine is building a platform around daily spins where users can win small amounts of tokens tied to popular AI models such as GPT, Claude, Gemini, Llama, DeepSeek, Qwen and more. $MACHINE is bringing that idea on-chain.",
+                "name": "Token Machine",
+                "offering": "A platform for daily spins to win tokens tied to AI models, with $MACHINE token on-chain",
+                "reason": "The post promotes the platform, its token, and invites participation via links to chart and website."
+              }
+            ],
+            "uncertainties": [
+              "The URLs are short links; cannot resolve their final destinations without browsing."
+            ]
+          },
+          "P02": {
+            "other_mentions": [
+              {
+                "evidence": "no luck on the Hunyuan spin",
+                "name": "Hunyuan",
+                "reason": "It appears as a random outcome in the game, not a target.",
+                "role": "A model name mentioned as part of the spin result, not promoted"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Token Machine Day 1 — no luck on the Hunyuan spin. Free AI tokens every day → https://t.co/WlETXp902E",
+                "name": "Token Machine",
+                "offering": "Daily free AI tokens via a spin game, with a link to participate",
+                "reason": "It mentions the platform by name and invites engagement with the daily spins."
+              }
+            ],
+            "uncertainties": [
+              "The short URL points to a page not resolvable from the source."
+            ]
+          },
+          "P03": {
+            "other_mentions": [
+              {
+                "evidence": "official GLM API on Z.ai",
+                "name": "Z.ai",
+                "reason": "It is part of the offer but not the central promoted item; model is the focus.",
+                "role": "Platform hosting the API, but the main offer is the model and API access"
+              }
+            ],
+            "targets": [
+              {
+                "evidence": "Zhipu GLM-5.3-Flash is available now. Start building with the official GLM API on Z.ai today; get 20% off your first month.",
+                "name": "Zhipu GLM-5.3-Flash",
+                "offering": "AI model available via official GLM API on Z.ai, with a 20% discount on first month",
+                "reason": "It announces availability and encourages use with an incentive."
+              }
+            ],
+            "uncertainties": []
+          },
+          "P04": {
+            "other_mentions": [
+              {
+                "evidence": "Qwen leaks every customer's private files. I have seen no evidence for that allegation. My Qwen account has worked normally.",
+                "name": "Qwen",
+                "reason": "It is a factual report and rebuttal, not an endorsement or invitation.",
+                "role": "Discussed as an allegation and personal experience; no promotion"
+              },
+              {
+                "evidence": "Mira said",
+                "name": "Mira",
+                "reason": "This is a source of a quote, not promoted.",
+                "role": "Quoted speaker making an allegation, not a target"
+              }
+            ],
+            "targets": [],
+            "uncertainties": []
+          },
+          "P05": {
+            "other_mentions": [],
+            "targets": [],
+            "uncertainties": [
+              "The subject of the post (what was fixed and which 'other version' refers to) is unresolved from the text alone."
+            ]
+          }
+        }
+      }
+    },
+    "validation_errors": {
+      "P01": [
+        "targets:evidence_not_verbatim",
+        "other_mentions:item_shape"
+      ],
+      "P02": [
+        "other_mentions:item_shape"
+      ],
+      "P03": [
+        "other_mentions:item_shape"
+      ],
+      "P04": [
+        "other_mentions:item_shape",
+        "other_mentions:item_shape"
+      ],
+      "P05": []
+    }
+  }
+}

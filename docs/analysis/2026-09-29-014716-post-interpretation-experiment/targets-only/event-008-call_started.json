@@ -1,0 +1,9 @@
+{
+  "kind": "call_started",
+  "value": {
+    "call": 3,
+    "phase": "batch3:promotion_targets_only",
+    "request_sha256": "100d04bd82adf94b032ba8a636035d4a8283115e26308f0bc60654138413dbe9",
+    "reserved_cost_usd": "0.17360"
+  }
+}

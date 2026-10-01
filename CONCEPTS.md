@@ -140,6 +140,15 @@ classification result or prevent a separately valid classification.
 Legacy SQLite `n_discourse` counters are historical compatibility evidence and
 do not indicate current classifier health.
 
+### Jev / 0731 classification evaluation
+
+The September–October 2026 comparison of TypeSafe Jev's typed decisions with
+DeepSeek V4 Flash 0731. The owner retained 0731 for classification while leaving
+newer Jev versions open for reevaluation. The
+[evaluation closeout](docs/analysis/2026-10-01-193945-jev-classification-closeout.md)
+is the entry point for results, limitations, evidence locations and reopening
+conditions; it is not a classifier-switch instruction.
+
 ### Operator-degraded entry
 
 A named key in the `degraded` block of the run summary, signaling that a known condition was tolerated rather than treated as a failure. Naming convention: `<condition>:<detail>` so operators can pattern-match by condition prefix.

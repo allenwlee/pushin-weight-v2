@@ -1,0 +1,13 @@
+{
+  "kind": "accounting_112",
+  "value": {
+    "at": "2026-10-01T06:11:08.651878+00:00",
+    "completion_tokens": 1075,
+    "estimated_cost": "0.00059022",
+    "http_status": 200,
+    "id": "tr_16_raw",
+    "prompt_tokens": 12756,
+    "retained_reservation_usd": "0.00864432",
+    "status": "usage_present"
+  }
+}

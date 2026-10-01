@@ -1,0 +1,264 @@
+{
+  "rows": [
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "none",
+      "baseline_assigned": "none",
+      "review_assigned": "none",
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G01",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": "none",
+      "baseline_assigned": "none",
+      "review_assigned": "none",
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": false,
+      "baseline_assigned": false,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "none",
+      "baseline_assigned": "none",
+      "review_assigned": "none",
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G02",
+      "issue": "geopolitics",
+      "field": "us_national_stance",
+      "expected": "none",
+      "baseline_assigned": "none",
+      "review_assigned": "none",
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": true,
+      "baseline_assigned": false,
+      "review_assigned": true,
+      "baseline_correct": false,
+      "review_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G03",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "pro",
+      "baseline_assigned": "mild_pro",
+      "review_assigned": "mild_pro",
+      "baseline_correct": false,
+      "review_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "reporting",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": false,
+      "baseline_correct": true,
+      "review_correct": false
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "framework",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "nationalism",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "G04",
+      "issue": "geopolitics",
+      "field": "china_national_stance",
+      "expected": "anti",
+      "baseline_assigned": "anti",
+      "review_assigned": "anti",
+      "baseline_correct": true,
+      "review_correct": true
+    },
+    {
+      "case_id": "P01",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": false,
+      "baseline_assigned": true,
+      "review_assigned": false,
+      "baseline_correct": false,
+      "review_correct": true
+    },
+    {
+      "case_id": "P02",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": false,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": false,
+      "review_correct": false
+    },
+    {
+      "case_id": "P03",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": true,
+      "baseline_assigned": false,
+      "review_assigned": true,
+      "baseline_correct": false,
+      "review_correct": true
+    },
+    {
+      "case_id": "P04",
+      "issue": "promotion",
+      "field": "advertising_marketing",
+      "expected": true,
+      "baseline_assigned": true,
+      "review_assigned": true,
+      "baseline_correct": true,
+      "review_correct": true
+    }
+  ],
+  "baseline": {
+    "geopolitics": {
+      "correct": 16,
+      "total": 18,
+      "posts_all_scored_fields_correct": 3,
+      "posts": 4
+    },
+    "promotion": {
+      "correct": 1,
+      "total": 4,
+      "posts_all_scored_fields_correct": 1,
+      "posts": 4
+    },
+    "combined": {
+      "correct": 17,
+      "total": 22,
+      "posts_all_scored_fields_correct": 4,
+      "posts": 8
+    }
+  },
+  "review": {
+    "geopolitics": {
+      "correct": 16,
+      "total": 18,
+      "posts_all_scored_fields_correct": 2,
+      "posts": 4
+    },
+    "promotion": {
+      "correct": 3,
+      "total": 4,
+      "posts_all_scored_fields_correct": 3,
+      "posts": 4
+    },
+    "combined": {
+      "correct": 19,
+      "total": 22,
+      "posts_all_scored_fields_correct": 5,
+      "posts": 8
+    }
+  }
+}

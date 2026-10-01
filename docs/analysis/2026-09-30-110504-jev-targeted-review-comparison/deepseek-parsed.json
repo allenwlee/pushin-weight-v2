@@ -1,0 +1,1510 @@
+{
+  "decisions": {
+    "baseline": {
+      "G01": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "unknown",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "G02": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "unknown",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "G03": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "results_analysis"
+        ],
+        "audience_topics": [
+          "evals_benchmarks",
+          "cost_performance"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "mild_pro",
+        "us_national_stance": "none"
+      },
+      "G04": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "investigate_claim"
+        ],
+        "sentiment": "negative",
+        "geopolitical_modes": [
+          "reporting",
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "anti",
+        "us_national_stance": "none"
+      },
+      "P01": {
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "audience_topics": [
+          "cost_performance"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "P02": {
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "neutral",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "P03": {
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "results_analysis"
+        ],
+        "audience_topics": [
+          "evals_benchmarks"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "P04": {
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "audience_topics": [
+          "api_developer_surface"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "neutral",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      }
+    },
+    "justified": {
+      "G01": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "unknown",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "G02": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions"
+        ],
+        "audience_topics": [
+          "none"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "nationalism"
+        ],
+        "china_national_stance": "mild_pro",
+        "us_national_stance": "none"
+      },
+      "G03": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "news_reporting",
+          "results_analysis"
+        ],
+        "audience_topics": [
+          "evals_benchmarks",
+          "openness_license"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "framework",
+          "nationalism"
+        ],
+        "china_national_stance": "mild_pro",
+        "us_national_stance": "none"
+      },
+      "G04": {
+        "outcome": "classified",
+        "post_types": [
+          "opinions_reactions",
+          "research_explanations"
+        ],
+        "audience_topics": [
+          "model_distillation",
+          "evals_benchmarks",
+          "openness_license"
+        ],
+        "product_labels": [
+          "investigate_claim"
+        ],
+        "sentiment": "negative",
+        "geopolitical_modes": [
+          "nationalism"
+        ],
+        "china_national_stance": "anti",
+        "us_national_stance": "none"
+      },
+      "P02": {
+        "outcome": "classified",
+        "post_types": [
+          "advertising_marketing"
+        ],
+        "audience_topics": [
+          "api_developer_surface"
+        ],
+        "product_labels": [
+          "none"
+        ],
+        "sentiment": "neutral",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      },
+      "P03": {
+        "outcome": "classified",
+        "post_types": [
+          "results_analysis",
+          "releases_updates",
+          "advertising_marketing"
+        ],
+        "audience_topics": [
+          "evals_benchmarks",
+          "openness_license"
+        ],
+        "product_labels": [
+          "testimonial"
+        ],
+        "sentiment": "positive",
+        "geopolitical_modes": [
+          "none"
+        ],
+        "china_national_stance": "none",
+        "us_national_stance": "none"
+      }
+    }
+  },
+  "basis_by_role": {
+    "content": {},
+    "brand_interpretation": {
+      "2105081335475757197": {
+        "geopolitical_modes": {
+          "claim": "The post criticizes Anthropic and OpenAI but does not mention GLM's capabilities, so no geopolitical assessment is warranted.",
+          "evidence": [
+            "i have never seen such an hateful and useless company as anthropic",
+            "we haven't heard of a single case of this GLM 5.3 model being used for such."
+          ]
+        },
+        "china_national_stance": {
+          "claim": "No assessment of China or its national systems is present in the post.",
+          "evidence": [
+            "i have never seen such an hateful and useless company as anthropic"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No assessment of the US or its national systems is present in the post.",
+          "evidence": [
+            "i have never seen such an hateful and useless company as anthropic"
+          ]
+        }
+      },
+      "2100052017993683063": {
+        "geopolitical_modes": {
+          "claim": "The post adopts nationalist sentiment favoring DeepSeek's open and affordable AI over US companies, characterizing them negatively.",
+          "evidence": [
+            "I especially don’t want Anthropic to control the most advanced AI or AGI.",
+            "I chose to stay at DeepSeek, and why I remain there. We research powerful, fast, accessible AI and open-source our work."
+          ]
+        },
+        "china_national_stance": {
+          "claim": "The post expresses mild support for China-associated DeepSeek's approach without broad national evaluation.",
+          "evidence": [
+            "I chose to stay at DeepSeek, and why I remain there. We research powerful, fast, accessible AI and open-source our work."
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No evaluative stance toward the US as a nation is adopted; criticism targets specific companies.",
+          "evidence": [
+            "I especially don’t want Anthropic to control the most advanced AI or AGI."
+          ]
+        }
+      },
+      "2100011791119966665": {
+        "geopolitical_modes": {
+          "claim": "The post provides a geopolitical framework analyzing China's AI progress and counters claims of US technology theft.",
+          "evidence": [
+            "The contradiction in Bannon's position",
+            "The data suggests the flow has already reversed in key fields."
+          ]
+        },
+        "china_national_stance": {
+          "claim": "The post adopts mild pro-China stance by praising Chinese capabilities and rejecting theft accusations.",
+          "evidence": [
+            "DeepSeek R1 achieved 95% of OpenAI's performance at 5% of the training cost",
+            "These are not stolen technologies. They are technologies the West did not build."
+          ]
+        },
+        "us_national_stance": {
+          "claim": "The post criticizes US policy proposals but does not evaluate the US as a nation broadly.",
+          "evidence": [
+            "Bannon's proposed quarantine—expelling Chinese nationals from labs, cutting off chips, closing borders—is designed to stop the transfer of American technology to China."
+          ]
+        }
+      },
+      "2100011731204358249": {
+        "geopolitical_modes": {
+          "claim": "The post adopts nationalism with strong negative evaluation of China's AI and political system.",
+          "evidence": [
+            "中共的党国机制鼓励的就是「弯道超车」，准确地说就是弄虚作假",
+            "中国没有真正自由的创新环境"
+          ]
+        },
+        "china_national_stance": {
+          "claim": "The post adopts anti-China stance, characterizing Chinese AI as fraudulent and criticizing the CCP system.",
+          "evidence": [
+            "中国的AI在很大程度上可能是一个「假货」",
+            "中共的党国机制鼓励的就是「弯道超车」，准确地说就是弄虚作假"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "The post does not express an evaluative stance toward the US as a nation.",
+          "evidence": [
+            "川普总统现在把「中共AI直逼美国」当成美国的第一大威胁"
+          ]
+        }
+      },
+      "2104483144233853085": {
+        "geopolitical_modes": {
+          "claim": "The post is purely promotional and technical, with no geopolitical evaluation.",
+          "evidence": [
+            "the guide is a game changer. It not only demystifies complex AI concepts",
+            "The platform is designed to make global AI models accessible to everyone."
+          ]
+        },
+        "china_national_stance": {
+          "claim": "No mention of China or national evaluation is present.",
+          "evidence": [
+            "the guide is a game changer"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No mention of the US or national evaluation is present.",
+          "evidence": [
+            "the guide is a game changer"
+          ]
+        }
+      },
+      "2101798119298277764": {
+        "geopolitical_modes": {
+          "claim": "The post is a neutral promotional message about winning Qwen tokens with no geopolitical content.",
+          "evidence": [
+            "won $0.05 Qwen tokens on the Qwen spin"
+          ]
+        },
+        "china_national_stance": {
+          "claim": "No mention of China or national evaluation is present.",
+          "evidence": [
+            "won $0.05 Qwen tokens on the Qwen spin"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No mention of the US or national evaluation is present.",
+          "evidence": [
+            "won $0.05 Qwen tokens on the Qwen spin"
+          ]
+        }
+      },
+      "2102569821997346912": {
+        "geopolitical_modes": {
+          "claim": "The post is a celebratory announcement about Qwen model rankings with no geopolitical content.",
+          "evidence": [
+            "Qwen-Image-2.1 is now the #1 open-source model in both the Image Edit and Text-to-Image Arenas."
+          ]
+        },
+        "china_national_stance": {
+          "claim": "No mention of China or national evaluation is present.",
+          "evidence": [
+            "Qwen-Image-2.1 is now the #1 open-source model"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No mention of the US or national evaluation is present.",
+          "evidence": [
+            "Qwen-Image-2.1 is now the #1 open-source model"
+          ]
+        }
+      },
+      "u18a-tracked-untracked-co-promotion": {
+        "geopolitical_modes": {
+          "claim": "The post is a promotional announcement for DeepSeek V4 API with no geopolitical content.",
+          "evidence": [
+            "Try the official DeepSeek V4 API today"
+          ]
+        },
+        "china_national_stance": {
+          "claim": "No mention of China or national evaluation is present.",
+          "evidence": [
+            "Try the official DeepSeek V4 API today"
+          ]
+        },
+        "us_national_stance": {
+          "claim": "No mention of the US or national evaluation is present.",
+          "evidence": [
+            "Try the official DeepSeek V4 API today"
+          ]
+        }
+      }
+    }
+  },
+  "basis_issues": [
+    {
+      "case_id": "G01",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G02",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G03",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "G04",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P01",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P02",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P03",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    },
+    {
+      "case_id": "P04",
+      "role": "content",
+      "errors": [
+        "advertising_marketing:shape"
+      ]
+    }
+  ],
+  "invalid_rows": [
+    {
+      "request_id": "justified_content",
+      "case_id": "P01"
+    },
+    {
+      "request_id": "justified_content",
+      "case_id": "P04"
+    }
+  ],
+  "parsed_by_role": {
+    "baseline_content": {
+      "2105081335475757197": {
+        "by_brand": {
+          "glm": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100052017993683063": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100011791119966665": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions",
+              "results_analysis"
+            ],
+            "audience_topics": [
+              "evals_benchmarks",
+              "cost_performance"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100011731204358249": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2104483144233853085": {
+        "by_brand": {
+          "glm": {
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "audience_topics": [
+              "cost_performance"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "promoted_subjects": [
+          {
+            "name": "TRON",
+            "handle": "@justinsuntron",
+            "domain": null,
+            "account_handle": "@justinsuntron",
+            "evidence": "@justinsuntron @BAI_AGI #TRONEcostar"
+          }
+        ]
+      },
+      "2101798119298277764": {
+        "by_brand": {
+          "qwen": {
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "promoted_subjects": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": null,
+            "account_handle": null,
+            "evidence": "Free AI tokens every day → https://t.co/ry1CvgQyNP"
+          }
+        ]
+      },
+      "2102569821997346912": {
+        "by_brand": {
+          "qwen": {
+            "outcome": "classified",
+            "post_types": [
+              "releases_updates",
+              "results_analysis"
+            ],
+            "audience_topics": [
+              "evals_benchmarks"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "u18a-tracked-untracked-co-promotion": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [
+          "general"
+        ],
+        "promoted_subjects": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": "tokenmachine.example",
+            "account_handle": null,
+            "evidence": "join Token Machine's daily token spins at tokenmachine.example"
+          }
+        ]
+      }
+    },
+    "baseline_brand_interpretation": {
+      "2105081335475757197": {
+        "by_brand": {
+          "glm": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "unknown",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100052017993683063": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "unknown",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100011791119966665": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "framework",
+              "nationalism"
+            ],
+            "china_national_stance": "mild_pro",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100011731204358249": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "investigate_claim"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "reporting",
+              "framework",
+              "nationalism"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2104483144233853085": {
+        "by_brand": {
+          "glm": {
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2101798119298277764": {
+        "by_brand": {
+          "qwen": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "neutral",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2102569821997346912": {
+        "by_brand": {
+          "qwen": {
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "u18a-tracked-untracked-co-promotion": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "neutral",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      }
+    },
+    "justified_content": {
+      "2105081335475757197": {
+        "by_brand": {
+          "glm": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100052017993683063": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions"
+            ],
+            "audience_topics": [
+              "none"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100011791119966665": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions",
+              "news_reporting",
+              "results_analysis"
+            ],
+            "audience_topics": [
+              "evals_benchmarks",
+              "openness_license"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2100011731204358249": {
+        "by_brand": {
+          "deepseek": {
+            "outcome": "classified",
+            "post_types": [
+              "opinions_reactions",
+              "research_explanations"
+            ],
+            "audience_topics": [
+              "model_distillation",
+              "evals_benchmarks",
+              "openness_license"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      },
+      "2101798119298277764": {
+        "by_brand": {
+          "qwen": {
+            "outcome": "classified",
+            "post_types": [
+              "advertising_marketing"
+            ],
+            "audience_topics": [
+              "api_developer_surface"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [
+          "crypto"
+        ],
+        "promoted_subjects": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": null,
+            "account_handle": null,
+            "evidence": "Token Machine Day 1"
+          }
+        ]
+      },
+      "2102569821997346912": {
+        "by_brand": {
+          "qwen": {
+            "outcome": "classified",
+            "post_types": [
+              "results_analysis",
+              "releases_updates",
+              "advertising_marketing"
+            ],
+            "audience_topics": [
+              "evals_benchmarks",
+              "openness_license"
+            ]
+          }
+        },
+        "untracked_brand_promotions": [],
+        "promoted_subjects": []
+      }
+    },
+    "justified_brand_interpretation": {
+      "2105081335475757197": {
+        "by_brand": {
+          "glm": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "unknown",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100052017993683063": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "nationalism"
+            ],
+            "china_national_stance": "mild_pro",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100011791119966665": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "framework",
+              "nationalism"
+            ],
+            "china_national_stance": "mild_pro",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2100011731204358249": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "investigate_claim"
+            ],
+            "sentiment": "negative",
+            "geopolitical_modes": [
+              "nationalism"
+            ],
+            "china_national_stance": "anti",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2104483144233853085": {
+        "by_brand": {
+          "glm": {
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2101798119298277764": {
+        "by_brand": {
+          "qwen": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "neutral",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "2102569821997346912": {
+        "by_brand": {
+          "qwen": {
+            "product_labels": [
+              "testimonial"
+            ],
+            "sentiment": "positive",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      },
+      "u18a-tracked-untracked-co-promotion": {
+        "by_brand": {
+          "deepseek": {
+            "product_labels": [
+              "none"
+            ],
+            "sentiment": "neutral",
+            "geopolitical_modes": [
+              "none"
+            ],
+            "china_national_stance": "none",
+            "us_national_stance": "none"
+          }
+        }
+      }
+    }
+  },
+  "raw_by_role": {
+    "baseline_content": {
+      "decisions": {
+        "D01": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D02": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D03": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "results_analysis"
+          ],
+          "audience_topics": [
+            "evals_benchmarks",
+            "cost_performance"
+          ]
+        },
+        "D04": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D05": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing"
+          ],
+          "audience_topics": [
+            "cost_performance"
+          ]
+        },
+        "D06": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D07": {
+          "outcome": "classified",
+          "post_types": [
+            "releases_updates",
+            "results_analysis"
+          ],
+          "audience_topics": [
+            "evals_benchmarks"
+          ]
+        },
+        "D08": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing"
+          ],
+          "audience_topics": [
+            "api_developer_surface"
+          ]
+        }
+      },
+      "post_promotions": {
+        "P01": [
+          "none"
+        ],
+        "P02": [
+          "none"
+        ],
+        "P03": [
+          "none"
+        ],
+        "P04": [
+          "none"
+        ],
+        "P05": [
+          "general"
+        ],
+        "P06": [
+          "general"
+        ],
+        "P07": [
+          "none"
+        ],
+        "P08": [
+          "general"
+        ]
+      },
+      "promoted_subjects": {
+        "P01": [],
+        "P02": [],
+        "P03": [],
+        "P04": [],
+        "P05": [
+          {
+            "name": "TRON",
+            "handle": "@justinsuntron",
+            "domain": null,
+            "account_handle": "@justinsuntron",
+            "evidence": "@justinsuntron @BAI_AGI #TRONEcostar"
+          }
+        ],
+        "P06": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": null,
+            "account_handle": null,
+            "evidence": "Free AI tokens every day → https://t.co/ry1CvgQyNP"
+          }
+        ],
+        "P07": [],
+        "P08": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": "tokenmachine.example",
+            "account_handle": null,
+            "evidence": "join Token Machine's daily token spins at tokenmachine.example"
+          }
+        ]
+      }
+    },
+    "baseline_brand_interpretation": {
+      "decisions": {
+        "D01": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "unknown",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D02": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "unknown",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D03": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "framework"
+          ],
+          "china_national_stance": "mild_pro",
+          "us_national_stance": "none"
+        },
+        "D04": {
+          "product_labels": [
+            "investigate_claim"
+          ],
+          "sentiment": "negative",
+          "geopolitical_modes": [
+            "reporting",
+            "framework",
+            "nationalism"
+          ],
+          "china_national_stance": "anti",
+          "us_national_stance": "none"
+        },
+        "D05": {
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D06": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "neutral",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D07": {
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D08": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "neutral",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      }
+    },
+    "justified_content": {
+      "decisions": {
+        "D01": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D02": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions"
+          ],
+          "audience_topics": [
+            "none"
+          ]
+        },
+        "D03": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "news_reporting",
+            "results_analysis"
+          ],
+          "audience_topics": [
+            "evals_benchmarks",
+            "openness_license"
+          ]
+        },
+        "D04": {
+          "outcome": "classified",
+          "post_types": [
+            "opinions_reactions",
+            "research_explanations"
+          ],
+          "audience_topics": [
+            "model_distillation",
+            "evals_benchmarks",
+            "openness_license"
+          ]
+        },
+        "D05": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing",
+            "releases_updates",
+            "research_explanations"
+          ],
+          "audience_topics": [
+            "cost_performance",
+            "api_developer_surface"
+          ]
+        },
+        "D06": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing"
+          ],
+          "audience_topics": [
+            "api_developer_surface"
+          ]
+        },
+        "D07": {
+          "outcome": "classified",
+          "post_types": [
+            "results_analysis",
+            "releases_updates",
+            "advertising_marketing"
+          ],
+          "audience_topics": [
+            "evals_benchmarks",
+            "openness_license"
+          ]
+        },
+        "D08": {
+          "outcome": "classified",
+          "post_types": [
+            "advertising_marketing",
+            "releases_updates"
+          ],
+          "audience_topics": [
+            "api_developer_surface"
+          ]
+        }
+      },
+      "post_promotions": {
+        "P01": [
+          "none"
+        ],
+        "P02": [
+          "none"
+        ],
+        "P03": [
+          "none"
+        ],
+        "P04": [
+          "none"
+        ],
+        "P05": [
+          "general"
+        ],
+        "P06": [
+          "crypto"
+        ],
+        "P07": [
+          "none"
+        ],
+        "P08": [
+          "crypto",
+          "general"
+        ]
+      },
+      "promoted_subjects": {
+        "P01": [],
+        "P02": [],
+        "P03": [],
+        "P04": [],
+        "P05": [
+          {
+            "name": "TRONecostar",
+            "handle": "TRONEcostar",
+            "domain": null,
+            "account_handle": null,
+            "evidence": "@TRONEcostar"
+          }
+        ],
+        "P06": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": null,
+            "account_handle": null,
+            "evidence": "Token Machine Day 1"
+          }
+        ],
+        "P07": [],
+        "P08": [
+          {
+            "name": "Token Machine",
+            "handle": null,
+            "domain": "tokenmachine.example",
+            "account_handle": null,
+            "evidence": "join Token Machine's daily token spins at tokenmachine.example"
+          }
+        ]
+      }
+    },
+    "justified_brand_interpretation": {
+      "decisions": {
+        "D01": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "unknown",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D02": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "nationalism"
+          ],
+          "china_national_stance": "mild_pro",
+          "us_national_stance": "none"
+        },
+        "D03": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "framework",
+            "nationalism"
+          ],
+          "china_national_stance": "mild_pro",
+          "us_national_stance": "none"
+        },
+        "D04": {
+          "product_labels": [
+            "investigate_claim"
+          ],
+          "sentiment": "negative",
+          "geopolitical_modes": [
+            "nationalism"
+          ],
+          "china_national_stance": "anti",
+          "us_national_stance": "none"
+        },
+        "D05": {
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D06": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "neutral",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D07": {
+          "product_labels": [
+            "testimonial"
+          ],
+          "sentiment": "positive",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        },
+        "D08": {
+          "product_labels": [
+            "none"
+          ],
+          "sentiment": "neutral",
+          "geopolitical_modes": [
+            "none"
+          ],
+          "china_national_stance": "none",
+          "us_national_stance": "none"
+        }
+      }
+    }
+  }
+}
