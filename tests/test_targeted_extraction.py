@@ -486,6 +486,10 @@ def test_anna_transition_keeps_current_and_former_with_unknown_dates():
         max_calls=20,
     )
 
+    from core.models import StaffCollectionWork
+    queued_people = set(StaffCollectionWork.objects.values_list("person_id", flat=True))
+    assert queued_people == set(Person.objects.values_list("id", flat=True))
+    assert post.author.person_links.get().person_id in queued_people
     assert result.records_written == 2
     affiliations = list(PersonBrandAffiliation.objects.order_by("brand_id"))
     assert [(row.brand_id, row.status) for row in affiliations] == [
@@ -750,6 +754,9 @@ def test_official_handle_announcement_and_later_self_post_share_one_person():
         calls={"personnel_change_extraction": lambda *_args: {"records": [record]}},
         max_calls=20,
     )
+    from core.models import StaffCollectionWork
+    assert not official.author.person_links.exists()
+    assert set(StaffCollectionWork.objects.values_list("person_id", flat=True)) == set(Person.objects.values_list("id", flat=True))
     capture_post_profile_snapshot(
         post=self_post,
         raw={

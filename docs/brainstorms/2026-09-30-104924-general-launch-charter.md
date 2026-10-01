@@ -48,10 +48,17 @@ to maintain this charter or its index.
 
 ### Owner requirements
 
-- **G1-R01:** Use the Call A staff-account list as the starting population for a
-  comprehensive collection of real, verified researcher photos. The owner
-  expects many people in this population to be Chinese nationals; this is
-  context, not evidence of any individual's nationality.
+- **G1-R01 (expanded by the owner on 2026-09-30):** Comprehensively collect real,
+  verified researcher photos for the union of staff accounts in Call A and
+  staff accounts in the database, including database staff outside Call A.
+  Count overlapping accounts once. The owner's expectation that many are
+  Chinese nationals is context, not evidence of any individual's nationality
+  or a filter on which staff receive assets.
+  For the current Call A list, the owner's latest inclusion rule presumes every
+  non-company account is a person; a missing database staff role does not exclude
+  it. Preserve identity and employment uncertainty separately.
+  The October 1 expansion in G1-R08 adds publicly identified official-site staff
+  from the 15 China-based tracked brands, including people without X accounts.
 - **G1-R02:** Verify each person's identity and name, including their Chinese
   name where applicable. Do not invent Chinese characters from a romanized
   name, or treat an uncertain match as verified.
@@ -61,24 +68,184 @@ to maintain this charter or its index.
 - **G1-R04:** These assets must support lighthearted AI-generated illustrations
   accompanying news items. Identity verification and permission/suitability for
   the intended reuse are separate questions that must be recorded.
+- **G1-R05:** Provide an initial batch process to find and persist assets for
+  the existing population in G1-R01, with coverage and unresolved cases recorded.
+- **G1-R06:** Establish an ongoing process for staff added by the user or
+  discovered through the personnel-change mechanism, with or without an X account.
+  New arrivals must enter
+  the same identity and asset workflow; a completed initial batch alone does
+  not satisfy G1.
+- **G1-R07 (owner direction on 2026-09-30):** Investigate deeper mainland-China
+  photo collection integrations, including platform-specific APIs, paid data
+  services, WeChat's agent functionality, and Chinese models' native search.
+  Assess reusable patterns in top-gun and Scrolls; the owner corrected the
+  earlier cross-post reference to Scrolls on 2026-09-30. Use official-doc and
+  third-party GitHub crawls to distinguish consumer-app access, callable API
+  capabilities, and retrieval of actual platform images. The owner considers
+  the current collection approach insufficient. Provider and budget choices
+  remain open until the research and proposed coverage test are assessed.
+  The owner selected Baidu through SerpApi, replacing direct Baidu Cloud access
+  after signup difficulty, and then supplied a SearchApi key for a comparison
+  against the same sample. After that comparison, the owner identified SerpApi
+  as the more reliable option for this Baidu photo workflow; it remains preferred.
+  The owner subsequently requested a Phyllo test for Xiaohongshu search access
+  and supplied account-setup screenshots. While awaiting Phyllo's reply, the
+  owner requested a Firecrawl documentation assessment of Parse.bot's Xiaohongshu
+  API. Parse.bot research does not authorize a live test or API revision.
+  The owner then requested broader image/video acquisition through SerpApi,
+  with the filtering method explained first, and restricted Baidu searches to
+  Chinese people in the current list. This restricts the source used for this
+  batch; other staff remain within the overall G1 population.
+  The owner agreed to requesting up to 50 results per call and flagged noise
+  from name-only searches. Preserve identity context while expanding retrieval
+  depth; the detailed query method belongs in the G1 plan.
+  The latest batch request is one search per remaining Chinese person. The
+  owner then put searches on hold until the reported 77-member X list versus
+  dossier coverage is explained, specifically citing missing `@Ronny_MiniMax`.
+  Existing database staff-role assignments must not silently exclude unresolved
+  people from the roster review.
+  The owner subsequently authorized current list retrieval and dossier expansion:
+  treat every account except official company accounts as a person. This private
+  list belongs to `allenwlee`; use the owner's authenticated X access rather than
+  TwitterAPI.io. Preserve uncertain names/affiliations as uncertain without
+  excluding the person. On October 1 the owner resumed acquisition: find Chinese
+  names for all 40 people, using Baidu if needed, update the dossier, then find
+  their images. Distinguish sourced Chinese names from transliterations and
+  unresolved aliases. The earlier asset-search hold is lifted; Baidu media
+  collection remains Chinese-only, with other sources used for other people.
+  The owner then requested repair of broken dossier image links and addition
+  of all available X account profile images from stored records, including
+  nonhuman avatars. Account images supplement the researched photographs;
+  they do not establish the account owner's identity or resolve human-photo gaps.
+  The owner also requested a suggested Xiaohongshu search phrase beside every
+  dossier name for manual photo/video discovery; suggestions retain name and
+  affiliation uncertainty and do not imply tested platform results.
+  OpenCLI and Yuanbao tests remain deferred.
+  Each provider's result/media coverage must be measured independently
+  of the official Baidu AI Search API. This narrows the immediate experiment
+  without removing the initial-batch or ongoing-acquisition requirements.
+- **G1-R08 (owner direction on 2026-10-01):** Use the existing `people` identity
+  model for staff, with optional real X-account links. Collect as many staff as
+  the official websites of the 15 China-based tracked brands publicly identify,
+  using the existing job-listing crawler instructions and applicable fetching
+  patterns. Match existing people and account-linked identities before adding
+  records; preserve unresolved matches and avoid name-only merges. Do not create
+  placeholder accounts for people without X. Retain sourced roles, job history,
+  exact organization wording, and observed/effective dates separately. The
+  selected 15 brands and implementation details are in the G1 plan.
+- **G1-R09 (owner direction on 2026-10-01):** Keep full names and add optional
+  given/family name components for Chinese, English/romanized, and Japanese
+  versions. Preserve aliases and uncertain splits; components are not required
+  for importing a person. Rename `sexs` to `sex`, preserving existing values
+  and related records, and update readers/contracts with the schema change.
+  The latest request adds these changes to the plan; implementation is pending.
+- **G1-R10 (owner direction on 2026-10-01):** Preserve Chinese originals from
+  crawled people/job pages, including names, titles, organization/team names,
+  descriptions and supporting evidence. Record actual source language separately
+  from the person's primary language. Generate and save English or Japanese
+  translations when needed for display, deriving each from the original and
+  reusing it while that source version is unchanged. Translation must not replace
+  the original, block source collection, or be presented as published name/role
+  evidence. The owner explicitly selected translation on demand over translating
+  both languages during collection or storing originals only.
+  G1-R14 subsequently makes English-facing person names an intake requirement,
+  outside this on-demand prose-translation policy.
+- **G1-R11 (owner correction on 2026-10-01):** Make each dossier easy to audit:
+  separate romanized name, Chinese name, Chinese job title and English job title,
+  with a source for each and explicit title-verification status. Label translations
+  and missing evidence. Every image must carry a short explanation of its identity
+  evidence. Show actual Chinese-web search attempts and their outcomes; distinguish
+  an unperformed search, an access failure and a completed search that saved no
+  attributable photo. Require at least one fully source-verified individual
+  portrait for each person. The owner explicitly treats photos directly from a
+  confirmed personal X account or an official company bio page as qualifying
+  sources. Account avatars that are logos, cartoons or unattributed groups do not
+  satisfy individual-portrait coverage. Additional source-category choices belong
+  in the test/plan until settled; report unmet portrait requirements explicitly.
+  Source verification describes where an image was published, not biometric
+  identity confidence. The proposed facial-identification reference database is
+  excluded without the subjects' consent; the current work remains a
+  biographical dossier and source audit.
+- **G1-R12 (owner correction on 2026-10-01):** Contributors are not staff merely
+  because they appear in a paper, report credit, repository or organization
+  membership. Do not seek names, biographies, photos or videos for contributor-only
+  people unless the owner specifically requests them. Apply this to both batch
+  collection and new-person intake. A contributor with separate employment evidence
+  can qualify through that evidence. Keep current claims, former staff and dated
+  staff evidence with unknown current status distinct. Preserve existing contributor
+  evidence as history, outside default staff views, active queues and staff coverage
+  denominators. The 591 DeepSeek report entries are not an employee roster.
+- **G1-R13 (owner execution direction on 2026-10-01):** Build the database and
+  shared intake foundation first, use DeepSeek as its first end-to-end test,
+  then expand to the other Chinese brands. Reuse the existing DeepSeek evidence
+  to validate persistence, matching, job history, media provenance and dossier
+  output; the prototype alone is not evidence that the database/intake foundation
+  works. Preserve both initial-batch and ongoing-intake outcomes and the G1-R12
+  contributor exclusion. The owner requests a short plan summary before starting
+  implementation.
+- **G1-R14 (owner correction on 2026-10-01):** English-facing person names are
+  too important to defer until display. Research and persist the established
+  English/Latin professional form during intake, alongside the original-script
+  name and separate source evidence. Preserve unresolved gaps and distinguish
+  a generated romanization from an attested spelling. The owner requests
+  researched CJK guidance and an explicit column/count and primary-name design
+  before the people-schema implementation. The linked G1 plan records the
+  related-name schema; G1-R15 subsequently selects its structure and provenance
+  requirements. Implementation remains pending.
+- **G1-R15 (owner decision on 2026-10-01):** Include `Person`, `PersonName` and
+  separate `PersonNameEvidence` records in the first DeepSeek scaffold, with
+  simple links from generated or converted spellings to their originals. Keep
+  full names and optional components, selected primary/English names and
+  multiple source observations, including uncertain or conflicting claims.
+  Preserve original excerpts, source/capture references, observation times,
+  collection methods and review decisions with reasons. Evidence must connect
+  the name to the person; name-only matches do not establish identity. Keep
+  original publishers separate from search/scraping providers. Defer general
+  provenance graphs, automatic confidence scoring and elaborate component-level
+  review workflows. Final column details belong to scaffold implementation;
+  this selection does not claim that a migration or production import has run.
 
 ### Proposed first step and completion evidence
 
 Audit a dated roster before collection so comprehensive coverage has an explicit
 denominator. Account for every entry as verified, unresolved, inapplicable, or
-otherwise excluded with a reason. Decide the required number and quality of
-photos per person. Report name verification, photo verification, and reuse
+otherwise excluded with a reason. Require at least one source-verified individual
+portrait per person under G1-R11; record remaining quality limits. Report name verification, photo verification, and reuse
 eligibility separately; a downloaded profile picture does not establish all
 three. Demonstrate that an approved identity/photo record can support the
 intended illustration workflow.
 
+Use stored profile and post history first, including metadata and personal links
+behind alias accounts, then research remaining gaps. The initial batch must
+cover database-only staff, Call A staff, and the G1-R08 official-site population.
+Report accountless people and reused identities explicitly. Ongoing completion
+evidence must include both a user addition and a personnel discovery reaching the
+library automatically, with recovery for missed intake and failed source
+requests. A personnel report may name someone other than its author; preserve
+the subject's identity uncertainty instead of assigning the reporter's photo.
+
+The [G1 plan](../plans/2026-10-01-092148-feat-g1-staff-identity-library-plan.md)
+defines the shared workflow and both deliverables. The completed public-source
+sample is baseline evidence, not proof that the available photos are sufficient.
+The owner's subsequent G1-R07 direction requires deeper mainland-platform
+integration research. Full-population coverage and reuse eligibility remain
+unestablished.
+
+The [October 1 collection report](../analysis/2026-10-01-070200-g1-chinese-names-and-images.md)
+accounts for all 40 people in the current-list dossier: 17 Chinese names,
+eight published Chinese renderings, and 15 unresolved forms; 75 distinct
+photographs cover 36 people. Four photo gaps remain visible. This local result
+does not complete the database-only staff population or either ongoing intake
+path, and does not settle the launch photo-quality or reuse criteria.
+
 ### Open decisions
 
-Population boundary and roster refresh; acceptable identity evidence; photo
-quantity/quality; handling unavailable Chinese names; rights and reuse evidence;
-illustration labeling and editorial boundaries; whether any unresolved entry
-blocks launch. Do not silently replace the comprehensive requirement with a
-convenient subset.
+Roster freshness and ongoing scan cadence; acceptable identity evidence; photo
+quantity/quality; handling unavailable Chinese names; durable image storage;
+source budgets; rights and reuse evidence; illustration labeling and editorial
+boundaries; whether any unresolved entry blocks launch. The union population
+and two required acquisition paths are settled. Do not silently replace the
+comprehensive requirement with a convenient subset.
 
 ## G2 — General-page editorial voice
 

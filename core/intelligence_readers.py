@@ -315,7 +315,7 @@ def person_intelligence(person_id) -> dict[str, Any]:
         .prefetch_related(Prefetch("evidence", queryset=evidence))
         .order_by("brand_id", "id")
     )
-    person = Person.objects.prefetch_related(
+    person = Person.objects.select_related("primary_name", "english_name").prefetch_related(
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(
             "account_links",
@@ -328,16 +328,16 @@ def person_intelligence(person_id) -> dict[str, Any]:
     return {
         "person": {
             "id": str(person.pk),
-            "display_name": person.display_name,
+            "display_name": person.primary_name.full_name if person.primary_name_id else person.display_name,
             "display_names": {
-                "en": person.display_name_en,
+                "en": person.english_name.full_name if person.english_name_id else person.display_name_en,
                 "zh-cn": person.display_name_zh_cn,
                 "ja": person.display_name_ja,
             },
             "date_of_birth": _effective_date(
                 person.date_of_birth, person.date_of_birth_precision
             ),
-            "sexs": person.sexs,
+            "sex": person.sex,
             "nationality": person.nationality,
             "ethnicity": person.ethnicity,
             "primary_language": person.primary_language,

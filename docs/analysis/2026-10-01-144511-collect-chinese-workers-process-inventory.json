@@ -1,0 +1,933 @@
+{
+  "captured_at": "2026-10-01T14:58:56.135795+09:00",
+  "source_revision": "33f20b971b01dbb8d90939f975e5dbbd987a3d86",
+  "process_record": "2026-10-01-144511-collect-chinese-workers-process-capture.md",
+  "purpose": "Locate and fingerprint existing research evidence for future skill extraction; not an executable queue or an authorization to repeat calls.",
+  "availability": ".context and .firecrawl evidence is local and ignored. git_tracked_at_capture is an observation, not a publication instruction.",
+  "redaction": "Only paths, sizes and hashes; no credentials, raw payloads, private membership text or image bytes copied.",
+  "directories": [
+    {
+      "stage": "stored_metadata",
+      "path": ".context/g1-chinese-faces-20260930",
+      "exists": true
+    },
+    {
+      "stage": "chinese_public_sources",
+      "path": ".context/g1-chinese-portraits-20260930",
+      "exists": true
+    },
+    {
+      "stage": "integration_docs",
+      "path": ".context/g1-mainland-integrations-20260930",
+      "exists": true
+    },
+    {
+      "stage": "native_search_docs",
+      "path": ".firecrawl/g1-native-chinese-search-20260930",
+      "exists": true
+    },
+    {
+      "stage": "serpapi_trial",
+      "path": ".context/g1-serpapi-baidu-test-20260930",
+      "exists": true
+    },
+    {
+      "stage": "searchapi_comparison",
+      "path": ".context/g1-searchapi-baidu-test-20260930",
+      "exists": true
+    },
+    {
+      "stage": "phyllo_probe",
+      "path": ".context/g1-phyllo-xiaohongshu-test-20260930",
+      "exists": true
+    },
+    {
+      "stage": "private_list",
+      "path": ".context/g1-live-list-20260930",
+      "exists": true
+    },
+    {
+      "stage": "names_and_media",
+      "path": ".context/g1-names-images-20261001",
+      "exists": true
+    },
+    {
+      "stage": "preview_and_avatars",
+      "path": ".context/g1-broken-images-20261001",
+      "exists": true
+    },
+    {
+      "stage": "xiaohongshu_phrases",
+      "path": ".context/g1-xiaohongshu-terms-20261001",
+      "exists": true
+    },
+    {
+      "stage": "deepseek_initial",
+      "path": ".context/g1-deepseek-test-20261001",
+      "exists": true
+    },
+    {
+      "stage": "deepseek_source_audit",
+      "path": ".context/g1-deepseek-dossier-clarity-20261001",
+      "exists": true
+    }
+  ],
+  "files": [
+    {
+      "path": ".context/g1-chinese-portraits-20260930/downloads.json",
+      "stage": "chinese_public_sources",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 34950,
+      "sha256": "fb8defc439b054dbe2949f704e3582156df7f1640b5c6b4ae6eed01a9e7391d9"
+    },
+    {
+      "path": ".context/g1-chinese-portraits-20260930/review.json",
+      "stage": "chinese_public_sources",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 53052,
+      "sha256": "9bf7dbf81ad23027795d0c9889e38061818dfcf911c0a7852ada355e460c8328"
+    },
+    {
+      "path": ".context/g1-chinese-portraits-20260930/build_dossiers.py",
+      "stage": "chinese_public_sources",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 15864,
+      "sha256": "e2e4371cbc554d7b7eeb3294892c8bfebdbc93c97ee17b149fa6af52bf66a5f8"
+    },
+    {
+      "path": ".context/g1-chinese-portraits-20260930/download.py",
+      "stage": "chinese_public_sources",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2640,
+      "sha256": "decb781e73d6fc21e308c461697ed401d3e29d64a0065e109cd249f6a9362fc8"
+    },
+    {
+      "path": ".context/g1-chinese-portraits-20260930/pages_batch.py",
+      "stage": "chinese_public_sources",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 1191,
+      "sha256": "85efe9e40e7ebd08485c018af9961b2da2da5c192684dc20b3b3e0610259add1"
+    },
+    {
+      "path": ".context/g1-chinese-portraits-20260930/search_batch.py",
+      "stage": "chinese_public_sources",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2648,
+      "sha256": "27fcad89061bbdf9c98f57982537185bc3340c4be33dd434d5a4c985cbddef23"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/image-review.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 4127,
+      "sha256": "e82a09c174e57e693c3fcc550bddd13802bd7044623cf49d11709b7f47e066df"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/run-contract.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 698,
+      "sha256": "3d68ed0cde67acf300405a6621bfcf5654c352f86aefedebe3ea0cd4f0f92a63"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/scrape-receipt.jsonl",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1319,
+      "sha256": "05deaf14e6da13d8701d885c75d3f6eaf4b139b5203e27b837ee35f5d5e5a710"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/search-receipt.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 6335,
+      "sha256": "ad19935809a2c79cbf80d77eaee58cd08f38daf56b2ce1da01b3aa5aeb1aa605"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/search-requests.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1538,
+      "sha256": "b998d4b37d0bf01d20dcb41fa53acbace3276461956ad596e399bb4a336ef9e4"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/v41-credits.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 251871,
+      "sha256": "8a29399b2c9aed95a3edd5586cdc4195099e0e998349813abd771884457f6359"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/verification.json",
+      "stage": "deepseek_initial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 231,
+      "sha256": "c6b79b5e29d9b0fd09d1ecccd48ce0e2baaa74c352c11cb02e13bdc5228fe763"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/build_dossier.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 12132,
+      "sha256": "0c5ff030c62cf4ded2445b3add5ecca55ba0d197fb88d35fbcf23de70b247831"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/download_images.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2350,
+      "sha256": "eabc3c0b3c894157e80ffc3719a6afd548ee62917d21a02a1c0fe80207356889"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/parse_authors.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2030,
+      "sha256": "ace8bc8572c4a739ddff10ea02a6b268b0d472ca352305df9976730d8fc313b0"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/profile_facts.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 12674,
+      "sha256": "3d7559475907b4f228d672138b25db623e3ff280058933ca9e261ddb8e77c9be"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/scrape_batch.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 1006,
+      "sha256": "e79c68d392010072c59b45d56591725c1b8aecde3e747dc443aa9c0f4f8e4317"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/search_baidu.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2276,
+      "sha256": "82063296702f539ce74bcf6c91c80f35833820a27d67e64d48c45394e1851755"
+    },
+    {
+      "path": ".context/g1-deepseek-test-20261001/verify_dossier.py",
+      "stage": "deepseek_initial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2163,
+      "sha256": "0c7999c903d7e661b037db31c8fa15002d59bffa1cc1e80d608ae22f2973061f"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/approved-images.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 6677,
+      "sha256": "9ad819ae1a1be0e37dee4ba35d8079f9f65cc902b29da5b7e2f058ed635e08af"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/browser-verification.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2521,
+      "sha256": "f6e49e79597ba8ace8a666e571ce02237d5818bc91db14fd7b9554fd573dbe5b"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/build-receipt.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 177,
+      "sha256": "513718a36691fc97780c735894777dcf956e3994f0825800a0b3eb7cf40320c4"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/chrome-verification.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 297,
+      "sha256": "614c43378be7d53dc142a28dfd21625c148fa79f906928ed67a1073431ca979a"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/image-review.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2150,
+      "sha256": "50c9b7ed0b4982aa181ea5fb42f95ffff790c352dd41d722b1375904248ce25a"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/integrity-verification.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 254,
+      "sha256": "24de1027d03f9b7efff352f90a4361be359454e08670e93da51d46df02d2b19b"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/pdf-verification.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 163,
+      "sha256": "98664fcc58bf4166b80a5ee326c1cfd6a81baf90c5167d2a9b6c870be1cf01cf"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/remote-image-verification.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 958,
+      "sha256": "da5c0177a72d2dda706541bfc162847819446e16387abedaea61de8a96e38681"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/run-contract.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1231,
+      "sha256": "2093c933b8f501fe99ef5f23a7eabce64a6a82af932a3adb1b1358fb83fbe703"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/scrape-queue.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1094,
+      "sha256": "87002259c9bf2a22f4bf14adce0dc5350c27a68a0ba6accf9dfd8788c6460b3d"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/scrape-receipt.jsonl",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1472,
+      "sha256": "482cb66bdf56e37579a2863f9e59d2e735c6ddfe3b303fdee3196e0b8614f134"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/search-receipt.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 5168,
+      "sha256": "3e4f7d82b32625e01e37f22930c06a2f914f4a393817d3966e27c8dfb1450fec"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/search-requests.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1235,
+      "sha256": "3d61681c876cf1f183a11a5f2e34e32339b6937db73da81e1da427e90dd14b2b"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/source-reviews.json",
+      "stage": "deepseek_source_audit",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 11285,
+      "sha256": "75d2dc1372fca2edd94154dfc72d3205db40fd06241c00bfe1a645e2d8fcd122"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/build_clarity.py",
+      "stage": "deepseek_source_audit",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 15373,
+      "sha256": "967b210a8452c5a1859928d4f3d38dbccf2ca24e81fb0d6f732fee907fc57d36"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/scrape_batch.py",
+      "stage": "deepseek_source_audit",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 1004,
+      "sha256": "e4f6b332496af0a9261dcf8cf41355eda5e931ae3215f2494054981262b4af2d"
+    },
+    {
+      "path": ".context/g1-deepseek-dossier-clarity-20261001/search_baidu.py",
+      "stage": "deepseek_source_audit",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2276,
+      "sha256": "2f224d8ff3d9cac6c4155362d816a1e444b21459860d3b8822d4ec841a36465a"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/01-staff-dossiers/screens/001-staff-dossiers.html",
+      "stage": "dossier",
+      "kind": "current_local_output",
+      "git_tracked_at_capture": false,
+      "bytes": 27310,
+      "sha256": "222f871964e89aa525bb6240668c67e90db7591afc418082748eed5772312130"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/01-staff-dossiers/screens/data.json",
+      "stage": "dossier",
+      "kind": "current_local_output",
+      "git_tracked_at_capture": false,
+      "bytes": 1317675,
+      "sha256": "f7d13b7ebeac0e509a41eb921894b98252d534d7104fe8a85f2d7dc370d2a7a3"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/01-staff-dossiers/screens/deepseek-roster.json",
+      "stage": "dossier",
+      "kind": "current_local_output",
+      "git_tracked_at_capture": false,
+      "bytes": 499706,
+      "sha256": "344e5320649cb0612d9d36615135aab9f1fb1999dff27f40401bf8ef63c35a02"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/01-staff-dossiers/screens/deepseek-team.pdf",
+      "stage": "dossier",
+      "kind": "current_local_output",
+      "git_tracked_at_capture": false,
+      "bytes": 23755980,
+      "sha256": "bf2b0ec584f54a1e6a9288835d0137feeb5375fb2c30edcb456c86f3a712edd2"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/01-staff-dossiers/screens/dossiers.js",
+      "stage": "dossier",
+      "kind": "current_local_output",
+      "git_tracked_at_capture": false,
+      "bytes": 32237,
+      "sha256": "7ac2e80a5951c6b1f03adcc0341f401b2659a3f20c1146ba6328b5181e817ecf"
+    },
+    {
+      "path": ".context/compound-engineering/ce-prototype/2026-09-30-g1-staff-dossiers/prepare.py",
+      "stage": "dossier",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 16192,
+      "sha256": "15ff85afb14f890f263b97d9abd9da90031a348ff687c2fabc791f2b53eedc07"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/firecrawl-usage.json",
+      "stage": "names_and_media",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 104,
+      "sha256": "f84087b3701e5e326a3f4eadb43555a7a2c5f93aa16dd66ad2c5b562ab262d84"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/media-receipt.json",
+      "stage": "names_and_media",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 7583,
+      "sha256": "598ac5d0b7ab0a4eb649914296c47c14174bcfe2a27313b1bbf61a7ffffc45b3"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/media-requests.json",
+      "stage": "names_and_media",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1822,
+      "sha256": "3d8ee3d04d2898eb81f5a6dadfec67183a6f01d9c2ff1db945039704bcd1ad61"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/names-receipt.json",
+      "stage": "names_and_media",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 4850,
+      "sha256": "5453e80b31e46dcfa78fad6902d5dd7436eb0fbdfa22d0190fec92dbcb58e1ae"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/names-requests.json",
+      "stage": "names_and_media",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1168,
+      "sha256": "21e3cc9823ce1ab35b25c841e1233764644a53f5357a1ff9117e60c2ceeaf4db"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/fetch_media.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3342,
+      "sha256": "11c6badf0660ae954203ad768903e58d9a2ed996e0434f21ce82a835792999ed"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/scrape_sources.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 1617,
+      "sha256": "dda18317e628c8f4bbfe98dd976825980ebd4ae7de5d9de63ce142c09c5fa1ff"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/search_baidu.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2668,
+      "sha256": "e2e2605c220c9785168c9f660eedee1d1a3ab7800805c5a2191e53b83ff7dd32"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/update_gallery.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 10024,
+      "sha256": "a7a967e6ecda20abe2aafa164162ccfbe51782bf5db165fc59f655ac4ec52dcf"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/update_names.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 11695,
+      "sha256": "3b8c100bd3a9d4106d6318834e6a1a2999a6e925a0fed264305ad863521b5ac1"
+    },
+    {
+      "path": ".context/g1-names-images-20261001/verify_dossier.py",
+      "stage": "names_and_media",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 5261,
+      "sha256": "2feb5674c2ce8014ba3463cd2dbaa63d032c32fc42c42e7772a97de5a74a540f"
+    },
+    {
+      "path": ".firecrawl/g1-native-chinese-search-20260930/crawl-inventory.json",
+      "stage": "native_search_docs",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 5283,
+      "sha256": "f75f68bd75153e66137dd481e1dfa7d11319789bfbbfb9737d3aaaef1a7d4993"
+    },
+    {
+      "path": "core/job_sources/adapters.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 17900,
+      "sha256": "82faa0a69b48afa88fbe6b245c57de33a0635c52be71d48bd529fbfbb99d2cc5"
+    },
+    {
+      "path": "core/job_sources/http.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 5202,
+      "sha256": "3f367e9155e7c4ec7dbb589aed2efeb1c0e623db0b8d60807e8ac8e210ade0bd"
+    },
+    {
+      "path": "core/job_sources/registry.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 2221,
+      "sha256": "84dc5198c1120327ec2accc14f50c89d2021229ebcb080ab136906cac8a56083"
+    },
+    {
+      "path": "core/job_sources/runner.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 5994,
+      "sha256": "e5288bc32e6797e29abd325ea183414c33a3ab9ba2d59b6d98bb90cc9dd51fda"
+    },
+    {
+      "path": "core/job_sources/sync.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 9997,
+      "sha256": "76de4bdabc048a6d99240872a280801eb8804d980f8c1fca2715cf9cf42fbac8"
+    },
+    {
+      "path": "core/management/commands/sync_job_sources.py",
+      "stage": "official_jobs_crawler",
+      "kind": "inspected_existing_code_not_a_staff_importer",
+      "git_tracked_at_capture": true,
+      "bytes": 3071,
+      "sha256": "f60a22810ec9e851bd4eb207f96c6e6481aa02b0ef82b6af8f2e8a0c41259845"
+    },
+    {
+      "path": ".context/g1-phyllo-xiaohongshu-test-20260930/phyllo-host-probe.json",
+      "stage": "phyllo_probe",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 17785,
+      "sha256": "45892e239e3901556f41383885184846020e8638003fa6928a93b8ad924111d0"
+    },
+    {
+      "path": ".context/g1-phyllo-xiaohongshu-test-20260930/public-endpoints.json",
+      "stage": "phyllo_probe",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 21987,
+      "sha256": "9c06451b11ab42e4c1bc485571da466db72c3d62aa175926949e488409d6c874"
+    },
+    {
+      "path": ".context/g1-phyllo-xiaohongshu-test-20260930/test-summary.json",
+      "stage": "phyllo_probe",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 901,
+      "sha256": "6789f6ff0b56855f9cff591cfecc75e711b3e83615db069b2e38e1dc5a84871a"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/account-image-downloads.json",
+      "stage": "preview_and_avatars",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 25640,
+      "sha256": "66431456aac79e025a4a31fe6683215fdcdd086fd4a205adbe7a5ce1d2bc61f0"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/collect_account_images.py",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3765,
+      "sha256": "d705680afb269834f8e6d76bf1bc74ce02848ed48e581a8388d5da0725cae7fe"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/missing-images-raw.sql",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 530,
+      "sha256": "f328173d53e349ba07d92ddf5cd274efc5c1167563c1207794637139588ab071"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/profile-images.sql",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2804,
+      "sha256": "7dc4f849432f160957799d5f18b63a7e5081a096235e93fe48cc809bb74d1944"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/serve_dossier.py",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 788,
+      "sha256": "35aeda13d9fefaa924e69cc03f4a62a7f807d07bb80512560a1eda6a6a90e25d"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/update_account_images.py",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3003,
+      "sha256": "e8421a9f8526b01ce2ceef752229effa2c58139cb64cf04ceff82fc13c38a05f"
+    },
+    {
+      "path": ".context/g1-broken-images-20261001/verify_repair.py",
+      "stage": "preview_and_avatars",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 6876,
+      "sha256": "94959be3f7fef720cd188c3512ded0fcb06b76b9f9178e52ac4130da9a6bb7c4"
+    },
+    {
+      "path": ".context/g1-live-list-20260930/browser-verification.json",
+      "stage": "private_list",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2492,
+      "sha256": "94ae33a78008f7bf808e099484b54999d55e3bc39a152ef34bd6414c04ebef14"
+    },
+    {
+      "path": ".context/g1-live-list-20260930/reconciliation.json",
+      "stage": "private_list",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 1094,
+      "sha256": "de1d0f255c78b46057275719af8d94d7899abf3d4c657b0bd5cc435f878a756c"
+    },
+    {
+      "path": ".context/g1-live-list-20260930/update_dossier.py",
+      "stage": "private_list",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 12405,
+      "sha256": "2c3486222f2cc990d9c5312f064850e640d575fcd566f495f2c81790505f5bd6"
+    },
+    {
+      "path": ".context/g1-live-list-20260930/verify_dossier.py",
+      "stage": "private_list",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 4651,
+      "sha256": "b25fdbd82e2dee14d028618772ecbb9c0784a1f7d144e4a2d49aa7b79343799f"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-114155-g1-public-source-feasibility.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 15355,
+      "sha256": "98d1aca0243fcf5d68f35212be7f3c884ebb886b8af1f8bd014dc9389961eb77"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-164100-g1-chinese-web-portrait-collection.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 9450,
+      "sha256": "3f41e76275b245c67dc74aaa7fa0b101f9496932783963754b4d0b8437caf2cb"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-183447-g1-serpapi-baidu-media-test.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 7896,
+      "sha256": "060399df8449647e7ed6f9bcee3e4a22be59f0df4865c82edba74b88176fdd2c"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-185025-g1-searchapi-serpapi-comparison.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 7418,
+      "sha256": "4f65ebb13c5d5260b5a58479810c74af7fb86277d1a388db7cd5a3d50f0afa49"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-190049-g1-phyllo-xiaohongshu-access.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 6437,
+      "sha256": "7b84edf878c4d4cf99bfc7adc4b3162aa6c5de05212bf53d4fbde224c4161e07"
+    },
+    {
+      "path": "docs/analysis/2026-09-30-225700-g1-private-list-dossier-reconciliation.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 6367,
+      "sha256": "26cc0a1091ec5f770d031bd9081cf0d0fcbff9a4fe34b6b6b3ea09be7d3ff75d"
+    },
+    {
+      "path": "docs/analysis/2026-10-01-070200-g1-chinese-names-and-images.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 19160,
+      "sha256": "064468256c5cc616512ff85536de2a82667297a8198a425b3f141b8aed0bdb80"
+    },
+    {
+      "path": "docs/analysis/2026-10-01-122327-g1-deepseek-team-test.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 14901,
+      "sha256": "ba8d582f4e485592251ac9929493ca7220ed4cfc27f121a7cf0b35e0e0397b1e"
+    },
+    {
+      "path": "docs/research/2026-09-30-165900-g1-mainland-photo-integrations.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 14860,
+      "sha256": "00de00cf44d033d3b78acec3bfa27a24e726c0bbf66413057547b4fd5f9e0890"
+    },
+    {
+      "path": "docs/research/2026-09-30-172400-g1-chinese-model-native-search.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 16698,
+      "sha256": "28f07f220535ee2441abe8a43cf993c61194ae299bff800c86089e647d06ccc1"
+    },
+    {
+      "path": "docs/research/2026-09-30-192019-g1-parsebot-xiaohongshu.md",
+      "stage": "reports",
+      "kind": "dated_result_report",
+      "git_tracked_at_capture": false,
+      "bytes": 4728,
+      "sha256": "a34b45fa2aaaf177731daaa2f7cf6bc0606186661c24d5f25cf1772b69d7c9ee"
+    },
+    {
+      "path": ".context/g1-brand-hq-20261001.json",
+      "stage": "schema_and_scope",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 9548,
+      "sha256": "6801e3d6899a90fcf647827c5c34f8fae33174b5c381e75c448b90abd10b115e"
+    },
+    {
+      "path": ".context/g1-people-columns-20261001.json",
+      "stage": "schema_and_scope",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 3893,
+      "sha256": "c7b63f80299bc2787eb1e8dea52e8fdd46c03ba96bec2398e784f1cfaeb8a68a"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/archive-receipt.json",
+      "stage": "searchapi_comparison",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 410,
+      "sha256": "47e25913c7303cb8ce696418aaf3baf7af89e5d0acf90ed273e3937427226219"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/comparison.json",
+      "stage": "searchapi_comparison",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2729,
+      "sha256": "6bbc228445d9483d156acf324e55277aaa2fb357345b2a44d7b8ca9a6e66a414"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/raw-image-mapping.json",
+      "stage": "searchapi_comparison",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 25646,
+      "sha256": "c6c1284c66465878a335b915c530efcebb5bcbaa4069c6fe09946c4926287bab"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/requests.json",
+      "stage": "searchapi_comparison",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2684,
+      "sha256": "c0244b7ccb4b71b38a148d1b8d3fe13229e405464fcb8e5295d0e2fc31545b00"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/fetch_media.py",
+      "stage": "searchapi_comparison",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3512,
+      "sha256": "1c0f3b3690ea4a555a50c2808acadc56d24c9f94c373ce89852a19fbee16ac09"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/fetch_sources.py",
+      "stage": "searchapi_comparison",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2282,
+      "sha256": "ef3413c1a8f79dde0cd103a5dde3dfdca4f92d81633412d77c00f99a4aeff82f"
+    },
+    {
+      "path": ".context/g1-searchapi-baidu-test-20260930/run_searches.py",
+      "stage": "searchapi_comparison",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 5610,
+      "sha256": "1341e02a850d254d89c58628f5f61b0c3bb1909d6c82b49e1651aa9077496d23"
+    },
+    {
+      "path": ".context/g1-serpapi-baidu-test-20260930/requests.json",
+      "stage": "serpapi_trial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 2702,
+      "sha256": "33e1a1fb93432b67789ebcf47de36928510c48aab20d41a7fe86fa68975b89b2"
+    },
+    {
+      "path": ".context/g1-serpapi-baidu-test-20260930/search-receipt.json",
+      "stage": "serpapi_trial",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 4661,
+      "sha256": "b059bd19c3c8326df1aa908feadba780dddfe010197aad6c1f61e89676e2f7ee"
+    },
+    {
+      "path": ".context/g1-serpapi-baidu-test-20260930/fetch_media.py",
+      "stage": "serpapi_trial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3512,
+      "sha256": "1c0f3b3690ea4a555a50c2808acadc56d24c9f94c373ce89852a19fbee16ac09"
+    },
+    {
+      "path": ".context/g1-serpapi-baidu-test-20260930/fetch_sources.py",
+      "stage": "serpapi_trial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2186,
+      "sha256": "b7ce7f4b3f5246e9293bd85d950c20b8236b9d709e9e3a9447761170945bfdf4"
+    },
+    {
+      "path": ".context/g1-serpapi-baidu-test-20260930/run_searches.py",
+      "stage": "serpapi_trial",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 4608,
+      "sha256": "7e9b0c3976bb9d4cd1d6bf0698384d5d12859d514b9a53f303b24ab3c7692a0e"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/roster-dispositions.json",
+      "stage": "stored_metadata",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 25376,
+      "sha256": "437d99590cb370525802ca5a797ebf210b707d3124d5a457a9f1ac5ad2078fa8"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/roster-summary.json",
+      "stage": "stored_metadata",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 437,
+      "sha256": "dc5978d33dd0717806e238480666fe6c01a5c382f046206a5d98bb93692fcb0b"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/sample-audit.json",
+      "stage": "stored_metadata",
+      "kind": "evidence_pointer_only",
+      "git_tracked_at_capture": false,
+      "bytes": 7499,
+      "sha256": "6aaa77d8c15f9f2339cd73a65cf8e91b6a90c01b395a9cb58d496974700f0d8f"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/alias-post-evidence-query.sql",
+      "stage": "stored_metadata",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 483,
+      "sha256": "3836791249917b614b8ec10d0c9702011aa93b675a628932c278ac6235a5f725"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/roster-query.sql",
+      "stage": "stored_metadata",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 1184,
+      "sha256": "cd662e4a780938994d7c2842820cf5ce4a9aca172bf4fef8a1642135d5639a7b"
+    },
+    {
+      "path": ".context/g1-chinese-faces-20260930/stored-author-metadata-query.sql",
+      "stage": "stored_metadata",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 2081,
+      "sha256": "a0d12f1efffa971e3e10f307666d4f7a8f9accf0d1894ad519ef0564c6b4ae0d"
+    },
+    {
+      "path": ".context/g1-xiaohongshu-terms-20261001/add_search_terms.py",
+      "stage": "xiaohongshu_phrases",
+      "kind": "historical_local_entrypoint",
+      "git_tracked_at_capture": false,
+      "bytes": 3539,
+      "sha256": "740683360f8b2d6b95f1aae8eab2f916c43e00d46d4457371f3fe23199c0a2ce"
+    }
+  ]
+}

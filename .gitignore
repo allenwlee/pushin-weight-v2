@@ -83,3 +83,6 @@ data/*.test*
 
 # Worktree isolation
 .worktrees/
+
+# Local staff-library pilot storage
+.local/staff-media/
