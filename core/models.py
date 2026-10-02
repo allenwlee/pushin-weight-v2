@@ -4654,7 +4654,7 @@ class PersonName(models.Model):
         null=True,
     )
     review_status = models.CharField(
-        max_length=16, choices=REVIEW_STATUS_CHOICES, default="pending"
+        max_length=16, choices=[(value, value) for value in ("pending", "confirmed", "rejected")], default="pending"
     )
     review_history = models.JSONField(default=list)
     fingerprint = models.CharField(max_length=64)
@@ -4897,6 +4897,16 @@ class PersonMedia(models.Model):
 
 class PersonText(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="texts")
+    affiliation = models.ForeignKey(
+        "PersonBrandAffiliation", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="texts",
+    )
+    origin = models.CharField(max_length=24, default="source")
+    derived_from = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="derived_texts")
+    review_status = models.CharField(max_length=16, default="pending",
+                                    choices=[(value, value) for value in ("pending", "confirmed", "rejected")])
+    review_note = models.TextField(blank=True, default="")
     kind = models.CharField(max_length=32)
     language = models.CharField(max_length=35)
     text = models.TextField()
@@ -4909,9 +4919,16 @@ class PersonText(models.Model):
         db_table = "people_texts"
         constraints = [
             models.UniqueConstraint(
-                fields=["person", "kind", "source_reference", "version_hash"],
+                fields=["person", "affiliation", "kind", "source_reference", "version_hash"],
                 name="uq_person_text_version",
-            )
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(condition=models.Q(origin__in=["source", "translation", "summary", "unknown"]),
+                                   name="ck_person_text_origin"),
+            models.CheckConstraint(condition=models.Q(review_status__in=["pending", "confirmed", "rejected"]),
+                                   name="ck_person_text_review"),
+            models.CheckConstraint(condition=~models.Q(kind="title") | models.Q(affiliation__isnull=False),
+                                   name="ck_person_title_affiliation"),
         ]
 
 

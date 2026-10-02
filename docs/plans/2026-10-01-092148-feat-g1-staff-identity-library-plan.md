@@ -1899,6 +1899,18 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 2 LFG U10:** titles now belong to individual affiliations and
+  carry language, original/translation/unknown provenance and review details.
+  Dossier titles and profile locations read the dedicated records; saved intake
+  JSON remains the import/search journal. A preview/apply normalization command
+  adapts earlier saved title audits. Database triggers preserve intake/prose
+  versions and enforce affiliation/derivation ownership in both directions.
+  Selected-name updates maintain legacy display mirrors and clear a demoted
+  selection. Four new prose cases failed before implementation; 49 combined
+  name/text/correction/employment/dossier/library/migration tests now pass with
+  zero skips/errors. Model/migration drift check passes. Baseline private HTML
+  inspected in Chromium at 1440×1000 before changing its title display.
+
 - **October 2 LFG U9:** explicit reviewed claim replacement now drives the
   roster, collection context and dossier. Historical claims remain addressable;
   concurrent jobs and unreviewed contradictions remain visible. PostgreSQL

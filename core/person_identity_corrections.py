@@ -58,15 +58,31 @@ def _selection(source, kind, selection):
                 dependencies.add(row.superseded_by_id)
             if dependencies - ids:
                 raise ValueError("Select the complete employment replacement chain")
+        texts = {row.pk for row in chosen["texts"]}
+        required_texts = set(PersonText.objects.filter(affiliation_id__in=ids).values_list("pk", flat=True))
+        if required_texts - texts:
+            raise ValueError("Select the texts belonging to the moved affiliations")
+        for row in chosen["texts"]:
+            if row.affiliation_id and row.affiliation_id not in ids:
+                raise ValueError("Select the affiliation belonging to the moved text")
+            dependencies = set(row.derived_texts.values_list("pk", flat=True))
+            if row.derived_from_id:
+                dependencies.add(row.derived_from_id)
+            if dependencies - texts:
+                raise ValueError("Select the complete text derivation chain")
     return chosen
 
 
 def _copy_names(source, target, names, *, kind, reviewer, reason):
     mapping = {}
+    visiting = set()
 
     def copy(row):
         if row.pk in mapping:
             return PersonName.objects.get(pk=mapping[row.pk])
+        if row.pk in visiting:
+            raise ValueError("Name derivation cycle needs repair")
+        visiting.add(row.pk)
         parent = copy(row.derived_from) if row.derived_from_id else None
         representation = {
             "full_name": row.full_name, "language": row.language,
@@ -93,6 +109,7 @@ def _copy_names(source, target, names, *, kind, reviewer, reason):
                 name=new, evidence_hash=evidence_hash, defaults=values
             )
         mapping[row.pk] = new.pk
+        visiting.remove(row.pk)
         return new
 
     for row in names:
@@ -142,12 +159,14 @@ def _transfer(row, target, *, kind):
         collision = PersonMedia.objects.filter(person=target, fingerprint=row.fingerprint).first()
     elif isinstance(row, PersonText):
         collision = PersonText.objects.filter(
-            person=target, kind=row.kind, source_reference=row.source_reference,
+            person=target, affiliation_id=row.affiliation_id, kind=row.kind, source_reference=row.source_reference,
             version_hash=row.version_hash,
         ).first()
     else:
         collision = None
     if collision:
+        if isinstance(row, PersonText) and (row.derived_from_id or row.derived_texts.exists()):
+            raise ValueError("Text derivation collision needs separate review")
         if kind == "split":
             raise ValueError("Selected record already exists on target; review collision separately")
         # The original remains addressable and the journal records the collision.
@@ -191,6 +210,9 @@ def correct_identity(*, kind, source_id, target_id, reviewer, reason,
         raise ValueError("Use the active person ID for a new correction")
     if kind != "confirm_account" and source.pk == target.pk:
         raise ValueError("Source and target must differ")
+    if kind == "confirm_account" and source.pk != target.pk:
+        raise ValueError("Account confirmation uses the same source and target person")
+    people_before = snapshot(Person.objects.filter(pk__in=[source.pk, target.pk]))
     person_ids = list(people)
     if StaffCollectionWork.objects.filter(person_id__in=person_ids, state="running").exists():
         raise ValueError("Cannot correct identity while collection work is running")
@@ -237,6 +259,9 @@ def correct_identity(*, kind, source_id, target_id, reviewer, reason,
             ).update(state="needs_review", error_category="identity_corrected")
     if not apply:
         return {"applied": False, "request_key": request_key, "request": request, "changes": changes}
+    changes["people_before"] = people_before
+    changes["people_after"] = snapshot(Person.objects.filter(pk__in=[source.pk, target.pk]))
+    changes["accounts_after"] = snapshot(PersonAccount.objects.filter(person__in=[source, target]))
     result = PersonIdentityCorrection.objects.create(
         request_key=request_key, kind=kind, source=source, target=target,
         reviewer=reviewer, reason=reason, request=request, changes=changes,

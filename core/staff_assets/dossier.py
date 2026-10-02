@@ -25,6 +25,8 @@ def dossier_records(*, brand_id):
             "names__evidence",
             "media__media",
             "brand_affiliations__evidence",
+            "brand_affiliations__texts__translations",
+            "texts",
             "staff_intakes",
             "staff_requests",
             "collection_work",
@@ -101,20 +103,27 @@ def dossier_records(*, brand_id):
                 }
             )
         title_fields = []
-        for key, label in (
-            ("job_title_zh", "Chinese job title"),
-            ("job_title_en", "English job title"),
-        ):
-            field = presentation.get("fields", {}).get(key, {})
-            title_fields.append(
-                {
-                    "label": label,
-                    "value": field.get("value") or "Not collected",
-                    "status": field.get("status", "Unknown"),
-                    "source": source_url(field.get("source")),
-                    "note": field.get("note", ""),
-                }
-            )
+        for role in roles:
+            titles = [row for row in role.texts.all() if row.kind == "title" and row.review_status != "rejected"]
+            for row in titles:
+                title_fields.append({
+                    "label": {"zh-Hans": "Chinese job title", "en": "English job title"}.get(row.language, "Original job title"),
+                    "value": row.text, "status": row.review_status + " · " + row.origin,
+                    "source": source_url(row.source_reference), "note": row.review_note,
+                    "role": role.title_raw or "Title unknown",
+                })
+                for translation in row.translations.all():
+                    title_fields.append({"label": "Job title (" + translation.language + ")",
+                        "value": translation.text, "status": "translation · " + translation.provider,
+                        "source": source_url(row.source_reference), "note": "Translated from: " + row.text,
+                        "role": role.title_raw or "Title unknown"})
+            if not titles:
+                evidence = list(role.evidence.all())
+                title_fields.append({"label": "Original job title", "value": role.title_raw or "Not collected",
+                    "status": role.review_status + " · language not recorded",
+                    "source": source_url(evidence[0].source_url) if evidence else "", "note": ""})
+            if not any(row.language == "en" or any(t.language == "en" for t in row.translations.all()) for row in titles):
+                title_fields.append({"label": "English job title", "value": "Not collected", "status": "Translation not requested", "source": "", "note": ""})
         role_rows = []
         for role in roles:
             role_rows.append(
@@ -146,6 +155,8 @@ def dossier_records(*, brand_id):
                     "at": request.created_at.isoformat(),
                 }
             )
+        locations = [row for row in person.texts.all() if row.kind == "location" and row.affiliation_id is None and row.review_status != "rejected"]
+        profile_location = max(locations, key=lambda row: (row.observed_at, row.pk), default=None)
         result.append(
             {
                 "id": str(person.pk),
@@ -156,9 +167,7 @@ def dossier_records(*, brand_id):
                 if person.primary_name_id
                 else person.display_name,
                 "scope": scope,
-                "eligibility": dossier.get("deepseek", {})
-                .get("staff_eligibility", {})
-                .get("label", "Stored staff claim"),
+                "eligibility": "Current staff claim" if scope == "current" else "Former or dated staff claim",
                 "names": names,
                 "has_chinese": any(row["language"].startswith("zh") for row in names),
                 "has_english": bool(person.english_name_id),
@@ -170,8 +179,8 @@ def dossier_records(*, brand_id):
                 "search_summary": presentation.get("chinese_web", {}).get(
                     "summary", "No completed search recorded."
                 ),
-                "profile_location": dossier.get("location"),
-                "profile_location_source": source_url(dossier.get("location_source")),
+                "profile_location": profile_location.text if profile_location else None,
+                "profile_location_source": source_url(profile_location.source_reference) if profile_location else "",
                 "suggested_query": dossier.get("xiaohongshu_search", {}).get(
                     "query", ""
                 ),

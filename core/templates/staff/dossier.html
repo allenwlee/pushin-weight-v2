@@ -21,7 +21,7 @@
       {% for source in name.sources %}<p class="source">{% if source.url %}<a href="{{ source.url }}" rel="noreferrer">Name source</a>{% else %}{{ source.reference }}{% endif %} · {{ source.text }}{% if source.reason %} · {{ source.reason }}{% endif %}</p>{% endfor %}
     </div>{% empty %}<p>No sourced name representation collected.</p>{% endfor %}
     {% if not person.has_chinese %}<p class="gap">Chinese name not established.</p>{% endif %}{% if not person.has_english %}<p class="gap">English name selection needs review.</p>{% endif %}
-  </section><section><h3>Job titles</h3>{% for field in person.titles %}<p><strong>{{ field.label }}:</strong> {{ field.value }}<br><small>{{ field.status }}</small>{% if field.source %} · <a href="{{ field.source }}" rel="noreferrer">Source</a>{% endif %}<br>{{ field.note }}</p>{% endfor %}
+  </section><section><h3>Job titles</h3>{% for field in person.titles %}<p><strong>{{ field.label }}:</strong> {{ field.value }}<br><small>{{ field.status }}{% if field.role %} · Role: {{ field.role }}{% endif %}</small>{% if field.source %} · <a href="{{ field.source }}" rel="noreferrer">Source</a>{% endif %}<br>{{ field.note }}</p>{% endfor %}
     {% if person.profile_location %}<p><strong>Profile location:</strong> {{ person.profile_location }}{% if person.profile_location_source %} · <a href="{{ person.profile_location_source }}">Source</a>{% endif %}<br><small>Profile location does not establish the location of every role.</small></p>{% endif %}
     {% if person.suggested_query %}<p><strong>Xiaohongshu search:</strong> {{ person.suggested_query }}<br><small>Suggested phrase; not a completed search.</small></p>{% endif %}
   </section></div>

@@ -25,20 +25,34 @@ def literal_translator(*, client, config):
     return translate
 
 
-def record_text(person, *, kind, language, text, source_reference, observed_at=None):
-    if kind not in {"biography", "role", "job_description", "location"}:
+def record_text(person, *, kind, language, text, source_reference, observed_at=None,
+                affiliation=None, origin="source", derived_from=None,
+                review_status="pending", review_note=""):
+    if kind not in {"biography", "role", "job_description", "location", "title"}:
         raise ValueError("Names belong in PersonName, not the prose translation path")
     if not text or not source_reference:
         raise ValueError("Original text and source are required")
+    if affiliation and affiliation.person_id != person.pk:
+        raise ValueError("Text and affiliation must belong to the same person")
+    if kind == "title" and affiliation is None:
+        raise ValueError("A title requires an affiliation")
+    if derived_from and (derived_from.person_id != person.pk or derived_from.affiliation_id != (affiliation.pk if affiliation else None)):
+        raise ValueError("Derived text requires the same person and affiliation")
+    version = [language, text]
+    if origin != "source" or derived_from:
+        version += [origin, derived_from.pk if derived_from else None]
     return PersonText.objects.get_or_create(
         person=person,
+        affiliation=affiliation,
         kind=kind,
         source_reference=source_reference,
-        version_hash=digest([language, text]),
+        version_hash=digest(version),
         defaults={
             "language": language,
             "text": text,
             "observed_at": observed_at or timezone.now(),
+            "origin": origin, "derived_from": derived_from,
+            "review_status": review_status, "review_note": review_note,
         },
     )[0]
 

@@ -68,6 +68,26 @@ def import_manifest(manifest, *, apply=False, asset_root=None):
     }
 
 
+def saved_title_entries(fields):
+    """Carry the saved audit's uncertainty; a reported title is not a verified quote."""
+    result = []
+    for key, language in (("job_title_zh", "zh-Hans"), ("job_title_en", "en")):
+        field = fields.get(key, {})
+        if not field.get("value") or not field.get("source"):
+            continue
+        status = field.get("status", "Unknown")
+        translated = "translat" in status.casefold()
+        entry = {"key": key, "language": language, "text": field["value"],
+                 "source_reference": field["source"],
+                 "origin": "translation" if translated else "source" if field.get("original") else "unknown",
+                 "review_status": "confirmed" if status.startswith(("Verified", "Owner-supplied")) else "pending",
+                 "review_note": status + (": " + field["note"] if field.get("note") else "")}
+        if translated and result and result[0]["source_reference"] == entry["source_reference"]:
+            entry["derived_from_key"] = result[0]["key"]
+        result.append(entry)
+    return result
+
+
 def from_deepseek_dossier(data):
     """Explicit adapter for the saved prototype; generic intake knows no people."""
     records = []
@@ -168,6 +188,8 @@ def from_deepseek_dossier(data):
                         "end_date",
                         "end_date_precision",
                         "location",
+                        "department",
+                        "team",
                         "description",
                         "review_status",
                         "source_system",
@@ -217,6 +239,12 @@ def from_deepseek_dossier(data):
                     start_date_precision={4: "year", 7: "month", 10: "day"}[len(date)],
                 )
             record["affiliations"].append(role)
+        candidates = [role for role in record["affiliations"] if role["brand_id"] == "deepseek"]
+        if len(candidates) == 1:
+            candidates[0]["titles"] = saved_title_entries(fields)
+        if person.get("location") and person.get("location_source"):
+            record["texts"].append({"kind": "location", "language": "und",
+                                    "text": person["location"], "source_reference": person["location_source"]})
         # Prototype biographies can be researcher-written English summaries of
         # Chinese pages. Preserve them in source_dossier, not as original quotes.
         if staff.get("excerpt_original"):

@@ -25,7 +25,9 @@ def test_export_has_sources_roles_and_no_invented_photo_or_join_date(
             "OPTIONS": {"location": str(tmp_path)},
         },
     }
-    ingest_record(record(display_name='<script>alert("unsafe")</script>'))
+    data = record()
+    data["names"][0]["full_name"] = '<script>alert("unsafe")</script>'
+    ingest_record(data)
     result = export_dossier(brand_id="deepseek", output=tmp_path / "export")
     html = Path(result["output"]).read_text()
     assert result["people"] == 1 and result["portrait_gaps"] == 1
@@ -79,8 +81,13 @@ def test_adapter_keeps_profile_location_separate_and_excludes_contributors():
 
 
 def test_later_account_observation_preserves_dossier():
+    data = record()
+    data["affiliations"][0]["titles"] = [{"language": "zh-Hans", "text": "研究员",
+                                          "source_reference": "https://example.com/bio"}]
     intake, _ = ingest_record(
         record(
+            affiliations=data["affiliations"],
+            texts=[{"kind": "location", "language": "en", "text": "Beijing", "source_reference": "https://example.com/profile"}],
             source_dossier={
                 "location": "Beijing",
                 "presentation": {

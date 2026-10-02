@@ -96,8 +96,9 @@ def review_name(name, status, reviewer, reason):
         raise ValueError("Review requires a status, reviewer and reason")
     row = PersonName.objects.select_for_update().get(pk=name.pk)
     if status != "confirmed":
-        Person.objects.filter(primary_name=row).update(primary_name=None)
-        Person.objects.filter(english_name=row).update(english_name=None)
+        person = Person.objects.get(pk=row.person_id)
+        select_names(person, primary=None if person.primary_name_id == row.pk else person.primary_name,
+                      english=None if person.english_name_id == row.pk else person.english_name)
     row.review_history.append(
         {
             "status": status,
@@ -123,7 +124,18 @@ def select_names(person, *, primary=None, english=None):
                 )
     if english and english.language not in {"en", "en-Latn"}:
         raise ValueError("English selection must use an English language tag")
-    Person.objects.filter(pk=person.pk).update(
-        primary_name=primary, english_name=english
-    )
+    current = Person.objects.get(pk=person.pk)
+    mirrors = {}
+    if primary:
+        mirrors["display_name"] = primary.full_name
+    elif current.primary_name_id:
+        mirrors["display_name"] = "Unreviewed person"
+    if english or current.english_name_id:
+        mirrors["display_name_en"] = english.full_name if english else None
+    for language, field in (("zh-Hans", "display_name_zh_cn"), ("ja", "display_name_ja")):
+        if primary and primary.language == language:
+            mirrors[field] = primary.full_name
+        elif current.primary_name_id and current.primary_name.language == language:
+            mirrors[field] = None
+    Person.objects.filter(pk=person.pk).update(primary_name=primary, english_name=english, **mirrors)
     person.refresh_from_db()

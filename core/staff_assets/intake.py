@@ -135,6 +135,7 @@ def ingest_record(record):
         role = dict(entry)
         source_url, evidence_text = role.pop("source_url"), role.pop("evidence_text")
         source_data = role.pop("source_data", {})
+        title_texts = role.pop("titles", [])
         role.setdefault("affiliation_type", "employment")
         role.setdefault("status", "unknown")
         role.setdefault("review_status", "pending")
@@ -154,6 +155,15 @@ def ingest_record(record):
                 "extraction_method": "staff-manifest-v1",
             },
         )
+        originals = {}
+        for title in title_texts:
+            entry = dict(title)
+            key = entry.pop("key", str(len(originals)))
+            parent = entry.pop("derived_from_key", None)
+            if parent and parent not in originals:
+                raise ValueError("A translated title must follow its original")
+            originals[key] = record_text(person, affiliation=affiliation, kind="title",
+                                         observed_at=observed, derived_from=originals.get(parent), **entry)
     for entry in record.get("texts", []):
         record_text(person, observed_at=observed, **entry)
     intake, created = StaffIntake.objects.get_or_create(
