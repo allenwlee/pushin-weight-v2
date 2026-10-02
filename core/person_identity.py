@@ -13,6 +13,28 @@ class IdentityConflict(ValueError):
     """The source is retained, but attaching it to a person requires review."""
 
 
+def canonical_person(person_id):
+    seen = set()
+    while person_id not in seen:
+        seen.add(person_id)
+        person = Person.objects.get(pk=person_id)
+        if not person.merged_into_id:
+            return person
+        person_id = person.merged_into_id
+    raise IdentityConflict("Cyclic identity redirect requires repair")
+
+
+def identity_ids(person_id):
+    person = canonical_person(person_id)
+    # Corrections flatten redirects, so every retired ID points to its survivor.
+    return [person.pk, *Person.objects.filter(merged_into=person).values_list("pk", flat=True)]
+
+
+def _write_lock():
+    from core.staff_assets.queue import _lock
+    _lock()
+
+
 def normalized_handle(handle):
     return (
         unicodedata.normalize("NFKC", handle or "").strip().removeprefix("@").casefold()
@@ -38,17 +60,19 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
     attach an independently researched biography to an unconfirmed person.
     """
     if create:
+        _write_lock()
         account = Account.objects.select_for_update().get(pk=account.pk)
     links = list(PersonAccount.objects.filter(account=account).select_related("person"))
     confirmed = [link for link in links if link.resolution_status == "confirmed"]
     if confirmed:
-        person = confirmed[0].person
+        person = canonical_person(confirmed[0].person_id)
     else:
         ids = [
             person_id_for_account(account.pk),
             uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{account.pk}"),
         ]
-        people = list(Person.objects.filter(pk__in=ids))
+        people = list({canonical_person(pk).pk: canonical_person(pk)
+                       for pk in Person.objects.filter(pk__in=ids).values_list("pk", flat=True)}.values())
         if len(people) > 1:
             raise IdentityConflict(
                 "Conflicting account identities need reviewed correction"
@@ -88,8 +112,10 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
     return person
 
 
+@transaction.atomic
 def subject_person(*, handle, display_name, source_key, account=None, observed_at=None):
     """Personnel subjects use a stored account when unambiguous, otherwise a source ID."""
+    _write_lock()
     handle = normalized_handle(handle)
     if account is None and handle:
         accounts = list(Account.objects.filter(handle__iexact=handle)[:2])
@@ -105,13 +131,16 @@ def subject_person(*, handle, display_name, source_key, account=None, observed_a
         if handle
         else uuid.uuid5(uuid.NAMESPACE_URL, "pushinweight:person:" + source_key)
     )
-    return Person.objects.get_or_create(
+    person = Person.objects.get_or_create(
         pk=identity, defaults={"display_name": display_name}
     )[0]
+    return canonical_person(person.pk)
 
 
 @transaction.atomic
 def manifest_person(record, *, create=False):
+    if create:
+        _write_lock()
     account_id = record.get("account_id")
     accounts = Account.objects.select_for_update() if create else Account.objects
     account = accounts.filter(pk=account_id).first() if account_id else None
@@ -131,6 +160,7 @@ def manifest_person(record, *, create=False):
         link.person_id for link in links if link.resolution_status == "confirmed"
     }
     existing.update(confirmed)
+    existing = {canonical_person(pk).pk for pk in existing}
     if len(existing) > 1:
         raise IdentityConflict(
             "Conflicting identity links need review; no name-based merge"
@@ -167,4 +197,4 @@ def manifest_person(record, *, create=False):
         ),
         defaults={"display_name": record["display_name"]},
     )
-    return person, None
+    return canonical_person(person.pk), None

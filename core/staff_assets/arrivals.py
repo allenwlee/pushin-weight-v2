@@ -12,6 +12,7 @@ from core.models import (
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
 )
+from core.person_identity import account_person, canonical_person
 from core.person_names import record_name
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.media import record_media
@@ -23,6 +24,7 @@ def register_person(person_id):
     person = Person.objects.filter(pk=person_id).first()
     if person is None:
         return
+    person = canonical_person(person.pk)
     roles = list(
         person.brand_affiliations.filter(affiliation_type__in=["employment", "founder"])
         .exclude(review_status="rejected")
@@ -41,6 +43,10 @@ def register_person(person_id):
     )
     snapshots = []
     for link in links:
+        if link.resolution_status != "confirmed":
+            observed_person = account_person(link.account)
+            if not observed_person or observed_person.pk != person.pk:
+                continue
         if is_official(link.account_id):
             continue
         account = link.account

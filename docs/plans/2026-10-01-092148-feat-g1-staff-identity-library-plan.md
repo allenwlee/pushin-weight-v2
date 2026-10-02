@@ -1899,6 +1899,15 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 2 LFG U7–U8:** shared identity matching retains ambiguous intake
+  and account observations without promoting guessed matches. U7 committed
+  as `ff383364`; 77 PostgreSQL regressions passed. Reviewed corrections now
+  preview/apply account confirmation, merge and selective split, preserve name
+  evidence and old person IDs, retain paid-request history, and refuse running
+  workers. Ten correction regressions pass; the broader 93-test run had one
+  invalid test-fixture origin (corrected), with the other 92 passing. Journal
+  immutability is checked with direct SQL. No production/provider calls.
+
 - **October 1 name-provenance design selected:** the owner accepted the
   three-table design, separate name observations and lightweight derivation
   links from the first implementation. Updated the plain-English summary,

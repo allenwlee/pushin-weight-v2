@@ -17,7 +17,7 @@ def source_url(value):
 
 def dossier_records(*, brand_id):
     people = (
-        Person.objects.filter(brand_affiliations__brand_id=brand_id)
+        Person.objects.filter(brand_affiliations__brand_id=brand_id, merged_into__isnull=True)
         .distinct()
         .select_related("primary_name", "english_name")
         .prefetch_related(

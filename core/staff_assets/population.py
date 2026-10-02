@@ -33,6 +33,7 @@ def staff_population(*, list_id):
     people = (
         PersonBrandAffiliation.objects.filter(
             affiliation_type__in=["employment", "founder"],
+            person__merged_into__isnull=True,
         )
         .exclude(review_status="rejected")
         .values_list("person_id", flat=True)

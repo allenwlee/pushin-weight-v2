@@ -53,6 +53,7 @@ def claim(*, lease_seconds=180, max_attempts=3):
         StaffCollectionWork.objects.select_for_update(skip_locked=True)
         .filter(
             state__in=["queued", "retry_due"],
+            person__merged_into__isnull=True,
             next_attempt_at__lte=now,
         )
         .order_by("next_attempt_at", "id")
@@ -114,7 +115,14 @@ def reserve_request(
         "provider": provider,
         "fingerprint": digest(parameters),
     }
-    existing = StaffProviderRequest.objects.filter(**key).first()
+    from core.person_identity import identity_ids
+    related_ids = identity_ids(work.person_id)
+    matches = StaffProviderRequest.objects.filter(
+        person_id__in=related_ids, provider=provider, fingerprint=key["fingerprint"]
+    )
+    if matches.exclude(state="complete").exists():
+        raise AmbiguousRequest("A matching request needs review; no automatic paid retry")
+    existing = matches.order_by("pk").first()
     if existing:
         if existing.state == "complete":
             return existing, False
@@ -124,7 +132,7 @@ def reserve_request(
     day_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     requests = StaffProviderRequest.objects.filter(provider=provider)
     if (
-        requests.filter(person_id=work.person_id).count() >= per_person
+        requests.filter(person_id__in=related_ids).count() >= per_person
         or requests.filter(run_id=run_id).count() >= per_run
         or requests.filter(created_at__gte=day_start).count() >= per_day
     ):

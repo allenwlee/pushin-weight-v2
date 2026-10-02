@@ -4584,6 +4584,10 @@ class Person(models.Model):
     nationality = models.TextField(blank=True, null=True)
     ethnicity = models.TextField(blank=True, null=True)
     primary_language = models.TextField(blank=True, null=True)
+    merged_into = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="merged_identities",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -4592,10 +4596,41 @@ class Person(models.Model):
         ordering = ["display_name", "id"]
         constraints = [
             models.CheckConstraint(
+                condition=~models.Q(merged_into=models.F("pk")),
+                name="ck_person_merge_not_self",
+            ),
+            models.CheckConstraint(
                 condition=_precision_value_condition(
                     "date_of_birth", "date_of_birth_precision"
                 ),
                 name="ck_people_dob_precision",
+            ),
+        ]
+
+
+class PersonIdentityCorrection(models.Model):
+    """Append-only operator decision and the exact source rows it affected."""
+
+    request_key = models.CharField(max_length=128, unique=True)
+    kind = models.CharField(max_length=24)
+    source = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="identity_corrections_from")
+    target = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="identity_corrections_to")
+    reviewer = models.TextField()
+    reason = models.TextField()
+    request = models.JSONField(default=dict)
+    changes = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_identity_corrections"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["merge", "split", "confirm_account"]),
+                name="ck_identity_correction_kind",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reviewer="") & ~models.Q(reason="") & ~models.Q(request_key=""),
+                name="ck_identity_correction_review",
             ),
         ]
 
