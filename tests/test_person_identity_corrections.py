@@ -58,6 +58,64 @@ def test_merge_preserves_sources_and_redirects_existing_id():
     assert correct("merge", source, target).pk == result.pk
 
 
+def test_new_observation_after_merge_does_not_duplicate_the_moved_job():
+    intake, _ = ingest_record(record())
+    target = Person.objects.create(display_name="Survivor")
+    correct("merge", intake.person, target)
+    updated, _ = ingest_record(record(observed_at="2026-10-02T00:00:00Z"))
+    assert updated.person_id == target.pk
+    assert target.brand_affiliations.count() == 1
+
+
+def test_profile_write_finishes_before_a_concurrent_merge(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import close_old_connections
+
+    import core.profile_snapshots as snapshots
+    from core.models import Account
+    from tests.test_person_identity import profile
+
+    record()  # known brand
+    account = Account.objects.create(author_id="concurrent-correction", handle="worker")
+    source = Person.objects.create(display_name="Source")
+    target = Person.objects.create(display_name="Target")
+    link(source, account, "confirmed")
+    resolved, merged = Event(), Event()
+    original = snapshots.account_person
+
+    def pause_after_resolution(*args, **kwargs):
+        person = original(*args, **kwargs)
+        resolved.set()
+        merged.wait(0.3)
+        return person
+
+    def capture():
+        close_old_connections()
+        try:
+            profile(account)
+        finally:
+            close_old_connections()
+
+    def merge():
+        close_old_connections()
+        try:
+            assert resolved.wait(5)
+            correct("merge", source, target)
+            merged.set()
+        finally:
+            close_old_connections()
+
+    monkeypatch.setattr(snapshots, "account_person", pause_after_resolution)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.submit(capture), pool.submit(merge)
+        first.result(timeout=10)
+        second.result(timeout=10)
+    assert not source.brand_affiliations.exists()
+    assert target.brand_affiliations.count() == 1
+
+
 def test_duplicate_name_retains_both_evidence_observations():
     source = Person.objects.create(display_name="First")
     target = Person.objects.create(display_name="Second")

@@ -43,6 +43,7 @@ from core.models import (
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
+from core.person_affiliations import matching_moved_claim
 from core.person_identity import subject_person
 from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.rare_type_search import record_unknown_name_tokens_from_movement
@@ -1106,17 +1107,20 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
         organization_identity = (
             f"brand:{brand.pk}" if brand is not None else f"candidate:{candidate.pk}"
         )
-        claim_identity = _hash(
-            {
-                "person": str(person.pk),
-                "organization": organization_identity,
-                "type": affiliation_type,
-                "status": status,
-                "title": _text(record.get("title_raw")),
-                "start": start_value,
-                "end": end_value,
-            }
-        )
+        claim_payload = {
+            "organization": organization_identity,
+            "type": affiliation_type,
+            "status": status,
+            "title": _text(record.get("title_raw")),
+            "start": start_value,
+            "end": end_value,
+        }
+
+        def identity_for(pk, payload=claim_payload):
+            return _hash({"person": str(pk), **payload})
+
+        moved = matching_moved_claim(person, identity_for)
+        claim_identity = moved.claim_identity if moved else identity_for(person.pk)
         affiliation, created = PersonBrandAffiliation.objects.get_or_create(
             claim_identity=claim_identity,
             defaults={

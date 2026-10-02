@@ -811,6 +811,7 @@ def classify_affiliation_signals(
     return tuple(signals)
 
 
+@transaction.atomic
 def persist_affiliation_candidates(
     *,
     account: Account,

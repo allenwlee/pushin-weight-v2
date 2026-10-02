@@ -60,9 +60,10 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 The October 2 LFG continuation accepts the independent review repairs: keep
 the existing tables, unify person matching, provide reviewed identity
 corrections, reconcile job conclusions and make the dossier read its dedicated
-records. U7–U11 below carry the remaining implementation work. Preserve the
-completed U0–U6 foundation and prove the repaired paths with the saved DeepSeek
-pilot before expanding collection. Product Contract unchanged.
+records. U7–U11 are implemented and verified with the saved DeepSeek pilot,
+preserving the completed U0–U6 foundation. The October 3 continuation is
+finishing review and the existing PR's CI gate before any expanded collection.
+Product Contract unchanged.
 
 Build one staff identity and image library with two ways of receiving work.
 First, process the union of staff accounts in Call A and staff accounts already
@@ -1898,6 +1899,19 @@ Choices above can be resolved alongside local roster/evidence/queue foundations
 when implementation begins.
 
 ## Progress and continuation
+
+- **October 3 LFG final review:** reproduced and fixed three interactions:
+  profile affiliation writes racing with identity merges, duplicate moved job
+  claims on later observations, and queued work retaining a replaced job claim.
+  All 153 PostgreSQL regressions passed with zero skips/errors. Local review
+  ran sequentially under the user-level tool mapping; external Claude review
+  remained unavailable after HTTP 402, so no independent-model approval is
+  claimed. Review receipts and before/after evidence are under the private
+  `ce-code-review/20261002-g1-repairs` scratch directory. The full-repository
+  Ruff result remains non-green (1,663 findings, including seven new framework
+  class-metadata warnings); scoped service/test lint passes. The existing
+  production commentary health failure above is recorded, not waived or
+  reported as passed. PR #49 remains the endpoint; CI is checked after push.
 
 - **October 2 LFG U11 local proof:** upgraded a disposable copy of the saved
   DeepSeek database through migration 0064, normalized 37 saved title records,

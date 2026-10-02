@@ -295,7 +295,7 @@ def correct_identity(
     ).exists():
         raise ValueError("Cannot correct identity while collection work is running")
     if kind == "confirm_account":
-        account = Account.objects.select_for_update().get(pk=account_id)
+        account = Account.objects.get(pk=account_id)
         if (
             PersonAccount.objects.filter(account=account, resolution_status="confirmed")
             .exclude(person=target)

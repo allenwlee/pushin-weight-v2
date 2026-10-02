@@ -11,6 +11,7 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     StaffIntake,
 )
+from core.person_affiliations import matching_moved_claim
 from core.person_identity import IdentityConflict, manifest_person
 from core.person_names import digest, record_name, review_name, select_names
 from core.person_text import record_text
@@ -140,8 +141,13 @@ def ingest_record(record):
         role.setdefault("status", "unknown")
         role.setdefault("review_status", "pending")
         role.setdefault("observed_organization_name", role["brand_id"])
+        moved = matching_moved_claim(
+            person, lambda pk, claim=role: digest([str(pk), claim])
+        )
         affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
-            claim_identity=digest([str(person.pk), role]),
+            claim_identity=moved.claim_identity
+            if moved
+            else digest([str(person.pk), role]),
             defaults={"person": person, **role},
         )
         PersonBrandAffiliationEvidence.objects.get_or_create(

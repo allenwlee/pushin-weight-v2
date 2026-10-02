@@ -61,6 +61,11 @@ def test_promotion_preserves_founder_and_other_jobs():
         active_claims().filter(person=intake.person).values_list("pk", flat=True)
     ) == {founder.pk, promotion.pk}
     assert dossier_records(brand_id="deepseek")[0]["scope"] == "current"
+    queued = StaffCollectionWork.objects.filter(person=intake.person, state="queued")
+    assert queued.exists()
+    assert all(
+        old.pk not in [r["id"] for r in work.context["roles"]] for work in queued
+    )
 
 
 def test_unreviewed_contradiction_does_not_automatically_replace_current_job():

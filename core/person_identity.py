@@ -65,7 +65,7 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
     """
     if create:
         _write_lock()
-        account = Account.objects.select_for_update().get(pk=account.pk)
+        account = Account.objects.get(pk=account.pk)
     links = list(PersonAccount.objects.filter(account=account).select_related("person"))
     confirmed = [link for link in links if link.resolution_status == "confirmed"]
     if confirmed:
@@ -149,7 +149,7 @@ def manifest_person(record, *, create=False):
     if create:
         _write_lock()
     account_id = record.get("account_id")
-    accounts = Account.objects.select_for_update() if create else Account.objects
+    accounts = Account.objects
     account = accounts.filter(pk=account_id).first() if account_id else None
     if account_id and not account:
         raise ValueError(

@@ -3,7 +3,11 @@
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import PersonBrandAffiliation, StaffCollectionWork
+from core.models import (
+    PersonBrandAffiliation,
+    PersonIdentityCorrection,
+    StaffCollectionWork,
+)
 from core.staff_assets.queue import _lock
 
 
@@ -15,6 +19,35 @@ def active_claims(queryset=None):
 
 def is_active_claim(row):
     return row.superseded_by_id is None and row.review_status != "rejected"
+
+
+def matching_moved_claim(person, identity_for):
+    """Reuse a moved claim's original key; historical IDs do not merge people.
+
+    A correction changes ownership, not the source's claim fingerprint. Restrict
+    this lookup to rows already owned by the resolved person, including splits.
+    """
+    seen, frontier = {person.pk}, {person.pk}
+    while frontier:
+        previous = (
+            set(
+                PersonIdentityCorrection.objects.filter(
+                    target_id__in=frontier, kind__in=["merge", "split"]
+                ).values_list("source_id", flat=True)
+            )
+            - seen
+        )
+        seen.update(previous)
+        frontier = previous
+    if len(seen) == 1:
+        return None
+    return (
+        PersonBrandAffiliation.objects.filter(
+            person=person, claim_identity__in=[identity_for(pk) for pk in seen]
+        )
+        .order_by("pk")
+        .first()
+    )
 
 
 @transaction.atomic
@@ -73,6 +106,9 @@ def replace_claim(old_id, new_id, *, reviewer, reason, apply=True):
         reviewed_at=now,
         review_note=reviewer + ": " + reason,
     )
+    StaffCollectionWork.objects.filter(
+        person=old.person, state__in=["queued", "retry_due"]
+    ).update(state="needs_review", error_category="affiliation_corrected")
     from core.staff_assets.arrivals import register_person
 
     transaction.on_commit(lambda: register_person(old.person_id))
