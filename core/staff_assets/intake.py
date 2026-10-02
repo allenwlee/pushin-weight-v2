@@ -1,19 +1,17 @@
 """One import path for curated site research, existing accounts and new arrivals."""
 
-import uuid
-
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from core.models import (
-    Account,
     Person,
     PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     StaffIntake,
 )
+from core.person_identity import IdentityConflict, manifest_person
 from core.person_names import digest, record_name, review_name, select_names
 from core.person_text import record_text
 from core.staff_assets.population import is_official
@@ -54,40 +52,7 @@ def validate_record(record):
 
 
 def resolve_person(record, *, create=False):
-    existing = list(
-        StaffIntake.objects.filter(
-            source_key=record["source_key"], person__isnull=False
-        )
-        .values_list("person_id", flat=True)
-        .distinct()
-    )
-    if record.get("person_id"):
-        supplied = Person.objects.get(pk=record["person_id"])
-        existing.append(supplied.pk)
-    account_id = record.get("account_id")
-    account = Account.objects.filter(pk=account_id).first() if account_id else None
-    if account_id and not account:
-        raise ValueError(
-            "Account ID is not stored; import the real account first or omit it"
-        )
-    if account:
-        existing.extend(
-            PersonAccount.objects.filter(account=account)
-            .exclude(resolution_status="rejected")
-            .values_list("person_id", flat=True)
-        )
-    if len(set(existing)) > 1:
-        raise ValueError("Conflicting identity links need review; no name-based merge")
-    if existing:
-        return Person.objects.get(pk=existing[0]), account
-    if not create:
-        return None, account
-    identity = "account:" + account.pk if account else "source:" + record["source_key"]
-    person, _ = Person.objects.get_or_create(
-        pk=uuid.uuid5(uuid.NAMESPACE_URL, "staff-library:" + identity),
-        defaults={"display_name": record["display_name"]},
-    )
-    return person, account
+    return manifest_person(record, create=create)
 
 
 @transaction.atomic
@@ -98,7 +63,7 @@ def ingest_record(record):
     previous = StaffIntake.objects.filter(
         source_key=source_key, fingerprint=fingerprint
     ).first()
-    if previous:
+    if previous and previous.eligibility != "needs_review":
         return previous, False
     observed = observed_time(record.get("observed_at"))
     eligibility = record.get("eligibility", "unestablished")
@@ -114,7 +79,18 @@ def ingest_record(record):
                 "observed_at": observed,
             },
         )[0], False
-    person, account = resolve_person(record, create=True)
+    try:
+        person, account = resolve_person(record, create=True)
+    except IdentityConflict:
+        return StaffIntake.objects.get_or_create(
+            source_key=source_key,
+            fingerprint=fingerprint,
+            defaults={
+                "eligibility": "needs_review",
+                "payload": record,
+                "observed_at": observed,
+            },
+        )
     # Serialize concurrent versions for the same person before adding evidence.
     Person.objects.select_for_update().get(pk=person.pk)
     if account:
@@ -190,6 +166,10 @@ def ingest_record(record):
             "observed_at": observed,
         },
     )
+    if intake.person_id is None:
+        intake.person = person
+        intake.eligibility = eligibility
+        intake.save(update_fields=["person", "eligibility"])
     from core.staff_assets.arrivals import register_person
 
     transaction.on_commit(lambda: register_person(person.pk))

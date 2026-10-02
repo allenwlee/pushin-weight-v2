@@ -57,6 +57,13 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 
 ## Plain-English Summary
 
+The October 2 LFG continuation accepts the independent review repairs: keep
+the existing tables, unify person matching, provide reviewed identity
+corrections, reconcile job conclusions and make the dossier read its dedicated
+records. U7–U11 below carry the remaining implementation work. Preserve the
+completed U0–U6 foundation and prove the repaired paths with the saved DeepSeek
+pilot before expanding collection. Product Contract unchanged.
+
 Build one staff identity and image library with two ways of receiving work.
 First, process the union of staff accounts in Call A and staff accounts already
 in the database, including accounts outside Call A, plus staff publicly identified
@@ -157,6 +164,199 @@ acquisition process and its activation have not started.
   PDF includes Tianyi. Implementation and recovery fixes are in
   [PR #49](https://github.com/allenwlee/pushin-weight-v2/pull/49). The authoritative
   root General Launch Index carries the final delivery/CI session outcome.
+- Owner-requested populated-field export delivered to
+  `/Users/allenwlee/Downloads/agents/2026-10-01-195517-deepseek-24-populated-fields-and-assets.html`.
+  A read-only snapshot of `g1_staff_library_20261001` exported all 24 people,
+  329 related database rows and 3,659 non-null `table.column` values, with all
+  35 saved image files embedded unchanged. Direct SQL comparisons, embedded
+  byte hashes and browser image decoding passed; the destination SHA-256
+  matches the source. Chenggang Zhao, Shengding Hu, Tianyi Cui and Yu Wu have
+  no linked saved asset, explicitly shown in the export. Evidence and the
+  delivery receipt are in root `.context/g1-lfg-20261001/exports/`.
+- October 2: at the owner's request, saved mainland staff-data and founder
+  travel-risk research in the authoritative root at
+  `docs/china_compliance/2026-10-02-051235-mainland-china-staff-data-and-travel-risk.md`.
+  The report preserves nine official sources, applicability limits, project
+  assessments and questions for legal review. At the owner's follow-up request,
+  added Chinese customers/employment, beneficial purpose, individual rights and
+  overseas data flows, plus the public-document Dinq comparison at
+  `docs/china_compliance/2026-10-02-052419-dinq-compliance-comparison.md`.
+  Published vendor claims are distinguished from tested controls and legal
+  clearance. Recommendations remain proposals; this documentation/research
+  request does not change collection authority, the PR CI choice or production
+  activation.
+- October 2 follow-up: saved the SerpApi/Baidu Chinese-law assessment in the
+  authoritative root at
+  `docs/china_compliance/2026-10-02-053159-serpapi-baidu-chinese-law.md`.
+  Verified the U.S.-only Legal Shield scope, provider retention statements and
+  relevant Chinese rules; distinguished searches from our separate publisher
+  fetches/downloads and attribution from image-use permission. Historic Free
+  Plan evidence is not a current account check. No paid query, account setting,
+  collection permission or release decision changed.
+- October 2 database explanation: selective fingerprint use does not change
+  ordinary IDs or foreign-key links. Existing translation, synthesis and trend
+  models already contain fingerprints. G1 name uniqueness is scoped to
+  `(person_id, fingerprint)`; `record_name()` reuses an exact representation
+  while keeping source observations separately. The hash includes full text,
+  language, type, origin and derivation; it does not normalize spelling or
+  establish that two people are the same. Current intake/arrival writers share
+  the helper; the historical-field backfill has its own migration recipe.
+  Reviewed models, writers, migration and existing test cases without changing
+  application code or the database. No database-wide fingerprint migration is
+  needed solely for consistency; later changes to name equality need deliberate
+  normalization and migration review.
+- October 2 table-purpose review: confirmed `people_brand_affiliations` exists
+  on main and was created by `0032_stage1c_people_jobs_events` before G1.
+  Affiliation evidence supports specific claims; `people_texts` stores typed,
+  language-tagged original prose versions for separately cached translations.
+  The saved pilot export records 37 texts and zero translations, and the current
+  dossier does not consume the prose translation helper. Some role excerpts are
+  intentionally repeated in evidence and text records. `staff_intakes` retains
+  submitted bundles, eligibility and source-to-person mapping, including
+  noneligible/unresolved inputs without a person; its saved prototype payload
+  still supplies some dossier presentation fields. `staff_collection_work` is a
+  persistent person/context/policy task whose attempts update the same row,
+  not one immutable row per execution. Provider-request records carry `run_id`;
+  there is no separate staff-run model. This was source/receipt inspection only,
+  not a schema simplification, fresh production check or new test run.
+- October 2 owner-authorized compliance publication completed by the resumed
+  delegate after a server restart: only the four `docs/china_compliance/`
+  files were committed and pushed directly to main as
+  [f4159057](https://github.com/allenwlee/pushin-weight-v2/commit/f41590574b12c0ec5301ffb575d2de1394bf79cf),
+  with `[skip render]`. Five references to unpublished local evidence became
+  labeled code paths; legal findings were preserved and repaired copies were
+  synchronized to the root. Delegate checked ten portable links/anchors and
+  whitespace; parent independently verified remote main, four-file commit
+  scope and byte equality with the root. The G1 implementation PR and its
+  separate pending CI decision were not part of this documentation push.
+- October 2 table-routing/enforcement audit: the curated manifest importer
+  routes names, claims/evidence, prose and media through shared helpers.
+  Name-selection triggers and queue/media constraints provide real database
+  safeguards, but text kinds/nonempty originals, intake eligibility, provider
+  budgets and completion meaning rely partly on Python. Intake/text rows have
+  no database append-only guard; direct writes can bypass helper conventions.
+  Database privileges were not audited. The shared Chinese-worker skill's
+  project reference remains a dated research-stage snapshot without a direct
+  link to the implemented operations guide. These are findings/proposed
+  hardening, not new accepted implementation scope or release gates.
+  Existing profile/personnel writers can create people and pending claims
+  directly: staff_intakes is not a universal pre-person gate. Generic rejected
+  or identity-conflicting imports also are not automatically retained there.
+- October 2 owner-requested HTML textbook example authored under the root
+  `.context/g1-lfg-20261001/staff-table-walkthrough/` as
+  `2026-10-02-104202-staff-tables-worked-example.html`. A clearly fictional
+  Yuchen Zhao scenario explains 21 tables across 12 chapters and 13 diagrams:
+  harvested observations, a personless intake, sourced identity/names, job
+  claims/evidence, prose/translation versions, collection work/provider
+  reservations, image attribution/storage/review, profile changes and
+  alternative staff/list arrivals. Separates implemented behavior, manual
+  research and incomplete integration, including the text/dossier and claim
+  reconciliation gaps. Browser/schema checks matched all 141 illustrated
+  columns, 65 internal links, three viewports and zero external asset requests
+  or JavaScript errors; desktop/mobile and print-cover visuals inspected.
+  Source snapshot is `aeba0a8876ffccb441068c69b1a744dfd3a05a14`.
+  No live research, import, translation, application change or database write.
+  Requested delivery is the single HTML file in allenwlee Downloads/agents;
+  initial SSH reachability passed but the transfer later timed out. Preserve
+  the local artifact and verify destination bytes before claiming delivery.
+  At 10:58 JST, Tailscale still reported allenwlee offline, last seen at
+  10:50 JST; SCP exited 255 and no destination hash was obtained. fuchitalee
+  network/socket health checks passed. Asked the owner whether the MacBook
+  is awake/connected; answer pending. Delivery receipt records
+  `pending_host_offline`; next step is a bounded SCP and source/destination
+  SHA-256 comparison once reachable. HTML SHA-256 is
+  `d98ce6613480d1c448e10a135347c0b8565657545fddb98357557b81dffcfe7f`.
+- October 2, 16:19 JST: owner requested browser display after the MacBook
+  reconnected. Copied the unchanged walkthrough to
+  `/Users/allenwlee/Downloads/agents/2026-10-02-104202-staff-tables-worked-example.html`;
+  source and destination SHA-256 match. Opened it in Chrome window 919890309
+  and verified the front window's title and exact file URL after a targeted
+  Accessibility raise. Receipt now records delivered/displayed; prior offline
+  attempt remains in its history. Document content and application are unchanged.
+- October 2 design-reference clarification: the saved CJK research cites W3C,
+  Unicode CLDR, ORCID and Korean naming guidance; separate name evidence follows
+  this repository's existing affiliation/evidence precedent. Top-gun supplied
+  evidence-first enrichment, bounded cost and recovery patterns. Dinq was
+  reviewed later for compliance, after the scaffold; no earlier systematic
+  marketing/contact-enrichment vendor schema benchmark is documented here.
+  A new bounded check of People Data Labs' public
+  [build process](https://docs.peopledatalabs.com/docs/data-build),
+  [person schema](https://docs.peopledatalabs.com/docs/fields) and
+  [enrichment API](https://docs.peopledatalabs.com/docs/person-enrichment-api)
+  supports the owner's comparison to professional-data enrichment: combine
+  multiple sources, resolve duplicate identities cautiously and associate names,
+  employment and social profiles with a person. This is a comparison of public
+  concepts/interfaces, not evidence of their private SQL layout or a retroactive
+  source for our implementation. No new adoption or schema decision was made.
+- October 2: owner requests an independent review of the people/affiliation
+  schema and a clear place to point another agent. Created the immutable
+  ce-handoff brief at machine-local temporary path
+  `/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-10-02-174714-g1-people-schema-independent-review.md`.
+  It pins feature HEAD/base, separates functional requirements from the author's
+  design choices, maps every creation path and actual consumer, identifies
+  historical verification limits, and proposes architecture/data-integrity
+  questions and evidence-backed output. Author observations are explicitly
+  distinguished from independent findings; the reviewer can challenge table
+  necessity. No reviewer was launched and no schema change was made. This
+  handoff is OS-managed temporary storage; receiving agents need fuchitalee
+  filesystem access or a supplied copy, plus the pinned code.
+- October 2 independent-review response: read the owner-supplied
+  [complexity review](../../../../../docs/reviews/2026-10-02-194536-g1-people-schema-complexity-review.md)
+  and checked its material findings against unchanged feature source at
+  `aeba0a8876ffccb441068c69b1a744dfd3a05a14`. Agree with retaining the
+  person/account/claim/evidence/name/media/work separations. This assessment
+  records proposed repairs; it does not treat the supplied review as owner
+  acceptance of every recommendation or change the selected product scope.
+  The source confirms different identity recipes and reuse of pending account
+  links in the intake, profile and personnel writers. Existing-link reuse
+  prevents some duplicates, so three UUID recipes do not prove three live rows
+  for an account. However, site-first and later account discovery can create
+  separate people, and a later combined intake refuses the conflicting links.
+  Recommend one shared resolver, confirmed evidence for cross-source linking,
+  preservation of existing person IDs, and explicit review of ambiguity.
+  Repeated observations of the same provisional source must remain repeatable;
+  simply rejecting every pending link would break ordinary repeat intake.
+  An account identity must not replace the human identity: one person can have
+  several accounts or none.
+- The review correctly identifies the missing operator correction path. No
+  person merge/split implementation was found in the inspected application.
+  A correction must retain the original evidence, record actor/reason and
+  preserve account uniqueness, name derivations and media attribution. Name
+  immutability guards mean this requires a designed correction operation,
+  not a bulk foreign-key update. A merge alone does not provide a split or
+  undo operation. Test source-first/account-first discovery, conflicting
+  pending links, retries and correction of mistaken joins before expansion.
+- The job-history defect is visible in source: status/title/date changes make
+  separate claims, while the dossier classifies a person as current if any
+  non-rejected claim is current. Recommend an explicit reviewed conclusion
+  with retained prior claims. Recency alone must not decide truth; preserve
+  simultaneous roles, employer returns, unknown dates and conflicts. A single
+  row per person/company is too coarse. Verify departure, promotion and
+  concurrent-role behavior in the dossier and collection population together.
+- The dossier still gets audited Chinese/English title fields from intake
+  JSON, and does not read `people_texts` or translations. Move presentation to
+  selected affiliation/name/text records while retaining the intake journal.
+  Role prose must identify the affiliation/source version it describes; the
+  existing person-level text link alone does not resolve multiple jobs.
+  Protect original intake payload/text versions without blocking reviewed
+  identity corrections. Also resolve the confirmed `PersonName` choices versus
+  database-check mismatch for `needs_review`, and define one-way compatibility
+  updates for legacy display-name fields; `select_names` currently updates
+  selected-name references only. Small migrations/constraints may be needed;
+  the report's phrase "writer and reader fixes" is not a promise of zero
+  schema changes.
+- Do not adopt the review's blanket instruction to leave department empty.
+  G1-R10 and this plan require preserving sourced team/department wording.
+  Existing optional demographic/taxonomy fields do not create a requirement
+  to collect or infer them. The People Data Labs comparison establishes no
+  private backend design, and keeping provenance does not inherently require
+  SQL rather than JSON; retaining the present separations is a project-specific
+  judgment. `staff_media_objects` stores metadata/storage references, with
+  bytes in media storage. Collection completion currently measures qualifying
+  portrait coverage, not completed name research. No tests were rerun, pilot
+  or production rows inspected, application edits made, or new external
+  research performed for this response. Historical 111-test evidence remains
+  scoped to its earlier checks and does not verify these proposed repairs.
 - Review reproduced and fixed two recovery defects: a later account-only intake
   hid saved dossier detail, and reimport did not restore missing stored bytes.
   Three regression checks failed before the fixes and passed afterward. Scoped
@@ -1291,6 +1491,30 @@ a failed page lookup does not imply paid X or model fallback.
   official-site observations; the prototype-specific format has an explicit
   adapter, not hardcoded person branches in the importer.
 
+- KTD9. Retain the existing table separations and repair their shared writers
+  and readers (session-settled: user-approved — chosen over collapsing the
+  profile into a single document: preserve names, source evidence and review
+  decisions while making the workflow dependable). Governs U7–U11.
+- KTD10. A shared identity service preserves existing person IDs and treats a
+  confirmed account link as cross-source identity evidence. A repeated
+  observation from the same provisional account/source can reuse its person
+  without claiming that a separate biography has been matched. Ambiguous
+  imports remain saved for review; names never establish a merge.
+- KTD11. Identity corrections are explicit, transactional operations with an
+  actor, reason and durable record of affected rows. Retain retired identity
+  IDs, source versions and name derivations. Merge and selective split must
+  both be supported; reject an ambiguous or colliding transfer before changing
+  anything. Do not disable the ordinary immutable-name guards globally.
+- KTD12. Employment observations remain separate claims. Review explicitly
+  identifies which earlier claims a new conclusion replaces. Default readers
+  exclude replaced/rejected claims, allow several active roles and preserve
+  unresolved conflicts. Observation time alone never settles employment.
+- KTD13. Source-language title observations and display translations belong to
+  a specific affiliation. Dossiers read them and the original prose tables,
+  with explicit missing/unverified labels. Import JSON remains an immutable
+  journal. Compatibility name strings are maintained from selected/confirmed
+  names without inventing source evidence.
+
 ### Technical design
 
 These sketches show ownership and flow, not exact implementation signatures.
@@ -1442,6 +1666,127 @@ worker lease recovery, catch-up cadence and activation verification. Keep an
 explicit separation between a reviewed code delivery and an observed production
 worker/full-population run. G2–G4 remain untouched by G1 activation settings.
 
+### U7. Shared identity matching and retained ambiguous intake
+
+**Goal:** every writer resolves the same confirmed account consistently and
+retains unresolved cross-source matches for review. Requirements: G1-R01,
+G1-R08, G1-R12, G1-R15; KTD9–KTD10. Depends on U0–U4.
+
+**Files:** proposed `core/person_identity.py`; `core/staff_assets/intake.py`,
+`manifest.py`, `arrivals.py`; `core/profile_snapshots.py`,
+`core/targeted_extraction.py`; proposed `tests/test_person_identity.py`,
+existing `tests/test_staff_library.py`, `tests/test_profile_snapshots.py` and
+`tests/test_targeted_extraction.py`.
+
+Use the real account ID for account-derived identity; resolve handles through
+stored accounts when available and retain handle-only subjects as provisional.
+Preserve existing IDs instead of replacing them with a new UUID recipe. Save
+ambiguous input as a personless intake with a review outcome; neither attach
+its photos nor launch collection until resolution. Reviewed resolution must
+allow replay of that saved observation. Keep source persistence independent
+of optional staff collection callbacks.
+
+Test account-first/site-first order, a confirmed link, a wrong pending link,
+multiple pending links, a renamed handle, repeat intake, same-name strangers,
+concurrent account arrival and replay after explicit identity review. Start
+with failing cases through actual profile/personnel/import callers.
+
+### U8. Reviewed identity correction
+
+**Goal:** operators can repair a duplicate or mistaken identity without losing
+sources. Requirements: G1-R03, G1-R08, G1-R15; KTD11. Depends on U7.
+
+**Files:** `core/models.py`, generated migration(s), proposed
+`core/person_identity_corrections.py` and
+`core/management/commands/correct_person_identity.py`; identity service,
+staff readers/queue as required; `tests/test_person_identity_corrections.py`.
+
+Provide preview and explicit apply for confirming an account, merging a
+duplicate into a surviving person, and splitting selected source-associated
+records onto another person. A small correction journal records actor/reason,
+source and destination, row mappings and before/after state. Lock affected
+people and account relationships in a consistent order; fail atomically on
+conflicting confirmed accounts, active worker leases or unsafe dependencies.
+Keep original IDs addressable, and preserve immutable name/text source data
+through audited copies or narrowly scoped transfer rules. Paid request history
+must survive correction and must not cause a repeated charge after a merge.
+
+Test merge and split across names/derivations/evidence, accounts, affiliations,
+intakes, media and queued work; duplicate observations; account uniqueness;
+rollback on invalid selection; repeat application; and historical lookup of
+the retired ID. Verification includes direct SQL guard checks in PostgreSQL.
+
+### U9. Reviewed employment conclusions
+
+**Goal:** a reviewed departure or promotion changes the current roster without
+erasing history or unrelated simultaneous roles. Requirements: G1-R08,
+G1-R10, G1-R12; KTD12. Depends on U7.
+
+**Files:** affiliation models/migration, proposed `core/person_affiliations.py`
+and review command; `core/staff_assets/population.py`, `arrivals.py`,
+`dossier.py`; `core/intelligence_readers.py`;
+proposed `tests/test_person_affiliations.py`, existing
+`tests/test_staff_dossier.py` and `tests/test_staff_library.py`.
+
+Represent replacement separately from the claimed current/former status and
+retain who reviewed it and why. Reject replacements across different people
+or organizations and cycles. All default staff readers use the same active
+claim selection; unreviewed contradictory observations stay visible as such.
+No automatic newest-row-wins rule. Re-register changed collection context
+after commit, and prevent superseded-only evidence from maintaining staff work.
+
+Test a reviewed departure, promotion, founder plus researcher, return to the
+same employer, unknown dates, contradictory unreviewed evidence, invalid
+cross-person replacement and rollback. Check dossier and queue/population
+results together, including existing operational staff/list membership rules.
+
+### U10. Normalized dossier fields and provenance guards
+
+**Goal:** the dossier shows current dedicated records and correctly labeled
+originals/translations instead of stale intake presentation JSON.
+Requirements: G1-R09–G1-R11, G1-R14–G1-R15; KTD13. Depends on U8–U9.
+
+**Files:** text/name models and migrations; `core/person_names.py`,
+`core/person_text.py`; `core/staff_assets/intake.py`, `manifest.py`,
+`dossier.py`; dossier template; `tests/test_person_names.py`,
+`tests/test_person_text.py`, `tests/test_staff_dossier.py` and migration tests.
+
+Associate title prose with its affiliation and carry source language, review
+status and translation derivation. Adapt saved dossier title fields explicitly
+into this contract, preserving uncertain titles and department/team wording.
+Add source-version update guards for intake payload and original prose while
+leaving reviewed identity association corrections possible. Align name review
+choices with the database and synchronize legacy display fields through one
+name-selection path. Existing unknown-provenance values remain recorded.
+
+Test two simultaneous jobs with different Chinese/English titles, missing
+translations, updated evidence overriding old dossier JSON, source-version
+immutability, migration preservation, selected-name changes and demotion,
+unaltered name provenance and all saved DeepSeek assets.
+
+### U11. DeepSeek proof, operating guide and PR delivery
+
+**Goal:** demonstrate the repaired foundation and give agents a concrete way
+to operate it. Requirements: G1-R03, G1-R11, G1-R13; KTD8–KTD13.
+Depends on U7–U10.
+
+**Files:** existing staff operations/reference documentation and user-level
+skill reference when needed; focused regression tests; proposed
+`.github/workflows/g1-staff-library.yml`; this plan's verification record.
+
+Run migration, focused PostgreSQL tests and a repeat import into a disposable
+DeepSeek database; export and browser-check its dossier. Reuse saved evidence
+and media, report portrait gaps honestly and make no paid provider requests.
+Add narrowly scoped secret-free PostgreSQL CI for the changed staff paths so
+the existing PR can reach a decided check result; do not gate this work on
+unrelated whole-repository lint debt. Document correction/review commands and
+the Python/database responsibilities, then review, commit and update PR #49.
+Production activation and full-population live collection retain U6's boundary.
+
+Verification requires source preservation, repeat-import stability, reviewed
+identity/employment correction scenarios, no broken stored images and an
+observed PR check result. Remove abandoned implementation experiments.
+
 ## Verification Contract
 
 New module/command names below are **proposed**, not commands to run now. Read
@@ -1511,6 +1856,12 @@ not prove an activated production process. This documentation-only revision
 does not need application tests or live probes.
 
 ## Definition of Done
+
+The October 2 continuation also requires U7–U11: shared identity resolution,
+audited merge/split, reviewed employment replacement, dedicated dossier fields
+and source-version guards, with their PostgreSQL regressions and an observed
+CI result. The saved pilot proves source preservation and repeat import;
+remaining portrait/name gaps are reported rather than relabeled as verified.
 
 For the current LFG delivery, names/evidence, preserving migrations, generic
 batch intake, continuing intake, bounded collection work, media storage,

@@ -4,6 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from core.person_identity import IdentityConflict
 from core.staff_assets.intake import (
     ELIGIBLE,
     ingest_record,
@@ -34,8 +35,11 @@ def import_manifest(manifest, *, apply=False, asset_root=None):
     for record in manifest["people"]:
         validate_record(record)
         eligible = record.get("eligibility") in ELIGIBLE
-        person, _ = resolve_person(record) if eligible else (None, None)
-        action = "reuse" if person else "create" if eligible else "exclude"
+        try:
+            person, _ = resolve_person(record) if eligible else (None, None)
+            action = "reuse" if person else "create" if eligible else "exclude"
+        except IdentityConflict:
+            person, action = None, "needs_review"
         counts[action] += 1
         if apply:
             intake, created = ingest_record(record)
