@@ -1899,6 +1899,14 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 2 LFG U9:** explicit reviewed claim replacement now drives the
+  roster, collection context and dossier. Historical claims remain addressable;
+  concurrent jobs and unreviewed contradictions remain visible. PostgreSQL
+  enforces same-person/organization chains, prevents cycles and preserves
+  recorded replacement decisions. Seven new cases started with six failures;
+  the combined employment/correction/library/dossier suite now passes all 37
+  tests, with zero skips/errors. No live collection or production writes.
+
 - **October 2 LFG U7–U8:** shared identity matching retains ambiguous intake
   and account observations without promoting guessed matches. U7 committed
   as `ff383364`; 77 PostgreSQL regressions passed. Reviewed corrections now

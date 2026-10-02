@@ -50,6 +50,14 @@ def _selection(source, kind, selection):
     if len(accounts) != len(set(accounts)) or links.filter(account_id__in=accounts).count() != len(accounts):
         raise ValueError("Selected accounts must belong to the source person")
     chosen["accounts"] = list(links.filter(account_id__in=accounts).order_by("account_id"))
+    if kind == "split":
+        ids = {row.pk for row in chosen["affiliations"]}
+        for row in chosen["affiliations"]:
+            dependencies = set(row.replaced_claims.values_list("pk", flat=True))
+            if row.superseded_by_id:
+                dependencies.add(row.superseded_by_id)
+            if dependencies - ids:
+                raise ValueError("Select the complete employment replacement chain")
     return chosen
 
 

@@ -10,6 +10,7 @@ from core.models import (
     PersonBrandAffiliation,
     TwitterListMembership,
 )
+from core.person_affiliations import active_claims
 
 
 def staff_population(*, list_id):
@@ -31,11 +32,11 @@ def staff_population(*, list_id):
             else:
                 reasons[account].add(label)
     people = (
-        PersonBrandAffiliation.objects.filter(
+        active_claims(PersonBrandAffiliation.objects.filter(
             affiliation_type__in=["employment", "founder"],
             person__merged_into__isnull=True,
-        )
-        .exclude(review_status="rejected")
+            status="current",
+        ))
         .values_list("person_id", flat=True)
         .distinct()
     )

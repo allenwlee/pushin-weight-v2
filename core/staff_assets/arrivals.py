@@ -12,6 +12,7 @@ from core.models import (
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
 )
+from core.person_affiliations import active_claims
 from core.person_identity import account_person, canonical_person
 from core.person_names import record_name
 from core.staff_assets.intake import ingest_record
@@ -26,8 +27,7 @@ def register_person(person_id):
         return
     person = canonical_person(person.pk)
     roles = list(
-        person.brand_affiliations.filter(affiliation_type__in=["employment", "founder"])
-        .exclude(review_status="rejected")
+        active_claims(person.brand_affiliations.filter(affiliation_type__in=["employment", "founder"]))
         .order_by("pk")
         .values(
             "id", "claim_identity", "review_status", "title_raw", "location", "status"
@@ -35,6 +35,13 @@ def register_person(person_id):
     )
     intakes = list(person.staff_intakes.order_by("id"))
     if not roles and not intakes:
+        return
+    # Explicit operational account membership remains its own eligibility source.
+    operational = any(row.eligibility in {"db_staff", "call_a_person"} for row in intakes)
+    if not operational and not any(role["status"] == "current" for role in roles):
+        person.collection_work.filter(state__in=["queued", "retry_due"]).update(
+            state="needs_review", error_category="no_current_staff_claim"
+        )
         return
     links = list(
         person.account_links.exclude(resolution_status="rejected").select_related(

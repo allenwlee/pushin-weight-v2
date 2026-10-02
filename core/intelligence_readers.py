@@ -264,6 +264,7 @@ def _evidence(row: PersonBrandAffiliationEvidence) -> dict[str, Any]:
 
 
 def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
+    from core.person_affiliations import is_active_claim
     candidate = row.brand_discovery_candidate
     return {
         "id": row.pk,
@@ -283,6 +284,8 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
         "organization_name": row.observed_organization_name,
         "organization_handle": row.observed_organization_handle,
         "affiliation_type": row.affiliation_type,
+        "active": is_active_claim(row),
+        "superseded_by": row.superseded_by_id,
         "status": row.status,
         "title": {
             "raw": row.title_raw,

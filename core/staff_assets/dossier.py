@@ -8,6 +8,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from core.models import Person
+from core.person_affiliations import is_active_claim
 from core.staff_assets.media import media_storage
 
 
@@ -46,7 +47,7 @@ def dossier_records(*, brand_id):
         roles = [
             role
             for role in person.brand_affiliations.all()
-            if role.brand_id == brand_id and role.review_status != "rejected"
+            if role.brand_id == brand_id and is_active_claim(role)
         ]
         if not roles:
             continue

@@ -5201,6 +5201,13 @@ class PersonBrandAffiliation(models.Model):
     source_system = models.CharField(max_length=64, blank=True, null=True)
     external_id = models.TextField(blank=True, null=True)
     claim_identity = models.CharField(max_length=64, unique=True)
+    superseded_by = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="replaced_claims",
+    )
+    superseded_at = models.DateTimeField(null=True, blank=True)
+    superseded_by_reviewer = models.TextField(blank=True, default="")
+    supersession_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
