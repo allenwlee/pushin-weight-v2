@@ -162,8 +162,14 @@ def ingest_record(record):
             parent = entry.pop("derived_from_key", None)
             if parent and parent not in originals:
                 raise ValueError("A translated title must follow its original")
-            originals[key] = record_text(person, affiliation=affiliation, kind="title",
-                                         observed_at=observed, derived_from=originals.get(parent), **entry)
+            originals[key] = record_text(
+                person,
+                affiliation=affiliation,
+                kind="title",
+                observed_at=observed,
+                derived_from=originals.get(parent),
+                **entry,
+            )
     for entry in record.get("texts", []):
         record_text(person, observed_at=observed, **entry)
     intake, created = StaffIntake.objects.get_or_create(

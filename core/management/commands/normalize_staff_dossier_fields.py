@@ -1,4 +1,5 @@
 """Materialize previously saved title audits without rewriting their intake."""
+
 import json
 
 from django.core.management.base import BaseCommand
@@ -10,7 +11,9 @@ from core.staff_assets.manifest import saved_title_entries
 
 
 class Command(BaseCommand):
-    help = "Preview/apply titles and profile locations from saved DeepSeek source audits"
+    help = (
+        "Preview/apply titles and profile locations from saved DeepSeek source audits"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--apply", action="store_true")
@@ -18,36 +21,70 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, **options):
         from core.staff_assets.queue import _lock
+
         _lock()
         results = []
-        for intake in StaffIntake.objects.filter(person__isnull=False).select_related("person").order_by("pk"):
+        for intake in (
+            StaffIntake.objects.filter(person__isnull=False)
+            .select_related("person")
+            .order_by("pk")
+        ):
             dossier = intake.payload.get("source_dossier", {})
             if not dossier.get("deepseek"):
                 continue
             if dossier.get("location") and dossier.get("location_source"):
                 results.append({"intake": intake.pk, "field": "profile_location"})
                 if options["apply"]:
-                    record_text(intake.person, kind="location", language="und", text=dossier["location"],
-                        source_reference=dossier["location_source"], observed_at=intake.observed_at,
-                        review_note="Saved profile location; does not establish role location")
-            entries = saved_title_entries(dossier.get("presentation", {}).get("fields", {}))
+                    record_text(
+                        intake.person,
+                        kind="location",
+                        language="und",
+                        text=dossier["location"],
+                        source_reference=dossier["location_source"],
+                        observed_at=intake.observed_at,
+                        review_note="Saved profile location; does not establish role location",
+                    )
+            entries = saved_title_entries(
+                dossier.get("presentation", {}).get("fields", {})
+            )
             if not entries:
                 continue
             roles = intake.person.brand_affiliations.filter(brand_id="deepseek")
-            original_roles = [r for r in intake.payload.get("affiliations", []) if r.get("brand_id") == "deepseek"]
+            original_roles = [
+                r
+                for r in intake.payload.get("affiliations", [])
+                if r.get("brand_id") == "deepseek"
+            ]
             if len(original_roles) == 1:
                 original = original_roles[0]
-                roles = roles.filter(title_raw=original.get("title_raw"), status=original.get("status", "unknown"))
+                roles = roles.filter(
+                    title_raw=original.get("title_raw"),
+                    status=original.get("status", "unknown"),
+                )
             if roles.count() != 1:
-                results.append({"intake": intake.pk, "status": "needs_review", "reason": "Ambiguous source affiliation"})
+                results.append(
+                    {
+                        "intake": intake.pk,
+                        "status": "needs_review",
+                        "reason": "Ambiguous source affiliation",
+                    }
+                )
                 continue
             role = roles.get()
-            results.append({"intake": intake.pk, "affiliation": role.pk, "titles": len(entries)})
+            results.append(
+                {"intake": intake.pk, "affiliation": role.pk, "titles": len(entries)}
+            )
             if options["apply"]:
                 recorded = {}
                 for entry in entries:
                     key = entry.pop("key")
                     parent = entry.pop("derived_from_key", None)
-                    recorded[key] = record_text(intake.person, affiliation=role, kind="title",
-                        observed_at=intake.observed_at, derived_from=recorded.get(parent), **entry)
+                    recorded[key] = record_text(
+                        intake.person,
+                        affiliation=role,
+                        kind="title",
+                        observed_at=intake.observed_at,
+                        derived_from=recorded.get(parent),
+                        **entry,
+                    )
         self.stdout.write(json.dumps({"applied": options["apply"], "records": results}))

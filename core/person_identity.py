@@ -27,11 +27,15 @@ def canonical_person(person_id):
 def identity_ids(person_id):
     person = canonical_person(person_id)
     # Corrections flatten redirects, so every retired ID points to its survivor.
-    return [person.pk, *Person.objects.filter(merged_into=person).values_list("pk", flat=True)]
+    return [
+        person.pk,
+        *Person.objects.filter(merged_into=person).values_list("pk", flat=True),
+    ]
 
 
 def _write_lock():
     from core.staff_assets.queue import _lock
+
     _lock()
 
 
@@ -71,8 +75,11 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
             person_id_for_account(account.pk),
             uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{account.pk}"),
         ]
-        people = list({canonical_person(pk).pk: canonical_person(pk)
-                       for pk in Person.objects.filter(pk__in=ids).values_list("pk", flat=True)}.values())
+        resolved = [
+            canonical_person(pk)
+            for pk in Person.objects.filter(pk__in=ids).values_list("pk", flat=True)
+        ]
+        people = list({person.pk: person for person in resolved}.values())
         if len(people) > 1:
             raise IdentityConflict(
                 "Conflicting account identities need reviewed correction"

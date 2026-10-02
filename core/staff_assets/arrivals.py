@@ -27,7 +27,11 @@ def register_person(person_id):
         return
     person = canonical_person(person.pk)
     roles = list(
-        active_claims(person.brand_affiliations.filter(affiliation_type__in=["employment", "founder"]))
+        active_claims(
+            person.brand_affiliations.filter(
+                affiliation_type__in=["employment", "founder"]
+            )
+        )
         .order_by("pk")
         .values(
             "id", "claim_identity", "review_status", "title_raw", "location", "status"
@@ -37,7 +41,9 @@ def register_person(person_id):
     if not roles and not intakes:
         return
     # Explicit operational account membership remains its own eligibility source.
-    operational = any(row.eligibility in {"db_staff", "call_a_person"} for row in intakes)
+    operational = any(
+        row.eligibility in {"db_staff", "call_a_person"} for row in intakes
+    )
     if not operational and not any(role["status"] == "current" for role in roles):
         person.collection_work.filter(state__in=["queued", "retry_due"]).update(
             state="needs_review", error_category="no_current_staff_claim"

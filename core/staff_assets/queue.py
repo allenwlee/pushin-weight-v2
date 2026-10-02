@@ -116,12 +116,15 @@ def reserve_request(
         "fingerprint": digest(parameters),
     }
     from core.person_identity import identity_ids
+
     related_ids = identity_ids(work.person_id)
     matches = StaffProviderRequest.objects.filter(
         person_id__in=related_ids, provider=provider, fingerprint=key["fingerprint"]
     )
     if matches.exclude(state="complete").exists():
-        raise AmbiguousRequest("A matching request needs review; no automatic paid retry")
+        raise AmbiguousRequest(
+            "A matching request needs review; no automatic paid retry"
+        )
     existing = matches.order_by("pk").first()
     if existing:
         if existing.state == "complete":

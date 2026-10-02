@@ -18,7 +18,9 @@ def source_url(value):
 
 def dossier_records(*, brand_id):
     people = (
-        Person.objects.filter(brand_affiliations__brand_id=brand_id, merged_into__isnull=True)
+        Person.objects.filter(
+            brand_affiliations__brand_id=brand_id, merged_into__isnull=True
+        )
         .distinct()
         .select_related("primary_name", "english_name")
         .prefetch_related(
@@ -104,26 +106,63 @@ def dossier_records(*, brand_id):
             )
         title_fields = []
         for role in roles:
-            titles = [row for row in role.texts.all() if row.kind == "title" and row.review_status != "rejected"]
+            titles = [
+                row
+                for row in role.texts.all()
+                if row.kind == "title" and row.review_status != "rejected"
+            ]
             for row in titles:
-                title_fields.append({
-                    "label": {"zh-Hans": "Chinese job title", "en": "English job title"}.get(row.language, "Original job title"),
-                    "value": row.text, "status": row.review_status + " · " + row.origin,
-                    "source": source_url(row.source_reference), "note": row.review_note,
-                    "role": role.title_raw or "Title unknown",
-                })
+                title_fields.append(
+                    {
+                        "label": {
+                            "zh-Hans": "Chinese job title",
+                            "en": "English job title",
+                        }.get(row.language, "Original job title"),
+                        "value": row.text,
+                        "status": row.review_status + " · " + row.origin,
+                        "source": source_url(row.source_reference),
+                        "note": row.review_note,
+                        "role": role.title_raw or "Title unknown",
+                    }
+                )
                 for translation in row.translations.all():
-                    title_fields.append({"label": "Job title (" + translation.language + ")",
-                        "value": translation.text, "status": "translation · " + translation.provider,
-                        "source": source_url(row.source_reference), "note": "Translated from: " + row.text,
-                        "role": role.title_raw or "Title unknown"})
+                    title_fields.append(
+                        {
+                            "label": "Job title (" + translation.language + ")",
+                            "value": translation.text,
+                            "status": "translation · " + translation.provider,
+                            "source": source_url(row.source_reference),
+                            "note": "Translated from: " + row.text,
+                            "role": role.title_raw or "Title unknown",
+                        }
+                    )
             if not titles:
                 evidence = list(role.evidence.all())
-                title_fields.append({"label": "Original job title", "value": role.title_raw or "Not collected",
-                    "status": role.review_status + " · language not recorded",
-                    "source": source_url(evidence[0].source_url) if evidence else "", "note": ""})
-            if not any(row.language == "en" or any(t.language == "en" for t in row.translations.all()) for row in titles):
-                title_fields.append({"label": "English job title", "value": "Not collected", "status": "Translation not requested", "source": "", "note": ""})
+                title_fields.append(
+                    {
+                        "label": "Original job title",
+                        "value": role.title_raw or "Not collected",
+                        "status": role.review_status + " · language not recorded",
+                        "source": source_url(evidence[0].source_url)
+                        if evidence
+                        else "",
+                        "note": "",
+                    }
+                )
+            if not any(
+                row.language == "en"
+                or any(t.language == "en" for t in row.translations.all())
+                for row in titles
+            ):
+                title_fields.append(
+                    {
+                        "label": "English job title",
+                        "value": "Not collected",
+                        "status": "Translation not requested",
+                        "source": "",
+                        "note": "",
+                    }
+                )
         role_rows = []
         for role in roles:
             role_rows.append(
@@ -155,8 +194,16 @@ def dossier_records(*, brand_id):
                     "at": request.created_at.isoformat(),
                 }
             )
-        locations = [row for row in person.texts.all() if row.kind == "location" and row.affiliation_id is None and row.review_status != "rejected"]
-        profile_location = max(locations, key=lambda row: (row.observed_at, row.pk), default=None)
+        locations = [
+            row
+            for row in person.texts.all()
+            if row.kind == "location"
+            and row.affiliation_id is None
+            and row.review_status != "rejected"
+        ]
+        profile_location = max(
+            locations, key=lambda row: (row.observed_at, row.pk), default=None
+        )
         result.append(
             {
                 "id": str(person.pk),
@@ -167,7 +214,9 @@ def dossier_records(*, brand_id):
                 if person.primary_name_id
                 else person.display_name,
                 "scope": scope,
-                "eligibility": "Current staff claim" if scope == "current" else "Former or dated staff claim",
+                "eligibility": "Current staff claim"
+                if scope == "current"
+                else "Former or dated staff claim",
                 "names": names,
                 "has_chinese": any(row["language"].startswith("zh") for row in names),
                 "has_english": bool(person.english_name_id),
@@ -180,7 +229,9 @@ def dossier_records(*, brand_id):
                     "summary", "No completed search recorded."
                 ),
                 "profile_location": profile_location.text if profile_location else None,
-                "profile_location_source": source_url(profile_location.source_reference) if profile_location else "",
+                "profile_location_source": source_url(profile_location.source_reference)
+                if profile_location
+                else "",
                 "suggested_query": dossier.get("xiaohongshu_search", {}).get(
                     "query", ""
                 ),

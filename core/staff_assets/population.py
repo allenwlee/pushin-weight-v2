@@ -32,11 +32,13 @@ def staff_population(*, list_id):
             else:
                 reasons[account].add(label)
     people = (
-        active_claims(PersonBrandAffiliation.objects.filter(
-            affiliation_type__in=["employment", "founder"],
-            person__merged_into__isnull=True,
-            status="current",
-        ))
+        active_claims(
+            PersonBrandAffiliation.objects.filter(
+                affiliation_type__in=["employment", "founder"],
+                person__merged_into__isnull=True,
+                status="current",
+            )
+        )
         .values_list("person_id", flat=True)
         .distinct()
     )

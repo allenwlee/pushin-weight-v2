@@ -10,18 +10,28 @@ from tests.test_staff_library import record
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-def role(person, *, status="current", title="Research lead", affiliation_type="employment"):
+def role(
+    person, *, status="current", title="Research lead", affiliation_type="employment"
+):
     import uuid
+
     return PersonBrandAffiliation.objects.create(
-        person=person, brand_id="deepseek", affiliation_type=affiliation_type,
-        observed_organization_name="DeepSeek", status=status, title_raw=title,
+        person=person,
+        brand_id="deepseek",
+        affiliation_type=affiliation_type,
+        observed_organization_name="DeepSeek",
+        status=status,
+        title_raw=title,
         claim_identity=uuid.uuid4().hex,
     )
 
 
 def replace(old, new, **kwargs):
     from core.person_affiliations import replace_claim
-    return replace_claim(old.pk, new.pk, reviewer="Allen", reason="Reviewed departure source", **kwargs)
+
+    return replace_claim(
+        old.pk, new.pk, reviewer="Allen", reason="Reviewed departure source", **kwargs
+    )
 
 
 def test_departure_updates_population_dossier_and_pending_work_together():
@@ -34,7 +44,9 @@ def test_departure_updates_population_dossier_and_pending_work_together():
     assert entry["scope"] == "history"
     assert len(entry["roles"]) == 1
     assert PersonBrandAffiliation.objects.filter(person=intake.person).count() == 2
-    assert not StaffCollectionWork.objects.filter(person=intake.person, state="queued").exists()
+    assert not StaffCollectionWork.objects.filter(
+        person=intake.person, state="queued"
+    ).exists()
 
 
 def test_promotion_preserves_founder_and_other_jobs():
@@ -44,7 +56,10 @@ def test_promotion_preserves_founder_and_other_jobs():
     promotion = role(intake.person, title="研究主管")
     replace(old, promotion)
     from core.person_affiliations import active_claims
-    assert set(active_claims().filter(person=intake.person).values_list("pk", flat=True)) == {founder.pk, promotion.pk}
+
+    assert set(
+        active_claims().filter(person=intake.person).values_list("pk", flat=True)
+    ) == {founder.pk, promotion.pk}
     assert dossier_records(brand_id="deepseek")[0]["scope"] == "current"
 
 

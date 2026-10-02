@@ -17,9 +17,13 @@ class Command(BaseCommand):
 
     def handle(self, **options):
         try:
-            result = replace_claim(options["old"], options["replacement"],
-                                   reviewer=options["reviewer"], reason=options["reason"],
-                                   apply=options["apply"])
+            result = replace_claim(
+                options["old"],
+                options["replacement"],
+                reviewer=options["reviewer"],
+                reason=options["reason"],
+                apply=options["apply"],
+            )
         except (KeyError, ValueError) as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(json.dumps(result, ensure_ascii=False))

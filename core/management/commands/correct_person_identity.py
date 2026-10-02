@@ -20,20 +20,39 @@ class Command(BaseCommand):
         parser.add_argument("--reason", required=True)
         parser.add_argument("--request-key", required=True)
         parser.add_argument("--account-id")
-        parser.add_argument("--selection", type=Path, help="JSON file containing selected row IDs for a split")
+        parser.add_argument(
+            "--selection",
+            type=Path,
+            help="JSON file containing selected row IDs for a split",
+        )
         parser.add_argument("--apply", action="store_true")
 
     def handle(self, **options):
         try:
-            selection = json.loads(options["selection"].read_text()) if options["selection"] else None
+            selection = (
+                json.loads(options["selection"].read_text())
+                if options["selection"]
+                else None
+            )
             result = correct_identity(
-                kind=options["kind"], source_id=options["source"], target_id=options["target"],
-                reviewer=options["reviewer"], reason=options["reason"],
-                request_key=options["request_key"], account_id=options["account_id"],
-                selection=selection, apply=options["apply"],
+                kind=options["kind"],
+                source_id=options["source"],
+                target_id=options["target"],
+                reviewer=options["reviewer"],
+                reason=options["reason"],
+                request_key=options["request_key"],
+                account_id=options["account_id"],
+                selection=selection,
+                apply=options["apply"],
             )
         except (ValueError, OSError) as exc:
             raise CommandError(str(exc)) from exc
         if not isinstance(result, dict):
-            result = {"applied": True, "correction_id": result.pk, "changes": result.changes}
-        self.stdout.write(json.dumps(result, cls=DjangoJSONEncoder, ensure_ascii=False, indent=2))
+            result = {
+                "applied": True,
+                "correction_id": result.pk,
+                "changes": result.changes,
+            }
+        self.stdout.write(
+            json.dumps(result, cls=DjangoJSONEncoder, ensure_ascii=False, indent=2)
+        )
