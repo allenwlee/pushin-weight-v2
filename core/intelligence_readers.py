@@ -310,8 +310,6 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
 
 
 def person_intelligence(person_id) -> dict[str, Any]:
-    from core.person_identity import canonical_person
-    person_id = canonical_person(person_id).pk
     evidence = PersonBrandAffiliationEvidence.objects.select_related(
         "source_profile_snapshot"
     ).order_by("observed_at", "id")
@@ -329,6 +327,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
             ),
         ),
     ).get(pk=person_id)
+    if person.merged_into_id:
+        from core.person_identity import canonical_person
+        return person_intelligence(canonical_person(person.merged_into_id).pk)
     all_affiliations = [_affiliation(row) for row in person.brand_affiliations.all()]
     return {
         "person": {

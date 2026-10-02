@@ -34,11 +34,11 @@ def test_upgrade_preserves_source_versions_and_normalization_is_repeatable():
         assert StaffIntake.objects.get(pk=intake.pk).payload == payload
         assert PersonText.objects.get(pk=prose.pk).text == "研究工作"
         output = io.StringIO()
-        call_command("normalize_staff_titles", stdout=output)
+        call_command("normalize_staff_dossier_fields", stdout=output)
         assert not json.loads(output.getvalue())["applied"]
         assert PersonText.objects.count() == 1
-        call_command("normalize_staff_titles", apply=True, stdout=io.StringIO())
-        call_command("normalize_staff_titles", apply=True, stdout=io.StringIO())
+        call_command("normalize_staff_dossier_fields", apply=True, stdout=io.StringIO())
+        call_command("normalize_staff_dossier_fields", apply=True, stdout=io.StringIO())
         titles = PersonText.objects.filter(affiliation_id=role.pk)
         assert titles.count() == 2
         assert titles.get(language="en").derived_from_id == titles.get(language="zh-Hans").pk

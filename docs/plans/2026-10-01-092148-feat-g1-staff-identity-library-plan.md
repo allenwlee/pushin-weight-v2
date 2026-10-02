@@ -1899,6 +1899,23 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 2 LFG U11 local proof:** upgraded a disposable copy of the saved
+  DeepSeek database through migration 0064, normalized 37 saved title records,
+  and repeated the original manifest twice. Counts and source payloads remained
+  stable: 24 people, 27 job claims, 46 names/evidence, 35 media objects/attributions,
+  28 intake observations (four excluded). All 35 image hashes match stored bytes.
+  Chromium checks passed at desktop/mobile/print: 17 current, seven history,
+  working filters/search, 35 loaded images, no console errors or overflow.
+  Eleven current portrait gaps remain explicit. Zero paid calls or production
+  writes. Added a secret-free PostgreSQL CI workflow; schema inventory and every
+  column match models exactly (121 tables, 1,537 columns). Updated the operating
+  guide, README and shared user-level skill reference.
+  The required immediate harvester diagnostic ran once: the production cohort
+  had 20 unhealthy posts, zero complete/pending; both commentary languages were
+  0/20, detected language 19/20, and non-Chinese translation 14/14. This branch
+  has not deployed; the observed production health failure remains outside this
+  PR's people-schema repair and is not counted as a passing check.
+
 - **October 2 LFG U10:** titles now belong to individual affiliations and
   carry language, original/translation/unknown provenance and review details.
   Dossier titles and profile locations read the dedicated records; saved intake

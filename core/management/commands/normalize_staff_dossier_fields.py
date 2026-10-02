@@ -10,7 +10,7 @@ from core.staff_assets.manifest import saved_title_entries
 
 
 class Command(BaseCommand):
-    help = "Preview/apply normalized titles from saved DeepSeek source audits"
+    help = "Preview/apply titles and profile locations from saved DeepSeek source audits"
 
     def add_arguments(self, parser):
         parser.add_argument("--apply", action="store_true")
@@ -24,6 +24,12 @@ class Command(BaseCommand):
             dossier = intake.payload.get("source_dossier", {})
             if not dossier.get("deepseek"):
                 continue
+            if dossier.get("location") and dossier.get("location_source"):
+                results.append({"intake": intake.pk, "field": "profile_location"})
+                if options["apply"]:
+                    record_text(intake.person, kind="location", language="und", text=dossier["location"],
+                        source_reference=dossier["location_source"], observed_at=intake.observed_at,
+                        review_note="Saved profile location; does not establish role location")
             entries = saved_title_entries(dossier.get("presentation", {}).get("fields", {}))
             if not entries:
                 continue

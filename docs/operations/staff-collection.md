@@ -33,8 +33,11 @@ rules. Other eligibility values are retained as exclusions without creating a
 person. Contributors alone do not qualify. The saved-dossier adapter explicitly
 preserves those distinctions.
 
-Resolve `person_id` or a stored stable `account_id` before insertion. Existing
-conflicting links fail for review. A name never merges two people. An accountless
+Resolve `person_id` or a stored stable `account_id` before insertion. Conflicting
+links retain a personless `staff_intakes` observation with `needs_review`; replay
+it after resolving the identity. A pending cross-source match is not confirmation.
+An account's own provisional observation is repeatable, including handle changes.
+A name never merges two people. An accountless
 source key receives a stable UUID without a placeholder X account. A supplied
 account ID must already exist; the importer never guesses an ID from a handle.
 
@@ -72,6 +75,59 @@ python manage.py review_staff_collection media 456 --source-verified --individua
 Reviewing a portrait does not imply reuse permission. Set `--reuse permitted` only
 when its evidence supports that separate decision. Review history is retained.
 
+## Correcting identities and job history
+
+Use `correct_person_identity` to preview a specific correction. Add `--apply`
+to record it. Supply an existing destination person; a split never guesses which
+records belong together. For account confirmation, source and target are the
+same person ID.
+
+```bash
+python manage.py correct_person_identity merge --source OLD_UUID --target KEPT_UUID --reviewer Allen --reason 'Same individual in both sourced profiles' --request-key review-001
+python manage.py correct_person_identity split --source OLD_UUID --target OTHER_UUID --selection /private/selected-rows.json --reviewer Allen --reason 'Two different researchers' --request-key review-002
+python manage.py correct_person_identity confirm_account --source PERSON_UUID --target PERSON_UUID --account-id STORED_ACCOUNT_ID --reviewer Allen --reason 'Personal site links this account' --request-key review-003
+python manage.py review_person_affiliation OLD_CLAIM_ID NEW_CLAIM_ID --reviewer Allen --reason 'Reviewed departure announcement'
+```
+
+A split selection is a JSON object whose optional arrays are `names`,
+`affiliations`, `texts`, `intakes`, `media` (row IDs), and `accounts` (stored X
+account IDs). Include complete employment replacement and text derivation
+chains, and the texts attached to a moved affiliation. Invalid dependencies,
+conflicting identities and running collection workers stop the transaction.
+Text collisions involving derivation need separate review and are refused.
+Repeat the same request key only for the exact same correction.
+
+The correction journal preserves the operator, reason, source rows and mappings.
+Original name rows remain addressable; a split rejects their old attribution
+and copies the representation and evidence to the selected person. A merge
+redirects the retired person ID and preserves paid-request history and cache
+reuse. No global constraint bypass or automatic same-name merge is used.
+
+Job replacement is a separate decision from `current`/`former` employment status.
+It keeps the earlier claim and records who replaced it and why. A later observed
+date alone does not settle a contradiction. Replacement must stay within the
+same person and organization; concurrent roles stay separate. The dossier and
+default roster use unreplaced, nonrejected claims; current collection needs a
+current claim or the independent operational account-intake eligibility.
+
+Each affiliation can include a `titles` array. Entries contain `text`, `language`,
+`source_reference`, `origin` (`source`, `translation`, `summary`, `unknown`),
+`review_status`, and `review_note`. Optional `key`/`derived_from_key` link a
+translation to an earlier title in that array. Titles are attached to that exact
+affiliation. General biography/location prose remains in the person's `texts`.
+
+For an existing saved DeepSeek import, preview and apply
+`python manage.py normalize_staff_dossier_fields [--apply]`. It creates dedicated title
+records from the saved audit without editing the intake; ambiguous job matches
+remain `needs_review`. Dossier title display reads the dedicated records, and
+the intake payload remains the original import/search journal.
+
+Python services perform matching, review, selection, queue registration and
+budget checks. PostgreSQL enforces foreign keys, confirmed-account uniqueness,
+name-selection provenance, same-person text/job links, replacement consistency,
+immutable source versions and the append-only correction journal. Raw SQL does
+not run Python callbacks; run the catch-up command after authorized bulk writes.
+
 ## Existing population and ongoing arrivals
 
 ```bash
@@ -81,7 +137,8 @@ python manage.py run_staff_collection_worker --once
 ```
 
 The population is the union of active stored Call A membership, both company and
-brand staff-role tables, and people with nonrejected employment/founder claims.
+brand staff-role tables, and people with current, unreplaced, nonrejected
+employment/founder claims. Former and dated claims remain available in history.
 Official company accounts are excluded. The frozen output includes overlap and
 identity-review failures. This reads stored membership; it does not make a fresh
 authenticated X list request. Preserve the capture provenance when supplying a
