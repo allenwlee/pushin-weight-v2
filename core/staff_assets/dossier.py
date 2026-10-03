@@ -27,7 +27,7 @@ def provider_search_summary(requests):
         elif request.state == "needs_review":
             phrases.append(f"{provider} search needs review")
         else:
-            phrases.append(f"{provider} search not run")
+            phrases.append(f"{provider} search completion unconfirmed")
     return "; ".join(phrases) + "."
 
 

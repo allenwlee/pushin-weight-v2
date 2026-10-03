@@ -1900,6 +1900,22 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 3 Grok follow-up review:** reviewed the six fixes in
+  `9e2f8ea2..1e9a3a68`: active employment reads, reader-contract documentation,
+  account catch-up, ownership guards after identity splits, bounded image
+  retries, and provider-backed dossier summaries. All 162 focused PostgreSQL
+  tests passed with zero skips/errors, and GitHub CI passed on `1e9a3a68`.
+  One new interrupted-worker scenario exposed a misleading “search not run”
+  label for a request whose completion is unknown. The follow-up preserves
+  that uncertainty in the exported dossier and adds a real worker-to-export
+  regression; all 25 affected library/dossier tests pass. Chromium verified
+  the actual export before and after the fix. Review and browser receipts:
+  `/tmp/compound-engineering-501/ce-code-review/20261003-grok-six-fixes/`
+  and `.context/g1-grok-review-20261003/`. Review lenses ran sequentially;
+  no independent-model approval is claimed. Acceptance is scoped to these
+  fixes on PR #49, with its final CI checked after push. No production write,
+  paid request, merge or deployment.
+
 - **October 3 LFG final review:** reproduced and fixed three interactions:
   profile affiliation writes racing with identity merges, duplicate moved job
   claims on later observations, and queued work retaining a replaced job claim.

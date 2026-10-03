@@ -18,6 +18,7 @@ from core.staff_assets.dossier import dossier_records, export_dossier
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.manifest import from_deepseek_dossier
 from core.staff_assets.queue import enqueue
+from core.staff_assets.worker import run_once
 from tests.test_staff_library import record
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -211,9 +212,56 @@ def test_search_summary_comes_from_provider_requests():
     assert summary == (
         "serpapi search completed (2 results); "
         "serpapi search needs review; "
-        "serpapi search not run."
+        "serpapi search completion unconfirmed."
     )
     assert "No completed search recorded." not in summary
+
+
+def test_export_preserves_uncertainty_after_interrupted_provider_request(
+    settings, tmp_path
+):
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "staff_media": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {"location": str(tmp_path / "media")},
+        },
+    }
+
+    class Interrupted(BaseException):
+        pass
+
+    class Provider:
+        name = "serpapi"
+        calls = 0
+
+        def search(self, parameters):
+            self.calls += 1
+            raise Interrupted("Process stopped after sending the request")
+
+    ingest_record(record(baidu_eligible=True, baidu_query="测试人 DeepSeek"))
+    provider = Provider()
+    with pytest.raises(Interrupted):
+        run_once(
+            run_id=uuid.uuid4(),
+            provider=provider,
+            allow_network=True,
+            per_person=1,
+            per_run=1,
+            per_day=1,
+        )
+    assert provider.calls == 1
+    assert StaffProviderRequest.objects.get().state == "reserved"
+    call_command(
+        "export_staff_dossier",
+        brand="deepseek",
+        output=str(tmp_path),
+        stdout=io.StringIO(),
+    )
+    html = (tmp_path / "index.html").read_text()
+    assert "serpapi search completion unconfirmed." in html
+    assert "serpapi search not run." not in html
+    assert "reserved" in html
 
 
 def test_requeue_retries_unavailable_media_without_stored_bytes():
