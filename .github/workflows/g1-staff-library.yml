@@ -26,7 +26,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: staff_test
-          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_PASSWORD: test
           POSTGRES_DB: staff_test
         ports:
           - 5432:5432
@@ -34,7 +34,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql://staff_test:local-test-only@127.0.0.1:5432/staff_test
+      DATABASE_URL: postgresql://staff_test:test@127.0.0.1:5432/staff_test
       STAFF_COLLECTION_NETWORK_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4

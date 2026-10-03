@@ -8,8 +8,11 @@ ollija:
   change_id: feat-g1-staff-identity-library-2026-10-01-092148
   branch: feat/g1-staff-identity-library
   workflow: lfg
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -37,11 +40,25 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -1900,6 +1917,29 @@ when implementation begins.
 
 ## Progress and continuation
 
+- **October 4 database-only leadership lookup:** read both production
+  `pushinweight_shadow` through Render CLI and local
+  `g1_repairs_pilot_20261002` in read-only transactions. The local pilot records
+  Wenfeng Liang / 梁文锋 as current founder/CEO (claim 5; saved Fortune China
+  profile), Wentao Yan / 严文韬 as current CFO from 2026-09-21 (claim 26;
+  saved appointment report), Yu Wu / 吴俣 as post-training team lead with
+  unknown current status (claim 23; saved Peking University news), and Chong
+  Ruan / 阮翀 as former R&D lead (claim 25). All four job claims remain
+  `pending` review. Production has no Liang name match or new name table;
+  its DeepSeek founder claims for Jay (637) and Charlie (764) are unsupported
+  by their saved excerpts, which concern their own tools/API business.
+  Claims 596/597 incorrectly attach a post about AMD/World Labs roles to
+  DeepSeek. No external lookup or database correction performed; these are
+  observed data-quality gaps, not accepted leadership evidence.
+
+- **October 4 merge:** the owner requested PR #49 merge. GitHub confirms
+  `MERGED` at `2026-10-03T21:31:23Z`; remote `main` points to
+  `651620adcefd8c3684d039664cd4c1650d376397`, retaining reviewed head
+  `6c1d4b6a` and its green 163-test CI. The merge commit includes
+  `[skip render]` to preserve the separate coordinated schema-release step.
+  No production migration, paid collection or schedule activation ran.
+  Receipt: `.context/g1-merge-20261004/merge-receipt.json`.
+
 - **October 3 Grok follow-up review:** reviewed the six fixes in
   `9e2f8ea2..1e9a3a68`: active employment reads, reader-contract documentation,
   account catch-up, ownership guards after identity splits, bounded image
@@ -2101,6 +2141,49 @@ when implementation begins.
 
 ## Delivery Exceptions
 
+### October 4 production release procedure
+
+The release candidate includes the already-reviewed G1 application code and a
+CI-only correction: the disposable PostgreSQL password uses the repository's
+recognized `test` placeholder. Reuse the 163-test PostgreSQL result for unchanged
+application code; rerun `tests/ollija` and dispatch the PostgreSQL workflow for
+the final candidate. No application behavior or test assertion is weakened.
+
+Create Render exports of production and staging and retain a verified local
+backup before migrating. Rehearse on the isolated staging database, preserving
+the existing suspension states. Use the existing guarded staging refresh if its
+preflight accepts the source and target; never bypass a refused refresh guard.
+Record people, account-link, job-claim and evidence counts and the sex-value
+distribution before migration and after migration, before staff import.
+
+For this saved-data release, attach a private 1 GB persistent disk to each web
+service at `/var/data/staff-media`, configure `STAFF_MEDIA_ROOT`, and verify all
+35 stored image hashes after a subsequent deploy. This is the authoritative
+operator image store for this release. Keep `STAFF_MEDIA_DURABLE=false` and
+`STAFF_COLLECTION_NETWORK_ENABLED=false`: the network-worker assertion requires
+shared storage, and this single-service disk does not satisfy it. Shared storage
+and a paid collection worker remain part of the separately bounded acquisition
+activation described in KTD5; this release does not assert they are live.
+
+During the physical column rename, put the web service in Render maintenance
+mode and wait for in-flight requests to drain. For production, suspend the
+harvester and temporarily use the dormant staging cron schedule while it is
+resumed and deployed, restoring `*/15 * * * *` only after the new revision is
+observed. The headline, synthesis and job-source paths do not query Person and
+can receive the candidate normally; previously suspended services stay suspended.
+Record every actual pause, schedule change and restoration. Stop on an unexpected
+service state or competing release. A failed migration keeps the web protected
+until the schema and running code agree; preserve the backup and imported media
+instead of blindly reversing migrations after new writes.
+
+Match the 24 eligible saved people against production using existing account IDs,
+source identities and reviewed employment evidence; never merge on a name alone.
+Keep the four contributor-only exclusions. Preview and apply the same manifest
+twice, verify unchanged counts on replay, export a private dossier, check stored
+image hashes and name-provenance constraints, and inspect one natural harvester
+cycle for new-code intake behavior. Final evidence must distinguish saved pilot
+coverage from unresolved portrait/role review gaps and disabled paid acquisition.
+
 The owner invoked LFG on October 1. This authorizes implementation, local
 verification, scoped commits, a feature-branch push and an open reviewed pull
 request with CI decided. Staging, merging, production deployment and automated
@@ -2108,3 +2191,22 @@ paid acquisition activation require their own selected endpoint. The generated
 on-request guide does not cancel this explicit LFG commit/push/PR authority.
 G1 implementation proceeds independently of G2–G4; the general-page launch still
 requires all four workstreams. Preserve their branches, resources and changes.
+
+
+On October 4 the owner explicitly requested “merge pr,” authorizing PR #49
+to merge into `main` after current checks. This extends the earlier PR-only
+endpoint to a verified GitHub merge. Use `[skip render]` on the merge commit
+to preserve the separately coordinated schema-release boundary; no staging,
+production migration, paid acquisition or schedule activation is selected.
+
+
+On October 4 the owner then requested “lfg to deployment,” extending delivery
+to verified production for the merged G1 scaffold and saved DeepSeek pilot.
+The accepted rollout includes staging rehearsal, a production backup, bounded
+coordination of services that read/write the people schema, code/schema deployment,
+matching/import of the saved 24 people and 35 image objects, and live verification.
+Restore participating services to their original active state after migration;
+leave previously suspended services suspended. Preserve other workstreams and
+keep paid staff search disabled. No additional brands or new research batch is
+authorized by this release. The earlier merge-only boundary is superseded for
+this bounded rollout.
