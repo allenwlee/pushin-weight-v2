@@ -264,6 +264,7 @@ def _evidence(row: PersonBrandAffiliationEvidence) -> dict[str, Any]:
 
 
 def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
+    from core.person_affiliations import is_active_claim
     candidate = row.brand_discovery_candidate
     return {
         "id": row.pk,
@@ -283,6 +284,8 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
         "organization_name": row.observed_organization_name,
         "organization_handle": row.observed_organization_handle,
         "affiliation_type": row.affiliation_type,
+        "active": is_active_claim(row),
+        "superseded_by": row.superseded_by_id,
         "status": row.status,
         "title": {
             "raw": row.title_raw,
@@ -315,7 +318,7 @@ def person_intelligence(person_id) -> dict[str, Any]:
         .prefetch_related(Prefetch("evidence", queryset=evidence))
         .order_by("brand_id", "id")
     )
-    person = Person.objects.prefetch_related(
+    person = Person.objects.select_related("primary_name", "english_name").prefetch_related(
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(
             "account_links",
@@ -324,20 +327,23 @@ def person_intelligence(person_id) -> dict[str, Any]:
             ),
         ),
     ).get(pk=person_id)
+    if person.merged_into_id:
+        from core.person_identity import canonical_person
+        return person_intelligence(canonical_person(person.merged_into_id).pk)
     all_affiliations = [_affiliation(row) for row in person.brand_affiliations.all()]
     return {
         "person": {
             "id": str(person.pk),
-            "display_name": person.display_name,
+            "display_name": person.primary_name.full_name if person.primary_name_id else person.display_name,
             "display_names": {
-                "en": person.display_name_en,
+                "en": person.english_name.full_name if person.english_name_id else person.display_name_en,
                 "zh-cn": person.display_name_zh_cn,
                 "ja": person.display_name_ja,
             },
             "date_of_birth": _effective_date(
                 person.date_of_birth, person.date_of_birth_precision
             ),
-            "sexs": person.sexs,
+            "sex": person.sex,
             "nationality": person.nationality,
             "ethnicity": person.ethnicity,
             "primary_language": person.primary_language,
@@ -354,7 +360,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
         },
         "affiliations": all_affiliations,
         "employment_history": [
-            row for row in all_affiliations if row["affiliation_type"] == "employment"
+            row
+            for row in all_affiliations
+            if row["affiliation_type"] == "employment" and row["active"]
         ],
     }
 

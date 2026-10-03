@@ -366,3 +366,12 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     # Patch that too so connections created via dbapi2 also get the collation.
     import sqlite3.dbapi2 as _dbapi2
     _dbapi2.connect = _patched_connect
+
+# G1 collection remains an independent, opt-in worker. Local media never enters Git.
+STAFF_MEDIA_ROOT = env("STAFF_MEDIA_ROOT", default=str(BASE_DIR / ".local" / "staff-media"))
+STORAGES["staff_media"] = {
+    "BACKEND": env("STAFF_MEDIA_STORAGE_BACKEND", default="django.core.files.storage.FileSystemStorage"),
+    "OPTIONS": env.json("STAFF_MEDIA_STORAGE_OPTIONS", default={"location": STAFF_MEDIA_ROOT}),
+}
+STAFF_MEDIA_DURABLE = env.bool("STAFF_MEDIA_DURABLE", default=False)
+STAFF_COLLECTION_NETWORK_ENABLED = env.bool("STAFF_COLLECTION_NETWORK_ENABLED", default=False)

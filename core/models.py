@@ -4566,11 +4566,28 @@ class Person(models.Model):
         choices=DATE_PRECISION_CHOICES,
         default="unknown",
     )
-    # The owner selected this column name explicitly.
-    sexs = models.TextField(blank=True, null=True)
+    sex = models.TextField(blank=True, null=True)
+    primary_name = models.ForeignKey(
+        "PersonName",
+        on_delete=models.SET_NULL,
+        related_name="primary_for",
+        blank=True,
+        null=True,
+    )
+    english_name = models.ForeignKey(
+        "PersonName",
+        on_delete=models.SET_NULL,
+        related_name="english_for",
+        blank=True,
+        null=True,
+    )
     nationality = models.TextField(blank=True, null=True)
     ethnicity = models.TextField(blank=True, null=True)
     primary_language = models.TextField(blank=True, null=True)
+    merged_into = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="merged_identities",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -4579,11 +4596,360 @@ class Person(models.Model):
         ordering = ["display_name", "id"]
         constraints = [
             models.CheckConstraint(
+                condition=~models.Q(merged_into=models.F("pk")),
+                name="ck_person_merge_not_self",
+            ),
+            models.CheckConstraint(
                 condition=_precision_value_condition(
                     "date_of_birth", "date_of_birth_precision"
                 ),
                 name="ck_people_dob_precision",
             ),
+        ]
+
+
+class PersonIdentityCorrection(models.Model):
+    """Append-only operator decision and the exact source rows it affected."""
+
+    request_key = models.CharField(max_length=128, unique=True)
+    kind = models.CharField(max_length=24)
+    source = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="identity_corrections_from")
+    target = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="identity_corrections_to")
+    reviewer = models.TextField()
+    reason = models.TextField()
+    request = models.JSONField(default=dict)
+    changes = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_identity_corrections"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["merge", "split", "confirm_account"]),
+                name="ck_identity_correction_kind",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reviewer="") & ~models.Q(reason="") & ~models.Q(request_key=""),
+                name="ck_identity_correction_review",
+            ),
+        ]
+
+
+class PersonName(models.Model):
+    """One spelling of a person's name; equality does not establish identity."""
+
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="names")
+    full_name = models.TextField()
+    given_name = models.TextField(blank=True, null=True)
+    family_name = models.TextField(blank=True, null=True)
+    language = models.CharField(max_length=35, default="und")
+    name_type = models.CharField(max_length=32, default="professional")
+    name_order = models.CharField(max_length=24, default="unknown")
+    origin = models.CharField(max_length=24, default="source")
+    derived_from = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="derived_names",
+        blank=True,
+        null=True,
+    )
+    review_status = models.CharField(
+        max_length=16, choices=[(value, value) for value in ("pending", "confirmed", "rejected")], default="pending"
+    )
+    review_history = models.JSONField(default=list)
+    fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "people_names"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "fingerprint"], name="uq_person_name_fingerprint"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(full_name=""), name="ck_person_name_nonempty"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_status__in=["pending", "confirmed", "rejected"]
+                ),
+                name="ck_person_name_review",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    origin__in=["source", "owner", "converted", "generated", "legacy"]
+                ),
+                name="ck_person_name_origin",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(derived_from=models.F("pk")),
+                name="ck_person_name_not_self",
+            ),
+        ]
+
+
+class PersonNameEvidence(models.Model):
+    name = models.ForeignKey(
+        PersonName, on_delete=models.CASCADE, related_name="evidence"
+    )
+    source_kind = models.CharField(max_length=40)
+    source_reference = models.TextField()
+    source_text = models.TextField(blank=True, default="")
+    supports_fields = models.JSONField(default=list)
+    observed_at = models.DateTimeField()
+    collection_method = models.CharField(max_length=64)
+    review_reason = models.TextField(blank=True, default="")
+    evidence_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_name_evidence"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "evidence_hash"], name="uq_person_name_evidence"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(source_reference=""), name="ck_person_name_source"
+            ),
+        ]
+
+
+class StaffIntake(models.Model):
+    """One immutable source observation; a source key can have several versions."""
+
+    source_key = models.CharField(max_length=512)
+    fingerprint = models.CharField(max_length=64)
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="staff_intakes",
+        null=True,
+        blank=True,
+    )
+    eligibility = models.CharField(max_length=32)
+    payload = models.JSONField(default=dict)
+    observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_intakes"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_key", "fingerprint"], name="uq_staff_intake_version"
+            )
+        ]
+
+
+class StaffCollectionWork(models.Model):
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="collection_work"
+    )
+    fingerprint = models.CharField(max_length=64)
+    policy_version = models.CharField(max_length=32, default="staff-v1")
+    state = models.CharField(max_length=24, default="queued")
+    context = models.JSONField(default=dict)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    lease_token = models.UUIDField(blank=True, null=True)
+    lease_expires_at = models.DateTimeField(blank=True, null=True)
+    error_category = models.CharField(max_length=64, blank=True, default="")
+    result = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_collection_work"
+        indexes = [
+            models.Index(fields=["state", "next_attempt_at"], name="idx_staff_work_due")
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "fingerprint", "policy_version"],
+                name="uq_staff_work_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    state__in=[
+                        "queued",
+                        "running",
+                        "retry_due",
+                        "complete",
+                        "needs_review",
+                        "needs_evidence",
+                    ]
+                ),
+                name="ck_staff_work_state",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        state="running",
+                        lease_token__isnull=False,
+                        lease_expires_at__isnull=False,
+                    )
+                    | (
+                        ~models.Q(state="running")
+                        & models.Q(
+                            lease_token__isnull=True, lease_expires_at__isnull=True
+                        )
+                    )
+                ),
+                name="ck_staff_work_lease",
+            ),
+        ]
+
+
+class StaffProviderRequest(models.Model):
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="staff_requests"
+    )
+    work = models.ForeignKey(
+        StaffCollectionWork, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    provider = models.CharField(max_length=32)
+    fingerprint = models.CharField(max_length=64)
+    run_id = models.UUIDField()
+    parameters = models.JSONField(default=dict)
+    state = models.CharField(max_length=24, default="reserved")
+    response = models.JSONField(default=dict)
+    error_category = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "staff_provider_requests"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "provider", "fingerprint"],
+                name="uq_staff_request_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(state__in=["reserved", "complete", "needs_review"]),
+                name="ck_staff_request_state",
+            ),
+        ]
+
+
+class StaffMediaObject(models.Model):
+    sha256 = models.CharField(max_length=64, primary_key=True)
+    storage_name = models.TextField()
+    media_type = models.CharField(max_length=64)
+    byte_size = models.PositiveBigIntegerField()
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_media_objects"
+
+
+class PersonMedia(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="media")
+    media = models.ForeignKey(
+        StaffMediaObject,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
+    fingerprint = models.CharField(max_length=64)
+    source_url = models.URLField(max_length=4096)
+    original_url = models.URLField(max_length=4096, blank=True, default="")
+    source_kind = models.CharField(max_length=40)
+    discovery_provider = models.CharField(max_length=64, blank=True, default="")
+    kind = models.CharField(max_length=24, default="image")
+    availability = models.CharField(max_length=24, default="unfetched")
+    source_verified = models.BooleanField(default=False)
+    individual_portrait = models.BooleanField(default=False)
+    suitability = models.CharField(max_length=24, default="pending")
+    reuse_status = models.CharField(max_length=24, default="unknown")
+    verification_reason = models.TextField(blank=True, default="")
+    evidence = models.JSONField(default=dict)
+    review_history = models.JSONField(default=list)
+    observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_media"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "fingerprint"], name="uq_person_media_attribution"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(source_verified=False) | ~models.Q(verification_reason="")
+                ),
+                name="ck_media_verification_reason",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(suitability__in=["pending", "approved", "rejected"]),
+                name="ck_media_suitability",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    reuse_status__in=["unknown", "permitted", "restricted"]
+                ),
+                name="ck_media_reuse",
+            ),
+        ]
+
+
+class PersonText(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="texts")
+    affiliation = models.ForeignKey(
+        "PersonBrandAffiliation", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="texts",
+    )
+    origin = models.CharField(max_length=24, default="source")
+    derived_from = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="derived_texts")
+    review_status = models.CharField(max_length=16, default="pending",
+                                    choices=[(value, value) for value in ("pending", "confirmed", "rejected")])
+    review_note = models.TextField(blank=True, default="")
+    kind = models.CharField(max_length=32)
+    language = models.CharField(max_length=35)
+    text = models.TextField()
+    source_reference = models.TextField()
+    version_hash = models.CharField(max_length=64)
+    observed_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_texts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "affiliation", "kind", "source_reference", "version_hash"],
+                name="uq_person_text_version",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(condition=models.Q(origin__in=["source", "translation", "summary", "unknown"]),
+                                   name="ck_person_text_origin"),
+            models.CheckConstraint(condition=models.Q(review_status__in=["pending", "confirmed", "rejected"]),
+                                   name="ck_person_text_review"),
+            models.CheckConstraint(condition=~models.Q(kind="title") | models.Q(affiliation__isnull=False),
+                                   name="ck_person_title_affiliation"),
+        ]
+
+
+class PersonTextTranslation(models.Model):
+    original = models.ForeignKey(
+        PersonText, on_delete=models.CASCADE, related_name="translations"
+    )
+    language = models.CharField(max_length=35)
+    text = models.TextField()
+    provider = models.CharField(max_length=64)
+    model = models.CharField(max_length=128)
+    prompt_version = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "people_text_translations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["original", "language", "provider", "model", "prompt_version"],
+                name="uq_person_text_translation",
+            )
         ]
 
 
@@ -4852,6 +5218,13 @@ class PersonBrandAffiliation(models.Model):
     source_system = models.CharField(max_length=64, blank=True, null=True)
     external_id = models.TextField(blank=True, null=True)
     claim_identity = models.CharField(max_length=64, unique=True)
+    superseded_by = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="replaced_claims",
+    )
+    superseded_at = models.DateTimeField(null=True, blank=True)
+    superseded_by_reviewer = models.TextField(blank=True, default="")
+    supersession_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

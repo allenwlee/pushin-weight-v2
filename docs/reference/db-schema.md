@@ -1,10 +1,10 @@
 # Database schema reference
 
-Last verified: 2026-10-01 11:33:12 JST
+Last verified: 2026-10-02 23:45:20 JST
 
-Scope: **111 application tables**, **1,412 physical columns**, plus one
-compatibility view. Source revision: `fb592ab79669c70efa815183ba907195219e4f4e`; migration graph through
-`0058_postenrichmentstate_translation_diagnostics`.
+Scope: **121 application tables**, **1,537 physical columns**, plus one
+compatibility view. Source: `feat/g1-staff-identity-library`; migration graph through
+`0064_affiliation_text_provenance`.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -12,7 +12,7 @@ to jump directly to any table. Every inventory entry has a full column reference
 
 The schema is defined by [core/models.py](../../core/models.py) and the
 [ordered Django migrations](../../core/migrations/). This snapshot describes
-that repository schema, checked without connecting to a database; it does not
+that repository schema, checked against Django models, migration state and an isolated PostgreSQL database; it does not
 assert that a particular deployment has applied every migration. Django’s own
 authentication, session, content-type, and migration-ledger tables are outside
 this **application-table** count. `DiscoveryRunBase` is an abstract model, not
@@ -23,7 +23,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 
 | Subject | Tables | Start here when you need… |
 | --- | ---: | --- |
-| [People and job history](#people) | 6 | A person, their optional X identity, roles, employment dates, and evidence. |
+| [People and job history](#people) | 13 | A person, their optional X identity, roles, employment dates, and evidence. |
 | [Companies, brands, and organization discovery](#organizations) | 11 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
 | [X accounts, profiles, and lists](#accounts) | 5 | X profiles, observed profile history, list membership, and post appearances. |
 | [Countries and regions](#geography) | 6 | Country/region names and interpretation of account geography. |
@@ -34,7 +34,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Trend headlines and publication](#headlines) | 9 | Prepared headline text, publication pointers, work requests, and provider costs. |
-| [Collection, extraction, and processing records](#processing) | 13 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
+| [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 
 For staff records, begin with **[People and job history](#people)**. A person can
 exist without an X account. Their employer/brand relationships and supporting
@@ -120,20 +120,20 @@ of a confirmed identity. Do not count evidence rows as distinct people/jobs.
 Several observations can support one record, and different claims can still
 need reconciliation.
 
-Localized names exist on `people`, `brands`, and `companies`. People and their
-affiliations do **not** currently have dedicated biography translations,
-person-level photo/video storage, or affiliation/evidence `source_language`
-columns. Job listings have source text, `source_language`, and `raw_payload`,
-but no EN/JA translation tables. The translation artifacts below belong to
-**posts**. A future collection plan does not change this schema until its
-models and migrations exist.
+People select primary and English names from `people_names`; the four legacy
+name fields remain for compatibility. `people_name_evidence` stores the sources.
+Original professional prose and EN/JA translations live in `people_texts` and
+`people_text_translations`. Media bytes and person/source attribution have their
+own tables. Affiliation title/location originals and supporting evidence remain
+in the existing job-history records; no company-headquarters location is inferred
+for staff. Job listings retain their own source text and language fields.
 
 <a id="table-inventory"></a>
 
 ## Alphabetical table inventory
 
-Each of the 111 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 111.
+Each of the 121 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 121.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -189,6 +189,12 @@ the detailed sections. Subject counts above sum to 111.
 | [people_accounts](#table-people_accounts) | [People and job history](#people) | One proposed or reviewed link between a person and an X account. |
 | [people_brand_affiliation_evidence](#table-people_brand_affiliation_evidence) | [People and job history](#people) | One source observation supporting an affiliation claim. |
 | [people_brand_affiliations](#table-people_brand_affiliations) | [People and job history](#people) | One claim about a person’s role or relationship with an organization. |
+| [people_identity_corrections](#table-people_identity_corrections) | [People and job history](#people) | One append-only reviewed account confirmation, identity merge or selective split. |
+| [people_media](#table-people_media) | [People and job history](#people) | One person-specific attribution of an image or video reference to a source. |
+| [people_name_evidence](#table-people_name_evidence) | [People and job history](#people) | One observation supporting a name or explicitly supported name components. |
+| [people_names](#table-people_names) | [People and job history](#people) | One sourced spelling of a person’s full name, with optional evidenced components. |
+| [people_text_translations](#table-people_text_translations) | [People and job history](#people) | One cached translation of a specific original prose version and provider configuration. |
+| [people_texts](#table-people_texts) | [People and job history](#people) | One immutable version of original biography, role, location or job-description prose. |
 | [personnel_discovery_runs](#table-personnel_discovery_runs) | [People and job history](#people) | One personnel-search query/window run, including coverage, cost, and extraction counts. |
 | [post_enrichment_states](#table-post_enrichment_states) | [Post translation and commentary](#translation) | One post’s replayable translation/classification progress and diagnostics. |
 | [post_synthesis_artifacts](#table-post_synthesis_artifacts) | [Post translation and commentary](#translation) | One versioned commentary artifact for a post and its context. |
@@ -233,6 +239,10 @@ the detailed sections. Subject counts above sum to 111.
 | [search_queries](#table-search_queries) | [Collection, extraction, and processing records](#processing) | One saved collection/discovery query identity and associated brand/keywords. |
 | [sentiment_keys](#table-sentiment_keys) | [Classification vocabularies and translated labels](#vocabularies) | One sentiment vocabulary key. |
 | [sentiment_labels](#table-sentiment_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated sentiment label. |
+| [staff_collection_work](#table-staff_collection_work) | [Collection, extraction, and processing records](#processing) | One person/source-fingerprint/policy unit of resumable collection work. |
+| [staff_intakes](#table-staff_intakes) | [Collection, extraction, and processing records](#processing) | One versioned staff-source observation, including eligibility and its input payload. |
+| [staff_media_objects](#table-staff_media_objects) | [People and job history](#people) | One validated image file, addressed by its SHA-256 content hash. |
+| [staff_provider_requests](#table-staff_provider_requests) | [Collection, extraction, and processing records](#processing) | One reserved provider request, its outcome and safe response evidence. |
 | [targeted_extraction_attempts](#table-targeted_extraction_attempts) | [Collection, extraction, and processing records](#processing) | One recorded attempt to extract a role-specific fact from a post. |
 | [targeted_extraction_states](#table-targeted_extraction_states) | [Collection, extraction, and processing records](#processing) | One post/role extraction state, used to avoid repeating the same work. |
 | [trend_narrative_demands](#table-trend_narrative_demands) | [Trend headlines and publication](#headlines) | One coalesced brand/window headline request and its scheduling state. |
@@ -274,11 +284,15 @@ not employment. The current [person reader](../../core/intelligence_readers.py)
 returns all affiliations, but its `employment_history` subset includes only
 `affiliation_type='employment'`.
 
-Current person identity has 13 columns. `sexs` is the literal implemented name;
-there is no `sex` column or given/family-name split in this snapshot. Full names
-need not be unique. See [the extraction path](../../core/targeted_extraction.py)
-and [profile observations](../../core/profile_snapshots.py) for identity creation
-and evidence handling.
+Current person identity has 16 columns, including `sex` and two selected name
+links. Full names and optional given/family components belong to `people_names`.
+Primary selects a sourced professional/original representation; English selects
+an established English representation. Both must belong to this person and be
+confirmed. The reader falls back to legacy full-name fields when no selection
+exists; a fallback does not establish source verification. Its version-2 read
+contract exposes `sex`. See [the extraction path](../../core/targeted_extraction.py)
+and [profile observations](../../core/profile_snapshots.py) for identity creation.
+
 
 
 <a id="table-people"></a>
@@ -294,16 +308,19 @@ Model: [Person](../../core/models.py#L4557).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK. Default: `uuid.uuid4()`. |
-| `display_name` | `text` | No | Primary full display name; not unique. |
+| `display_name` | `text` | No | Legacy full display name and fallback; not unique. |
 | `display_name_en` | `text` | Yes | English or romanized full name. |
 | `display_name_zh_cn` | `text` | Yes | Simplified Chinese full name. |
 | `display_name_ja` | `text` | Yes | Japanese full name. |
 | `date_of_birth` | `varchar(10)` | Yes | Source-supported date at the paired precision; not necessarily a full date. |
 | `date_of_birth_precision` | `varchar(16)` | No | Default: `'unknown'`. Choices: `day`, `month`, `year`, `unknown`. |
-| `sexs` | `text` | Yes | Sex value; exact current column spelling. |
+| `sex` | `text` | Yes | Source-supported sex value. |
+| `primary_name_id` | `bigint` | Yes | FK → [people_names](#table-people_names); Django SET_NULL. Confirmed name belonging to this person. |
+| `english_name_id` | `bigint` | Yes | FK → [people_names](#table-people_names); Django SET_NULL. Confirmed English name belonging to this person. |
 | `nationality` | `text` | Yes | — |
 | `ethnicity` | `text` | Yes | — |
 | `primary_language` | `text` | Yes | — |
+| `merged_into_id` | `uuid` | Yes | Retired identity redirects to [people](#table-people); Django PROTECT. Original ID remains addressable. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. |
 
@@ -312,6 +329,8 @@ Model: [Person](../../core/models.py#L4557).
 None beyond primary-key, unique-field, and automatic field/FK indexes described above.
 
 **Named constraints:**
+
+- `ck_person_merge_not_self`: a person cannot redirect to itself. The correction service flattens redirects and rejects retired destinations.
 
 - `ck_people_dob_precision`: Check: `(("date_of_birth" IS NULL AND "date_of_birth_precision" = 'unknown') OR ("date_of_birth"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND "date_of_birth_precision" = 'day') OR ("date_of_birth"::text ~ '^[0-9]{4}-[0-9]{2}$' AND "date_of_birth_precision" = 'month') OR ("date_of_birth"::text ~ '^[0-9]{4}$' AND "date_of_birth_precision" = 'year'))`.
 
@@ -323,7 +342,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One proposed or reviewed link between a person and an X account.
 
-Model: [PersonAccount](../../core/models.py#L4590).
+Model: [PersonAccount](../../core/models.py#L4904).
 
 **Primary key:** `person_id`, `author_id` (composite; no separate `pk` column).
 
@@ -359,7 +378,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One claim about a person’s role or relationship with an organization.
 
-Model: [PersonBrandAffiliation](../../core/models.py#L4776).
+Model: [PersonBrandAffiliation](../../core/models.py#L5090).
 
 **Primary key:** `id`.
 
@@ -394,6 +413,10 @@ Model: [PersonBrandAffiliation](../../core/models.py#L4776).
 | `source_system` | `varchar(64)` | Yes | — |
 | `external_id` | `text` | Yes | — |
 | `claim_identity` | `varchar(64)` | No | Unique. Stable identity for this claim; uniqueness is not a person-matching algorithm. |
+| `superseded_by_id` | `bigint` | Yes | Reviewed replacement claim in this table; Django PROTECT. Distinct from current/former job status. |
+| `superseded_at` | `timestamp with time zone` | Yes | When the replacement decision was recorded. |
+| `superseded_by_reviewer` | `text` | No | Reviewer; default empty before replacement. |
+| `supersession_reason` | `text` | No | Decision reason; default empty before replacement. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. |
 
@@ -413,6 +436,8 @@ Model: [PersonBrandAffiliation](../../core/models.py#L4776).
 - `ck_pba_end_precision`: Check: `(("end_date" IS NULL AND "end_date_precision" = 'unknown') OR ("end_date"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND "end_date_precision" = 'day') OR ("end_date"::text ~ '^[0-9]{4}-[0-9]{2}$' AND "end_date_precision" = 'month') OR ("end_date"::text ~ '^[0-9]{4}$' AND "end_date_precision" = 'year'))`.
 - `ck_pba_comparable_dates`: Check: `("start_date" IS NULL OR "end_date" IS NULL OR NOT ("start_date_precision" = ("end_date_precision")) OR "start_date" <= ("end_date"))`.
 
+Migration 0063 enforces same-person/organization replacement, complete review metadata and acyclic chains. Recorded replacement decisions cannot be rewritten. Readers use `active_claims`; latest observation time alone never settles competing claims.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-people_brand_affiliation_evidence"></a>
@@ -421,7 +446,7 @@ Model: [PersonBrandAffiliation](../../core/models.py#L4776).
 
 One source observation supporting an affiliation claim.
 
-Model: [PersonBrandAffiliationEvidence](../../core/models.py#L4944).
+Model: [PersonBrandAffiliationEvidence](../../core/models.py#L5258).
 
 **Primary key:** `id`.
 
@@ -465,7 +490,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One observed profile change queued for personnel-movement interpretation.
 
-Model: [ProfileMovementCandidate](../../core/models.py#L4723).
+Model: [ProfileMovementCandidate](../../core/models.py#L5037).
 
 **Primary key:** `id`.
 
@@ -506,7 +531,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One personnel-search query/window run, including coverage, cost, and extraction counts.
 
-Model: [PersonnelDiscoveryRun](../../core/models.py#L5652).
+Model: [PersonnelDiscoveryRun](../../core/models.py#L5966).
 
 **Primary key:** `id`.
 
@@ -558,6 +583,279 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 [Back to table inventory](#table-inventory)
 
+
+<a id="table-people_names"></a>
+
+### `people_names` — PersonName
+
+One sourced spelling of a person’s full name, with optional evidenced components.
+
+Original names stay authoritative. Language/script and origin are independent of the selected display locale. Generated or converted origins remain unchanged after corroboration. Names never identify or merge people. PostgreSQL triggers reject cross-person derivations and edits that would erase an original representation.
+
+Model: [PersonName](../../core/models.py#L4603).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `person_id` | `uuid` | No | FK → [people](#table-people); Django CASCADE. |
+| `full_name` | `text` | No | — |
+| `given_name` | `text` | Yes | — |
+| `family_name` | `text` | Yes | — |
+| `language` | `varchar(35)` | No | Default: `'und'`. |
+| `name_type` | `varchar(32)` | No | Default: `'professional'`. |
+| `name_order` | `varchar(24)` | No | Default: `'unknown'`. |
+| `origin` | `varchar(24)` | No | Default: `'source'`. |
+| `derived_from_id` | `bigint` | Yes | FK → [people_names](#table-people_names); Django PROTECT. |
+| `review_status` | `varchar(16)` | No | Default: `'pending'`. Choices: `pending`, `confirmed`, `rejected`. |
+| `review_history` | `jsonb` | No | Default: `list()`. |
+| `fingerprint` | `varchar(64)` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `updated_at` | `timestamp with time zone` | No | Set by Django on model save. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_person_name_fingerprint`: `CONSTRAINT "uq_person_name_fingerprint" UNIQUE ("person_id", "fingerprint")`.
+- `ck_person_name_nonempty`: `CONSTRAINT "ck_person_name_nonempty" CHECK (NOT ("full_name" = ''))`.
+- `ck_person_name_review`: `CONSTRAINT "ck_person_name_review" CHECK ("review_status" IN ('pending', 'confirmed', 'rejected'))`.
+- `ck_person_name_origin`: `CONSTRAINT "ck_person_name_origin" CHECK ("origin" IN ('source', 'owner', 'converted', 'generated', 'legacy'))`.
+- `ck_person_name_not_self`: `CONSTRAINT "ck_person_name_not_self" CHECK (NOT ("derived_from_id" = ("id") AND "derived_from_id" IS NOT NULL))`.
+
+Migration 0060 installs `g1_person_name_guard` on this table and `g1_person_name_selection` on `people`. These PostgreSQL triggers enforce same-person derivation/selection, confirmed selections, immutable original representations, and clearing selections before rejecting a name.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-people_name_evidence"></a>
+
+### `people_name_evidence` — PersonNameEvidence
+
+One observation supporting a name or explicitly supported name components.
+
+Several observations can corroborate the same representation. Source excerpts, observation time, collection method and review reason remain separate from the name’s review status. Legacy backfills explicitly record unknown provenance.
+
+Model: [PersonNameEvidence](../../core/models.py#L4657).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `name_id` | `bigint` | No | FK → [people_names](#table-people_names); Django CASCADE. |
+| `source_kind` | `varchar(40)` | No | — |
+| `source_reference` | `text` | No | — |
+| `source_text` | `text` | No | Default: `''`. |
+| `supports_fields` | `jsonb` | No | Default: `list()`. |
+| `observed_at` | `timestamp with time zone` | No | — |
+| `collection_method` | `varchar(64)` | No | — |
+| `review_reason` | `text` | No | Default: `''`. |
+| `evidence_hash` | `varchar(64)` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_person_name_evidence`: `CONSTRAINT "uq_person_name_evidence" UNIQUE ("name_id", "evidence_hash")`.
+- `ck_person_name_source`: `CONSTRAINT "ck_person_name_source" CHECK (NOT ("source_reference" = ''))`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-people_texts"></a>
+
+### `people_texts` — PersonText
+
+One immutable source version of biography, role, title, location or job-description prose, with separately reviewed attribution.
+
+The version hash covers language and exact text, plus origin/derivation for translated or other derived representations. New source wording creates a new version; prior originals and translations remain available. Person names use the name tables instead.
+
+Model: [PersonText](../../core/models.py#L4863).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `person_id` | `uuid` | No | FK → [people](#table-people); Django CASCADE. |
+| `affiliation_id` | `bigint` | Yes | [Job claim](#table-people_brand_affiliations); required for titles. Django PROTECT. |
+| `origin` | `varchar(24)` | No | Default source; source, translation, summary or unknown. |
+| `derived_from_id` | `bigint` | Yes | Exact parent text in this table; Django PROTECT. |
+| `review_status` | `varchar(16)` | No | Default pending; pending, confirmed or rejected. |
+| `review_note` | `text` | No | Source audit or review explanation; default empty. |
+| `kind` | `varchar(32)` | No | — |
+| `language` | `varchar(35)` | No | — |
+| `text` | `text` | No | — |
+| `source_reference` | `text` | No | — |
+| `version_hash` | `varchar(64)` | No | — |
+| `observed_at` | `timestamp with time zone` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_person_text_version`: `CONSTRAINT "uq_person_text_version" UNIQUE NULLS NOT DISTINCT ("person_id", "affiliation_id", "kind", "source_reference", "version_hash")`.
+
+- `ck_person_text_origin` and `ck_person_text_review` enforce the values above.
+- `ck_person_title_affiliation` requires an affiliation for each title.
+
+Migration 0064 prevents changing captured wording, language, source, version, origin, derivation or affiliation. New wording creates a new row. Deferred database guards enforce the same person for text and job, matching person/affiliation for derived text and acyclic derivation. Identity corrections can move complete dependencies together.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-people_text_translations"></a>
+
+### `people_text_translations` — PersonTextTranslation
+
+One cached translation of a specific original prose version and provider configuration.
+
+English/Japanese display text stays linked to the exact original. Missing or failed translation does not replace the source or prevent staff intake. Translation runs explicitly outside source transactions.
+
+Model: [PersonTextTranslation](../../core/models.py#L4883).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `original_id` | `bigint` | No | FK → [people_texts](#table-people_texts); Django CASCADE. |
+| `language` | `varchar(35)` | No | — |
+| `text` | `text` | No | — |
+| `provider` | `varchar(64)` | No | — |
+| `model` | `varchar(128)` | No | — |
+| `prompt_version` | `varchar(64)` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_person_text_translation`: `CONSTRAINT "uq_person_text_translation" UNIQUE ("original_id", "language", "provider", "model", "prompt_version")`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-people_identity_corrections"></a>
+
+### `people_identity_corrections` — PersonIdentityCorrection
+
+One operator's reviewed account confirmation, merge or selective split. This is
+an audit record, not another identity or evidence source. Original names, intake
+payloads and provider histories retain their source meanings.
+
+Model: [PersonIdentityCorrection](../../core/models.py).
+Writer: [correct_identity](../../core/person_identity_corrections.py).
+
+**Primary key:** `id`. **Named indexes:** automatic primary-key, unique request-key and foreign-key indexes only.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Database-generated identity. |
+| `request_key` | `varchar(128)` | No | Unique operator request; reuse requires exactly the same request. |
+| `kind` | `varchar(24)` | No | merge, split or confirm_account. |
+| `source_id` | `uuid` | No | Original [person](#table-people); Django PROTECT. |
+| `target_id` | `uuid` | No | Destination [person](#table-people); Django PROTECT. |
+| `reviewer` | `text` | No | Operator identity. |
+| `reason` | `text` | No | Explanation of the reviewed correction. |
+| `request` | `jsonb` | No | Exact requested operation and selected row IDs; default dict. |
+| `changes` | `jsonb` | No | Source snapshots, mappings and resulting identity/account state; default dict. |
+| `created_at` | `timestamp with time zone` | No | Django creation timestamp. |
+
+**Named constraints:** `ck_identity_correction_kind` allows the three operations;
+`ck_identity_correction_review` requires nonempty reviewer, reason and request key.
+Migration 0062's `protect_identity_correction` trigger rejects UPDATE and DELETE.
+The Python service validates selected dependencies, serializes against worker
+claims, refuses running workers and records the correction atomically.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-people_media"></a>
+
+### `people_media` — PersonMedia
+
+One person-specific attribution of an image or video reference to a source.
+
+Multiple publisher attributions may point to identical media bytes. Source verification, individual-portrait suitability, availability and permission for reuse remain separate. An X avatar may be a logo; downloading it does not make it a verified portrait. Video-page references can exist without downloadable video bytes.
+
+Model: [PersonMedia](../../core/models.py#L4812).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `person_id` | `uuid` | No | FK → [people](#table-people); Django CASCADE. |
+| `media_id` | `varchar(64)` | Yes | FK → [staff_media_objects](#table-staff_media_objects); Django PROTECT. |
+| `fingerprint` | `varchar(64)` | No | — |
+| `source_url` | `varchar(4096)` | No | — |
+| `original_url` | `varchar(4096)` | No | Default: `''`. |
+| `source_kind` | `varchar(40)` | No | — |
+| `discovery_provider` | `varchar(64)` | No | Default: `''`. |
+| `kind` | `varchar(24)` | No | Default: `'image'`. |
+| `availability` | `varchar(24)` | No | Default: `'unfetched'`. |
+| `source_verified` | `boolean` | No | Default: `False`. |
+| `individual_portrait` | `boolean` | No | Default: `False`. |
+| `suitability` | `varchar(24)` | No | Default: `'pending'`. |
+| `reuse_status` | `varchar(24)` | No | Default: `'unknown'`. |
+| `verification_reason` | `text` | No | Default: `''`. |
+| `evidence` | `jsonb` | No | Default: `dict()`. |
+| `review_history` | `jsonb` | No | Default: `list()`. |
+| `observed_at` | `timestamp with time zone` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_person_media_attribution`: `CONSTRAINT "uq_person_media_attribution" UNIQUE ("person_id", "fingerprint")`.
+- `ck_media_verification_reason`: `CONSTRAINT "ck_media_verification_reason" CHECK ((NOT "source_verified" OR NOT ("verification_reason" = '')))`.
+- `ck_media_suitability`: `CONSTRAINT "ck_media_suitability" CHECK ("suitability" IN ('pending', 'approved', 'rejected'))`.
+- `ck_media_reuse`: `CONSTRAINT "ck_media_reuse" CHECK ("reuse_status" IN ('unknown', 'permitted', 'restricted'))`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-staff_media_objects"></a>
+
+### `staff_media_objects` — StaffMediaObject
+
+One validated image file, addressed by its SHA-256 content hash.
+
+Bytes live in the configured staff_media Django storage, outside PostgreSQL and Git. Records retain dimensions, type and byte size. File decoding and bounded public-network checks run before publication in a dossier.
+
+Model: [StaffMediaObject](../../core/models.py#L4799).
+
+**Primary key:** `sha256`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `sha256` | `varchar(64)` | No | PK. |
+| `storage_name` | `text` | No | — |
+| `media_type` | `varchar(64)` | No | — |
+| `byte_size` | `bigint` | No | — |
+| `width` | `integer` | Yes | — |
+| `height` | `integer` | Yes | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+None beyond field-level database rules.
+
+[Back to table inventory](#table-inventory)
 
 <a id="organizations"></a>
 
@@ -723,7 +1021,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One unresolved organization identity awaiting review against known brands.
 
-Model: [BrandDiscoveryCandidate](../../core/models.py#L5016).
+Model: [BrandDiscoveryCandidate](../../core/models.py#L5330).
 
 **Primary key:** `id`.
 
@@ -767,7 +1065,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One exact observed spelling or handle for an unresolved organization.
 
-Model: [BrandDiscoveryCandidateToken](../../core/models.py#L5086).
+Model: [BrandDiscoveryCandidateToken](../../core/models.py#L5400).
 
 **Primary key:** `id`.
 
@@ -802,7 +1100,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One source observation supporting an organization token.
 
-Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L5131).
+Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L5445).
 
 **Primary key:** `id`.
 
@@ -1025,7 +1323,7 @@ The country FK is explicitly named `fk_accounts_country_code` in
 
 One consecutive observation period during which an account’s saved profile hash is unchanged.
 
-Model: [AccountProfileSnapshot](../../core/models.py#L4655).
+Model: [AccountProfileSnapshot](../../core/models.py#L4969).
 
 **Primary key:** `id`.
 
@@ -2647,7 +2945,7 @@ Model: [ProductVerificationProposal](../../core/models.py#L2894).
 
 One source-backed model-release occurrence and its stated date precision.
 
-Model: [ModelRelease](../../core/models.py#L6093).
+Model: [ModelRelease](../../core/models.py#L6407).
 
 **Primary key:** `id`.
 
@@ -2687,7 +2985,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One observed source claim supporting a model release.
 
-Model: [ModelReleaseEvidence](../../core/models.py#L6147).
+Model: [ModelReleaseEvidence](../../core/models.py#L6461).
 
 **Primary key:** `id`.
 
@@ -2845,7 +3143,7 @@ and [official jobs runbook](../deploy/render.md#official-ai-lab-jobs-sync).
 
 One advertised position/requisition, including its source identity and current saved details.
 
-Model: [JobListing](../../core/models.py#L5209).
+Model: [JobListing](../../core/models.py#L5523).
 
 **Primary key:** `id`.
 
@@ -2935,7 +3233,7 @@ Model: [JobListing](../../core/models.py#L5209).
 
 One source observation supporting a job listing.
 
-Model: [JobListingEvidence](../../core/models.py#L5490).
+Model: [JobListingEvidence](../../core/models.py#L5804).
 
 **Primary key:** `id`.
 
@@ -2981,7 +3279,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One attempt to synchronize an official career-site source.
 
-Model: [JobSourceSyncRun](../../core/models.py#L5407).
+Model: [JobSourceSyncRun](../../core/models.py#L5721).
 
 **Primary key:** `id`.
 
@@ -3019,7 +3317,7 @@ Model: [JobSourceSyncRun](../../core/models.py#L5407).
 
 One career-site source’s active lease and last successful synchronization state.
 
-Model: [JobSourceState](../../core/models.py#L5451).
+Model: [JobSourceState](../../core/models.py#L5765).
 
 **Primary key:** `source_key`.
 
@@ -3050,7 +3348,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One job-search query/window run, including coverage, cost, and extracted listing count.
 
-Model: [JobDiscoveryRun](../../core/models.py#L5630).
+Model: [JobDiscoveryRun](../../core/models.py#L5944).
 
 **Primary key:** `id`.
 
@@ -3126,7 +3424,7 @@ where shown. See [rare-type readers and extraction](rare-types.md).
 
 One attendance-bearing occurrence, such as a conference or meetup.
 
-Model: [Event](../../core/models.py#L5675).
+Model: [Event](../../core/models.py#L5989).
 
 **Primary key:** `id`.
 
@@ -3190,7 +3488,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One source observation supporting an event occurrence.
 
-Model: [EventEvidence](../../core/models.py#L5841).
+Model: [EventEvidence](../../core/models.py#L6155).
 
 **Primary key:** `id`.
 
@@ -3232,7 +3530,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One bounded offer in which an action can provide a benefit, optionally linked to an event.
 
-Model: [Opportunity](../../core/models.py#L5909).
+Model: [Opportunity](../../core/models.py#L6223).
 
 **Primary key:** `id`.
 
@@ -4286,7 +4584,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post/role extraction state, used to avoid repeating the same work.
 
-Model: [TargetedExtractionState](../../core/models.py#L6212).
+Model: [TargetedExtractionState](../../core/models.py#L6526).
 
 **Primary key:** `id`.
 
@@ -4325,7 +4623,7 @@ Model: [TargetedExtractionState](../../core/models.py#L6212).
 
 One recorded attempt to extract a role-specific fact from a post.
 
-Model: [TargetedExtractionAttempt](../../core/models.py#L6269).
+Model: [TargetedExtractionAttempt](../../core/models.py#L6583).
 
 **Primary key:** `id`.
 
@@ -4359,7 +4657,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One source-backed rare-category assignment for a post and organization.
 
-Model: [RareTypeCategoryAssignment](../../core/models.py#L6169).
+Model: [RareTypeCategoryAssignment](../../core/models.py#L6483).
 
 **Primary key:** `id`.
 
@@ -4392,7 +4690,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One search lane’s budget accounting for a UTC day.
 
-Model: [RareTypeSearchDailyBudget](../../core/models.py#L6307).
+Model: [RareTypeSearchDailyBudget](../../core/models.py#L6621).
 
 **Primary key:** `id`.
 
@@ -4428,7 +4726,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One paid rare-type search time slot and its coverage/cost record.
 
-Model: [RareTypeSearchRun](../../core/models.py#L6347).
+Model: [RareTypeSearchRun](../../core/models.py#L6661).
 
 **Primary key:** `id`.
 
@@ -4501,7 +4799,7 @@ Model: [RareTypeSearchRun](../../core/models.py#L6347).
 
 One durable inbox result from an already-paid rare-type search.
 
-Model: [RareTypeSearchHit](../../core/models.py#L6801).
+Model: [RareTypeSearchHit](../../core/models.py#L7115).
 
 **Primary key:** `id`.
 
@@ -4553,7 +4851,7 @@ Model: [RareTypeSearchHit](../../core/models.py#L6801).
 
 One reusable, versioned relevance interpretation of a provider result.
 
-Model: [RareTypeDecision](../../core/models.py#L6597).
+Model: [RareTypeDecision](../../core/models.py#L6911).
 
 **Primary key:** `id`.
 
@@ -4607,7 +4905,7 @@ Model: [RareTypeDecision](../../core/models.py#L6597).
 
 One processing time slot that funds relevance-decision attempts.
 
-Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L6532).
+Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L6846).
 
 **Primary key:** `id`.
 
@@ -4652,7 +4950,7 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 One funded provider attempt for a relevance decision, with one settlement record.
 
-Model: [RareTypeDecisionAttempt](../../core/models.py#L6716).
+Model: [RareTypeDecisionAttempt](../../core/models.py#L7030).
 
 **Primary key:** `id`.
 
@@ -4692,20 +4990,133 @@ None beyond primary-key, unique-field, and automatic field/FK indexes described 
 
 [Back to table inventory](#table-inventory)
 
+<a id="table-staff_intakes"></a>
+
+### `staff_intakes` — StaffIntake
+
+One versioned staff-source observation, including eligibility and its input payload.
+
+Stable source keys and existing person/account IDs support repeat imports. Excluded contributor-only observations have no person. Names alone never authorize a merge. Payloads retain the original dossier or source evidence; these are private operator records.
+
+Model: [StaffIntake](../../core/models.py#L4683).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `source_key` | `varchar(512)` | No | — |
+| `fingerprint` | `varchar(64)` | No | — |
+| `person_id` | `uuid` | Yes | FK → [people](#table-people); Django PROTECT. |
+| `eligibility` | `varchar(32)` | No | — |
+| `payload` | `jsonb` | No | Default: `dict()`. |
+| `observed_at` | `timestamp with time zone` | No | — |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_staff_intake_version`: `CONSTRAINT "uq_staff_intake_version" UNIQUE ("source_key", "fingerprint")`.
+
+Migration 0064 prevents updates to the source key, fingerprint, payload and capture timestamps. Reviewed eligibility and person association can change. `needs_review` retains unresolved identity observations without creating collection work.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-staff_collection_work"></a>
+
+### `staff_collection_work` — StaffCollectionWork
+
+One person/source-fingerprint/policy unit of resumable collection work.
+
+Source writers register work after commit; periodic catch-up covers bulk writes. A shared PostgreSQL advisory lock enforces one active worker lease. Expired leases can resume; interrupted paid requests require review. Stale workers cannot publish collection outcomes.
+
+Model: [StaffCollectionWork](../../core/models.py#L4709).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `person_id` | `uuid` | No | FK → [people](#table-people); Django CASCADE. |
+| `fingerprint` | `varchar(64)` | No | — |
+| `policy_version` | `varchar(32)` | No | Default: `'staff-v1'`. |
+| `state` | `varchar(24)` | No | Default: `'queued'`. |
+| `context` | `jsonb` | No | Default: `dict()`. |
+| `attempts` | `integer` | No | Default: `0`. |
+| `next_attempt_at` | `timestamp with time zone` | No | Default: `now()`. |
+| `lease_token` | `uuid` | Yes | — |
+| `lease_expires_at` | `timestamp with time zone` | Yes | — |
+| `error_category` | `varchar(64)` | No | Default: `''`. |
+| `result` | `jsonb` | No | Default: `dict()`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `updated_at` | `timestamp with time zone` | No | Set by Django on model save. |
+
+**Named indexes:**
+
+- `idx_staff_work_due`: `state`, `next_attempt_at`.
+
+**Named constraints:**
+
+- `uq_staff_work_identity`: `CONSTRAINT "uq_staff_work_identity" UNIQUE ("person_id", "fingerprint", "policy_version")`.
+- `ck_staff_work_state`: `CONSTRAINT "ck_staff_work_state" CHECK ("state" IN ('queued', 'running', 'retry_due', 'complete', 'needs_review', 'needs_evidence'))`.
+- `ck_staff_work_lease`: `CONSTRAINT "ck_staff_work_lease" CHECK ((("lease_expires_at" IS NOT NULL AND "lease_token" IS NOT NULL AND "state" = 'running') OR (NOT ("state" = 'running') AND "lease_expires_at" IS NULL AND "lease_token" IS NULL)))`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-staff_provider_requests"></a>
+
+### `staff_provider_requests` — StaffProviderRequest
+
+One reserved provider request, its outcome and safe response evidence.
+
+Reservations commit before HTTP. They count toward lifetime per-person, per-run and UTC-day caps, including failures. Completed identical queries are reused; uncertain requests are held for review. Explicit operator retry authorization retains the original reservation and records a new query identity.
+
+Model: [StaffProviderRequest](../../core/models.py#L4768).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK. |
+| `person_id` | `uuid` | No | FK → [people](#table-people); Django CASCADE. |
+| `work_id` | `bigint` | Yes | FK → [staff_collection_work](#table-staff_collection_work); Django SET_NULL. |
+| `provider` | `varchar(32)` | No | — |
+| `fingerprint` | `varchar(64)` | No | — |
+| `run_id` | `uuid` | No | — |
+| `parameters` | `jsonb` | No | Default: `dict()`. |
+| `state` | `varchar(24)` | No | Default: `'reserved'`. |
+| `response` | `jsonb` | No | Default: `dict()`. |
+| `error_category` | `varchar(64)` | No | Default: `''`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `completed_at` | `timestamp with time zone` | Yes | — |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field, and automatic field/FK indexes described above.
+
+**Named constraints:**
+
+- `uq_staff_request_identity`: `CONSTRAINT "uq_staff_request_identity" UNIQUE ("person_id", "provider", "fingerprint")`.
+- `ck_staff_request_state`: `CONSTRAINT "ck_staff_request_state" CHECK ("state" IN ('reserved', 'complete', 'needs_review'))`.
+
+[Back to table inventory](#table-inventory)
+
 ## Compatibility view and schema boundary
 
-`trend_narrative_versions` is a PostgreSQL **view**, not a 112th application
-table or a Django model. [Migration 0014](../../core/migrations/0014_expand_trend_narrative.py)
+`trend_narrative_versions` is a PostgreSQL **view**, outside the application-table count, with no Django model. [Migration 0014](../../core/migrations/0014_expand_trend_narrative.py)
 creates it with `SELECT * FROM trend_narratives`. PostgreSQL fixes that view’s
 column list at creation; do not assume later table columns automatically appear
 in the existing view. Inspect the deployed view definition before relying on
 its exact column set.
 
-The column/type/index inventory above was reconciled with all 111 concrete
-`core` models and the final migration state through migration 0058. Raw SQL
+The column/type/index inventory above was reconciled with all 120 concrete
+`core` models and the final migration state through migration 0061. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
-collation, and this compatibility view. Application-level validators and
+collation, the person-name selection/immutability triggers, and this compatibility view. Application-level validators and
 reader/writer behavior still matter; a database check does not prove that a
 real-world identity or source claim is true.
 

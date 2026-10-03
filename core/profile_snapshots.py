@@ -13,7 +13,6 @@ import hashlib
 import json
 import re
 import unicodedata
-import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -29,12 +28,22 @@ from core.models import (
     Brand,
     BrandAccount,
     Person,
-    PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     Post,
     ProfileMovementCandidate,
     TwitterListMembership,
+)
+from core.person_affiliations import require_claim_owner
+from core.person_identity import (
+    IdentityConflict,
+    account_person,
+)
+from core.person_identity import (
+    person_id_for_account as person_id_for_account,  # noqa: PLC0414 -- public compatibility export
+)
+from core.person_identity import (
+    person_id_for_handle as person_id_for_handle,  # noqa: PLC0414 -- public compatibility export
 )
 from monitor.twitterapi.user_about import SchemaDriftError, flatten_label
 
@@ -173,24 +182,6 @@ class ProfileCaptureResult:
     snapshot_created: bool
     snapshot_changed: bool
     candidate_counts: dict[str, int]
-
-
-def person_id_for_account(account_id: object) -> uuid.UUID:
-    """Return the stable person identity shared by every self-account path."""
-
-    return uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:account:{account_id}")
-
-
-def person_id_for_handle(handle: str) -> uuid.UUID:
-    """Return the provisional identity used for a normalized X handle."""
-
-    normalized = unicodedata.normalize("NFKC", handle).strip().removeprefix("@").casefold()
-    if not normalized:
-        raise ValueError("person handle must be nonblank")
-    return uuid.uuid5(
-        uuid.NAMESPACE_URL,
-        f"pushinweight:person:x-handle:{normalized}",
-    )
 
 
 def _json_safe(value: Any) -> Any:
@@ -821,6 +812,7 @@ def classify_affiliation_signals(
     return tuple(signals)
 
 
+@transaction.atomic
 def persist_affiliation_candidates(
     *,
     account: Account,
@@ -829,18 +821,6 @@ def persist_affiliation_candidates(
     observed_at: datetime,
 ) -> dict[str, int]:
     counts = {"staff": 0, "community": 0, "unknown": 0, "official": 0}
-    existing_link = (
-        account.person_links.filter(resolution_status="confirmed").first()
-        or account.person_links.exclude(resolution_status="rejected")
-        .order_by("-is_primary", "person_id")
-        .first()
-    )
-    person_id = existing_link.person_id if existing_link is not None else None
-    if person_id is None and account.handle:
-        handle_person_id = person_id_for_handle(account.handle)
-        if Person.objects.filter(pk=handle_person_id).exists():
-            person_id = handle_person_id
-    person_id = person_id or person_id_for_account(account.pk)
     person: Person | None = None
 
     for signal in signals:
@@ -850,30 +830,13 @@ def persist_affiliation_candidates(
         if signal.candidate_role == "official":
             continue
         if person is None:
-            person, _ = Person.objects.get_or_create(
-                id=person_id,
-                defaults={
-                    "display_name": account.display_name
-                    or account.handle
-                    or str(account.pk)
-                },
-            )
-            link, _ = PersonAccount.objects.get_or_create(
-                person=person,
-                account=account,
-                defaults={
-                    "first_observed_at": observed_at,
-                    "last_observed_at": observed_at,
-                    "confidence": signal.confidence,
-                    "resolution_status": "pending",
-                },
-            )
-            changed: list[str] = []
-            if observed_at > link.last_observed_at:
-                link.last_observed_at = observed_at
-                changed.append("last_observed_at")
-            if changed:
-                link.save(update_fields=changed)
+            try:
+                person = account_person(account, create=True, observed_at=observed_at)
+            except IdentityConflict:
+                # The profile snapshot is already retained. Do not attach it
+                # to an arbitrary identity while an operator resolves the links.
+                counts["identity_review"] = counts.get("identity_review", 0) + 1
+                continue
 
         claim_payload = {
             "account_id": str(account.pk),
@@ -885,25 +848,32 @@ def persist_affiliation_candidates(
         claim_identity = hashlib.sha256(
             json.dumps(claim_payload, sort_keys=True).encode("utf-8")
         ).hexdigest()
-        affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
-            claim_identity=claim_identity,
-            defaults={
-                "person": person,
-                "brand_id": signal.brand_id,
-                "affiliation_type": signal.affiliation_type,
-                "observed_organization_name": signal.observed_organization_name,
-                "observed_organization_handle": signal.observed_organization_handle,
-                "status": signal.status,
-                "start_date": None,
-                "start_date_precision": "unknown",
-                "end_date": None,
-                "end_date_precision": "unknown",
-                "confidence": signal.confidence,
-                "review_status": "pending",
-                "review_note": f"candidate_role={signal.candidate_role}",
-                "source_system": PROFILE_RULE_VERSION,
-            },
-        )
+        try:
+            affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
+                claim_identity=claim_identity,
+                defaults={
+                    "person": person,
+                    "brand_id": signal.brand_id,
+                    "affiliation_type": signal.affiliation_type,
+                    "observed_organization_name": signal.observed_organization_name,
+                    "observed_organization_handle": signal.observed_organization_handle,
+                    "status": signal.status,
+                    "start_date": None,
+                    "start_date_precision": "unknown",
+                    "end_date": None,
+                    "end_date_precision": "unknown",
+                    "confidence": signal.confidence,
+                    "review_status": "pending",
+                    "review_note": f"candidate_role={signal.candidate_role}",
+                    "source_system": PROFILE_RULE_VERSION,
+                },
+            )
+            require_claim_owner(affiliation, person)
+        except IdentityConflict:
+            # The profile snapshot is already retained. Do not attach new
+            # evidence to a claim another person already owns.
+            counts["identity_review"] = counts.get("identity_review", 0) + 1
+            continue
         evidence_payload = {
             **claim_payload,
             "snapshot_id": snapshot.pk,

@@ -37,12 +37,12 @@ def _assert_integrity_error(create):
         create()
 
 
-def test_people_schema_preserves_reduced_precision_and_owner_named_sexs_column():
+def test_people_schema_preserves_reduced_precision_and_sex_column():
     year_only = Person.objects.create(
         display_name="Year Only",
         date_of_birth="1987",
         date_of_birth_precision="year",
-        sexs="female",
+        sex="female",
         nationality="Korean",
         ethnicity="Korean",
         primary_language="ko",
@@ -50,10 +50,10 @@ def test_people_schema_preserves_reduced_precision_and_owner_named_sexs_column()
     unknown = Person.objects.create(display_name="Unknown")
 
     assert year_only.date_of_birth == "1987"
-    assert year_only.sexs == "female"
+    assert year_only.sex == "female"
     assert unknown.date_of_birth is None
     assert unknown.date_of_birth_precision == "unknown"
-    assert Person._meta.get_field("sexs").column == "sexs"
+    assert Person._meta.get_field("sex").column == "sex"
     _assert_integrity_error(
         lambda: Person.objects.create(
             display_name="Bad precision",

@@ -36,7 +36,7 @@ NOW = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
 CONTRACT = json.loads(
     (
         Path(__file__).parents[1]
-        / "tests/fixtures/stage1c_intelligence_read_contract_v1.json"
+        / "tests/fixtures/stage1c_intelligence_read_contract_v2.json"
     ).read_text(encoding="utf-8")
 )
 
@@ -98,7 +98,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         display_name="Anna Wang",
         date_of_birth="1987",
         date_of_birth_precision="year",
-        sexs="female",
+        sex="female",
         nationality="American",
         ethnicity="Asian",
         primary_language="en",
@@ -145,7 +145,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         "value": "1987",
         "precision": "year",
     }
-    assert document["person"]["sexs"] == "female"
+    assert document["person"]["sex"] == "female"
     assert len(document["affiliations"]) == 2
     assert [row["affiliation_type"] for row in document["employment_history"]] == [
         "employment"

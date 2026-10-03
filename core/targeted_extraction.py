@@ -8,7 +8,6 @@ import logging
 import re
 import time
 import unicodedata
-import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -17,7 +16,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from django.db import transaction
-from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models import F, Q
 from django.utils import timezone
 
 from core.models import (
@@ -32,8 +31,6 @@ from core.models import (
     ModelRelease,
     ModelReleaseEvidence,
     Opportunity,
-    Person,
-    PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     PersonnelDiscoveryRun,
@@ -46,8 +43,9 @@ from core.models import (
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
+from core.person_affiliations import matching_moved_claim, require_claim_owner
+from core.person_identity import subject_person
 from core.product_verification import POLICY_VERSION, source_repo_evidence
-from core.profile_snapshots import person_id_for_account, person_id_for_handle
 from core.rare_type_search import record_unknown_name_tokens_from_movement
 from x_monitor.config import TargetedExtractionConfig
 from x_monitor.provider_telemetry import (
@@ -1074,89 +1072,14 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             and normalized_handle
             == post.author_handle.removeprefix("@").casefold()
         )
-        linked_person = (
-            PersonAccount.objects.filter(account_id=post.author_id)
-            .exclude(resolution_status="rejected")
-            .select_related("person")
-            .order_by(
-                Case(
-                    When(resolution_status="confirmed", then=Value(0)),
-                    When(is_primary=True, then=Value(1)),
-                    default=Value(2),
-                    output_field=IntegerField(),
-                ),
-                "person_id",
-            )
-            .first()
-            if self_authored
-            else None
+        person = subject_person(
+            handle=normalized_handle,
+            display_name=person_name,
+            source_key="source-post:" + str(post.pk) + ":name:"
+            + unicodedata.normalize("NFKC", person_name).casefold(),
+            account=post.author if self_authored else None,
+            observed_at=post.fetched_at,
         )
-        if linked_person is None and normalized_handle:
-            handle_links = list(
-                PersonAccount.objects.filter(account__handle=normalized_handle)
-                .exclude(resolution_status="rejected")
-                .select_related("person")
-                .order_by(
-                    Case(
-                        When(resolution_status="confirmed", then=Value(0)),
-                        When(is_primary=True, then=Value(1)),
-                        default=Value(2),
-                        output_field=IntegerField(),
-                    ),
-                    "person_id",
-                )[:2]
-            )
-            confirmed_links = [
-                link
-                for link in handle_links
-                if link.resolution_status == "confirmed"
-            ]
-            if confirmed_links:
-                linked_person = confirmed_links[0]
-            elif len(handle_links) == 1:
-                linked_person = handle_links[0]
-        if linked_person is not None:
-            person = linked_person.person
-        else:
-            person_identity = (
-                f"x-handle:{normalized_handle}"
-                if normalized_handle
-                else "source-post:"
-                + str(post.pk)
-                + ":name:"
-                + unicodedata.normalize("NFKC", person_name).casefold()
-            )
-            if normalized_handle:
-                handle_person_id = person_id_for_handle(normalized_handle)
-                person_id = handle_person_id
-                if self_authored and not Person.objects.filter(
-                    pk=handle_person_id
-                ).exists():
-                    person_id = person_id_for_account(post.author_id)
-            elif self_authored:
-                person_id = person_id_for_account(post.author_id)
-            else:
-                person_id = uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"pushinweight:person:{person_identity}",
-                )
-            person, _ = Person.objects.get_or_create(
-                id=person_id, defaults={"display_name": person_name}
-            )
-        if self_authored:
-            link, _ = PersonAccount.objects.get_or_create(
-                person=person,
-                account_id=post.author_id,
-                defaults={
-                    "first_observed_at": post.fetched_at,
-                    "last_observed_at": post.fetched_at,
-                    "confidence": _confidence(record.get("confidence")),
-                    "resolution_status": "pending",
-                },
-            )
-            if post.fetched_at > link.last_observed_at:
-                link.last_observed_at = post.fetched_at
-                link.save(update_fields=["last_observed_at"])
         affiliation_type = (
             _text(record.get("affiliation_type"), maximum=32) or "employment"
         )
@@ -1184,17 +1107,20 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
         organization_identity = (
             f"brand:{brand.pk}" if brand is not None else f"candidate:{candidate.pk}"
         )
-        claim_identity = _hash(
-            {
-                "person": str(person.pk),
-                "organization": organization_identity,
-                "type": affiliation_type,
-                "status": status,
-                "title": _text(record.get("title_raw")),
-                "start": start_value,
-                "end": end_value,
-            }
-        )
+        claim_payload = {
+            "organization": organization_identity,
+            "type": affiliation_type,
+            "status": status,
+            "title": _text(record.get("title_raw")),
+            "start": start_value,
+            "end": end_value,
+        }
+
+        def identity_for(pk, payload=claim_payload):
+            return _hash({"person": str(pk), **payload})
+
+        moved = matching_moved_claim(person, identity_for)
+        claim_identity = moved.claim_identity if moved else identity_for(person.pk)
         affiliation, created = PersonBrandAffiliation.objects.get_or_create(
             claim_identity=claim_identity,
             defaults={
@@ -1225,6 +1151,7 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "source_system": version,
             },
         )
+        require_claim_owner(affiliation, person)
         written += int(created)
         evidence_hash = _hash(
             {"claim": claim_identity, "post": str(post.pk), "version": version}

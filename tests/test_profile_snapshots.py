@@ -51,6 +51,71 @@ def _observation(description: str):
     )
 
 
+def test_profile_evidence_stays_off_another_persons_claim():
+    import hashlib
+
+    from core.models import Person
+    from core.profile_snapshots import PROFILE_RULE_VERSION, AffiliationSignal
+
+    now = timezone.now()
+    account = Account.objects.create(author_id="foreign-claim", handle="researcher")
+    other = Person.objects.create(display_name="Other person")
+    Brand.objects.get_or_create(
+        nickname="deepseek", defaults={"display_name": "DeepSeek"}
+    )
+    snapshot = AccountProfileSnapshot.objects.create(
+        account=account,
+        profile_hash="f" * 64,
+        first_observed_at=now,
+        last_observed_at=now,
+        first_source_kind="post",
+        handle="researcher",
+        display_name="Researcher",
+        description="Researcher at DeepSeek",
+        present_fields=["description"],
+        profile_data={"description": "Researcher at DeepSeek"},
+    )
+    payload = {
+        "account_id": str(account.pk),
+        "brand_id": "deepseek",
+        "affiliation_type": "employment",
+        "status": "current",
+        "rule_version": PROFILE_RULE_VERSION,
+    }
+    claim_identity = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    affiliation = PersonBrandAffiliation.objects.create(
+        person=other,
+        brand_id="deepseek",
+        affiliation_type="employment",
+        observed_organization_name="DeepSeek",
+        status="current",
+        claim_identity=claim_identity,
+    )
+    counts = persist_affiliation_candidates(
+        account=account,
+        snapshot=snapshot,
+        signals=[
+            AffiliationSignal(
+                brand_id="deepseek",
+                observed_organization_name="DeepSeek",
+                observed_organization_handle=None,
+                candidate_role="staff",
+                affiliation_type="employment",
+                status="current",
+                confidence=0.9,
+                evidence_kind="bio",
+                evidence_text="Researcher at DeepSeek",
+                call_a_active=False,
+            )
+        ],
+        observed_at=now,
+    )
+    assert counts["identity_review"] == 1
+    assert affiliation.evidence.count() == 0
+
+
 def test_profile_history_collapses_consecutive_values_and_keeps_a_b_a():
     account = Account.objects.create(author_id="profile-account", handle="profile")
     start = timezone.now()

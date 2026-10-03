@@ -10,6 +10,8 @@ class CoreConfig(AppConfig):
     def ready(self) -> None:
         from django.db import connection
 
+        from core.staff_assets import arrivals  # noqa: F401
+
         if connection.vendor == "sqlite":
             # Register a Python-based case_insensitive collation for
             # SQLite (Postgres has native CITEXT / case_insensitive
