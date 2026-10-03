@@ -16,6 +16,21 @@ def source_url(value):
     return value if value and urlsplit(value).scheme in {"https", "http"} else ""
 
 
+def provider_search_summary(requests):
+    """Describe stored provider requests without rewriting the intake payload."""
+    phrases = []
+    for request in requests:
+        provider = request.provider or "Search"
+        if request.state == "complete":
+            count = len(request.response.get("organic_results", []))
+            phrases.append(f"{provider} search completed ({count} results)")
+        elif request.state == "needs_review":
+            phrases.append(f"{provider} search needs review")
+        else:
+            phrases.append(f"{provider} search not run")
+    return "; ".join(phrases) + "."
+
+
 def dossier_records(*, brand_id):
     people = (
         Person.objects.filter(
@@ -182,7 +197,8 @@ def dossier_records(*, brand_id):
                 }
             )
         searches = list(presentation.get("chinese_web", {}).get("attempts", []))
-        for request in person.staff_requests.all():
+        requests = list(person.staff_requests.all())
+        for request in requests:
             searches.append(
                 {
                     "query": request.parameters.get("q", ""),
@@ -193,6 +209,12 @@ def dossier_records(*, brand_id):
                     else None,
                     "at": request.created_at.isoformat(),
                 }
+            )
+        if requests:
+            search_summary = provider_search_summary(requests)
+        else:
+            search_summary = presentation.get("chinese_web", {}).get(
+                "summary", "No completed search recorded."
             )
         locations = [
             row
@@ -225,9 +247,7 @@ def dossier_records(*, brand_id):
                 "media": media,
                 "portrait_count": sum(row["qualifies"] for row in media),
                 "searches": searches,
-                "search_summary": presentation.get("chinese_web", {}).get(
-                    "summary", "No completed search recorded."
-                ),
+                "search_summary": search_summary,
                 "profile_location": profile_location.text if profile_location else None,
                 "profile_location_source": source_url(profile_location.source_reference)
                 if profile_location

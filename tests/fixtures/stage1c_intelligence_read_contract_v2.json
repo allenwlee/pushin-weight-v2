@@ -20,6 +20,8 @@
         "affiliations[].brand_discovery_candidate_id",
         "affiliations[].organization_review",
         "affiliations[].affiliation_type",
+        "affiliations[].active",
+        "affiliations[].superseded_by",
         "affiliations[].status",
         "affiliations[].start_date.precision",
         "affiliations[].end_date.precision",

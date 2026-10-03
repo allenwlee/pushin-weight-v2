@@ -1,6 +1,10 @@
 {
   "schema_version": "stage1c-intelligence-read-contract-v1",
   "contract_kind": "deterministic-json-read-shape/v1",
+  "retirement": {
+    "status": "retired-pre-rename-snapshot",
+    "note": "Tests no longer load this file. person.sexs is the pre-rename field. The live contract is stage1c_intelligence_read_contract_v2.json and the reader returns person.sex."
+  },
   "documents": {
     "person_intelligence": {
       "root_keys": ["person", "affiliations", "employment_history"],

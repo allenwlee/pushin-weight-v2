@@ -34,6 +34,7 @@ from core.models import (
     ProfileMovementCandidate,
     TwitterListMembership,
 )
+from core.person_affiliations import require_claim_owner
 from core.person_identity import (
     IdentityConflict,
     account_person,
@@ -847,25 +848,32 @@ def persist_affiliation_candidates(
         claim_identity = hashlib.sha256(
             json.dumps(claim_payload, sort_keys=True).encode("utf-8")
         ).hexdigest()
-        affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
-            claim_identity=claim_identity,
-            defaults={
-                "person": person,
-                "brand_id": signal.brand_id,
-                "affiliation_type": signal.affiliation_type,
-                "observed_organization_name": signal.observed_organization_name,
-                "observed_organization_handle": signal.observed_organization_handle,
-                "status": signal.status,
-                "start_date": None,
-                "start_date_precision": "unknown",
-                "end_date": None,
-                "end_date_precision": "unknown",
-                "confidence": signal.confidence,
-                "review_status": "pending",
-                "review_note": f"candidate_role={signal.candidate_role}",
-                "source_system": PROFILE_RULE_VERSION,
-            },
-        )
+        try:
+            affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
+                claim_identity=claim_identity,
+                defaults={
+                    "person": person,
+                    "brand_id": signal.brand_id,
+                    "affiliation_type": signal.affiliation_type,
+                    "observed_organization_name": signal.observed_organization_name,
+                    "observed_organization_handle": signal.observed_organization_handle,
+                    "status": signal.status,
+                    "start_date": None,
+                    "start_date_precision": "unknown",
+                    "end_date": None,
+                    "end_date_precision": "unknown",
+                    "confidence": signal.confidence,
+                    "review_status": "pending",
+                    "review_note": f"candidate_role={signal.candidate_role}",
+                    "source_system": PROFILE_RULE_VERSION,
+                },
+            )
+            require_claim_owner(affiliation, person)
+        except IdentityConflict:
+            # The profile snapshot is already retained. Do not attach new
+            # evidence to a claim another person already owns.
+            counts["identity_review"] = counts.get("identity_review", 0) + 1
+            continue
         evidence_payload = {
             **claim_payload,
             "snapshot_id": snapshot.pk,

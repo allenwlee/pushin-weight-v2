@@ -113,6 +113,29 @@ def test_preview_is_read_only_and_repeat_review_is_idempotent():
     assert old.superseded_by_id == new.pk
 
 
+def test_person_intelligence_lists_only_active_employment_after_replacement():
+    from core.intelligence_readers import person_intelligence
+
+    intake, _ = ingest_record(record())
+    person = intake.person
+    current = person.brand_affiliations.get()
+    pending = role(person, title="Unreviewed second role")
+    replacement = role(person, status="former", title="Former researcher")
+    replace(current, replacement)
+
+    document = person_intelligence(person.pk)
+
+    history_ids = {row["id"] for row in document["employment_history"]}
+    assert history_ids == {pending.pk, replacement.pk}
+    stored = {row["id"]: row for row in document["affiliations"]}
+    assert stored[current.pk]["status"] == "current"
+    assert stored[current.pk]["active"] is False
+    assert stored[current.pk]["superseded_by"] == replacement.pk
+    assert stored[pending.pk]["active"] is True
+    assert stored[pending.pk]["review_status"] == "pending"
+    assert stored[replacement.pk]["active"] is True
+
+
 def test_database_rejects_cross_person_replacement():
     intake, _ = ingest_record(record())
     other, _ = ingest_record(record(source_key="other:person"))

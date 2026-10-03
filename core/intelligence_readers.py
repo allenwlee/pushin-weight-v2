@@ -360,7 +360,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
         },
         "affiliations": all_affiliations,
         "employment_history": [
-            row for row in all_affiliations if row["affiliation_type"] == "employment"
+            row
+            for row in all_affiliations
+            if row["affiliation_type"] == "employment" and row["active"]
         ],
     }
 

@@ -1,7 +1,7 @@
 import pytest
 from django.db import IntegrityError, transaction
 
-from core.models import Person, StaffCollectionWork, StaffProviderRequest
+from core.models import Person, StaffCollectionWork, StaffIntake, StaffProviderRequest
 from core.person_names import record_name, review_name, select_names
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.queue import claim, reserve_request
@@ -125,6 +125,33 @@ def test_duplicate_name_retains_both_evidence_observations():
     assert target.names.filter(full_name="测试人").count() == 1
     assert target.names.get(full_name="测试人").evidence.count() == 2
     assert source.names.get().evidence.count() == 1
+
+
+def test_reimport_after_split_does_not_attach_evidence_to_the_other_person():
+    intake, _ = ingest_record(record())
+    source = intake.person
+    target = Person.objects.create(display_name="Separated person")
+    affiliation = source.brand_affiliations.get()
+    evidence_before = affiliation.evidence.count()
+    names_before = source.names.count()
+    correct(
+        "split",
+        source,
+        target,
+        key="split-affiliation-only",
+        selection={"affiliations": [affiliation.pk]},
+    )
+    affiliation.refresh_from_db()
+    assert affiliation.person_id == target.pk
+    replay = record()
+    replay["affiliations"][0]["evidence_text"] = "另一条任职摘录"
+    held, _ = ingest_record(replay)
+    assert held.eligibility == "needs_review" and held.person_id is None
+    assert affiliation.evidence.count() == evidence_before
+    assert affiliation.evidence.filter(evidence_text="另一条任职摘录").count() == 0
+    assert StaffIntake.objects.get(pk=intake.pk).person_id == source.pk
+    assert source.names.count() == names_before
+    assert not source.brand_affiliations.exists()
 
 
 def test_split_moves_only_selected_claim_and_copies_name_with_audit():

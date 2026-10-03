@@ -43,7 +43,7 @@ from core.models import (
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
-from core.person_affiliations import matching_moved_claim
+from core.person_affiliations import matching_moved_claim, require_claim_owner
 from core.person_identity import subject_person
 from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.rare_type_search import record_unknown_name_tokens_from_movement
@@ -1151,6 +1151,7 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "source_system": version,
             },
         )
+        require_claim_owner(affiliation, person)
         written += int(created)
         evidence_hash = _hash(
             {"claim": claim_identity, "post": str(post.pk), "version": version}

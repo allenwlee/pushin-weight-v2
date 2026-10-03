@@ -501,6 +501,46 @@ def test_anna_transition_keeps_current_and_former_with_unknown_dates():
     assert PersonBrandAffiliationEvidence.objects.filter(source_post=post).count() == 2
 
 
+def test_personnel_replay_refuses_evidence_on_someone_elses_claim():
+    from core.person_identity import IdentityConflict
+    from core.targeted_extraction import _persist_personnel
+
+    post = _post(
+        "split-personnel",
+        text="Lee Jiyin has joined New AI Co.",
+        brand_ids=(),
+        author_handle="industry_news",
+    )
+    payload = {
+        "person_name": "Lee Jiyin",
+        "person_handle": "lee_jiyin_split",
+        "brand_id": None,
+        "organization_name": "New AI Co",
+        "organization_handle": "new_ai_co",
+        "affiliation_type": "employment",
+        "status": "current",
+        "start_date": None,
+        "start_date_precision": "unknown",
+        "end_date": None,
+        "end_date_precision": "unknown",
+        "confidence": 0.91,
+    }
+    from django.db import transaction
+
+    with transaction.atomic():
+        _persist_personnel(post, [payload], "test")
+    affiliation = PersonBrandAffiliation.objects.get()
+    other = Person.objects.create(display_name="Separated person")
+    PersonBrandAffiliation.objects.filter(pk=affiliation.pk).update(person=other)
+    before = affiliation.evidence.count()
+    with pytest.raises(IdentityConflict, match="another person"), transaction.atomic():
+        _persist_personnel(post, [payload], "test")
+    assert affiliation.evidence.count() == before
+    assert not PersonBrandAffiliationEvidence.objects.exclude(
+        affiliation=affiliation
+    ).exists()
+
+
 def test_untracked_personnel_organization_keeps_affiliation_and_evidence():
     post = _post(
         "untracked-personnel",

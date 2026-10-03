@@ -90,6 +90,28 @@ def test_held_intake_can_replay_after_account_confirmation():
     assert person.names.filter(language="zh-Hans").exists()
 
 
+def test_register_account_attaches_to_its_provisional_person():
+    from core.staff_assets.arrivals import register_account
+
+    account = Account.objects.create(
+        author_id="x-account-register",
+        handle="researcher",
+        display_name="Profile Name",
+    )
+    profile(account)
+    person = Person.objects.get()
+    intake = register_account(account.pk)
+    assert intake.person_id == person.pk
+    assert intake.eligibility == "db_staff"
+    assert person.names.filter(full_name="Profile Name").exists()
+    blocked, _ = ingest_record(
+        record(source_key="biography:later", account_id=account.pk)
+    )
+    assert blocked.person_id is None
+    assert blocked.eligibility == "needs_review"
+    assert person.brand_affiliations.count() == 1
+
+
 def test_account_only_intake_uses_the_common_account_identity():
     account = Account.objects.create(author_id="new-account", handle="researcher")
     intake, _ = ingest_record(

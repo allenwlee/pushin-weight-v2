@@ -360,6 +360,66 @@ def test_paid_journal_dedup_budget_and_no_implicit_china_route(staff_storage):
     assert provider.calls == 1
 
 
+def _unfetched_media(person, url):
+    return PersonMedia.objects.create(
+        person=person,
+        fingerprint=url,
+        source_url="https://example.com/bio",
+        original_url=url,
+        source_kind="company_bio",
+        kind="image",
+        availability="unfetched",
+        observed_at=timezone.now(),
+    )
+
+
+def test_transient_download_stays_unfetched_and_retries_until_three_attempts():
+    person = Person.objects.create(display_name="Retry")
+    enqueue(person.pk, {"version": "download"})
+    row = _unfetched_media(person, "https://example.com/photo.png")
+
+    def fail(url):
+        raise OSError("timed out")
+
+    first = run_once(run_id=uuid.uuid4(), allow_network=True, fetcher=fail)
+    row.refresh_from_db()
+    work = StaffCollectionWork.objects.get(person=person)
+    assert first["state"] == "retry_due"
+    assert row.availability == "unfetched" and row.media_id is None
+    assert work.attempts == 1
+    StaffCollectionWork.objects.filter(pk=work.pk).update(
+        attempts=2, state="retry_due", next_attempt_at=timezone.now()
+    )
+    second = run_once(run_id=uuid.uuid4(), allow_network=True, fetcher=fail)
+    row.refresh_from_db()
+    work.refresh_from_db()
+    assert second["state"] == "needs_review"
+    assert work.attempts == 3
+    assert row.availability == "unfetched" and row.media_id is None
+
+
+def test_unsupported_image_and_decompression_bomb_stay_unavailable():
+    person = Person.objects.create(display_name="Bad image")
+    enqueue(person.pk, {"version": "bad-image"})
+    unsupported = _unfetched_media(person, "https://example.com/not-image")
+    bomb = _unfetched_media(person, "https://example.com/bomb")
+
+    def fetch(url):
+        if url.endswith("/bomb"):
+            raise Image.DecompressionBombError("too many pixels")
+        data = io.BytesIO()
+        Image.new("RGB", (8, 8), "red").save(data, format="BMP")
+        return data.getvalue()
+
+    result = run_once(run_id=uuid.uuid4(), allow_network=True, fetcher=fetch)
+    unsupported.refresh_from_db()
+    bomb.refresh_from_db()
+    assert unsupported.availability == "unavailable"
+    assert bomb.availability == "unavailable"
+    assert result["state"] == "needs_evidence"
+    assert result["unavailable"] == 2
+
+
 def test_interrupted_paid_request_is_not_automatically_retried():
     person = Person.objects.create(display_name="Staff")
     provider = Provider(fail=True)

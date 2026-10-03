@@ -21,6 +21,15 @@ def is_active_claim(row):
     return row.superseded_by_id is None and row.review_status != "rejected"
 
 
+def require_claim_owner(affiliation, person):
+    """Attach new evidence only when this claim already belongs to the person."""
+    if affiliation.person_id != person.pk:
+        from core.person_identity import IdentityConflict
+
+        raise IdentityConflict("Claim identity belongs to another person")
+    return affiliation
+
+
 def matching_moved_claim(person, identity_for):
     """Reuse a moved claim's original key; historical IDs do not merge people.
 

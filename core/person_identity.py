@@ -188,9 +188,10 @@ def manifest_person(record, *, create=False):
             raise IdentityConflict("Account link is rejected")
         return person, account
     if account:
-        direct = record["source_key"] == "account:" + account.pk and record.get(
-            "eligibility"
-        ) in {"db_staff", "call_a_person"}
+        direct = record["source_key"] in {
+            "account:" + account.pk,
+            "x-account:" + account.pk,
+        } and record.get("eligibility") in {"db_staff", "call_a_person"}
         if not direct and (links or account_person(account) is not None):
             raise IdentityConflict(
                 "Pending account match needs confirmation before cross-source linking"

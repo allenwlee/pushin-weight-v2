@@ -11,7 +11,7 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     StaffIntake,
 )
-from core.person_affiliations import matching_moved_claim
+from core.person_affiliations import matching_moved_claim, require_claim_owner
 from core.person_identity import IdentityConflict, manifest_person
 from core.person_names import digest, record_name, review_name, select_names
 from core.person_text import record_text
@@ -81,7 +81,14 @@ def ingest_record(record):
             },
         )[0], False
     try:
-        person, account = resolve_person(record, create=True)
+        with transaction.atomic():
+            return _ingest_resolved(
+                record,
+                source_key=source_key,
+                fingerprint=fingerprint,
+                observed=observed,
+                eligibility=eligibility,
+            )
     except IdentityConflict:
         return StaffIntake.objects.get_or_create(
             source_key=source_key,
@@ -92,6 +99,10 @@ def ingest_record(record):
                 "observed_at": observed,
             },
         )
+
+
+def _ingest_resolved(record, *, source_key, fingerprint, observed, eligibility):
+    person, account = resolve_person(record, create=True)
     # Serialize concurrent versions for the same person before adding evidence.
     Person.objects.select_for_update().get(pk=person.pk)
     if account:
@@ -150,6 +161,7 @@ def ingest_record(record):
             else digest([str(person.pk), role]),
             defaults={"person": person, **role},
         )
+        require_claim_owner(affiliation, person)
         PersonBrandAffiliationEvidence.objects.get_or_create(
             affiliation=affiliation,
             evidence_hash=digest([source_url, evidence_text, source_data]),

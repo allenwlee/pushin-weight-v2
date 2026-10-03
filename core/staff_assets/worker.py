@@ -18,6 +18,13 @@ from core.staff_assets.queue import (
 )
 
 
+def _permanent_download_failure(exc):
+    """Unsupported images and decompression bombs do not become safer on retry."""
+    return isinstance(exc, Image.DecompressionBombError) or (
+        isinstance(exc, ValueError) and str(exc).startswith("Unsupported image")
+    )
+
+
 def lease_live(work):
     return StaffCollectionWork.objects.filter(
         pk=work.pk,
@@ -99,6 +106,7 @@ def run_once(
                 .exclude(original_url="")
                 .order_by("id")[:max_downloads]
             )
+            transient = False
             for row in candidates:
                 if not lease_live(work):
                     return {"state": "stale", **result}
@@ -110,8 +118,14 @@ def run_once(
                     ValueError,
                     urllib3.exceptions.HTTPError,
                     Image.DecompressionBombError,
-                ):
-                    media, availability = None, "unavailable"
+                ) as exc:
+                    media = None
+                    availability = (
+                        "unavailable"
+                        if _permanent_download_failure(exc)
+                        else "unfetched"
+                    )
+                    transient = transient or availability == "unfetched"
                 with transaction.atomic():
                     StaffCollectionWork.objects.select_for_update().get(pk=work.pk)
                     if not lease_live(work):
@@ -119,7 +133,17 @@ def run_once(
                     PersonMedia.objects.filter(pk=row.pk).update(
                         media=media, availability=availability
                     )
-                result["downloads" if media else "unavailable"] += 1
+                if media:
+                    result["downloads"] += 1
+                elif availability == "unavailable":
+                    result["unavailable"] += 1
+            if transient:
+                state = "needs_review" if work.attempts >= 3 else "retry_due"
+                if not finish(
+                    work, state=state, result=result, error="download_failed"
+                ):
+                    state = "stale"
+                return {"state": state, **result}
         covered = PersonMedia.objects.filter(
             person_id=work.person_id,
             source_verified=True,

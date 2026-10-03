@@ -116,6 +116,11 @@ class Command(BaseCommand):
             work.state, work.error_category = "queued", ""
             work.next_attempt_at = timezone.now()
             work.save()
+            PersonMedia.objects.filter(
+                person_id=work.person_id,
+                availability="unavailable",
+                media__isnull=True,
+            ).update(availability="unfetched")
         self.stdout.write(
             json.dumps({"applied": True, "kind": kind, "id": options["id"]})
         )

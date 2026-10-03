@@ -1,10 +1,18 @@
 import io
+import uuid
 from pathlib import Path
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 
-from core.models import Person, PersonName, StaffCollectionWork, StaffProviderRequest
+from core.models import (
+    Person,
+    PersonMedia,
+    PersonName,
+    StaffCollectionWork,
+    StaffProviderRequest,
+)
 from core.person_names import record_name
 from core.staff_assets.dossier import dossier_records, export_dossier
 from core.staff_assets.intake import ingest_record
@@ -168,6 +176,72 @@ def test_worker_network_activation_requires_explicit_configuration(settings):
     with pytest.raises(CommandError, match="NETWORK_ENABLED"):
         call_command("run_staff_collection_worker", once=True, enable_network=True)
     assert not StaffProviderRequest.objects.exists()
+
+
+def test_search_summary_comes_from_provider_requests():
+    intake, _ = ingest_record(
+        record(
+            source_dossier={
+                "presentation": {
+                    "chinese_web": {"summary": "No completed search recorded."}
+                }
+            }
+        )
+    )
+    person = intake.person
+    assert (
+        dossier_records(brand_id="deepseek")[0]["search_summary"]
+        == "No completed search recorded."
+    )
+    for state, response, fingerprint in (
+        ("complete", {"organic_results": [{}, {}]}, "a" * 64),
+        ("needs_review", {}, "b" * 64),
+        ("reserved", {}, "c" * 64),
+    ):
+        StaffProviderRequest.objects.create(
+            person=person,
+            provider="serpapi",
+            fingerprint=fingerprint,
+            run_id=uuid.uuid4(),
+            parameters={"q": "测试人 DeepSeek"},
+            state=state,
+            response=response,
+        )
+    summary = dossier_records(brand_id="deepseek")[0]["search_summary"]
+    assert summary == (
+        "serpapi search completed (2 results); "
+        "serpapi search needs review; "
+        "serpapi search not run."
+    )
+    assert "No completed search recorded." not in summary
+
+
+def test_requeue_retries_unavailable_media_without_stored_bytes():
+    person = Person.objects.create(display_name="Test")
+    work = enqueue(person.pk, {"version": "requeue-media"})
+    StaffCollectionWork.objects.filter(pk=work.pk).update(state="needs_evidence")
+    missing = PersonMedia.objects.create(
+        person=person,
+        fingerprint="missing-bytes",
+        source_url="https://example.com/bio",
+        original_url="https://example.com/photo.png",
+        source_kind="company_bio",
+        availability="unavailable",
+        observed_at=timezone.now(),
+    )
+    call_command(
+        "review_staff_collection",
+        "work",
+        str(work.pk),
+        reviewer="Allen",
+        reason="Storage restored",
+        apply=True,
+        stdout=io.StringIO(),
+    )
+    missing.refresh_from_db()
+    work.refresh_from_db()
+    assert work.state == "queued"
+    assert missing.availability == "unfetched"
 
 
 def test_requeue_preserves_work_and_operator_reason():
