@@ -74,13 +74,12 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Plain-English Summary
 
-The October 2 LFG continuation accepts the independent review repairs: keep
-the existing tables, unify person matching, provide reviewed identity
-corrections, reconcile job conclusions and make the dossier read its dedicated
-records. U7–U11 are implemented and verified with the saved DeepSeek pilot,
-preserving the completed U0–U6 foundation. The October 3 continuation is
-finishing review and the existing PR's CI gate before any expanded collection.
-Product Contract unchanged.
+U0–U11 are implemented, including the independent review repairs to identity
+matching, reviewed corrections, job conclusions and sourced dossier fields.
+The October 4 production release deploys this scaffold and the saved DeepSeek
+pilot after a production-sized staging rehearsal. Expanded research, the other
+Chinese brands and paid acquisition activation remain separate work. Product
+Contract unchanged.
 
 Build one staff identity and image library with two ways of receiving work.
 First, process the union of staff accounts in Call A and staff accounts already
@@ -1917,6 +1916,86 @@ when implementation begins.
 
 ## Progress and continuation
 
+
+### October 4 production release
+
+Application revision `f176e61481ff93899424ba4aa4743a5ee86446dd` passed the
+staged branch route and is live on production web, harvest, headlines,
+synthesis and jobs. CI [37165625918](https://github.com/allenwlee/pushin-weight-v2/actions/runs/37165625918)
+passed 276 tests, including all 167 required PostgreSQL tests with zero skips
+or errors. The local refresh/Ollija suite passed 149 tests. Release fixes
+classify the new staff tables/sequences for future staging refreshes and give
+large restores a bounded hour; the first 30-minute timeout preserved the
+serving staging database. The successful retry completed at 01:28:21 UTC.
+
+Production migrations 0059–0064 preserved all 583 people, 550 account links,
+829 affiliation claims and 899 evidence rows, including the unchanged sex-value
+distribution while renaming `sexs` to `sex`. The saved pilot then added 21
+people and reused three independently reviewed existing identities. Its four
+contributor-only observations remain excluded. There are now 604 people in
+production; the pilot itself has 24 people (17 current and seven former/dated).
+Repeating the manifest retained the same graph and all 28 observations.
+
+All 35 image objects (20,060,954 bytes) matched their saved SHA-256 values before
+and after a second deployment in both environments. Private 1 GB web disks
+retain the files and printable dossier. Production has 39 media attributions,
+629 names and name-evidence records, 82 sourced texts and 19 queued collection
+records. The saved pilot links four stored X accounts; three identity matches
+include Daya Guo, who had no linked account. Name selection/provenance checks
+passed. The ongoing after-commit intake path created the collection records;
+this is not a paid acquisition activation.
+
+`STAFF_COLLECTION_NETWORK_ENABLED=false`, `STAFF_MEDIA_DURABLE=false`, and
+zero staff-provider requests remain verified. The web-local disks do not claim
+to provide shared worker storage. Eleven current portrait gaps and pending role
+reviews remain. Legacy wrong-company claims observed before this release were
+preserved for separate review; the pilot dossier isolates its 24 source-backed
+intakes from the full-brand view's older claims.
+
+The latest verified pre-release production backup is Render export
+`2026-10-04T01:23Z`, 1,409,706,738 bytes, SHA-256
+`c74e388585d5e3c30fde168561cb2eaba1453ec98b123677370ec7306ec8b218`.
+Every restore stream was read successfully using PostgreSQL 18 tools. Private
+backups, the earlier backup, import/replay receipts, SHA checks and service
+receipts are in the G1 worktree's `.context/g1-production-20261004/`.
+
+The harvester's original schedule was restored at 01:46:06 UTC, after its new
+revision was live. Production maintenance ended at 01:54:17 UTC with HTTP 200
+from the login page. Originally suspended services remain suspended; staging
+headlines resumed and both staging maintenance mode and production maintenance
+mode are off. New least-privilege grants were accepted by a live staging
+refresh preflight against the migrated production source.
+
+The production pilot dossier and all 35 verified image files were copied to
+`/Users/allenwlee/Downloads/agents/2026-10-04-105625-deepseek-production/pilot.html`.
+The natural 02:00 UTC harvest, `20261004T020034_0000-3f5d7ca9`, ran on the
+verified revision and finished at 02:03:08 UTC. Its eight calls returned 43
+results and reported 20 inserts and four updates. All 20 inserted IDs were
+found in production with this run's fetch timestamps; persistence and targeted
+extraction failures were zero. Nineteen of the 20 rows had language and English/
+Chinese text populated at inspection. Staff intakes stayed at 28, collection
+records at 19 and staff-provider requests at zero. No new staff intake arrived
+in this particular cycle; production import callbacks and the PostgreSQL suite
+supply the intake-path evidence.
+
+The run was `degraded`, not a clean full-pipeline health result. Coverage caps,
+one quarantined enrichment and list-membership reconciliation warnings were
+also present before release. This run additionally counted one classifier-batch
+failure and logged a `DeepInfraRetryableError` during literal translation.
+Monitor/classifier source under `monitor/` and `x_monitor/` is unchanged from
+the previous production revision. These observations do not establish a cause
+for every warning; retain them for separate harvester-health work. No manual
+harvest, repair, paid probe or extra evaluation cycle was triggered.
+
+All eight originally active services across production and staging are live on
+`f176e614`; all four original suspensions and every original schedule and
+maintenance setting were preserved/restored. Release verification is complete.
+Post-release documentation follows the application candidate with `[skip render]`;
+it does not change the verified application revision or activate more collection.
+The canonical worktree is retained because this documentation commit follows
+rather than equals the deployed candidate; it also holds the private backups
+and receipts. Do not force-remove it.
+
 - **October 4 database-only leadership lookup:** read both production
   `pushinweight_shadow` through Render CLI and local
   `g1_repairs_pilot_20261002` in read-only transactions. The local pilot records
@@ -1925,7 +2004,8 @@ when implementation begins.
   saved appointment report), Yu Wu / 吴俣 as post-training team lead with
   unknown current status (claim 23; saved Peking University news), and Chong
   Ruan / 阮翀 as former R&D lead (claim 25). All four job claims remain
-  `pending` review. Production has no Liang name match or new name table;
+  `pending` review. At that pre-release lookup, production had no Liang name
+  match or new name table;
   its DeepSeek founder claims for Jay (637) and Charlie (764) are unsupported
   by their saved excerpts, which concern their own tools/API business.
   Claims 596/597 incorrectly attach a post about AMD/World Labs roles to

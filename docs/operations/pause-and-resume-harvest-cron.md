@@ -172,3 +172,43 @@ After resume, wait ≥1 cron cycle (`/15` schedule = up to 15 min), then verify 
 - Staging harvest and synthesis were already suspended and remain suspended.
   Production remains active. Resume the originally active staging headline
   worker and remove maintenance mode after the rehearsal.
+
+
+## 2026-10-04 01:39–01:54 UTC — G1 production schema and saved staff pilot
+
+- **Authorization:** the owner's “lfg to deployment” request includes the
+  coordinated schema release and restoration described in the G1 plan.
+- The guarded staging refresh initially exceeded 30 minutes while rebuilding
+  indexes. Its candidate was cleaned up and the serving staging database
+  remained intact. The bounded 60-minute retry passed at 01:28:21 UTC.
+- Production web maintenance started at 01:39 UTC. The harvest service was
+  suspended, its last scheduled run was observed finished, and its database
+  writer connection was absent. Its schedule temporarily became `0 0 31 2 *`
+  while it was resumed and deployed. No manual harvest run was triggered.
+- Revision `f176e614` deployed to all five originally active production
+  services. Render refused commit-reference deployment for cron services;
+  they were deployed from `main` and their resulting SHA was checked before
+  restoring the original schedule. No empty source commit was used.
+- Migrations preserved the existing people graph and sex values. The saved
+  DeepSeek pilot imported 24 eligible people (21 new, three reused), retained
+  four exclusions, and stored 35 image objects. Repeat imports and image hashes
+  after another web deployment passed in staging and production.
+- The harvester schedule returned to `*/15 * * * *` at 01:46:06 UTC.
+  Production maintenance was disabled at 01:54:17 UTC; login returned HTTP 200.
+  Staging maintenance is off and its originally active headline worker resumed.
+  Previously suspended production beat/worker and staging harvest/synthesis
+  remain suspended. Job schedules were unchanged.
+- New staff-provider requests remain zero. Private web disks store this pilot;
+  paid acquisition and shared-worker storage activation remain disabled.
+- Private operational receipts and backup files: the G1 worktree's
+  `.context/g1-production-20261004/`. The production backup from 01:23 UTC was
+  downloaded and every restore stream read before the production migration.
+
+- **Post-resume observation:** scheduled run `20261004T020034_0000-3f5d7ca9`
+  finished at 02:03:08 UTC on `f176e614`: eight calls, 43 results, 20 inserts,
+  four updates, zero persistence/targeted-extraction failures. A read-only
+  database check found every inserted ID and the expected fetch timestamps.
+  Coverage caps, quarantine and list-reconciliation warnings persisted; this
+  run also recorded one classifier-batch failure and a translation-provider
+  retryable error. It remains a degraded harvest-health observation, not a
+  clean health pass. No extra harvest or repair was launched.

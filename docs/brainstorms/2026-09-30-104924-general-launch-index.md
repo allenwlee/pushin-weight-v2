@@ -31,7 +31,7 @@ they can be assumed present in other clones or branch snapshots.
 
 | G item | Outcome | Task plan | Active sessions and owned scope | Status | Next step / blocker |
 | --- | --- | --- | --- | --- | --- |
-| G1 | Verified researcher identities and images | Not created | None recorded | Not started | Audit the dated Call A staff roster; propose verification and photo-coverage criteria. |
+| G1 | Verified researcher identities and images | [G1 plan](../plans/2026-10-01-092148-feat-g1-staff-identity-library-plan.md), [PR #49](https://github.com/allenwlee/pushin-weight-v2/pull/49), `feat/g1-staff-identity-library` | None; production scaffold/pilot release complete. | Implementing | Scaffold and saved DeepSeek pilot are live at `f176e614`: 24 people, 35 stored images, repeat-import and restart checks passed. Review 11 current portrait gaps, pending roles and legacy wrong-company claims; establish shared worker storage and paid-search limits before broader collection. General G1 acquisition and launch readiness remain unfinished; separate harvester-health warnings are recorded in the plan. |
 | G2 | English, Chinese, and Japanese editorial voice | Not created | None recorded | Not started | Research reference voices and prepare a bounded comparison packet. |
 | G3 | Topic history behind each general-page headline | Not created | None recorded | Not started | Turn the existing longitudinal research into one concrete reader experience. |
 | G4 | Controlled public API and MCP | Not created | None recorded | Not started | Define permitted outputs, check relevant terms, and resolve source-link versus anonymity wording. |
@@ -122,3 +122,6 @@ introduce a fifth launch workstream.
 - [First-screen prototype HTML](../../.context/compound-engineering/ce-prototype/2026-09-29-general-homepage/01-above-the-fold/screens/index.html): local artifact; do not infer a running server from its existence.
 - [Meta Muse collection proposal](../handoffs/2026-09-28-183339-meta-muse-harvest-proposal.md): adjacent prior research; not an extra authorized G item.
 - [Docs taxonomy](../docs-taxonomy.md): routing guidance for research, plans, evidence, and handoffs.
+
+| 2026-10-04T08:37:52+09:00 | ON | G1 | g1-chinese-faces-20260930 | Owner requests “lfg to deployment” after the production-rollout summary. Continue the existing G1 plan through staging rehearsal, backup, coordinated production code/schema release, matching/import of the 24-person DeepSeek pilot and stored assets, and live verification. Paid search remains disabled; preserve other workstreams and existing suspended services. |
+| 2026-10-04T11:11:18+09:00 | OFF | G1 | g1-chinese-faces-20260930 | Deployed scaffold and saved DeepSeek pilot at `f176e614` through production-sized staging, verified backups, migrations, 24 people (21 new/three matched), 35 persistent images and duplicate-free replay. Restored all service states/schedules; normal harvest inserted 20 verified rows but retained degraded-health warnings. Paid photo search remains off; 11 current portrait gaps remain. Dossier with assets copied to allenwlee Downloads/agents. |
