@@ -6,6 +6,7 @@ on:
       - 'core/**'
       - 'tests/**'
       - 'project/**'
+      - 'config/staging_refresh.yaml'
       - 'pyproject.toml'
       - '.github/workflows/g1-staff-library.yml'
   workflow_dispatch:
@@ -55,3 +56,4 @@ jobs:
           tests/test_profile_snapshots.py tests/test_bio_change_personnel.py
           tests/test_targeted_extraction.py tests/test_intelligence_readers.py
           tests/test_stage1c_intelligence_schema.py tests/test_onboard_brand.py
+          tests/staging_refresh

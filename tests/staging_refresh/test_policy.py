@@ -252,6 +252,16 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "people_identity_corrections",
+        "people_media",
+        "people_names",
+        "people_name_evidence",
+        "people_texts",
+        "people_text_translations",
+        "staff_collection_work",
+        "staff_intakes",
+        "staff_media_objects",
+        "staff_provider_requests",
         "product_label_keys",
         "hf_model_catalog_runs",
         "hf_model_catalog_namespace_runs",

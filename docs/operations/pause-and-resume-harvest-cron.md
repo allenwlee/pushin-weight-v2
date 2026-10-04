@@ -161,3 +161,14 @@ After resume, wait ≥1 cron cycle (`/15` schedule = up to 15 min), then verify 
   read-only and requires current explicit owner authorization for the exact
   production pause or resume action. Historical instructions no longer carry
   forward as permission.
+
+## 2026-10-03 23:51 UTC — G1 authorized deployment rehearsal
+
+- **Authorization:** owner requested “lfg to deployment” after the coordinated
+  G1 production-rollout explanation; the active G1 plan records that scope.
+- **Staging only:** enabled maintenance mode on `pushinweight-staging-web`
+  (`srv-d9vb8t49v7es738lf2ng`) and suspended `pushinweight-staging-headlines`
+  (`srv-da7vrdqd0e5s739uvcsg`); the API confirmed both states.
+- Staging harvest and synthesis were already suspended and remain suspended.
+  Production remains active. Resume the originally active staging headline
+  worker and remove maintenance mode after the rehearsal.

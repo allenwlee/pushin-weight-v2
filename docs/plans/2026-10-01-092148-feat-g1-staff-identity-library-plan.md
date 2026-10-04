@@ -2149,6 +2149,17 @@ recognized `test` placeholder. Reuse the 163-test PostgreSQL result for unchange
 application code; rerun `tests/ollija` and dispatch the PostgreSQL workflow for
 the final candidate. No application behavior or test assertion is weakened.
 
+Release inspection also reproduced a missing integration with the exhaustive
+staging refresh policy. Classify all ten G1 tables and nine sequences, copy
+name/evidence/prose records with their people, and exclude environment-specific
+intakes, correction audit payloads, collection work, provider requests and
+service-local image records. Add exact count checks for the copied people graph,
+retain support for pre-G1 sources, and grant the existing read-only refresh role
+only the corresponding SELECT/MAINTAIN permissions after production migration.
+Run the policy/refresh suite, including a PostgreSQL test proving that scrubbing
+staff runtime/media records preserves selected names and prose. Include this
+suite in G1 CI and verify the live source reader after release.
+
 Create Render exports of production and staging and retain a verified local
 backup before migrating. Rehearse on the isolated staging database, preserving
 the existing suspension states. Use the existing guarded staging refresh if its

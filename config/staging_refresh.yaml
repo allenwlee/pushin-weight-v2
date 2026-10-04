@@ -33,6 +33,10 @@ production_deny:
 
 relations:
   copied_tables:
+    - people_names
+    - people_name_evidence
+    - people_texts
+    - people_text_translations
     - account_based_in_mappings
     - account_post_appearances
     - account_profile_snapshots
@@ -116,6 +120,13 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Collection work, private intake/audit payloads and service-local image storage.
+    - people_identity_corrections
+    - people_media
+    - staff_collection_work
+    - staff_intakes
+    - staff_media_objects
+    - staff_provider_requests
     - hf_model_catalog_observations
     - hf_model_catalog_namespace_runs
     - hf_model_catalog_runs
@@ -162,6 +173,16 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - people_identity_corrections
+    - people_media
+    - people_names
+    - people_name_evidence
+    - people_texts
+    - people_text_translations
+    - staff_collection_work
+    - staff_intakes
+    - staff_media_objects
+    - staff_provider_requests
     - hf_model_catalog_observations
     - hf_model_catalog_namespace_runs
     - hf_model_catalog_runs
@@ -227,6 +248,15 @@ relations:
   views:
     - trend_narrative_versions
   sequences:
+    - people_identity_corrections_id_seq
+    - people_media_id_seq
+    - people_names_id_seq
+    - people_name_evidence_id_seq
+    - people_texts_id_seq
+    - people_text_translations_id_seq
+    - staff_collection_work_id_seq
+    - staff_intakes_id_seq
+    - staff_provider_requests_id_seq
     - hf_model_catalog_namespace_runs_id_seq
     - hf_model_catalog_observations_id_seq
     - account_emailaddress_id_seq
@@ -294,6 +324,15 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - people_identity_corrections_id_seq
+    - people_media_id_seq
+    - people_names_id_seq
+    - people_name_evidence_id_seq
+    - people_texts_id_seq
+    - people_text_translations_id_seq
+    - staff_collection_work_id_seq
+    - staff_intakes_id_seq
+    - staff_provider_requests_id_seq
     - hf_model_catalog_namespace_runs_id_seq
     - hf_model_catalog_observations_id_seq
     - account_profile_snapshots_id_seq
@@ -339,6 +378,12 @@ relations:
 
 scrub:
   truncate_tables:
+    - people_identity_corrections
+    - people_media
+    - staff_collection_work
+    - staff_intakes
+    - staff_media_objects
+    - staff_provider_requests
     - hf_model_catalog_observations
     - hf_model_catalog_namespace_runs
     - hf_model_catalog_runs
@@ -392,6 +437,14 @@ scrub:
 
 validation:
   exact_count_tables:
+    - people
+    - people_accounts
+    - people_brand_affiliations
+    - people_brand_affiliation_evidence
+    - people_names
+    - people_name_evidence
+    - people_texts
+    - people_text_translations
     - accounts
     - brand_discovery_candidates
     - brands

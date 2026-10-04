@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-09-24.
+Last verified: 2026-10-04 (G1 table policy; see release receipts for live checks).
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -64,6 +64,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
+  people_names, people_name_evidence, people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
   account_profile_snapshots, accounts, audience_topic_concepts,
   audience_topic_labels, audience_topic_schemes, brand_discovery_candidates,
@@ -99,6 +100,8 @@ TO staging_refresh_reader;
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
 GRANT MAINTAIN ON
+  people_identity_corrections, people_media, staff_collection_work,
+  staff_intakes, staff_media_objects, staff_provider_requests,
   hf_model_catalog_runs, hf_model_catalog_namespace_runs,
   hf_model_catalog_observations,
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
@@ -123,6 +126,11 @@ GRANT MAINTAIN ON
 TO staging_refresh_reader;
 
 GRANT SELECT ON
+  people_identity_corrections_id_seq, people_media_id_seq,
+  people_names_id_seq, people_name_evidence_id_seq,
+  people_texts_id_seq, people_text_translations_id_seq,
+  staff_collection_work_id_seq, staff_intakes_id_seq,
+  staff_provider_requests_id_seq,
   hf_model_catalog_namespace_runs_id_seq, hf_model_catalog_observations_id_seq,
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   account_profile_snapshots_id_seq,
@@ -161,6 +169,22 @@ GRANT SELECT ON
   twitter_list_memberships_id_seq, untracked_brand_promotion_evidence_id_seq
 TO staging_refresh_reader;
 ```
+
+G1 migrations 0059–0064 add sourced names, name evidence and professional text.
+The refresh copies these with the existing people, account links and job claims,
+and checks their counts. Both selected-name foreign keys remain valid. All ten
+new G1 tables and their nine sequences are optional on an older source.
+
+The refresh excludes and scrubs raw staff intakes, identity-correction audit
+payloads, collection work and paid-request journals. It also excludes image
+objects and attribution rows: a database snapshot does not copy the web service's
+private persistent disk. Reimport the saved, reviewed image manifest separately
+when staging needs a dossier with images. No production collection work is replayed.
+
+After production reaches migration 0064, add the G1 grants above to the existing
+`staging_refresh_reader` role. Keep the existing least-privilege rules; do not
+grant row reads on excluded G1 tables. Run the guarded preflight again before
+another refresh. The source remains read-only.
 
 The sequence `SELECT` grants both preserve copied sequence state and permit
 `pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded
