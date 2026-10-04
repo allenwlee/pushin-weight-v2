@@ -337,6 +337,12 @@ name, and exact rollback confirmation. Copy the JSON receipt to the operation
 record, but never create a tracked receipt file. The dump is removed in the
 command's guaranteed cleanup path.
 
+Restoring the candidate has a 60-minute timeout. The October 4 G1 rehearsal
+exceeded the former 30-minute limit while rebuilding indexes from a 4.5 GB
+source. That failed candidate was cleaned up and the serving staging database
+remained unchanged. The longer bound retains the existing permission, capacity,
+validation and cleanup checks; other command timeouts remain unchanged.
+
 Activation revalidates the candidate under its isolated shadow name, disables
 it again, and only then swaps names. It writes the paired active/recovery
 receipt comments while the new canonical database still refuses connections;

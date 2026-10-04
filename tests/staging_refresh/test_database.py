@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
@@ -157,6 +158,7 @@ class FakeRunner:
         self.commands: list[tuple[list[str], dict[str, str]]] = []
         self.fail: str | None = None
         self.interrupt_restore = False
+        self.required_restore_seconds = 0
 
     def __call__(self, command: list[str], **options: object):
         environment = options["env"]
@@ -178,6 +180,8 @@ class FakeRunner:
             output = Path(command[command.index("--file") + 1])
             output.write_bytes(b"custom-format-dump")
         if executable == "pg_restore":
+            if self.required_restore_seconds > options["timeout"]:
+                raise subprocess.TimeoutExpired(command, options["timeout"])
             if self.interrupt_restore:
                 raise KeyboardInterrupt
             if self.fail == "pg_restore":
@@ -416,6 +420,24 @@ def test_command_failure_is_secret_free_and_preserves_canonical(
         assert list(tmp_path.glob("*.dump")) == []
     else:
         assert any(event.startswith("shadow:drop") for event in events)
+
+
+@pytest.mark.parametrize("minutes", [31, 61])
+def test_large_restore_has_a_bounded_hour_and_cleans_up_on_timeout(
+    tmp_path: Path, minutes: int
+) -> None:
+    engine, _adapter, runner, events = _engine(tmp_path)
+    runner.required_restore_seconds = minutes * 60
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        if minutes == 31:
+            candidate = engine.restore_shadow(artifact)
+            assert candidate.name.startswith(engine.policy.lifecycle.shadow_prefix)
+        else:
+            with pytest.raises(RefreshError, match="subprocess_failed"):
+                engine.restore_shadow(artifact)
+            assert any(event.startswith("shadow:drop") for event in events)
+    assert not any("pushinweight_staging:" in event for event in events)
 
 
 def test_checksum_mismatch_fails_before_shadow_creation(tmp_path: Path) -> None:

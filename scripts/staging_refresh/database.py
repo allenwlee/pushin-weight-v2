@@ -982,7 +982,11 @@ class SnapshotRestoreEngine:
         return self.policy.path.parents[1]
 
     def _run(
-        self, command: list[str], *, environment: Mapping[str, str]
+        self,
+        command: list[str],
+        *,
+        environment: Mapping[str, str],
+        timeout_seconds: int = 60 * 30,
     ) -> CommandResult:
         try:
             return self.runner(
@@ -991,7 +995,7 @@ class SnapshotRestoreEngine:
                 env=dict(environment),
                 text=True,
                 capture_output=True,
-                timeout=60 * 30,
+                timeout=timeout_seconds,
                 check=False,
             )
         except KeyboardInterrupt:
@@ -1183,7 +1187,11 @@ class SnapshotRestoreEngine:
                 name,
                 str(artifact.path),
             ]
-            result = self._run(command, environment=environment)
+            # Index restoration on the small staging database can exceed 30
+            # minutes. Retain a finite bound and the same candidate cleanup.
+            result = self._run(
+                command, environment=environment, timeout_seconds=60 * 60
+            )
             if result.returncode != 0:
                 raise RefreshError("pg_restore_failed")
             return ShadowCandidate(name=name, marker=marker, artifact=artifact)
@@ -1371,7 +1379,9 @@ class CandidateProcessor:
         self._run_django(candidate.name, "check", "--deploy")
         self._run_django(candidate.name, "migrate", "--check")
         scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
-        census = self.adapter.inspect_candidate(self.target_url, candidate.name)
+        census = self.adapter.inspect_candidate(
+                    self.target_url, candidate.name
+                )
         self.validate(candidate, census)
         evidence: dict[str, object] = {
             "validation": "passed",

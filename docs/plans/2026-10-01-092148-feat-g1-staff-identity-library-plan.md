@@ -2167,6 +2167,14 @@ preflight accepts the source and target; never bypass a refused refresh guard.
 Record people, account-link, job-claim and evidence counts and the sex-value
 distribution before migration and after migration, before staff import.
 
+The first guarded refresh exceeded its 30-minute restore timeout while building
+indexes from the 4.5 GB production snapshot. It cleaned up the candidate and
+left the serving staging database unchanged (four people, account links,
+affiliations and evidence rows). Increase only the restore bound to 60 minutes,
+test both successful work beyond 30 minutes and cleanup beyond 60 minutes,
+deploy the corrected candidate to protected staging, then repeat the guarded
+refresh. Preserve all other preflight and validation requirements.
+
 For this saved-data release, attach a private 1 GB persistent disk to each web
 service at `/var/data/staff-media`, configure `STAFF_MEDIA_ROOT`, and verify all
 35 stored image hashes after a subsequent deploy. This is the authoritative
