@@ -33,6 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+benchmark = ["pyarrow>=25,<26"]
 dev = [
     "pytest>=8",
     "pytest-django>=4.8",

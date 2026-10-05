@@ -300,6 +300,18 @@ class HFMetadataClient:
             result.outcome = "invalid_continuation"
         return result
 
+    def download_counts(self, repo_id: str) -> MetadataResponse:
+        """Read public rolling-30-day/all-time counters without model files."""
+        if not REPO_ID.fullmatch(repo_id):
+            return MetadataResponse("malformed")
+        result = self._get(
+            f"/models/{repo_id}",
+            [("expand", "downloads"), ("expand", "downloadsAllTime")],
+        )
+        if result.outcome == "ok":
+            result.outcome = self._identity_outcome(result.payload, repo_id=repo_id) or "ok"
+        return result
+
     def model_group(self, repo_id: str, group: str) -> MetadataResponse:
         if not REPO_ID.fullmatch(repo_id):
             return MetadataResponse("malformed")
