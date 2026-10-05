@@ -184,6 +184,54 @@ request proof covers actual image attachments, no fallback, required parameters
 and configured price ceilings. These are fake-provider/local proofs; no live
 generation, R2 readiness or staging deployment is claimed.
 
+**Staging continuation:** `3935f695` is observed live on both staging web and
+headline worker. Migrations 0065–0068 are applied; 290,672 posts and 35 staff
+media records match the pre-deploy baseline. Credentials and the English profile
+are configured with generation/public reading disabled and a $1.50 lower cap.
+The one historical writing trial used cutoff `2026-10-04T00:45:40.731920+00:00`:
+105 of 2,514 eligible recent posts fit the packet; 7-day context rows were trimmed
+by its byte cap. The editor call was held by provider validation, published zero
+editions and retained a $0.029484 reservation. It must not resubmit that ambiguous
+stage. Permit at most one separate, tiny JSON route probe (512 output tokens,
+$0.01 maximum reservation, 120-second process deadline) to identify the response-
+contract failure before any new full writing trial. It shares staging's $1.50
+and combined rollout $5 limits. No automatic retry or model fallback.
+
+The staging database has seven verified/approved/available individual portraits,
+but all 856 staff-role records are pending; the editorial packet contains zero
+confirmed people. G1 role readiness is an additional upstream requirement for
+staff/founder selection; R2 storage alone cannot fix missing reviewed roles.
+
+**G2 R2 consumption/delivery:** G1's selected handoff is resumed under the
+existing production authority. The asset view now retains its access, edition,
+verification and mode checks, then uses the shared S3-compatible adapter's
+`url(name, expire=300)` for remote files. It rejects missing objects, non-HTTPS,
+unsigned and over-300-second links and sends `private, no-store` redirects.
+Local files still stream. Previously issued URLs can remain usable for up to
+five minutes after disablement; do not claim immediate revocation. Seven route
+regressions failed before the change because the web service streamed remote
+bytes, then passed. Full affected suite: 183 passed / 118 required PostgreSQL /
+zero skips/errors; scoped Ruff passed. Real R2 expiry, range/playback and web/
+worker cross-read remain unverified and owned/coordinated with the G1 phase.
+
+The tiny protocol probe completed HTTP 200, exact configured model, `stop`,
+valid `{"ok":true}` and 39 prompt/56 completion tokens. This proves the route
+can serve a small JSON request; it does not establish the initial large-request
+failure's cause or live writing quality. That first adapter retained only
+`ValueError`, losing whether HTTP, model identity or truncation caused the hold.
+The provider/ledger now records whitelisted diagnostics and fixed failure codes
+for those cases without raw text or credentials. Three PostgreSQL regressions
+cover HTTP failure, changed model and truncation, and prove no uncertain resend.
+After this observability repair is staged, permit one final full trial in the
+next historical interval with a 660-second process deadline. Preserve the first
+ambiguous receipt, source snapshot, model/voice/price recipe and $1.50 cap. Stop
+the quality experiment after that attempt and report any remaining defect; do
+not repeatedly vary prompts, models or spending without a new frozen trial.
+The full affected regression suite including both changes passes 186 tests,
+121 required PostgreSQL tests, zero skips/errors. Scoped Ruff and whitespace
+checks pass. Live staging's login endpoint returns 200; story/API requests
+redirect to its existing login wall (302), not accepted public story pages.
+
 **Verification/rollback:** Reuse the completed migration/regression/browser
 proof where its inputs are unchanged. Check new config controls and affected
 provider/request suites; then real staging calls and saved headline/byline/asset

@@ -1,10 +1,17 @@
 """Permanent story and share surfaces; optional anonymous access is explicit."""
 
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 from django.core import signing
-from django.core.files.storage import storages
-from django.http import FileResponse, Http404, HttpResponseBadRequest, JsonResponse
+from django.core.files.storage import FileSystemStorage, storages
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponseBadRequest,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, render
 from django.utils import translation
 from django.views.decorators.http import require_GET
@@ -134,6 +141,24 @@ def asset(request, story_id, picture_id, variant):
     else:
         raise Http404
     try:
+        if not isinstance(storage, FileSystemStorage):
+            if not storage.exists(name):
+                raise Http404
+            # The shared S3-compatible adapter owns credentials and URL signing.
+            # Never persist the temporary URL or cache this authorization response.
+            url = storage.url(name, expire=300)
+            parts = urlsplit(url)
+            query = parse_qs(parts.query)
+            expires = query.get("X-Amz-Expires", [])
+            if (
+                parts.scheme != "https"
+                or not parts.hostname
+                or not query.get("X-Amz-Signature")
+                or len(expires) != 1
+                or not 0 < int(expires[0]) <= 300
+            ):
+                raise Http404
+            return private_cache(HttpResponseRedirect(url))
         stream = storage.open(name, "rb")
     except (OSError, ValueError):
         raise Http404 from None

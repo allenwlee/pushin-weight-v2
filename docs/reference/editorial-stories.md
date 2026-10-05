@@ -112,7 +112,11 @@ The `editor`, `chatter` and `pulse` routes require explicit model identifiers,
 endpoint, matching credential variable, output cap and token prices. Supported
 endpoints are OpenRouter and direct DeepInfra. `vision` is an explicit capability;
 OpenRouter provider fallback is disabled. A mismatched returned model or
-truncated/invalid response is held. No guessed model, key or price is supplied.
+truncated/invalid response is held. Rejected replies persist a fixed failure code,
+HTTP status, model-match Boolean, standard finish reason and integer token counts
+when available. Raw rejected text and credentials are excluded. Uncertain stages
+retain their reservation and cannot resend. No guessed model, key or price is
+supplied.
 OpenRouter requests also cap the permitted provider input/output prices at the
 configured reservation rates.
 
@@ -167,6 +171,18 @@ and `editorial_media` storage must be configured as durable and readable by
 worker and web processes before video creation. `EDITORIAL_MEDIA_STORAGE_BACKEND`,
 `EDITORIAL_MEDIA_STORAGE_OPTIONS`, `EDITORIAL_MEDIA_ROOT` and
 `EDITORIAL_MEDIA_DURABLE` configure the derivative namespace.
+
+The story asset route checks public/staff access, the exact edition/picture
+association, current source verification and picture mode before delivering a
+file. Filesystem storage streams through Django. For shared S3-compatible
+storage it checks object existence, asks the adapter for a signed URL with a
+300-second lifetime, and redirects the client directly to storage. The URL must
+use HTTPS, contain a signature and expire within 300 seconds; unsigned or
+unbounded links are rejected. The redirect is `private, no-store`, and temporary
+URLs are never saved as object identifiers. Disabling a binding prevents new
+links immediately; a previously issued link can remain usable until expiry.
+Object expiry, range requests and real video playback require live shared-
+storage verification; local fake-backend tests do not establish those results.
 
 The initial adapter produces 768P video, six seconds by default (configurable
 four to fifteen). It verifies source hashes and minimum dimensions, persists a

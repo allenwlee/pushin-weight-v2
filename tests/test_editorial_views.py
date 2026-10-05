@@ -149,3 +149,104 @@ def test_feed_batches_portrait_and_affiliation_reads():
         result = feed_payload(EditorialConfig(pictures={"chatter": "select_only"}))
     assert len(result["items"]) == 20 and all(i["asset"] for i in result["items"])
     assert len(queries) <= 7, [q["sql"] for q in queries]
+
+
+def picture_asset(monkeypatch, remote, variant):
+    from django.urls import reverse
+
+    from core.models import EditorialPicture
+    from tests.editorial_support import active_config, person_photo
+
+    _, role, photo = person_photo("blue", "founder")
+    item = edition()
+    picture = EditorialPicture.objects.create(
+        content_kind="chatter",
+        content_id=str(item.pk),
+        revision_hash="fixture",
+        source_media=photo.media,
+        person_media=photo,
+        mode="derive",
+        state="complete",
+        generated_storage_name="generated/fixture.mp4",
+        provenance={
+            "reuse_status": "permitted",
+            "brand_keys": ["deepseek"],
+            "affiliation_id": role.pk,
+        },
+    )
+    cfg = active_config(public_enabled=True)
+    monkeypatch.setattr("monitor.editorial.views.load_editorial_config", lambda: cfg)
+    monkeypatch.setattr("monitor.editorial.views.media_storage", lambda: remote)
+    monkeypatch.setattr("monitor.editorial.views.storages", {"editorial_media": remote})
+    url = reverse(
+        "editorial_asset",
+        kwargs={
+            "story_id": item.story_id,
+            "picture_id": picture.pk,
+            "variant": variant,
+        },
+    )
+    return url, photo, cfg
+
+
+class RemoteMedia:
+    def __init__(self, url, exists=True):
+        self.link = url
+        self.present = exists
+        self.issued = []
+
+    def exists(self, name):
+        return self.present
+
+    def url(self, name, *, expire):
+        self.issued.append((name, expire))
+        return self.link
+
+    def open(self, *args):
+        pytest.fail("remote media bytes must not stream through the web service")
+
+
+@pytest.mark.usefixtures("editorial_storage")
+@pytest.mark.parametrize("variant", ["source", "generated"])
+def test_remote_asset_redirect_is_short_lived_and_policy_checked(
+    client, monkeypatch, variant
+):
+    remote = RemoteMedia(
+        "https://media.example/object?X-Amz-Signature=test&X-Amz-Expires=300"
+    )
+    url, photo, cfg = picture_asset(monkeypatch, remote, variant)
+    response = client.get(url, secure=True)
+    assert response.status_code == 302 and response["Location"] == remote.link
+    assert response["Cache-Control"] == "private, no-store"
+    assert remote.issued[0][1] == 300
+    photo.source_verified = False
+    photo.save(update_fields=["source_verified"])
+    assert client.get(url, secure=True).status_code == 404
+    assert len(remote.issued) == 1
+    photo.source_verified = True
+    photo.save(update_fields=["source_verified"])
+    monkeypatch.setattr(
+        "monitor.editorial.views.load_editorial_config",
+        lambda: cfg.model_copy(update={"pictures": {}}),
+    )
+    assert client.get(url, secure=True).status_code == 404
+    assert len(remote.issued) == 1
+
+
+@pytest.mark.usefixtures("editorial_storage")
+@pytest.mark.parametrize(
+    "link,present",
+    [
+        ("http://media.example/object?X-Amz-Signature=test&X-Amz-Expires=300", True),
+        ("https://media.example/public/object", True),
+        ("https://media.example/object?X-Amz-Signature=test&X-Amz-Expires=3600", True),
+        ("https://media.example/object?X-Amz-Signature=test", True),
+        ("https://media.example/object?X-Amz-Signature=test&X-Amz-Expires=300", False),
+    ],
+)
+def test_remote_asset_rejects_missing_unsigned_or_unbounded_links(
+    client, monkeypatch, link, present
+):
+    remote = RemoteMedia(link, exists=present)
+    url, _, _ = picture_asset(monkeypatch, remote, "source")
+    assert client.get(url, secure=True).status_code == 404
