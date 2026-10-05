@@ -29,11 +29,13 @@ Conventions:
 from __future__ import annotations
 
 import uuid
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
@@ -7263,10 +7265,12 @@ class RareTypeSearchHit(models.Model):
 
 class EditorialAssessment(models.Model):
     """One bounded evaluation of all tracks at a fixed quarter-hour cutoff."""
-    interval = models.DateTimeField(unique=True)
+
+    interval = models.DateTimeField()
+    scope = models.CharField(max_length=80, default="editorial")
     cutoff = models.DateTimeField()
     source_cycle_id = models.TextField()
-    state = models.CharField(max_length=24, default='running')
+    state = models.CharField(max_length=24, default="running")
     fence = models.PositiveIntegerField(default=1)
     lease_until = models.DateTimeField()
     packet = models.JSONField(default=dict)
@@ -7275,8 +7279,17 @@ class EditorialAssessment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'editorial_assessments'
-        indexes = [models.Index(fields=['state', 'interval'], name='idx_editorial_assessment_state')]
+        db_table = "editorial_assessments"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["scope", "interval"], name="uq_editorial_scope_interval"
+            )
+        ]
+        indexes: ClassVar[list] = [
+            models.Index(
+                fields=["state", "interval"], name="idx_editorial_assessment_state"
+            )
+        ]
 
 
 class EditorialBudget(models.Model):
@@ -7286,25 +7299,45 @@ class EditorialBudget(models.Model):
     media_calls = models.PositiveIntegerField(default=0)
 
     class Meta:
-        db_table = 'editorial_budgets'
-        constraints = [models.CheckConstraint(condition=models.Q(reserved_usd__gte=0), name='ck_editorial_budget_positive')]
+        db_table = "editorial_budgets"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(reserved_usd__gte=0),
+                name="ck_editorial_budget_positive",
+            )
+        ]
 
 
 class EditorialCall(models.Model):
-    assessment = models.ForeignKey(EditorialAssessment, on_delete=models.PROTECT, related_name='calls')
+    assessment = models.ForeignKey(
+        EditorialAssessment, on_delete=models.PROTECT, related_name="calls"
+    )
     stage = models.CharField(max_length=200)
     kind = models.CharField(max_length=16)
-    state = models.CharField(max_length=24, default='sent')
+    state = models.CharField(max_length=24, default="sent")
     reserved_usd = models.DecimalField(max_digits=12, decimal_places=6)
     budget_day = models.DateField()
     response = models.JSONField(default=dict)
-    error_code = models.CharField(max_length=80, blank=True, default='')
+    error_code = models.CharField(max_length=80, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'editorial_calls'
-        constraints = [models.UniqueConstraint(fields=['assessment', 'stage'], name='uq_editorial_call_stage')]
-        indexes = [models.Index(fields=['state', 'created_at'], name='idx_editorial_call_state')]
+        db_table = "editorial_calls"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["assessment", "stage"], name="uq_editorial_call_stage"
+            ),
+            models.UniqueConstraint(
+                fields=["stage"],
+                condition=models.Q(kind="media"),
+                name="uq_editorial_media_stage",
+            ),
+        ]
+        indexes: ClassVar[list] = [
+            models.Index(
+                fields=["state", "created_at"], name="idx_editorial_call_state"
+            )
+        ]
 
 
 class EditorialStory(models.Model):
@@ -7314,13 +7347,18 @@ class EditorialStory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'editorial_stories'
+        db_table = "editorial_stories"
+        indexes: ClassVar[list] = [GinIndex(fields=["anchor_ids"], name="idx_editorial_story_anchors")]
 
 
 class EditorialEdition(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    story = models.ForeignKey(EditorialStory, on_delete=models.PROTECT, related_name='editions')
-    assessment = models.ForeignKey(EditorialAssessment, on_delete=models.PROTECT, related_name='editions')
+    story = models.ForeignKey(
+        EditorialStory, on_delete=models.PROTECT, related_name="editions"
+    )
+    assessment = models.ForeignKey(
+        EditorialAssessment, on_delete=models.PROTECT, related_name="editions"
+    )
     track = models.CharField(max_length=16)
     locale = models.CharField(max_length=12)
     revision = models.PositiveIntegerField()
@@ -7337,15 +7375,36 @@ class EditorialEdition(models.Model):
     published_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'editorial_editions'
-        constraints = [
-            models.UniqueConstraint(fields=['story', 'track', 'locale', 'revision'], name='uq_editorial_edition_revision'),
-            models.UniqueConstraint(fields=['story', 'track', 'locale', 'fingerprint'], name='uq_editorial_edition_evidence'),
-            models.UniqueConstraint(fields=['assessment', 'locale'], condition=models.Q(track='chatter'), name='uq_editorial_chatter_interval'),
-            models.CheckConstraint(condition=models.Q(track__in=['chatter', 'pulse']), name='ck_editorial_edition_track'),
-            models.CheckConstraint(condition=models.Q(importance__gte=0, importance__lte=100), name='ck_editorial_importance'),
+        db_table = "editorial_editions"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["story", "track", "locale", "revision"],
+                name="uq_editorial_edition_revision",
+            ),
+            models.UniqueConstraint(
+                fields=["story", "track", "locale", "fingerprint"],
+                name="uq_editorial_edition_evidence",
+            ),
+            models.UniqueConstraint(
+                fields=["assessment", "locale"],
+                condition=models.Q(track="chatter"),
+                name="uq_editorial_chatter_interval",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(track__in=["chatter", "pulse"]),
+                name="ck_editorial_edition_track",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(importance__gte=0, importance__lte=100),
+                name="ck_editorial_importance",
+            ),
         ]
-        indexes = [models.Index(fields=['track', 'locale', '-published_at', '-id'], name='idx_editorial_feed')]
+        indexes: ClassVar[list] = [
+            models.Index(
+                fields=["track", "locale", "-published_at", "-id"],
+                name="idx_editorial_feed",
+            )
+        ]
 
 
 class EditorialHero(models.Model):
@@ -7353,32 +7412,46 @@ class EditorialHero(models.Model):
     edition = models.ForeignKey(EditorialEdition, on_delete=models.PROTECT, null=True)
 
     class Meta:
-        db_table = 'editorial_heroes'
+        db_table = "editorial_heroes"
 
 
 class EditorialPicture(models.Model):
     """Optional generic attachment; source assets never become generated originals."""
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     content_kind = models.CharField(max_length=24)
     content_id = models.CharField(max_length=160)
-    source_platform = models.CharField(max_length=24, default='x')
+    source_platform = models.CharField(max_length=24, default="x")
     revision_hash = models.CharField(max_length=64)
-    assessment = models.ForeignKey(EditorialAssessment, on_delete=models.PROTECT, null=True)
+    assessment = models.ForeignKey(
+        EditorialAssessment, on_delete=models.PROTECT, null=True
+    )
     person_media = models.ForeignKey(PersonMedia, on_delete=models.PROTECT, null=True)
-    source_media = models.ForeignKey(StaffMediaObject, on_delete=models.PROTECT, null=True)
+    source_media = models.ForeignKey(
+        StaffMediaObject, on_delete=models.PROTECT, null=True
+    )
     provenance = models.JSONField(default=dict)
-    treatment = models.TextField(blank=True, default='')
+    treatment = models.TextField(blank=True, default="")
     mode = models.CharField(max_length=16)
-    state = models.CharField(max_length=24, default='selected')
-    provider_task_id = models.CharField(max_length=160, blank=True, default='')
+    state = models.CharField(max_length=24, default="selected")
+    provider_task_id = models.CharField(max_length=160, blank=True, default="")
     poll_count = models.PositiveIntegerField(default=0)
     next_poll_at = models.DateTimeField(null=True)
     poll_lease_until = models.DateTimeField(null=True)
-    generated_storage_name = models.TextField(blank=True, default='')
-    generated_sha256 = models.CharField(max_length=64, blank=True, default='')
+    generated_storage_name = models.TextField(blank=True, default="")
+    generated_sha256 = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'editorial_pictures'
-        constraints = [models.UniqueConstraint(fields=['content_kind', 'content_id', 'revision_hash'], name='uq_editorial_picture_revision')]
-        indexes = [models.Index(fields=['state', 'next_poll_at'], name='idx_editorial_picture_poll')]
+        db_table = "editorial_pictures"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["content_kind", "content_id", "revision_hash"],
+                name="uq_editorial_picture_revision",
+            )
+        ]
+        indexes: ClassVar[list] = [
+            models.Index(
+                fields=["state", "next_poll_at"], name="idx_editorial_picture_poll"
+            )
+        ]

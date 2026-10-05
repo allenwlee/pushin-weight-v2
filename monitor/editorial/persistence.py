@@ -21,13 +21,14 @@ class BudgetHeld(ValueError):
     pass
 
 
-def claim_assessment(cutoff, cycle_id):
+def claim_assessment(cutoff, cycle_id, *, scope="editorial"):
     now = timezone.now()
     if cutoff > now + timedelta(minutes=1) or cutoff < now - timedelta(days=8):
         raise ValueError("cutoff outside supported replay horizon")
     with transaction.atomic():
         row, created = EditorialAssessment.objects.get_or_create(
             interval=interval_start(cutoff),
+            scope=scope,
             defaults={
                 "cutoff": cutoff,
                 "source_cycle_id": cycle_id,
@@ -69,13 +70,16 @@ def call_once(row, stage, kind, ceiling, cfg, send):
     day = timezone.now().date()
     with transaction.atomic():
         require_fence(row)
-        prior = EditorialCall.objects.filter(assessment=row, stage=stage).first()
+        EditorialHero.objects.get_or_create(key="provider-lock")
+        EditorialHero.objects.select_for_update().get(pk="provider-lock")
+        # A picture can be revisited in a later interval after a worker died.
+        # Its media stage belongs to the picture, not to that later assessment.
+        stages = EditorialCall.objects.filter(stage=stage, kind=kind)
+        prior = (stages if kind == "media" else stages.filter(assessment=row)).first()
         if prior:
             if prior.state == "complete":
                 return prior.response
             raise BudgetHeld("stage already sent; operator reconciliation required")
-        EditorialHero.objects.get_or_create(key="provider-lock")
-        EditorialHero.objects.select_for_update().get(pk="provider-lock")
         EditorialBudget.objects.get_or_create(day=day)
         budget = EditorialBudget.objects.select_for_update().get(pk=day)
         spent = row.calls.aggregate(total=Sum("reserved_usd"))["total"] or Decimal(0)
@@ -88,6 +92,9 @@ def call_once(row, stage, kind, ceiling, cfg, send):
         ):
             raise BudgetHeld("budget exhausted")
         # Queue concurrency is one today; this also protects future overlapping workers.
+        EditorialCall.objects.filter(
+            state="sent", assessment__lease_until__lt=timezone.now()
+        ).update(state="ambiguous", error_code="lease_expired")
         if EditorialCall.objects.filter(state="sent").exists():
             raise BudgetHeld("provider already in flight")
         call = EditorialCall.objects.create(

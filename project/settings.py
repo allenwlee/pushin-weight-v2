@@ -244,6 +244,9 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
 # worker cannot silently create a second 15-minute harvest scheduler.
 CELERY_BEAT_SCHEDULE = {}
 CELERY_TASK_ROUTES = {
+    "monitor.tasks.refresh_editorial": {"queue": "trend-narratives"},
+    "monitor.tasks.poll_editorial_picture": {"queue": "trend-narratives"},
+    "monitor.tasks.edit_content_picture": {"queue": "trend-narratives"},
     "monitor.tasks.refresh_trend_narratives": {
         "queue": "trend-narratives",
     },
@@ -375,3 +378,11 @@ STORAGES["staff_media"] = {
 }
 STAFF_MEDIA_DURABLE = env.bool("STAFF_MEDIA_DURABLE", default=False)
 STAFF_COLLECTION_NETWORK_ENABLED = env.bool("STAFF_COLLECTION_NETWORK_ENABLED", default=False)
+
+# Generated editorial derivatives use a separate storage namespace from source photos.
+EDITORIAL_MEDIA_ROOT = env("EDITORIAL_MEDIA_ROOT", default=str(BASE_DIR / ".local" / "editorial-media"))
+STORAGES["editorial_media"] = {
+    "BACKEND": env("EDITORIAL_MEDIA_STORAGE_BACKEND", default="django.core.files.storage.FileSystemStorage"),
+    "OPTIONS": env.json("EDITORIAL_MEDIA_STORAGE_OPTIONS", default={"location": EDITORIAL_MEDIA_ROOT}),
+}
+EDITORIAL_MEDIA_DURABLE = env.bool("EDITORIAL_MEDIA_DURABLE", default=False)

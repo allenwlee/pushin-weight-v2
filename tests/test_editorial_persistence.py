@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from core.models import EditorialAssessment, EditorialCall
 from monitor.editorial.config import EditorialConfig
-from monitor.editorial.persistence import claim_assessment, call_once, BudgetHeld
+from monitor.editorial.persistence import BudgetHeld, call_once, claim_assessment
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
@@ -77,6 +77,7 @@ def test_completed_stage_reuses_output_and_enforces_shared_budget():
 def test_concurrent_workers_share_one_daily_reservation_limit():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
     from django.db import close_old_connections
 
     now = timezone.now()
@@ -98,4 +99,55 @@ def test_concurrent_workers_share_one_daily_reservation_limit():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(work, rows))
     assert sorted(results) == ["held", "sent"]
+    assert EditorialCall.objects.count() == 1
+
+
+def test_dead_workers_do_not_block_other_intervals_forever():
+    now = timezone.now()
+    old = claim_assessment(now - timedelta(minutes=30), "old")
+    EditorialCall.objects.create(
+        assessment=old,
+        stage="editor",
+        kind="text",
+        state="sent",
+        reserved_usd="0.1",
+        budget_day=now.date(),
+    )
+    EditorialAssessment.objects.filter(pk=old.pk).update(
+        lease_until=now - timedelta(seconds=1)
+    )
+    new = claim_assessment(now, "new")
+    cfg = EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=4)
+    assert call_once(
+        new, "editor", "text", Decimal("0.1"), cfg, lambda: {"ok": True}
+    ) == {"ok": True}
+    assert old.calls.get().state == "ambiguous"
+
+
+def test_media_receipt_survives_assessment_change_without_second_send():
+    now = timezone.now()
+    first = claim_assessment(now - timedelta(minutes=30), "first")
+    second = claim_assessment(now, "second")
+    cfg = EditorialConfig(
+        daily_usd=1, assessment_usd=1, daily_calls=4, media_daily_calls=2
+    )
+    receipt = call_once(
+        first,
+        "media:picture-id",
+        "media",
+        Decimal("0.1"),
+        cfg,
+        lambda: {"task_id": "123"},
+    )
+    assert (
+        call_once(
+            second,
+            "media:picture-id",
+            "media",
+            Decimal("0.1"),
+            cfg,
+            lambda: pytest.fail("duplicate media send"),
+        )
+        == receipt
+    )
     assert EditorialCall.objects.count() == 1

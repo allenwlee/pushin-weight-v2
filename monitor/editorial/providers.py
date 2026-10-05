@@ -37,7 +37,8 @@ def request_payload(route, request):
     return body
 
 
-def json_call(assessment, stage, route, request, cfg, *, transport=https_request):
+def json_call(assessment, stage, route, request, cfg, *, transport=None):
+    transport = transport or https_request
     body = request_payload(route, request)
     encoded = json.dumps(body, ensure_ascii=False).encode()
     if len(encoded) > cfg.max_packet_bytes + 30000:

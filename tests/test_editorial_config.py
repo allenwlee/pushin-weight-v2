@@ -13,7 +13,12 @@ def test_shipped_configuration_cannot_spend_or_publish():
 
 def test_atomic_platform_override_does_not_disable_headline_pictures():
     cfg = EditorialConfig(
-        pictures={"atomic": "select_only", "atomic:x": "off", "chatter": "derive"}
+        pictures={"atomic": "select_only", "atomic:x": "off", "chatter": "derive"},
+        daily_usd=1,
+        assessment_usd=1,
+        daily_calls=5,
+        media_daily_calls=1,
+        media_cost_ceiling_usd=1,
     )
     assert cfg.picture_mode("atomic", "x") == "off"
     assert cfg.picture_mode("atomic", "youtube") == "select_only"
@@ -34,3 +39,12 @@ def test_voice_is_versioned_independent_of_provider_and_atomic_tone():
         load_voice("../config")
     with pytest.raises(ValueError, match="unavailable"):
         load_voice("chatter-ja-v1")
+
+
+def test_unavailable_or_mismatched_bindings_rejected_before_activation():
+    from tests.editorial_support import active_config
+
+    with pytest.raises(ValueError, match="binding mismatch"):
+        active_config(voices={"chatter:en": "pulse-en-v1"})
+    with pytest.raises(ValueError, match="unavailable"):
+        active_config(voices={"chatter:ja": "chatter-ja-v1"})

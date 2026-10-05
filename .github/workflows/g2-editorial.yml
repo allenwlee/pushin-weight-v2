@@ -1,0 +1,61 @@
+name: Editorial stories and pictures
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'monitor/**'
+      - 'x_monitor/**'
+      - 'tests/**'
+      - 'project/**'
+      - 'config.yaml'
+      - 'config/editorial*'
+      - 'config/editorial_voices/**'
+      - 'locale/**'
+      - 'pyproject.toml'
+      - '.github/workflows/g2-editorial.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: editorial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: editorial_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: editorial_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://editorial_test:test@127.0.0.1:5432/editorial_test
+      STAFF_COLLECTION_NETWORK_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Check migration state
+        run: python manage.py makemigrations --check --dry-run
+      - name: PostgreSQL regressions (required skips fail; fake providers only)
+        run: >-
+          python -m pytest -q tests/test_editorial*.py
+          tests/test_synthesis_tagged_text.py tests/test_deepinfra.py
+          tests/test_deepinfra_factory_routing.py tests/test_trend_narrative_dispatch.py
+          tests/test_trend_narrative_lifecycle.py tests/test_trend_narrative_tasks.py
+          tests/test_post_synthesis_lifecycle.py tests/test_post_synthesis_api.py
+          tests/test_staff_library.py

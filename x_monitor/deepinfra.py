@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .provider_telemetry import ProviderResponse, ProviderTextResponse
 from .provider_http import https_request
+from .provider_telemetry import ProviderResponse, ProviderTextResponse
 
 DEEPINFRA_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"

@@ -31,6 +31,7 @@ class Event(ClosedModel):
     person_ids: list[UUID] = Field(default_factory=list, max_length=5)
     visual_essential: bool = False
     source_image_url: str = Field(default="", max_length=4096)
+    chart_fact_ids: list[str] = Field(default_factory=list, max_length=10)
     chart_support: Literal["supported", "unavailable", "not_supported"] = "unavailable"
 
 

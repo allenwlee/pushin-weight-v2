@@ -1,0 +1,7 @@
+{% load static i18n %}<!doctype html><html lang="{{ feed.requested_locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% translate "Story archive" %} · PushinWeight</title><link rel="stylesheet" href="{% static 'monitor/editorial/editorial.css' %}"><script src="{% static 'monitor/editorial/editorial.js' %}" defer></script></head>
+<body class="editorial-page"><nav><a href="/">{% translate "Current General" %}</a><a href="?track=chatter&amp;lang={{ feed.locale }}">Chatter</a><a href="?track=pulse&amp;lang={{ feed.locale }}">Pulse</a></nav><main><h1>{% translate "Story archive" %}</h1>
+{% if feed.locale != feed.requested_locale %}<p>{% translate "This story is currently available in English." %}</p>{% endif %}
+{% if feed.track == 'chatter' %}{% include 'monitor/editorial/chatter.html' %}{% endif %}
+<section class="archive-list">{% for item in feed.items %}<article><p class="eyebrow">{{ item.published_at|slice:':10' }}</p><h2><a href="{{ item.url }}">{{ item.headline }}</a></h2><p>{{ item.byline }}</p></article>{% empty %}<p>{% translate "No published stories yet." %}</p>{% endfor %}</section>
+{% if feed.next_cursor %}<a href="?track={{ feed.track }}&amp;lang={{ feed.locale }}&amp;cursor={{ feed.next_cursor|urlencode }}">{% translate "Older stories" %}</a>{% endif %}
+</main></body></html>

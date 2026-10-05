@@ -14,8 +14,9 @@ from core.models import (
     EditorialHero,
     PersonBrandAffiliation,
     Post,
+    TrendNarrativeRun,
 )
-from monitor.trend_narrative_packet import project_evidence
+from monitor.trend_narrative_packet import project_dossier, project_evidence
 
 
 def source_images(post):
@@ -170,6 +171,23 @@ def build_packet(cutoff, cfg):
             "brand_key_snapshot", "headline_en", "secondary_en", "cited_evidence_ids"
         )[:40]
     )
+    latest_chart = (
+        TrendNarrativeRun.objects.filter(
+            window_days=1,
+            facts_as_of__lte=cutoff,
+            facts_as_of__gte=cutoff - timedelta(days=1),
+            status__in=["active", "superseded", "terminal"],
+        )
+        .order_by("-facts_as_of")
+        .first()
+    )
+    chart_context = []
+    if latest_chart:
+        for dossier in latest_chart.snapshot.get("dossiers", [])[:40]:
+            projected = project_dossier(dossier, rank=True)
+            chart_context.append(
+                {key: projected[key] for key in ("brand_key", "facts", "scopes")}
+            )
     packet = {
         "schema": "editorial-evidence-v1",
         "cutoff": cutoff.isoformat(),
@@ -178,7 +196,8 @@ def build_packet(cutoff, cfg):
         "people": people,
         "stories": list(stories.values()),
         "headline_leads": leads,
-        "chart_support": "unavailable",
+        "chart_support": "available" if chart_context else "unavailable",
+        "chart_context": chart_context,
         "coverage": {
             "eligible_24h": total,
             "included_24h": len(posts),
@@ -188,7 +207,14 @@ def build_packet(cutoff, cfg):
         },
     }
     # Trim complete rows rather than silently chopping source strings mid-JSON.
-    for field in ("context", "headline_leads", "people", "stories", "posts"):
+    for field in (
+        "context",
+        "headline_leads",
+        "people",
+        "stories",
+        "chart_context",
+        "posts",
+    ):
         while (
             len(json.dumps(packet, ensure_ascii=False).encode()) > cfg.max_packet_bytes
             and packet[field]
@@ -196,4 +222,5 @@ def build_packet(cutoff, cfg):
             packet[field].pop()
             packet["coverage"]["sampled"] = True
     packet["coverage"]["included_24h"] = len(packet["posts"])
+    packet["chart_support"] = "available" if packet["chart_context"] else "unavailable"
     return packet

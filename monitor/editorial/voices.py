@@ -34,3 +34,16 @@ def load_voice(profile_id: str) -> Voice:
     if voice.id != profile_id or not voice.available:
         raise ValueError("voice unavailable")
     return voice
+
+
+def load_bound_voices(cfg):
+    """Reject unavailable or mismatched locale profiles before any paid work."""
+    voices = {}
+    for binding, profile in cfg.voices.items():
+        voice = load_voice(profile)
+        if f"{voice.track}:{voice.locale}" != binding:
+            raise ValueError("voice binding mismatch")
+        voices[binding] = voice
+    if "chatter:en" not in voices or (cfg.pulse_limit and "pulse:en" not in voices):
+        raise ValueError("English track profiles are required")
+    return voices

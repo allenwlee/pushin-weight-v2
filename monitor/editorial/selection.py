@@ -12,7 +12,7 @@ ordinary stories may also merit both independently. Neither is a valid choice.
 Distinguish a primary announcement from sarcasm, promotion and a reaction to it.
 Do not turn jokes into factual news. Multiple reactions are context, not independent
 corroboration. Select important news even without chart movement. Chart support is
-unavailable unless supplied measurements support it; never invent measurements.
+unavailable without supplied measurements. For supported/not_supported, cite the exact chart_fact_ids for the relevant brand. No causal claim follows from volume alone; never invent measurements.
 Existing headlines are leads, not source truth. Ground each decision in supplied
 post IDs. Existing stories supply candidate identities: use story_id for the same
 development, mark unchanged unless there is a meaningful factual update. A new
@@ -52,10 +52,15 @@ def validate_decisions(raw, packet):
             raise ValueError("unknown brand")
         if event.occurred_at > cutoff:
             raise ValueError("future development")
-        if (
-            event.chart_support == "supported"
-            and packet.get("chart_support") != "supported"
-        ):
+        available_facts = {
+            fact["fact_id"]
+            for chart in packet.get("chart_context", [])
+            if chart["brand_key"] in event.brand_keys
+            for fact in chart["facts"]
+        }
+        if not set(event.chart_fact_ids) <= available_facts:
+            raise ValueError("unknown chart facts")
+        if event.chart_support != "unavailable" and not event.chart_fact_ids:
             raise ValueError("unsupported chart claim")
         images = {url for pid in event.post_ids for url in sources[pid]["images"]}
         if event.source_image_url and event.source_image_url not in images:

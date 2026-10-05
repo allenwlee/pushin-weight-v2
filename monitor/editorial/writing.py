@@ -50,6 +50,11 @@ matching the supplied schema. Do not add facts from memory or unseen image URLs.
             {
                 "event": event.model_dump(mode="json"),
                 "evidence": sources,
+                "chart_context": [
+                    c
+                    for c in packet.get("chart_context", [])
+                    if c["brand_key"] in event.brand_keys
+                ],
                 "output_schema": schema,
             },
             ensure_ascii=False,

@@ -73,8 +73,24 @@ class EditorialConfig(BaseModel):
     @model_validator(mode="after")
     def validate_activation(self):
         kinds = {"atomic", "current_headline", "chatter", "pulse"}
-        if any(key.split(":")[0] not in kinds for key in self.pictures):
+        if any(
+            key not in kinds
+            and not (
+                key.startswith("atomic:") and key.count(":") == 1 and key[7:].isalnum()
+            )
+            for key in self.pictures
+        ):
             raise ValueError("unknown picture content kind")
+        if any(
+            key
+            not in {
+                f"{track}:{locale}"
+                for track in ("chatter", "pulse")
+                for locale in ("en", "zh-cn", "ja")
+            }
+            for key in self.voices
+        ):
+            raise ValueError("unsupported voice binding")
         if self.enabled and (
             set(self.routes) != {"editor", "chatter", "pulse"}
             or not self.daily_usd
@@ -82,12 +98,18 @@ class EditorialConfig(BaseModel):
             or not self.daily_calls
         ):
             raise ValueError("generation requires explicit routes and positive budgets")
-        if (
-            self.enabled
-            and "derive" in self.pictures.values()
-            and (not self.media_daily_calls or not self.media_cost_ceiling_usd)
+        if "derive" in self.pictures.values() and (
+            not self.media_daily_calls
+            or not self.media_cost_ceiling_usd
+            or not self.daily_usd
+            or not self.assessment_usd
+            or not self.daily_calls
         ):
             raise ValueError("derivatives require explicit media budgets")
+        if self.enabled:
+            from .voices import load_bound_voices
+
+            load_bound_voices(self)
         return self
 
     def picture_mode(self, content_kind: str, source_platform: str = "") -> PictureMode:
