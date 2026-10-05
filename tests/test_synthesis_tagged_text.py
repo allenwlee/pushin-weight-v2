@@ -219,3 +219,13 @@ def test_formatter_reason_is_specific_and_cannot_leak_response_text():
     assert "PRIVATE_PROVIDER_OUTPUT" not in code
     assert synthesis_failure_code(ValueError("PRIVATE_PROVIDER_OUTPUT")) == "ValueError"
     assert synthesis_failure_code(ValueError("synthesis_private_data")) == "ValueError"
+
+
+def test_original_source_drives_every_locale_without_a_house_voice():
+    client = _TextClient(_answer())
+    synthesize_post(post_id='p1', context={'source': '原文', 'stored_quote': '別人'}, client=client, config=_config())
+    system = client.calls[0]['system']
+    assert 'context.source' in system
+    assert 'directly from the original' in system
+    assert 'First write commentary_en' not in system
+    assert 'house voice' in system

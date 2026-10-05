@@ -18,9 +18,9 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.parse import urlparse
 
 from .provider_telemetry import ProviderResponse, ProviderTextResponse
+from .provider_http import https_request
 
 DEEPINFRA_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
@@ -563,25 +563,15 @@ class DeepInfraChatCompletionsClient:
                 raise
             except (TimeoutError, OSError) as exc:
                 raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
-        parsed = urlparse(self._endpoint_url())
-        conn = http.client.HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=timeout)
         try:
-            try:
-                conn.request(
-                    "POST",
-                    parsed.path or "/v1/openai/chat/completions",
-                    body=json.dumps(request, ensure_ascii=False).encode("utf-8"),
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                )
-                response = conn.getresponse()
-                body = response.read()
-            except (TimeoutError, OSError, http.client.HTTPException) as exc:
-                raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
-        finally:
-            conn.close()
-        if not 200 <= response.status < 300:
-            exc_type = DeepInfraRetryableError if response.status == 429 or response.status >= 500 else DeepInfraPermanentError
-            raise exc_type(f"deepinfra_http_status_{response.status}")
+            status, body = https_request(self._endpoint_url(), self.api_key, request, timeout=timeout)
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
+        except ValueError as exc:
+            raise DeepInfraPermanentError("deepinfra_response_shape_invalid") from exc
+        if not 200 <= status < 300:
+            exc_type = DeepInfraRetryableError if status == 429 or status >= 500 else DeepInfraPermanentError
+            raise exc_type(f"deepinfra_http_status_{status}")
         try:
             decoded = json.loads(body)
         except (TypeError, ValueError) as exc:

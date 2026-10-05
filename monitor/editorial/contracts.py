@@ -10,7 +10,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class ClosedModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 class Event(ClosedModel):
@@ -28,7 +28,7 @@ class Event(ClosedModel):
     subject_kind: Literal[
         "company_direction", "model_release", "agent_release", "person", "other"
     ] = "other"
-    person_ids: list[int] = Field(default_factory=list, max_length=5)
+    person_ids: list[UUID] = Field(default_factory=list, max_length=5)
     visual_essential: bool = False
     source_image_url: str = Field(default="", max_length=4096)
     chart_support: Literal["supported", "unavailable", "not_supported"] = "unavailable"
