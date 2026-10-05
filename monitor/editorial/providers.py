@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from x_monitor.provider_http import https_request
 
+from .contracts import ProviderReplyError
 from .persistence import call_once
 
 
@@ -70,23 +71,46 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
 
     def send():
         status, raw = transport(route.endpoint, key, body, timeout=90)
+        diagnostics = {"http_status": status}
         if not 200 <= status < 300:
-            raise ValueError(f"provider_http_{status}")
-        decoded = json.loads(raw)
-        if decoded.get("model") != route.model:
-            raise ValueError("served model mismatch")
-        choices = decoded.get("choices", [])
-        if len(choices) != 1 or choices[0].get("finish_reason") != "stop":
-            raise ValueError("incomplete model response")
-        result = json.loads(choices[0]["message"]["content"])
-        if not isinstance(result, dict):
-            raise TypeError("object response required")
+            raise ProviderReplyError(f"provider_http_{status}", diagnostics)
+        try:
+            decoded = json.loads(raw)
+        except (ValueError, TypeError) as exc:
+            raise ProviderReplyError("invalid_provider_json", diagnostics) from exc
+        if not isinstance(decoded, dict):
+            raise ProviderReplyError("malformed_provider_response", diagnostics)
         usage = decoded.get("usage", {})
         kept = {
             k: usage[k]
             for k in ("prompt_tokens", "completion_tokens", "total_tokens")
-            if type(usage.get(k)) is int and usage[k] >= 0
+            if isinstance(usage, dict) and type(usage.get(k)) is int and usage[k] >= 0
         }
+        diagnostics["usage"] = kept
+        diagnostics["model_matches_config"] = decoded.get("model") == route.model
+        if decoded.get("model") != route.model:
+            raise ProviderReplyError("served_model_mismatch", diagnostics)
+        choices = decoded.get("choices", [])
+        if (
+            not isinstance(choices, list)
+            or len(choices) != 1
+            or not isinstance(choices[0], dict)
+        ):
+            raise ProviderReplyError("malformed_provider_response", diagnostics)
+        reason = choices[0].get("finish_reason")
+        diagnostics["finish_reason"] = (
+            reason
+            if reason in ("stop", "length", "content_filter", "tool_calls", "error")
+            else "other"
+        )
+        if reason != "stop":
+            raise ProviderReplyError("incomplete_model_response", diagnostics)
+        try:
+            result = json.loads(choices[0]["message"]["content"])
+        except (ValueError, TypeError, KeyError) as exc:
+            raise ProviderReplyError("invalid_model_json", diagnostics) from exc
+        if not isinstance(result, dict):
+            raise ProviderReplyError("non_object_model_response", diagnostics)
         return {"data": result, "usage": kept, "model": decoded["model"]}
 
     return call_once(assessment, stage, "text", ceiling, cfg, send)

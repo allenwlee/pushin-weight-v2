@@ -113,6 +113,63 @@ def test_launch_text_and_media_share_the_five_dollar_daily_ceiling(monkeypatch):
     assert len(sent) == 5 and EditorialCall.objects.count() == 5
 
 
+@pytest.mark.parametrize(
+    "status,model,reason,code",
+    [
+        (503, "expected", "stop", "provider_http_503"),
+        (200, "different", "stop", "served_model_mismatch"),
+        (200, "expected", "length", "incomplete_model_response"),
+    ],
+)
+def test_rejected_provider_reply_keeps_safe_diagnostics_and_cannot_resubmit(
+    monkeypatch, status, model, reason, code
+):
+    import json
+
+    from monitor.editorial.config import Route
+    from monitor.editorial.contracts import ProviderReplyError
+    from monitor.editorial.providers import json_call
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-private-key")
+    cfg = EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=10)
+    route = Route(
+        model="expected",
+        endpoint="https://openrouter.ai/api/v1/chat/completions",
+        key_env="OPENROUTER_API_KEY",
+        input_usd_per_million=1,
+        output_usd_per_million=1,
+    )
+    row = claim_assessment(timezone.now(), "diagnostics")
+    sends = []
+
+    def transport(*args, **kwargs):
+        sends.append(1)
+        return status, json.dumps(
+            {
+                "model": model,
+                "choices": [
+                    {
+                        "finish_reason": reason,
+                        "message": {"content": "PRIVATE PROVIDER TEXT"},
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 34},
+            }
+        ).encode()
+
+    request = {"system": "Return JSON", "user": "A source"}
+    with pytest.raises(ProviderReplyError):
+        json_call(row, "editor", route, request, cfg, transport=transport)
+    receipt = row.calls.get()
+    assert receipt.state == "ambiguous" and receipt.error_code == code
+    assert receipt.response["failure"]["http_status"] == status
+    saved = json.dumps(receipt.response)
+    assert "PRIVATE PROVIDER TEXT" not in saved and "test-only-private-key" not in saved
+    with pytest.raises(BudgetHeld):
+        json_call(row, "editor", route, request, cfg, transport=transport)
+    assert len(sends) == 1
+
+
 def test_concurrent_workers_share_one_daily_reservation_limit():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier

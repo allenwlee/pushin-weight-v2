@@ -9,6 +9,15 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
+class ProviderReplyError(ValueError):
+    """A fixed failure code and whitelisted metadata, never raw provider text."""
+
+    def __init__(self, code, diagnostics):
+        super().__init__(code)
+        self.code = code
+        self.diagnostics = diagnostics
+
+
 class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

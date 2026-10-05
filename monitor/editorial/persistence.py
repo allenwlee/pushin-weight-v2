@@ -14,7 +14,7 @@ from core.models import (
     EditorialHero,
 )
 
-from .contracts import interval_start
+from .contracts import ProviderReplyError, interval_start
 
 
 class BudgetHeld(ValueError):
@@ -107,9 +107,10 @@ def call_once(row, stage, kind, ceiling, cfg, send):
     try:
         response = send()
     except Exception as exc:
-        EditorialCall.objects.filter(pk=call.pk, state="sent").update(
-            state="ambiguous", error_code=type(exc).__name__[:80]
-        )
+        failure = {"state": "ambiguous", "error_code": type(exc).__name__[:80]}
+        if isinstance(exc, ProviderReplyError):
+            failure.update(error_code=exc.code, response={"failure": exc.diagnostics})
+        EditorialCall.objects.filter(pk=call.pk, state="sent").update(**failure)
         raise
     EditorialCall.objects.filter(pk=call.pk, state="sent").update(
         state="complete", response=response
