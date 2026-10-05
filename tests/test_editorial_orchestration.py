@@ -105,6 +105,44 @@ def test_production_harvest_dispatch_reaches_g2_when_legacy_headlines_are_off(
     assert task.apply_async.call_count == 1
 
 
+def test_disabled_while_building_packet_sends_no_editor_call(monkeypatch):
+    from core.models import Post
+    from monitor.editorial import service
+    from monitor.editorial.config import EditorialConfig
+
+    Post.objects.create(
+        tweet_id="review-disable",
+        text="New release",
+        created_at=timezone.now() - timedelta(minutes=1),
+    )
+    cfg = active_config(pictures={})
+    current = [cfg]
+    original = service.build_packet
+
+    def build_then_disable(cutoff, config):
+        packet = original(cutoff, config)
+        current[0] = EditorialConfig()
+        return packet
+
+    monkeypatch.setattr(service, "build_packet", build_then_disable)
+    call = Mock(return_value={"data": {"events": []}, "model": "test", "usage": {}})
+    result = run_editorial(
+        {
+            "schema_version": 1,
+            "completed_at": timezone.now().isoformat(),
+            "source_cycle_id": "review",
+            "outcome": "completed",
+            "dry_run": False,
+        },
+        cfg=cfg,
+        call=call,
+        policy_reader=lambda: current[0],
+    )
+    call.assert_not_called()
+    assert result["status"] == "held"
+    assert EditorialEdition.objects.count() == 0
+
+
 def test_stale_publication_cannot_replace_a_newer_hero():
     from core.models import EditorialHero
     from monitor.editorial.contracts import Copy

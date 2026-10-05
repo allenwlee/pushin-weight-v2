@@ -187,6 +187,9 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
             outcome.update(status="unchanged", packet_identity=identity)
             finish_assessment(row, outcome)
             return outcome
+        cfg = policy_reader()
+        if not cfg.enabled:
+            raise BudgetHeld("disabled before editor")
         response = call(
             row, "editor:v1", cfg.routes["editor"], editor_request(packet, cfg), cfg
         )

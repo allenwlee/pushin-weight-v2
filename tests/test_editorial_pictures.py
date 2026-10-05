@@ -147,6 +147,29 @@ def test_affiliation_correction_invalidates_cached_source_and_selects_founder():
     assert second.provenance["fallback"]
 
 
+def test_replaced_photo_cannot_verify_saved_source():
+    from monitor.editorial.pictures import assignment_eligible
+
+    person, _, photo = person_photo("blue", "founder")
+    _, _, replacement = person_photo("red")
+    cfg = EditorialConfig(pictures={"chatter": "select_only"})
+    kwargs = {"content_kind": "chatter", "content_id": "one", "revision": "v1"}
+    event = selection(person_ids=[person.pk])
+    row = select_picture(event, {"posts": []}, cfg, **kwargs)
+    assert assignment_eligible(row, cfg)
+
+    photo.media = replacement.media
+    photo.save(update_fields=["media"])
+    row.refresh_from_db()
+    assert row.source_media_id != row.person_media.media_id
+    assert not assignment_eligible(row, cfg)
+
+    refreshed = select_picture(event, {"posts": []}, cfg, **kwargs)
+    assert refreshed.pk != row.pk
+    assert refreshed.source_media_id == replacement.media_id
+    assert assignment_eligible(refreshed, cfg)
+
+
 def test_essential_post_image_is_used_instead_of_unrelated_portrait(monkeypatch):
     from core.staff_assets.media import media_storage
 

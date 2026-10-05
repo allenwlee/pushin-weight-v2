@@ -58,6 +58,7 @@ def assignment_eligible(row, cfg, *, affiliations=None):
             or role.person_id != row.person_media.person_id
             or role.brand_id not in row.provenance.get("brand_keys", [])
             or not role_current(role)
+            or row.source_media_id != row.person_media.media_id
             or not photo_eligible(row.person_media, cfg)
         ):
             return False

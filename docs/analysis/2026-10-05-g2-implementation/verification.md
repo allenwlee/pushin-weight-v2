@@ -3,8 +3,8 @@
 Candidate: `feat/g2-editorial`, based on `71377000`. Local checks on October 5, 2026.
 Delivery scope: open PR and CI decided; no deployment or paid model/media trial.
 
-- Affected regression suite: **170 passed**, 107 required PostgreSQL tests, zero skips.
-- Later focused suite: **37 passed**, 26 required PostgreSQL tests, zero skips.
+- Final affected regression suite after simplification and review fixes: **173 passed**, 110 required PostgreSQL tests, zero skips.
+- Review reproduced and corrected stale policy at the first editor call and stale image verification after a G1 media replacement. Both regressions passed with the fixes.
 - Migrations 0065–0068 applied to isolated `g2_editorial_dev`; migration drift check and Django system check passed.
 - Schema reference reconciles 128 tables and 1,605 physical columns against models, migration state and local PostgreSQL; table/column sets, types, nullability and named index/constraint coverage agree.
 - New editorial modules/tests pass Ruff; repository-wide lint remains non-clean in existing code. No type-check command is configured in pyproject.toml.
@@ -31,6 +31,8 @@ The baseline `/stories/` returned 404 before implementation. Local fixtures exer
 | Live OAuth login, social-platform rendering, generated video quality | Not exercised: local staff authentication and fixtures; no third-party publishing or paid generation. |
 
 Screenshots remain in the local evidence directory as desktop.png, desktop-full.png, mobile.png and story-mobile.png. Fixture-only picture configuration was restored to the checked-in all-off configuration.
+
+Final LFG browser pass after the review fixes: [browser receipt](browser-result.md). The source image initially remained undecoded during navigation; after awaiting image decode it loaded at its stored 320-pixel width. This is normal image loading, not a failed source. All tested routes passed; external login, card rendering and paid generation remain explicitly skipped.
 
 ## Live persisted-health baseline
 
