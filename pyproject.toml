@@ -30,6 +30,7 @@ dependencies = [
     "anthropic==0.120.2",
     "cryptography>=49,<50",
     "pillow>=12.1,<13",
+    "django-storages[s3]>=1.14.6,<2",
 ]
 
 [project.optional-dependencies]

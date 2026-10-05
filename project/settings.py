@@ -368,6 +368,9 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     _dbapi2.connect = _patched_connect
 
 # G1 collection remains an independent, opt-in worker. Local media never enters Git.
+R2_ACCOUNT_ID = env("R2_ACCOUNT_ID", default="")
+R2_ACCESS_KEY_ID = env("R2_ACCESS_KEY_ID", default="")
+R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY", default="")
 STAFF_MEDIA_ROOT = env("STAFF_MEDIA_ROOT", default=str(BASE_DIR / ".local" / "staff-media"))
 STORAGES["staff_media"] = {
     "BACKEND": env("STAFF_MEDIA_STORAGE_BACKEND", default="django.core.files.storage.FileSystemStorage"),
@@ -375,3 +378,11 @@ STORAGES["staff_media"] = {
 }
 STAFF_MEDIA_DURABLE = env.bool("STAFF_MEDIA_DURABLE", default=False)
 STAFF_COLLECTION_NETWORK_ENABLED = env.bool("STAFF_COLLECTION_NETWORK_ENABLED", default=False)
+
+# G2 consumes the same storage contract with an independent derivative namespace.
+EDITORIAL_MEDIA_ROOT = env("EDITORIAL_MEDIA_ROOT", default=str(BASE_DIR / ".local" / "editorial-media"))
+STORAGES["editorial_media"] = {
+    "BACKEND": env("EDITORIAL_MEDIA_STORAGE_BACKEND", default="django.core.files.storage.FileSystemStorage"),
+    "OPTIONS": env.json("EDITORIAL_MEDIA_STORAGE_OPTIONS", default={"location": EDITORIAL_MEDIA_ROOT}),
+}
+EDITORIAL_MEDIA_DURABLE = env.bool("EDITORIAL_MEDIA_DURABLE", default=False)

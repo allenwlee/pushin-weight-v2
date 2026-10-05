@@ -5,13 +5,13 @@ product_contract_source: legacy-requirements
 origin: docs/brainstorms/2026-09-30-104924-general-launch-charter.md
 execution: code
 ollija:
-  change_id: feat-g1-staff-identity-library-2026-10-01-092148
-  branch: feat/g1-staff-identity-library
+  change_id: feat-g1-r2-media-2026-10-05
+  branch: feat/g1-r2-media
   workflow: lfg
   delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
-  delivery_route_selected_by_user: false
+  delivery_route_selected_by_user: true
   staging_transport: branch
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -24,12 +24,12 @@ This block is generated guidance. Do not edit it directly. Correct durable facts
 - Authoritative host: `fuchitalee`
 - Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
 - Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
-- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library`
-- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library/docs/plans/2026-10-01-092148-feat-g1-staff-identity-library-plan.md`
-- Change: `feat-g1-staff-identity-library-2026-10-01-092148`
-- Branch: `feat/g1-staff-identity-library`
-- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library/render-staging.yaml`
-- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library/render.yaml`
+- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media`
+- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media/docs/plans/2026-10-01-092148-feat-g1-staff-identity-library-plan.md`
+- Change: `feat-g1-r2-media-2026-10-05`
+- Branch: `feat/g1-r2-media`
+- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media/render-staging.yaml`
+- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media/render.yaml`
 - Staging URL: `https://pushinweight-staging-web.onrender.com`
 - Production URL: `https://pushinweight-web.onrender.com`
 
@@ -56,8 +56,8 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
 11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library` without `--force`.
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-r2-media` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
@@ -73,6 +73,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE --># G1 staff identities and images — initial batch and ongoing acquisition
 
 ## Plain-English Summary
+
+The active follow-up moves staff images and editorial media to private
+Cloudflare R2 storage shared by Render's web and worker services. It preserves
+database references and original disk files. The October 4 G1 release below
+remains complete; the October 5 R2 phase is the current work. Completion requires
+verified file copies and shared access on staging and production. Credentials
+and live R2 verification are still outstanding.
 
 U0–U11 are implemented, including the independent review repairs to identity
 matching, reviewed corrections, job conclusions and sourced dossier fields.
@@ -152,6 +159,118 @@ automatic handling of new arrivals. Photo quality, storage, reuse criteria, and
 operating budgets still need concrete settings before automated production
 collection. Local research and the dossier prototype have run; the production
 acquisition process and its activation have not started.
+
+## October 5 follow-up — shared R2 media for G1 and G2
+
+The owner accepted this bounded follow-up after asking about G2 asset growth
+and Render compatibility, then requested a G2 handoff as the first step. The
+October 4 scaffold/DeepSeek release remains complete. This phase addresses the
+shared worker storage left open by that release; it does not reopen PR #49.
+
+The intended result is one configured storage service accessible from Render's
+web and worker processes, with separate staff-original and editorial-output
+namespaces and isolated staging/production data. Existing database object names,
+hashes and attribution records remain valid. Published media can be delivered
+directly from R2 after application access checks. New provider searches and paid
+media generation remain governed by their separate activation decisions.
+
+**Current state:** implementation and local review fixes are on `feat/g1-r2-media`, based on
+`713770008eacc3f890c90e6fce07efad940eb664`. The owner requested proceeding
+on October 5 after the G2 handoff, and G2 has acknowledged its scope. R2 credentials
+were not found locally and have been requested while code work proceeds. No R2
+bucket, transfer or deployment is complete yet. The adapter uses explicit R2
+credentials and signed URLs valid for at most 300 seconds. Cloudflare account
+access, bucket names and runtime credential scopes still need live verification.
+Fresh read-only checks on October 5 found 35 staff image objects / 20,060,954
+bytes in both production and staging, with no missing files or hash mismatches.
+Inventory again immediately before migration. MiniMax's local research is not
+a production import.
+
+### Ownership and shared interface
+
+| Owner | Scope |
+| --- | --- |
+| G1 / `g1-chinese-faces-20260930` | R2 configuration, storage adapter/dependency, shared Django settings, Render environment configuration, file-copy command, hash verification and staged storage deployment. Own shared `project/settings.py`, dependency/lock files and deployment configuration for this change. |
+| G2 / editorial session | Integration in `monitor/editorial/media.py` and `monitor/editorial/views.py`, source/generated policy checks, direct-download response behavior and editorial media tests. G2 acknowledged this split at 21:17 JST; its existing active work is preserved. |
+
+Keep the existing `storages["staff_media"]` and `storages["editorial_media"]`
+interfaces. Configuration remains `STAFF_MEDIA_STORAGE_BACKEND`,
+`STAFF_MEDIA_STORAGE_OPTIONS`, `STAFF_MEDIA_DURABLE` and the corresponding
+`EDITORIAL_MEDIA_*` variables. Filesystem `*_MEDIA_ROOT` settings are local
+fallbacks, not R2 paths. Preserve relative `StaffMediaObject.storage_name` and
+`EditorialPicture.generated_storage_name`; do not save temporary signed URLs as
+object identifiers. The backend is `core.media_storage.PrivateR2Storage`; its
+credential variables are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY`. The [R2 operating guide](../operations/r2-media-storage.md)
+records the exact alias settings, bucket/prefix proposals, copy commands and
+verification procedure. Credentials stay in secret stores.
+
+G2's current `asset()` view streams a `FileResponse` through Render. The accepted
+direction is authorized, short-lived R2 links while retaining the existing
+access, verification, edition/picture selection and content-type switches.
+Already issued signed links can remain usable until expiry; URL lifetime and
+response caching must be explicit and tested against G2's disablement behavior.
+Local filesystem delivery remains available for local tests.
+
+### Implementation sequence and completion evidence
+
+1. Deliver the coordination handoff and link this phase from the shared index.
+   G2 can continue independent editorial work while storage is prepared.
+2. Reconcile current remote main and G2 integration state, then create a fresh
+   implementation branch/worktree and PR for R2. Carry this same plan/history
+   forward and update its canonical pointer/branch metadata; preserve the dirty
+   prior worktree and never create a competing R2 implementation plan.
+3. Inventory current assets/settings, confirm account access, configure private
+   environment-separated R2 storage and the Django adapter. Keep staff originals
+   separate from editorial derivatives and configure access for required services.
+4. Copy the current inventory using the same relative keys. Compare SHA-256,
+   byte counts and missing-object reports; recheck new writes before cutover.
+   Copy first, retain original disk files and a recorded rollback configuration.
+5. Exercise existing staff read/write consumers and G2's storage/delivery path
+   on staging with saved media; provider calls are unnecessary for storage proof.
+   Verify denied access, disabled pictures, expired links and video range/playback.
+6. Follow the accepted staged route to production for the storage change. Record
+   deployed revisions and effective settings; prove web-to-worker and worker-to-web
+   object access, fresh writes, migrated hashes, image/video delivery and access
+   after redeployment. Mark a namespace durable only after these checks pass.
+7. Publish readiness evidence for G2. Staff collection and paid generation
+   activation remain separate. Disk deletion/retention cleanup is a later explicit
+   action after the production observation period; no deletion during handoff.
+
+The regression checks cover existing staff storage/dossier reads, deduplication,
+local filesystem behavior, missing-object handling and G2 media eligibility and
+disablement. Passing backend configuration alone does not prove G2 integration.
+G2's disabled-code deployment need not wait for R2; media activation requires
+verified shared access to both namespaces.
+
+### October 5 implementation and verification record
+
+- Added the shared private adapter, opt-in settings for both aliases,
+  `migrate_staff_media` and `check_media_storage`. Copying preserves DB records
+  and source bytes, resumes after partial failure and checks destination hashes.
+  Destination-only verification does not depend on the Render disk.
+- The final full G1 regression suite passed 301 tests, including 176 required
+  PostgreSQL tests, with no skipped required checks. All 36 Ollija checks passed;
+  Django reports no model migrations and scoped Ruff checks pass. The post-fix
+  focused storage/staff/dossier run passed 50 tests before the full regression run.
+- Local review ran sequentially in the main agent, following the user-level Task
+  mapping. It found two concrete issues: an existence-check/write race and
+  storage-option overrides of dedicated credentials. Both are fixed, with five
+  initially failing regression cases and added concurrent-writer coverage.
+- Independent cross-model coverage is incomplete: Claude Opus 5.5 requested at
+  high effort returned HTTP 402 insufficient balance without reviewing; the
+  replacement Grok 4.7 requested at extra-high effort timed out after 600 seconds
+  without a usable result. Neither is counted as a passed independent review.
+- Production source verification observed `f176e61481ff93899424ba4aa4743a5ee86446dd`;
+  staging observed G2's `bacbb4337d62b3b97bed3f37956ad225993f0790`. Both inventories
+  hash to `5d87e585ab518346379658826772adbc84a36d75ba7c9fc351276553679f6c8e`.
+  Source files and database records remain unchanged. Current runtime backends
+  are filesystem, durability is false and staff collection networking is off.
+- Local evidence: `.context/g1-r2-20261005/` in this worktree, including source
+  inventories, test logs, review findings and the exact reviewed diff. No R2
+  credentials were present when checked; they have been requested from the owner.
+  G2's staging work and environment settings are preserved. No buckets, copied
+  objects, durability activation or storage deployment are claimed yet.
 
 ## Execution record — October 1 scaffolding pilot
 
@@ -2220,6 +2339,166 @@ and receipts. Do not force-remove it.
 
 
 ## Delivery Exceptions
+
+### October 5 R2 follow-up delivery
+
+The owner's latest acceptance ("ok let's do that") selects the described staged
+R2 migration through production, using a fresh branch/PR and the existing G1
+plan. The handoff was delivered; the owner then explicitly requested moving forward with G1 R2. It does not reopen the
+completed DeepSeek release or authorize paid collection, ongoing generation,
+MiniMax ingestion, deletion of existing disk copies, or changes to another
+session's active files. Current delivery metadata applies to this R2 follow-up;
+the MiniMax section below records the earlier local-research endpoint. This same
+plan has been carried into `.worktrees/feat/g1-r2-media` and reannotated for the
+fresh branch. The prior dirty scaffold worktree remains preserved. The R2 release
+must incorporate G2's current shared-settings contract and preserve its active
+staging revision; Cloudflare access remains a runtime prerequisite, not a reason
+to change unrelated settings or create empty commits.
+
+### October 5 MiniMax research delivery
+
+The owner's later display correction is delivered as
+`/Users/allenwlee/Downloads/agents/2026-10-05-172606-minimax-team-names.html`,
+opened and independently re-read in normal Chrome with title
+“MiniMax — Names, Accounts & Image Verification.” All 45 staff cards and 15
+review observations now have Field / storage and Value / verification columns.
+Labels distinguish official professional names, published or corroborated names,
+aliases, account display text, handles, generated romanizations and unknowns.
+Image verification remains separate and changes with the selected image.
+
+For 破晓, the preserved `pushinweight_shadow` export captured at
+2026-10-05T02:00:50.090605Z contains `accounts.display_name = 破晓`,
+`accounts.handle = poxiao_h`, and its avatar URL in `accounts.profile_picture`.
+No linked Person was returned for that account in the export. This is dated
+snapshot evidence, not a fresh production query. The Poxiao rendering is saved
+in `team-page/name-labels/field-guide.json` as a generated romanization of the
+alias; a potential `people_names` destination is explicitly unimported. No
+given/family components or confirmed name status are invented. Original
+`people.jsonl`, coverage, sources, requests, database export and embedded media
+remain byte-identical. There were no collection calls or database writes.
+
+The real-browser baseline had no field tables, storage notice or generated-name
+label. The delivered artifact passes 25 browser checks covering the new labels,
+Poxiao/Chinese/handle/variant searches, all image selections, filters, source
+links and desktop/mobile layout; all 47 images decode. A filtered PDF retains
+the name/type/storage labels; long column identifiers wrap as normal text.
+Remote SHA-256 matches the checked local file
+`bb1efed9e5e744e7d4e5727c5f823432c134d34337cb8d6c3bfd7ec39ecab9c8`.
+Receipts and original presentation backup are in the MiniMax run's
+`team-page/name-labels/`. This private HTML task does not change application UI
+or its deployment; the existing on-request delivery selection remains.
+
+The owner then explicitly requested both ce-compound capture and updates to the
+existing user-level skill. Two sequential Full-mode captures document
+[named image-block attribution](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library/docs/solutions/workflow-issues/2026-10-05-142500-staff-photo-named-block-attribution.md)
+and [separate research coverage units](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g1-staff-identity-library/docs/solutions/workflow-issues/2026-10-05-142900-staff-research-coverage-counting.md).
+These local research documents remain in the preserved prior G1 worktree; they
+are historical context and are not part of the R2 code change.
+The parent performed the research/validation roles sequentially, following the
+user's AGENTS.md tool mapping; no independent-agent review is claimed. Both
+seven-day prior-session probes found no matching session after excluding this
+thread. No overlapping solution or stale related document required a refresh.
+Three scoped glossary entries define image attribution, portrait coverage and
+research completion; existing agent instructions already expose the knowledge store.
+
+The canonical shared collect-chinese-workers skill and four existing references
+now include exact image-block checks, planned-employment/copied-claim holds,
+alias reconciliation, company-join versus role dates, evidence-stage counts,
+safe presentation rebuilds, portable team-page delivery and qualified MiniMax
+workload observations alongside the DeepSeek baseline. Existing X-first routing,
+SerpApi/shared quota, China-connection gate and automatic invocation remain.
+Claude's symlink resolves to that same canonical skill; Codex discovers it in
+the shared skill root. No separate skill copy or instruction-file edit was needed.
+
+Validation: skill format and both learning frontmatter schemas pass; all 18
+local skill links resolve; 12 evidence-grounded scenarios pass. Mechanical
+learning checks flagged five run-relative private evidence paths, all explicitly
+labeled operator artifacts and verified at their stated absolute run root.
+Two image-filename hex notes are not commit claims. Semantic checks verified
+14 claims across the two captures. These are parent checks, not independent
+forward-testing. Receipts and skill diffs are in
+`.context/g1-compound-minimax-20261005/`. No new collection, original dossier
+change, database write, commit or push was part of this documentation task.
+
+Earlier on October 5, the owner requested a separate company-team-style HTML page with
+specific verification notes for each image, copied to Downloads/agents and
+opened in allenwlee Chrome. Build from the final saved records without new
+research. Keep current, dated and former staff distinct, do not promote held
+images or identities, embed media for portable viewing, and preserve the
+original dossier. Verify all displayed images, card counts, filters, image
+selection, responsive layout, file-transfer hash and the actual remote tab.
+This is a local presentation task; product UI assurance and deployment do not
+apply. Application files, database records and the separate XHS browser remain
+outside its scope.
+
+Delivered the team page at 13:26 JST as
+`/Users/allenwlee/Downloads/agents/2026-10-05-132603-minimax-team.html` and
+confirmed the expected title and file URL in the active normal Chrome tab.
+The authoritative copy and builder are in the MiniMax run's `team-page/` and
+`scripts/build_team_page.py`. All 45 staff/history cards retain role/name sources,
+per-image attribution, separate current/dated/former sections, image switching,
+enlargement and review notes. The 15 unconfirmed/alias records remain in a
+separate appendix; their two saved avatars account for two of the 47 embedded
+image files. The saved interview video is also embedded. No new source requests.
+Twenty-nine browser checks passed, including 47-image loading, nine mainland
+portrait gaps, all filter counts, caption switching and 390px layout. Desktop
+1440px layout and actual video playback passed. The transferred 9,657,640-byte
+file matches SHA-256 `a4845fdbb8a448363cc4bf3ca983a9d78e5e531c546dc42119a230037f8dbcd8`.
+Receipts: `team-page/manifest.json`, `browser-verification.json`, `delivery.json`;
+desktop, card and mobile screenshots are alongside them. No DB/Git delivery.
+
+The October 4 production release is complete and remains recorded below.
+The current follow-up is the owner's MiniMax collection request, excluding
+Xiaohongshu, with a private local dossier and saved evidence as its endpoint.
+It does not extend the completed DeepSeek deployment to a MiniMax import,
+commit/push, deployment, scheduler or new live X-list request. The delivery
+metadata now describes this follow-up, not a reversal of the completed release.
+
+The owner requires an X-account staff inventory first, SerpApi rather than
+SearchApi, shared accounting for the Starter plan's 1,000 monthly searches,
+and individual mainland-China ties before Chinese enrichment. Employer
+headquarters, a name, language or appearance do not establish those ties.
+Unknown connections remain under review; people with no connection found in
+the checked biographies use general research. Preserve dated and former jobs,
+including the owner-confirmed Skyler Miao departure. These rules are in the
+canonical user-level collect-chinese-workers skill; this task makes no claim
+that its local skill edits are committed or pushed.
+
+The bounded research pass is complete. Its run directory is
+`/Users/fuchitalee/.local/state/collect-chinese-workers/runs/minimax.io/2026-10-05T020000Z`.
+The [dossier](/Users/fuchitalee/.local/state/collect-chinese-workers/runs/minimax.io/2026-10-05T020000Z/dossier.html)
+and [coverage report](/Users/fuchitalee/.local/state/collect-chinese-workers/runs/minimax.io/2026-10-05T020000Z/coverage-report.md)
+retain per-claim sources, failures, held candidates, queries and next actions.
+The inventory has 45 employment-supported people: four official current leaders,
+11 current-role claims in saved profiles, 17 dated claims and 13 former staff.
+Of those, 21 have documented individual mainland ties, five use general research
+and 19 require connection review. Four employment candidates and 11 potentially
+overlapping alias observations stay separate from the 45-person count.
+
+The dossier displays 47 unique locally saved image files, including 18 account
+images and some photograph variants, plus one saved video and five distinct
+video-source links. Twelve of the 21 qualifying people have a source-attributed
+individual photo; nine still lack one. This is not a complete employee census,
+and the photo requirement remains unmet. Account ownership does not establish
+the depicted subject. The preceding person's government-biography image was
+excluded after checking page structure; the correctly positioned Yun Yeyi image
+failed to load. No facial comparison was performed.
+
+The final shared SerpApi snapshot records 78 searches used and 922 remaining;
+75 responses completed and three requests failed or remained unresolved.
+The 3,658 returned entries include duplicates and title/snippet triage; they
+are not 3,658 opened source pages. Page-attempt evidence, 249 source-ledger
+records and the closing sweep are saved. The last sweep added no eligible
+unique person; unresolved employment and connection claims remain explicit holds.
+
+File decoding and hashes passed for all 47 displayed images and the saved video.
+Browser checks found no broken/external media, correct scope/status/name filters,
+working print expansion and no desktop/mobile overflow. Validation receipts are
+`evidence/file-validation.json` and `evidence/browser-validation.json`.
+The run is `completed_within_scope`, with no background queries or DB writes.
+Resume from the final JSON/ledger/report rather than replaying the earlier
+`reconcile_people.py` phase snapshot. A requested continuation should target
+the recorded gaps and refresh quota; importing this run is a separate endpoint.
 
 ### October 4 production release procedure
 

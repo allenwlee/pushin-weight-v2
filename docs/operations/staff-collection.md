@@ -152,6 +152,11 @@ command independently. No HTTP runs in account creation or harvest transactions.
 
 ## Network and storage configuration
 
+For shared storage on Render, follow the [R2 media storage runbook](r2-media-storage.md).
+It covers copying existing objects without changing database references,
+cross-service verification, direct downloads and rollback. R2 setup is separate
+from paid collection activation.
+
 Network collection requires both `--enable-network` and
 `STAFF_COLLECTION_NETWORK_ENABLED=true`. It also requires
 `STAFF_MEDIA_DURABLE=true`, which is the operator's assertion that storage is
