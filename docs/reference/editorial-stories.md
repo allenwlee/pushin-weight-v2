@@ -11,6 +11,16 @@ Generation, public access and picture bindings ship **off** in
 [`config/editorial.yaml`](../../config/editorial.yaml). Deployment and a fresh
 human quality evaluation are separate from the local implementation tests.
 
+The explicit English launch profile is
+[`config/editorial-english-launch.yaml`](../../config/editorial-english-launch.yaml).
+It configures generation/public story reading and headline derivatives with a
+combined $5/day reservation ceiling. `EDITORIAL_CONFIG_PATH` selects the file
+for all processes; its resolved path must be under the repository's `config/`
+directory. `EDITORIAL_ENABLED` and `EDITORIAL_PUBLIC_ENABLED` accept only
+`true`/`false`; `EDITORIAL_DAILY_USD` may lower the selected profile's daily cap.
+Selecting the default file disables generation, public reading and all pictures.
+The configured launch profile does not prove that a service has activated it.
+
 Staging refresh treats the editorial tables as environment-local, like the
 existing per-brand headline work. It excludes their data from the source dump
 and clears the full graph in staging, including accepted editions and assets,
@@ -36,6 +46,17 @@ for optional-source migration handling and the required source-reader grants.
 5. The optional **picture editor** selects an eligible source image. `derive`
    adds an asynchronous MiniMax H3 video; the verified source image can display
    while that task is pending. Missing imagery does not discard valid text.
+
+The editor's instructions carry the owner's reviewed newsworthiness rules:
+spotlight model releases from quieter tracked brands, prioritize major agent or
+application providers entering model competition, and reserve personnel-change
+headlines for well-known people or very key roles. Ordinary moves belong in
+Who's Moved. Unproven allegations require multiple supporting posts with their
+provenance distinguished from copies of one claim. The writer identifies
+unfamiliar people and companies, preserves the actual product category and
+explains why the development matters using supplied evidence. These are runtime
+instructions; the saved human judgments do not train a model or establish that
+a live model followed them.
 
 Each quarter-hour permits at most one new Chatter story, including a meaningful
 revision of an existing story. Locale variants belong to that same publication.
@@ -92,6 +113,8 @@ endpoint, matching credential variable, output cap and token prices. Supported
 endpoints are OpenRouter and direct DeepInfra. `vision` is an explicit capability;
 OpenRouter provider fallback is disabled. A mismatched returned model or
 truncated/invalid response is held. No guessed model, key or price is supplied.
+OpenRouter requests also cap the permitted provider input/output prices at the
+configured reservation rates.
 
 Atomic commentary uses its existing model and the versioned
 `post-synthesis-direct-source-v3` prompt, with no editorial profile.

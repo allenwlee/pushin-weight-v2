@@ -74,6 +74,45 @@ def test_completed_stage_reuses_output_and_enforces_shared_budget():
         )
 
 
+def test_launch_text_and_media_share_the_five_dollar_daily_ceiling(monkeypatch):
+    from core.models import EditorialBudget
+    from monitor.editorial.config import load_editorial_config
+
+    monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "config/editorial-english-launch.yaml")
+    cfg = load_editorial_config()
+    now = timezone.now()
+    costs = [
+        ("text", "1.8"),
+        ("media", "0.6"),
+        ("text", "1.8"),
+        ("media", "0.6"),
+        ("text", "0.2"),
+    ]
+    sent = []
+    for index, (kind, cost) in enumerate(costs):
+        row = claim_assessment(now - timedelta(minutes=15 * index), f"cycle-{index}")
+        call_once(
+            row,
+            f"stage-{index}",
+            kind,
+            Decimal(cost),
+            cfg,
+            lambda kind=kind: sent.append(kind) or {"ok": True},
+        )
+    assert EditorialBudget.objects.get(day=now.date()).reserved_usd == Decimal(5)
+    for kind in ("text", "media"):
+        with pytest.raises(BudgetHeld, match="budget exhausted"):
+            call_once(
+                row,
+                f"over-{kind}",
+                kind,
+                Decimal("0.01"),
+                cfg,
+                lambda: pytest.fail("send beyond combined ceiling"),
+            )
+    assert len(sent) == 5 and EditorialCall.objects.count() == 5
+
+
 def test_concurrent_workers_share_one_daily_reservation_limit():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier

@@ -33,7 +33,14 @@ def request_payload(route, request):
         else:
             body["reasoning_effort"] = route.reasoning
     if "openrouter.ai" in route.endpoint:
-        body["provider"] = {"allow_fallbacks": False, "require_parameters": True}
+        body["provider"] = {
+            "allow_fallbacks": False,
+            "require_parameters": True,
+            "max_price": {
+                "prompt": route.input_usd_per_million,
+                "completion": route.output_usd_per_million,
+            },
+        }
     return body
 
 

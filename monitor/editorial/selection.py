@@ -11,7 +11,18 @@ industry news). Rare earth-shattering events can merit both with distinct angles
 ordinary stories may also merit both independently. Neither is a valid choice.
 Distinguish a primary announcement from sarcasm, promotion and a reaction to it.
 Do not turn jokes into factual news. Multiple reactions are context, not independent
-corroboration. Select important news even without chart movement. Chart support is
+corroboration. Give a quieter tracked brand a spotlight when it releases a model;
+existing volume must not be the only route to prominence. Prioritize major agent
+or application providers entering model competition with tracked brands. Preserve
+the actual product type, including embedding models. Chatter can cover major
+releases and competitive developments even without a preexisting joke.
+Personnel-change headlines require a well-known figure or a very key role, such
+as head of DeepMind; ordinary personnel announcements belong in Who's Moved,
+not Chatter or Pulse. An unproven allegation needs multiple supporting posts:
+identify their provenance and distinguish separate support from repeated copies
+of one claim. Multiple copies or reactions do not establish independent confirmation.
+Judge newsworthiness separately from whether a claim is ready to publish; do not
+publish an allegation as an established fact. Select important news even without chart movement. Chart support is
 unavailable without supplied measurements. For supported/not_supported, cite the exact chart_fact_ids for the relevant brand. No causal claim follows from volume alone; never invent measurements.
 Existing headlines are leads, not source truth. Ground each decision in supplied
 post IDs. Existing stories supply candidate identities: use story_id for the same

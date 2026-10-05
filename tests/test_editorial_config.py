@@ -48,3 +48,33 @@ def test_unavailable_or_mismatched_bindings_rejected_before_activation():
         active_config(voices={"chatter:en": "pulse-en-v1"})
     with pytest.raises(ValueError, match="unavailable"):
         active_config(voices={"chatter:ja": "chatter-ja-v1"})
+
+
+def test_launch_profile_has_one_combined_ceiling_and_independent_picture_modes(
+    monkeypatch,
+):
+    monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "config/editorial-english-launch.yaml")
+    cfg = load_editorial_config()
+    assert cfg.enabled and cfg.public_enabled and cfg.daily_usd == 5
+    assert cfg.routes["chatter"].model == "openai/gpt-6-sol"
+    assert cfg.routes["chatter"].vision
+    assert cfg.picture_mode("atomic") == "select_only"
+    assert cfg.picture_mode("chatter") == cfg.picture_mode("pulse") == "derive"
+    assert set(cfg.voices) == {"chatter:en", "pulse:en"}
+    monkeypatch.setenv("EDITORIAL_DAILY_USD", "1")
+    monkeypatch.setenv("EDITORIAL_PUBLIC_ENABLED", "false")
+    assert load_editorial_config().daily_usd == 1
+    assert not load_editorial_config().public_enabled
+    monkeypatch.setenv("EDITORIAL_DAILY_USD", "6")
+    with pytest.raises(ValueError, match="only lower"):
+        load_editorial_config()
+
+
+def test_profile_cannot_escape_config_and_invalid_switch_fails_closed(monkeypatch):
+    monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "../.env.secrets")
+    with pytest.raises(ValueError, match="under config"):
+        load_editorial_config()
+    monkeypatch.delenv("EDITORIAL_CONFIG_PATH")
+    monkeypatch.setenv("EDITORIAL_ENABLED", "maybe")
+    with pytest.raises(ValueError, match="true or false"):
+        load_editorial_config()

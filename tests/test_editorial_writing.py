@@ -75,3 +75,8 @@ def test_essential_image_is_passed_to_vision_route_and_text_route_holds():
     assert (
         payload["messages"][1]["content"][1]["image_url"]["url"] == e.source_image_url
     )
+    assert payload["provider"] == {
+        "allow_fallbacks": False,
+        "require_parameters": True,
+        "max_price": {"prompt": 1, "completion": 1},
+    }

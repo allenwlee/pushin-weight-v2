@@ -6,9 +6,12 @@ execution: code
 ollija:
   change_id: docs-g2-voices-corpus-2026-09-30-051835
   branch: feat/g2-editorial
-  workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  workflow: implementation
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 # G2 editorial engine, voices and modular picture editor
 
@@ -27,8 +30,11 @@ gets the tested voice direction; Chinese/Japanese have independent profile slots
 and read original evidence. Atomic commentary stays faithful to its source.
 
 The owner invoked LFG on October 5: implement, verify, review and open a pull
-request with CI decided. This does not select merging, deployment or paid trial
-batches. New generation and public presentation ship disabled until configured.
+request with CI decided. That endpoint is complete. The owner subsequently
+requests full English G2 activation and deployment with a combined **$5/day**
+text/media cap. Continue through staging to verified production under the
+recorded staged route. Default code remains disabled until its explicit launch
+profile is selected on the intended services.
 Use real PostgreSQL tests, fake provider transports with captured requests,
 browser checks of new story routes, and the saved human review cases. These
 checks prove software behavior; they do not establish new model-quality results.
@@ -70,10 +76,123 @@ The PR's checks are the current remote verification record. The existing live
 Claude review was unavailable because its account lacked credit. No new paid
 headline/media batch or external social-posting test ran.
 
-**Next step:** review PR #51. Merge/activation requires a later owner-selected
-delivery endpoint; select production routes, prices/budgets and durable media
-storage before enabling. Editorial tuning, JA/ZH Chatter craftsmanship and G5
+**Next step:** complete the owner's subsequent production activation request
+below, including staging proof and shared media storage. Editorial tuning,
+JA/ZH Chatter craftsmanship and G5
 placement remain separately scoped launch work. G1/G3/G5 claims are preserved.
+
+## Deployment preparation, October 5
+
+The owner asks to resolve deployment prerequisites one at a time. Read-only
+checks confirm PR #51 remains open and mergeable with both CI jobs green at
+`2523730d`. Render's staging web/headline worker and production web report live
+revision `f176e614`; that revision is already an ancestor of the G2 candidate.
+Remote main is `71377000` and staging is `f176e614`. The build applies migrations
+under the existing advisory lock. No deployment, branch promotion or paid call
+has occurred during this preparation.
+
+At this preparation snapshot rollout scope was unresolved. The later owner
+instruction selects English activation and production; the current deployment
+contract below supersedes this earlier decision point. Existing shipped defaults
+remain disabled unless the explicit launch profile is selected.
+
+## Experiment-to-runtime audit, October 5
+
+The owner questions whether G2 includes the experiment agreements. The audit
+confirms the English New York Post direction, exclusion of the five-example
+prompt, actual-source/vision handling, factual Pulse, source-faithful atomic
+commentary and direct-source locale generation. Accepted model range remains
+GPT-6.1-Sol through GPT-6-Sol; it does not select a production provider/model/effort.
+The audit snapshot had no runtime routes selected; the current deployment
+contract below now selects them explicitly. The production request is not a byte-for-
+byte experiment replay: it uses an API call and structured output for a headline,
+byline and full article, rather than the original CLI headline-only assignment
+or the later eight-candidate comparison. No new live quality result is claimed.
+
+The audit found a genuine omission: the saved 54-case owner fixture preserved
+labels, but G2-R39–R42 were not all present in runtime instructions. The editor
+now includes quiet-brand releases, competitive entrants, the notable-person/key-
+role personnel bar and multiple-source allegation/provenance guidance. The shared
+writer now supplies unfamiliar-subject descriptions, product type and relevance
+from source evidence. These changes carry existing owner requirements into the
+calls; they do not add example headlines, change the approved voice direction or
+authorize a paid experiment. Verify actual request construction and affected
+selection/writing/orchestration tests before pushing this correction to PR #51.
+
+## Current deployment contract — English G2, $5/day
+
+The owner says "let's turn on everything and move towards deployment", then sets
+the combined daily text/media cap to **$5/day**. This supersedes the completed
+LFG run's no-deployment exclusion for this continuation. Parent owns staging,
+authorized fast-forward promotion/merge and exact-revision production proof.
+The existing staged branch route applies; no force push or new scheduler.
+
+- Select `config/editorial-english-launch.yaml` using `EDITORIAL_CONFIG_PATH` on
+  the intended web, headline worker and harvest services. The harvest service
+  only enqueues the quarter-hour assessment; provider credentials stay on the
+  headline worker. Existing schedule and collection behavior stay unchanged.
+  Default `editorial.yaml` stays off.
+  Readers, workers and CLI all use the selected file. `EDITORIAL_ENABLED` and
+  `EDITORIAL_PUBLIC_ENABLED` support explicit Boolean controls; switching back
+  to the default profile disables all picture bindings as well.
+- Routes: OpenRouter `deepseek/deepseek-v4-flash-0731`/medium for editor and
+  factual Pulse; `openai/gpt-6-sol`/medium, with actual image attachments, for
+  Chatter. This uses the accepted writer range and planned factual routing.
+  The editor/Pulse routes are text-only; an image-essential writer request is
+  held unless its route supports vision. Do not claim those routes inspect URLs.
+- All content kinds can select pictures: atomic/current headline use source
+  selection; Chatter/Pulse add track-appropriate H3 derivatives. Public-source
+  reuse may be unknown; restricted sources remain excluded. English voices
+  only: do not invent JA/ZH Chatter craftsmanship or G5 integration.
+- Combined daily reservation cap $5; per assessment $2 / six create/text calls;
+  at most 384 daily text/create calls and four media creations, sharing the
+  same daily dollars. Six-second 768P H3, $0.60 conservative per-video reserve.
+  Catalogs verified October 5: Sol $2/M input, $10/M output, $2.50/M cache write;
+  OpenRouter 0731 $0.0152/M input, $1.28/M output; H3 $0.08/second. Config reserves
+  conservative upper prices and sends provider `max_price`. These are billing
+  assumptions, not a provider billing guarantee.
+- Staging trial is a single manual assessment, maximum $1.50 reservation,
+  no new collection. `EDITORIAL_DAILY_USD` can lower but never raise the file's
+  daily cap. Pause staging generation after the trial; preserve its receipt.
+  Before enabling production, carry same-UTC-day staging reservations into
+  production's daily ledger as explicitly labeled rollout cost, with an
+  idempotent audit record. Combined staging + production must stay within $5.
+- Needed credentials are available locally: `OPENROUTER_API_KEY` and the exact
+  project `PUSHINWEIGHT_MINIMAX_API_KEY`. Neither is configured on headline
+  workers yet. Transfer only those keys securely to the intended services;
+  never print, commit or overwrite a different existing credential.
+- Shared storage remains the actual missing prerequisite. Production G1 files
+  are on the web-only `/var/data/staff-media` disk; headline workers cannot read
+  it. The owner has selected G1-led R2 migration; G2 acknowledges the October 5
+  handoff at `/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-10-05-211242-g2-r2-media-storage.md`.
+  G1 owns shared settings, dependencies, Render/R2 configuration and migration.
+  G2 consumes `staff_media`/`editorial_media` aliases and owns authorized media
+  delivery in its existing view. Do not duplicate shared storage work or claim
+  readiness before G1 records web/worker cross-read, hash and restart proof.
+  Preserve relative source/generated keys, hashes and private source access;
+  staging must not write production objects. Direct R2 delivery requires policy
+  checks before issuing short-lived signed links, no redirect caching, and an
+  explicit expiration limit: issued URLs cannot be immediately revoked by
+  disabling picture bindings. Local filesystem delivery remains streamed.
+
+**Local activation verification, October 5:** 176 affected tests passed,
+including 111 required PostgreSQL tests, zero skips/errors. The launch-profile
+ledger test reserves exactly $5 across text and media, then proves both kinds
+are held without another send. Profile selection cannot escape `config/`;
+invalid Boolean controls and a runtime cap above $5 are rejected. Provider
+request proof covers actual image attachments, no fallback, required parameters
+and configured price ceilings. These are fake-provider/local proofs; no live
+generation, R2 readiness or staging deployment is claimed.
+
+**Verification/rollback:** Reuse the completed migration/regression/browser
+proof where its inputs are unchanged. Check new config controls and affected
+provider/request suites; then real staging calls and saved headline/byline/asset
+reading. Verify migrations 0065–0068, worker/web revision and service/database
+identity. Promote only the unchanged tested candidate. Observe an actual
+production assessment and served edition/asset within the spend cap. Rollback
+first selects the default disabled profile, retaining all rows and media; do
+not reverse/drop editorial tables. Health/login and prior headline paths must
+continue to work. Keep current failures and unperformed checks explicit.
 
 ## Goal Capsule
 
@@ -84,8 +203,9 @@ placement remain separately scoped launch work. G1/G3/G5 claims are preserved.
   persistent story editions and optional picture assignments (KTD1–KTD8).
 - **Authority:** Current owner instructions and G2-R01–R48 in the authoritative
   General Launch Charter; this execution contract; then the historical evidence.
-- **Endpoint:** LFG parent owns implementation, review, open PR and CI decision.
-  No merge, production activation, new collection or paid evaluation batch.
+- **Endpoint:** Completed LFG implementation/review/PR endpoint; parent now owns
+  the subsequent English activation request through staging and verified
+  production with the combined $5/day cap and no new collection.
 - **Stop:** Report an invalidated owner decision or missing prerequisite that
   prevents safe implementation. Unknown editorial tuning stays configurable;
   missing source/photo evidence yields an explicit unavailable/hold outcome.
@@ -676,12 +796,26 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ### Delivery scope
 
-- Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Workflow: `implementation`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -706,6 +840,13 @@ On 2026-10-05 the owner invoked LFG for G2, authorizing implementation, local
 verification, review, commits, push and an open PR with CI decided. Merge,
 deployment, production activation and fresh paid experiment batches remain
 outside this grant.
+
+The later owner instruction "let's turn on everything and move towards
+deployment", followed by "$5/day", explicitly extends this continuation to
+English G2 activation and production delivery through the normal staging route.
+Model/media calls and setup must stay within the combined daily cap. This
+supersedes the earlier no-deployment boundary for this continuation only;
+G1 collection, G3, G4 and G5 ownership remain separate.
 
 ## Owner contract and scope
 

@@ -1,5 +1,7 @@
 """Explicit operator configuration; importing or reading never spends money."""
 
+import os
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -119,7 +121,31 @@ class EditorialConfig(BaseModel):
 
 
 def load_editorial_config(path: Path | None = None) -> EditorialConfig:
-    # One file for every worker/reader/CLI. No environment-specific silent model fallback.
-    path = path or Path(settings.BASE_DIR) / "config/editorial.yaml"
+    # Every worker/reader/CLI uses the same explicitly selected deployment profile.
+    # Route identifiers and prices are always in that file, never inferred from keys.
+    if path is None:
+        config_root = (Path(settings.BASE_DIR) / "config").resolve()
+        path = (
+            Path(settings.BASE_DIR)
+            / os.environ.get("EDITORIAL_CONFIG_PATH", "config/editorial.yaml")
+        ).resolve()
+        if not path.is_relative_to(config_root) or path.suffix not in {".yaml", ".yml"}:
+            raise ValueError("editorial profile must be a YAML file under config")
     with path.open() as stream:
-        return EditorialConfig.model_validate(yaml.safe_load(stream) or {})
+        data = yaml.safe_load(stream) or {}
+    cfg = EditorialConfig.model_validate(data)
+    for name, field in (
+        ("EDITORIAL_ENABLED", "enabled"),
+        ("EDITORIAL_PUBLIC_ENABLED", "public_enabled"),
+    ):
+        value = os.environ.get(name)
+        if value is not None:
+            if value.lower() not in {"true", "false"}:
+                raise ValueError(f"{name} must be true or false")
+            data[field] = value.lower() == "true"
+    if "EDITORIAL_DAILY_USD" in os.environ:
+        ceiling = Decimal(os.environ["EDITORIAL_DAILY_USD"])
+        if not ceiling.is_finite() or not 0 <= ceiling <= Decimal(str(cfg.daily_usd)):
+            raise ValueError("runtime daily cap may only lower the profile ceiling")
+        data["daily_usd"] = float(ceiling)
+    return EditorialConfig.model_validate(data)
