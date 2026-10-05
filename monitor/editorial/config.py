@@ -11,7 +11,7 @@ PictureMode = Literal["off", "select_only", "derive"]
 
 
 class Route(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     model: str = Field(min_length=1, max_length=160)
     endpoint: Literal[
         "https://openrouter.ai/api/v1/chat/completions",
@@ -38,7 +38,7 @@ class Route(BaseModel):
 
 
 class EditorialConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     enabled: bool = False
     public_enabled: bool = False
     daily_usd: float = Field(default=0, ge=0, le=1000)

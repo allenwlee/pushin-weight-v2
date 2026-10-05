@@ -1,0 +1,101 @@
+from datetime import timedelta
+from decimal import Decimal
+
+import pytest
+from django.utils import timezone
+
+from core.models import EditorialAssessment, EditorialCall
+from monitor.editorial.config import EditorialConfig
+from monitor.editorial.persistence import claim_assessment, call_once, BudgetHeld
+
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
+
+
+def test_interval_claim_is_unique_and_stale_fence_cannot_send():
+    now = timezone.now()
+    row = claim_assessment(now, "cycle-1")
+    assert claim_assessment(now, "cycle-2") is None
+    EditorialAssessment.objects.filter(pk=row.pk).update(
+        lease_until=now - timedelta(seconds=1)
+    )
+    replacement = claim_assessment(now, "cycle-3")
+    assert replacement.fence > row.fence
+    with pytest.raises(BudgetHeld):
+        call_once(
+            row,
+            "editor",
+            "text",
+            Decimal("0.01"),
+            EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=5),
+            lambda: {"ok": True},
+        )
+
+
+def test_unknown_send_stays_reserved_and_cannot_be_repeated():
+    row = claim_assessment(timezone.now(), "cycle")
+    cfg = EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=5)
+    calls = []
+
+    def send():
+        calls.append(1)
+        raise TimeoutError()
+
+    with pytest.raises(TimeoutError):
+        call_once(row, "editor", "text", Decimal("0.2"), cfg, send)
+    with pytest.raises(BudgetHeld):
+        call_once(row, "editor", "text", Decimal("0.2"), cfg, send)
+    assert calls == [1]
+    assert EditorialCall.objects.get().state == "ambiguous"
+
+
+def test_completed_stage_reuses_output_and_enforces_shared_budget():
+    now = timezone.now()
+    cfg = EditorialConfig(daily_usd=0.3, assessment_usd=1, daily_calls=10)
+    row = claim_assessment(now, "cycle")
+    assert call_once(
+        row, "editor", "text", Decimal("0.2"), cfg, lambda: {"result": 1}
+    ) == {"result": 1}
+    assert call_once(
+        row,
+        "editor",
+        "text",
+        Decimal("0.2"),
+        cfg,
+        lambda: pytest.fail("duplicate send"),
+    ) == {"result": 1}
+    with pytest.raises(BudgetHeld):
+        call_once(
+            row,
+            "writer",
+            "text",
+            Decimal("0.2"),
+            cfg,
+            lambda: pytest.fail("over budget"),
+        )
+
+
+def test_concurrent_workers_share_one_daily_reservation_limit():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from django.db import close_old_connections
+
+    now = timezone.now()
+    rows = [claim_assessment(now - timedelta(minutes=15 * i), str(i)) for i in range(2)]
+    barrier = Barrier(2)
+    cfg = EditorialConfig(daily_usd=0.3, assessment_usd=1, daily_calls=10)
+
+    def work(row):
+        close_old_connections()
+        try:
+            barrier.wait(timeout=5)
+            call_once(row, "editor", "text", Decimal("0.2"), cfg, lambda: {"ok": True})
+            return "sent"
+        except BudgetHeld:
+            return "held"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(work, rows))
+    assert sorted(results) == ["held", "sent"]
+    assert EditorialCall.objects.count() == 1
