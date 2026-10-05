@@ -5,6 +5,7 @@ Delivery scope: open PR and CI decided; no deployment or paid model/media trial.
 
 - Final affected regression suite after simplification and review fixes: **173 passed**, 110 required PostgreSQL tests, zero skips.
 - Review reproduced and corrected stale policy at the first editor call and stale image verification after a G1 media replacement. Both regressions passed with the fixes.
+- CI recovery: full staff/staging suite **277 passed**, 168 required PostgreSQL tests, zero skips. The unchanged exhaustive schema-policy assertion caught seven unclassified G2 tables. A new populated scrub regression proved the old policy retained editorial work; the corrected policy clears all seven tables while retaining atomic source posts. Source-grant documentation and optional older-source tables/sequences agree with the policy. No live refresh or grants ran.
 - Migrations 0065–0068 applied to isolated `g2_editorial_dev`; migration drift check and Django system check passed.
 - Schema reference reconciles 128 tables and 1,605 physical columns against models, migration state and local PostgreSQL; table/column sets, types, nullability and named index/constraint coverage agree.
 - New editorial modules/tests pass Ruff; repository-wide lint remains non-clean in existing code. No type-check command is configured in pyproject.toml.

@@ -11,6 +11,13 @@ Generation, public access and picture bindings ship **off** in
 [`config/editorial.yaml`](../../config/editorial.yaml). Deployment and a fresh
 human quality evaluation are separate from the local implementation tests.
 
+Staging refresh treats the editorial tables as environment-local, like the
+existing per-brand headline work. It excludes their data from the source dump
+and clears the full graph in staging, including accepted editions and assets,
+so staging cannot resume source provider jobs or use source-only storage paths.
+Original posts remain copied. See the [staging refresh runbook](../operations/staging-data-refresh.md)
+for optional-source migration handling and the required source-reader grants.
+
 ## Normal flow
 
 1. A committed harvest completion queues one editorial assessment on the

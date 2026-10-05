@@ -53,6 +53,14 @@ links and switching image access off. The two review findings were reproduced
 and fixed: stale editor settings after disablement and stale picture verification
 after G1 replaces a media object.
 
+CI then caught the missing staging-refresh classification for G2's new tables.
+The existing exhaustive assertion reproduced locally; an added PostgreSQL scrub
+test also proved editorial work survived the old policy. The fix excludes and
+clears the whole environment-local editorial graph, declares its tables and
+sequences optional on older sources, and updates the source-grant runbook.
+The complete staff/staging suite now passes **277 tests**, including **168
+required PostgreSQL tests with no skips**. No live refresh or grants were run.
+
 Detailed commands and scope are in the [implementation return](../analysis/2026-10-05-g2-implementation/implementation-result.json),
 [verification record](../analysis/2026-10-05-g2-implementation/verification.md),
 [browser receipt](../analysis/2026-10-05-g2-implementation/browser-result.md), and
