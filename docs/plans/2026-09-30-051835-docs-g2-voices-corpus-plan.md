@@ -37,6 +37,36 @@ The implementation contract below governs this run. The dated experiment and
 brainstorm records later in this same file remain evidence, not active commands
 or permission to repeat old paid experiments.
 
+## October 5 implementation result
+
+Implementation and review are delivered in [PR #51](https://github.com/allenwlee/pushin-weight-v2/pull/51),
+branch `feat/g2-editorial`. U1–U8 are complete. The implementation commits through
+`0c8775c2` add the shared editor, versioned profiles, bounded provider ledger,
+optional picture service, queue/CLI bindings and permanent story readers.
+Generation, public access and all picture policies remain off by default.
+
+The final local affected suite passes **173 tests**, including **110 required
+PostgreSQL tests with no skips**; the new GitHub editorial job reports the same
+counts. Local migrations, schema-reference reconciliation and scoped lint pass.
+Browser checks cover fixed hero/scrolling history, mobile story reading, pinned
+links and switching image access off. The two review findings were reproduced
+and fixed: stale editor settings after disablement and stale picture verification
+after G1 replaces a media object.
+
+Detailed commands and scope are in the [implementation return](../analysis/2026-10-05-g2-implementation/implementation-result.json),
+[verification record](../analysis/2026-10-05-g2-implementation/verification.md),
+[browser receipt](../analysis/2026-10-05-g2-implementation/browser-result.md), and
+[review with follow-through](../reviews/2026-10-05-174611-g2-code-review.md).
+The PR's checks are the current remote verification record. The existing live
+20-post health baseline failed; this candidate was not deployed. Independent
+Claude review was unavailable because its account lacked credit. No new paid
+headline/media batch or external social-posting test ran.
+
+**Next step:** review PR #51. Merge/activation requires a later owner-selected
+delivery endpoint; select production routes, prices/budgets and durable media
+storage before enabling. Editorial tuning, JA/ZH Chatter craftsmanship and G5
+placement remain separately scoped launch work. G1/G3/G5 claims are preserved.
+
 ## Goal Capsule
 
 - **Objective:** Readers can follow distinct, source-grounded Chatter and Pulse
