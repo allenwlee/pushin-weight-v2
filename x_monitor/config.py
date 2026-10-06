@@ -242,7 +242,8 @@ class JevDecisionsConfig(BaseModel):
     staging_decisions_per_cycle: int = Field(default=5, ge=1, le=5)
     cycle_budget_usd: Decimal = Field(default=Decimal("0.02"), gt=0, le=Decimal("0.02"))
     daily_budget_usd: Decimal = Field(default=Decimal("0.50"), gt=0, le=Decimal("0.50"))
-    max_request_bytes: int = Field(default=32_000, ge=1, le=32_000)
+    # Capacity is enforced by the pinned provider, using its own tokenizer.
+    max_request_tokens: Literal[64_000] = 64_000
     max_response_bytes: int = Field(default=65_536, ge=1, le=65_536)
 
     @model_validator(mode="after")

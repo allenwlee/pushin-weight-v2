@@ -50,12 +50,10 @@ operation or coverage of people who never registered.
 Its [community guidelines](https://dinq.me/guidelines), dated December 15,
 2025, require rights to uploaded media and express consent for photos featuring
 other people. The [terms](https://dinq.me/terms), effective January 15, 2026,
-prohibit biometric information in user inputs. No facial-matching feature was
-found in the pages reviewed.
+prohibit biometric information in user inputs.
 
 **Implication for G1:** Dinq is not evidence that attributed photos automatically
-authorize face recognition. Our saved pilot records image sources; the earlier
-proposal to recognize people in later images needs its own assessment.
+authorize every later use. Our saved pilot records image sources.
 
 ## Questions the public pages leave unresolved
 

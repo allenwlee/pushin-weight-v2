@@ -12,7 +12,7 @@ records; they do not establish legal compliance or travel clearance.
 
 | Research | Scope | Sources checked |
 | --- | --- | --- |
-| [Mainland China staff-data collection and founder travel risk](2026-10-02-051235-mainland-china-staff-data-and-travel-risk.md) | Public staff dossiers, rights/security framework, overseas transfers, beneficial purpose, Chinese customers/employment, facial recognition, tourism visas and travel devices | October 2, 2026 |
+| [Mainland China staff-data collection and founder travel risk](2026-10-02-051235-mainland-china-staff-data-and-travel-risk.md) | Public staff dossiers, rights/security framework, overseas transfers, beneficial purpose, Chinese customers/employment, tourism visas and travel devices | October 2, 2026 |
 | [Dinq compliance comparison](2026-10-02-052419-dinq-compliance-comparison.md) | Public talent-discovery features, policy coverage, nonmember profiles, Chinese-source claims and limits of the comparison | October 2, 2026 |
 | [SerpApi and Baidu discovery under Chinese law](2026-10-02-053159-serpapi-baidu-chinese-law.md) | U.S. Legal Shield limits, actual collection stages, photo rights, scraping methods and overseas provider processing | October 2, 2026 |
 

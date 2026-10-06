@@ -153,7 +153,6 @@ def test_threshold_hash_tracks_exact_values_and_output_price_is_pinned_free():
         JevDecisionsConfig(output_price_per_million_usd=Decimal("0.001"))
     with pytest.raises(ValueError):
         JevDecisionsConfig(question_set_version="x" * 64)
-    assert _config().max_request_bytes == 32_000
 
 
 def test_claim_to_http_to_decision_and_hit_is_atomic_reusable_and_posts_nothing():
@@ -568,22 +567,34 @@ def test_total_request_deadline_cancels_a_multi_chunk_async_stream():
     )
 
 
-def test_oversized_32k_context_is_blocked_before_claim_or_transport():
-    calls = 0
+def test_request_over_32kb_reaches_provider_without_truncation():
+    calls = []
+    text = "AI model announcement " * 1600
 
-    def handler(_request):
-        nonlocal calls
-        calls += 1
+    def handler(request):
+        calls.append(request)
         return httpx.Response(200, json=_response())
 
-    hit = _hits({"id": "too-large", "text": "x" * 31_000})[0]
+    hit = _hits({"id": "long-valid", "text": text})[0]
     result = _gate(handler).process_hit(hit.pk, owner="worker-a")
+    assert result.reason == "completed"
+    assert len(calls[0].content) > 32_000
+    assert json.loads(calls[0].content)["state"]["text"] == text
+    assert RareTypeDecisionAttempt.objects.get().state == "settled"
 
-    assert result.reason == "request_too_large"
-    assert result.decision_id is None
-    assert calls == 0
-    assert RareTypeDecision.objects.count() == 0
-    assert RareTypeDecisionAttempt.objects.count() == 0
+
+@pytest.mark.parametrize("status", [400, 413, 422])
+def test_provider_invalid_input_is_durable_review_needed_without_retry(status):
+    hit = _hits({"id": "invalid-context", "text": "candidate"})[0]
+    result = _gate(
+        lambda _r: httpx.Response(status, json={"error": "invalid input"})
+    ).process_hit(hit.pk, owner="worker-a")
+    hit.refresh_from_db()
+    assert result.reason == "provider_input_rejected"
+    assert hit.gate_state == "review_needed"
+    assert hit.decision.next_attempt_at is None
+    assert hit.last_error_code == "provider_input_rejected"
+    assert hit.public_payload["text"] == "candidate"
 
 
 def test_expired_shared_deadline_payload_and_budget_denial_consume_no_attempt():
@@ -843,3 +854,126 @@ def test_database_rejects_empty_search_result_with_null_normalized_count():
             raw_result_count=0,
             normalized_result_count=None,
         )
+
+
+def test_spend_reservation_caps_at_provider_total_token_capacity():
+    from x_monitor.jev_decisions import conservative_reservation_usd
+
+    cfg = _config()
+    assert cfg.max_request_tokens == 64_000
+    assert conservative_reservation_usd(b"x" * 150_000, cfg) == Decimal("0.002688000")
+    assert conservative_reservation_usd(b"x" * 10_000, cfg) == Decimal("0.000420000")
+
+
+@pytest.mark.parametrize("terminal", ["completed", "review_needed"])
+def test_drain_reconciles_old_duplicate_after_fresh_copy_resolves_shared_decision(
+    monkeypatch, terminal
+):
+    from django.db.models import Sum
+
+    from monitor.cycle import CycleRunner
+
+    clock = [NOW]
+    cfg = load_config(REPO / "config.yaml")
+    cfg.discovery.rare_types.enabled = True
+    runner = CycleRunner(cfg=cfg, _clock=lambda: clock[0])
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if clock[0] == NOW:
+            return httpx.Response(503)
+        if terminal == "review_needed":
+            return httpx.Response(413)
+        return httpx.Response(200, json=_response())
+
+    gate = _gate(handler, clock=lambda: clock[0])
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: gate
+    )
+    payloads = [{"id": f"old-{i}", "text": f"candidate {i}"} for i in range(6)]
+    older = _hits(*payloads, now=clock[0])
+    runner._drain_rare_type_hits(run_id="first", index=(None, {}), search_terms={})
+    target = older[-1]
+    clock[0] += timedelta(minutes=15)
+    fresh = _hits(
+        *[{"id": f"fresh-{i}", "text": "candidate"} for i in range(14)],
+        payloads[-1],
+        now=clock[0],
+    )
+    runner._drain_rare_type_hits(run_id="second", index=(None, {}), search_terms={})
+    target.refresh_from_db()
+    fresh[-1].refresh_from_db()
+    assert target.decision_id == fresh[-1].decision_id
+    assert target.decision.status == terminal
+    assert target.gate_state == "provider_failed"
+
+    def funding():
+        return (
+            len(calls),
+            RareTypeDecisionAttempt.objects.count(),
+            RareTypeDecisionProcessingCycle.objects.aggregate(
+                reserved=Sum("decision_usd_reserved"),
+                accounted=Sum("decision_usd_accounted"),
+            ),
+        )
+
+    before = funding()
+    clock[0] += timedelta(minutes=15)
+    result = runner._drain_rare_type_hits(
+        run_id="third", index=(None, {}), search_terms={}
+    )
+    target.refresh_from_db()
+    assert result["selected"] == 1
+    assert target.gate_state == fresh[-1].gate_state
+    assert funding() == before
+
+
+def test_drain_filters_claim_lease_and_retry_delay_before_slicing(monkeypatch):
+    from monitor.cycle import CycleRunner
+    from x_monitor.jev_decisions import question_identity, threshold_identity
+
+    cfg = load_config(REPO / "config.yaml")
+    cfg.discovery.rare_types.enabled = True
+    cfg.discovery.rare_types.jev.normal_decisions_per_cycle = 2
+    config = cfg.discovery.rare_types.jev
+    hits = _hits(
+        *[
+            {"id": name, "text": name}
+            for name in ["active", "too-soon", "ready", "fresh"]
+        ]
+    )
+    for hit, age, expires in zip(
+        hits[:3], [30, 120, 900], [30, -60, -840], strict=True
+    ):
+        hit.fetched_at = NOW - timedelta(hours=1)
+        hit.decision = RareTypeDecision.objects.create(
+            provider_post_id=hit.provider_post_id,
+            content_hash=hit.content_hash,
+            model=config.model,
+            question_version=question_identity(config),
+            threshold_version=threshold_identity(config),
+            status="claimed",
+            attempts=1,
+            claim_owner="old-owner",
+            claim_fence=1,
+            claimed_at=NOW - timedelta(seconds=age),
+            claim_expires_at=NOW + timedelta(seconds=expires),
+        )
+        hit.save(update_fields=["fetched_at", "decision"])
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content)["state"]["text"])
+        return httpx.Response(200, json=_response())
+
+    gate = _gate(handler, config=config)
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: gate
+    )
+    runner = CycleRunner(cfg=cfg, _clock=lambda: NOW)
+    result = runner._drain_rare_type_hits(
+        run_id="claims", index=(None, {}), search_terms={}
+    )
+    assert result["selected"] == 2
+    assert calls == ["fresh", "ready"]

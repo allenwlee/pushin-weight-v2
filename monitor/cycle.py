@@ -81,6 +81,7 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    RareTypeDecision,
     RareTypeSearchHit,
     SearchQuery,
     SentimentKey,
@@ -92,6 +93,7 @@ from core.profile_snapshots import (
     capture_post_profile_snapshot,
 )
 from core.rare_type_search import (
+    DECISION_RETRY_DELAY,
     kept_hits_pending_post,
     link_kept_hit_to_post,
     mark_hit_ingestion_failed,
@@ -3159,6 +3161,7 @@ class CycleRunner:
         index: Any,
         search_terms: dict[str, str],
         fetched_since: datetime | None = None,
+        fresh_since: datetime | None = None,
         deadline: Any = None,
         hit_ids: set[int] | None = None,
         allow_disabled: bool = False,
@@ -3194,6 +3197,32 @@ class CycleRunner:
                 post_id__isnull=True,
                 payload_expired_at__isnull=True,
             )
+            now = self._wall_now()
+            # Eligibility comes before the bounded slice. Sleeping retries and
+            # active claims must not displace work that can actually run.
+            # Shared terminal decisions still need propagation to older hits.
+            candidates = candidates.filter(payload_expires_at__gt=now).filter(
+                Q(decision__isnull=True)
+                | Q(
+                    decision__status__in=[
+                        RareTypeDecision.Status.COMPLETED,
+                        RareTypeDecision.Status.REVIEW_NEEDED,
+                    ]
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__isnull=True,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__lte=now,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.CLAIMED,
+                    decision__claim_expires_at__lte=now,
+                    decision__claimed_at__lte=now - DECISION_RETRY_DELAY,
+                )
+            )
             if fetched_since is not None:
                 candidates = candidates.filter(fetched_at__gte=fetched_since)
             if hit_ids is not None:
@@ -3203,11 +3232,35 @@ class CycleRunner:
                 if environment == "staging"
                 else self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle
             )
+            fresh_since = fresh_since or now.replace(
+                minute=(now.minute // 15) * 15, second=0, microsecond=0
+            )
+            fresh = candidates.filter(fetched_at__gte=fresh_since, decision__isnull=True)
+            older = candidates.exclude(fetched_at__gte=fresh_since, decision__isnull=True)
+            # Reserve one quarter for older/retry work, borrowing unused slots.
+            fresh_limit = limit - max(1, limit // 4)
+            selected = list(
+                fresh.order_by("fetched_at", "id")
+                .values_list("pk", flat=True)[:fresh_limit]
+            )
+            selected += list(
+                older.order_by(
+                    Case(When(decision__attempts__gt=0, then=Value(0)), default=Value(1)),
+                    "fetched_at",
+                    "id",
+                ).values_list("pk", flat=True)[:limit - len(selected)]
+            )
+            if len(selected) < limit:
+                selected += list(
+                    fresh.exclude(pk__in=selected)
+                    .order_by("fetched_at", "id")
+                    .values_list("pk", flat=True)[:limit - len(selected)]
+                )
             shared_deadline = getattr(deadline, "deadline_at", None)
-            for hit in candidates.order_by("fetched_at", "id")[:limit]:
+            for hit_id in selected:
                 result["selected"] += 1
                 decision = gate.process_hit(
-                    hit.pk,
+                    hit_id,
                     owner=run_id,
                     shared_deadline_monotonic=shared_deadline,
                 )
@@ -4959,6 +5012,18 @@ class CycleRunner:
                     rare_result.get("provider_called", False)
                 )
                 summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                    run_id=run_id,
+                    index=index,
+                    search_terms=search_terms,
+                    fresh_since=cycle_started_wall,
+                    fetched_since=(
+                        cycle_started_wall
+                        if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
+                        else None
+                    ),
+                    deadline=deadline,
+                )
                 continue
 
             # Resolve this call's time window from its cursor (or the
@@ -5316,13 +5381,15 @@ class CycleRunner:
                 if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
                 else None
             )
-            summary["rare_type_ingestion"] = self._drain_rare_type_hits(
-                run_id=run_id,
-                index=index,
-                search_terms=search_terms,
-                fetched_since=rare_fetched_since,
-                deadline=deadline,
-            )
+            if "rare_type_ingestion" not in summary:
+                summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                    run_id=run_id,
+                    index=index,
+                    search_terms=search_terms,
+                    fetched_since=rare_fetched_since,
+                    fresh_since=cycle_started_wall,
+                    deadline=deadline,
+                )
             post_fetch_started = self._monotonic()
             pf_counters = self._run_post_fetch(
                 kept_all,
