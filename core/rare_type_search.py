@@ -1619,6 +1619,7 @@ def fail_funded_decision(
     output_tokens: int | None = None,
     cost_usd: Decimal | None = None,
     cost_confirmed: bool = True,
+    retryable: bool = True,
 ) -> bool:
     """Record a failed call, settling known usage or retaining unknown spend."""
 
@@ -1702,7 +1703,7 @@ def fail_funded_decision(
         decision.claim_owner = ""
         decision.claimed_at = None
         decision.claim_expires_at = None
-        if decision.attempts >= MAX_DECISION_ATTEMPTS:
+        if not retryable or decision.attempts >= MAX_DECISION_ATTEMPTS:
             decision.status = RareTypeDecision.Status.REVIEW_NEEDED
             decision.next_attempt_at = None
             hit.gate_state = RareTypeSearchHit.GateState.REVIEW_NEEDED

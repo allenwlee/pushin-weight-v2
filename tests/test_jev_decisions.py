@@ -153,7 +153,6 @@ def test_threshold_hash_tracks_exact_values_and_output_price_is_pinned_free():
         JevDecisionsConfig(output_price_per_million_usd=Decimal("0.001"))
     with pytest.raises(ValueError):
         JevDecisionsConfig(question_set_version="x" * 64)
-    assert _config().max_request_bytes == 32_000
 
 
 def test_claim_to_http_to_decision_and_hit_is_atomic_reusable_and_posts_nothing():
@@ -568,22 +567,34 @@ def test_total_request_deadline_cancels_a_multi_chunk_async_stream():
     )
 
 
-def test_oversized_32k_context_is_blocked_before_claim_or_transport():
-    calls = 0
+def test_request_over_32kb_reaches_provider_without_truncation():
+    calls = []
+    text = "AI model announcement " * 1600
 
-    def handler(_request):
-        nonlocal calls
-        calls += 1
+    def handler(request):
+        calls.append(request)
         return httpx.Response(200, json=_response())
 
-    hit = _hits({"id": "too-large", "text": "x" * 31_000})[0]
+    hit = _hits({"id": "long-valid", "text": text})[0]
     result = _gate(handler).process_hit(hit.pk, owner="worker-a")
+    assert result.reason == "completed"
+    assert len(calls[0].content) > 32_000
+    assert json.loads(calls[0].content)["state"]["text"] == text
+    assert RareTypeDecisionAttempt.objects.get().state == "settled"
 
-    assert result.reason == "request_too_large"
-    assert result.decision_id is None
-    assert calls == 0
-    assert RareTypeDecision.objects.count() == 0
-    assert RareTypeDecisionAttempt.objects.count() == 0
+
+@pytest.mark.parametrize("status", [400, 413, 422])
+def test_provider_invalid_input_is_durable_review_needed_without_retry(status):
+    hit = _hits({"id": "invalid-context", "text": "candidate"})[0]
+    result = _gate(
+        lambda _r: httpx.Response(status, json={"error": "invalid input"})
+    ).process_hit(hit.pk, owner="worker-a")
+    hit.refresh_from_db()
+    assert result.reason == "provider_input_rejected"
+    assert hit.gate_state == "review_needed"
+    assert hit.decision.next_attempt_at is None
+    assert hit.last_error_code == "provider_input_rejected"
+    assert hit.public_payload["text"] == "candidate"
 
 
 def test_expired_shared_deadline_payload_and_budget_denial_consume_no_attempt():
@@ -843,3 +854,11 @@ def test_database_rejects_empty_search_result_with_null_normalized_count():
             raw_result_count=0,
             normalized_result_count=None,
         )
+
+
+def test_spend_reservation_caps_at_provider_total_token_capacity():
+    from x_monitor.jev_decisions import conservative_reservation_usd
+    cfg = _config()
+    assert cfg.max_request_tokens == 64_000
+    assert conservative_reservation_usd(b"x" * 150_000, cfg) == Decimal("0.002688000")
+    assert conservative_reservation_usd(b"x" * 10_000, cfg) == Decimal("0.000420000")

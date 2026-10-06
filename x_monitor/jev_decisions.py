@@ -287,20 +287,24 @@ def encode_request_payload(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    if len(encoded) > config.max_request_bytes:
-        raise JevDecisionError("request_too_large")
+    # Jev enforces 64k total tokens and 32k state + longest question.
+    # A UTF-8 byte cutoff would reject valid inputs; preserve the full state.
     return encoded
 
 
 def conservative_reservation_usd(
     request_bytes: bytes, config: JevDecisionsConfig
 ) -> Decimal:
-    """Treat every UTF-8 byte as an input token, a conservative upper bound."""
+    """Reserve a conservative upper bound, capped at provider context capacity.
+
+    This is spend accounting, not local token counting or input validation.
+    Jev uses its own tokenizer and rejects inputs exceeding its context.
+    """
 
     if config.input_price_per_million_usd is None:
         raise JevDecisionError("pricing_missing")
     estimate = (
-        Decimal(len(request_bytes))
+        Decimal(min(len(request_bytes), config.max_request_tokens))
         * config.input_price_per_million_usd
         / Decimal(1_000_000)
     )
@@ -580,6 +584,8 @@ class JevDecisionsClient:
         finally:
             _TRANSPORT_LIMIT.release()
 
+        if status in {400, 413, 422}:
+            raise JevDecisionError("provider_input_rejected")
         if status == 401:
             raise JevDecisionError("unauthorized")
         if status == 402:
@@ -747,6 +753,7 @@ class JevDecisionGate:
                 owner=owner,
                 fence=claim.decision.claim_fence,
                 error_code=exc.code,
+                retryable=exc.code != "provider_input_rejected",
                 now=failed_at,
                 response_id=known_usage.response_id if known_usage else None,
                 input_tokens=known_usage.input_tokens if known_usage else None,
