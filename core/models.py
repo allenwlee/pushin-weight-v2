@@ -7266,39 +7266,68 @@ class RareTypeSearchHit(models.Model):
 class OfficialCompanyScan(models.Model):
     key = models.CharField(max_length=64, primary_key=True)
     started_at = models.DateTimeField(default=timezone.now)
-    cursor = models.TextField(blank=True, default='')
+    cursor = models.TextField(blank=True, default="")
     population = models.PositiveIntegerField(default=0)
     enumerated = models.PositiveIntegerField(default=0)
     complete = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'official_company_scans'
+        db_table = "official_company_scans"
 
 
 class OfficialCompanyAccountState(models.Model):
-    account = models.OneToOneField(Account, on_delete=models.PROTECT, related_name='official_company_state')
+    account = models.OneToOneField(
+        Account, on_delete=models.PROTECT, related_name="official_company_state"
+    )
     evidence_hash = models.CharField(max_length=64)
     evidence = models.JSONField(default=dict)
-    status = models.CharField(max_length=24, default='pending')
+    status = models.CharField(max_length=24, default="pending")
     decision = models.JSONField(default=dict)
-    model = models.CharField(max_length=128, blank=True, default='')
-    policy_version = models.CharField(max_length=96, blank=True, default='')
+    model = models.CharField(max_length=128, blank=True, default="")
+    policy_version = models.CharField(max_length=96, blank=True, default="")
     attempts = models.PositiveIntegerField(default=0)
     next_attempt_at = models.DateTimeField(null=True, blank=True)
-    claim_token = models.CharField(max_length=64, blank=True, default='')
+    claim_token = models.CharField(max_length=64, blank=True, default="")
     claim_expires_at = models.DateTimeField(null=True, blank=True)
-    initial_scan = models.ForeignKey(OfficialCompanyScan, on_delete=models.PROTECT, null=True, blank=True)
-    registered_brand = models.ForeignKey(Brand, on_delete=models.PROTECT, null=True, blank=True)
-    registered_company = models.ForeignKey(Company, on_delete=models.PROTECT, null=True, blank=True)
-    last_error = models.CharField(max_length=128, blank=True, default='')
+    initial_scan = models.ForeignKey(
+        OfficialCompanyScan, on_delete=models.PROTECT, null=True, blank=True
+    )
+    registered_brand = models.ForeignKey(
+        Brand, on_delete=models.PROTECT, null=True, blank=True
+    )
+    registered_company = models.ForeignKey(
+        Company, on_delete=models.PROTECT, null=True, blank=True
+    )
+    last_error = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'official_company_account_states'
-        indexes = [models.Index(fields=['status', 'next_attempt_at'], name='idx_official_co_due')]
-        constraints = [models.CheckConstraint(condition=models.Q(status__in=['pending','claimed','accepted','rejected','review_needed','retry_due','registered','no_evidence','suppressed']), name='ck_official_co_status')]
+        db_table = "official_company_account_states"
+        indexes = [
+            models.Index(
+                fields=["status", "next_attempt_at"], name="idx_official_co_due"
+            )
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "pending",
+                        "claimed",
+                        "accepted",
+                        "rejected",
+                        "review_needed",
+                        "retry_due",
+                        "registered",
+                        "no_evidence",
+                        "suppressed",
+                    ]
+                ),
+                name="ck_official_co_status",
+            )
+        ]
 
 
 class OfficialCompanyBudget(models.Model):
@@ -7307,52 +7336,122 @@ class OfficialCompanyBudget(models.Model):
     spent_usd = models.DecimalField(max_digits=16, decimal_places=10, default=0)
 
     class Meta:
-        db_table = 'official_company_budgets'
-        constraints = [models.CheckConstraint(condition=models.Q(reserved_usd__gte=0, spent_usd__gte=0), name='ck_official_co_funding')]
+        db_table = "official_company_budgets"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(reserved_usd__gte=0, spent_usd__gte=0),
+                name="ck_official_co_funding",
+            )
+        ]
 
 
 class OfficialCompanyAttempt(models.Model):
-    state = models.ForeignKey(OfficialCompanyAccountState, on_delete=models.PROTECT, related_name='attempt_records')
+    state = models.ForeignKey(
+        OfficialCompanyAccountState,
+        on_delete=models.PROTECT,
+        related_name="attempt_records",
+    )
     evidence_hash = models.CharField(max_length=64)
     evidence = models.JSONField(default=dict)
     claim_token = models.CharField(max_length=64, unique=True)
     model = models.CharField(max_length=128)
     policy_version = models.CharField(max_length=96)
-    status = models.CharField(max_length=24, default='reserved')
+    status = models.CharField(max_length=24, default="reserved")
     decision = models.JSONField(default=dict)
     reserved_usd = models.DecimalField(max_digits=16, decimal_places=10)
     actual_usd = models.DecimalField(max_digits=16, decimal_places=10, null=True)
     budget_keys = models.JSONField(default=list)
     input_tokens = models.PositiveIntegerField(default=0)
     output_tokens = models.PositiveIntegerField(default=0)
-    error_code = models.CharField(max_length=128, blank=True, default='')
+    error_code = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True)
 
     class Meta:
-        db_table = 'official_company_attempts'
-        constraints = [models.CheckConstraint(condition=models.Q(reserved_usd__gte=0) & (models.Q(actual_usd__isnull=True) | models.Q(actual_usd__gte=0)), name='ck_official_co_attempt_cost')]
+        db_table = "official_company_attempts"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(reserved_usd__gte=0)
+                & (models.Q(actual_usd__isnull=True) | models.Q(actual_usd__gte=0)),
+                name="ck_official_co_attempt_cost",
+            )
+        ]
 
 
 class OfficialCompanyListIntent(models.Model):
-    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='official_list_intents')
-    state = models.ForeignKey(OfficialCompanyAccountState, on_delete=models.PROTECT, related_name='list_intents')
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name="official_list_intents"
+    )
+    state = models.ForeignKey(
+        OfficialCompanyAccountState,
+        on_delete=models.PROTECT,
+        related_name="list_intents",
+    )
     evidence_hash = models.CharField(max_length=64)
     list_id = models.BigIntegerField()
-    status = models.CharField(max_length=24, default='pending')
-    claim_token = models.CharField(max_length=64, blank=True, default='')
+    status = models.CharField(max_length=24, default="pending")
+    claim_token = models.CharField(max_length=64, blank=True, default="")
     claim_expires_at = models.DateTimeField(null=True)
     next_attempt_at = models.DateTimeField(null=True)
     attempts = models.PositiveIntegerField(default=0)
-    last_error = models.CharField(max_length=128, blank=True, default='')
+    last_error = models.CharField(max_length=128, blank=True, default="")
     confirmed_at = models.DateTimeField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'official_company_list_intents'
+        db_table = "official_company_list_intents"
         constraints = [
-            models.UniqueConstraint(fields=['list_id','account'],name='uq_official_co_list_intent'),
-            models.CheckConstraint(condition=models.Q(status__in=['pending','claimed','retry_due','verify_needed','blocked_auth','confirmed','review_needed','suppressed']),name='ck_official_co_list_status'),
+            models.UniqueConstraint(
+                fields=["list_id", "account"], name="uq_official_co_list_intent"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "pending",
+                        "claimed",
+                        "retry_due",
+                        "verify_needed",
+                        "blocked_auth",
+                        "confirmed",
+                        "review_needed",
+                        "suppressed",
+                    ]
+                ),
+                name="ck_official_co_list_status",
+            ),
         ]
-        indexes = [models.Index(fields=['status','next_attempt_at'],name='idx_official_co_list_due')]
+        indexes = [
+            models.Index(
+                fields=["status", "next_attempt_at"], name="idx_official_co_list_due"
+            )
+        ]
+
+
+class OfficialCompanyOwnerCredential(models.Model):
+    """Opaque encrypted owner tokens; encryption key stays in managed secrets."""
+
+    key = models.CharField(max_length=64, primary_key=True)
+    encrypted_tokens = models.BinaryField()
+    status = models.CharField(max_length=24, default="ready")
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "official_company_owner_credentials"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=["ready", "refreshing", "blocked"]),
+                name="ck_official_co_credential",
+            )
+        ]
+
+
+class OfficialCompanyProviderState(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    credential_revision = models.CharField(max_length=64)
+    blocked_reason = models.CharField(max_length=96, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "official_company_provider_states"
