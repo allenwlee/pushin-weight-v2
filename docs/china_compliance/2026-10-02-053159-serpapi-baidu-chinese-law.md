@@ -51,7 +51,7 @@ another clone.
 | Discovery | We submitted names and context to SerpApi for Baidu results. | Outsourcing the search does not establish rights to every returned item. |
 | Source access | We then fetched selected publisher pages and media separately. | Those activities require their own assessment; a SerpApi search contract does not automatically cover another service or downloader. |
 | Storage | Selected images and professional facts were saved in dossiers. | Source attribution and permitted retention/use are different questions. |
-| Future use | Editorial illustration and possible facial matching were discussed. | A search result is not permission for either use; matching raises additional biometric questions covered in the companion report. |
+| Future use | Editorial illustration was discussed. | A search result is not permission for that use. |
 
 ## The provider's legal protection has a specific limit
 
@@ -80,7 +80,7 @@ China and specified overseas activities involving mainland individuals.
 
 **Assessment:** a public company biography can supply evidence for a name or
 role. It does not automatically authorize unlimited aggregation, evaluation,
-redistribution or face recognition. A paid search invoice does not change that
+redistribution. A paid search invoice does not change that
 question. Overseas processing is not automatically outside PIPL; the actual
 purposes and territorial connection need review.
 
@@ -143,8 +143,7 @@ for the separate tourist-visa question in the companion report.
 SerpApi remains a possible discovery supplier; our earlier finding that it was
 more reliable than SearchApi was a technical observation, not legal clearance.
 The most useful next legal review would cover the actual sequence: named-person
-queries, vendor retrieval, publisher downloads, storage, intended publication
-and any proposed biometric use.
+queries, vendor retrieval, publisher downloads, storage and intended publication.
 
 For that review, preserve original publisher links and acquisition records,
 distinguish attribution from reuse permissions, and identify the current vendor
