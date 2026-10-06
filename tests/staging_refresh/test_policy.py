@@ -175,6 +175,32 @@ def test_per_brand_headline_graph_is_environment_local_state() -> None:
     assert policy.quiescence.unacked_index_key == "unacked_index"
 
 
+def test_official_company_credentials_and_work_remain_environment_local() -> None:
+    policy = load_policy(POLICY_PATH)
+    runtime_tables = {
+        "official_company_account_states",
+        "official_company_attempts",
+        "official_company_budgets",
+        "official_company_list_intents",
+        "official_company_owner_credentials",
+        "official_company_provider_states",
+        "official_company_scans",
+    }
+    sequences = {
+        "official_company_account_states_id_seq",
+        "official_company_attempts_id_seq",
+        "official_company_list_intents_id_seq",
+    }
+
+    assert runtime_tables <= policy.relations.excluded_tables
+    assert runtime_tables <= policy.scrub.truncate_tables
+    assert runtime_tables <= policy.relations.optional_source_tables
+    assert runtime_tables.isdisjoint(policy.relations.copied_tables)
+    assert sequences <= policy.relations.sequences
+    assert sequences <= policy.relations.optional_source_sequences
+    assert {"brands_accounts", "companies_accounts"} <= policy.relations.copied_tables
+
+
 def test_runbook_source_grants_cover_the_exhaustive_copy_policy() -> None:
     policy = load_policy(POLICY_PATH)
     runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
@@ -252,6 +278,13 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "official_company_account_states",
+        "official_company_attempts",
+        "official_company_budgets",
+        "official_company_list_intents",
+        "official_company_owner_credentials",
+        "official_company_provider_states",
+        "official_company_scans",
         "people_identity_corrections",
         "people_media",
         "people_names",

@@ -452,11 +452,40 @@ Add explicit `initial-scan`/resume and incremental modes using the same evidence
 | Offline acceptance corpus | U1, U6 | Three attested positives plus unseen closed/pre-release labs and negative/impersonation cases produce expected validated decisions |
 | Authorized model evaluation | U6 activation | Fixed corpus, explicit model/prompt/pricing, frozen iteration and spend cap, error analysis; unrun evaluation is not passed |
 | Owner-auth list smoke | U4 activation | Local owner read and Reflection add/readback verified on 2026-10-06; runtime adapter, deployed secret/refresh configuration, and persisted observation remain unverified |
-| Future delivery health | U6 delivery only | If later authorized to ship, apply change-harvester's enrichment-relevant latest-N health check and retain exact deployed revision and feature activation evidence |
+| Delivery health | U6 delivery | Apply change-harvester's enrichment-relevant latest-N health check after the authorized deployment and retain exact deployed revision and feature activation evidence |
 
 Verification commands use the repository's local test wrapper and a dedicated isolated PostgreSQL database; production DB and occupied shared staging resources are not test fixtures. The current LFG request authorizes implementation, bounded evaluation, production discovery and activation; preserve explicit budgets, locks and provider limits.
 
 ---
+
+## Current delivery evidence and prerequisites
+
+Review candidate: [PR #53](https://github.com/allenwlee/pushin-weight-v2/pull/53).
+Local feature/regression/Ollija validation passed 227 tests, including 158 required
+PostgreSQL tests with zero skips/errors. The discovery CI passed on `e6989e15`;
+the existing staff CI exposed missing staging-refresh classification for the
+seven new discovery tables. The repair excludes and scrubs these operational
+tables, including encrypted credentials and list intents, while preserving
+copied canonical company/brand account links. The repaired staff CI command
+passed locally: 302 tests, including 176 required PostgreSQL tests with zero
+skips/errors. Hosted checks must pass on the
+repaired head before delivery. Detailed receipts remain in the
+[implementation verification](../analysis/2026-10-07-061500-official-company-implementation-verification.md).
+
+Runtime renewal still requires the owner's identification of the app issuing
+the saved access/refresh token pair. Both existing local OAuth client pairs
+are present and differ; no guessed-client or alternate-app refresh is permitted.
+Shared staging retains the separate G2 candidate. Its occupancy and the current
+branch history require resolving the selected delivery route without replacing
+another session's resources.
+
+Initial decisions currently run sequentially in bounded operator batches. The
+final 11-case evaluation averaged 4.4185 seconds per request. Applying that small
+sample mean to the earlier 90,391-author inventory gives approximately 111 hours
+of continuous request processing, before pauses, retries and database overhead.
+This is a planning estimate, not a measured population runtime or recall claim.
+Complete enumeration is not completed evaluation; retain the full-coverage
+endpoint and report unresolved work until it is actually processed.
 
 ## Definition of Done
 

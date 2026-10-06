@@ -9,6 +9,7 @@ The feature scans the whole stored author population once, then examines new or 
 - Review reproduced three queue failures using rollback-only PostgreSQL transactions, then fixed them: unchanged evidence changing queue priority, accepted evidence leaving an obsolete list intent ineligible, and retries taking both slots while unseen evidence waited. Added regression coverage also pins exact small scan limits and completion beyond the third membership page.
 - Token tests verify encrypted pair storage, atomic rotation, loading by another process, wrong-key/client refusal and durable blocking after uncertain renewal. These use fake transport; live token renewal remains unverified.
 - A dedicated GitHub workflow runs the discovery and harvest regressions on PostgreSQL16/Python3.12. Its hosted result must be observed separately from local results.
+- The staff CI command passed locally after the staging policy repair: 302 tests, including 176 required PostgreSQL tests, zero skips/errors. The seven discovery tables are excluded and scrubbed; the exhaustive relation and runbook grant checks pass. Production token rows and list intents cannot be copied into staging. The discovery hosted workflow passed on `e6989e15`; both hosted workflows must be observed on the repaired head.
 
 ## Review and evaluation limits
 

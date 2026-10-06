@@ -100,6 +100,10 @@ TO staging_refresh_reader;
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
 GRANT MAINTAIN ON
+  official_company_account_states, official_company_attempts,
+  official_company_budgets, official_company_list_intents,
+  official_company_owner_credentials, official_company_provider_states,
+  official_company_scans,
   people_identity_corrections, people_media, staff_collection_work,
   staff_intakes, staff_media_objects, staff_provider_requests,
   hf_model_catalog_runs, hf_model_catalog_namespace_runs,
@@ -127,6 +131,8 @@ TO staging_refresh_reader;
 
 GRANT SELECT ON
   people_identity_corrections_id_seq, people_media_id_seq,
+  official_company_account_states_id_seq, official_company_attempts_id_seq,
+  official_company_list_intents_id_seq,
   people_names_id_seq, people_name_evidence_id_seq,
   people_texts_id_seq, people_text_translations_id_seq,
   staff_collection_work_id_seq, staff_intakes_id_seq,
@@ -190,6 +196,16 @@ The sequence `SELECT` grants both preserve copied sequence state and permit
 `pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded
 tables receive `MAINTAIN` only, so the refresh role can lock their schema but
 cannot read their rows.
+
+Official-company discovery scans, account processing states, attempt journals,
+budgets, list-write intents, provider blocks and encrypted owner credentials
+are environment-local. All seven `official_company_*` tables are excluded and
+scrubbed. Their tables and three generated-ID sequences are optional on an
+older source. Canonical company/brand records and official-account links remain
+in the copied catalog. After the discovery migrations are deployed, grant only
+`MAINTAIN` on these tables and `SELECT` on their sequences as listed above;
+never grant the refresh reader access to credential rows. Staging must provision
+its own owner credentials and collection controls before performing any work.
 
 Policy version 4 marks every relation and sequence introduced after the
 production migration boundary at `0027` as optional on the source. This covers
@@ -409,6 +425,13 @@ UNION ALL SELECT 'hf_model_catalog_observations', count(*) FROM hf_model_catalog
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
+UNION ALL SELECT 'official_company_account_states', count(*) FROM official_company_account_states
+UNION ALL SELECT 'official_company_attempts', count(*) FROM official_company_attempts
+UNION ALL SELECT 'official_company_budgets', count(*) FROM official_company_budgets
+UNION ALL SELECT 'official_company_list_intents', count(*) FROM official_company_list_intents
+UNION ALL SELECT 'official_company_owner_credentials', count(*) FROM official_company_owner_credentials
+UNION ALL SELECT 'official_company_provider_states', count(*) FROM official_company_provider_states
+UNION ALL SELECT 'official_company_scans', count(*) FROM official_company_scans
 UNION ALL SELECT 'post_enrichment_states', count(*) FROM post_enrichment_states
 UNION ALL SELECT 'post_synthesis_daily_budgets', count(*) FROM post_synthesis_daily_budgets
 UNION ALL SELECT 'post_synthesis_demands', count(*) FROM post_synthesis_demands

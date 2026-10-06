@@ -120,6 +120,14 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Discovery work and encrypted owner credentials belong to one environment.
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     # Collection work, private intake/audit payloads and service-local image storage.
     - people_identity_corrections
     - people_media
@@ -173,6 +181,13 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     - people_identity_corrections
     - people_media
     - people_names
@@ -248,6 +263,9 @@ relations:
   views:
     - trend_narrative_versions
   sequences:
+    - official_company_account_states_id_seq
+    - official_company_attempts_id_seq
+    - official_company_list_intents_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -324,6 +342,9 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - official_company_account_states_id_seq
+    - official_company_attempts_id_seq
+    - official_company_list_intents_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -378,6 +399,13 @@ relations:
 
 scrub:
   truncate_tables:
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     - people_identity_corrections
     - people_media
     - staff_collection_work
