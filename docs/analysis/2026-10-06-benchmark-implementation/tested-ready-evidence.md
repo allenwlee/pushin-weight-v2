@@ -2,7 +2,7 @@
 
 Endpoint: tested and ready for owner review, with an isolated persistent database
 and browser page. No production writes, migrations, schedules or deployment.
-Final review and remote CI are recorded below when completed.
+Review evidence is recorded below; current-head remote CI is recorded on PR #50.
 
 ## Retained environment
 
@@ -37,7 +37,7 @@ Final review and remote CI are recorded below when completed.
 | U11 | Literal-span direct attribution and retained legacy brand evidence. Company rollups count a multi-product post once; company-only mentions never become exact product mentions. |
 | U14 | Default-off public aggregate page/API, matching existing home access policy. Real URL/template/JSON tests, late-post refresh without caching, five-series real browser proof, mobile/keyboard/scale/source checks. Initial HTTP tests were red on missing routes. |
 | U15 | Validated polling/lag/recheck/budget configuration, separate retrieval/publication freshness, gated due-collection command, no registered scheduler. Operations tests were red before implementation; disabled activation and bounded dispatch are tested. |
-| U9 | README, recorded fixtures, tracked-brand coverage, CI paths/PostgreSQL18, migration/caller/view regression, review and handoff. Review fixes verified; remote CI pending below. |
+| U9 | README, recorded fixtures, tracked-brand coverage, CI paths/PostgreSQL18, migration/caller/view regression, review and handoff. Review fixes verified; remote CI is tracked on PR #50. |
 
 ## Real data and limits
 
@@ -114,4 +114,4 @@ PostgreSQL tests**, with zero skips/errors. The database-backed offline report n
 uses the same computation as Pulse. Its browser checks passed with real data;
 Pulse's five-line verification was repeated on unchanged chart code and assets.
 External independent review was unavailable (Claude balance error, Grok timeout),
-and is not counted as passed. Remote CI will be observed on the published head.
+and is not counted as passed. Remote CI and its reviewed head are tracked on [PR #50](https://github.com/allenwlee/pushin-weight-v2/pull/50).
