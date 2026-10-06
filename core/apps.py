@@ -46,5 +46,5 @@ def _register_account_sources(sender, using, apps=None, **kwargs):
         source = apps.get_model("core", "DataSource")
     except LookupError:
         return
-    for key, name, kind in (("x", "X", "social"), ("hf", "Hugging Face", "model_catalog")):
+    for key, name, kind in (("x", "X", "social"), ("hf", "Hugging Face", "model_adoption")):
         source.objects.using(using).get_or_create(pk=key, defaults={"name": name, "source_type": kind, "enabled": False, "metadata": {}})
