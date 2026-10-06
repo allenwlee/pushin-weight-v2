@@ -212,6 +212,11 @@ def prepare_collection(spec):
         from core.benchmark_metric_operations import validate_operations
 
         validate_operations(settings)
+        if source_key == "openrouter":
+            require(
+                settings["completed_day_lag"] >= 1,
+                "OpenRouter completed_day_lag must be at least 1",
+            )
         source = DataSource.objects.get(pk=source_key)
         require(source.adapter_key is not None, "source adapter remains disabled")
         selected = settings.get("metrics", [])

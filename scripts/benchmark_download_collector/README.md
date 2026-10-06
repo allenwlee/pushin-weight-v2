@@ -89,6 +89,21 @@ zero/missing launch baseline cannot produce a percentage. An explicitly selected
 later baseline is disclosed. Integer values travel as strings so large token totals
 retain precision. Arena raw score/rank, uncertainty bounds and votes remain stored.
 
+## Save a database-backed offline report
+
+`python manage.py render_benchmark_report --contract CONTRACT_UUID --preset deepseek
+--end-date 2026-10-06 --output /path/to/new-report.html` saves the existing four-panel
+raw-value report from the same `build_comparison` result as Pulse. The output path
+must be new. This reads the database and makes no provider calls. Each panel accepts
+one matching line in the preset; ambiguous duplicates are rejected.
+
+The report retains per-line scope and coverage in its diagnostics and embeds the
+complete five-line response, including rank, baselines and provenance, in
+`database_comparison`. Arena rank remains available in Pulse and the embedded
+response; the retained four-panel layout shows Arena score. Unmapped platform
+totals absent from this response stay unavailable. Legacy snapshot reports remain
+available as a separate diagnostic input.
+
 ## Disabled operations and future release
 
 Reviewed source configuration freezes polling interval, freshness thresholds,

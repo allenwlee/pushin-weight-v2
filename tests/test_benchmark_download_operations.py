@@ -79,3 +79,20 @@ def test_due_collection_requires_activation_and_only_dispatches_due_sources(sett
     assert collect.call_count == 1
     assert collect.call_args.args[0] == "collect_benchmark_metrics"
     assert collect.call_args.kwargs["source"] == "hf"
+
+
+def test_openrouter_configuration_requires_a_completed_utc_day():
+    _, spec = setup_spec()
+    spec["source_configuration"]["openrouter"] = {
+        "metrics": ["total_tokens"],
+        "completed_day_lag": 0,
+    }
+    with pytest.raises(ValueError, match="OpenRouter.*completed_day_lag"):
+        configure_collection(spec)
+
+
+def test_hf_configuration_allows_zero_completed_day_lag():
+    _, spec = setup_spec()
+    spec["source_configuration"]["hf"]["completed_day_lag"] = 0
+    contract = configure_collection(spec)
+    assert contract.source_configuration["hf"]["completed_day_lag"] == 0

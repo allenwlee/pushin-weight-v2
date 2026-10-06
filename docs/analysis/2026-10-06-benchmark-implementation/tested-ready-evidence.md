@@ -37,7 +37,7 @@ Final review and remote CI are recorded below when completed.
 | U11 | Literal-span direct attribution and retained legacy brand evidence. Company rollups count a multi-product post once; company-only mentions never become exact product mentions. |
 | U14 | Default-off public aggregate page/API, matching existing home access policy. Real URL/template/JSON tests, late-post refresh without caching, five-series real browser proof, mobile/keyboard/scale/source checks. Initial HTTP tests were red on missing routes. |
 | U15 | Validated polling/lag/recheck/budget configuration, separate retrieval/publication freshness, gated due-collection command, no registered scheduler. Operations tests were red before implementation; disabled activation and bounded dispatch are tested. |
-| U9 | README, recorded fixtures, tracked-brand coverage, CI paths/PostgreSQL18, migration/caller/view regression, review and handoff. Final review/CI pending below. |
+| U9 | README, recorded fixtures, tracked-brand coverage, CI paths/PostgreSQL18, migration/caller/view regression, review and handoff. Review fixes verified; remote CI pending below. |
 
 ## Real data and limits
 
@@ -104,3 +104,14 @@ export DATABASE_URL=postgresql://127.0.0.1:55436/pw_benchmark_ready_20261006
 
 Feature/runtime flags default off. Owner visual approval, production crosswalk
 acceptance, a verified live backup and release/activation remain future decisions.
+
+## Final review and focused verification
+
+Four review findings were reproduced and resolved; see
+[review resolution](review-resolution.md) and the original [review](code-review.json).
+The final CI-equivalent local run passed **223 tests**, including **126 required
+PostgreSQL tests**, with zero skips/errors. The database-backed offline report now
+uses the same computation as Pulse. Its browser checks passed with real data;
+Pulse's five-line verification was repeated on unchanged chart code and assets.
+External independent review was unavailable (Claude balance error, Grok timeout),
+and is not counted as passed. Remote CI will be observed on the published head.

@@ -1,0 +1,268 @@
+{
+  "status": "complete",
+  "verdict": "Not ready",
+  "scope": {
+    "base": "5082ddf7",
+    "branch": "feat/benchmark-download-collector",
+    "head_sha": "7bc690e9d91b1f5db3b4dda2f065f01aeefb73f1",
+    "pr_url": "https://github.com/allenwlee/pushin-weight-v2/pull/50",
+    "files_changed": 122
+  },
+  "intent": "Deliver shared taxonomy/accounts, durable provider metrics/history, and database Pulse plus offline report for isolated tested-and-ready review. No production release.",
+  "intent_confidence": "explicit",
+  "reviewers": [
+    "correctness",
+    "api-contract",
+    "reliability",
+    "security",
+    "data-migration",
+    "testing",
+    "performance",
+    "maintainability",
+    "project-standards",
+    "julik-frontend-races",
+    "requirements"
+  ],
+  "findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "core/intelligence_readers.py:352: \"author_id\": link.account_id,"
+      ],
+      "file": "core/intelligence_readers.py",
+      "first_evidence": "core/intelligence_readers.py:352: \"author_id\": link.account_id,",
+      "independent_reviewers": [],
+      "line": 352,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "api-contract"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Keep author_id from link.account.author_id and assert the native X ID remains in the existing response shape.",
+      "title": "Person response labels UUID as X author ID",
+      "why_it_matters": "Existing person intelligence consumers receive a UUID instead of the native X identifier after the FK migration.",
+      "validation_status": "confirmed",
+      "validation_reason": "Native author_id assertion reproduced UUID in PostgreSQL test on 7bc690e9."
+    },
+    {
+      "#": 2,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "monitor/management/commands/load_seed.py:372: account_id=author_id,"
+      ],
+      "file": "monitor/management/commands/load_seed.py",
+      "first_evidence": "monitor/management/commands/load_seed.py:372: account_id=author_id,",
+      "independent_reviewers": [],
+      "line": 372,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Resolve Account.x by author_id and pass its account object to BrandAccount.get_or_create; assert seed creates edges without warnings.",
+      "title": "Seed account links still receive native IDs",
+      "why_it_matters": "Account.pk is now UUID; normal seed loading catches the UUID conversion error and omits brand/account roles.",
+      "validation_status": "confirmed",
+      "validation_reason": "Seeded BrandAccount missing reproduced in PostgreSQL test on 7bc690e9."
+    },
+    {
+      "#": 3,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "U8 requires both offline diagnostic report and Pulse endpoint to use the shared computation; render_benchmark_report command is absent.",
+        "scripts/benchmark_download_collector/series.py:12: def build_report(snapshots, start_date, end_date):"
+      ],
+      "file": "scripts/benchmark_download_collector/series.py",
+      "first_evidence": "scripts/benchmark_download_collector/series.py:12: def build_report(snapshots, start_date, end_date):",
+      "independent_reviewers": [],
+      "line": 12,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "requirements"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Add the planned read-only render_benchmark_report command and a presentation adapter from build_comparison into the existing report shape; retain exact raw values, scope and complete comparison evidence without recomputing values.",
+      "title": "Offline report is not connected to the shared database series",
+      "why_it_matters": "The planned database-backed offline report cannot be produced, and its original calculation can diverge from the Pulse response.",
+      "validation_status": "confirmed",
+      "validation_reason": "U8/R7 requires a shared database offline consumer; call_command(render_benchmark_report) raises Unknown command on 7bc690e9."
+    },
+    {
+      "#": 4,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "core/benchmark_metric_operations.py:15: \"completed_day_lag\": (0, 7, 1),"
+      ],
+      "file": "core/benchmark_metric_operations.py",
+      "first_evidence": "core/benchmark_metric_operations.py:15: \"completed_day_lag\": (0, 7, 1),",
+      "independent_reviewers": [],
+      "line": 15,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "reliability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Reject completed_day_lag < 1 when configuring OpenRouter, preserving zero for sources where it is unused; add configuration test.",
+      "title": "Zero completed-day lag admits an invalid OR schedule",
+      "why_it_matters": "The reviewed scheduler can select today for OpenRouter although its source adapter requires completed UTC days, creating a permanently failing schedule.",
+      "validation_status": "confirmed",
+      "validation_reason": "OpenRouter lag zero admitted by configure_collection; rejection test fails DID NOT RAISE on 7bc690e9."
+    }
+  ],
+  "actionable_findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "core/intelligence_readers.py:352: \"author_id\": link.account_id,"
+      ],
+      "file": "core/intelligence_readers.py",
+      "first_evidence": "core/intelligence_readers.py:352: \"author_id\": link.account_id,",
+      "independent_reviewers": [],
+      "line": 352,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "api-contract"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Keep author_id from link.account.author_id and assert the native X ID remains in the existing response shape.",
+      "title": "Person response labels UUID as X author ID",
+      "why_it_matters": "Existing person intelligence consumers receive a UUID instead of the native X identifier after the FK migration.",
+      "validation_status": "confirmed",
+      "validation_reason": "Native author_id assertion reproduced UUID in PostgreSQL test on 7bc690e9."
+    },
+    {
+      "#": 2,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "monitor/management/commands/load_seed.py:372: account_id=author_id,"
+      ],
+      "file": "monitor/management/commands/load_seed.py",
+      "first_evidence": "monitor/management/commands/load_seed.py:372: account_id=author_id,",
+      "independent_reviewers": [],
+      "line": 372,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Resolve Account.x by author_id and pass its account object to BrandAccount.get_or_create; assert seed creates edges without warnings.",
+      "title": "Seed account links still receive native IDs",
+      "why_it_matters": "Account.pk is now UUID; normal seed loading catches the UUID conversion error and omits brand/account roles.",
+      "validation_status": "confirmed",
+      "validation_reason": "Seeded BrandAccount missing reproduced in PostgreSQL test on 7bc690e9."
+    },
+    {
+      "#": 3,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "U8 requires both offline diagnostic report and Pulse endpoint to use the shared computation; render_benchmark_report command is absent.",
+        "scripts/benchmark_download_collector/series.py:12: def build_report(snapshots, start_date, end_date):"
+      ],
+      "file": "scripts/benchmark_download_collector/series.py",
+      "first_evidence": "scripts/benchmark_download_collector/series.py:12: def build_report(snapshots, start_date, end_date):",
+      "independent_reviewers": [],
+      "line": 12,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "requirements"
+      ],
+      "severity": "P1",
+      "suggested_fix": "Add the planned read-only render_benchmark_report command and a presentation adapter from build_comparison into the existing report shape; retain exact raw values, scope and complete comparison evidence without recomputing values.",
+      "title": "Offline report is not connected to the shared database series",
+      "why_it_matters": "The planned database-backed offline report cannot be produced, and its original calculation can diverge from the Pulse response.",
+      "validation_status": "confirmed",
+      "validation_reason": "U8/R7 requires a shared database offline consumer; call_command(render_benchmark_report) raises Unknown command on 7bc690e9."
+    },
+    {
+      "#": 4,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "core/benchmark_metric_operations.py:15: \"completed_day_lag\": (0, 7, 1),"
+      ],
+      "file": "core/benchmark_metric_operations.py",
+      "first_evidence": "core/benchmark_metric_operations.py:15: \"completed_day_lag\": (0, 7, 1),",
+      "independent_reviewers": [],
+      "line": 15,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "reliability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Reject completed_day_lag < 1 when configuring OpenRouter, preserving zero for sources where it is unused; add configuration test.",
+      "title": "Zero completed-day lag admits an invalid OR schedule",
+      "why_it_matters": "The reviewed scheduler can select today for OpenRouter although its source adapter requires completed UTC days, creating a permanently failing schedule.",
+      "validation_status": "confirmed",
+      "validation_reason": "OpenRouter lag zero admitted by configure_collection; rejection test fails DID NOT RAISE on 7bc690e9."
+    }
+  ],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": {
+    "R1-R24": "Implemented except R7 offline DB consumer and R18 seed/person ID boundaries; U9 CI pending",
+    "U1-U15": "U8 offline consumer incomplete; U9 final verification in progress; U15 production activation intentionally excluded"
+  },
+  "learnings": [
+    {
+      "type": "known_pattern",
+      "title": "Retain old evidence and use one migration owner",
+      "citation": "docs/solutions/data-migration/posts-raw-denormalize-prod-incident-2026-07-28.md",
+      "note": "Native columns retained; backup and single migration runner required before future production cutover."
+    }
+  ],
+  "agent_native_gaps": [],
+  "deployment_notes": [
+    "Production backup with timestamp/location/restore verification required before release; hours earlier allowed.",
+    "0066 irreversible; restore/redeploy old revision for rollback, not reverse migration.",
+    "Production cutover duration not proven by bounded projection."
+  ],
+  "residual_risks": [
+    "Full production cutover lock duration is not measured by the 74,957-post projection; retain the pre-deploy backup and controlled single-writer migration window."
+  ],
+  "testing_gaps": [],
+  "coverage": {
+    "depth": "full",
+    "peer": {
+      "outcome": "degraded",
+      "coverage": "Claude requested claude-opus-5-5 high: no review, HTTP402 insufficient balance. Native Grok replacement requested grok-4.7 xhigh: timeout/no usable schema output after bounded580s. No independent corroboration; all job directories cleaned."
+    },
+    "validator": {
+      "confirmed": 4,
+      "rejected": 0,
+      "unresolved": 0,
+      "shortcut_skipped": 0,
+      "mode": "Sequential inline per AGENTS.md; discriminating tests, no independent-agent claim"
+    },
+    "first_evidence_backfilled": 3,
+    "malformed_findings": 0,
+    "suppressed_by_confidence": {},
+    "stage_telemetry": "partial; original peer start event missing"
+  },
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261006-223105-f557b20c",
+  "run_id": "20261006-223105-f557b20c"
+}

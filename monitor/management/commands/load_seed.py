@@ -362,6 +362,7 @@ class Command(BaseCommand):
                             company_id=company_nickname
                         ).values_list("brand_id", flat=True)
 
+                        account = Account.x.get(author_id=author_id)
                         for brand_nickname in linked_brands:
                             # Skip if brand not in our target set (if filtering)
                             if brands_filter and brand_nickname not in requested:
@@ -369,7 +370,7 @@ class Command(BaseCommand):
                             try:
                                 BrandAccount.objects.get_or_create(
                                     brand_id=brand_nickname,
-                                    account_id=author_id,
+                                    account=account,
                                     role_id=role_key,
                                 )
                                 stats["brands_accounts"] += 1

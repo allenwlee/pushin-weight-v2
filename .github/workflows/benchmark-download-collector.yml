@@ -7,6 +7,10 @@ on:
       - 'monitor/management/commands/export_benchmark_inputs.py'
       - 'core/hf_metadata_client.py'
       - 'core/account_identity.py'
+      - 'core/intelligence_readers.py'
+      - 'monitor/management/commands/load_seed.py'
+      - 'tests/test_load_seed_account_observation.py'
+      - 'tests/test_intelligence_readers.py'
       - 'core/apps.py'
       - 'core/benchmark_metric*.py'
       - 'core/measurement*.py'
@@ -79,3 +83,4 @@ jobs:
           tests/test_account_source_identity.py tests/test_hf_catalog_persistence.py
           tests/test_list_membership_reconciliation.py tests/test_profile_snapshots.py
           tests/test_product_verification.py tests/test_staff_library.py tests/test_staff_dossier.py
+          tests/test_load_seed_account_observation.py tests/test_intelligence_readers.py

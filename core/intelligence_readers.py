@@ -349,7 +349,7 @@ def person_intelligence(person_id) -> dict[str, Any]:
             "primary_language": person.primary_language,
             "accounts": [
                 {
-                    "author_id": link.account_id,
+                    "author_id": link.account.author_id,
                     "handle": link.account.handle,
                     "is_primary": link.is_primary,
                     "resolution_status": link.resolution_status,
