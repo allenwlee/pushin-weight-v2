@@ -140,6 +140,10 @@ classification result or prevent a separately valid classification.
 Legacy SQLite `n_discourse` counters are historical compatibility evidence and
 do not indicate current classifier health.
 
+### Official company account discovery
+
+Recognition of an AI company or lab's official social account from stored author and post evidence. Its identity follows the provider's stable account ID, while handles and profile descriptions are dated observations. Organization registration and confirmation of membership in the collection list are separate outcomes.
+
 ### Jev / 0731 classification evaluation
 
 The September–October 2026 comparison of TypeSafe Jev's typed decisions with
