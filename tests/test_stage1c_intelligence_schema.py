@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from core.models import (
@@ -97,7 +97,16 @@ def test_person_account_confirmed_and_primary_uniqueness_is_database_enforced():
             resolution_status="confirmed",
         )
     )
-    assert PersonAccount._meta.get_field("account").column == "author_id"
+    field = PersonAccount._meta.get_field("account")
+    assert field.column == "account_key"
+    assert field.target_field.name == "account_key"
+    # UUID relationships preserve the native compatibility column for X callers.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT author_id, account_key FROM people_accounts WHERE person_id=%s",
+            [person.pk],
+        )
+        assert cursor.fetchone() == ("person-account-one", account.pk)
     assert tuple(PersonAccount._meta.pk.field_names) == ("person", "account")
 
 

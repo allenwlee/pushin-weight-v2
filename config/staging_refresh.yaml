@@ -33,6 +33,22 @@ production_deny:
 
 relations:
   copied_tables:
+    # Benchmark taxonomy and measurement evidence; never collection credentials.
+    - data_sources
+    - taxonomy_versions
+    - product_groups
+    - product_relationships
+    - product_group_memberships
+    - measurement_subjects
+    - subject_relationships
+    - post_subject_attributions
+    - metric_types
+    - source_metrics
+    - metric_collection_contracts
+    - source_subject_mappings
+    - metric_collection_runs
+    - metric_observations
+    - metric_values
     - people_names
     - people_name_evidence
     - people_texts
@@ -173,6 +189,22 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    # Benchmark taxonomy and measurement evidence; never collection credentials.
+    - data_sources
+    - taxonomy_versions
+    - product_groups
+    - product_relationships
+    - product_group_memberships
+    - measurement_subjects
+    - subject_relationships
+    - post_subject_attributions
+    - metric_types
+    - source_metrics
+    - metric_collection_contracts
+    - source_subject_mappings
+    - metric_collection_runs
+    - metric_observations
+    - metric_values
     - people_identity_corrections
     - people_media
     - people_names
@@ -248,6 +280,10 @@ relations:
   views:
     - trend_narrative_versions
   sequences:
+    # Benchmark taxonomy and measurement evidence; never collection credentials.
+    - source_metrics_id_seq
+    - metric_observations_id_seq
+    - metric_values_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -324,6 +360,10 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    # Benchmark taxonomy and measurement evidence; never collection credentials.
+    - source_metrics_id_seq
+    - metric_observations_id_seq
+    - metric_values_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -437,6 +477,21 @@ scrub:
 
 validation:
   exact_count_tables:
+    # Benchmark taxonomy and measurement evidence; never collection credentials.
+    - taxonomy_versions
+    - product_groups
+    - product_relationships
+    - product_group_memberships
+    - measurement_subjects
+    - subject_relationships
+    - post_subject_attributions
+    - metric_types
+    - source_metrics
+    - metric_collection_contracts
+    - source_subject_mappings
+    - metric_collection_runs
+    - metric_observations
+    - metric_values
     - people
     - people_accounts
     - people_brand_affiliations
@@ -469,6 +524,9 @@ validation:
   forward_migration_translation_count_deltas: {}
   required_columns:
     accounts:
+      - account_key
+      - data_source_id
+      - external_identifier
       - author_id
       - handle
       - bio_en
@@ -478,6 +536,7 @@ validation:
       - display_name_en
       - display_name_zh_cn
     posts:
+      - author_account_key
       - tweet_id
       - author_id
       - text

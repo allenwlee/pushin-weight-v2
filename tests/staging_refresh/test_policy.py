@@ -252,6 +252,21 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "data_sources",
+        "taxonomy_versions",
+        "product_groups",
+        "product_relationships",
+        "product_group_memberships",
+        "measurement_subjects",
+        "subject_relationships",
+        "post_subject_attributions",
+        "metric_types",
+        "source_metrics",
+        "metric_collection_contracts",
+        "source_subject_mappings",
+        "metric_collection_runs",
+        "metric_observations",
+        "metric_values",
         "people_identity_corrections",
         "people_media",
         "people_names",
@@ -447,3 +462,36 @@ def test_recovery_database_name_must_match_the_policy_grammar(recovery: str) -> 
 
     with pytest.raises(PolicyError, match="recovery_name_invalid"):
         expected_confirmation(policy, "rollback", recovery=recovery)
+
+
+def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
+    policy = load_policy(POLICY_PATH)
+    tables = {
+        "data_sources",
+        "taxonomy_versions",
+        "product_groups",
+        "product_relationships",
+        "product_group_memberships",
+        "measurement_subjects",
+        "subject_relationships",
+        "post_subject_attributions",
+        "metric_types",
+        "source_metrics",
+        "metric_collection_contracts",
+        "source_subject_mappings",
+        "metric_collection_runs",
+        "metric_observations",
+        "metric_values",
+    }
+    assert tables <= policy.relations.copied_tables
+    assert tables <= policy.relations.optional_source_tables
+    assert tables.isdisjoint(policy.relations.excluded_tables)
+    # 0066 seeds X/HF into data_sources, so its pre-migration count may change.
+    assert tables - {"data_sources"} <= set(policy.validation.exact_count_tables)
+    sequences = {
+        "source_metrics_id_seq",
+        "metric_observations_id_seq",
+        "metric_values_id_seq",
+    }
+    assert sequences <= policy.relations.sequences
+    assert sequences <= policy.relations.optional_source_sequences

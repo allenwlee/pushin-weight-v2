@@ -38,3 +38,24 @@ The known unchanged legacy homepage-filter test failure remains documented in
 
 Additional compound documentation was skipped: the code, regression tests, plan,
 this receipt and existing migration-incident learning carry the durable reasoning.
+
+## CI integration follow-up
+
+On ecec4e43 the benchmark workflow passed. Staff CI passed 299 tests and found
+two additional integration gaps: its schema assertion still expected the pre-0066
+person/account column, and staging refresh had not classified the fifteen new
+tables. Both failures were reproduced locally before changes.
+
+The person/account test retains both uniqueness failures and now checks the UUID
+foreign key plus the actual native compatibility column through SQL. The staging
+policy copies all fifteen durable taxonomy/measurement tables, records the three
+new sequences and allows their absence on older source schemas. Fourteen receive
+exact count checks; data_sources can gain X/HF seeds during 0066, so its source
+count is not pinned. Candidate account/post columns are explicitly required.
+The source-grant runbook matches that policy; no grants or refresh ran.
+
+The affected schema/staging-refresh suite passes **123 tests**, including 13
+required PostgreSQL cases with zero skips/errors. Focused lint and whitespace
+checks pass. The remaining staff tests passed in the preceding remote run and
+will run again on the final candidate. This corrects integration with the new
+schema; it removes no assertions, skips or authorization checks.
