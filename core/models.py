@@ -7332,3 +7332,27 @@ class OfficialCompanyAttempt(models.Model):
     class Meta:
         db_table = 'official_company_attempts'
         constraints = [models.CheckConstraint(condition=models.Q(reserved_usd__gte=0) & (models.Q(actual_usd__isnull=True) | models.Q(actual_usd__gte=0)), name='ck_official_co_attempt_cost')]
+
+
+class OfficialCompanyListIntent(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='official_list_intents')
+    state = models.ForeignKey(OfficialCompanyAccountState, on_delete=models.PROTECT, related_name='list_intents')
+    evidence_hash = models.CharField(max_length=64)
+    list_id = models.BigIntegerField()
+    status = models.CharField(max_length=24, default='pending')
+    claim_token = models.CharField(max_length=64, blank=True, default='')
+    claim_expires_at = models.DateTimeField(null=True)
+    next_attempt_at = models.DateTimeField(null=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=128, blank=True, default='')
+    confirmed_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'official_company_list_intents'
+        constraints = [
+            models.UniqueConstraint(fields=['list_id','account'],name='uq_official_co_list_intent'),
+            models.CheckConstraint(condition=models.Q(status__in=['pending','claimed','retry_due','verify_needed','blocked_auth','confirmed','review_needed','suppressed']),name='ck_official_co_list_status'),
+        ]
+        indexes = [models.Index(fields=['status','next_attempt_at'],name='idx_official_co_list_due')]
