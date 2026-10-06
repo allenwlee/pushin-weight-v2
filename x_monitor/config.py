@@ -371,6 +371,38 @@ class TargetedExtractionConfig(BaseModel):
         return self
 
 
+class OfficialCompanyConfig(BaseModel):
+    enabled: bool = False
+    registration_enabled: bool = False
+    list_sync_enabled: bool = False
+    model: str = 'deepseek-ai/DeepSeek-V4-Flash-0731'
+    max_calls_per_cycle: int = Field(default=2, ge=0, le=20)
+    max_tokens: int = Field(default=1024, ge=128, le=4096)
+    max_input_bytes: int = Field(default=262144, ge=4096, le=1048576)
+    request_timeout_seconds: int = Field(default=20, ge=5, le=60)
+    lane_deadline_seconds: int = Field(default=45, ge=10, le=120)
+    max_usd_per_cycle: Decimal = Field(default=Decimal('0'), ge=0)
+    max_usd_per_day: Decimal = Field(default=Decimal('0'), ge=0)
+    initial_scan_max_usd: Decimal = Field(default=Decimal('0'), ge=0)
+    input_usd_per_million: Decimal = Field(default=Decimal('0.06'), ge=0)
+    output_usd_per_million: Decimal = Field(default=Decimal('0.18'), ge=0)
+    list_id: str = '2067062923525275922'
+    owner_id: str = '17456158'
+    max_list_writes: int = Field(default=2, ge=0, le=10)
+
+    @model_validator(mode='after')
+    def _validate_activation(self):
+        if self.registration_enabled and not self.enabled:
+            raise ValueError('official company registration requires discovery')
+        if self.list_sync_enabled and not self.registration_enabled:
+            raise ValueError('official company list sync requires registration')
+        if self.model != 'deepseek-ai/DeepSeek-V4-Flash-0731':
+            raise ValueError('official company model needs an explicitly reviewed pricing route')
+        if self.list_id != '2067062923525275922' or self.owner_id != '17456158':
+            raise ValueError('official company list adapter requires the configured owner list')
+        return self
+
+
 class CycleConfig(BaseModel):
     """Cycle-level runtime constants (plan 2026-08-01-001).
 
@@ -926,6 +958,7 @@ class Config(BaseModel):
     search: SearchConfig = SearchConfig()
     discovery: DiscoveryConfig = DiscoveryConfig()
     targeted_extraction: TargetedExtractionConfig = TargetedExtractionConfig()
+    official_company: OfficialCompanyConfig = OfficialCompanyConfig()
     cycle: CycleConfig = CycleConfig()
     harvest: HarvestConfig = HarvestConfig()
     llm: LlmConfig = LlmConfig()

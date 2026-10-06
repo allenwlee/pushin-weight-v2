@@ -194,3 +194,274 @@ audio,speech,multimodal,robotics,embedding,other), rationale, contradictions
 model_developer arrays). For acceptance, EACH claim requires a citation object
 {source_id, quote}; quote must be a verbatim excerpt of that supplied source.
 A company account's identity never proves a particular product mention."""
+
+
+def evidence_for_account(account):
+    """Read bounded representative inputs over all history, never a date window."""
+    from django.db.models import Q
+
+    from core.models import AccountProfileSnapshot, Post
+
+    fields = ("tweet_id", "text", "author_description", "author_profile_bio")
+    qs = Post.objects.filter(author=account)
+    recent = list(qs.order_by("-fetched_at", "-tweet_id").values(*fields)[:5])
+    # Supplement latest material with older announcement evidence. This ranks
+    # evidence, never filters which accounts enter the complete inventory.
+    historical = list(
+        qs.filter(
+            Q(text__icontains="model")
+            | Q(text__icontains="模型")
+            | Q(text__icontains="モデル")
+            | Q(text__icontains="weights")
+        )
+        .order_by("-created_at", "-tweet_id")
+        .values(*fields)[:3]
+    )
+    rows = {
+        r["tweet_id"]: {
+            "id": r["tweet_id"],
+            "text": r["text"],
+            "author_description": r["author_description"],
+            "profile_bio": r["author_profile_bio"],
+        }
+        for r in recent + historical
+    }
+    profiles = [
+        {"id": str(p.pk), "profile": p.raw_profile_payload or p.profile_data}
+        for p in AccountProfileSnapshot.objects.filter(account=account).order_by(
+            "-last_observed_at", "-pk"
+        )[:3]
+    ]
+    return build_evidence(account, list(rows.values()), profiles)
+
+
+def enqueue_account(account, *, initial_scan=None):
+    from django.db import transaction
+
+    from core.models import OfficialCompanyAccountState
+
+    evidence = evidence_for_account(account)
+    with transaction.atomic():
+        state, created = (
+            OfficialCompanyAccountState.objects.select_for_update().get_or_create(
+                account=account,
+                defaults={
+                    "evidence_hash": evidence["identity"],
+                    "evidence": evidence,
+                    "initial_scan": initial_scan,
+                },
+            )
+        )
+        if state.status == "suppressed":
+            return state
+        changed = state.evidence_hash != evidence["identity"]
+        if created or changed:
+            state.evidence = evidence
+            state.evidence_hash = evidence["identity"]
+            state.policy_version = POLICY_VERSION
+            state.status = "pending" if evidence["sources"] else "no_evidence"
+            state.attempts = 0
+            state.claim_token = ""
+            state.claim_expires_at = None
+            state.next_attempt_at = None
+            state.last_error = ""
+        if initial_scan and state.initial_scan_id is None:
+            state.initial_scan = initial_scan
+        state.save()
+    return state
+
+
+def claim_account(state_id, *, cfg, budget_scope, initial=False):
+    """Reserve conservative cost under ordered row locks before one physical call."""
+    import uuid
+    from datetime import timedelta
+    from decimal import ROUND_UP, Decimal
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from core.models import (
+        OfficialCompanyAccountState,
+        OfficialCompanyAttempt,
+        OfficialCompanyBudget,
+    )
+
+    now = timezone.now()
+    with transaction.atomic():
+        state = OfficialCompanyAccountState.objects.select_for_update().get(pk=state_id)
+        if state.status not in {"pending", "retry_due", "claimed"}:
+            return None
+        if state.next_attempt_at and state.next_attempt_at > now:
+            return None
+        if (
+            state.status == "claimed"
+            and state.claim_expires_at
+            and state.claim_expires_at > now
+        ):
+            return None
+        if state.attempts >= 3:
+            state.status = "review_needed"
+            state.last_error = "attempt_limit"
+            state.save()
+            return None
+        payload = json.dumps(state.evidence, ensure_ascii=False, sort_keys=True)
+        input_bytes = len((SYSTEM_PROMPT + payload).encode())
+        if input_bytes > cfg.max_input_bytes:
+            state.status = "review_needed"
+            state.last_error = "evidence_envelope_exceeded"
+            state.save()
+            return None
+        # UTF-8 bytes + framing is a conservative token upper bound. No local
+        # character truncation and no reservation based on an average ratio.
+        reserve = (
+            (
+                Decimal(input_bytes + 1024) * cfg.input_usd_per_million
+                + Decimal(cfg.max_tokens) * cfg.output_usd_per_million
+            )
+            / Decimal(1_000_000)
+        ).quantize(Decimal("0.0000000001"), rounding=ROUND_UP)
+        limits = (
+            {"initial-total": cfg.initial_scan_max_usd}
+            if initial
+            else {
+                "day:" + now.date().isoformat(): cfg.max_usd_per_day,
+                "cycle:" + budget_scope: cfg.max_usd_per_cycle,
+            }
+        )
+        budgets = []
+        for key in sorted(limits):
+            if limits[key] <= 0:
+                return None
+            OfficialCompanyBudget.objects.get_or_create(key=key)
+            budget = OfficialCompanyBudget.objects.select_for_update().get(key=key)
+            if budget.spent_usd + budget.reserved_usd + reserve > limits[key]:
+                return None
+            budgets.append(budget)
+        token = uuid.uuid4().hex
+        for budget in budgets:
+            budget.reserved_usd += reserve
+            budget.save(update_fields=["reserved_usd"])
+        state.status = "claimed"
+        state.claim_token = token
+        state.claim_expires_at = now + timedelta(
+            seconds=cfg.request_timeout_seconds + 30
+        )
+        state.attempts += 1
+        state.model = cfg.model
+        state.policy_version = POLICY_VERSION
+        state.save()
+        return OfficialCompanyAttempt.objects.create(
+            state=state,
+            evidence_hash=state.evidence_hash,
+            evidence=state.evidence,
+            claim_token=token,
+            model=cfg.model,
+            policy_version=POLICY_VERSION,
+            reserved_usd=reserve,
+            budget_keys=list(limits),
+        )
+
+
+def complete_attempt(attempt_id, *, cfg, response=None, error=None):
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from core.models import (
+        OfficialCompanyAccountState,
+        OfficialCompanyAttempt,
+        OfficialCompanyBudget,
+    )
+
+    now = timezone.now()
+    with transaction.atomic():
+        attempt = OfficialCompanyAttempt.objects.select_for_update().get(pk=attempt_id)
+        if attempt.completed_at:
+            return False
+        state = OfficialCompanyAccountState.objects.select_for_update().get(
+            pk=attempt.state_id
+        )
+        usage = response.get("usage", {}) if isinstance(response, Mapping) else {}
+        valid_usage = all(
+            isinstance(usage.get(k), int)
+            and not isinstance(usage[k], bool)
+            and usage[k] >= 0
+            for k in ("input_tokens", "output_tokens")
+        )
+        if valid_usage:
+            attempt.input_tokens = usage["input_tokens"]
+            attempt.output_tokens = usage["output_tokens"]
+            attempt.actual_usd = (
+                Decimal(attempt.input_tokens) * cfg.input_usd_per_million
+                + Decimal(attempt.output_tokens) * cfg.output_usd_per_million
+            ) / Decimal(1_000_000)
+            for key in sorted(attempt.budget_keys):
+                budget = OfficialCompanyBudget.objects.select_for_update().get(pk=key)
+                budget.reserved_usd -= attempt.reserved_usd
+                budget.spent_usd += attempt.actual_usd
+                budget.save()
+        # Unknown spend stays reserved even after a failed or stale response.
+        decision = {}
+        if error is None:
+            try:
+                decision = validate_decision(
+                    {k: v for k, v in response.items() if k != "usage"},
+                    attempt.evidence,
+                )
+            except (TypeError, ValueError, AttributeError):
+                error = ValueError("invalid_decision")
+        code = type(error).__name__ if error else ""
+        attempt.status = "failed" if error else "completed"
+        attempt.error_code = code
+        attempt.decision = decision
+        attempt.completed_at = now
+        attempt.save()
+        if (
+            state.claim_token != attempt.claim_token
+            or state.evidence_hash != attempt.evidence_hash
+        ):
+            return False
+        if error:
+            terminal = isinstance(error, (TypeError, ValueError)) or getattr(
+                error, "status_code", None
+            ) in {400, 401, 403}
+            state.status = (
+                "review_needed" if terminal or state.attempts >= 3 else "retry_due"
+            )
+            state.next_attempt_at = (
+                now + timedelta(minutes=15) if state.status == "retry_due" else None
+            )
+            state.last_error = code
+        else:
+            state.status = decision["outcome"]
+            state.decision = decision
+            state.last_error = ""
+            state.next_attempt_at = None
+        state.claim_token = ""
+        state.claim_expires_at = None
+        state.save()
+        return True
+
+
+def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
+    if not cfg.enabled or call is None:
+        return False
+    attempt = claim_account(
+        state_id, cfg=cfg, budget_scope=budget_scope, initial=initial
+    )
+    if attempt is None:
+        return False
+    try:
+        response = call(
+            SYSTEM_PROMPT,
+            json.dumps(attempt.evidence, ensure_ascii=False, sort_keys=True),
+            cfg.model,
+            cfg.max_tokens,
+        )
+    except Exception as exc:  # noqa: BLE001 - persist a provider failure and retain unknown spend
+        complete_attempt(attempt.pk, cfg=cfg, error=exc)
+    else:
+        complete_attempt(attempt.pk, cfg=cfg, response=response)
+    return True
