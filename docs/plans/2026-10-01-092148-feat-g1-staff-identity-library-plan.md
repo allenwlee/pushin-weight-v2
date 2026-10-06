@@ -12,7 +12,7 @@ ollija:
   delivery_selected_by_user: true
   delivery_route: staged
   delivery_route_selected_by_user: true
-  staging_transport: branch
+  staging_transport: commit
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -48,10 +48,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
 8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
@@ -78,8 +78,11 @@ The active follow-up moves staff images and editorial media to private
 Cloudflare R2 storage shared by Render's web and worker services. It preserves
 database references and original disk files. The October 4 G1 release below
 remains complete; the October 5 R2 phase is the current work. Completion requires
-verified file copies and shared access on staging and production. Credentials
-and live R2 verification are still outstanding.
+verified file copies and shared access on staging and production. The supplied
+setup credentials and private R2 buckets passed live checks on October 6.
+Environment-specific deployment credentials passed own-bucket access and
+cross-bucket denial checks. Live Render migration and verification remain
+outstanding.
 
 U0–U11 are implemented, including the independent review repairs to identity
 matching, reviewed corrections, job conclusions and sourced dossier fields.
@@ -174,13 +177,17 @@ hashes and attribution records remain valid. Published media can be delivered
 directly from R2 after application access checks. New provider searches and paid
 media generation remain governed by their separate activation decisions.
 
-**Current state:** implementation and local review fixes are on `feat/g1-r2-media`, based on
+**Current state:** implementation and local review fixes are published in draft
+PR #52 at `fb750d1ec27886f121047997b5469792e11e58c2`, based on
 `713770008eacc3f890c90e6fce07efad940eb664`. The owner requested proceeding
-on October 5 after the G2 handoff, and G2 has acknowledged its scope. R2 credentials
-were not found locally and have been requested while code work proceeds. No R2
-bucket, transfer or deployment is complete yet. The adapter uses explicit R2
-credentials and signed URLs valid for at most 300 seconds. Cloudflare account
-access, bucket names and runtime credential scopes still need live verification.
+on October 5 after the G2 handoff, and G2 has acknowledged its scope. On October 6
+the owner supplied valid setup credentials. Both private environment buckets
+are created, and the actual adapter passed live write/read, conditional-create,
+signed-link, expiry and range-request checks. No source-asset transfer or Render
+deployment has run. The adapter uses explicit R2 credentials and signed URLs
+valid for at most 300 seconds. Separate bucket-scoped runtime credentials are
+supplied and verified: each reads its own bucket (HTTP 200), while the other
+bucket returns HTTP 403 AccessDenied.
 Fresh read-only checks on October 5 found 35 staff image objects / 20,060,954
 bytes in both production and staging, with no missing files or hash mismatches.
 Inventory again immediately before migration. MiniMax's local research is not
@@ -271,6 +278,82 @@ verified shared access to both namespaces.
   credentials were present when checked; they have been requested from the owner.
   G2's staging work and environment settings are preserved. No buckets, copied
   objects, durability activation or storage deployment are claimed yet.
+
+### October 6 credential and private-bucket verification
+
+- Parsed only the three named assignments from `/Users/fuchitalee/.env.secrets`;
+  each is present once and has the expected format. The file is mode `0600`.
+  No secret values were printed or written to receipts. An authenticated
+  `ListBuckets` request returned HTTP 200; the account initially had no buckets.
+- Created `pushinweight-media-staging` and `pushinweight-media-production`,
+  retaining R2's private default. Requested the `WNAM` location hint for the
+  Oregon Render services; this is a placement hint, not a jurisdiction guarantee.
+- Exercised `PrivateR2Storage` from the published code in both buckets and both
+  `staff/` and `editorial/` prefixes. Conditional writes preserve an existing
+  object; authenticated reads and signed downloads match the uploaded SHA-256.
+  Responses retain `private, no-store`; byte-range requests return HTTP 206.
+  An expired signed URL returns HTTP 403. Unsigned requests return HTTP 400
+  `InvalidArgument` and do not return the object. The initial probe incorrectly
+  required 401/403 for unsigned requests; correcting that probe required no
+  application-code change. Five small JSON proof objects (640 bytes total)
+  remain under `_storage-probes/`; no staff or editorial asset was copied.
+- Rechecked all four Render services: production web/worker remain at
+  `f176e61481ff93899424ba4aa4743a5ee86446dd`; staging web/worker remain at G2's
+  `bacbb4337d62b3b97bed3f37956ad225993f0790`. No R2 credentials or settings have
+  been installed there. Staff acquisition and G2 generation/public access stay
+  disabled. Remote main remains `71377000`, and staging remains `bacbb433`.
+- Requested the planned per-environment Object Read & Write credentials,
+  restricted to their respective buckets. The operator secret-store names are
+  `R2_STAGING_ACCESS_KEY_ID`, `R2_STAGING_SECRET_ACCESS_KEY`,
+  `R2_PRODUCTION_ACCESS_KEY_ID` and `R2_PRODUCTION_SECRET_ACCESS_KEY`.
+  Each service receives its own pair under the adapter's existing
+  `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` names. The supplied setup pair works;
+  the additional pairs implement the already planned environment separation.
+- Evidence: `.context/g1-r2-20261006/credentials-and-buckets.json` preserves the
+  initial probe failure; `probe-diagnosis.json` identifies the unsigned-response
+  mismatch; `storage-probes.json` records all passing live storage checks;
+  `render-baseline.json` records the unchanged live service revisions/settings.
+  These local checks do not establish web/worker sharing or production cutover.
+- Next: verify the scoped deployment credentials; reconcile the existing staged
+  delivery route with paused G2's unpublished staging revision; copy and verify
+  the live staff inventory, then complete the Render cross-service and delivery
+  checks before asserting storage durability. Preserve both original disks.
+
+### October 6 scoped access and deployment continuation
+
+The owner supplied both deployment key pairs after the token-creation guidance.
+Each local assignment occurs once with the expected format. The two key IDs are
+different. Authenticated GETs of known proof objects succeed in the intended
+bucket and return HTTP 403 `AccessDenied` in the other bucket. The receipt is
+`.context/g1-r2-20261006/scoped-credentials.json`; values are never printed.
+
+Code review: skipped (ce-code-review unavailable). The completed October 5
+top-level attempt exhausted its independent-provider fallback (Claude balance
+failure and Grok timeout). Its local findings are fixed, and the final manual
+diff scan plus 301 G1/36 Ollija checks and exact-revision GitHub CI remain valid
+for unchanged application code. This is not a claim of independent review.
+
+## Delivery Exceptions
+
+The authorized endpoint remains staged production delivery of G1 R2, independent
+of unfinished G2 work. Remote staging is G2's unpublished `bacbb433`; merging that
+branch into the production candidate would add 86 unrelated files and four
+editorial migrations. Use exact-commit staging within the existing staged route,
+preserving the staging and G2 Git branches and the dirty G2 worktree. This is a
+deployment-transport choice to keep the accepted G1-only release scope.
+
+For G2 consumer verification, a separate integration commit may combine the
+published G2 revision and the reviewed R2 candidate, resolving only shared
+settings. Deploy that integration commit only to staging, with generation and
+public access disabled. Verify both storage aliases and G2 delivery there.
+Then deploy the unchanged G1-only candidate to staging and verify its migration
+and shared storage before advancing that same candidate to production. Restore
+the combined G2/R2 staging deployment afterward so G2 retains its staged work
+with the new backend. Record both deployment identities; the integration commit
+must never enter the G1 production candidate. Preserve service controls, the
+original disk files and all database records. Disable staging automatic deploys
+while an explicit integration revision differs from its tracked branch, and
+record that setting for the G2 continuation.
 
 ## Execution record — October 1 scaffolding pilot
 

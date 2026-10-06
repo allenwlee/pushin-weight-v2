@@ -27,13 +27,31 @@ Configure these secret values through Render's service environment, not Git:
   environment's bucket. Provisioning credentials are a separate operator concern.
 
 Use a different private bucket for staging and production. Within each bucket,
-`staff/` stores originals and `editorial/` stores derivatives. The following names
-are the proposed rollout names; confirm availability and ownership before use:
+`staff/` stores originals and `editorial/` stores derivatives. Both buckets below
+were created and passed operator-side access checks on October 6, 2026. They
+remain private; Render migration and service access are not yet verified:
 
 | Environment | Bucket | Staff options | Editorial options |
 | --- | --- | --- | --- |
 | Staging | `pushinweight-media-staging` | `{"bucket_name":"pushinweight-media-staging","location":"staff"}` | `{"bucket_name":"pushinweight-media-staging","location":"editorial"}` |
 | Production | `pushinweight-media-production` | `{"bucket_name":"pushinweight-media-production","location":"staff"}` | `{"bucket_name":"pushinweight-media-production","location":"editorial"}` |
+
+The operator's `/Users/fuchitalee/.env.secrets` keeps the deployment pairs under
+distinct names so configuring staging does not accidentally use production's
+credential. Create each token with **Object Read & Write**, restricted to the
+one corresponding bucket:
+
+| Operator secret-store variable | Render variable | Services |
+| --- | --- | --- |
+| `R2_STAGING_ACCESS_KEY_ID` | `R2_ACCESS_KEY_ID` | Staging web and headline worker |
+| `R2_STAGING_SECRET_ACCESS_KEY` | `R2_SECRET_ACCESS_KEY` | Staging web and headline worker |
+| `R2_PRODUCTION_ACCESS_KEY_ID` | `R2_ACCESS_KEY_ID` | Production web and headline worker |
+| `R2_PRODUCTION_SECRET_ACCESS_KEY` | `R2_SECRET_ACCESS_KEY` | Production web and headline worker |
+
+`R2_ACCOUNT_ID` is shared. The original administrative setup pair stays in the
+operator secret store. Both deployment pairs passed own-bucket GETs and
+cross-bucket denial checks on October 6; no credentials have been installed on
+Render yet. Repeat those checks when rotating or replacing credentials.
 
 Set `STAFF_MEDIA_STORAGE_BACKEND` and `EDITORIAL_MEDIA_STORAGE_BACKEND` to
 `core.media_storage.PrivateR2Storage`; put the corresponding JSON above in
