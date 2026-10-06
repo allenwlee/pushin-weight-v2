@@ -2254,7 +2254,7 @@ def _enrich_posts_with_classifications(
     scalar_reads = read_brand_scalars_many(scalar_pairs)
     role_map: dict[tuple[str, str], str | None] = {}
     if author_ids and post_brand_ids:
-        ba_qs = BrandAccount.objects.filter(
+        ba_qs = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id__in=author_ids,
             brand_id__in=post_brand_ids,
         ).select_related("role")
@@ -3428,13 +3428,13 @@ def _filter_home_posts_queryset(
         if role_scope not in (None, "__all__"):
             role_scope_filter["brand_id__in"] = role_scope
         role_post_filter = {"brand__posts__post__tweet_id": OuterRef("tweet_id")}
-        has_known_role = BrandAccount.objects.filter(
+        has_known_role = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id=OuterRef("author_id"),
             role_id__in=known_roles,
             **role_scope_filter,
             **role_post_filter,
         )
-        has_selected_role = BrandAccount.objects.filter(
+        has_selected_role = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id=OuterRef("author_id"),
             role_id__in=selected_known,
             **role_scope_filter,
@@ -4328,7 +4328,7 @@ def _each_chart_payload(
                         assigned[post_id].add(key)
         elif tab == "role":
             authors = {author_id for _, _, _, author_id in batch if author_id}
-            role_by_author = dict(BrandAccount.objects.filter(brand_id=brand, account_id__in=authors).values_list("account_id", "role_id"))
+            role_by_author = dict(BrandAccount.objects.filter(account__data_source_id="x").filter(brand_id=brand, account__author_id__in=authors).values_list("account__author_id", "role_id"))
             for post_id, _, _, author_id in batch:
                 role = role_by_author.get(author_id)
                 assigned[post_id].add(role if role in series and role != "other" else "other")

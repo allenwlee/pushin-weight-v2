@@ -143,6 +143,7 @@ class Command(BaseCommand):
         runner = CycleRunner(cycle_kind="manual", dry_run=True)
         official_author_ids = set(
             BrandAccount.objects.filter(
+                account__data_source_id="x",
                 brand_id=brand_id,
                 role_id="official",
             ).values_list("account_id", flat=True)

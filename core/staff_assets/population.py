@@ -5,6 +5,7 @@ from collections import defaultdict
 from django.utils import timezone
 
 from core.models import (
+    Account,
     BrandAccount,
     CompanyAccount,
     PersonBrandAffiliation,
@@ -25,7 +26,7 @@ def staff_population(*, list_id):
         (CompanyAccount, "company_staff"),
     ):
         for account, role in model.objects.filter(
-            role_id__in=["official", "staff"]
+            role_id__in=["official", "staff"], account__data_source_id="x"
         ).values_list("account_id", "role_id"):
             if role == "official":
                 official.add(account)
@@ -42,15 +43,16 @@ def staff_population(*, list_id):
         .values_list("person_id", flat=True)
         .distinct()
     )
+    native_ids = dict(Account.x.filter(pk__in=set(reasons) | official).values_list("pk", "author_id"))
     return {
         "captured_at": timezone.now().isoformat(),
         "list_id": str(list_id),
         "accounts": [
-            {"account_id": key, "reasons": sorted(value)}
+            {"account_id": native_ids[key], "account_key": str(key), "reasons": sorted(value)}
             for key, value in sorted(reasons.items())
             if key not in official
         ],
-        "excluded_official_accounts": sorted(official & reasons.keys()),
+        "excluded_official_accounts": sorted(native_ids[key] for key in official & reasons.keys()),
         "people": sorted(str(pk) for pk in people),
         "overlap_accounts": sum(
             len(value) > 1 for key, value in reasons.items() if key not in official

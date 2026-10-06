@@ -59,7 +59,7 @@ def test_complete_snapshot_activates_updates_and_deactivates_atomically():
     assert result.deactivated == 1
     assert set(TwitterListMembership.objects.filter(
         list_id=42, active=True
-    ).values_list("account_id", flat=True)) == {"1", "2"}
+    ).values_list("account__author_id", flat=True)) == {"1", "2"}
     removed.refresh_from_db()
     assert TwitterListMembership.objects.get(list_id=42, account=removed).active is False
     kept.refresh_from_db()
@@ -155,7 +155,7 @@ def test_call_a_author_is_observed_immediately_without_complete_snapshot():
     )
 
     assert result.observed == 1
-    membership = TwitterListMembership.objects.get(list_id=42, account_id="1")
+    membership = TwitterListMembership.objects.get(list_id=42, account__author_id="1")
     assert membership.active is True
     assert membership.source == "call_a"
     assert membership.source_run_id == "run-1"

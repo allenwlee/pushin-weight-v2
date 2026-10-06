@@ -475,6 +475,7 @@ class Company(models.Model):
 
 
 class HFOrg(models.Model):
+    account = models.OneToOneField("Account", to_field="account_key", db_column="account_key", null=True, on_delete=models.PROTECT, related_name="legacy_hf_org")
     namespace = models.CharField(
         max_length=64,
         primary_key=True,
@@ -941,11 +942,38 @@ class AccountBasedInMapping(models.Model):
         ]
 
 
+class XAccountManager(models.Manager):
+    """Explicit adapter for existing X-only callers; generic identity uses objects."""
+    def get_queryset(self):
+        return super().get_queryset().filter(data_source_id="x")
+
+    def create(self, **kwargs):
+        kwargs.setdefault("data_source_id", "x")
+        return super().create(**kwargs)
+
+
 class Account(models.Model):
-    author_id = models.TextField(primary_key=True)
-    handle = models.CharField(
-        max_length=64,
-        db_collation="case_insensitive",
+    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    external_identifier = models.TextField(default="")
+    normalized_identifier = models.TextField(default="", db_collation="C")
+    identifier_kind = models.CharField(max_length=32, default="provider_id")
+    normalized_handle = models.TextField(null=True, db_collation="C")
+    account_kind = models.CharField(max_length=24, default="unknown")
+    provider_metadata = models.JSONField(default=dict)
+    objects = models.Manager()
+    x = XAccountManager()
+    author_id = models.TextField(unique=True, null=True)
+
+    def save(self, *args, **kwargs):
+        from core.account_identity import normalize_account
+        normalize_account(self)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
+        return super().save(*args, **kwargs)
+
+    handle = models.TextField(
+        db_collation="C",
         blank=True,
         null=True,
     )
@@ -1055,6 +1083,12 @@ class Account(models.Model):
         ]
         ordering = ["handle"]
         constraints = [
+            models.UniqueConstraint(fields=["data_source", "normalized_identifier"], name="uq_account_source_identifier"),
+            models.UniqueConstraint(fields=["data_source", "normalized_handle"], condition=models.Q(normalized_handle__isnull=False), name="uq_account_source_handle"),
+            models.CheckConstraint(condition=~models.Q(external_identifier="") & ~models.Q(normalized_identifier=""), name="ck_account_identity_nonempty"),
+            models.CheckConstraint(condition=models.Q(identifier_kind__in=["provider_id", "namespace"]), name="ck_account_identifier_kind"),
+            models.CheckConstraint(condition=models.Q(account_kind__in=["organization", "individual", "channel", "unknown"]), name="ck_account_kind"),
+            models.CheckConstraint(condition=(models.Q(data_source="x", author_id=models.F("external_identifier"), author_id__isnull=False) | (~models.Q(data_source="x") & models.Q(author_id__isnull=True))), name="ck_account_native_x_id"),
             models.CheckConstraint(
                 condition=(
                     models.Q(country__isnull=True)
@@ -1135,12 +1169,12 @@ class Account(models.Model):
 
         with transaction.atomic():
             if expected_handle is None:
-                account, created = cls.objects.select_for_update().get_or_create(
+                account, created = cls.x.select_for_update().get_or_create(
                     author_id=target_id
                 )
             else:
                 account = (
-                    cls.objects.select_for_update()
+                    cls.x.select_for_update()
                     .filter(author_id=target_id)
                     .first()
                 )
@@ -1256,7 +1290,7 @@ class Account(models.Model):
                 if (
                     field_name == "handle"
                     and account.handle != validated
-                    and cls.objects.filter(handle__iexact=validated)
+                    and cls.x.filter(handle__iexact=validated)
                     .exclude(author_id=target_id)
                     .exists()
                 ):
@@ -1332,12 +1366,13 @@ class TwitterListMembership(models.Model):
     """Durable membership snapshot keyed by Twitter list and account."""
 
     list_id = models.BigIntegerField()
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="twitter_list_memberships",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     active = models.BooleanField(default=True)
     first_seen_at = models.DateTimeField(default=timezone.now)
@@ -1400,14 +1435,15 @@ class Post(models.Model):
         blank=True,
         null=True,
     )
+    native_author_id = models.TextField(db_column="author_id", null=True, editable=False)
     author = models.ForeignKey(
         Account,
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
         related_name="posts",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="author_account_key",
+        to_field="account_key",
     )
     text = models.TextField(blank=True, null=True)
     lang = models.TextField(blank=True, null=True)
@@ -2038,12 +2074,13 @@ class BrandAccount(models.Model):
         db_column="brand_id",
         to_field="nickname",
     )
+    native_account_id = models.TextField(db_column="accounts_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="brands",
-        db_column="accounts_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     role = models.ForeignKey(
         Role,
@@ -2070,12 +2107,13 @@ class CompanyAccount(models.Model):
         db_column="company_id",
         to_field="nickname",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="companies",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     role = models.ForeignKey(
         Role,
@@ -2681,12 +2719,13 @@ class UntrackedBrandPromotionEvidence(models.Model):
         db_column="source_post_id",
         to_field="tweet_id",
     )
+    native_account_id = models.TextField(db_column="exact_matched_account_id", null=True, editable=False)
     exact_matched_account = models.ForeignKey(
         Account,
         on_delete=models.SET_NULL,
         related_name="untracked_brand_promotion_evidence",
-        db_column="exact_matched_account_id",
-        to_field="author_id",
+        db_column="matched_account_key",
+        to_field="account_key",
         blank=True,
         null=True,
     )
@@ -2739,12 +2778,13 @@ class UntrackedBrandPromotionEvidence(models.Model):
 
 class AccountPostAppearance(models.Model):
     pk = models.CompositePrimaryKey("account", "post")
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="appearances",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     post = models.ForeignKey(
         Post,
@@ -2927,9 +2967,10 @@ class ProductVerificationProposal(models.Model):
         "BrandDiscoveryCandidate", on_delete=models.PROTECT, blank=True, null=True,
         related_name="product_verification_proposals",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account, on_delete=models.PROTECT, related_name="product_verification_proposals",
-        db_column="author_id", to_field="author_id",
+        db_column="account_key", to_field="account_key",
     )
     account_handle_snapshot = models.CharField(max_length=64, blank=True, default="")
     observed_name = models.TextField()
@@ -4961,12 +5002,13 @@ class PersonAccount(models.Model):
         related_name="account_links",
         db_column="person_id",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="person_links",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     is_primary = models.BooleanField(default=False)
     first_observed_at = models.DateTimeField()
@@ -5020,12 +5062,13 @@ class PersonAccount(models.Model):
 
 class AccountProfileSnapshot(models.Model):
     id = models.BigAutoField(primary_key=True)
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="profile_snapshots",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     profile_hash = models.CharField(max_length=64)
     first_observed_at = models.DateTimeField()
@@ -5090,9 +5133,10 @@ class ProfileMovementCandidate(models.Model):
     STATUSES = (("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed"))
 
     id = models.BigAutoField(primary_key=True)
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name="profile_movement_candidates",
-        db_column="author_id", to_field="author_id",
+        db_column="account_key", to_field="account_key",
     )
     prior_snapshot = models.ForeignKey(
         AccountProfileSnapshot, on_delete=models.PROTECT,

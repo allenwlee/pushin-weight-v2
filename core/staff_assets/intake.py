@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from core.models import (
+    Account,
     Person,
     PersonAccount,
     PersonBrandAffiliation,
@@ -68,7 +69,10 @@ def ingest_record(record):
         return previous, False
     observed = observed_time(record.get("observed_at"))
     eligibility = record.get("eligibility", "unestablished")
-    if record.get("account_id") and is_official(record["account_id"]):
+    account_key = record.get("account_key")
+    if not account_key and record.get("account_id"):
+        account_key = Account.x.filter(author_id=str(record["account_id"])).values_list("pk", flat=True).first()
+    if account_key and is_official(account_key):
         eligibility = "official_account"
     if eligibility not in ELIGIBLE:
         return StaffIntake.objects.get_or_create(

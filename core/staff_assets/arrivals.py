@@ -65,7 +65,7 @@ def register_person(person_id):
         account = link.account
         snapshots.append(
             {
-                "author_id": account.pk,
+                "author_id": account.author_id,
                 "handle": account.handle,
                 "display_name": account.display_name,
                 "bio": account.profile_bio_text or account.bio,
@@ -79,12 +79,12 @@ def register_person(person_id):
                 {
                     "source_url": f"https://x.com/{account.handle}"
                     if account.handle
-                    else f"https://x.com/i/user/{account.pk}",
+                    else f"https://x.com/i/user/{account.author_id}",
                     "original_url": account.profile_picture,
                     "source_kind": "x_account",
                     "kind": "avatar",
                     "evidence": {
-                        "account_id": account.pk,
+                        "account_key": str(account.pk),
                         "link_status": link.resolution_status,
                     },
                 },
@@ -138,13 +138,13 @@ def register_person(person_id):
 def register_account(account_id, *, eligibility="db_staff"):
     if is_official(account_id):
         return
-    account = Account.objects.filter(pk=account_id).first()
+    account = Account.x.filter(pk=account_id).first()
     if not account:
         return
     source = (
         f"https://x.com/{account.handle}"
         if account.handle
-        else f"https://x.com/i/user/{account.pk}"
+        else f"https://x.com/i/user/{account.author_id}"
     )
     snapshots = list(
         account.profile_snapshots.order_by("id").values(
@@ -156,9 +156,9 @@ def register_account(account_id, *, eligibility="db_staff"):
         )
     )
     record = {
-        "source_key": "x-account:" + account.pk,
-        "account_id": account.pk,
-        "display_name": account.display_name or account.handle or account.pk,
+        "source_key": "x-account:" + account.author_id,
+        "account_key": str(account.pk),
+        "display_name": account.display_name or account.handle or account.author_id,
         "eligibility": eligibility,
         "profile": {
             "bio": account.profile_bio_text or account.bio,
@@ -169,11 +169,11 @@ def register_account(account_id, *, eligibility="db_staff"):
         },
         "names": [
             {
-                "full_name": account.display_name or account.handle or account.pk,
+                "full_name": account.display_name or account.handle or account.author_id,
                 "language": "und",
                 "source_kind": "x_profile",
                 "source_reference": source,
-                "source_text": account.display_name or account.handle or account.pk,
+                "source_text": account.display_name or account.handle or account.author_id,
                 "collection_method": "stored_account",
             }
         ],
@@ -187,7 +187,7 @@ def register_account(account_id, *, eligibility="db_staff"):
                 "original_url": account.profile_picture,
                 "source_kind": "x_account",
                 "kind": "avatar",
-                "evidence": {"account_id": account.pk},
+                "evidence": {"account_key": str(account.pk)},
             },
         )
     return intake
@@ -199,7 +199,7 @@ def catch_up(*, list_id):
     for entry in roster["accounts"]:
         try:
             register_account(
-                entry["account_id"],
+                entry["account_key"],
                 eligibility="call_a_person"
                 if "call_a" in entry["reasons"]
                 else "db_staff",

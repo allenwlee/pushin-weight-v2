@@ -32,7 +32,7 @@ def profile(account):
     return capture_post_profile_snapshot(
         post=post,
         raw={
-            "author_id": account.pk,
+            "author_id": account.author_id,
             "author_description": "Researcher at DeepSeek",
             "_author_present_fields": ["author_description"],
         },
@@ -44,7 +44,7 @@ def test_new_biography_does_not_use_a_pending_account_match():
     account = Account.objects.create(author_id="pending-match", handle="researcher")
     wrong = Person.objects.create(display_name="A different person")
     link(wrong, account)
-    payload = record(account_id=account.pk)
+    payload = record(account_key=str(account.pk))
     intake, _ = ingest_record(payload)
     assert intake.person_id is None
     assert intake.eligibility == "needs_review"
@@ -68,7 +68,7 @@ def test_confirmed_account_identity_is_shared_by_profile_and_import():
     person = Person.objects.create(display_name="The researcher")
     link(person, account, "confirmed")
     profile(account)
-    intake, _ = ingest_record(record(account_id=account.pk))
+    intake, _ = ingest_record(record(account_key=str(account.pk)))
     assert intake.person_id == person.pk
     assert Person.objects.count() == 1
     assert person.brand_affiliations.count() == 2
@@ -78,7 +78,7 @@ def test_held_intake_can_replay_after_account_confirmation():
     account = Account.objects.create(author_id="held-match", handle="researcher")
     person = Person.objects.create(display_name="The researcher")
     candidate = link(person, account)
-    payload = record(account_id=account.pk)
+    payload = record(account_key=str(account.pk))
     held, _ = ingest_record(payload)
     assert held.person_id is None
     candidate.resolution_status = "confirmed"
@@ -105,7 +105,7 @@ def test_register_account_attaches_to_its_provisional_person():
     assert intake.eligibility == "db_staff"
     assert person.names.filter(full_name="Profile Name").exists()
     blocked, _ = ingest_record(
-        record(source_key="biography:later", account_id=account.pk)
+        record(source_key="biography:later", account_key=str(account.pk))
     )
     assert blocked.person_id is None
     assert blocked.eligibility == "needs_review"
@@ -116,8 +116,8 @@ def test_account_only_intake_uses_the_common_account_identity():
     account = Account.objects.create(author_id="new-account", handle="researcher")
     intake, _ = ingest_record(
         record(
-            source_key="account:" + account.pk,
-            account_id=account.pk,
+            source_key="account:" + account.author_id,
+            account_key=str(account.pk),
             eligibility="db_staff",
             names=[],
             affiliations=[],
@@ -126,8 +126,8 @@ def test_account_only_intake_uses_the_common_account_identity():
     assert intake.person_id == person_id_for_account(account.pk)
     again, created = ingest_record(
         record(
-            source_key="account:" + account.pk,
-            account_id=account.pk,
+            source_key="account:" + account.author_id,
+            account_key=str(account.pk),
             eligibility="db_staff",
             names=[],
             affiliations=[],
@@ -143,7 +143,7 @@ def test_site_first_then_account_discovery_retains_the_conflict_for_review():
         author_id="site-later-account", handle="researcher"
     )
     profile(account)
-    held, _ = ingest_record({**payload, "account_id": account.pk})
+    held, _ = ingest_record({**payload, "account_key": str(account.pk)})
     assert held.person_id is None and held.eligibility == "needs_review"
     assert Person.objects.count() == 2
     assert StaffIntake.objects.get(pk=site.pk).person_id == site.person_id
@@ -153,7 +153,7 @@ def test_multiple_pending_accounts_do_not_pick_the_first_person():
     account = Account.objects.create(author_id="many-pending", handle="researcher")
     for name in ("One", "Two"):
         link(Person.objects.create(display_name=name), account)
-    intake, _ = ingest_record(record(account_id=account.pk))
+    intake, _ = ingest_record(record(account_key=str(account.pk)))
     assert intake.person_id is None and intake.eligibility == "needs_review"
     assert not Person.objects.filter(brand_affiliations__isnull=False).exists()
 
@@ -179,7 +179,7 @@ def test_concurrent_account_import_uses_one_person():
     account = Account.objects.create(author_id="concurrent", handle="researcher")
     payload = record(
         source_key="account:concurrent",
-        account_id=account.pk,
+        account_key=str(account.pk),
         eligibility="db_staff",
         affiliations=[],
         names=[],

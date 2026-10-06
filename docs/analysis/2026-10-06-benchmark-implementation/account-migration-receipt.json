@@ -1,0 +1,52 @@
+{
+  "database": "127.0.0.1:55436/pw_benchmark_ready_20261006",
+  "version": "PostgreSQL 18.6 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.3.34.2), 64-bit",
+  "accounts": 32144,
+  "posts": 74957,
+  "post_brand_links": 120783,
+  "products": 2048,
+  "all_references": {
+    "twitter_list_memberships": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "posts": {
+      "rows": 74957,
+      "mismatches": 0
+    },
+    "brands_accounts": {
+      "rows": 98,
+      "mismatches": 0
+    },
+    "companies_accounts": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "untracked_brand_promotion_evidence": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "account_post_appearances": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "product_verification_proposals": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "people_accounts": {
+      "rows": 625,
+      "mismatches": 0
+    },
+    "account_profile_snapshots": {
+      "rows": 0,
+      "mismatches": 0
+    },
+    "profile_movement_candidates": {
+      "rows": 0,
+      "mismatches": 0
+    }
+  },
+  "native_identity_hash": "31f779d0d12f36dc4e6e5890618f6c1bf0a817eb767f043fa1208f52a230dda5",
+  "production_writes": 0
+}

@@ -315,7 +315,7 @@ def evaluate_known_publisher(
     *, account: Account, brand: Brand, namespace: str
 ) -> LegitimacyDecision:
     """Accept only a stable tracked official account and confirmed HF owner."""
-    official = BrandAccount.objects.filter(
+    official = BrandAccount.objects.filter(account__data_source_id="x").filter(
         account_id=account.pk, brand_id=brand.pk, role_id="official"
     ).exists()
     company_ids = BrandCompany.objects.filter(brand_id=brand.pk).values_list(
@@ -353,7 +353,7 @@ def _proposal_source_gate(
         current_handle.casefold() == source_handle.casefold() == post_handle.casefold()
     )
     source_account_id = str(evidence.get("stable_account_id") or "")
-    account_stable = source_account_id == str(proposal.account_id) and str(
+    account_stable = source_account_id in {str(proposal.account_id), proposal.account.author_id} and str(
         proposal.source_post.author_id or ""
     ) == str(proposal.account_id)
     explicit_repo = bool(evidence.get("exact_hf_repo_link"))
@@ -780,7 +780,7 @@ def _finalize_new_publisher(
         or proposal.review_status != "pending"
     ):
         return False
-    proposal.account = Account.objects.select_for_update().get(pk=proposal.account_id)
+    proposal.account = Account.x.select_for_update().get(pk=proposal.account_id)
     candidate = BrandDiscoveryCandidate.objects.select_for_update().get(
         pk=proposal.proposed_candidate_id
     )
@@ -913,7 +913,7 @@ def _finalize_known_publisher(
         or proposal.review_status != "pending"
     ):
         return False
-    proposal.account = Account.objects.select_for_update().get(pk=proposal.account_id)
+    proposal.account = Account.x.select_for_update().get(pk=proposal.account_id)
     proposal.attempted_at = timezone.now()
     proposal.hf_outcome = result.outcome
     proposal.hf_evidence = result.payload or {}

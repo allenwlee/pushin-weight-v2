@@ -362,7 +362,7 @@ class Command(BaseCommand):
         _verify_taxonomy_seed(manifest)
 
         recovery: GeographyRecoveryReceipt | None = None
-        account_queryset = Account.objects.all()
+        account_queryset = Account.x.all()
         if options["apply"]:
             expected_database = (
                 STAGING_DATABASE_NAME

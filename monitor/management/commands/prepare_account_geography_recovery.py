@@ -38,7 +38,7 @@ class Command(BaseCommand):
                     {
                         "mode": "dry_run",
                         "target": "production",
-                        "account_count": Account.objects.count(),
+                        "account_count": Account.x.count(),
                         "columns": list(GEOGRAPHY_COLUMNS),
                         "writes": 0,
                     },

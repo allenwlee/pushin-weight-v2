@@ -122,7 +122,8 @@ def test_invalid_account_fields_do_not_block_related_post_write():
 
     assert created is True
     assert post is not None
-    assert post.author_id == "42"
+    assert post.author.author_id == "42"
+    assert post.author_id == post.author.account_key
     assert post.text == "post still lands"
     account.refresh_from_db()
     assert account.handle is None
@@ -144,7 +145,8 @@ def test_duplicate_handle_does_not_block_related_post_write():
 
     assert created is True
     assert post is not None
-    assert post.author_id == "42"
+    assert post.author.author_id == "42"
+    assert post.author_id == post.author.account_key
     account.refresh_from_db()
     assert account.handle is None
     assert account.display_name == "Accepted Name"

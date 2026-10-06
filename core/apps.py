@@ -9,6 +9,9 @@ class CoreConfig(AppConfig):
 
     def ready(self) -> None:
         from django.db import connection
+        from django.db.models.signals import post_migrate
+
+        post_migrate.connect(_register_account_sources, sender=self, dispatch_uid="core.account_sources")
 
         from core.staff_assets import arrivals  # noqa: F401
 
@@ -33,3 +36,15 @@ def _sqlite_case_insensitive_compare(a: str | None, b: str | None) -> int:
     if a_lower > b_lower:
         return 1
     return 0
+
+
+def _register_account_sources(sender, using, apps=None, **kwargs):
+    """Required identity namespaces survive test flushes as well as migrations."""
+    if apps is None:
+        from django.apps import apps
+    try:
+        source = apps.get_model("core", "DataSource")
+    except LookupError:
+        return
+    for key, name, kind in (("x", "X", "social"), ("hf", "Hugging Face", "model_catalog")):
+        source.objects.using(using).get_or_create(pk=key, defaults={"name": name, "source_type": kind, "enabled": False, "metadata": {}})

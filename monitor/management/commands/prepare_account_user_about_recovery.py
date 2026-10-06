@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
     def handle(self, **options):
         if not options["apply"]:
-            account_count = Account.objects.count()
+            account_count = Account.x.count()
             self.stdout.write(
                 json.dumps(
                     {

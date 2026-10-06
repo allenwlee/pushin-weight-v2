@@ -103,9 +103,9 @@ def test_staging_apply_is_idempotent_and_uses_no_provider_io(tmp_path):
             stdout=StringIO(),
         )
 
-    country = Account.objects.get(pk="country-account")
-    region = Account.objects.get(pk="region-account")
-    unresolved = Account.objects.get(pk="unresolved-account")
+    country = Account.x.get(author_id="country-account")
+    region = Account.x.get(author_id="region-account")
+    unresolved = Account.x.get(author_id="unresolved-account")
     assert (country.country_code, country.based_in_region_key) == ("US", None)
     assert (region.country_code, region.based_in_region_key) == (None, "europe")
     assert (unresolved.country_code, unresolved.based_in_region_key) == (None, None)

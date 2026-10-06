@@ -180,18 +180,18 @@ def resolve_call_a_author_contexts(
         if str(item.get("author_id") or "").strip()
     }
     memberships = {
-        row.account_id: row
+        row.account.author_id: row
         for row in TwitterListMembership.objects.filter(
             list_id=list_id,
             active=True,
-            account_id__in=author_ids,
+            account__author_id__in=author_ids,
         )
     }
     edges_by_author: dict[str, list[BrandAccount]] = {}
-    for edge in BrandAccount.objects.filter(
-        account_id__in=memberships
-    ).select_related("role"):
-        edges_by_author.setdefault(edge.account_id, []).append(edge)
+    for edge in BrandAccount.objects.filter(account__data_source_id="x").filter(
+        account__author_id__in=memberships
+    ).select_related("role", "account"):
+        edges_by_author.setdefault(edge.account.author_id, []).append(edge)
 
     contexts: dict[str, AuthorRoleContext] = {}
     degraded: list[str] = []
@@ -274,7 +274,7 @@ def reconcile_complete_snapshot(
 
         removed = TwitterListMembership.objects.filter(
             list_id=list_id, active=True
-        ).exclude(account_id__in=active_ids)
+        ).exclude(account__author_id__in=active_ids)
         result.deactivated = removed.update(
             active=False,
             last_complete_reconciliation_at=completed_at,
