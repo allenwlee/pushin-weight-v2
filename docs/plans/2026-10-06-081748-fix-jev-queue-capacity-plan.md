@@ -10,6 +10,8 @@ ollija:
   workflow: lfg
   delivery_target: production
   delivery_selected_by_user: true
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -39,20 +41,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `lfg`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/jev-queue-capacity` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/jev-queue-capacity` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -71,7 +69,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+2026-10-06: owner explicitly replied “deploy” to the direct-production recommendation. Use direct production; preserve G2 staging branch, services, and database. No cron pause or manual harvest run authorized. Existing external-review unavailability and unrelated production health defects remain disclosed.
 
 # Jev request capacity and nonblocking rare-search decisions
 
@@ -79,7 +77,7 @@ None.
 
 Rare-search hits currently wait behind repeatedly rejected requests because a local 32,000-byte limit is mistaken for model capacity. Remove that cutoff and let pinned Jev enforce its documented 64k total-token and 32k state-plus-longest-question limits. Keep full saved text, make invalid input visibly review-needed, and prioritize fresh results while reserving bounded capacity for older/retry work.
 
-The owner selected LFG through production and a separate worktree. Search wording, editorial selection, G2 work, existing spend limits, concurrency and production cron state remain outside this fix. Completion requires regression evidence, applicable staging verification, exact production revision and natural-cycle database/log proof.
+The owner selected LFG through production and a separate worktree. Search wording, editorial selection, G2 work, existing spend limits, concurrency and production cron state remain outside this fix. Completion requires regression evidence, owner-selected direct delivery, exact production revision and natural-cycle database/log proof.
 
 ## Diagnosis and scope
 
@@ -98,7 +96,7 @@ The owner selected LFG through production and a separate worktree. Search wordin
 3. Query eligible decisions before limiting; exclude retries not due/active claims/expired payloads. Allocate fresh work promptly and older/retry work separately under existing total budget.
 4. Pin transient failure next-cycle retry and successful fresh admission despite old failures. Pin full >32KB request reaching HTTP, terminal provider rejection, request spending reservation, deadlines/concurrency, unchanged A/B/C.
 5. Run focused PostgreSQL suite, simplify/review, required browser applicability check, Ollija checks. Isolated local database test_pw_jev_queue_20261006; no shared G2 test resources.
-6. Read latest-N production health before delivery and preserve same cohort for 30-minute follow-up. Deliver through available staging per generated guide, production deploy exact SHA, inspect natural cycles and Beam/backlog durable progress.
+6. Read latest-N production health before delivery and preserve same cohort for 30-minute follow-up. Deliver directly to production per owner-selected generated guide, verify exact SHA, inspect natural cycles and Beam/backlog durable progress.
 7. Record verified evidence and residuals. Cleanup only guarded canonical worktree at verified candidate SHA, last filesystem action.
 
 ## Progress
@@ -140,8 +138,8 @@ Remaining unhealthy rows:
 
 ## Remaining delivery work
 
-The default staged route needs an owner route decision because staging contains unrelated G2 integration. Parent will present the completed candidate before requesting direct production or coordinated exact-commit staging. Production endpoint remains authorized; this is not a request to reauthorize the fix. Existing production health failures remain disclosed and unresolved in this bounded Jev task.
+Owner selected direct production after reviewing candidate5ed8fd2. Staging remains untouched; production authorization and route are settled. Existing production health failures remain disclosed and unresolved in this bounded Jev task.
 
-After route selection: exact candidate deployment on web+harvest; observe natural cycle logs plus durable fresh/older/retry outcomes; replay saved Beam hit5713 through existing bounded replay path, without another TwitterAPI fetch, within existing shared Jev budgets; report remaining backlog. No cron pause authorized. Perform guarded canonical worktree cleanup only after exact-SHA production proof.
+Remaining: exact candidate deployment on web+harvest; observe natural cycle logs plus durable fresh/older/retry outcomes; replay saved Beam hit5713 through existing bounded replay path, without another TwitterAPI fetch, within existing shared Jev budgets; report remaining backlog. No cron pause authorized. Perform guarded canonical worktree cleanup only after exact-SHA production proof.
 
 - 2026-10-06 09:03 UTC final validation: 209 tests passed in130.24seconds, including82 required PostgreSQL cases with zero skips/errors. This includes the two red-before-fix shared-terminal-decision regressions and the claim-lease/retry-boundary test. Evidence covers final code after simplification and review fixes.
