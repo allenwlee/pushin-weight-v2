@@ -11,6 +11,7 @@ BEFORE = [("core", "0049_rare_type_domain_records")]
 AFTER = [("core", "0051_profile_movement_token_evidence")]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_populated_profile_snapshot_survives_movement_schema_upgrade():
     executor = MigrationExecutor(connection)
     try:

@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ comparison.title }} · Pulse</title>
+<link rel="stylesheet" href="{% static 'benchmark-pulse.css' %}">
+<script defer src="{% static 'benchmark-pulse.js' %}"></script></head>
+<body><main id="pulse" data-series-url="{% url 'benchmark_series' contract.pk preset %}">
+<header class="page-heading"><div><a class="wordmark" href="/">PushinWeight</a><h1>{{ comparison.title }}</h1></div>
+<nav aria-label="Product comparisons">{% for key, item in comparisons.items %}<a href="{% url 'benchmark_pulse' contract.pk key %}"{% if key == preset %} aria-current="page"{% endif %}>{{ item.title }}</a>{% endfor %}</nav></header>
+<section class="pulse-panel" aria-labelledby="pulse-title">
+<header class="panel-heading"><div><h2 id="pulse-title">Pulse</h2><p>Change since launch · posts, downloads, usage and performance</p></div><button id="sources-open" type="button">Sources &amp; definitions</button></header>
+<p id="load-status" role="status">Loading measurements…</p>
+<div id="chart-content" hidden>
+<div class="toolbar"><div id="legend" aria-label="Visible series"></div><div class="scale-controls"><label for="scale">View</label><select id="scale"><option value="compressed">Compressed %</option><option value="linear">Linear %</option><option value="raw">Raw values</option></select><label for="raw-series" class="sr-only">Raw measurement</label><select id="raw-series" hidden></select></div></div>
+<p id="scale-explanation" class="muted"></p>
+<div class="pulse-layout"><div class="chart-column"><svg id="pulse-chart" viewBox="0 0 900 440" role="img" aria-labelledby="chart-title chart-description"><title id="chart-title">Change from baseline</title><desc id="chart-description">Use the day slider below to inspect exact values and coverage.</desc></svg>
+<div class="day-control"><label for="day">Inspect day</label><input id="day" type="range" min="0" value="0" step="1"><output id="day-label" for="day"></output></div>
+<p id="launch-note" class="muted"></p></div>
+<aside aria-label="Selected day measurements"><h3 id="readout-date"></h3><div id="readout"></div></aside></div>
+<footer><p>Posts cover the whole brand. Provider measurements cover the selected product or labeled variant. Rank: lower is better.</p><p id="coverage-note"></p></footer>
+</div></section>
+<dialog id="sources"><div class="dialog-heading"><h2>Sources &amp; definitions</h2><button id="sources-close" type="button" aria-label="Close sources">Close</button></div><div id="source-details"></div><a id="download-data" download="pulse-series.json">Download data &amp; evidence (JSON)</a></dialog>
+</main></body></html>

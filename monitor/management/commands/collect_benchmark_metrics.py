@@ -47,6 +47,11 @@ class Command(BaseCommand):
                 or not 1 <= options["max_bytes"] <= 32 * 1024 * 1024
             ):
                 raise ValueError("resource budget outside allowed range")
+            for key in ("max_requests", "max_seconds", "max_bytes"):
+                options[key] = min(
+                    options[key],
+                    contract.source_configuration[source].get(key, options[key]),
+                )
             if not options["apply"]:
                 self.stdout.write(
                     json.dumps(
@@ -77,6 +82,16 @@ class Command(BaseCommand):
                 )
 
                 def fetch():
+                    try:
+                        return fetch_source()
+                    except sources.SourceError:
+                        return {
+                            "status": "error",
+                            "rows": [],
+                            "request_count": options["max_requests"] - budget.remaining,
+                        }
+
+                def fetch_source():
                     if source == "hf":
                         selected = [
                             {

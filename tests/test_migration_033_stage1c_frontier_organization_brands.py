@@ -9,6 +9,7 @@ from django.db.migrations.executor import MigrationExecutor
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_migration_seeds_anthropic_and_google_deepmind_without_gemini_aliasing():
     executor = MigrationExecutor(connection)
     try:
@@ -17,7 +18,7 @@ def test_migration_seeds_anthropic_and_google_deepmind_without_gemini_aliasing()
             [("core", "0032_stage1c_people_jobs_events")]
         ).apps
         Brand = old_apps.get_model("core", "Brand")
-        Brand.objects.create(nickname="gemini", display_name="Gemini")
+        Brand.objects.get_or_create(nickname="gemini", defaults={"display_name": "Gemini"})
 
         executor = MigrationExecutor(connection)
         executor.migrate([("core", "0033_stage1c_frontier_organization_brands")])

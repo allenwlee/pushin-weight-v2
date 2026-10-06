@@ -58,7 +58,7 @@ def measurement():
 
 
 def test_shared_benchmark_siblings_and_protected_definitions():
-    source, definition, observation = measurement()
+    _source, definition, observation = measurement()
     models.DataSource.objects.create(
         id="artificial_analysis", name="AA", source_type="benchmark"
     )

@@ -1,0 +1,321 @@
+{
+  "observed_at": "2026-10-06T07:16:37.487632+00:00",
+  "usage_date": "2026-10-05",
+  "source_as_of": "2026-10-06T07:14:04.107Z",
+  "config_path": "/Users/fuchitalee/development/pushin-weight-v2/config.yaml",
+  "config_sha256": "1f05eecd94fcc9a3a340c287e43ada5f5fa89422dae6f6dc2e78c26797bf659f",
+  "requested_brand_count": 22,
+  "configured_brand_count": 21,
+  "represented_brand_count": 11,
+  "absent_brand_count": 10,
+  "top_50_models_under_current_brands": 25,
+  "not_represented_does_not_mean_zero": true,
+  "partial_brand_usage_only": true,
+  "source_url": "https://openrouter.ai/rankings",
+  "results": [
+    {
+      "brand_id": "minimax",
+      "represented": true,
+      "best_rank": 22,
+      "reported_model_count": 1,
+      "matches": [
+        {
+          "rank": 22,
+          "model_permaslug": "minimax/minimax-m3-20260531",
+          "total_tokens": "161872438711"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "qwen",
+      "represented": true,
+      "best_rank": 38,
+      "reported_model_count": 2,
+      "matches": [
+        {
+          "rank": 38,
+          "model_permaslug": "qwen/qwen3.8-27b-20260814",
+          "total_tokens": "74644606819"
+        },
+        {
+          "rank": 45,
+          "model_permaslug": "qwen/qwen3.8-flash-20260826",
+          "total_tokens": "66716255633"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "deepseek",
+      "represented": true,
+      "best_rank": 1,
+      "reported_model_count": 5,
+      "matches": [
+        {
+          "rank": 1,
+          "model_permaslug": "deepseek/deepseek-v4.1-flash-20260910",
+          "total_tokens": "6458330218100"
+        },
+        {
+          "rank": 6,
+          "model_permaslug": "deepseek/deepseek-v4-flash-20260731",
+          "total_tokens": "853299292680"
+        },
+        {
+          "rank": 11,
+          "model_permaslug": "deepseek/deepseek-v4-flash-20260423",
+          "total_tokens": "469720284116"
+        },
+        {
+          "rank": 24,
+          "model_permaslug": "deepseek/deepseek-v4-pro-20260813",
+          "total_tokens": "150911677139"
+        },
+        {
+          "rank": 29,
+          "model_permaslug": "deepseek/deepseek-v4-pro-20260423",
+          "total_tokens": "119588153674"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "glm",
+      "represented": true,
+      "best_rank": 3,
+      "reported_model_count": 3,
+      "matches": [
+        {
+          "rank": 3,
+          "model_permaslug": "z-ai/glm-5.3-flash-20260826",
+          "total_tokens": "1603476115426"
+        },
+        {
+          "rank": 10,
+          "model_permaslug": "z-ai/glm-5.3-20260816",
+          "total_tokens": "474242199541"
+        },
+        {
+          "rank": 20,
+          "model_permaslug": "z-ai/glm-5.2-20260616",
+          "total_tokens": "189644558360"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "mimo",
+      "represented": true,
+      "best_rank": 4,
+      "reported_model_count": 3,
+      "matches": [
+        {
+          "rank": 4,
+          "model_permaslug": "xiaomi/mimo-v2.6-flash-20260921",
+          "total_tokens": "1518957374333"
+        },
+        {
+          "rank": 21,
+          "model_permaslug": "xiaomi/mimo-v2.6-pro-20260921",
+          "total_tokens": "179704972576"
+        },
+        {
+          "rank": 27,
+          "model_permaslug": "xiaomi/mimo-v2.5-20260422",
+          "total_tokens": "143005096320"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "moonshot_kimi",
+      "represented": true,
+      "best_rank": 14,
+      "reported_model_count": 1,
+      "matches": [
+        {
+          "rank": 14,
+          "model_permaslug": "moonshotai/kimi-k3-20260715",
+          "total_tokens": "299471440010"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "inclusionai",
+      "represented": true,
+      "best_rank": 36,
+      "reported_model_count": 2,
+      "matches": [
+        {
+          "rank": 36,
+          "model_permaslug": "inclusionai/ling-3.1-flash-20261002",
+          "total_tokens": "78901200527"
+        },
+        {
+          "rank": 43,
+          "model_permaslug": "inclusionai/ling-3.0-flash-sante-20260904:free",
+          "total_tokens": "69197101194"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "mistral",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "stepfun",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "ernie",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "hunyuan",
+      "represented": true,
+      "best_rank": 5,
+      "reported_model_count": 2,
+      "matches": [
+        {
+          "rank": 5,
+          "model_permaslug": "tencent/hy4-preview-20260827",
+          "total_tokens": "1064912183986"
+        },
+        {
+          "rank": 17,
+          "model_permaslug": "tencent/hy3-20260706",
+          "total_tokens": "220527783445"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "llama",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "nemo_megatron",
+      "represented": true,
+      "best_rank": 7,
+      "reported_model_count": 3,
+      "matches": [
+        {
+          "rank": 7,
+          "model_permaslug": "nvidia/nemotron-3-ultra-550b-a55b-20260604:free",
+          "total_tokens": "845005564428"
+        },
+        {
+          "rank": 31,
+          "model_permaslug": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "total_tokens": "113046874530"
+        },
+        {
+          "rank": 35,
+          "model_permaslug": "nvidia/nemotron-3-super-120b-a12b-20230311:free",
+          "total_tokens": "79899981945"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "doubao",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "yi",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "sensechat",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "exaone",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "kuaishou",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "sakana_ai",
+      "represented": false,
+      "best_rank": null,
+      "reported_model_count": 0,
+      "matches": [],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "upstage",
+      "represented": true,
+      "best_rank": 40,
+      "reported_model_count": 2,
+      "matches": [
+        {
+          "rank": 40,
+          "model_permaslug": "upstage/solar-pro4-20260810",
+          "total_tokens": "72163625959"
+        },
+        {
+          "rank": 46,
+          "model_permaslug": "upstage/solar-mini4-20260922",
+          "total_tokens": "65830503003"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    },
+    {
+      "brand_id": "dots",
+      "represented": true,
+      "best_rank": 42,
+      "reported_model_count": 1,
+      "matches": [
+        {
+          "rank": 42,
+          "model_permaslug": "dots-studio/dots-3-note-preview-20260813:free",
+          "total_tokens": "70530273830"
+        }
+      ],
+      "brand_matching_basis": "Existing broad brand definitions and provider namespace/product name; analysis only, no canonical mapping saved."
+    }
+  ]
+}

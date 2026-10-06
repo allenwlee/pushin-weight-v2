@@ -685,6 +685,7 @@ def test_database_rejects_null_raw_count_for_known_return_states(
         )
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_z_additive_migration_preserves_populated_prior_schema():
     from django.db.migrations.executor import MigrationExecutor
 

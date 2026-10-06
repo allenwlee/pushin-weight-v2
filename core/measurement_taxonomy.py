@@ -85,6 +85,13 @@ def prepare_taxonomy(spec):
             edge["type"] in RELATIONS and bool(edge.get("evidence")),
             "invalid relationship evidence/type",
         )
+        for role, key in (("parent", parent), ("child", child)):
+            evidence_repo = edge["evidence"].get(f"{role}_repo_id")
+            require(
+                evidence_repo is None
+                or evidence_repo == snapshot["products"][key]["repo_id"],
+                "relationship evidence identity mismatch",
+            )
         require(parent != child, "relationship cycle/self-link")
         graph[parent].add(child)
         edge_kinds[parent, child].add(edge["type"])
@@ -113,22 +120,30 @@ def prepare_taxonomy(spec):
             "unsupported group rule",
         )
         selected, paths = set(group.get("include", [])), {}
+        supporting_paths = defaultdict(list)
         if group.get("rule_kind") == "new_version_chain":
             root = group["root"]
             require(root in snapshot["products"], "unknown group root")
             owners = group.get("owner_brands", [])
             require(bool(owners), "successor rule needs reviewed ownership scope")
             queue = [(root, [])]
+            traversed = 0
             while queue:
+                traversed += 1
+                require(traversed <= 10000, "group path budget exceeded")
                 node, path = queue.pop()
                 require(
                     snapshot["products"][node]["brand"] in owners,
                     "successor outside reviewed ownership scope",
                 )
-                if node in paths:
+                if path in supporting_paths[node]:
                     continue
-                require(len(paths) < 1000, "group traversal budget exceeded")
-                paths[node] = path
+                supporting_paths[node].append(path)
+                require(
+                    node in paths or len(paths) < 1000,
+                    "group traversal budget exceeded",
+                )
+                paths.setdefault(node, path)
                 selected.add(node)
                 for edge in snapshot["relationships"]:
                     if edge["parent"] == node and edge["type"] == "new_version":
@@ -143,6 +158,7 @@ def prepare_taxonomy(spec):
             "included": sorted(selected - excluded),
             "excluded": sorted(excluded),
             "paths": paths,
+            "supporting_paths": dict(supporting_paths),
         }
         gid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:group:{group['key']}"))
         snapshot["subjects"][str(subject_id("product_group", gid))] = {
@@ -221,6 +237,9 @@ def configure_taxonomy(spec):
                     else None,
                     evidence={
                         "path": group["paths"].get(product_key, []),
+                        "supporting_paths": group["supporting_paths"].get(
+                            product_key, []
+                        ),
                         "root": group.get("root"),
                         "rule_hash": digest(group),
                     },

@@ -386,3 +386,7 @@ STORAGES["editorial_media"] = {
     "OPTIONS": env.json("EDITORIAL_MEDIA_STORAGE_OPTIONS", default={"location": EDITORIAL_MEDIA_ROOT}),
 }
 EDITORIAL_MEDIA_DURABLE = env.bool("EDITORIAL_MEDIA_DURABLE", default=False)
+
+# Aggregate benchmark pages remain disabled until explicitly activated.
+BENCHMARK_METRICS_ENABLED = env.bool("BENCHMARK_METRICS_ENABLED", default=False)
+BENCHMARK_COLLECTION_ENABLED = env.bool("BENCHMARK_COLLECTION_ENABLED", default=False)

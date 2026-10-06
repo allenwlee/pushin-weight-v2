@@ -1,0 +1,38 @@
+{
+  "provider": "hf",
+  "retrieved_at": "2026-10-06T12:52:19.264745+00:00",
+  "source_url": "https://huggingface.co",
+  "whole_payload_sha256": "d14dc187212c045e60edee19012e94efa83d15488b363eb2297daabdae7b9569",
+  "selection_sha256": "d14dc187212c045e60edee19012e94efa83d15488b363eb2297daabdae7b9569",
+  "selection_note": "Public provider metadata only; selected rows, no post bodies or credentials.",
+  "payload": {
+    "rows": [
+      {
+        "raw": {
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "_id": "6aa213563d5b3527359d1af2",
+          "downloads": 1160332,
+          "downloadsAllTime": 1160332
+        },
+        "status": "ok",
+        "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "observed_at": "2026-10-06T12:52:19.569345+00:00",
+        "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff"
+      },
+      {
+        "raw": {
+          "id": "zai-org/GLM-5.3-Flash",
+          "_id": "6a8d39822a943ad8a2f2ea50",
+          "downloads": 5952376,
+          "downloadsAllTime": 6746146
+        },
+        "status": "ok",
+        "repo_id": "zai-org/GLM-5.3-Flash",
+        "observed_at": "2026-10-06T12:52:19.751177+00:00",
+        "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6"
+      }
+    ],
+    "status": "ok",
+    "request_count": 2
+  }
+}

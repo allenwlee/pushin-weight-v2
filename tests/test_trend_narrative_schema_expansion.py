@@ -336,6 +336,7 @@ def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
     assert {"critic_decision", "narrative_kind", "confidence"} <= brand_fields
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_u2_migration_round_trip_preserves_legacy_narrative_rows():
     from django.db.migrations.executor import MigrationExecutor
 
@@ -401,6 +402,7 @@ def test_product_subject_snapshot_survives_future_product_catalog_deletion():
     assert subject.name_en_snapshot == "FutureModel"
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
     from django.db.migrations.executor import MigrationExecutor
 
@@ -475,6 +477,7 @@ def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
         _restore_current_core_schema()
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_reverse_refuses_expansion_only_data_before_any_destructive_step():
     from django.db.migrations.executor import MigrationExecutor
 

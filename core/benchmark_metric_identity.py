@@ -89,34 +89,34 @@ def definition_rows():
             "rank": "rank",
             "variance": "score_variance",
         }.get(key, "benchmark_score")
-        row = dict(
-            source_id=source,
-            metric_type_id=metric_type,
-            metric_key=key,
-            version=1,
-            name=key.replace("_", " ").title(),
-            unit=unit,
-            value_kind=representation,
-            quantity_form=quantity,
-            value_role={
+        row = {
+            "source_id": source,
+            "metric_type_id": metric_type,
+            "metric_key": key,
+            "version": 1,
+            "name": key.replace("_", " ").title(),
+            "unit": unit,
+            "value_kind": representation,
+            "quantity_form": quantity,
+            "value_role": {
                 "rating_lower": "lower_bound",
                 "rating_upper": "upper_bound",
             }.get(key, "value"),
-            measurement_kind=kind,
-            window_mode="none",
-            window_amount=None,
-            window_unit=None,
-            window_duration_basis="none",
-            window_alignment=None,
-            source_timezone="unknown",
-            required=key not in {"variance", "rank"},
-            definition_metadata={
+            "measurement_kind": kind,
+            "window_mode": "none",
+            "window_amount": None,
+            "window_unit": None,
+            "window_duration_basis": "none",
+            "window_alignment": None,
+            "source_timezone": "unknown",
+            "required": key not in {"variance", "rank"},
+            "definition_metadata": {
                 "wire_field": "downloadsAllTime"
                 if key == "downloads_all_time"
                 else key,
                 "adapter_version": SOURCES[source][3],
             },
-        )
+        }
         if key == "downloads":
             row.update(
                 window_mode="rolling",
@@ -144,13 +144,13 @@ def register_definitions():
     for key, (name, kind, url, adapter, normalizer) in SOURCES.items():
         source, created = DataSource.objects.get_or_create(
             pk=key,
-            defaults=dict(
-                name=name,
-                source_type=kind,
-                website_url=url,
-                adapter_key=adapter,
-                identifier_normalizer=normalizer,
-            ),
+            defaults={
+                "name": name,
+                "source_type": kind,
+                "website_url": url,
+                "adapter_key": adapter,
+                "identifier_normalizer": normalizer,
+            },
         )
         if not created:
             require(source.source_type == kind, "source category changed")
@@ -201,11 +201,17 @@ def validate_evidence_url(value):
 
 
 def prepare_collection(spec):
+    from core.benchmark_metric_store import safe_payload
+
+    safe_payload(spec)
     require(bool(spec.get("reviewed_by", "").strip()), "reviewed_by required")
     taxonomy = TaxonomyVersion.objects.get(pk=spec["taxonomy_version"])
     config = copy.deepcopy(spec["source_configuration"])
     require(0 < len(config) <= 10, "invalid source configuration count")
     for source_key, settings in config.items():
+        from core.benchmark_metric_operations import validate_operations
+
+        validate_operations(settings)
         source = DataSource.objects.get(pk=source_key)
         require(source.adapter_key is not None, "source adapter remains disabled")
         selected = settings.get("metrics", [])
@@ -314,18 +320,18 @@ def prepare_collection(spec):
                 Account.objects.filter(pk=publisher, data_source_id=source).exists(),
                 "publisher source mismatch",
             )
-        accepted = dict(
-            source=source,
-            source_subject_kind=kind,
-            identifier_scope=scope,
-            external_identifier=literal,
-            normalized_identifier=normalized,
-            subject_id=subject_key,
-            publisher_account_key=str(publisher) if publisher else None,
-            evidence_url=validate_evidence_url(row["evidence_url"]),
-            identifier_metadata=copy.deepcopy(row.get("identifier_metadata", {})),
-            identity_snapshot=copy.deepcopy(taxonomy.snapshot["subjects"][subject_key]),
-        )
+        accepted = {
+            "source": source,
+            "source_subject_kind": kind,
+            "identifier_scope": scope,
+            "external_identifier": literal,
+            "normalized_identifier": normalized,
+            "subject_id": subject_key,
+            "publisher_account_key": str(publisher) if publisher else None,
+            "evidence_url": validate_evidence_url(row["evidence_url"]),
+            "identifier_metadata": copy.deepcopy(row.get("identifier_metadata", {})),
+            "identity_snapshot": copy.deepcopy(taxonomy.snapshot["subjects"][subject_key]),
+        }
         accepted["mapping_hash"] = digest(accepted)
         mappings.append(accepted)
     mappings.sort(
@@ -337,6 +343,7 @@ def prepare_collection(spec):
         )
     )
     methodology = copy.deepcopy(spec.get("methodology", {}))
+    validate_comparisons(taxonomy, mappings, config, methodology)
     frozen = {
         "schema_version": 1,
         "taxonomy_version": str(taxonomy.pk),
@@ -411,3 +418,78 @@ def configure_hf_account(namespace, *, reviewed_by, evidence_url):
     org.account = account
     org.save(update_fields=["account"])
     return account
+
+
+def validate_comparisons(taxonomy, mappings, config, methodology):
+    from core.benchmark_metric_store import aware_instant, native_date
+    from core.measurement_taxonomy import resolve_products
+
+    presets = methodology.get("comparisons", {})
+    require(len(presets) <= 50, "comparison preset budget exceeded")
+    for preset in presets.values():
+        anchor = preset["launch_anchor"]
+        subject = taxonomy.snapshot["subjects"].get(anchor["product_subject_id"])
+        require(
+            subject and subject["kind"] == "product", "launch requires reviewed product"
+        )
+        require(
+            anchor.get("reviewed_by") and anchor.get("event_kind"),
+            "launch evidence review required",
+        )
+        validate_evidence_url(anchor["source_url"])
+        if anchor.get("precision") == "date":
+            native_date(anchor["announced_date"])
+            require(not anchor.get("announced_at"), "ambiguous launch representation")
+        else:
+            require(
+                anchor.get("precision") == "instant"
+                and not anchor.get("announced_date"),
+                "launch precision required",
+            )
+            aware_instant(anchor["announced_at"])
+        lines = preset["lines"]
+        require(
+            0 < len(lines) <= 20 and len({line["key"] for line in lines}) == len(lines),
+            "unique bounded lines required",
+        )
+        for line in lines:
+            key = line["subject_id"]
+            require(
+                key in taxonomy.snapshot["subjects"], "line subject outside taxonomy"
+            )
+            require(
+                line.get("baseline", "launch") in {"launch", "first_observed"},
+                "invalid baseline policy",
+            )
+            if line["source"] == "x":
+                require(
+                    line["metric_key"] == "post_volume", "unsupported native X metric"
+                )
+                require(
+                    line.get("post_policy") in {"legacy_brand", "direct_subject"},
+                    "explicit post policy required",
+                )
+                continue
+            require(line["source"] in config, "line source outside contract")
+            require(
+                line["metric_key"] in config[line["source"]]["metrics"],
+                "line definition outside contract",
+            )
+            selected = [
+                m
+                for m in mappings
+                if m["source"] == line["source"]
+                and m["external_identifier"] in line["mapping_identifiers"]
+            ]
+            require(
+                selected and len(selected) == len(set(line["mapping_identifiers"])),
+                "line mapping missing or ambiguous",
+            )
+            products = resolve_products(taxonomy, key)
+            for mapping in selected:
+                mapped = taxonomy.snapshot["subjects"][mapping["subject_id"]]
+                require(
+                    mapping["subject_id"] == key
+                    or (mapped["kind"] == "product" and mapped["key"] in products),
+                    "mapping outside line scope",
+                )

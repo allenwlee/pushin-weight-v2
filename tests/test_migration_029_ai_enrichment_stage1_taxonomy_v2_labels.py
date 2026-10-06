@@ -23,6 +23,7 @@ RELEASE_A = [("core", "0029_ai_enrichment_stage1_taxonomy_v2_labels")]
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_release_a_labels_are_additive_idempotent_and_preserve_state_and_edges():
     executor = MigrationExecutor(connection)
     try:

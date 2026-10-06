@@ -9,6 +9,7 @@ from django.db.migrations.executor import MigrationExecutor
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_upgrade_preserves_source_versions_and_normalization_is_repeatable():
     before = [("core", "0063_reviewed_affiliation_replacement")]
     try:

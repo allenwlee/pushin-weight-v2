@@ -63,7 +63,7 @@ def test_contract_is_reviewed_idempotent_and_frozen():
     contract.refresh_from_db()
     assert "Renamed later" not in str(contract.catalog_snapshot)
     revised = copy.deepcopy(spec)
-    revised["source_configuration"]["hf"]["poll_seconds"] = 86400
+    revised["source_configuration"]["hf"]["poll_seconds"] = 43200
     assert configure_collection(revised).pk != contract.pk
 
 

@@ -28,13 +28,17 @@ def test_u9_state_tables_exist_on_postgresql():
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_u9_reverse_migration_preserves_existing_posts_flags_and_vocabulary():
     import importlib
 
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
-    from core.models import Post, PostUnsanctionedFlag, UnsanctionedFlagKey
+    historical = MigrationExecutor(connection).loader.project_state([( "core", "0065_measurement_taxonomy")]).apps
+    Post = historical.get_model("core", "Post")
+    PostUnsanctionedFlag = historical.get_model("core", "PostUnsanctionedFlag")
+    UnsanctionedFlagKey = historical.get_model("core", "UnsanctionedFlagKey")
 
     migration = importlib.import_module("core.migrations.0011_harvester_state_primitives")
     expected_flag_keys = set(migration.FLAG_KEYS)

@@ -1,0 +1,16 @@
+{
+  "scope": "local pre-0066 rehearsal dump only; not a production backup",
+  "restored_database": "pw_benchmark_restore_20261006",
+  "host": "127.0.0.1",
+  "port": 55436,
+  "dump_sha256": "f7286952ea10e2aa28f2a838b7515aaebddb52b04f4e42c650b52947dcda6d20",
+  "counts": {
+    "accounts": 32144,
+    "posts": 74957,
+    "post_brand_links": 120783,
+    "products": 2048
+  },
+  "post_author_mismatches": 0,
+  "restore_and_forward_migration": "passed",
+  "production_writes": 0
+}

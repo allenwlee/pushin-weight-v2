@@ -1,0 +1,68 @@
+{
+  "provider": "arena",
+  "retrieved_at": "2026-10-06T13:13:25.438705+00:00",
+  "source_url": "https://arena.ai",
+  "whole_payload_sha256": "324375c836e6377cb72b886320dabcfff78e68ca3dff3c0c541660016a5f0d51",
+  "selection_sha256": "7200d6cff4c6e69fd484753944d8436a78dbfff81a361b258ad4c66996234f8a",
+  "selection_note": "Public provider metadata only; selected rows, no post bodies or credentials.",
+  "payload": {
+    "rows": [
+      {
+        "rank": 38,
+        "rating": 1474.4402781653991,
+        "license": "MIT",
+        "category": "overall",
+        "variance": 12.496437193891838,
+        "model_name": "deepseek-v4.1-flash-max",
+        "vote_count": 8728.0,
+        "organization": "deepseek",
+        "rating_lower": 1467.5117466553513,
+        "rating_upper": 1481.368809675447,
+        "_source_metadata": {
+          "file_path": "text_style_control/full-00000-of-00001.parquet",
+          "dataset_id": "lmarena-ai/leaderboard-dataset",
+          "artifact_kind": "selected_json",
+          "secondary_source": false,
+          "archive_publisher": "lmarena-ai",
+          "immutable_revision": "aedab586542b978719f89662bff1b4e78e0f025be8c1ea06681ed29d7584b7bc",
+          "raw_artifact_sha256": "58f011006abb6bacc36df9bbf78311fd7629c51ff9170ff1273153d7f4b82d39",
+          "archive_snapshot_date": "2026-10-02",
+          "original_retrieved_at": null,
+          "upstream_binary_sha256": "aedab586542b978719f89662bff1b4e78e0f025be8c1ea06681ed29d7584b7bc",
+          "archive_snapshot_timezone": "unknown",
+          "archive_snapshot_precision": "date"
+        },
+        "leaderboard_publish_date": "2026-10-02"
+      },
+      {
+        "rank": 41,
+        "rating": 1473.0004900163892,
+        "license": "MIT",
+        "category": "overall",
+        "variance": 7.4305131661600505,
+        "model_name": "glm-5.3-flash",
+        "vote_count": 22971.0,
+        "organization": "zai",
+        "rating_lower": 1467.657830534031,
+        "rating_upper": 1478.3431494987472,
+        "_source_metadata": {
+          "file_path": "text_style_control/full-00000-of-00001.parquet",
+          "dataset_id": "lmarena-ai/leaderboard-dataset",
+          "artifact_kind": "selected_json",
+          "secondary_source": false,
+          "archive_publisher": "lmarena-ai",
+          "immutable_revision": "aedab586542b978719f89662bff1b4e78e0f025be8c1ea06681ed29d7584b7bc",
+          "raw_artifact_sha256": "58f011006abb6bacc36df9bbf78311fd7629c51ff9170ff1273153d7f4b82d39",
+          "archive_snapshot_date": "2026-10-02",
+          "original_retrieved_at": null,
+          "upstream_binary_sha256": "aedab586542b978719f89662bff1b4e78e0f025be8c1ea06681ed29d7584b7bc",
+          "archive_snapshot_timezone": "unknown",
+          "archive_snapshot_precision": "date"
+        },
+        "leaderboard_publish_date": "2026-10-02"
+      }
+    ],
+    "config": "text_style_control",
+    "status": "ok"
+  }
+}

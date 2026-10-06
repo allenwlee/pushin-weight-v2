@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from contextlib import contextmanager
@@ -15,6 +16,7 @@ from django.utils import timezone
 from core.benchmark_metric_identity import definition_snapshot
 from core.measurement_taxonomy import digest, require
 from core.models import (
+    DataSource,
     MetricCollectionRun,
     MetricObservation,
     MetricValue,
@@ -268,6 +270,10 @@ def native_rows(source, payload):
                 },
             }
         elif source == "arena":
+            metadata["publication_complete"] = payload.get("coverage") in {
+                "latest_publication_only",
+                "publication_window",
+            }
             day = row["leaderboard_publish_date"]
             require(row["category"] == "overall", "Arena category mismatch")
             config = payload.get("config")
@@ -386,24 +392,24 @@ def prepare_rows(contract, source, payload, *, adapter=None):
             require(seen[key] == fingerprint, "conflicting duplicate source row")
             continue
         seen[key] = fingerprint
-        observation = dict(
-            mapping=mapping,
-            source_identifier=identity,
-            source_subject_kind=kind,
-            observation_key=key,
-            dimensions=dimensions,
-            source_metadata=metadata,
-            status=row.get("status", "ok"),
-            observed_at=aware_instant(row.get("observed_at") or timezone.now()),
-            publication_precision=row.get("publication_precision", "unknown"),
-            published_at=aware_instant(row["published_at"])
+        observation = {
+            "mapping": mapping,
+            "source_identifier": identity,
+            "source_subject_kind": kind,
+            "observation_key": key,
+            "dimensions": dimensions,
+            "source_metadata": metadata,
+            "status": row.get("status", "ok"),
+            "observed_at": aware_instant(row.get("observed_at") or timezone.now()),
+            "publication_precision": row.get("publication_precision", "unknown"),
+            "published_at": aware_instant(row["published_at"])
             if row.get("published_at")
             else None,
-            published_date=native_date(row["published_date"])
+            "published_date": native_date(row["published_date"])
             if row.get("published_date")
             else None,
-            error_code=row.get("error_code"),
-        )
+            "error_code": row.get("error_code"),
+        }
         values = []
         try:
             if observation["status"] == "ok":
@@ -479,7 +485,7 @@ def persist_source(
             source_id=source,
             ingestion_key=ingestion_key,
             lease_expires_at=now + timedelta(minutes=10),
-            source_url=contract.mappings.filter(source_id=source).first().source.website_url,
+            source_url=DataSource.objects.get(pk=source).website_url,
             **({"batch_id": batch_id} if batch_id is not None else {}),
             selected_count=contract.mappings.filter(source_id=source).count(),
         )
@@ -492,7 +498,9 @@ def persist_source(
             safe_payload(source_metadata or {})
             raw_hash = digest(payload)
             require(
-                len(str(payload)) <= 32 * 1024 * 1024, "payload byte budget exceeded"
+                len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+                <= 32 * 1024 * 1024,
+                "payload byte budget exceeded",
             )
             run.raw_payload = payload
             run.payload_sha256 = raw_hash
@@ -529,7 +537,7 @@ def persist_source(
                 "success"
                 if not errors and run.success_count == run.selected_count
                 else "partial"
-                if successful
+                if successful or (prepared and not errors)
                 else "failed"
             )
             run.completed_at = timezone.now()

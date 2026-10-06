@@ -91,6 +91,7 @@ def test_pre_ledger_rich_columns_survive_first_listing():
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_additive_migration_preserves_existing_products():
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor

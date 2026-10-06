@@ -6,6 +6,7 @@ from django.utils import timezone
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_existing_person_and_links_survive_name_migration():
     before = [("core", "0058_postenrichmentstate_translation_diagnostics")]
     after = [("core", "0060_person_name_provenance_and_guards")]

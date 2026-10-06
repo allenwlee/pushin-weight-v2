@@ -62,12 +62,14 @@ def test_injected_database_write_failure_cannot_publish_success():
     from core.benchmark_metric_store import persist_source
 
     contract = configured()
-    with patch(
-        "core.benchmark_metric_store.MetricValue.objects.bulk_create",
-        side_effect=RuntimeError("injected"),
+    with (
+        patch(
+            "core.benchmark_metric_store.MetricValue.objects.bulk_create",
+            side_effect=RuntimeError("injected"),
+        ),
+        pytest.raises(RuntimeError),
     ):
-        with pytest.raises(RuntimeError):
-            persist_source(contract, "hf", "c" * 64, payload())
+        persist_source(contract, "hf", "c" * 64, payload())
     assert MetricCollectionRun.objects.get().status == "running"
     assert not MetricObservation.objects.exists()
 
@@ -202,3 +204,41 @@ def test_fourth_benchmark_needs_only_its_own_score_definition():
     )
     assert run.status == "success"
     assert run.observations.get().values.get().float_value == 42.5
+
+
+def test_source_lock_contention_and_expired_run_recovery():
+    from datetime import timedelta
+
+    from django.db import connection
+    from django.utils import timezone
+
+    from core.benchmark_metric_store import collection_lock, persist_source
+    from core.measurement_taxonomy import digest
+
+    contract = configured()
+    lock_key = int(digest(["benchmark-metrics-v1", str(contract.pk), "hf"])[:15], 16)
+    import psycopg
+
+    params = connection.get_connection_params()
+    params.pop("cursor_factory", None)
+    other = psycopg.connect(**params, autocommit=True)
+    try:
+        with other.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_lock(%s)", [lock_key])
+        with (
+            pytest.raises(ValueError, match="already running"),
+            collection_lock(contract, "hf"),
+        ):
+            pytest.fail("contended lock was admitted")
+    finally:
+        other.close()
+    run = MetricCollectionRun.objects.create(
+        contract=contract,
+        source_id="hf",
+        ingestion_key="2" * 64,
+        lease_expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    aborted = persist_source(contract, "hf", "2" * 64, payload())
+    assert aborted.pk == run.pk and aborted.status == "aborted"
+    assert not aborted.observations.exists()
+    assert persist_source(contract, "hf", "3" * 64, payload()).status == "success"
