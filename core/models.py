@@ -7259,3 +7259,158 @@ class RareTypeSearchHit(models.Model):
             models.Index(fields=["provider_post_id"], name="idx_rare_hit_post"),
             models.Index(fields=["payload_expires_at"], name="idx_rare_hit_expiry"),
         ]
+
+
+# Shared taxonomy and external measurements. Provider facts never rewrite catalog identity.
+class DataSource(models.Model):
+    id = models.CharField(max_length=32, primary_key=True)
+    name = models.CharField(max_length=128)
+    source_type = models.CharField(max_length=32)
+    enabled = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict)
+
+    class Meta:
+        db_table = 'data_sources'
+
+
+class TaxonomyVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version_hash = models.CharField(max_length=64, unique=True)
+    snapshot = models.JSONField()
+    reviewed_by = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'taxonomy_versions'
+        constraints = [models.CheckConstraint(condition=models.Q(version_hash__regex=r'^[0-9a-f]{64}$'), name='ck_taxonomy_hash')]
+
+
+class ProductGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_key = models.CharField(max_length=128, unique=True)
+    name = models.TextField()
+    description = models.TextField(default='')
+    group_kind = models.CharField(max_length=32, default='series')
+    rule_kind = models.CharField(max_length=32, default='manual')
+    root_product = models.ForeignKey(Product, to_field='product_key', db_column='root_product_key', null=True, on_delete=models.PROTECT)
+    rule_version = models.PositiveSmallIntegerField(default=1)
+    rule_configuration = models.JSONField(default=dict)
+    rule_taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_groups'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(group_kind__in=['series','family','collection']), name='ck_product_group_kind'),
+            models.CheckConstraint(condition=models.Q(rule_version__gt=0), name='ck_product_group_rule_version'),
+            models.CheckConstraint(condition=(models.Q(rule_kind='manual',root_product__isnull=True) | models.Q(rule_kind='new_version_chain',root_product__isnull=False)), name='ck_product_group_rule_root'),
+        ]
+
+
+class ProductRelationship(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    parent_product = models.ForeignKey(Product, to_field='product_key', db_column='parent_product_key', related_name='child_relationships', on_delete=models.PROTECT)
+    child_product = models.ForeignKey(Product, to_field='product_key', db_column='child_product_key', related_name='parent_relationships', on_delete=models.PROTECT)
+    relationship_type = models.CharField(max_length=32)
+    source = models.ForeignKey(DataSource, null=True, on_delete=models.PROTECT)
+    evidence_method = models.CharField(max_length=32, default='source_reported')
+    evidence = models.JSONField()
+    observed_at = models.DateTimeField(default=timezone.now)
+    reviewed_by = models.TextField()
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'product_relationships'
+        constraints = [
+            models.UniqueConstraint(fields=['taxonomy_version','parent_product','child_product','relationship_type'],name='uq_product_relationship'),
+            models.CheckConstraint(condition=~models.Q(parent_product=models.F('child_product')),name='ck_product_relationship_self'),
+            models.CheckConstraint(condition=models.Q(relationship_type__in=['new_version','finetune','adapter','quantized','merge']),name='ck_product_relationship_type'),
+            models.CheckConstraint(condition=models.Q(evidence_method__in=['source_reported','publisher_declared','provider_inferred','artifact_verified','our_inference']),name='ck_product_relationship_method'),
+        ]
+        indexes=[models.Index(fields=['taxonomy_version','parent_product','relationship_type']),models.Index(fields=['taxonomy_version','child_product','relationship_type'])]
+
+
+class ProductGroupMembership(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    group = models.ForeignKey(ProductGroup, on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, to_field='product_key', db_column='product_key', on_delete=models.PROTECT)
+    membership_status = models.CharField(max_length=16)
+    membership_method = models.CharField(max_length=24)
+    rule_version = models.PositiveSmallIntegerField(null=True)
+    evidence = models.JSONField(default=dict)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'product_group_memberships'
+        constraints = [
+            models.UniqueConstraint(fields=['taxonomy_version','group','product'],name='uq_product_group_membership'),
+            models.CheckConstraint(condition=(models.Q(membership_method='manual_include',membership_status='included',rule_version__isnull=True)|models.Q(membership_method='manual_exclude',membership_status='excluded',rule_version__isnull=True)|models.Q(membership_method='rule_generated',membership_status='included',rule_version__gt=0)),name='ck_product_group_membership'),
+        ]
+        indexes=[models.Index(fields=['taxonomy_version','group','membership_status'])]
+
+
+class MeasurementSubject(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subject_kind = models.CharField(max_length=16)
+    company = models.OneToOneField(Company,null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    brand = models.OneToOneField(Brand,null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    product_group = models.OneToOneField(ProductGroup,null=True,on_delete=models.PROTECT,related_name='subject')
+    product = models.OneToOneField(Product,to_field='product_key',db_column='product_key',null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'measurement_subjects'
+        constraints=[models.CheckConstraint(condition=(
+            models.Q(subject_kind='company',company__isnull=False,brand__isnull=True,product_group__isnull=True,product__isnull=True)|
+            models.Q(subject_kind='brand',company__isnull=True,brand__isnull=False,product_group__isnull=True,product__isnull=True)|
+            models.Q(subject_kind='product_group',company__isnull=True,brand__isnull=True,product_group__isnull=False,product__isnull=True)|
+            models.Q(subject_kind='product',company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=False)
+        ),name='ck_measurement_subject_target')]
+
+
+class SubjectRelationship(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion,on_delete=models.PROTECT)
+    parent_subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT,related_name='outgoing_relationships')
+    child_subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT,related_name='incoming_relationships')
+    relation_kind = models.CharField(max_length=32)
+    effective_from_date = models.DateField(null=True)
+    effective_to_date = models.DateField(null=True)
+    effective_date_precision = models.CharField(max_length=16,default='unknown')
+    evidence = models.JSONField()
+
+    class Meta:
+        db_table = 'subject_relationships'
+        constraints=[
+            models.UniqueConstraint(fields=['taxonomy_version','parent_subject','child_subject','relation_kind'],name='uq_subject_relationship'),
+            models.CheckConstraint(condition=~models.Q(parent_subject=models.F('child_subject')),name='ck_subject_relationship_self'),
+            models.CheckConstraint(condition=models.Q(relation_kind__in=['owns','offers']),name='ck_subject_relationship_kind'),
+            models.CheckConstraint(condition=models.Q(effective_date_precision__in=['day','unknown']),name='ck_subject_date_precision'),
+            models.CheckConstraint(condition=models.Q(effective_from_date__isnull=True)|models.Q(effective_to_date__isnull=True)|models.Q(effective_to_date__gt=models.F('effective_from_date')),name='ck_subject_date_order'),
+        ]
+
+
+class PostSubjectAttribution(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(Post,on_delete=models.PROTECT)
+    subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion,on_delete=models.PROTECT)
+    assertion_key = models.CharField(max_length=64)
+    attribution_kind = models.CharField(max_length=24)
+    observed_name = models.TextField()
+    policy_version = models.CharField(max_length=128)
+    evidence = models.JSONField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'post_subject_attributions'
+        constraints=[
+            models.UniqueConstraint(fields=['post','subject','taxonomy_version','policy_version','assertion_key'],name='uq_post_subject_assertion'),
+            models.CheckConstraint(condition=models.Q(attribution_kind__in=['direct_mention','legacy_brand']),name='ck_post_subject_kind'),
+            models.CheckConstraint(condition=models.Q(assertion_key__regex=r'^[0-9a-f]{64}$'),name='ck_post_subject_assertion_hash'),
+        ]
+        indexes=[models.Index(fields=['subject','taxonomy_version','post'])]
