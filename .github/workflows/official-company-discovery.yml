@@ -1,0 +1,60 @@
+name: Official company discovery
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'monitor/**'
+      - 'x_monitor/**'
+      - 'tests/**'
+      - 'config.yaml'
+      - 'pyproject.toml'
+      - '.github/workflows/official-company-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: official-company-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: discovery_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: discovery_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://discovery_test:test@127.0.0.1:5432/discovery_test
+      STAFF_COLLECTION_NETWORK_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Check migration state
+        run: python manage.py makemigrations --check --dry-run
+      - name: Discovery and harvest regressions (required skips fail)
+        run: >-
+          python -m pytest -q
+          tests/test_official_company_accounts.py tests/test_official_company_account_schema.py
+          tests/test_official_company_registration.py tests/test_official_company_scan.py
+          tests/test_official_company_cycle.py tests/test_official_company_credentials.py
+          tests/test_official_company_list_sync.py tests/test_call_a_role_routing.py
+          tests/test_targeted_extraction.py tests/test_targeted_extraction_model_route.py
+          tests/test_profile_snapshots.py tests/test_list_membership_reconciliation.py
+          tests/test_jev_decisions.py tests/test_jev_routing.py tests/test_cycle_regression_net.py
+          tests/test_cycle_run_lock.py tests/test_run_cycle_call_ids.py

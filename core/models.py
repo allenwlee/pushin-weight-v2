@@ -31,7 +31,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
 from django.db import IntegrityError, models, transaction
@@ -7305,12 +7305,12 @@ class OfficialCompanyAccountState(models.Model):
 
     class Meta:
         db_table = "official_company_account_states"
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["status", "next_attempt_at"], name="idx_official_co_due"
             )
         ]
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=models.Q(
                     status__in=[
@@ -7337,7 +7337,7 @@ class OfficialCompanyBudget(models.Model):
 
     class Meta:
         db_table = "official_company_budgets"
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=models.Q(reserved_usd__gte=0, spent_usd__gte=0),
                 name="ck_official_co_funding",
@@ -7369,7 +7369,7 @@ class OfficialCompanyAttempt(models.Model):
 
     class Meta:
         db_table = "official_company_attempts"
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=models.Q(reserved_usd__gte=0)
                 & (models.Q(actual_usd__isnull=True) | models.Q(actual_usd__gte=0)),
@@ -7401,7 +7401,7 @@ class OfficialCompanyListIntent(models.Model):
 
     class Meta:
         db_table = "official_company_list_intents"
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=["list_id", "account"], name="uq_official_co_list_intent"
             ),
@@ -7421,7 +7421,7 @@ class OfficialCompanyListIntent(models.Model):
                 name="ck_official_co_list_status",
             ),
         ]
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["status", "next_attempt_at"], name="idx_official_co_list_due"
             )
@@ -7439,7 +7439,7 @@ class OfficialCompanyOwnerCredential(models.Model):
 
     class Meta:
         db_table = "official_company_owner_credentials"
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=models.Q(status__in=["ready", "refreshing", "blocked"]),
                 name="ck_official_co_credential",

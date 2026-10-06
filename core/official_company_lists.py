@@ -31,7 +31,9 @@ class XOwnerListClient:
     owner_id: str
     request: Callable = field(default=requests.request, repr=False)
     timeout: float = 10
-    max_pages: int = 3
+    # X permits 5000 members per list, returned in pages of at most 100.
+    # The elapsed-time deadline also bounds reads when the provider is slow.
+    max_pages: int = 50
     deadline: float = field(default_factory=lambda: time.monotonic() + 40)
     refresh: Callable | None = field(default=None, repr=False)
     _ready: bool = field(default=False, init=False)

@@ -106,7 +106,10 @@ def _observations(key, model, time_field, *, limit, account_field=None, deadline
         if cursor["pk"] is not None:
             after |= Q(**{time_field: at, "pk__gt": cursor["pk"]})
         # Observation timestamps, never the post's publication date.
-        rows = list(model.objects.filter(after).order_by(time_field, "pk")[:limit])
+        observations = model.objects.filter(after).order_by(time_field, "pk")
+        if account_field:
+            observations = observations.select_related(account_field)
+        rows = list(observations[:limit])
         seen = set()
         for row in rows:
             if deadline and time.monotonic() >= deadline:
@@ -128,18 +131,30 @@ def enqueue_incremental(*, limit=100, deadline=None):
         raise ValueError("incremental account bound must be 1..100")
     # All-account rotation closes observation timestamp / late-commit races and
     # covers existing rows when incremental discovery precedes initial scanning.
-    per_source = max(1, limit // 4)
+    per_source, remainder = divmod(limit, 4)
+    # Small operator batches still rotate across the whole account population.
+    bounds = [
+        per_source + int(remainder >= 2),
+        per_source + int(remainder >= 3),
+        per_source,
+        per_source + int(remainder >= 1),
+    ]
     count = 0
-    for key, model, field, account_field in [
+    sources = [
         ("account-observations", Account, "last_seen_at", None),
         ("post-observations", Post, "fetched_at", "author"),
         ("profile-observations", AccountProfileSnapshot, "last_observed_at", "account"),
-    ]:
+    ]
+    for (key, model, field, account_field), source_limit in zip(
+        sources, bounds[:3], strict=True
+    ):
+        if source_limit == 0:
+            continue
         count += _observations(
             key,
             model,
             field,
-            limit=per_source,
+            limit=source_limit,
             account_field=account_field,
             deadline=deadline,
         )
@@ -149,12 +164,12 @@ def enqueue_incremental(*, limit=100, deadline=None):
         )
         rows = list(
             Account.objects.filter(author_id__gt=scan.cursor).order_by("author_id")[
-                :per_source
+                :bounds[3]
             ]
         )
         if not rows:
             scan.cursor = ""
-            rows = list(Account.objects.order_by("author_id")[:per_source])
+            rows = list(Account.objects.order_by("author_id")[:bounds[3]])
         for account in rows:
             if deadline and time.monotonic() >= deadline:
                 break
@@ -207,10 +222,16 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
         .values_list("pk", flat=True)[:1]
     )
     ids = retry + list(
-        qs.exclude(pk__in=retry)
+        qs.filter(status="pending")
         .order_by("created_at" if initial else "-updated_at")
         .values_list("pk", flat=True)[: max(0, limit - len(retry))]
     )
+    if len(ids) < limit:
+        ids += list(
+            qs.exclude(pk__in=ids)
+            .order_by("created_at")
+            .values_list("pk", flat=True)[: limit - len(ids)]
+        )
     for state_id in ids[:limit]:
         if deadline and time.monotonic() + cfg.request_timeout_seconds + 2 > deadline:
             break

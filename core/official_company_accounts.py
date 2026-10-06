@@ -318,7 +318,10 @@ def enqueue_account(account, *, initial_scan=None):
             state.last_error = ""
         if initial_scan and state.initial_scan_id is None:
             state.initial_scan = initial_scan
-        state.save()
+            if not (created or changed):
+                state.save(update_fields=["initial_scan"])
+        if created or changed:
+            state.save()
         if created and str(account.author_id) in OWNER_ATTESTATIONS:
             _apply_owner_attestation(state)
     return state
@@ -757,9 +760,23 @@ def register_account(state_id, *, cfg):
                 defaults={"state": state, "evidence_hash": state.evidence_hash},
             )
             # Do not clear suppression or manual-removal review on new evidence.
-            if intent.status in {"pending", "retry_due", "blocked_auth"}:
+            if intent.status in {
+                "pending",
+                "retry_due",
+                "verify_needed",
+                "claimed",
+                "blocked_auth",
+            } and intent.evidence_hash != state.evidence_hash:
                 intent.state = state
                 intent.evidence_hash = state.evidence_hash
+                # A superseded claim cannot complete against this new revision.
+                # Auth blocks still require credential repair and explicit retry.
+                if intent.status != "blocked_auth":
+                    intent.status = "verify_needed"
+                intent.claim_token = ""
+                intent.claim_expires_at = None
+                intent.next_attempt_at = None
+                intent.attempts = 0
                 intent.save()
             return intent.pk
     except (IdentityConflict, IntegrityError, ValueError) as exc:

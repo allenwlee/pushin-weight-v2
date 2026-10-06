@@ -133,3 +133,33 @@ def test_observed_manual_removal_requires_review_and_is_never_readded():
     assert intent.status == "review_needed"
     assert intent.last_error == "observed_member_removal"
     assert not client.preflight.called and not client.add.called
+
+
+def test_list_read_reaches_fourth_page_before_confirming_absence():
+    requests = []
+
+    def transport(method, url, **kwargs):
+        response = Mock(status_code=200)
+        if url.endswith("/users/me"):
+            response.json.return_value = {"data": {"id": "17456158"}}
+            return response
+        if not url.endswith("/members"):
+            response.json.return_value = {"data": {"owner_id": "17456158", "private": True}}
+            return response
+        requests.append(kwargs["params"].get("pagination_token"))
+        page = len(requests)
+        response.json.return_value = {
+            "data": [{"id": str(page)}],
+            "meta": {"next_token": str(page)} if page < 4 else {},
+        }
+        return response
+
+    client = XOwnerListClient(
+        access_token="test-token", list_id="2067062923525275922",
+        owner_id="17456158", request=transport,
+    )
+    client.preflight()
+    members, complete = client.members()
+    assert members == {"1", "2", "3", "4"}
+    assert complete
+    assert requests == [None, "1", "2", "3"]

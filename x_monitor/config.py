@@ -381,9 +381,9 @@ class OfficialCompanyConfig(BaseModel):
     max_input_bytes: int = Field(default=262144, ge=4096, le=1048576)
     request_timeout_seconds: int = Field(default=20, ge=5, le=60)
     lane_deadline_seconds: int = Field(default=45, ge=10, le=120)
-    max_usd_per_cycle: Decimal = Field(default=Decimal("0"), ge=0)
-    max_usd_per_day: Decimal = Field(default=Decimal("0"), ge=0)
-    initial_scan_max_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    max_usd_per_cycle: Decimal = Field(default=Decimal(0), ge=0)
+    max_usd_per_day: Decimal = Field(default=Decimal(0), ge=0)
+    initial_scan_max_usd: Decimal = Field(default=Decimal(0), ge=0)
     input_usd_per_million: Decimal = Field(default=Decimal("0.06"), ge=0)
     output_usd_per_million: Decimal = Field(default=Decimal("0.18"), ge=0)
     list_id: str = "2067062923525275922"

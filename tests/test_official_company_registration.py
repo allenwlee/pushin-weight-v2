@@ -136,3 +136,40 @@ def test_confirmed_candidate_with_stable_evidence_reuses_brand():
     state.refresh_from_db()
     assert state.registered_brand_id == brand.pk
     assert Brand.objects.count() == 1
+
+
+@pytest.mark.parametrize("status", ["verify_needed", "claimed", "pending", "retry_due"])
+def test_new_accepted_evidence_resumes_unresolved_intent(status):
+    state = accepted()
+    cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    register_account(state.pk, cfg=cfg)
+    intent = OfficialCompanyListIntent.objects.get(state=state)
+    intent.status = status
+    intent.claim_token = "obsolete-claim"
+    intent.attempts = 4
+    intent.save()
+    state.status = "accepted"
+    state.evidence_hash = "b" * 64
+    state.save()
+    register_account(state.pk, cfg=cfg)
+    intent.refresh_from_db()
+    assert intent.evidence_hash == state.evidence_hash
+    assert intent.status == "verify_needed"
+    assert intent.claim_token == ""
+    assert intent.attempts == 0
+
+
+@pytest.mark.parametrize("status", ["confirmed", "suppressed", "review_needed"])
+def test_new_evidence_preserves_settled_or_manually_stopped_intent(status):
+    state = accepted()
+    cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    register_account(state.pk, cfg=cfg)
+    intent = OfficialCompanyListIntent.objects.get(state=state)
+    intent.status = status
+    intent.save()
+    state.status = "accepted"
+    state.evidence_hash = "b" * 64
+    state.save()
+    register_account(state.pk, cfg=cfg)
+    intent.refresh_from_db()
+    assert intent.status == status

@@ -5559,7 +5559,10 @@ class CycleRunner:
             return {"status": "disabled"}
         if deadline.remaining() < self.cfg.official_company.request_timeout_seconds + 2:
             return {"status": "deferred_deadline"}
-        from core.official_company_discovery import build_discovery_call, run_discovery_lane
+        from core.official_company_discovery import (
+            build_discovery_call,
+            run_discovery_lane,
+        )
 
         try:
             call = self._official_company_call or build_discovery_call(
