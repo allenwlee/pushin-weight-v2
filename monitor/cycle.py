@@ -81,6 +81,7 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    RareTypeDecision,
     RareTypeSearchHit,
     SearchQuery,
     SentimentKey,
@@ -92,6 +93,7 @@ from core.profile_snapshots import (
     capture_post_profile_snapshot,
 )
 from core.rare_type_search import (
+    DECISION_RETRY_DELAY,
     kept_hits_pending_post,
     link_kept_hit_to_post,
     mark_hit_ingestion_failed,
@@ -3198,14 +3200,27 @@ class CycleRunner:
             now = self._wall_now()
             # Eligibility comes before the bounded slice. Sleeping retries and
             # active claims must not displace work that can actually run.
+            # Shared terminal decisions still need propagation to older hits.
             candidates = candidates.filter(payload_expires_at__gt=now).filter(
                 Q(decision__isnull=True)
-                | Q(decision__status="pending", decision__next_attempt_at__isnull=True)
-                | Q(decision__status="pending", decision__next_attempt_at__lte=now)
                 | Q(
-                    decision__status="claimed",
+                    decision__status__in=[
+                        RareTypeDecision.Status.COMPLETED,
+                        RareTypeDecision.Status.REVIEW_NEEDED,
+                    ]
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__isnull=True,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__lte=now,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.CLAIMED,
                     decision__claim_expires_at__lte=now,
-                    decision__claimed_at__lte=now - timedelta(minutes=15),
+                    decision__claimed_at__lte=now - DECISION_RETRY_DELAY,
                 )
             )
             if fetched_since is not None:
@@ -3224,23 +3239,28 @@ class CycleRunner:
             older = candidates.exclude(fetched_at__gte=fresh_since, decision__isnull=True)
             # Reserve one quarter for older/retry work, borrowing unused slots.
             fresh_limit = limit - max(1, limit // 4)
-            selected = list(fresh.order_by("fetched_at", "id")[:fresh_limit])
+            selected = list(
+                fresh.order_by("fetched_at", "id")
+                .values_list("pk", flat=True)[:fresh_limit]
+            )
             selected += list(
                 older.order_by(
                     Case(When(decision__attempts__gt=0, then=Value(0)), default=Value(1)),
-                    "fetched_at", "id",
-                )[:limit - len(selected)]
+                    "fetched_at",
+                    "id",
+                ).values_list("pk", flat=True)[:limit - len(selected)]
             )
             if len(selected) < limit:
                 selected += list(
-                    fresh.exclude(pk__in=[hit.pk for hit in selected])
-                    .order_by("fetched_at", "id")[:limit - len(selected)]
+                    fresh.exclude(pk__in=selected)
+                    .order_by("fetched_at", "id")
+                    .values_list("pk", flat=True)[:limit - len(selected)]
                 )
             shared_deadline = getattr(deadline, "deadline_at", None)
-            for hit in selected:
+            for hit_id in selected:
                 result["selected"] += 1
                 decision = gate.process_hit(
-                    hit.pk,
+                    hit_id,
                     owner=run_id,
                     shared_deadline_monotonic=shared_deadline,
                 )

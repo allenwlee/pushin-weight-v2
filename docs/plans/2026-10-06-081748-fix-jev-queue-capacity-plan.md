@@ -109,3 +109,39 @@ The owner selected LFG through production and a separate worktree. Search wordin
 - Fresh allocation: normal15 fresh +5 older/retry when both are full; idle shares borrowed. Due retries take precedence within the older share. Therefore not all20 fresh arrivals can be attempted immediately when backlog exists, by design under the unchanged cap.
 - Initial latest20 pre-change health: 0 complete /13 pending /7 unhealthy; missing commentary and one missing language predate the fix. Exact IDs retained in /tmp/jev-queue-health-before.json for one follow-up after30min. This is not a passed health gate.
 - Staging branch bacbb433 contains unrelated G2 changes and is occupied by its live replay. No staging mutations. Release candidate will be completed before requesting owner route exception.
+
+## Review and release evidence
+
+- ce-debug fixed return: cb609ac1, base d6ed01c3, no unrelated preexisting changes. No issue of record.
+- ce-simplify-code: three persona passes; reused retry-delay constant and model enums, selected IDs without loading payloads twice. 27 affected tests passed after simplification.
+- ce-code-review: full review run `20261006-173044-4998ffcb`, receipt `/tmp/compound-engineering-501/ce-code-review/20261006-173044-4998ffcb/review.json`. Seven local lenses completed sequentially under the harness thread cap. No independent agreement is claimed across reused persona contexts.
+- External review did not pass: Claude returned402 before producing a review; one permitted Grok replacement timed out after600seconds with no usable review. No further attempts. This is a coverage limit, not passed verification.
+- One confirmed P2: preserve terminal decision reuse for older duplicate search hits. Two PostgreSQL reproductions confirmed the failure and unchanged funding when directly reused. The same two cases were added to the existing Jev test file and failed before fixing eligibility; terminal decisions are now eligible for the existing no-send reuse path. The original review retains confidence75 as required by its validation contract; this repair follows the owner's explicit fix authority and independently reproduced red tests, not invented reviewer consensus.
+- Added the advisory CLAIMED lease/retry-boundary regression: active lease and expired-but-not-due claim do not displace fresh work; exactly15-minute-old expired claim reaches the real gate.
+- Optional cap1 policy remains unchanged: when configured below deployed normal20/staging5, the reserved older share can use the sole slot. No deployment uses cap1; changing that policy was outside this release.
+- Project lint reports1797 pre-existing findings. Base/current changed-file counts match exactly: cycle40, config3, Jev1, others0. No new changed-line findings; no configured typecheck. Diff whitespace checks pass.
+- ce-test-browser mode:pipeline applicability: no changed routes, views, templates, styles, or browser behavior; no browser session/server was needed. Existing ingestion test checks feed inclusion. Browser execution skipped as worker-only scope, not reported passed.
+- ce-compound documentation skipped: diagnosis, regression tests, and this plan carry the reusable reasoning.
+- Read-only Render08:33UTC: production web+harvest both live d6ed01c3, running; staging web live f9276520(G1R2+G2 integration), autodeployoff; staging harvest suspended on76bf81db. Staging ref bacbb433 is unrelated and cannot be safely advanced from this candidate by fast-forward. No environment setting/service state changed.
+
+## Immutable production health cohort (before this deployment)
+
+Initial observation completed2026-10-06T08:22:23Z:0complete/13pending/7unhealthy. Exact-ID follow-up after30minutes:14complete/0pending/6unhealthy. Both regression_gate and acceptance_gate remain failed, not waived or passed. Language15/20; English and Chinese commentary19/20 each; non-zh-Hans Chinese translations13/13. All6 remaining rows report translation/classification succeeded despite missing fields. These are pre-existing production findings; this branch has not been deployed.
+
+Ordered IDs: 2107381820945797549, 2107382228242104789, 2107382472312783262, 2107382715058192664, 2107381078885306618, 2107381223051931769, 2107383071255265550, 2107383261756301508, 2107382886920028642, 2107382932671541252, 2107382945400951071, 2107383057271476427, 2107383120588861754, 2107383197994815676, 2107383262167630279, 2107383766733762800, 2107383786329497630, 2107383875647451358, 2107383925521645648, 2107384123610317193
+
+Remaining unhealthy rows:
+- 2107382228242104789: missing_lang_detected
+- 2107382945400951071: missing_lang_detected
+- 2107383262167630279: missing_lang_detected
+- 2107383766733762800: missing_lang_detected
+- 2107383786329497630: missing_commentary_en, missing_commentary_zh_cn
+- 2107383925521645648: missing_lang_detected
+
+## Remaining delivery work
+
+The default staged route needs an owner route decision because staging contains unrelated G2 integration. Parent will present the completed candidate before requesting direct production or coordinated exact-commit staging. Production endpoint remains authorized; this is not a request to reauthorize the fix. Existing production health failures remain disclosed and unresolved in this bounded Jev task.
+
+After route selection: exact candidate deployment on web+harvest; observe natural cycle logs plus durable fresh/older/retry outcomes; replay saved Beam hit5713 through existing bounded replay path, without another TwitterAPI fetch, within existing shared Jev budgets; report remaining backlog. No cron pause authorized. Perform guarded canonical worktree cleanup only after exact-SHA production proof.
+
+- 2026-10-06 09:03 UTC final validation: 209 tests passed in130.24seconds, including82 required PostgreSQL cases with zero skips/errors. This includes the two red-before-fix shared-terminal-decision regressions and the claim-lease/retry-boundary test. Evidence covers final code after simplification and review fixes.
