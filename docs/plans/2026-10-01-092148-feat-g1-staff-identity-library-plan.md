@@ -77,12 +77,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 The active follow-up moves staff images and editorial media to private
 Cloudflare R2 storage shared by Render's web and worker services. It preserves
 database references and original disk files. The October 4 G1 release below
-remains complete; the October 5 R2 phase is the current work. Completion requires
-verified file copies and shared access on staging and production. The supplied
-setup credentials and private R2 buckets passed live checks on October 6.
-Environment-specific deployment credentials passed own-bucket access and
-cross-bucket denial checks. Live Render migration and verification remain
-outstanding.
+remains complete. On October 6, all 35 stored images were copied and hash-verified
+in both environment buckets, and actual web/worker access passed in both
+directions for staff and editorial storage. Each runtime key is denied access to
+the other environment's bucket. The rollout evidence below and
+[PR #52](https://github.com/allenwlee/pushin-weight-v2/pull/52) record deployed
+revisions, restart verification and the G2 handoff. Original files remain on disk;
+this storage change does not activate collection or media generation.
 
 U0–U11 are implemented, including the independent review repairs to identity
 matching, reviewed corrections, job conclusions and sourced dossier fields.
@@ -177,21 +178,18 @@ hashes and attribution records remain valid. Published media can be delivered
 directly from R2 after application access checks. New provider searches and paid
 media generation remain governed by their separate activation decisions.
 
-**Current state:** implementation and local review fixes are published in draft
-PR #52 at `fb750d1ec27886f121047997b5469792e11e58c2`, based on
-`713770008eacc3f890c90e6fce07efad940eb664`. The owner requested proceeding
-on October 5 after the G2 handoff, and G2 has acknowledged its scope. On October 6
-the owner supplied valid setup credentials. Both private environment buckets
-are created, and the actual adapter passed live write/read, conditional-create,
-signed-link, expiry and range-request checks. No source-asset transfer or Render
-deployment has run. The adapter uses explicit R2 credentials and signed URLs
-valid for at most 300 seconds. Separate bucket-scoped runtime credentials are
-supplied and verified: each reads its own bucket (HTTP 200), while the other
-bucket returns HTTP 403 AccessDenied.
-Fresh read-only checks on October 5 found 35 staff image objects / 20,060,954
-bytes in both production and staging, with no missing files or hash mismatches.
-Inventory again immediately before migration. MiniMax's local research is not
-a production import.
+**Implementation and migration:** PR #52 merged at
+`2fd51098d4de9b1a9e70b5f8ed203766f422268e` on October 6. Both private buckets
+contain the full 35-object / 20,060,954-byte staff inventory, copied from the
+corresponding Render web disk without changing database references. The actual
+web and worker services use the environment-specific bucket and passed both
+directions of access for both storage aliases. Live signed downloads, byte
+ranges and unsigned denial passed in production; G2's delivery and policy checks
+passed on its separate staging integration. See the dated evidence below and
+the PR for final deployment/readiness observations. The adapter limits signed
+links to 300 seconds. Runtime keys read their own bucket (HTTP 200) and are
+denied the other bucket (HTTP 403 AccessDenied). Source disks remain intact.
+MiniMax's local research is not a production import.
 
 ### Ownership and shared interface
 
@@ -212,9 +210,9 @@ credential variables are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
 records the exact alias settings, bucket/prefix proposals, copy commands and
 verification procedure. Credentials stay in secret stores.
 
-G2's current `asset()` view streams a `FileResponse` through Render. The accepted
-direction is authorized, short-lived R2 links while retaining the existing
-access, verification, edition/picture selection and content-type switches.
+G2's staged `asset()` view issues authorized, short-lived R2 links while retaining
+the existing access, verification, edition/picture selection and content-type
+switches. Its filesystem fallback still uses `FileResponse` through Render.
 Already issued signed links can remain usable until expiry; URL lifetime and
 response caching must be explicit and tested against G2's disablement behavior.
 Local filesystem delivery remains available for local tests.
@@ -332,6 +330,48 @@ top-level attempt exhausted its independent-provider fallback (Claude balance
 failure and Grok timeout). Its local findings are fixed, and the final manual
 diff scan plus 301 G1/36 Ollija checks and exact-revision GitHub CI remain valid
 for unchanged application code. This is not a claim of independent review.
+
+### October 6 migration and deployed-service evidence
+
+- Staging and production each copied and independently verified 35 objects /
+  20,060,954 bytes. The ordered database inventory hash remains
+  `5d87e585ab518346379658826772adbc84a36d75ba7c9fc351276553679f6c8e`.
+  Both original Render disks are retained; the transfer made no database writes.
+- Actual web and headline worker processes passed staff/editorial writes and
+  reads in both directions using `core.media_storage.PrivateR2Storage`. The
+  production proofs record revision `2fd51098`; no process-local backend
+  override was used for those final access checks. Production signed image and
+  editorial-object downloads returned matching bytes with private/no-store
+  headers, HTTP 206 ranges and unsigned-request denial.
+- Staging-only integration `f92765206fdbbbe9aa2006ef29154fdf0e1d079f`
+  combines published G2 `bacbb433` with G1. G2's actual deployed asset view passed
+  source-image and saved-video delivery, anonymous denial, disabled-picture and
+  revoked-verification checks. These are direct view checks on the deployed
+  service, not a logged-in end-to-end browser session. Synthetic database
+  fixtures were rolled back and before/after counts matched. Real Chrome
+  playback of the synthetic video separately passed. Zero provider calls ran.
+- The unchanged G1-only `2fd51098` was separately deployed to both staging
+  services; all 35 images and the same cross-service proof objects remained
+  readable after replacement of the services. Both durability flags were true
+  in those actual processes. The website login page returned HTTP 200. Only
+  that G1 revision advanced to main; no G2 code or migrations entered production.
+- One production verification connection was reset by the SSH gateway before
+  authentication. Website health and service state remained healthy. After a
+  bounded pause, the same read passed without any network/SSH configuration
+  change. Preserve the failed receipt as well as the successful recovery;
+  this was not an R2 or application failure.
+- Final documentation revisions leave application code unchanged. The closing
+  production restart, effective durability flags and restored G2 staging
+  deployment are recorded in the final rollout receipt and PR description.
+  Staging automatic deployments stay off while the integration commit differs
+  from its tracked `staging` branch. G2 must reconcile with main before restoring
+  branch-driven deployments. Its local 65,536-token route correction remains
+  separate from this storage release.
+- Raw receipts are under `.context/g1-r2-20261005/` and
+  `.context/g1-r2-20261006/` in the release worktree. Before worktree cleanup,
+  archive them under the authoritative repository's
+  `.context/g1-r2-release-20261006/`. The final readiness record belongs there;
+  the shared launch index and PR retain its location and final revisions.
 
 ## Delivery Exceptions
 

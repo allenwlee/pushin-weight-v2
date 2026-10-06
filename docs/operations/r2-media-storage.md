@@ -27,9 +27,9 @@ Configure these secret values through Render's service environment, not Git:
   environment's bucket. Provisioning credentials are a separate operator concern.
 
 Use a different private bucket for staging and production. Within each bucket,
-`staff/` stores originals and `editorial/` stores derivatives. Both buckets below
-were created and passed operator-side access checks on October 6, 2026. They
-remain private; Render migration and service access are not yet verified:
+`staff/` stores originals and `editorial/` stores derivatives. Both private buckets
+below were created on October 6, 2026. Deployment observations and G2 handoff
+details are recorded in the existing G1 plan and [PR #52](https://github.com/allenwlee/pushin-weight-v2/pull/52).
 
 | Environment | Bucket | Staff options | Editorial options |
 | --- | --- | --- | --- |
@@ -50,8 +50,9 @@ one corresponding bucket:
 
 `R2_ACCOUNT_ID` is shared. The original administrative setup pair stays in the
 operator secret store. Both deployment pairs passed own-bucket GETs and
-cross-bucket denial checks on October 6; no credentials have been installed on
-Render yet. Repeat those checks when rotating or replacing credentials.
+cross-bucket denial checks on October 6 and are installed on the corresponding
+Render web and headline worker services. Repeat those checks when rotating or
+replacing credentials.
 
 Set `STAFF_MEDIA_STORAGE_BACKEND` and `EDITORIAL_MEDIA_STORAGE_BACKEND` to
 `core.media_storage.PrivateR2Storage`; put the corresponding JSON above in
@@ -159,6 +160,39 @@ minutes. Disabling pictures prevents new links from being issued. An existing
 link can remain usable until its expiry; this is not immediate revocation of a
 previously issued link. Media already downloaded cannot be recalled. The G2
 tests and operating description must preserve this distinction.
+
+## October 6 verification and G2 continuation
+
+The deployed adapter passed actual web-to-worker and worker-to-web checks for
+both aliases in both environments. Each bucket contains all 35 existing staff
+objects, totaling 20,060,954 bytes, with unchanged database-relative keys and
+matching hashes. The ordered inventory hash is
+`5d87e585ab518346379658826772adbc84a36d75ba7c9fc351276553679f6c8e`.
+
+G2's integration revision is
+`f92765206fdbbbe9aa2006ef29154fdf0e1d079f` on
+`test/g1-r2-g2-20261006`. It combines published G2 `bacbb433` with the G1 adapter.
+Its deployed asset view passed source-image and saved-video redirects/downloads,
+ranges, anonymous denial, disabled pictures and revoked-verification checks.
+The temporary database fixtures were rolled back; synthetic Chrome video
+playback passed separately. Production has the G1 code only. No paid provider
+calls were needed for any storage check.
+
+The rollout restores that G2 integration to staging after separately proving
+the G1 production candidate. The tracked `staging` branch remains at G2's
+published revision, and automatic deployment is off for both staging services.
+Before G2 resumes deployment, inspect live service revisions, reconcile its
+branch with main, and preserve the existing `staff_media` / `editorial_media`
+aliases and credential settings. Keep the local G2 route-limit correction;
+this storage change does not include it. Re-enable automatic deployment only
+when the tracked branch contains the intended combined code.
+
+The latest deployment identities, effective durability flags and restart
+read-back results are recorded in [PR #52](https://github.com/allenwlee/pushin-weight-v2/pull/52)
+and the authoritative launch index. Local evidence is archived on fuchitalee at
+`/Users/fuchitalee/development/pushin-weight-v2/.context/g1-r2-release-20261006/`.
+Storage readiness resolves G1's shared-file dependency. G2's role review,
+generation policy, spending limits and public activation remain its own gates.
 
 ## Rollback and retained files
 
