@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 ROLE = "official_co_account_extraction"
-POLICY_VERSION = "official-model-developer-v1"
+POLICY_VERSION = "official-model-developer-v2"
 MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
 MODEL_TYPES = {
     "language",
@@ -92,7 +92,12 @@ def build_evidence(
 
     identifier = str(account.author_id)
     for field in ("bio", "description", "profile_bio_text"):
-        add(f"account:{field}", getattr(account, field, None))
+        add(
+            f"account:{field}",
+            getattr(account, field, None),
+            getattr(account, "bio_fetched_at", None)
+            or getattr(account, "last_seen_at", None),
+        )
     for row in posts:
         post_id = str(row["id"])
         add(f"post:{post_id}", row.get("text"))
@@ -106,7 +111,9 @@ def build_evidence(
     for row in profiles or []:
         profile(f"profile:{row['id']}", row.get("profile", {}))
         for key, source in sources.items():
-            if key.startswith(f"profile:{row['id']}") and row.get("observed_at"):
+            if (
+                key == f"profile:{row['id']}" or key.startswith(f"profile:{row['id']}:")
+            ) and row.get("observed_at"):
                 source["observed_at"] = str(row["observed_at"])
     result = {
         "provider": "x",
@@ -204,6 +211,13 @@ consultancies, tool wrappers and model users do not qualify merely because they
 mention AI or a lab. Links/badges alone cannot establish official ownership.
 Return review_needed when evidence cannot distinguish a plausible impersonator,
 when organization/model-development claims lack support, or evidence conflicts.
+Consistent first-party organizational self-representation is sufficient under
+this policy. Do not demand a verification badge, external website verification,
+or independent corroboration. A merely hypothetical possibility of impersonation
+is not contradictory evidence; explicit parody/fan/personal identity or conflicting
+organization claims are. Missing identity/development evidence is review_needed,
+not proof that the account is a non-developer. Reject when supplied evidence
+positively identifies an ineligible kind of account.
 Use only supplied evidence; do not use remembered facts or invent company IDs.
 Return a JSON object with ONLY: outcome (accepted/rejected/review_needed),
 organization_name (string or null), model_types (array of language,image,video,
@@ -211,6 +225,14 @@ audio,speech,multimodal,robotics,embedding,other), rationale, contradictions
 (array of strings), claims (object with organization, official_account and
 model_developer arrays). For acceptance, EACH claim requires a citation object
 {source_id, quote}; quote must be a verbatim excerpt of that supplied source.
+Use this exact structure; do not nest citations inside another object or add
+claim/citation wrapper keys:
+{"outcome":"accepted","organization_name":"Example Lab","model_types":["speech"],
+"rationale":"Consistent supplied identity and model-development evidence.",
+"contradictions":[],"claims":{
+"organization":[{"source_id":"account:bio","quote":"at least eight verbatim characters"}],
+"official_account":[{"source_id":"account:bio","quote":"at least eight verbatim characters"}],
+"model_developer":[{"source_id":"post:123","quote":"at least eight verbatim characters"}]}}
 A company account's identity never proves a particular product mention."""
 
 
@@ -297,7 +319,58 @@ def enqueue_account(account, *, initial_scan=None):
         if initial_scan and state.initial_scan_id is None:
             state.initial_scan = initial_scan
         state.save()
+        if created and str(account.author_id) in OWNER_ATTESTATIONS:
+            _apply_owner_attestation(state)
     return state
+
+
+def _apply_owner_attestation(state):
+    """Apply the owner's versioned settlement once, never as classifier logic."""
+    import uuid
+
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyAttempt
+
+    name = OWNER_ATTESTATIONS[str(state.account_id)]
+    source = {
+        "id": "owner:2026-10-06:preverified-model-labs:v1",
+        "text": f"The owner verified this stable account as the official account of {name}, an AI model developer.",
+        "observed_at": "2026-10-06",
+    }
+    state.evidence = {**state.evidence, "sources": [*state.evidence["sources"], source]}
+    citation = {"source_id": source["id"], "quote": source["text"]}
+    state.decision = validate_decision(
+        {
+            "outcome": "accepted",
+            "organization_name": name,
+            "model_types": ["other"],
+            "rationale": "Explicit owner settlement, 2026-10-06; no provider inference.",
+            "contradictions": [],
+            "claims": {
+                key: [citation]
+                for key in ("organization", "official_account", "model_developer")
+            },
+        },
+        state.evidence,
+    )
+    state.status = "accepted"
+    state.model = "owner-attestation"
+    state.policy_version = source["id"]
+    state.save()
+    OfficialCompanyAttempt.objects.create(
+        state=state,
+        evidence_hash=state.evidence_hash,
+        evidence=state.evidence,
+        claim_token=uuid.uuid4().hex,
+        model=state.model,
+        policy_version=state.policy_version,
+        status="owner_attested",
+        decision=state.decision,
+        reserved_usd=0,
+        actual_usd=0,
+        completed_at=timezone.now(),
+    )
 
 
 def claim_account(state_id, *, cfg, budget_scope, initial=False):
@@ -412,7 +485,11 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         state = OfficialCompanyAccountState.objects.select_for_update().get(
             pk=attempt.state_id
         )
-        usage = response.get("usage", {}) if isinstance(response, Mapping) else {}
+        usage = (
+            response.get("usage", {})
+            if isinstance(response, Mapping)
+            else getattr(error, "provider_usage", {}) or {}
+        )
         valid_usage = all(
             isinstance(usage.get(k), int)
             and not isinstance(usage[k], bool)
@@ -444,7 +521,11 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         code = type(error).__name__ if error else ""
         attempt.status = "failed" if error else "completed"
         attempt.error_code = code
-        attempt.decision = decision
+        attempt.decision = decision or (
+            {k: v for k, v in response.items() if k != "usage"}
+            if isinstance(response, Mapping)
+            else {}
+        )
         attempt.completed_at = now
         attempt.save()
         if (
@@ -453,9 +534,11 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         ):
             return False
         if error:
-            terminal = isinstance(error, (TypeError, ValueError)) or getattr(
-                error, "status_code", None
-            ) in {400, 401, 403}
+            from x_monitor.deepinfra import DeepInfraPermanentError
+
+            terminal = isinstance(
+                error, (TypeError, ValueError, DeepInfraPermanentError)
+            ) or getattr(error, "status_code", None) in {400, 401, 403}
             state.status = (
                 "review_needed" if terminal or state.attempts >= 3 else "retry_due"
             )
@@ -477,6 +560,24 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
 def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
     if not cfg.enabled or call is None:
         return False
+    from django.db import transaction
+
+    from core.models import OfficialCompanyProviderState
+
+    revision = getattr(call, "credential_revision", None)
+    if isinstance(revision, str):
+        with transaction.atomic():
+            gate, _ = (
+                OfficialCompanyProviderState.objects.select_for_update().get_or_create(
+                    key="deepinfra", defaults={"credential_revision": revision}
+                )
+            )
+            if gate.credential_revision != revision:
+                gate.credential_revision = revision
+                gate.blocked_reason = ""
+                gate.save()
+            if gate.blocked_reason:
+                return False
     attempt = claim_account(
         state_id, cfg=cfg, budget_scope=budget_scope, initial=initial
     )
@@ -491,6 +592,22 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
         )
     except Exception as exc:  # noqa: BLE001 - persist a provider failure and retain unknown spend
         complete_attempt(attempt.pk, cfg=cfg, error=exc)
+        from x_monitor.deepinfra import DeepInfraPermanentError
+
+        if (
+            isinstance(revision, str)
+            and isinstance(exc, DeepInfraPermanentError)
+            and str(exc)
+            in {
+                "deepinfra_http_status_400",
+                "deepinfra_http_status_401",
+                "deepinfra_http_status_402",
+                "deepinfra_http_status_403",
+            }
+        ):
+            OfficialCompanyProviderState.objects.filter(
+                key="deepinfra", credential_revision=revision
+            ).update(blocked_reason=str(exc))
     else:
         complete_attempt(attempt.pk, cfg=cfg, response=response)
     return True

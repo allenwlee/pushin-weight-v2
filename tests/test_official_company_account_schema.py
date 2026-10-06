@@ -157,3 +157,52 @@ def test_concurrent_claims_share_one_funded_attempt():
         results = list(pool.map(lambda _: claim(), range(2)))
     assert sum(x is not None for x in results) == 1
     assert OfficialCompanyAttempt.objects.count() == 1
+
+
+def test_owner_settlement_is_versioned_once_and_not_a_classifier_handle_rule():
+    from core.official_company_accounts import enqueue_account
+
+    account = Account.objects.create(
+        author_id="1800594921704898560",
+        handle="renamed_reflection",
+        bio="Make intelligence open",
+    )
+    state = enqueue_account(account)
+    assert state.status == "accepted" and state.model == "owner-attestation"
+    assert state.attempt_records.get().status == "owner_attested"
+    enqueue_account(account)
+    assert state.attempt_records.count() == 1
+    account.bio = "Changed evidence"
+    account.save()
+    changed = enqueue_account(account)
+    assert changed.status == "pending"
+    assert not any(s["id"].startswith("owner:") for s in changed.evidence["sources"])
+
+
+def test_model_auth_failure_blocks_other_accounts_until_credential_revision():
+    from decimal import Decimal
+
+    from core.official_company_accounts import enqueue_account, evaluate_account
+    from x_monitor.config import OfficialCompanyConfig
+    from x_monitor.deepinfra import DeepInfraPermanentError
+
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    first = enqueue_account(Account.objects.create(author_id="9001", bio="A model lab"))
+    second = enqueue_account(
+        Account.objects.create(author_id="9002", bio="Another model lab")
+    )
+    attempts = []
+
+    def fail(*args):
+        attempts.append(args)
+        raise DeepInfraPermanentError("deepinfra_http_status_401")
+
+    fail.credential_revision = "a" * 64
+    assert evaluate_account(first.pk, cfg=cfg, call=fail, budget_scope="auth")
+    assert not evaluate_account(second.pk, cfg=cfg, call=fail, budget_scope="auth")
+    assert len(attempts) == 1
+    fail.credential_revision = "b" * 64
+    assert evaluate_account(second.pk, cfg=cfg, call=fail, budget_scope="repaired")
+    assert len(attempts) == 2
