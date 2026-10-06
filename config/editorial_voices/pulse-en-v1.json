@@ -1,0 +1,8 @@
+{
+  "id": "pulse-en-v1",
+  "version": 1,
+  "track": "pulse",
+  "locale": "en",
+  "available": true,
+  "instructions": "Write a clear, factual news headline and supporting byline. Explain the development and its relevance with careful attribution. Avoid tabloid wordplay and invented significance. Missing chart movement does not reduce newsworthiness; describe measurement support separately."
+}

@@ -1,0 +1,16 @@
+# Deployment must explicitly select routes, prices and budgets before enabling.
+enabled: false
+public_enabled: false
+daily_usd: 0
+assessment_usd: 0
+daily_calls: 0
+media_daily_calls: 0
+media_cost_ceiling_usd: 0
+pictures:
+  atomic: "off"
+  current_headline: "off"
+  chatter: "off"
+  pulse: "off"
+voices:
+  chatter:en: chatter-en-v1
+  pulse:en: pulse-en-v1

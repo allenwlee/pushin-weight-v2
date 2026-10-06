@@ -255,3 +255,50 @@ msgstr "論点:"
 #: tests/test_i18n_catalog_pinned.py:169
 msgid "definitely_not_a_msgid_xyz"
 msgstr "definitely_not_a_msgid_xyz"
+
+#: monitor/templates/monitor/editorial/
+msgid "Current General"
+msgstr "現在のGeneral"
+
+#: monitor/templates/monitor/editorial/
+msgid "Story archive"
+msgstr "記事一覧"
+
+#: monitor/templates/monitor/editorial/
+msgid "This story is currently available in English."
+msgstr "この記事は現在英語で提供されています。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Chart support is unavailable for this development."
+msgstr "この動向を裏付けるチャートデータはありません。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Sources"
+msgstr "情報源"
+
+#: monitor/templates/monitor/editorial/
+msgid "Share on X"
+msgstr "Xで共有"
+
+#: monitor/templates/monitor/editorial/
+msgid "Pause scrolling"
+msgstr "スクロールを一時停止"
+
+#: monitor/templates/monitor/editorial/
+msgid "Resume scrolling"
+msgstr "スクロールを再開"
+
+#: monitor/templates/monitor/editorial/
+msgid "Previous Chatter stories"
+msgstr "過去のChatter記事"
+
+#: monitor/templates/monitor/editorial/
+msgid "No published stories yet."
+msgstr "公開された記事はまだありません。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Older stories"
+msgstr "以前の記事"
+
+msgid "Available chart data does not support this development."
+msgstr "この動向を裏付けるデータは、現在のチャートにはありません。"

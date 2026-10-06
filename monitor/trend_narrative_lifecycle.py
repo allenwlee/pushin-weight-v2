@@ -329,6 +329,10 @@ def prepare_brand_trend_narrative(
                 if headline and secondary
             ]
         )
+        if status == BrandTrendNarrative.Status.APPROVED:
+            from monitor.editorial.dispatch import dispatch_picture
+
+            dispatch_picture("current_headline", outcome.pk)
         return outcome
 
 

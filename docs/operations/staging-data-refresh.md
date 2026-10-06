@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-10-04 (G1 table policy; see release receipts for live checks).
+Last verified: 2026-10-05 (G2 table policy, local tests; see release receipts for live checks).
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -15,9 +15,8 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below describes the rare-type schema through migration 0055 and
-the HF catalog schema from 0045_hf_catalog_observations, joined by migration
-0056_merge_hf_catalog_rare_types.
+The allowlist below covers the rare-type/HF schema, G1 identity/media tables and
+G2 editorial tables through migration 0068.
 Relations introduced after the production migration boundary at 0027 remain
 optional on the source so a staging refresh can accept an older production
 snapshot and create those relations during the shadow migration. Refresh
@@ -100,6 +99,8 @@ TO staging_refresh_reader;
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
 GRANT MAINTAIN ON
+  editorial_assessments, editorial_budgets, editorial_calls,
+  editorial_editions, editorial_heroes, editorial_pictures, editorial_stories,
   people_identity_corrections, people_media, staff_collection_work,
   staff_intakes, staff_media_objects, staff_provider_requests,
   hf_model_catalog_runs, hf_model_catalog_namespace_runs,
@@ -126,6 +127,7 @@ GRANT MAINTAIN ON
 TO staging_refresh_reader;
 
 GRANT SELECT ON
+  editorial_assessments_id_seq, editorial_calls_id_seq,
   people_identity_corrections_id_seq, people_media_id_seq,
   people_names_id_seq, people_name_evidence_id_seq,
   people_texts_id_seq, people_text_translations_id_seq,
@@ -185,6 +187,16 @@ After production reaches migration 0064, add the G1 grants above to the existing
 `staging_refresh_reader` role. Keep the existing least-privilege rules; do not
 grant row reads on excluded G1 tables. Run the guarded preflight again before
 another refresh. The source remains read-only.
+
+G2's seven editorial tables and two sequences are optional on an older source.
+The refresh excludes and clears the whole editorial graph, including accepted
+editions and hero pointers: their assessments, provider task IDs, spending
+journals and stored assets belong to the source environment. This follows the
+existing per-brand headline policy and prevents staging from resuming source
+media jobs or serving source-only storage paths. Original posts remain copied.
+After production has migration 0065, apply the listed G2 table `MAINTAIN` and
+sequence `SELECT` grants before the next refresh; excluded tables never receive
+row-read grants. This document does not authorize a live refresh or grant change.
 
 The sequence `SELECT` grants both preserve copied sequence state and permit
 `pg_dump`'s sequence locks; sequences do not need `MAINTAIN`. The excluded

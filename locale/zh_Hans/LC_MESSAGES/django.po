@@ -181,3 +181,50 @@ msgstr "切换 本地 ⇄ 北京时间"
 
 msgid "X reports this account is based in %(place)s"
 msgstr "X 显示此账号所在地为%(place)s"
+
+#: monitor/templates/monitor/editorial/
+msgid "Current General"
+msgstr "General 首页"
+
+#: monitor/templates/monitor/editorial/
+msgid "Story archive"
+msgstr "报道归档"
+
+#: monitor/templates/monitor/editorial/
+msgid "This story is currently available in English."
+msgstr "这篇报道目前仅提供英文版。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Chart support is unavailable for this development."
+msgstr "这项进展暂无图表数据支持。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Sources"
+msgstr "来源"
+
+#: monitor/templates/monitor/editorial/
+msgid "Share on X"
+msgstr "分享到 X"
+
+#: monitor/templates/monitor/editorial/
+msgid "Pause scrolling"
+msgstr "暂停滚动"
+
+#: monitor/templates/monitor/editorial/
+msgid "Resume scrolling"
+msgstr "继续滚动"
+
+#: monitor/templates/monitor/editorial/
+msgid "Previous Chatter stories"
+msgstr "往期 Chatter 报道"
+
+#: monitor/templates/monitor/editorial/
+msgid "No published stories yet."
+msgstr "暂无已发布报道。"
+
+#: monitor/templates/monitor/editorial/
+msgid "Older stories"
+msgstr "更早的报道"
+
+msgid "Available chart data does not support this development."
+msgstr "现有图表数据未能支持这一动态。"

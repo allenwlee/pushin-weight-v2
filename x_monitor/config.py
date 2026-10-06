@@ -864,7 +864,7 @@ class SynthesisConfig(BaseModel):
     model: str = "google/gemma-4-31B-it-turbo"
     request_profile: Literal["gemma4_tagged"] = "gemma4_tagged"
     response_format: Literal["tagged_text"] = "tagged_text"
-    prompt_version: str = Field(default="post-synthesis-gemma4-tagged-v2", max_length=64)
+    prompt_version: str = Field(default="post-synthesis-direct-source-v3", max_length=64)
     output_schema_version: int = Field(default=2, ge=1, le=32)
     activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
     provider_calls_enabled: bool = False

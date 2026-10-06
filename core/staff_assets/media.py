@@ -66,7 +66,7 @@ def public_addresses(url):
     return parsed, port, addresses
 
 
-def fetch_public(url):
+def fetch_public(url, *, max_bytes=MAX_BYTES):
     deadline = time.monotonic() + 45
     for _ in range(4):
         parsed, port, addresses = public_addresses(url)
@@ -106,7 +106,7 @@ def fetch_public(url):
             body = bytearray()
             for chunk in response.stream(65536, decode_content=True):
                 body.extend(chunk)
-                if len(body) > MAX_BYTES or time.monotonic() > deadline:
+                if len(body) > max_bytes or time.monotonic() > deadline:
                     raise ValueError("Media download limit exceeded")
             return bytes(body)
         finally:

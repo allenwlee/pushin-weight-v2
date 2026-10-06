@@ -1,0 +1,8 @@
+{
+  "id": "chatter-zh-cn-v1",
+  "version": 1,
+  "track": "chatter",
+  "locale": "zh-cn",
+  "available": false,
+  "instructions": "Uncrafted: requires owner-approved independent locale voice."
+}
