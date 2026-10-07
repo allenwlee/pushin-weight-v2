@@ -5836,6 +5836,9 @@ _PRODUCT_REVIEW_COPY = {
 _ADMIN_COPY = {
     "en": {
         "title": "Admin", "accounts": "Official AI accounts", "empty": "No official accounts have been found yet.",
+        "review_tab": "Review needed", "queue_tab": "Scan queue", "history_tab": "List history",
+        "history_empty": "No list synchronization history yet.",
+        "review_note": "These candidates need review before registration or list addition. Verified HF model developers appear under Official accounts found.",
         "found": "Official accounts found", "registered": "Registered", "added": "Call A adds acknowledged",
         "pending": "Awaiting evaluation", "review": "Needs review", "confirmed": "Membership confirmed",
         "coverage": "Initial scan coverage", "not_started": "Initial scan has not started.",
@@ -5850,6 +5853,9 @@ _ADMIN_COPY = {
     },
     "zh_hans": {
         "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未发现官方账号。",
+        "review_tab": "需审核", "queue_tab": "扫描队列", "history_tab": "列表记录",
+        "history_empty": "暂无列表同步记录。",
+        "review_note": "这些候选账号在登记或添加到列表前需要审核。经验证的 HF 模型开发者显示在“已发现官方账号”中。",
         "found": "已发现官方账号", "registered": "已登记", "added": "Call A 添加已确认",
         "pending": "等待评估", "review": "需审核", "confirmed": "成员身份已确认",
         "coverage": "初始扫描覆盖", "not_started": "初始扫描尚未开始。",
@@ -5864,6 +5870,9 @@ _ADMIN_COPY = {
     },
     "ja": {
         "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだ公式アカウントは見つかっていません。",
+        "review_tab": "要確認", "queue_tab": "スキャン待機列", "history_tab": "リスト履歴",
+        "history_empty": "リスト同期の履歴はまだありません。",
+        "review_note": "これらの候補は登録やリスト追加の前に確認が必要です。HF で検証済みのモデル開発者は「発見した公式アカウント」に表示されます。",
         "found": "発見した公式アカウント", "registered": "登録済み", "added": "Call A 追加確認済み",
         "pending": "評価待ち", "review": "要確認", "confirmed": "メンバー確認済み",
         "coverage": "初回スキャンの対象範囲", "not_started": "初回スキャンは未開始です。",
@@ -5875,6 +5884,43 @@ _ADMIN_COPY = {
         "outcomes": {"not_queued": "未登録", "added": "追加確認済み", "confirmed_after_request": "追加要求後にメンバー確認", "already_present": "既存メンバー；追加要求なし", "request_unconfirmed": "追加要求済み；結果未確認", "queued": "待機中"},
         "requested": "初回追加要求", "acknowledged": "初回追加確認", "observed": "メンバー確認時刻",
         "attempts": "試行回数", "error": "直近のエラー", "models": "モデル種別", "policy": "ポリシー", "model": "評価モデル",
+    },
+}
+
+
+_CANDIDATE_COPY = {
+    "en": {
+        "hf_verified": "HF verified",
+        "already_tracked": "Already tracked", "tracked_brands": "Tracked brands", "tracked_companies": "Tracked companies",
+        "title": "Candidate queue", "note": "Screening selects candidates; completed LLM decisions count actual evaluations. Verified HF model publishers can be approved automatically; other positive decisions require human review. Gold accounts go first.",
+        "screened": "Authors screened", "selected": "Candidates selected", "llm_evaluated": "Accounts evaluated by LLM",
+        "owner_settled": "Owner settled", "waiting": "Waiting", "evaluating": "Evaluating", "retry_due": "Retry pending",
+        "review_needed": "Needs human review", "rejected": "Rejected", "registered": "Registered", "no_evidence": "No evidence",
+        "all": "All candidates", "status": "Candidate status", "search": "Search candidates", "apply": "Apply filters",
+        "empty": "No candidates match these filters.", "entrance": "Candidate entrance", "gold": "Gold / business badge",
+        "bio": "Development bio and website", "release": "Organization and release evidence",
+    },
+    "zh_hans": {
+        "hf_verified": "HF 已验证",
+        "already_tracked": "已追踪", "tracked_brands": "已追踪品牌", "tracked_companies": "已追踪公司",
+        "title": "候选账号队列", "note": "筛选仅选出候选账号；LLM 判定完成数统计实际评估。HF 模型发布者经验证后可自动确认；其他正面判定需要人工审核。金标账号优先。",
+        "screened": "已筛选作者", "selected": "已选候选账号", "llm_evaluated": "LLM 已评估账号",
+        "owner_settled": "所有者已确认", "waiting": "等待中", "evaluating": "评估中", "retry_due": "等待重试",
+        "review_needed": "需人工审核", "rejected": "已排除", "registered": "已登记", "no_evidence": "无证据",
+        "all": "全部候选账号", "status": "候选状态", "search": "搜索候选账号", "apply": "应用筛选",
+        "empty": "没有符合筛选条件的候选账号。", "entrance": "入选依据", "gold": "金标／企业认证",
+        "bio": "模型开发简介和网站", "release": "组织和发布证据",
+    },
+    "ja": {
+        "hf_verified": "HF 検証済み",
+        "already_tracked": "追跡済み", "tracked_brands": "追跡中のブランド", "tracked_companies": "追跡中の企業",
+        "title": "候補アカウントの待機列", "note": "スクリーニングは候補の選定です。LLM の判定完了数は実際の評価を数えます。HF のモデル公開者は検証後に自動確認でき、その他の肯定判定は人の確認が必要です。金バッジを優先します。",
+        "screened": "確認した投稿者", "selected": "選定した候補", "llm_evaluated": "LLM 評価済みアカウント",
+        "owner_settled": "所有者確認済み", "waiting": "待機中", "evaluating": "評価中", "retry_due": "再試行待ち",
+        "review_needed": "人による確認待ち", "rejected": "対象外", "registered": "登録済み", "no_evidence": "根拠なし",
+        "all": "すべての候補", "status": "候補の状態", "search": "候補を検索", "apply": "絞り込む",
+        "empty": "条件に一致する候補はありません。", "entrance": "選定根拠", "gold": "金／企業認証バッジ",
+        "bio": "モデル開発の紹介とウェブサイト", "release": "組織とリリースの根拠",
     },
 }
 
@@ -5895,16 +5941,62 @@ def _product_review_context(
     copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
     from pathlib import Path
 
-    from core.official_company_admin import account_report
+    from core.official_company_admin import (
+        CANDIDATE_STATUSES,
+        account_report,
+        candidate_report,
+    )
     from x_monitor.config import load_config
 
+    # Older bookmarked candidate filters keep opening their queue. The normal
+    # admin entry point opens settled accounts, with review and audit separate.
+    default_tab = "queue" if any(key in request.GET for key in ("candidate_status", "candidate_q", "candidate_page")) else "found"
+    accounts_tab = request.GET.get("accounts_tab", default_tab)
+    if accounts_tab not in {"found", "review", "queue", "history"}:
+        accounts_tab = "found"
     report = account_report(
         list_id=load_config(Path("config.yaml")).official_company.list_id,
         page=request.GET.get("accounts_page", 1),
+        section="history" if accounts_tab == "history" else "found",
     )
     admin_copy = _ADMIN_COPY.get(copy_locale, _ADMIN_COPY["en"])
     for row in report["rows"]:
         row["list_label"] = admin_copy["outcomes"][row["list_outcome"]]
+    candidates = candidate_report(
+        page=request.GET.get("candidate_page", 1),
+        status="review_needed" if accounts_tab == "review" else request.GET.get("candidate_status", "all"),
+        query=request.GET.get("candidate_q", ""),
+    )
+    candidate_copy = _CANDIDATE_COPY.get(copy_locale, _CANDIDATE_COPY["en"])
+    for row in candidates["rows"]:
+        state = row["state"]
+        row["entrance_label"] = candidate_copy[{1: "gold", 2: "bio", 3: "release"}[state.candidate_priority]]
+        status_key = {"pending": "waiting", "claimed": "evaluating", "accepted": "review_needed"}.get(state.status, state.status)
+        if state.status == "accepted" and state.decision.get("hf_verification", {}).get("outcome") == "passed":
+            status_key = "hf_verified"
+        row["status_label"] = candidate_copy["owner_settled"] if state.model == "owner-attestation" else candidate_copy.get(status_key, state.status)
+    for paginated, key in [(report, "accounts_page"), (candidates, "candidate_page")]:
+        for direction in ["previous", "next"]:
+            paginated[direction + "_url"] = ""
+            if getattr(paginated["page"], "has_" + direction)():
+                params = request.GET.copy()
+                params[key] = getattr(paginated["page"], direction + "_page_number")()
+                params["locale"] = locale
+                params["accounts_tab"] = accounts_tab
+                paginated[direction + "_url"] = "?" + params.urlencode()
+    tabs = []
+    for key, label, count in [
+        ("found", admin_copy["found"], report["summary"]["found"]),
+        ("review", admin_copy["review_tab"], candidates["summary"]["review_needed"]),
+        ("queue", admin_copy["queue_tab"], candidates["summary"]["selected"]),
+        ("history", admin_copy["history_tab"], None),
+    ]:
+        params = request.GET.copy()
+        for param in ("candidate_page", "accounts_page", "candidate_status"):
+            params.pop(param, None)
+        params["locale"] = locale
+        params["accounts_tab"] = key
+        tabs.append({"key": key, "label": label, "count": count, "url": "?" + params.urlencode()})
     proposals = (
         ProductVerificationProposal.objects.select_related(
             "source_post", "account", "proposed_brand", "proposed_candidate"
@@ -5914,7 +6006,24 @@ def _product_review_context(
         "active_locale": locale,
         "copy": _PRODUCT_REVIEW_COPY.get(copy_locale, _PRODUCT_REVIEW_COPY["en"]),
         "admin_copy": admin_copy,
+        "accounts_tab": accounts_tab,
+        "account_tabs": tabs,
+        "account_section_title": admin_copy["history_tab"] if accounts_tab == "history" else admin_copy["accounts"],
+        "account_section_empty": admin_copy["history_empty"] if accounts_tab == "history" else admin_copy["empty"],
+        "candidate_section_title": admin_copy["review_tab"] if accounts_tab == "review" else candidate_copy["title"],
+        "candidate_section_note": admin_copy["review_note"] if accounts_tab == "review" else candidate_copy["note"],
         "official_accounts": report,
+        "official_candidates": candidates,
+        "candidate_copy": candidate_copy,
+        "candidate_metrics": [
+            {"key": key, "label": candidate_copy[key], "value": value}
+            for key, value in candidates["summary"].items()
+            if accounts_tab != "review" or key == "review_needed"
+        ],
+        "candidate_status_options": [
+            {"value": key, "label": candidate_copy[key]} for key in CANDIDATE_STATUSES
+        ],
+        "candidate_refreshed_at": django_timezone.now(),
         "proposals": proposals,
         "proposal": proposal,
         "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),

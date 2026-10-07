@@ -162,3 +162,21 @@ def test_original_candidate_prompt_is_retained():
 
     assert POLICY_VERSION == "official-model-developer-v2"
     assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e"
+
+
+@pytest.mark.parametrize("signal", ["blockchain", "Web3", "web-3", "区块链", "ブロックチェーン"])
+def test_blockchain_risk_changes_prompt_without_changing_eligibility_or_base_prompt(signal):
+    from core.official_company_accounts import (
+        BLOCKCHAIN_POLICY_VERSION,
+        POLICY_VERSION,
+        SYSTEM_PROMPT,
+        evaluator_prompt,
+    )
+
+    ordinary = build_evidence(account(), [{"id": "1", "text": "We trained and released our own speech model."}])
+    assert evaluator_prompt(ordinary) == (SYSTEM_PROMPT, POLICY_VERSION)
+    risky = build_evidence(account(), [{"id": "1", "text": "We trained and released our own speech model. " + signal}])
+    prompt, policy = evaluator_prompt(risky)
+    assert prompt.startswith(SYSTEM_PROMPT)
+    assert policy == BLOCKCHAIN_POLICY_VERSION
+    assert "higher hurdle" in prompt and "not an automatic rejection" in prompt

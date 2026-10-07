@@ -58,9 +58,9 @@ class WriterLockLease:
     contention: WriterLockContention | None = None
 
 
-def _lock_keys(environment: str) -> tuple[int, int, int, int]:
+def _lock_keys(environment: str, lock_scope: str = "harvest-writer") -> tuple[int, int, int, int]:
     digest = hashlib.sha256(
-        f"pushinweight:harvest-writer:{environment}".encode()
+        f"pushinweight:{lock_scope}:{environment}".encode()
     ).digest()
     unsigned = (
         int.from_bytes(digest[:4], "big"),
@@ -70,8 +70,9 @@ def _lock_keys(environment: str) -> tuple[int, int, int, int]:
     return signed[0], signed[1], unsigned[0], unsigned[1]
 
 
-def _safe_context(execution_mode: str, entrypoint: str, run_id: str) -> str:
-    raw = f"harvest:{execution_mode}:{entrypoint}:{run_id}"
+def _safe_context(execution_mode: str, entrypoint: str, run_id: str, lock_scope: str = "harvest-writer") -> str:
+    prefix = "harvest" if lock_scope == "harvest-writer" else lock_scope
+    raw = f"{prefix}:{execution_mode}:{entrypoint}:{run_id}"
     return _CONTEXT_SAFE.sub("_", raw)[:63]
 
 
@@ -104,6 +105,7 @@ def harvest_writer_lock(
     entrypoint: str,
     run_id: str | None = None,
     environment: str | None = None,
+    lock_scope: str = "harvest-writer",
     using: str = "default",
     contention_alert_threshold: int = 1,
     on_contention: Callable[[WriterLockContention], None] | None = None,
@@ -132,9 +134,9 @@ def harvest_writer_lock(
         or str(database.settings_dict.get("NAME") or "default")
     )
     run_id = run_id or uuid.uuid4().hex
-    signed_class, signed_object, class_id, object_id = _lock_keys(environment)
+    signed_class, signed_object, class_id, object_id = _lock_keys(environment, lock_scope)
     lock_identity = (class_id, object_id)
-    application_name = _safe_context(execution_mode, entrypoint, run_id)
+    application_name = _safe_context(execution_mode, entrypoint, run_id, lock_scope)
 
     database.ensure_connection()
     previous_application_name = ""

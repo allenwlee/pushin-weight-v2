@@ -1,0 +1,45 @@
+<section id="candidate-queue" class="panel account-section" aria-labelledby="candidate-title">
+  <h2 id="candidate-title">{{ candidate_section_title }}</h2>
+  <p class="muted">{{ candidate_section_note }}</p>
+  <p>{{ candidate_copy.screened }}: <strong data-candidate-count="screened">{{ official_candidates.coverage.enumerated }}</strong> / {{ official_candidates.coverage.population }} · {{ admin_copy.updated }}: {{ candidate_refreshed_at|date:'Y-m-d H:i:s T' }}</p>
+  <div class="metrics">
+    {% for metric in candidate_metrics %}
+      <div class="metric">{{ metric.label }}<strong data-candidate-count="{{ metric.key }}">{{ metric.value }}</strong></div>
+    {% endfor %}
+  </div>
+  <form method="get" class="candidate-filters">
+    <input type="hidden" name="locale" value="{{ active_locale }}">
+    <input type="hidden" name="accounts_page" value="{{ official_accounts.page.number }}">
+    <input type="hidden" name="accounts_tab" value="{{ accounts_tab }}">
+    {% if accounts_tab != 'review' %}
+    <label>{{ candidate_copy.status }}
+      <select name="candidate_status">
+        {% for option in candidate_status_options %}<option value="{{ option.value }}"{% if official_candidates.status == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label>{{ candidate_copy.search }}<input name="candidate_q" value="{{ official_candidates.query }}" maxlength="100"></label>
+    <button type="submit">{{ candidate_copy.apply }}</button>
+  </form>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>{{ admin_copy.account }}</th><th>{{ candidate_copy.entrance }}</th><th>{{ candidate_copy.status }}</th><th>{{ admin_copy.attempts }}</th><th>{{ admin_copy.decision }}</th></tr></thead>
+      <tbody>
+      {% for row in official_candidates.rows %}
+        <tr data-admin-candidate="{{ row.state.account_id }}">
+          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account_id }}{% endif %}{% if row.tracked_brands %}<p>{{ candidate_copy.tracked_brands }}: {{ row.tracked_brands|join:', ' }}</p>{% endif %}{% if row.tracked_companies %}<p>{{ candidate_copy.tracked_companies }}: {{ row.tracked_companies|join:', ' }}</p>{% endif %}</td>
+          <td>{{ row.entrance_label }}</td>
+          <td><span>{{ row.status_label }}</span>{% if row.state.decision.hf_verification.outcome == 'passed' %}<p>{{ candidate_copy.hf_verified }}: <a href="{{ row.state.decision.hf_verification.model_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}</td>
+          <td>{{ row.state.attempts }}</td>
+          <td>{{ row.state.decision.organization_name|default:'—' }}{% if row.state.decision.rationale or row.state.last_error %}<details><summary>{{ admin_copy.evidence }}</summary><p>{{ row.state.decision.rationale }}</p><p>{{ row.state.last_error }}</p>{% if row.state.decision.hf_verification.outcome == 'passed' %}<blockquote>{{ row.state.decision.hf_verification.development_quote }}</blockquote><p><a href="{{ row.state.decision.hf_verification.card_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.namespace }} / {{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}<p>{{ admin_copy.updated }}: {{ row.state.updated_at|date:'Y-m-d H:i:s T' }}</p></details>{% endif %}</td>
+        </tr>
+      {% empty %}<tr><td colspan="5">{{ candidate_copy.empty }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="pagination" aria-label="{{ candidate_copy.title }}">
+    {% if official_candidates.previous_url %}<a href="{{ official_candidates.previous_url }}">{{ admin_copy.previous }}</a>{% endif %}
+    <span>{{ admin_copy.page }} {{ official_candidates.page.number }} {{ admin_copy.of }} {{ official_candidates.page.paginator.num_pages }}</span>
+    {% if official_candidates.next_url %}<a href="{{ official_candidates.next_url }}">{{ admin_copy.next }}</a>{% endif %}
+  </nav>
+</section>

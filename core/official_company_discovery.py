@@ -25,6 +25,7 @@ from core.official_company_accounts import (
     register_account,
 )
 from core.official_company_candidates import candidate_priorities
+from core.official_company_lock import official_company_writer_lock
 
 LEGACY_INITIAL_KEY = "official-company-initial-v1"
 INITIAL_KEY = "official-company-filtered-initial-v1"
@@ -270,7 +271,7 @@ def build_discovery_call(cfg):
     return call
 
 
-def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=None):
+def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=None, evaluate_only=False):
     now = timezone.now()
     result = {
         "attempted": 0, "registered": 0,
@@ -320,16 +321,25 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
             state_id, cfg=cfg, call=call, budget_scope=budget_scope, initial=initial
         ):
             result["attempted"] += 1
-    if cfg.registration_enabled:
-        for state_id in (
-            OfficialCompanyAccountState.objects.filter(status="accepted")
-            .order_by("updated_at")
-            .values_list("pk", flat=True)[:limit]
-        ):
-            if deadline and time.monotonic() + 1 > deadline:
-                break
-            result["registered"] += int(register_account(state_id, cfg=cfg) is not None)
+    if cfg.hf_verification_enabled:
+        from core.official_company_hf import verify_review_candidates
+
+        result["hf_verification"] = verify_review_candidates(limit=1, deadline=deadline)
+    if cfg.registration_enabled and not evaluate_only:
+        result["registered"] = register_ready_accounts(cfg=cfg, limit=limit, deadline=deadline)
     return result
+
+
+def register_ready_accounts(*, cfg, limit, deadline=None):
+    registered = 0
+    if not cfg.registration_enabled:
+        return registered
+    ids = OfficialCompanyAccountState.objects.filter(status="accepted").order_by("updated_at").values_list("pk", flat=True)[:limit]
+    for state_id in ids:
+        if deadline and time.monotonic() + 1 > deadline:
+            break
+        registered += int(register_account(state_id, cfg=cfg) is not None)
+    return registered
 
 
 def run_discovery_lane(
@@ -342,17 +352,22 @@ def run_discovery_lane(
         lane_end = min(lane_end, time.monotonic() + deadline.remaining())
     if lane_end - time.monotonic() < cfg.request_timeout_seconds + 2:
         return {"status": "deferred_deadline"}
-    enqueued = enqueue_incremental(deadline=lane_end)
-    result = drain_accounts(
-        cfg=cfg,
-        call=call,
-        limit=min(cfg.max_calls_per_cycle, allowance),
-        budget_scope=str(run_id),
-        deadline=lane_end,
-    )
-    result.update(status="complete", enqueued=enqueued)
-    if cfg.list_sync_enabled and client is not None:
-        from core.official_company_lists import sync_intents
+    with official_company_writer_lock(
+        execution_mode="scheduled", entrypoint="official-company-lane", run_id=str(run_id),
+    ) as lease:
+        if not lease.acquired:
+            return {"status": "discovery_busy", "attempted": 0, "enqueued": 0}
+        enqueued = enqueue_incremental(deadline=lane_end)
+        result = drain_accounts(
+            cfg=cfg,
+            call=call,
+            limit=min(cfg.max_calls_per_cycle, allowance),
+            budget_scope=str(run_id),
+            deadline=lane_end,
+        )
+        result.update(status="complete", enqueued=enqueued)
+        if cfg.list_sync_enabled and client is not None:
+            from core.official_company_lists import sync_intents
 
-        result["list_sync"] = sync_intents(cfg=cfg, client=client, deadline=lane_end)
+            result["list_sync"] = sync_intents(cfg=cfg, client=client, deadline=lane_end)
     return result

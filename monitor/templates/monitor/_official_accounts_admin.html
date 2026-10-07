@@ -1,12 +1,10 @@
 <section class="panel account-section" aria-labelledby="official-accounts-title">
-  <h2 id="official-accounts-title">{{ admin_copy.accounts }}</h2>
+  <h2 id="official-accounts-title">{{ account_section_title }}</h2>
   <div class="metrics">
     <div class="metric">{{ admin_copy.found }}<strong data-admin-count="found">{{ official_accounts.summary.found }}</strong></div>
     <div class="metric">{{ admin_copy.registered }}<strong data-admin-count="registered">{{ official_accounts.summary.registered }}</strong></div>
     <div class="metric">{{ admin_copy.added }}<strong data-admin-count="added">{{ official_accounts.summary.added }}</strong></div>
     <div class="metric">{{ admin_copy.confirmed }}<strong data-admin-count="confirmed">{{ official_accounts.summary.membership_confirmed }}</strong></div>
-    <div class="metric">{{ admin_copy.pending }}<strong>{{ official_accounts.summary.pending }}</strong></div>
-    <div class="metric">{{ admin_copy.review }}<strong>{{ official_accounts.summary.review_needed }}</strong></div>
   </div>
   <p class="muted">{{ admin_copy.add_note }}</p>
   <details>
@@ -30,7 +28,9 @@
             {% if row.state.decision.model_types %}<p class="muted">{{ admin_copy.models }}: {{ row.state.decision.model_types|join:', ' }}</p>{% endif %}
           </td>
           <td><strong>{{ row.state.status }}</strong><p>{{ row.state.decision.rationale|default:'—' }}</p>
+            {% if row.state.decision.hf_verification.outcome == 'passed' %}<p>{{ candidate_copy.hf_verified }}: <a href="{{ row.state.decision.hf_verification.model_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}
             <details><summary>{{ admin_copy.evidence }}</summary>
+              {% if row.state.decision.hf_verification.outcome == 'passed' %}<blockquote>{{ row.state.decision.hf_verification.development_quote }}</blockquote><p><a href="{{ row.state.decision.hf_verification.card_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}
               {% for claim, citations in row.state.decision.claims.items %}<p>{{ claim }}</p>{% for citation in citations %}<blockquote>{{ citation.quote }}<br><small class="muted">{{ citation.source_id }}</small></blockquote>{% endfor %}{% endfor %}
               <dl><dt>{{ admin_copy.model }}</dt><dd>{{ row.state.model|default:'—' }}</dd><dt>{{ admin_copy.policy }}</dt><dd>{{ row.state.policy_version|default:'—' }}</dd><dt>{{ admin_copy.attempts }}</dt><dd>{{ row.state.attempts }}</dd><dt>{{ admin_copy.updated }}</dt><dd>{{ row.state.updated_at|date:'Y-m-d H:i:s T' }}</dd></dl>
               {% if row.state.last_error %}<p>{{ admin_copy.error }}: {{ row.state.last_error }}</p>{% endif %}
@@ -52,9 +52,9 @@
     </table>
   </div>
   <nav class="pagination" aria-label="{{ admin_copy.accounts }}">
-    {% if official_accounts.page.has_previous %}<a href="?accounts_page={{ official_accounts.page.previous_page_number }}&amp;locale={{ active_locale }}">{{ admin_copy.previous }}</a>{% endif %}
+    {% if official_accounts.previous_url %}<a href="{{ official_accounts.previous_url }}">{{ admin_copy.previous }}</a>{% endif %}
     <span>{{ admin_copy.page }} {{ official_accounts.page.number }} {{ admin_copy.of }} {{ official_accounts.page.paginator.num_pages }}</span>
-    {% if official_accounts.page.has_next %}<a href="?accounts_page={{ official_accounts.page.next_page_number }}&amp;locale={{ active_locale }}">{{ admin_copy.next }}</a>{% endif %}
+    {% if official_accounts.next_url %}<a href="{{ official_accounts.next_url }}">{{ admin_copy.next }}</a>{% endif %}
   </nav>
-  {% else %}<p>{{ admin_copy.empty }}</p>{% endif %}
+  {% else %}<p>{{ account_section_empty }}</p>{% endif %}
 </section>

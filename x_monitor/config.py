@@ -373,6 +373,7 @@ class TargetedExtractionConfig(BaseModel):
 
 class OfficialCompanyConfig(BaseModel):
     enabled: bool = False
+    hf_verification_enabled: bool = False
     registration_enabled: bool = False
     list_sync_enabled: bool = False
     model: str = "deepseek-ai/DeepSeek-V4-Flash-0731"

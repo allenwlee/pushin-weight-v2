@@ -24,6 +24,84 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminBrowserTests(StaticLiveServerTestCase):
+    def test_official_found_and_review_tabs_separate_accounts(self):
+        from core.official_company_candidates import CANDIDATE_POLICY
+
+        for identifier, handle, status, model in [
+            ("97101", "verified_lab", "registered", "test-model"),
+            ("97102", "review_lab", "review_needed", "test-model"),
+            ("97103", "settled_lab", "accepted", "owner-attestation"),
+            ("97104", "waiting_lab", "pending", ""),
+            ("97105", "historical_add", "rejected", "test-model"),
+            ("97106", "unsettled_accept", "accepted", "test-model"),
+        ]:
+            state = OfficialCompanyAccountState.objects.create(
+                account=Account.objects.create(author_id=identifier, handle=handle),
+                status=status, model=model, evidence_hash="a" * 64,
+                candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+                decision={"outcome": "accepted", "organization_name": handle,
+                          "rationale": "Stored evidence for " + handle},
+            )
+            if identifier == "97105":
+                OfficialCompanyListIntent.objects.create(
+                    account=state.account, state=state, evidence_hash=state.evidence_hash,
+                    list_id=2067062923525275922, status="suppressed",
+                    add_acknowledged_at=timezone.now(),
+                )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                page.goto(self.live_server_url + "/admin?locale=en")
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-tabs.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+                self.assertTrue(page.locator('[data-account-tab="found"]').is_visible())
+                self.assertEqual(page.locator('[data-account-tab="found"]').get_attribute("aria-current"), "page")
+                self.assertTrue(page.locator('[data-admin-account="97101"]').is_visible())
+                self.assertTrue(page.locator('[data-admin-account="97103"]').is_visible())
+                self.assertEqual(page.locator('[data-admin-count="found"]').inner_text(), "2")
+                self.assertEqual(page.locator('[data-admin-account="97102"]').count(), 0)
+                self.assertEqual(page.locator('[data-admin-account="97105"]').count(), 0)
+                page.locator('[data-account-tab="review"]').focus()
+                page.keyboard.press("Enter")
+                page.wait_for_url("**accounts_tab=review**")
+                self.assertTrue(page.locator('[data-admin-candidate="97102"]').is_visible())
+                self.assertTrue(page.locator('[data-admin-candidate="97106"]').is_visible())
+                self.assertEqual(page.locator('[data-admin-account="97101"]').count(), 0)
+                self.assertEqual(page.locator('select[name="candidate_status"]').count(), 0)
+                page.get_by_label("Search candidates").fill("review_lab")
+                page.get_by_role("button", name="Apply filters").click()
+                self.assertEqual(page.locator('[data-account-tab="review"]').get_attribute("aria-current"), "page")
+                self.assertTrue(page.locator('[data-admin-candidate="97102"]').is_visible())
+                self.assertEqual(page.locator('[data-admin-candidate="97106"]').count(), 0)
+                page.get_by_label("Search candidates").fill("")
+                page.get_by_role("button", name="Apply filters").click()
+                page.locator('[data-account-tab="history"]').click()
+                self.assertTrue(page.locator('[data-admin-account="97105"]').is_visible())
+                page.locator('[data-account-tab="queue"]').click()
+                self.assertTrue(page.locator('[data-admin-candidate="97104"]').is_visible())
+                for locale, found, review in [
+                    ("en", "Official accounts found", "Review needed"),
+                    ("zh_hans", "已发现官方账号", "需审核"),
+                    ("ja", "発見した公式アカウント", "要確認"),
+                ]:
+                    page.goto(self.live_server_url + "/admin?locale=" + locale)
+                    self.assertIn(found, page.locator('[data-account-tab="found"]').inner_text())
+                    self.assertIn(review, page.locator('[data-account-tab="review"]').inner_text())
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    page.locator('[data-account-tab="review"]').click()
+                    self.assertTrue(page.locator('[data-admin-candidate="97102"]').is_visible())
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    page.screenshot(path=str(shot.with_name("admin-tabs-review-" + locale + ".png")), full_page=True)
+                    page.locator('[data-account-tab="found"]').click()
+                    self.assertTrue(page.locator('[data-admin-account="97101"]').is_visible())
+                page.goto(self.live_server_url + "/admin?locale=en")
+                page.set_viewport_size({"width": 1440, "height": 1000})
+                page.screenshot(path=str(shot), full_page=True)
+            finally:
+                browser.close()
+
     def setUp(self):
         super().setUp()
         self.user = get_user_model().objects.create_user(
@@ -71,17 +149,15 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_model_positive_without_list_intent_is_visible_for_review(self):
+        from core.official_company_candidates import CANDIDATE_POLICY
+
         account = Account.objects.create(author_id="884", handle="candidate_lab")
         OfficialCompanyAccountState.objects.create(
-            account=account,
-            status="review_needed",
-            evidence_hash="a" * 64,
+            account=account, status="review_needed", evidence_hash="a" * 64,
+            candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
             last_error="human_review_required",
-            decision={
-                "outcome": "accepted",
-                "organization_name": "Candidate Lab",
-                "rationale": "Candidate evidence requiring owner review.",
-            },
+            decision={"outcome": "accepted", "organization_name": "Candidate Lab",
+                      "rationale": "Candidate evidence requiring owner review."},
         )
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -89,17 +165,128 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                 page = self._context(browser).new_page()
                 response = page.goto(self.live_server_url + "/admin?locale=en")
                 self.assertEqual(response.status, 200)
-                row = page.locator('[data-admin-account="884"]')
-                self.assertTrue(row.is_visible())
-                self.assertTrue(row.get_by_text("review_needed", exact=True).is_visible())
-                self.assertEqual(page.locator('[data-admin-count="found"]').inner_text(), "1")
+                self.assertEqual(page.locator('[data-admin-count="found"]').inner_text(), "0")
                 self.assertEqual(page.locator('[data-admin-count="registered"]').inner_text(), "0")
+                page.locator('[data-account-tab="review"]').click()
+                row = page.locator('[data-admin-candidate="884"]')
+                self.assertTrue(row.is_visible())
+                self.assertTrue(row.get_by_text("Needs human review", exact=True).is_visible())
                 page.set_viewport_size({"width": 390, "height": 844})
                 self.assertTrue(row.is_visible())
                 self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
                 shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-human-review.png"
                 shot.parent.mkdir(exist_ok=True)
                 page.screenshot(path=str(shot), full_page=True)
+            finally:
+                browser.close()
+
+    def test_hf_approved_account_and_list_history_are_visible(self):
+        from unittest.mock import Mock, patch
+
+        import httpx
+
+        from core.official_company_accounts import enqueue_account, register_account
+        from core.official_company_candidates import CANDIDATE_POLICY
+        from core.official_company_hf import verify, verify_review_candidates
+        from core.official_company_lists import sync_intents
+        from tests.test_official_company_hf import transport
+        from x_monitor.config import OfficialCompanyConfig
+
+        state = enqueue_account(Account.objects.create(author_id="92103", handle="examplelab", bio="We develop our own speech models."))
+        state.status = "review_needed"
+        state.candidate_policy_version = CANDIDATE_POLICY
+        state.last_error = "ValueError"
+        state.save()
+        route, _ = transport()
+        def public_verifier(evidence, decision, **kwargs):
+            with httpx.Client(transport=route) as client:
+                return verify(evidence, decision, client=client, **kwargs)
+        env_patch = patch.dict("os.environ", {"PUSHINWEIGHT_OFFICIAL_COMPANY_HF_SIGNING_KEY": "isolated-browser-key"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        with patch("core.official_company_hf.verify", public_verifier):
+            self.assertEqual(verify_review_candidates(limit=1)["approved"], 1)
+        cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True, list_sync_enabled=True)
+        self.assertIsNotNone(register_account(state.pk, cfg=cfg))
+        provider = Mock()
+        provider.members.return_value = (set(), True)
+        sync_intents(cfg=cfg, client=provider)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                page.goto(self.live_server_url + "/admin?locale=en")
+                self.assertTrue(page.locator('[data-admin-account="92103"]').get_by_text("Add acknowledged", exact=True).is_visible())
+                self.assertEqual(page.locator('[data-admin-account="92103"]').get_by_role("link", name="examplelab/speech", exact=True).first.get_attribute("href"), "https://huggingface.co/examplelab/speech")
+                page.locator('[data-account-tab="queue"]').click()
+                page.get_by_label("Candidate status").select_option("hf_verified")
+                page.get_by_role("button", name="Apply filters").click()
+                queue = page.locator("#candidate-queue")
+                self.assertEqual(queue.locator('[data-candidate-count="hf_verified"]').inner_text(), "1")
+                self.assertEqual(queue.locator('[data-candidate-count="review_needed"]').inner_text(), "0")
+                row = queue.locator('[data-admin-candidate="92103"]')
+                self.assertTrue(row.get_by_text("Registered", exact=True).is_visible())
+                self.assertEqual(row.get_by_role("link", name="examplelab/speech").get_attribute("href"), "https://huggingface.co/examplelab/speech")
+                page.locator('[data-account-tab="found"]').click()
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-hf-verified.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+            finally:
+                browser.close()
+
+    def test_candidate_queue_tracks_waiting_and_rejected_accounts(self):
+        from core.models import Brand, BrandAccount, Role
+        from core.official_company_candidates import CANDIDATE_POLICY
+
+        for identifier, handle, status, priority in [
+            ("92101", "waiting_lab", "pending", 1),
+            ("92102", "rejected_company", "rejected", 2),
+        ]:
+            OfficialCompanyAccountState.objects.create(
+                account=Account.objects.create(author_id=identifier, handle=handle),
+                evidence_hash="e" * 64, status=status,
+                candidate_priority=priority, candidate_policy_version=CANDIDATE_POLICY,
+                decision={"outcome": "rejected", "rationale": "No model development evidence."}
+                if status == "rejected" else {},
+            )
+        role, _ = Role.objects.get_or_create(key="official")
+        BrandAccount.objects.create(account_id="92101", brand=Brand.objects.create(nickname="known_model"), role=role)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto(self.live_server_url + "/admin?accounts_tab=queue&locale=en")
+                queue = page.locator("#candidate-queue")
+                self.assertTrue(queue.is_visible())
+                self.assertTrue(queue.get_by_text("@waiting_lab", exact=True).is_visible())
+                self.assertTrue(queue.get_by_text("@rejected_company", exact=True).is_visible())
+                self.assertEqual(queue.locator('[data-candidate-count="selected"]').inner_text(), "2")
+                self.assertEqual(queue.locator('[data-candidate-count="llm_evaluated"]').inner_text(), "0")
+                self.assertEqual(queue.locator('[data-candidate-count="already_tracked"]').inner_text(), "1")
+                self.assertTrue(queue.get_by_text("Tracked brands: known_model", exact=True).is_visible())
+                queue.get_by_label("Candidate status").select_option("already_tracked")
+                queue.get_by_role("button", name="Apply filters").click()
+                queue = page.locator("#candidate-queue")
+                self.assertTrue(queue.get_by_text("@waiting_lab", exact=True).is_visible())
+                self.assertEqual(queue.get_by_text("@rejected_company", exact=True).count(), 0)
+                queue.get_by_label("Candidate status").select_option("rejected")
+                queue.get_by_role("button", name="Apply filters").click()
+                queue = page.locator("#candidate-queue")
+                self.assertFalse(queue.get_by_text("@waiting_lab", exact=True).count())
+                self.assertTrue(queue.get_by_text("@rejected_company", exact=True).is_visible())
+                for locale, title in [("zh_hans", "候选账号队列"), ("ja", "候補アカウントの待機列")]:
+                    page.goto(self.live_server_url + "/admin?accounts_tab=queue&locale=" + locale)
+                    self.assertTrue(page.get_by_role("heading", name=title, exact=True).is_visible())
+                page.goto(self.live_server_url + "/admin?accounts_tab=queue&locale=en")
+                page.set_viewport_size({"width": 390, "height": 844})
+                self.assertTrue(page.locator("#candidate-queue").is_visible())
+                self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-candidate-queue.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+                self.assertEqual(errors, [])
             finally:
                 browser.close()
 
