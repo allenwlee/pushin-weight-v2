@@ -182,7 +182,7 @@
       const padding=(high-low)*.1; low-=padding;high+=padding;
       const y=v=>rank&&field==='rank'?top+(Number(v)-low)/(high-low)*(bottom-top):bottom-(Number(v)-low)/(high-low)*(bottom-top);
       add('text',{x:arenaBox.left,y:top-12},label);
-      for (let i=0;i<3;i++) {const value=low+(high-low)*i/2;const cy=y(value);add('line',{x1:arenaBox.left,x2:arenaBox.right,y1:cy,y2:cy,class:'grid'});add('text',{x:arenaBox.left-10,y:cy+4,'text-anchor':'end'},new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value));}
+      for (let i=0;i<3;i++) {const value=low+(high-low)*i/2;const cy=y(value);add('line',{x1:arenaBox.left,x2:arenaBox.right,y1:cy,y2:cy,class:'grid'});add('text',{x:arenaBox.left-10,y:cy+4,'text-anchor':'end','data-axis':field},new Intl.NumberFormat('en-US',{notation:field==='battles'?'compact':'standard',maximumFractionDigits:1}).format(value));}
       let path='',previous=null;
       panel.points.forEach((point,i)=>{
         const value=point[field];

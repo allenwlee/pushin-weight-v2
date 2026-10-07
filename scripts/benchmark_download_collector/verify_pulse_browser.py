@@ -27,6 +27,9 @@ def verify_release_response(browser, check, screenshot, url):
     check(
         'document.querySelectorAll("#arena-chart .publication-point").length > 0 && document.querySelectorAll("#arena-chart .confidence-interval").length > 0'
     )
+    check(
+        '(()=>{const ticks=[...document.querySelectorAll("#arena-chart text[data-axis=score]")].map(n=>n.textContent);return ticks.length===3 && new Set(ticks).size===3;})()'
+    )
     browser("click", "#sources-open")
     check('document.querySelector("#sources").open')
     browser(
