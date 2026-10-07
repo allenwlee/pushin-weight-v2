@@ -263,6 +263,7 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                 self.assertTrue(page.locator('[data-account-tab="found"]').is_visible())
                 self.assertEqual(page.locator('[data-account-tab="found"]').get_attribute("aria-current"), "page")
                 self.assertTrue(page.locator('[data-admin-account="97101"]').is_visible())
+                self.assertEqual(page.locator('[data-admin-account="97101"] small').inner_text(), "97101")
                 self.assertTrue(page.locator('[data-admin-account="97103"]').is_visible())
                 self.assertEqual(page.locator('[data-admin-count="found"]').inner_text(), "2")
                 self.assertEqual(page.locator('[data-admin-account="97102"]').count(), 0)
@@ -300,6 +301,7 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                     page.screenshot(path=str(shot.with_name("admin-tabs-review-" + locale + ".png")), full_page=True)
                     page.locator('[data-account-tab="found"]').click()
                     self.assertTrue(page.locator('[data-admin-account="97101"]').is_visible())
+                self.assertEqual(page.locator('[data-admin-account="97101"] small').inner_text(), "97101")
                 page.goto(self.live_server_url + "/admin?locale=en")
                 page.set_viewport_size({"width": 1440, "height": 1000})
                 page.screenshot(path=str(shot), full_page=True)
@@ -454,7 +456,7 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                 if status == "rejected" else {},
             )
         role, _ = Role.objects.get_or_create(key="official")
-        BrandAccount.objects.create(account_id="92101", brand=Brand.objects.create(nickname="known_model"), role=role)
+        BrandAccount.objects.create(account=Account.x.get(author_id="92101"), brand=Brand.objects.create(nickname="known_model"), role=role)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:

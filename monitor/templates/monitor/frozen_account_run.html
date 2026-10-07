@@ -74,7 +74,7 @@
       <tbody>
       {% for row in frozen_run.rows %}
         <tr data-frozen-account="{{ row.account_id }}">
-          <td data-label="{{ frozen_copy.account }}">{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.account_id }}{% endif %}<p class="muted">{{ row.state.account.display_name|default:'' }}</p></td>
+          <td data-label="{{ frozen_copy.account }}">{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account.author_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account.author_id }}{% endif %}<p class="muted">{{ row.state.account.display_name|default:'' }}</p></td>
           <td data-label="{{ frozen_copy.company }}">{{ row.decision.organization_name|default:'—' }}</td>
           <td data-label="{{ frozen_copy.development }}">{{ row.development_label|default:'—' }}{% if row.hf_verified %}<p>{{ frozen_copy.hf_verified }}</p>{% endif %}</td>
           <td data-label="{{ frozen_copy.detail }}">{% if frozen_run.tab == 'awaiting' or frozen_run.tab == 'failed' %}<p>{{ row.error_code }}</p>{% if frozen_run.tab == 'awaiting' and row.next_attempt_at %}<p>{{ frozen_copy.next_retry }}: {{ row.next_attempt_at|date:'Y-m-d H:i:s T' }}</p>{% endif %}{% elif frozen_run.tab == 'pending' %}<p>{{ row.pending_label }}</p>{% else %}<p>{{ row.decision.rationale }}</p>{% endif %}
