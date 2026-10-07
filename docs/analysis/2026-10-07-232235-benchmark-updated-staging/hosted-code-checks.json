@@ -1,0 +1,42 @@
+{
+  "candidate_sha": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+  "checks": [
+    {
+      "workflow": "Benchmark and download collector",
+      "status": "passed",
+      "tests_passed": 284,
+      "required_postgresql_executed": 164,
+      "required_skips": 0,
+      "required_errors": 0,
+      "url": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37691561999/job/113032746828"
+    },
+    {
+      "workflow": "Official company discovery",
+      "status": "passed",
+      "tests_passed": 310,
+      "required_postgresql_executed": 250,
+      "required_skips": 0,
+      "required_errors": 0,
+      "url": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37691561989/job/113032746881"
+    },
+    {
+      "workflow": "Editorial stories and pictures",
+      "status": "passed",
+      "tests_passed": 257,
+      "required_postgresql_executed": 138,
+      "required_skips": 0,
+      "required_errors": 0,
+      "url": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37691561992/job/113032746836"
+    },
+    {
+      "workflow": "Staff identity and evidence",
+      "status": "passed",
+      "tests_passed": 304,
+      "required_postgresql_executed": 177,
+      "required_skips": 0,
+      "required_errors": 0,
+      "url": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37691562065/job/113032746580"
+    }
+  ],
+  "counts_overlap": true
+}

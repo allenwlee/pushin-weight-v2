@@ -1,0 +1,23 @@
+{
+  "candidate_sha": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+  "status": "passed",
+  "commands": 79,
+  "assertions": 29,
+  "url": "https://pushinweight-staging-web.onrender.com/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/deepseek-response/?end=2026-10-06",
+  "viewports": [
+    "1440x1080",
+    "390x844"
+  ],
+  "verified": [
+    "DeepSeek and GLM three-line database-backed comparisons",
+    "OpenRouter/OpenCode provider selection and source/approximation labels",
+    "seven-day reference remains fixed across date and display controls",
+    "raw/daily/smoothed/normalized and calendar/relative displays",
+    "all legends, keyboard day selection and physical mobile pointer selection",
+    "Arena score/confidence/battle/rank with distinct score ticks",
+    "readable mobile labels and no horizontal overflow",
+    "no browser JavaScript errors"
+  ],
+  "raw_browser_logs_screenshots_and_numeric_exports": "retained privately on fuchitalee; not published",
+  "access_scope": "controlled owner-authorized sessions, not a fresh Google OAuth journey"
+}

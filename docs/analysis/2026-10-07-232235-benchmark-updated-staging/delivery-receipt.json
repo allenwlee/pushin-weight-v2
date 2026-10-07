@@ -1,0 +1,66 @@
+{
+  "status": "staging-verified",
+  "recorded_at_utc": "2026-10-07T22:00:56.371088+00:00",
+  "candidate_sha": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+  "review_contract_id": "1b91bd1b-a07d-47c9-a5ae-0e2089fc581e",
+  "review_contract_hash": "d7a3e38e3e3da328dd91f8581e59b109c3db37e3c652848add789665560cdd27",
+  "parent_contract_id": "53fda009-28a4-4106-a91f-bd42ff7cb33e",
+  "deployed_code_and_documentation_are_separate_revisions": true,
+  "implemented_units": [
+    "U22",
+    "U23",
+    "U24",
+    "U25",
+    "U26",
+    "U27"
+  ],
+  "production_deployed_or_migrated": false,
+  "recurring_collection_activated": false,
+  "backup_scope": "staging only; restored populated copy rehearsed before staging migration",
+  "bounded_opencode_import": {
+    "products": [
+      "deepseek/deepseek-v4.1-flash",
+      "zhipuai/glm-5.3-flash"
+    ],
+    "available_dates_per_product": 56,
+    "first_date": "2026-08-13",
+    "last_date": "2026-10-07",
+    "observations_added": 112,
+    "values_added": 336,
+    "requests": 2,
+    "replay_idempotent": true,
+    "partial_current_day_values": 6
+  },
+  "actual_web_process_sha_observed": true,
+  "headline_evidence": "Render reports LIVE at exact SHA; connected/ready log observed. Direct worker process SHA was not obtained.",
+  "http_evidence_revision": "d3d5f97bc737730e16699c04a5fd7802e0120152",
+  "browser_assertions": 29,
+  "review": {
+    "inline": true,
+    "independent_reviewer_available": false,
+    "external_attempts": [
+      "Claude 402 balance failure",
+      "Grok timeout without review output"
+    ],
+    "unresolved_code_findings": []
+  },
+  "hf_poll": {
+    "preserved": true,
+    "hourly": true,
+    "auto_stop_utc": "2026-10-09T01:18:17.652544+00:00",
+    "effective_cutoff_timezone_confirmed": false
+  },
+  "future_production_requirements": [
+    "owner-selected production delivery",
+    "current-main account/migration compatibility check",
+    "verified live-production backup",
+    "one migration runner",
+    "source-use approvals before public forecast/export/trading or recurring activation"
+  ],
+  "review_urls": {
+    "deepseek-response": "https://pushinweight-staging-web.onrender.com/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/deepseek-response/?end=2026-10-06",
+    "deepseek-opencode-response": "https://pushinweight-staging-web.onrender.com/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/deepseek-opencode-response/?end=2026-10-06",
+    "glm-response": "https://pushinweight-staging-web.onrender.com/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/glm-response/?end=2026-10-06",
+    "glm-opencode-response": "https://pushinweight-staging-web.onrender.com/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/glm-opencode-response/?end=2026-10-06"
+  }
+}

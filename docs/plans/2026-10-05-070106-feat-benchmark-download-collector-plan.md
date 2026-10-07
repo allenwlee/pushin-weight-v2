@@ -31,21 +31,27 @@ Implementation uses the isolated feature worktree and PostgreSQL database on fuc
 
 The October 7 predecessor amendment adds an explicitly labeled predecessor-to-successor Arena rank history, while retaining exact-model views and measurements. It also requires source-use enforcement and honest historical inputs for G3. Collector deployment, public forecasts and trading integration receive separate sign-offs; G3 prediction accuracy and trading compliance remain its own work. No new table is proposed by that amendment or the selected-chart addition.
 
-The earlier October 7 review adds three required fixes before renewed tested-and-ready sign-off: portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. Dataset-specific permission records will use existing metadata. Public release additionally needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions do not prevent isolated verification, and this amendment authorizes plan edits only.
+The earlier October 7 review required portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. A1–A3 are now implemented and regression-verified. Dataset-specific permission records use existing metadata. Public release still needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions remain separate from the completed staging review.
 
-The owner has now selected one combined release-response chart as the default G5 Pulse presentation: brand posts, exact-product OpenRouter tokens and net change in the selected HF rolling-download counter. Each line shows percentage change from its own average over the same first complete post-release week, with optional three-day smoothing. Zero represents that reference average, not the launch-day value. Arena score, confidence bands and reported battle counts share its date selection in a linked panel; rank remains supporting context. This October 7 selection replaces the earlier unresolved default-chart proposal, while preserving old comparison contracts and diagnostic views. These chart additions are planned and are not yet implemented in the staging application.
+The owner has now selected one combined release-response chart as the default G5 Pulse presentation: brand posts, exact-product OpenRouter tokens and net change in the selected HF rolling-download counter. Each line shows percentage change from its own average over the same first complete post-release week, with optional three-day smoothing. Zero represents that reference average, not the launch-day value. Arena score, confidence bands and reported battle counts share its date selection in a linked panel; rank remains supporting context. This October 7 selection replaces the earlier unresolved default-chart proposal, while preserving old comparison contracts and diagnostic views. U22–U23 are implemented and verified on Render staging at `e28cbda9`; the original diagnostic comparisons remain available.
 
-The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. The schema below uses the proposed name; implementation and deployed databases still use the old name until U24 is executed and verified under a later authorized run.
+The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. U24 is implemented and verified on isolated and populated staging PostgreSQL; the current candidate and staging database use `metrics`. Production remains unchanged.
 
-## October 8 execution checkpoint — amended candidate
+## October 8 execution checkpoint — tested and staging verified
 
-U22–U27 are implemented locally and remain under the owner-selected staging delivery. The shared release-response computation, linked raw Arena panel, metrics rename and OpenCode daily history/hourly revision handling are exercised on PostgreSQL. OpenCode's initial reviewed cohort is DeepSeek V4.1 Flash and GLM 5.3 Flash; additional products require reviewed exact mappings. Collectors remain disabled and source-use decisions continue to restrict review data from public forecasts/trading/public numeric redistribution.
+U22–U27 are implemented, tested and deployed/verified on Render staging at exact code revision `e28cbda9fa340db61ca4d86e738c5db08ac73260`. The owner-selected endpoint is complete; production and recurring activation remain excluded. The shared release-response computation, linked raw Arena panel, metrics rename and OpenCode daily history/hourly revision handling are exercised on PostgreSQL. OpenCode's initial reviewed cohort is DeepSeek V4.1 Flash and GLM 5.3 Flash; additional products require reviewed exact mappings. Collectors remain disabled and source-use decisions continue to restrict review data from public forecasts/trading/public numeric redistribution.
 
 Integration with main `702fef5b` exposed two newer official-company account links that the original account cutover did not know about. Migration `0074_official_company_generic_accounts` adds their UUID account links while retaining native X IDs, evidence, list status, uniqueness and native-writer compatibility. It accepts either independent migration order, updates the saved account-observation checkpoint without repeating completed work, and keeps company discovery X-only. Existing full-save paths and owner attestations use the correct native ID. This is a required account-abstraction integration repair; no table is added and no company decisions, budgets, list requests or production jobs are replayed.
 
-Staging backup is retained privately on fuchitalee and was restored before rehearsing the populated rename and account repair. Definition object/constraint/index identities, IDs, sequence and all 2,056,891 prior values survive the rename; the staged review will reuse immutable parent measurements rather than copy them. Review ran inline under the project's sequential agent rule. External Claude and Grok attempts returned no usable review (402 balance failure and timeout); independent reviewer coverage is unavailable and is not counted as passed.
+Staging backup is retained privately on fuchitalee and was restored before rehearsing the populated rename and account repair. Definition object/constraint/index identities, IDs, sequence and all 2,056,891 prior values survive the rename; the new staging review reuses immutable parent measurements rather than copying them. Review ran inline under the project's sequential agent rule. External Claude and Grok attempts returned no usable review (402 balance failure and timeout); independent reviewer coverage is unavailable and is not counted as passed.
 
-The delivery receipt will record the actual candidate SHA, hosted checks, stage migration preservation, bounded import, owner-gated browser/API proof and restored service settings. Production and recurring activation are excluded.
+The [final staging evidence](../analysis/2026-10-07-232235-benchmark-updated-staging/README.md) records the deployed SHA, four passed hosted workflows, preservation checks, bounded import, owner-gated API/browser proof and restored service settings. Actual web process SHA and Render LIVE metadata agree. The private review used 79 browser commands/29 assertions; scores have distinct axis labels and mobile labels/pointer selection remain readable/accurate. The temporary user/session and owned uploads were removed without changing existing owner users or allowlist. No fresh Google OAuth journey or direct worker-process SHA is claimed.
+
+Staging contract `1b91bd1b-a07d-47c9-a5ae-0e2089fc581e`, hash `d7a3e38e3e3da328dd91f8581e59b109c3db37e3c652848add789665560cdd27`, reuses parent `53fda009-28a4-4106-a91f-bd42ff7cb33e`. It adds four response presets for DeepSeek/GLM with OpenRouter/OpenCode selection. The bounded two-request OpenCode capture adds 112 observations/336 values across 56 dates per product (August 13–October 7); six current-day values remain partial with unknown end. Totals are 3,891 runs, 1,371,217 observations, 2,057,227 values and 18 definitions. Existing 290,672 posts, 364,056 post/brand links, 88,743 accounts and both editorial stories survive. The definition relation retains its object/constraint/index identities, IDs, sequence and prior values. Replay is idempotent; operational past cutoffs exclude late imports and unreviewed public/trading uses remain denied.
+
+Hosted results at the code SHA: benchmark 284 passed/164 required PostgreSQL; company 310/250; editorial 257/138; staff 304/177, with zero required skips/errors. Suites overlap and are not summed. Independent HTTP arithmetic checks at `d3d5f97b` are reused only because subsequent commits change SVG rendering and browser assertions, not Python readers/contracts/source data. Local 36 Ollija checks pass. Raw exports, screenshots, login material and the recoverable 557,431,905-byte backup remain private on fuchitalee. Original staging reader/auto-deploy/suspension/schedule settings are restored; the staging foreground claim can be released. The hourly HF poll remains unchanged and auto-stops October 9 at 10:18 JST; HF's effective cutoff timezone is still unconfirmed.
+
+Post-delivery plan/evidence is committed separately on the feature branch. Staging stays at the exact verified code SHA; no documentation-only redeploy or production merge is performed. The staging-only worktree, local review preview and backup remain available. Future production needs an owner-selected release, then-current main/account compatibility, verified live-production backup and one migration runner. Source-use approvals and recurring activation remain separate decisions.
 
 ## October 7 amendment — OpenCode as a fourth peer source
 
@@ -53,9 +59,9 @@ The delivery receipt will record the actual candidate SHA, hosted checks, stage 
 OpenRouter, Arena and HF, with equal standing in registry, persistence,
 identity review, history, operations, queries and serving. OpenCode is a selected
 source, not a disabled research candidate or an OpenRouter subcategory. This
-request amends the plan only; U25–U27 remain pending. It does not start a
-collector, change a running poll or deploy anything. Existing staging evidence
-applies to its recorded revision and does not establish OpenCode readiness.
+original amendment granted plan edits only. The later October 7 LFG selection
+authorized U25–U27 execution; the October 8 checkpoint records their completed
+staging proof. Recurring activation remains excluded and the HF poll is unchanged.
 
 ### R42 — shared storage, scope and exact identifiers
 
@@ -64,7 +70,7 @@ applies to its recorded revision and does not establish OpenCode readiness.
   local adapter/version and exact-ID normalizer. Use the same shared tables as
   the other selected sources; there is no OpenCode table, account table or
   hourly-value table. The fifteen-table inventory remains unchanged, including
-  R41's pending definition-table rename to `metrics`.
+  R41's implemented definition-table rename to `metrics`.
 - Freeze the provider scope as **OpenCode-hosted Go + free-model usage**.
   Public exports do not separately expose free-only totals or all usage through
   external providers in the OpenCode client. Keep OpenCode and OpenRouter series
@@ -225,10 +231,10 @@ This amendment contacts no provider and changes no existing source policy.
 | U26 — history and hourly revisions (R43–R44) | Extend the existing history/acquisition/import boundary, `core/benchmark_metric_history.py`, `core/benchmark_metric_operations.py`, shared writer and due/health commands under `monitor/management/commands/`. Persist per-endpoint revision/period-status metadata using existing JSON columns. Review the current completed-day-only operations path before adding source-specific current-day collection. | Actual PostgreSQL round-trip of first 56-day capture, changed/unchanged hourly polls, idempotent replay, failed/partial cohort, older/same-time-conflicting revision, UTC midnight rollover, delayed publication, incomplete current-day end, next-day completed report, revised historical decrease, rolled-off dates, exact zero versus absence, locks/bounded retries/interrupted recovery and distinct retrieval/publication freshness. No snapshot summing, invented hourly data or regressions in the other sources' daily cadences. |
 | U27 — queries, provider selection and cutoff proof (R45) | Extend `core/benchmark_metric_series.py`, `core/benchmark_metric_report.py`, `core/benchmark_forecast_inputs.py`, Pulse view/template/static modules and shared offline/export output. Add a new reviewed OpenCode comparison preset/provider option; keep old contracts immutable and both token sources separately queryable. | PostgreSQL → SQL/ORM → actual response/report/export/browser evidence for DeepSeek and another mapped tracked product; hourly partial snapshots versus completed daily series; pinned observation revisions and reference dates; late correction; no future revision in cutoff replay; missing product/day/baseline; raw integers, attribution/scope/approximation labels, mobile/legend controls and unchanged default three-line/Arena behavior. Reuse and extend existing benchmark source/identity/persistence/history/operations/forecast/series/report/Pulse tests. |
 
-U25 precedes U26 and U27; U27 uses the pending U22/U23 chart boundary. U24's
-rename can be implemented independently but must be reconciled before claiming
-the whole amended candidate ready. The next readiness run must satisfy all
-pending units, not reuse pre-OpenCode staging receipts as proof. Document the
+U25 precedes U26 and U27; U27 uses U22/U23's implemented chart boundary. U24's
+rename is reconciled with the current account/migration integration. The
+October 8 readiness run satisfies these units with its own PostgreSQL/import/
+serving/browser evidence; pre-OpenCode staging receipts remain historical. Document the
 exact candidate revision, isolated database, import coverage, source-use
 decisions and hourly activation/disable procedure in the existing plan and
 `scripts/benchmark_download_collector/README.md` after implementation.
@@ -318,8 +324,9 @@ The fifteen-table count stays unchanged.
 Owner direction: add the discussed Arena analysis and **lock in the combined
 chart**. This is a documentation amendment for the next implementation run.
 The October 7 staging deployment remains verified for its recorded revision;
-U22–U23 below are pending. No implementation, collection, deployment or
-recurring activation is authorized by this amendment turn.
+U22–U23 were pending in this amendment turn. The later LFG selection
+authorized implementation and staging delivery; the October 8 checkpoint records
+completion. Recurring activation remains excluded.
 
 ### R37 / KD24 — selected combined release-response chart
 
@@ -818,7 +825,7 @@ for an unrelated repair.
 
 ## Goal Capsule
 
-Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. Current endpoint is the owner-authorized tested-and-ready implementation in the isolated database, with reviewable PR and decided CI. Managed delivery remains on-request; production migration, deployment and activation require the later owner decision described in Delivery Exceptions.
+Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. Current endpoint is the owner-authorized tested implementation plus verified Render staging deployment, with a reviewable PR and decided CI. Managed delivery targets staging; production migration, deployment and recurring activation require a later owner decision described in Delivery Exceptions.
 
 ## Delivery Exceptions
 
@@ -1289,7 +1296,7 @@ Columns: `id VARCHAR(32) PK`; `source_type VARCHAR(32) NOT NULL`; `name VARCHAR(
 | --- | --- | --- |
 | hf | model_adoption | Selected first pass; initially disabled until reviewed setup/activation |
 | openrouter | model_adoption | Selected first pass; initially disabled until reviewed setup/activation |
-| opencode | model_adoption | Selected fourth peer; hourly revision-aware collection planned in R42–R45/U25–U27, not implemented or activated |
+| opencode | model_adoption | Selected fourth peer; R42–R45/U25–U27 implemented and staging verified; hourly revision-aware collection remains default-off |
 | arena | benchmark | Selected first pass; source remains Arena although hosted on HF |
 | artificial_analysis | benchmark | Authenticated probe completed; disabled candidate |
 | vercel_ai_gateway | model_adoption | Public usage-share probe completed; disabled candidate |
@@ -1345,7 +1352,7 @@ UNIQUE(source,metric_key,version), index(metric_type,source). CHECK version>0, p
 | Vercel share_percent (candidate) | token_share / float | flow / ratio | Provider daily period; timezone/alignment not yet verified, cannot activate definition |
 | X distinct posts (serving definition) | post_volume / integer | flow / count | Requested UTC event window; existing native events, derived query only |
 
-The original base cohort contained nine definitions: two HF download fields, one OR field and six Arena fields. R26 adds HF likes/followers; R42 plans three OpenCode definitions through the same tables. OpenCode definitions are not yet implemented or activated. AA/Vercel/X rows above illustrate mapping and serving semantics; they are not active collection definitions. Arena vote_count is the reported battle sample size, not unique voters. Its sample inclusion/history does not establish a since-origin accumulation window; classify it as a count-valued state, with no daily differencing. A documented future accumulation contract would require a new definition version. Lower/upper require same observation/methodology as rating. Fraction scales may be 0–1 while an index is on another scale; unit/version and quantity_form prevent automatic blending.
+The original base cohort contained nine definitions: two HF download fields, one OR field and six Arena fields. R26 adds HF likes/followers; R42 adds three OpenCode definitions through the same tables. These are implemented and verified on staging; recurring collection is not activated. AA/Vercel/X rows above illustrate mapping and serving semantics; they are not active collection definitions. Arena vote_count is the reported battle sample size, not unique voters. Its sample inclusion/history does not establish a since-origin accumulation window; classify it as a count-valued state, with no daily differencing. A documented future accumulation contract would require a new definition version. Lower/upper require same observation/methodology as rating. Fraction scales may be 0–1 while an index is on another scale; unit/version and quantity_form prevent automatic blending.
 
 #### 4. metric_collection_contracts — frozen configuration
 
@@ -1750,7 +1757,7 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 
 ### U14 — database-backed Pulse comparison endpoint and UI
 
-**Selected-chart follow-up:** U22–U23 define the accepted default and its actual PostgreSQL/browser proof. The existing five-/seven-line implementation below is retained as a diagnostic alternative; its staging evidence does not establish the new default/panel is implemented.
+**Selected-chart follow-up:** U22–U23 define the accepted default and its actual PostgreSQL/browser proof. The existing five-/seven-line implementation below is retained as a diagnostic alternative; its earlier staging evidence is historical; the October 8 checkpoint separately proves the implemented new default/panel.
 
 **October 7 follow-up:** A1 carries attribution through UI and exports (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
 
@@ -1788,7 +1795,7 @@ Track last successful retrieval, latest effective/publication date, missing/part
 
 ## October 7 review follow-up — required adjustments
 
-Evidence: [code and provider-use review](../reviews/2026-10-07-064100-benchmark-code-and-data-compliance.md), reviewed head `a3cbfe0933dfd122990b7cb024bed75a5087e236`. The review's three findings are confirmed; its scalability and integration concerns are separately tracked below. Retain U1–U15 and the fifteen-table design; amend those units rather than create another workstream or provider-specific tables. All items below are pending implementation/verification unless explicitly marked as existing evidence.
+Evidence: [code and provider-use review](../reviews/2026-10-07-064100-benchmark-code-and-data-compliance.md), reviewed head `a3cbfe0933dfd122990b7cb024bed75a5087e236`. The review's three findings are confirmed; its scalability and integration concerns are separately tracked below. Retain U1–U15 and the fifteen-table design; amend those units rather than create another workstream or provider-specific tables. These were pending at the original review. A1–A3 are implemented and regression-verified; current completion evidence is recorded above. A4 performance limits and A5 public permission decisions remain explicitly scoped below.
 
 ### A1 — portable attribution and dataset-specific permission (review #1; U6/U8/U13/U14/U15)
 
@@ -1854,6 +1861,8 @@ Owner requested a 48-hour poll, then explicitly changed frequency to **hourly**.
 
 ## Verification Contract
 
+**Execution status:** the requirements below are retained as the acceptance contract. The October 8 checkpoint and linked evidence record their fulfilled isolated/staging scope. References to a next run or planning-only mutation limits below belong to the original amendments; they do not supersede the latest execution selection. Production and recurring activation were not executed.
+
 **Latest OpenCode amendment:** the next authorized implementation run must
 complete R42–R45/U25–U27 against isolated PostgreSQL, with reviewed real-data
 history coverage and source/identity/partial-day/revision/UTC-rollover/freshness
@@ -1889,31 +1898,13 @@ The next run must include U19–U21 and prove the full PostgreSQL → series →
 
 ## Definition of Done
 
-**Latest OpenCode addition:** R42–R45/U25–U27 are pending. Completion requires a
-reviewed fourth peer registry source and mappings, real available daily history
-in the isolated database, three typed usage definitions, hourly-capable
-revision-aware commands/health, correct partial/completed-day queries and the
-new provider preset/export/browser proof. Default-off operation and unresolved
-public-use decisions remain visible under existing release rules. This plan
-edit does not start collection or establish deployment/activation readiness.
+**Completed at the selected endpoint:** U22–U27 are implemented and verified on isolated PostgreSQL and exact Render staging code `e28cbda9`. OpenCode is the fourth peer with reviewed mappings, three typed definitions, real retained history, hourly revision-aware commands/health and default-off scheduling. Its partial/completed UTC-day handling, provider selection, shared report/export and cutoff-safe reads are verified. The normalized three-line chart and linked raw Arena panel have actual response/browser proof. The populated/fresh/reverse definition-table rename preserves measurements and references; current staging uses `metrics`.
 
-**Latest selected-chart addition:** R37–R40/U22–U23 are pending. Completion for
-this addition requires the accepted three-line chart and linked Arena panel
-working from the isolated database with their arithmetic, missingness,
-publication/anchor checks and browser/export proof. This amendment changes no
-table or live deployment; later delivery remains a separately selected action.
+U19–U21 and confirmed A1–A3 fixes remain implemented and regression-verified. Preserved exact/predecessor contracts, source-use enforcement and cutoff-aware inputs pass alongside existing account/company/editorial/staff behavior. Main `702fef5b` account relationships are reconciled through `0074`; this does not establish compatibility with every future main revision. Source coverage and performance limits remain documented. Independent reviewer coverage is unavailable, not passed.
 
-**Latest definition-table naming addition:** R41/U24 is pending. Readiness of
-the complete amended candidate includes the verified table rename, unchanged
-measurements/relationships/contracts and coordinated runtime compatibility.
-The existing staging database still uses `source_metrics` until that migration
-is implemented and separately delivered.
+The staging endpoint includes a recoverable staging backup/restore rehearsal, exact code deployment, bounded import with idempotent replay, original service-settings restoration and removal of owned review resources. The feature worktree/local database/preview remain retained. The post-deployment evidence commit is separate from the deployed code; current-head PR CI is decided before closeout.
 
-**Latest October 7 additions:** R31–R36/U19–U21 and the separate collector, public-output and exchange/trading release decisions above govern the next rerun. Verify the predecessor-ranking view, enforced source-use policy and cutoff-aware input contract; retain unresolved G3-owned forecast/trade gates as disabled and pending. The A1–A5 readiness boundary is also part of completion. Reopen tested-and-ready sign-off for the three confirmed fixes; retain historical receipts as scoped evidence. Public licensing/permission conditions remain separately visible until resolved.
-
-After separately selected implementation: the fifteen-new-table migration set and staged U12 existing-account changes apply cleanly on fresh and populated isolated PostgreSQL; a reviewed contract links typed measurements to stable subject identities and frozen rollup relationships; collection and bounded historical import persist provenance, successes/failures/revisions without secret leakage or duplicate counting; the actual Pulse response and UI reproduce five scoped lines with correct baselines, raw values, date precision and coverage; U9 regression/browser checks pass and operating instructions cover disabled scheduling plus activation/rollback. Without separately selected release/activation authority, the endpoint is a tested disabled candidate. When production activation is selected, completion additionally requires U15's observed scheduled persistence and live served comparison.
-
-For this planning request: preserve the existing crosswalk, Google exclusions, fifteen-table schema, account design and affected-table inventory; add R19–R24, the per-line comparison/history contract, U13–U15 and updated dependency flowchart/verification in this canonical plan. Existing table-relationship images remain valid because no table or relationship changes. Prior review copies/images are historical snapshots; this amendment does not refresh or deliver them to allenwlee. Application code, production catalog and database schema remain unchanged.
+Production migration/deployment, recurring activation, public forecasts, numeric redistribution and exchange/trading remain outside this completed endpoint. They require the separately selected release/use decisions; a live-production backup is still required before production deployment. Current HF timing observations do not establish its cutoff timezone. No production schema/catalog or scheduled collection was changed by this run.
 
 ## Planning evidence and review
 
@@ -1928,9 +1919,9 @@ For this planning request: preserve the existing crosswalk, Google exclusions, f
 - October 6 follow-up adds per-line scope, sourced launch anchors, fixed-baseline arithmetic, archive provenance, configuration/coverage, and explicit production import/serving/operations units without adding tables. The compressed-scale prototype has browser evidence but final owner visual approval remains pending. No causal explanation of the OR token spike is established.
 - U5–U8 and U10–U15 are implemented in the isolated feature branch. The retained PostgreSQL 18 database has real DeepSeek and GLM comparisons; U9 local review fixes and the 223-test CI-equivalent run pass (126 PostgreSQL-required tests, no skips/errors); published-head CI and final PR readiness are recorded on [PR #50](https://github.com/allenwlee/pushin-weight-v2/pull/50). See [implementation evidence](../analysis/2026-10-06-benchmark-implementation/tested-ready-evidence.md). Historical HTML and colored schema reviews remain planning snapshots, not current execution receipts.
 
-## October 7 staging delivery — verified
+## October 7 staging delivery — historical verified baseline
 
-The authorized Render staging endpoint is complete at code revision `1375d1c0efaa053d5d3d9cf1ca652e580ddcd330`. Staging web, headline worker and jobs service report that revision; suspended services and inactive cron schedules remain unchanged. This task did not deploy to production or enable recurring collection, public forecasts or trading.
+The prior authorized Render staging endpoint completed at code revision `1375d1c0efaa053d5d3d9cf1ca652e580ddcd330`. This receipt is historical; the October 8 checkpoint above records the superseding `e28cbda9` runtime. Staging web, headline worker and jobs service reported the earlier revision; suspended services and inactive cron schedules were unchanged. That task did not deploy to production or enable recurring collection, public forecasts or trading.
 
 - U19–U21 are implemented and reviewed. Source-use enforcement, labeled predecessor rank history and cutoff-aware forecast inputs are covered by the scoped regression tests. Review ran inline under AGENTS; no independent reviewer is claimed.
 - A 421,275,363-byte staging backup was restored locally before migration. Actual staging now has the combined migration leaf `0069_merge_20261007_0550`. All ten account relationships retain native X identities; 290,672 posts, 364,056 post/brand links, 88,741 X accounts and both editorial stories are preserved.

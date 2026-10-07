@@ -1,0 +1,8 @@
+{
+  "scope": "Arena score/rank axis notation only",
+  "before": "Actual c0 staging score ticks all render 1.5K",
+  "after": "Actual local page has three distinct score tick labels; completed browser verifier has 29 assertions including mobile labels and physical pointer selection",
+  "browser_commands": 79,
+  "review": "Battle-count ticks retain compact notation. Score/rank ticks retain one decimal on the ordinary number scale. Measurements, y coordinates, confidence intervals, source evidence, HTTP and database behavior remain unchanged.",
+  "residuals": []
+}

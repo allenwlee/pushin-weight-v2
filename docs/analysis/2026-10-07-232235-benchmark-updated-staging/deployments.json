@@ -1,0 +1,26 @@
+[
+  {
+    "service": "pushinweight-staging-web",
+    "service_id": "srv-d9vb8t49v7es738lf2ng",
+    "id": "dep-db3br3bbc2fs73d8r3f0",
+    "status": "live",
+    "commit": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+    "finished_at": "2026-10-07T21:47:55.088876Z"
+  },
+  {
+    "service": "pushinweight-staging-headlines",
+    "service_id": "srv-da7vrdqd0e5s739uvcsg",
+    "id": "dep-db3br3ijnfac739borp0",
+    "status": "live",
+    "commit": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+    "finished_at": "2026-10-07T21:47:16.919044Z"
+  },
+  {
+    "service": "pushinweight-staging-jobs",
+    "service_id": "crn-dain9moae00c73f7d73g",
+    "id": "dep-db3bqqg473hc73bbo590",
+    "status": "live",
+    "commit": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+    "finished_at": "2026-10-07T21:46:27.523877Z"
+  }
+]
