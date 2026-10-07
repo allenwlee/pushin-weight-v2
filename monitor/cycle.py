@@ -2494,6 +2494,8 @@ class CycleRunner:
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
         _targeted_extraction_calls: dict[str, Any] | None = None,
+        _official_company_call=None,
+        _official_list_client=None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -2517,6 +2519,9 @@ class CycleRunner:
         # Production wire-in passes an anthropic_messages_call function.
         self._relevancy_llm_call = _relevancy_llm_call
         self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
+        self._official_company_call = _official_company_call
+        self._official_list_client = _official_list_client
+        self._optional_calls_remaining = cfg.targeted_extraction.max_calls_per_cycle
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
@@ -4256,7 +4261,10 @@ class CycleRunner:
         classification_succeeded: set[str] = set()
         targeted_calls_remaining = (
             0 if repair_manifest is not None
-            else self.cfg.targeted_extraction.max_calls_per_cycle
+            else (
+                self._optional_calls_remaining if self.cfg.official_company.enabled
+                else self.cfg.targeted_extraction.max_calls_per_cycle
+            )
         )
         counters["n_targeted_extraction_calls"] = 0
         counters["n_targeted_records_written"] = 0
@@ -4327,6 +4335,8 @@ class CycleRunner:
                     eligible_rare_types=eligible_rare_types,
                 )
                 targeted_calls_remaining -= targeted.calls_made
+                if self.cfg.official_company.enabled:
+                    self._optional_calls_remaining -= targeted.calls_made
                 counters["n_targeted_extraction_calls"] += targeted.calls_made
                 counters["n_targeted_records_written"] += targeted.records_written
                 counters["n_targeted_evidence_written"] += targeted.evidence_written
@@ -4836,6 +4846,7 @@ class CycleRunner:
         Returns a run summary dict (compatible with LATEST.json shape).
         """
         cycle_started_wall = self._wall_now()
+        self._optional_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
         cycle_started_at = cycle_started_wall.isoformat(timespec="seconds")
         t0 = self._monotonic()
         run_id = (
@@ -5503,6 +5514,11 @@ class CycleRunner:
                 logger.warning("metrics_refresh channel failed: %s", exc)
                 summary.setdefault("metrics_refresh", {})["error"] = str(exc)
 
+        if self.cycle_kind == "scheduled" and summary["status"] != "aborted":
+            summary["official_company_discovery"] = self._run_official_company_discovery(
+                run_id=run_id, deadline=deadline,
+            )
+
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen
         summary["totals"]["n_inserted"] = self._posts_inserted
@@ -5533,3 +5549,41 @@ class CycleRunner:
             summary["wall_clock_sec"],
         )
         return summary
+
+    def _run_official_company_discovery(self, *, run_id, deadline):
+        if (
+            self.dry_run
+            or self.cycle_kind != "scheduled"
+            or not self.cfg.official_company.enabled
+        ):
+            return {"status": "disabled"}
+        if deadline.remaining() < self.cfg.official_company.request_timeout_seconds + 2:
+            return {"status": "deferred_deadline"}
+        from core.official_company_discovery import (
+            build_discovery_call,
+            run_discovery_lane,
+        )
+
+        try:
+            call = self._official_company_call or build_discovery_call(
+                self.cfg.official_company
+            )
+            client = self._official_list_client
+            if client is None and self.cfg.official_company.list_sync_enabled:
+                from core.official_company_lists import build_owner_list_client
+
+                client = build_owner_list_client(self.cfg.official_company)
+            result = run_discovery_lane(
+                cfg=self.cfg.official_company,
+                run_id=run_id,
+                deadline=deadline,
+                call=call,
+                client=client,
+                allowance=self._optional_calls_remaining,
+            )
+            self._optional_calls_remaining -= result.get("attempted", 0)
+            if call is None:
+                result["status"] = "model_unavailable"
+            return result
+        except Exception as exc:  # noqa: BLE001 - optional lane never aborts essential harvest
+            return {"status": "degraded", "error": type(exc).__name__}

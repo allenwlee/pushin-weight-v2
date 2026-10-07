@@ -1,0 +1,1881 @@
+{
+  "observed_at": "2026-10-07T03:05:49.241219+00:00",
+  "purpose": "Bounded evaluator regression after unsupported NEAR acceptance; this is not an exhaustive discovery-quality estimate.",
+  "billing_note": "Cost estimates use measured input/output tokens at configured uncached rates; provider cache discounts are not applied.",
+  "production_mutations": "None from evaluation; separate narrowly owned NEAR rollback verified before this pass.",
+  "limits": {
+    "frozen_before_calls": true,
+    "variant": 2,
+    "variants_limit": 2,
+    "total_call_limit": 24,
+    "calls_already_made": 12,
+    "remaining_calls": 12,
+    "total_conservative_usd_cap": "0.10",
+    "prior_reserved_usd": "0.00662262",
+    "grade": "Required outcome AND every accepted model_developer citation contains an identified first-party development-support span in its cited source. All accepted cases must include at least one such citation. No third variant.",
+    "case_changes": [
+      "Harder third-party leaderboard negative replaces easy benchmark disclaimer.",
+      "Fine-tune identity bio no longer supplies development claim; post alone must establish fine-tuning."
+    ],
+    "production_scope": "Evaluation support spans are case-specific grading, never a language regex in production."
+  },
+  "variants": [
+    {
+      "observed_at": "2026-10-07T02:44:02+00:00",
+      "purpose": "Bounded evaluator regression after unsupported NEAR acceptance; this is not an exhaustive discovery-quality estimate.",
+      "billing_note": "Cost estimates use measured input/output tokens at configured uncached rates; provider cache discounts are not applied.",
+      "production_mutations": "None from evaluation; separate narrowly owned NEAR rollback verified before this pass.",
+      "summary": {
+        "policy": "official-model-developer-v3",
+        "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "request_profile": "deepseek_0731",
+        "prompt_sha256": "46f8269d465fd6a10ecfb910e23ed21e60a676e90dde1f6c53a567fb0da51026",
+        "case_sha256": "c3a9f9753312f3eba1cacea9dab2469193fa38060d14b5626927778459eb6f37",
+        "max_calls": 12,
+        "max_usd": "0.10",
+        "rubric": "No model-user/news/benchmark acceptance; missing development proof held; eligible own-model development accepted. Cite direct development proof for all acceptances. Frozen before requests.",
+        "passed": 12,
+        "cases": 12,
+        "all_passed": false,
+        "conservative_reserved_usd": "0.00662262",
+        "unknown_cost_cases": [],
+        "token_rate_estimate_usd": "0.00121680",
+        "label_cases_passed": 12,
+        "accepted_citations_supported": 5,
+        "accepted_cases": 6,
+        "gate_status": "failed_citation_quality",
+        "audit_note": "Independent review found BTL cited availability/license without development. Original paid evaluator compared labels only; its recorded all_passed=true did not establish this semantic gate."
+      },
+      "cases": [
+        {
+          "key": "reflection_ai",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "review_needed",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "1800594921704898560",
+            "handle": "reflection_ai",
+            "display_name": "Reflection",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "Make intelligence open and accessible to all",
+                "observed_at": "2026-10-05 19:15:31.511108+00:00"
+              },
+              {
+                "id": "post:2107186852306550900",
+                "text": "Beam leads in inference efficiency for its model class -- 3-4x more efficient than GLM 5.2 and over 4x more efficient than leading Western open models.\n\nThis means Beam completes tasks faster and cheaper. https://t.co/vXolEfXOI4",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              },
+              {
+                "id": "post:2107186852306550900:bio",
+                "text": "Make intelligence open and accessible to all",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              },
+              {
+                "id": "post:2107186852306550900:bio:url:0",
+                "text": "https://reflection.ai",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              }
+            ],
+            "domains": [
+              "reflection.ai"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "ada295c94894ab44abd1034b3495aa97d06cfb6c7ce6b47abc1c7d9055d9248f"
+          },
+          "rubric_note": "Stored public sample only compares Beam efficiency; it does not state this organization develops Beam. Existing explicit owner settlement remains valid and is not changed by this raw-evidence test."
+        },
+        {
+          "key": "Aleph__Alpha",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "1073704329528438785",
+            "handle": "Aleph__Alpha",
+            "display_name": "Aleph Alpha",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman",
+                "observed_at": "2026-09-29 15:30:59.381785+00:00"
+              },
+              {
+                "id": "post:2104956884738347160",
+                "text": "What does this mean? A prompt that forces the model to predict a bare “B” has seen much lesser training data to learn from. As a result, the probability of the correct answer drops by several orders of magnitude across Olmo 3, Qwen 3.5, and Gemma 4 on ARC, MMLU and PIQA.",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              },
+              {
+                "id": "post:2104956884738347160:bio",
+                "text": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              },
+              {
+                "id": "post:2104956884738347160:bio:url:0",
+                "text": "https://www.aleph-alpha.com",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              }
+            ],
+            "domains": [
+              "aleph-alpha.com"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "identity": "5b8cab9f81a7942044fd69a8734dc0fc5b57e7198fe20bec80e4a33021258dcd"
+          }
+        },
+        {
+          "key": "Badtheorylabs",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "2048427879273218048",
+            "handle": "Badtheorylabs",
+            "display_name": "Bad theory labs",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-25 17:15:49.698114+00:00"
+              },
+              {
+                "id": "post:2085505590998999467",
+                "text": "@sachindetrax binary: /home/bfg/applications/llama.cpp/build/bin/llama-server\nmodel: BTL-4-IQ2_XXS.gguf\n\n# mmproj: removed. Compact is a text-only build with no vision tower, and that\n#   projector was for Qwen3.6 anyway. BTL-4 is qwen3_5_moe.\n# chat_template: removed. The GGUF ships the correct one. BTL-4 uses a\n#   <tool_call><function=name><parameter=x> DSL, not stock Qwen's JSON form.\n\nhost: 0.0.0.0\nport: 8080\nui: false\n\n# Use the GGUF's embedded Jinja template. Without this, llama.cpp falls back to\n# its legacy built-in templates and BTL-4's tool-call format is never used, so\n# removing the chat_template override above only helps if this is on.\njinja: true\n\n# Separate reasoning into reasoning_content instead of letting it accumulate\n# into content every turn. llama.cpp's default \"auto\" does not do this\n# correctly for BTL-4.\nreasoning_format: deepseek\n\nthreads: 6\nthreads_batch: 6\n\nubatch_size: 2048\nbatch_size: 2048\n\ngpu_layers: 99\nflash_attention: \"on\"\nparallel: 1\n\n# 250000 was costing you KV\n\nThis is the config. Use this.",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2085505590998999467:bio",
+                "text": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2085505590998999467:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2086805128342806538",
+                "text": "@HenkPoley @finkd Waiting on qwen 3.8 27B though. We’d compare. Then fine tune it to be better then compress",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2086805128342806538:bio",
+                "text": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2086805128342806538:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2102046077931163842",
+                "text": "Tinfield 1 is available now under the Qwen Community License 1.0.\nBase weights and benchmark details:\nhttps://t.co/QLeJFgPTb7\nCompressed builds and running instructions:\nTinfield 1 Compact:  https://t.co/5XD1bKBK7M\nTinfield 1 Mini : https://t.co/FM4AXFYj5B\nDownload a build. Put it to work.",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102046077931163842:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102046077931163842:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102457013267750944",
+                "text": "Tinfield 1 is now live \n\nNow available through api on https://t.co/HSAbaolIsW \n\nSign up grab your keys and use the open ai compatible url: https://t.co/iWGpNlrUF2\n\n$0.15 per million input token and $0.60 per million output token\n\n33 on tb4.0 and cheaper than glm 5.3 flash",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2102457013267750944:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2102457013267750944:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2103532471367172281",
+                "text": "@ctjlewis The model on the left is Qwen3-1.7B, not Opus. It obviously knows basic arithmetic. It actually found the correct expression at token 1,313, checked it several more times, then drifted back into bad ideas and never returned the answer. That is the behaviour the demo is showing.\nInterference Search isn’t meant to teach a model that 4 × 4 = 16. The arithmetic on the search side is exact. The problem is choosing and composing operations without exploring the same effective state repeatedly. With six numbers, 831,176 possible paths collapsed into 13,229 distinct states. That is where the saving comes from.\nI do agree that saying “models reason in a line” is too broad. Models clearly compile common operations into their weights. Call that memoization if you want. The interesting version of Interference Search would let those reliable operations remain atomic, then externalize the parts that still require search, merge equivalent outcomes, and remove dead states.\nThe 128-digit multiplication is cool, but it doesn’t really argue against any of that. It shows that a model can execute a long arithmetic procedure. It doesn’t show that combinatorial search, repeated states, and losing valid solutions have disappeared.",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              },
+              {
+                "id": "post:2103532471367172281:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              },
+              {
+                "id": "post:2103532471367172281:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              }
+            ],
+            "domains": [
+              "badtheorylabs.com"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "identity": "71110239388339a5a19692b7cf9848ad510c7d76e6ce08811450ac180cb0fb89"
+          }
+        },
+        {
+          "key": "NEARProtocol",
+          "kind": "stored-live-negative",
+          "expected": "not_accepted",
+          "evidence": {
+            "handle": "NEARProtocol",
+            "domains": [
+              "near.org"
+            ],
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "The unified commerce layer for assets and agents.",
+                "observed_at": "2026-10-02 21:30:50.689374+00:00"
+              },
+              {
+                "id": "post:2106133117559877693",
+                "text": "NEAR AI is now #1 on Lean Eval v1, Lean FRO's active benchmark of extremely hard formalization problems.\n\nThe system runs almost entirely on open-weight DeepSeek V4.1 Flash, so it's low cost and has no third-party model dependency.\n\nThis work lays the groundwork for formally verifying NEAR Protocol and core contracts, and for a tool any team can use to verify its own.",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              },
+              {
+                "id": "post:2106133117559877693:bio",
+                "text": "The unified commerce layer for assets and agents.",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              },
+              {
+                "id": "post:2106133117559877693:bio:url:0",
+                "text": "https://near.org/",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              }
+            ],
+            "identity": "5a2981420bc9701e8fa34e3aaf319c63b85d3682bc30a4c82c16fb75dac9c1bc",
+            "provider": "x",
+            "display_name": "NEAR Protocol",
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "external_identifier": "1031949518609121280"
+          }
+        },
+        {
+          "key": "host",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000000",
+            "handle": "host",
+            "display_name": "host",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are CloudHost, an AI inference provider."
+              },
+              {
+                "id": "post:0",
+                "text": "Today we added DeepSeek and Qwen to our hosting API. Our infrastructure serves their models unchanged."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "f9f4fd02aad8958481792479c3c25c16a11197037ee5746aa0d77879e67f2f79"
+          }
+        },
+        {
+          "key": "wrapper",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000001",
+            "handle": "wrapper",
+            "display_name": "wrapper",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are WrapTools, creators of an AI coding application."
+              },
+              {
+                "id": "post:1",
+                "text": "Our new coding assistant uses the OpenAI API. We do not train, fine-tune or develop models."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "d6bf8bef93e2cbf657c5321d1354fa7455fc7c64e82760e64fc348c80919109c"
+          }
+        },
+        {
+          "key": "news",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000002",
+            "handle": "news",
+            "display_name": "news",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "ModelWatch reports AI model news. This is a fan-operated news account."
+              },
+              {
+                "id": "post:2",
+                "text": "Introducing Orion Labs' new video model, now available. Congratulations to their research team."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "8c66c1c59a6bd53f5db2db5f57b4ad6d375feb7445d6cbd9ed4abf65e7b248ab"
+          }
+        },
+        {
+          "key": "benchmark",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000003",
+            "handle": "benchmark",
+            "display_name": "benchmark",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are EvalOrg, a model benchmark and independent evaluation service."
+              },
+              {
+                "id": "post:3",
+                "text": "Our latest leaderboard ranks DeepSeek first. We evaluate models from external labs and do not develop any models."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "f4f9821a60ab003da63944d155e59b2038e9da1e07d342d2ad1124d16d523861"
+          }
+        },
+        {
+          "key": "pre-release",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000004",
+            "handle": "pre-release",
+            "display_name": "pre-release",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+              },
+              {
+                "id": "post:4",
+                "text": "We are training our first proprietary robot action model. It has not been released yet."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "be928d72ccfce5cfdd2db7e2f351a64f4424f7e83d74c64f182992a162a9efe7"
+          }
+        },
+        {
+          "key": "closed-audio",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000005",
+            "handle": "closed-audio",
+            "display_name": "closed-audio",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are SoundLab, developers of our own speech generation models."
+              },
+              {
+                "id": "post:5",
+                "text": "Our new speech model was trained in-house. It is only available through our API; there are no public weights."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "72d8f4eb808065410e93574b311685a56c3af738f30f2978c1a83e3b143583b2"
+          }
+        },
+        {
+          "key": "fine-tune",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000006",
+            "handle": "fine-tune",
+            "display_name": "fine-tune",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are TuneLab. We develop specialized language models."
+              },
+              {
+                "id": "post:6",
+                "text": "We fine-tuned Qwen on our domain dataset and released our resulting model, Tune-1."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "a6e848d3f305b034aeb9cb27549b8dd336fe4d1d55905bee478c93d991656a31"
+          }
+        },
+        {
+          "key": "japanese-image",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000007",
+            "handle": "japanese-image",
+            "display_name": "japanese-image",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "画像生成モデルを研究・開発する未来画像ラボの公式アカウントです。"
+              },
+              {
+                "id": "post:7",
+                "text": "当社が独自に学習した画像生成モデル「未来1」を本日リリースしました。"
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "e3c15bf30e25e40fd97af1baa1bbf5760a30f116cae2d5d018193e9239f8277c"
+          }
+        }
+      ],
+      "results": [
+        {
+          "key": "reflection_ai",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "review_needed",
+          "outcome": "review_needed",
+          "passed": true,
+          "decision": {
+            "outcome": "review_needed",
+            "organization_name": "Reflection",
+            "model_types": [],
+            "rationale": "The account identifies as 'Reflection' and links to reflection.ai, but the evidence does not clearly confirm that this is an official account of an organization that develops AI models. The bio and post mention 'Beam', a model, but do not explicitly state that the organization 'Reflection' develops its own models. Further evidence is needed to confirm model development and official status.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1189,
+            "output_tokens": 142
+          },
+          "reserved_usd": "0.00054984",
+          "seconds": 5.032,
+          "token_rate_estimate_usd": "0.0000969"
+        },
+        {
+          "key": "Aleph__Alpha",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "Aleph Alpha",
+            "model_types": [
+              "language"
+            ],
+            "rationale": "The account bio consistently identifies the organization as creating large language models, and the domain and URL align with the official Aleph Alpha website. The post discusses model behavior across multiple third-party models, which does not contradict the development claim from the bio.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe"
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe"
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1259,
+            "output_tokens": 168
+          },
+          "reserved_usd": "0.0005628",
+          "seconds": 3.34,
+          "token_rate_estimate_usd": "0.00010578"
+        },
+        {
+          "key": "Badtheorylabs",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "Bad Theory Labs",
+            "model_types": [
+              "language"
+            ],
+            "rationale": "The account consistently self-identifies as Bad Theory Labs with a linked domain badtheorylabs.com, and posts demonstrate credible model development, including fine-tuning and compression of base models (e.g., BTL-4 based on Qwen) and releasing 'Tinfield 1' under a community license.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "making intelligence efficient enough to own."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "post:2085505590998999467:bio",
+                  "quote": "infrastructure for AI native computing"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:2102046077931163842",
+                  "quote": "Tinfield 1 is available now under the Qwen Community License 1.0."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 2670,
+            "output_tokens": 242
+          },
+          "reserved_usd": "0.0008175",
+          "seconds": 6.353,
+          "token_rate_estimate_usd": "0.00020376"
+        },
+        {
+          "key": "NEARProtocol",
+          "kind": "stored-live-negative",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The supplied evidence does not show that NEAR Protocol develops or releases its own AI models. The only model-related claim is that a system runs on DeepSeek's open-weight model, which is usage of a third-party model, not development. The bio only describes a commerce layer and does not claim AI model development. There is no evidence of training, fine-tuning, or any explicit claim of building models. Per policy, running a system with another lab's model does not qualify as model development; absence of positive development evidence is not review_needed but the account's own post explicitly frames the system as using DeepSeek, positively identifying it as a model user, not a developer.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "The unified commerce layer for assets and agents."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "The unified commerce layer for assets and agents."
+                }
+              ],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1222,
+            "output_tokens": 227
+          },
+          "reserved_usd": "0.00055866",
+          "seconds": 4.637,
+          "token_rate_estimate_usd": "0.00011418"
+        },
+        {
+          "key": "host",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": "CloudHost",
+            "model_types": [],
+            "rationale": "The account self-identifies as an AI inference provider, explicitly stating that it hosts and serves third-party models (DeepSeek and Qwen) unchanged. This is usage of another lab's models, not development of its own model. There is no evidence of training, fine-tuning, or model development. The organization is a model user/hosting provider, which does not qualify under the policy.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are CloudHost, an AI inference provider."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are CloudHost, an AI inference provider."
+                }
+              ],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 973,
+            "output_tokens": 166
+          },
+          "reserved_usd": "0.00051498",
+          "seconds": 3.287,
+          "token_rate_estimate_usd": "0.00008826"
+        },
+        {
+          "key": "wrapper",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account explicitly states it does not train, fine-tune, or develop models, and the only mention of AI is a product built on OpenAI's API. This fails the model_developer requirement.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are WrapTools, creators of an AI coding application."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are WrapTools, creators of an AI coding application."
+                }
+              ],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 974,
+            "output_tokens": 169
+          },
+          "reserved_usd": "0.0005154",
+          "seconds": 9.615,
+          "token_rate_estimate_usd": "0.00008886"
+        },
+        {
+          "key": "news",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account explicitly identifies as a fan-operated news account (\"This is a fan-operated news account.\") and reports on another organization's model (\"Orion Labs' new video model\"), indicating it is not an official organization account of an AI model developer. The supplied evidence positively identifies an ineligible kind of account.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 982,
+            "output_tokens": 110
+          },
+          "reserved_usd": "0.00051618",
+          "seconds": 5.295,
+          "token_rate_estimate_usd": "0.00007872"
+        },
+        {
+          "key": "benchmark",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account explicitly states it is a benchmark/evaluation service that does not develop models, positively identifying it as an ineligible organization type.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 981,
+            "output_tokens": 77
+          },
+          "reserved_usd": "0.0005178",
+          "seconds": 3.348,
+          "token_rate_estimate_usd": "0.00007272"
+        },
+        {
+          "key": "pre-release",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "Tomorrow Robotics Lab",
+            "model_types": [
+              "robotics"
+            ],
+            "rationale": "The supplied bio identifies the account as the Official account of Tomorrow Robotics Lab and states it develops neural action models for robots. A post provides first-party evidence of model development: training a proprietary robot action model, albeit unreleased. The account identity and model development claims are consistent and supported by supplied evidence.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:4",
+                  "quote": "We are training our first proprietary robot action model. It has not been released yet."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 978,
+            "output_tokens": 187
+          },
+          "reserved_usd": "0.0005175",
+          "seconds": 3.68,
+          "token_rate_estimate_usd": "0.00009234"
+        },
+        {
+          "key": "closed-audio",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "SoundLab",
+            "model_types": [
+              "speech"
+            ],
+            "rationale": "The account consistently self-identifies as SoundLab and explicitly claims to develop its own speech generation models, with first-party evidence of in-house training. The business verification and consistent identity support official status. The lack of public weights does not preclude acceptance under the policy.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are SoundLab, developers of our own speech generation models."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are SoundLab, developers of our own speech generation models."
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:5",
+                  "quote": "Our new speech model was trained in-house."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 982,
+            "output_tokens": 167
+          },
+          "reserved_usd": "0.00051762",
+          "seconds": 4.141,
+          "token_rate_estimate_usd": "0.00008898"
+        },
+        {
+          "key": "fine-tune",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "TuneLab",
+            "model_types": [
+              "language"
+            ],
+            "rationale": "The account self-identifies as TuneLab and states it develops specialized language models, and the post confirms fine-tuning (a qualifying model-development activity) and releasing a resulting model. Consistent supplied first-party evidence supports organization, official account, and model developer claims.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are TuneLab."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are TuneLab. We develop specialized language models."
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:6",
+                  "quote": "We fine-tuned Qwen on our domain dataset and released our resulting model, Tune-1."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 978,
+            "output_tokens": 171
+          },
+          "reserved_usd": "0.0005151",
+          "seconds": 3.66,
+          "token_rate_estimate_usd": "0.00008946"
+        },
+        {
+          "key": "japanese-image",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "未来画像ラボ",
+            "model_types": [
+              "image"
+            ],
+            "rationale": "The account identifies itself as the official account of a lab that researches and develops image generation models, and the post states the company released its own trained image generation model.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "未来画像ラボの公式アカウントです"
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "公式アカウントです"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:7",
+                  "quote": "当社が独自に学習した画像生成モデル「未来1」を本日リリースしました"
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 993,
+            "output_tokens": 207
+          },
+          "reserved_usd": "0.00051924",
+          "seconds": 3.799,
+          "token_rate_estimate_usd": "0.00009684"
+        }
+      ]
+    },
+    {
+      "summary": {
+        "policy": "official-model-developer-v3",
+        "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+        "request_profile": "deepseek_0731",
+        "prompt_sha256": "30ed3973961d435e3cd8d7c7c964b73f0f1b753697123a96b0ce88a5d7e823e4",
+        "case_sha256": "2ca218196ad3b9da782653388bc23ca01656c3f81aeef2ec7696f6ce3c29103e",
+        "max_calls": 12,
+        "max_usd": "0.10",
+        "rubric": "No model-user/news/benchmark acceptance; missing development proof held; eligible own-model development accepted. Cite direct development proof for all acceptances. Frozen before requests.",
+        "passed": 11,
+        "cases": 12,
+        "all_passed": false,
+        "token_rate_estimate_usd": "0.00132666",
+        "conservative_reserved_usd": "0.01354122",
+        "unknown_cost_cases": [],
+        "conservative_reserved_usd_includes_prior_variant": true
+      },
+      "cases": [
+        {
+          "key": "reflection_ai",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "review_needed",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "1800594921704898560",
+            "handle": "reflection_ai",
+            "display_name": "Reflection",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "Make intelligence open and accessible to all",
+                "observed_at": "2026-10-05 19:15:31.511108+00:00"
+              },
+              {
+                "id": "post:2107186852306550900",
+                "text": "Beam leads in inference efficiency for its model class -- 3-4x more efficient than GLM 5.2 and over 4x more efficient than leading Western open models.\n\nThis means Beam completes tasks faster and cheaper. https://t.co/vXolEfXOI4",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              },
+              {
+                "id": "post:2107186852306550900:bio",
+                "text": "Make intelligence open and accessible to all",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              },
+              {
+                "id": "post:2107186852306550900:bio:url:0",
+                "text": "https://reflection.ai",
+                "observed_at": "2026-10-05T19:15:31.522519+00:00"
+              }
+            ],
+            "domains": [
+              "reflection.ai"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "ada295c94894ab44abd1034b3495aa97d06cfb6c7ce6b47abc1c7d9055d9248f"
+          },
+          "rubric_note": "Stored public sample only compares Beam efficiency; it does not state this organization develops Beam. Existing explicit owner settlement remains valid and is not changed by this raw-evidence test.",
+          "development_support": {}
+        },
+        {
+          "key": "Aleph__Alpha",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "1073704329528438785",
+            "handle": "Aleph__Alpha",
+            "display_name": "Aleph Alpha",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman",
+                "observed_at": "2026-09-29 15:30:59.381785+00:00"
+              },
+              {
+                "id": "post:2104956884738347160",
+                "text": "What does this mean? A prompt that forces the model to predict a bare “B” has seen much lesser training data to learn from. As a result, the probability of the correct answer drops by several orders of magnitude across Olmo 3, Qwen 3.5, and Gemma 4 on ARC, MMLU and PIQA.",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              },
+              {
+                "id": "post:2104956884738347160:bio",
+                "text": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              },
+              {
+                "id": "post:2104956884738347160:bio:url:0",
+                "text": "https://www.aleph-alpha.com",
+                "observed_at": "2026-09-29T15:30:59.386835+00:00"
+              }
+            ],
+            "domains": [
+              "aleph-alpha.com"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "identity": "5b8cab9f81a7942044fd69a8734dc0fc5b57e7198fe20bec80e4a33021258dcd"
+          },
+          "development_support": {
+            "account:profile_bio_text": [
+              "We create specialized large language models"
+            ],
+            "post:2104956884738347160:bio": [
+              "We create specialized large language models"
+            ]
+          }
+        },
+        {
+          "key": "Badtheorylabs",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "2048427879273218048",
+            "handle": "Badtheorylabs",
+            "display_name": "Bad theory labs",
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-25 17:15:49.698114+00:00"
+              },
+              {
+                "id": "post:2085505590998999467",
+                "text": "@sachindetrax binary: /home/bfg/applications/llama.cpp/build/bin/llama-server\nmodel: BTL-4-IQ2_XXS.gguf\n\n# mmproj: removed. Compact is a text-only build with no vision tower, and that\n#   projector was for Qwen3.6 anyway. BTL-4 is qwen3_5_moe.\n# chat_template: removed. The GGUF ships the correct one. BTL-4 uses a\n#   <tool_call><function=name><parameter=x> DSL, not stock Qwen's JSON form.\n\nhost: 0.0.0.0\nport: 8080\nui: false\n\n# Use the GGUF's embedded Jinja template. Without this, llama.cpp falls back to\n# its legacy built-in templates and BTL-4's tool-call format is never used, so\n# removing the chat_template override above only helps if this is on.\njinja: true\n\n# Separate reasoning into reasoning_content instead of letting it accumulate\n# into content every turn. llama.cpp's default \"auto\" does not do this\n# correctly for BTL-4.\nreasoning_format: deepseek\n\nthreads: 6\nthreads_batch: 6\n\nubatch_size: 2048\nbatch_size: 2048\n\ngpu_layers: 99\nflash_attention: \"on\"\nparallel: 1\n\n# 250000 was costing you KV\n\nThis is the config. Use this.",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2085505590998999467:bio",
+                "text": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2085505590998999467:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-08-06T23:30:51.022571+00:00"
+              },
+              {
+                "id": "post:2086805128342806538",
+                "text": "@HenkPoley @finkd Waiting on qwen 3.8 27B though. We’d compare. Then fine tune it to be better then compress",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2086805128342806538:bio",
+                "text": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2086805128342806538:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-08-10T13:31:10.644280+00:00"
+              },
+              {
+                "id": "post:2102046077931163842",
+                "text": "Tinfield 1 is available now under the Qwen Community License 1.0.\nBase weights and benchmark details:\nhttps://t.co/QLeJFgPTb7\nCompressed builds and running instructions:\nTinfield 1 Compact:  https://t.co/5XD1bKBK7M\nTinfield 1 Mini : https://t.co/FM4AXFYj5B\nDownload a build. Put it to work.",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102046077931163842:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102046077931163842:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-21T14:45:40.510121+00:00"
+              },
+              {
+                "id": "post:2102457013267750944",
+                "text": "Tinfield 1 is now live \n\nNow available through api on https://t.co/HSAbaolIsW \n\nSign up grab your keys and use the open ai compatible url: https://t.co/iWGpNlrUF2\n\n$0.15 per million input token and $0.60 per million output token\n\n33 on tb4.0 and cheaper than glm 5.3 flash",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2102457013267750944:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2102457013267750944:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-22T18:01:38.224678+00:00"
+              },
+              {
+                "id": "post:2103532471367172281",
+                "text": "@ctjlewis The model on the left is Qwen3-1.7B, not Opus. It obviously knows basic arithmetic. It actually found the correct expression at token 1,313, checked it several more times, then drifted back into bad ideas and never returned the answer. That is the behaviour the demo is showing.\nInterference Search isn’t meant to teach a model that 4 × 4 = 16. The arithmetic on the search side is exact. The problem is choosing and composing operations without exploring the same effective state repeatedly. With six numbers, 831,176 possible paths collapsed into 13,229 distinct states. That is where the saving comes from.\nI do agree that saying “models reason in a line” is too broad. Models clearly compile common operations into their weights. Call that memoization if you want. The interesting version of Interference Search would let those reliable operations remain atomic, then externalize the parts that still require search, merge equivalent outcomes, and remove dead states.\nThe 128-digit multiplication is cool, but it doesn’t really argue against any of that. It shows that a model can execute a long arithmetic procedure. It doesn’t show that combinatorial search, repeated states, and losing valid solutions have disappeared.",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              },
+              {
+                "id": "post:2103532471367172281:bio",
+                "text": "making intelligence efficient enough to own.",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              },
+              {
+                "id": "post:2103532471367172281:bio:url:0",
+                "text": "https://badtheorylabs.com",
+                "observed_at": "2026-09-25T17:15:49.705786+00:00"
+              }
+            ],
+            "domains": [
+              "badtheorylabs.com"
+            ],
+            "policy_version": "official-model-developer-v2",
+            "identity": "71110239388339a5a19692b7cf9848ad510c7d76e6ce08811450ac180cb0fb89"
+          },
+          "development_support": {
+            "post:2086805128342806538": [
+              "fine tune it to be better then compress"
+            ]
+          }
+        },
+        {
+          "key": "NEARProtocol",
+          "kind": "stored-live-negative",
+          "expected": "not_accepted",
+          "evidence": {
+            "handle": "NEARProtocol",
+            "domains": [
+              "near.org"
+            ],
+            "sources": [
+              {
+                "id": "account:profile_bio_text",
+                "text": "The unified commerce layer for assets and agents.",
+                "observed_at": "2026-10-02 21:30:50.689374+00:00"
+              },
+              {
+                "id": "post:2106133117559877693",
+                "text": "NEAR AI is now #1 on Lean Eval v1, Lean FRO's active benchmark of extremely hard formalization problems.\n\nThe system runs almost entirely on open-weight DeepSeek V4.1 Flash, so it's low cost and has no third-party model dependency.\n\nThis work lays the groundwork for formally verifying NEAR Protocol and core contracts, and for a tool any team can use to verify its own.",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              },
+              {
+                "id": "post:2106133117559877693:bio",
+                "text": "The unified commerce layer for assets and agents.",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              },
+              {
+                "id": "post:2106133117559877693:bio:url:0",
+                "text": "https://near.org/",
+                "observed_at": "2026-10-02T21:30:50.698478+00:00"
+              }
+            ],
+            "identity": "5a2981420bc9701e8fa34e3aaf319c63b85d3682bc30a4c82c16fb75dac9c1bc",
+            "provider": "x",
+            "display_name": "NEAR Protocol",
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "external_identifier": "1031949518609121280"
+          },
+          "development_support": {}
+        },
+        {
+          "key": "host",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000000",
+            "handle": "host",
+            "display_name": "host",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are CloudHost, an AI inference provider."
+              },
+              {
+                "id": "post:0",
+                "text": "Today we added DeepSeek and Qwen to our hosting API. Our infrastructure serves their models unchanged."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "f9f4fd02aad8958481792479c3c25c16a11197037ee5746aa0d77879e67f2f79"
+          },
+          "development_support": {}
+        },
+        {
+          "key": "wrapper",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000001",
+            "handle": "wrapper",
+            "display_name": "wrapper",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are WrapTools, creators of an AI coding application."
+              },
+              {
+                "id": "post:1",
+                "text": "Our new coding assistant uses the OpenAI API. We do not train, fine-tune or develop models."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "d6bf8bef93e2cbf657c5321d1354fa7455fc7c64e82760e64fc348c80919109c"
+          },
+          "development_support": {}
+        },
+        {
+          "key": "news",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000002",
+            "handle": "news",
+            "display_name": "news",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "ModelWatch reports AI model news. This is a fan-operated news account."
+              },
+              {
+                "id": "post:2",
+                "text": "Introducing Orion Labs' new video model, now available. Congratulations to their research team."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "8c66c1c59a6bd53f5db2db5f57b4ad6d375feb7445d6cbd9ed4abf65e7b248ab"
+          },
+          "development_support": {}
+        },
+        {
+          "key": "benchmark",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000003",
+            "handle": "benchmark",
+            "display_name": "benchmark",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "Official account of ProofForge AI, building automated theorem proving systems."
+              },
+              {
+                "id": "post:3",
+                "text": "ProofForge ranks first on the new theorem-proving leaderboard. Our system generates and verifies proofs using Qwen and DeepSeek; its search planner chooses among their outputs. Our new API ships today."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "f4f9821a60ab003da63944d155e59b2038e9da1e07d342d2ad1124d16d523861"
+          },
+          "development_support": {},
+          "note": "Review-driven harder model-user negative: different domain/name and no explicit non-developer disclaimer; leaderboard/tool release still does not establish own-model development."
+        },
+        {
+          "key": "pre-release",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000004",
+            "handle": "pre-release",
+            "display_name": "pre-release",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+              },
+              {
+                "id": "post:4",
+                "text": "We are training our first proprietary robot action model. It has not been released yet."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "be928d72ccfce5cfdd2db7e2f351a64f4424f7e83d74c64f182992a162a9efe7"
+          },
+          "development_support": {
+            "account:bio": [
+              "We develop neural action models"
+            ],
+            "post:4": [
+              "We are training our first proprietary robot action model"
+            ]
+          }
+        },
+        {
+          "key": "closed-audio",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000005",
+            "handle": "closed-audio",
+            "display_name": "closed-audio",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "We are SoundLab, developers of our own speech generation models."
+              },
+              {
+                "id": "post:5",
+                "text": "Our new speech model was trained in-house. It is only available through our API; there are no public weights."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "72d8f4eb808065410e93574b311685a56c3af738f30f2978c1a83e3b143583b2"
+          },
+          "development_support": {
+            "account:bio": [
+              "developers of our own speech generation models"
+            ],
+            "post:5": [
+              "Our new speech model was trained in-house"
+            ]
+          }
+        },
+        {
+          "key": "fine-tune",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000006",
+            "handle": "fine-tune",
+            "display_name": "fine-tune",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "Official account of TuneLab, an AI company."
+              },
+              {
+                "id": "post:6",
+                "text": "We fine-tuned Qwen on our domain dataset and released our resulting model, Tune-1."
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "a6e848d3f305b034aeb9cb27549b8dd336fe4d1d55905bee478c93d991656a31"
+          },
+          "development_support": {
+            "post:6": [
+              "We fine-tuned Qwen on our domain dataset"
+            ]
+          }
+        },
+        {
+          "key": "japanese-image",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "evidence": {
+            "provider": "x",
+            "external_identifier": "9000007",
+            "handle": "japanese-image",
+            "display_name": "japanese-image",
+            "sources": [
+              {
+                "id": "account:bio",
+                "text": "画像生成モデルを研究・開発する未来画像ラボの公式アカウントです。"
+              },
+              {
+                "id": "post:7",
+                "text": "当社が独自に学習した画像生成モデル「未来1」を本日リリースしました。"
+              }
+            ],
+            "domains": [],
+            "policy_version": "official-model-developer-v2",
+            "verification_type": "Business",
+            "identity": "e3c15bf30e25e40fd97af1baa1bbf5760a30f116cae2d5d018193e9239f8277c"
+          },
+          "development_support": {
+            "account:bio": [
+              "画像生成モデルを研究・開発する"
+            ],
+            "post:7": [
+              "当社が独自に学習した画像生成モデル"
+            ]
+          }
+        }
+      ],
+      "results": [
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "reflection_ai",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "review_needed",
+          "outcome": "review_needed",
+          "passed": true,
+          "decision": {
+            "outcome": "review_needed",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account identifies itself as 'Reflection' with domain reflection.ai and a Business verification. The supplied bio text 'Make intelligence open and accessible to all' and a single post about 'Beam' model inference efficiency provide no explicit evidence that this organization develops its own AI models. There is no statement about training, fine-tuning, post-training, model architecture research, or an explicit claim of model development or intended release. The focus on 'inference efficiency' for 'Beam' might imply a product but does not distinguish model development from using a third-party model. Without any citation to support the organization's own model development, the account cannot be accepted. The lack of evidence is not a positive rejection, so review_needed is appropriate.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1265,
+            "output_tokens": 217
+          },
+          "cost_usd": "0.00011496",
+          "reserved_usd": "0.00057408",
+          "seconds": 8.995
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "Aleph__Alpha",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "Aleph Alpha",
+            "model_types": [
+              "language"
+            ],
+            "rationale": "The account bio consistently identifies the organization as Aleph Alpha with its official domain, and explicitly states that the organization creates large language models, which is direct first-party evidence of model development.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz"
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "We create specialized large language models for a sovereign Europe."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1335,
+            "output_tokens": 210
+          },
+          "cost_usd": "0.0001179",
+          "reserved_usd": "0.00058704",
+          "seconds": 3.571
+        },
+        {
+          "label_passed": false,
+          "citation_passed": true,
+          "key": "Badtheorylabs",
+          "kind": "stored-owner-positive-without-attestation",
+          "expected": "accepted",
+          "outcome": "review_needed",
+          "passed": false,
+          "decision": {
+            "outcome": "review_needed",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account appears to be an organization called 'Bad theory labs' and mentions model releases (Tinfield 1, BTL-4). However, the evidence conflates model authorship with modification/use. The bio 'making intelligence efficient enough to own' is vague and doesn't explicitly claim model development. Posts mention 'Fine tune it to be better then compress' (fine-tuning third-party Qwen, which could qualify but is non-specific about what they develop) and 'Base weights and benchmark details' for Tinfield 1, suggesting they may have created a model, but this is not explicitly stated as their own training. The 'BTL-4' mention is about running a GGUF (a compressed model), which could be their own or third-party. Lack of explicit first-party evidence of training, fine-tuning (as their own model), or clear model-architecture research means the model_developer claim is unsupported. The organization identity is plausible but not clearly distinct from a tool wrapper or model user. Evidence is insufficient to definitively classify as an official model developer, and contradictions are not provided but missing clear development evidence warrants review.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 2746,
+            "output_tokens": 276
+          },
+          "cost_usd": "0.00021444",
+          "reserved_usd": "0.00084174",
+          "seconds": 7.938
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "NEARProtocol",
+          "kind": "stored-live-negative",
+          "expected": "not_accepted",
+          "outcome": "review_needed",
+          "passed": true,
+          "decision": {
+            "outcome": "review_needed",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account's identity evidence is consistent (bio describes NEAR Protocol as 'The unified commerce layer for assets and agents', domain near.org, business verification). However, the only model-related statement explicitly states the system 'runs almost entirely on open-weight DeepSeek V4.1 Flash', which is evidence of using a third-party model, not developing one. No supplied first-party evidence describes this organization training, fine-tuning, post-training, or otherwise developing its own AI model. The claim about being '#1 on Lean Eval' and laying groundwork does not establish model development. Per policy, using another lab's model without stated fine-tuning or development intent requires review_needed.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "The unified commerce layer for assets and agents."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:profile_bio_text",
+                  "quote": "The unified commerce layer for assets and agents."
+                }
+              ],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1298,
+            "output_tokens": 242
+          },
+          "cost_usd": "0.00012144",
+          "reserved_usd": "0.0005829",
+          "seconds": 5.135
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "host",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account identifies as an AI inference provider that hosts third-party models (DeepSeek, Qwen) unchanged. It explicitly states 'Our infrastructure serves their models unchanged,' indicating it does not develop its own models. No evidence of training, fine-tuning, or model creation is provided. The account is an inference provider, which is an ineligible category under the policy.",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1049,
+            "output_tokens": 119
+          },
+          "cost_usd": "0.00008436",
+          "reserved_usd": "0.00053922",
+          "seconds": 2.492
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "wrapper",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "review_needed",
+          "passed": true,
+          "decision": {
+            "outcome": "review_needed",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account bio identifies as 'creators of an AI coding application,' but the post explicitly states they do not train, fine-tune, or develop models. No supplied evidence indicates this organization develops or intends to release AI models. The claim of being a creator of an AI coding application alone is insufficient to establish model development because they use the OpenAI API and explicitly deny model development. This absence of development evidence requires review.",
+            "contradictions": [
+              "post:1 explicitly states 'We do not train, fine-tune or develop models,' contradicting any potential model-development claim based on the bio's reference to an AI coding application."
+            ],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are WrapTools, creators of an AI coding application."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are WrapTools, creators of an AI coding application."
+                }
+              ],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1050,
+            "output_tokens": 227
+          },
+          "cost_usd": "0.00010386",
+          "reserved_usd": "0.00053964",
+          "seconds": 8.199
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "news",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account explicitly identifies as a fan-operated news account reporting on AI model news, not as the organization that develops models. The supplied post congratulates Orion Labs on their model, confirming the account is not Orion Labs itself. The bio's self-description positively identifies an ineligible kind of account (fan/aggregation account).",
+            "contradictions": [],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1058,
+            "output_tokens": 110
+          },
+          "cost_usd": "0.00008328",
+          "reserved_usd": "0.00054042",
+          "seconds": 4.967
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "benchmark",
+          "kind": "synthetic-boundary",
+          "expected": "not_accepted",
+          "outcome": "rejected",
+          "passed": true,
+          "decision": {
+            "outcome": "rejected",
+            "organization_name": null,
+            "model_types": [],
+            "rationale": "The account describes itself as 'proofforge ai', not 'benchmark'. The post states the system 'generates and verifies proofs using Qwen and DeepSeek' and that its 'search planner chooses among their outputs' - this describes using third-party models (Qwen, DeepSeek), not developing its own. There is no evidence of training, fine-tuning, or developing an AI model. The account is ineligible as a model user, not a developer.",
+            "contradictions": [
+              "Account display_name is 'benchmark' while bio claims organization is 'ProofForge AI'",
+              "Post describes using Qwen and DeepSeek, not developing models"
+            ],
+            "claims": {
+              "organization": [],
+              "official_account": [],
+              "model_developer": []
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1077,
+            "output_tokens": 181
+          },
+          "cost_usd": "0.0000972",
+          "reserved_usd": "0.00054786",
+          "seconds": 4.109
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "pre-release",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "Tomorrow Robotics Lab",
+            "model_types": [
+              "robotics"
+            ],
+            "rationale": "The account self-identifies as official and states it develops neural action models; a post confirms training of its own proprietary robot action model. No contradictions found.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of Tomorrow Robotics Lab. We develop neural action models for robots."
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:4",
+                  "quote": "We are training our first proprietary robot action model. It has not been released yet."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1054,
+            "output_tokens": 159
+          },
+          "cost_usd": "0.00009186",
+          "reserved_usd": "0.00054174",
+          "seconds": 5.782
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "closed-audio",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "SoundLab",
+            "model_types": [
+              "speech"
+            ],
+            "rationale": "The account consistently self-identifies as SoundLab and explicitly states it develops its own speech generation models. A post confirms in-house training of a speech model, satisfying the model_developer requirement despite closed availability. The Business verification type and consistent identity provide no contradictions.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are SoundLab, developers of our own speech generation models."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "We are SoundLab, developers of our own speech generation models."
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:5",
+                  "quote": "Our new speech model was trained in-house."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1058,
+            "output_tokens": 167
+          },
+          "cost_usd": "0.00009354",
+          "reserved_usd": "0.00054186",
+          "seconds": 2.832
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "fine-tune",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "TuneLab",
+            "model_types": [
+              "language"
+            ],
+            "rationale": "The account is self-identified as the official TuneLab account, and the post states the organization fine-tuned Qwen on its own dataset and released a resulting model, which qualifies as model development.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of TuneLab, an AI company."
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "Official account of TuneLab"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:6",
+                  "quote": "We fine-tuned Qwen on our domain dataset and released our resulting model, Tune-1."
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1053,
+            "output_tokens": 198
+          },
+          "cost_usd": "0.00009882",
+          "reserved_usd": "0.00053862",
+          "seconds": 4.023
+        },
+        {
+          "label_passed": true,
+          "citation_passed": true,
+          "key": "japanese-image",
+          "kind": "synthetic-boundary",
+          "expected": "accepted",
+          "outcome": "accepted",
+          "passed": true,
+          "decision": {
+            "outcome": "accepted",
+            "organization_name": "未来画像ラボ",
+            "model_types": [
+              "image"
+            ],
+            "rationale": "The account bio consistently identifies the account as the official account of 未来画像ラボ (Future Image Lab), an organization that researches and develops image generation models. The post provides first-party evidence of the organization's own model development: it states the company independently trained an image generation model named 「未来1」and released it. This satisfies both the official organization identity and model development requirements. No contradictions are present.",
+            "contradictions": [],
+            "claims": {
+              "organization": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "画像生成モデルを研究・開発する未来画像ラボの公式アカウントです。"
+                }
+              ],
+              "official_account": [
+                {
+                  "source_id": "account:bio",
+                  "quote": "画像生成モデルを研究・開発する未来画像ラボの公式アカウントです。"
+                }
+              ],
+              "model_developer": [
+                {
+                  "source_id": "post:7",
+                  "quote": "当社が独自に学習した画像生成モデル「未来1」を本日リリースしました。"
+                }
+              ]
+            }
+          },
+          "error_type": null,
+          "usage": {
+            "input_tokens": 1069,
+            "output_tokens": 227
+          },
+          "cost_usd": "0.000105",
+          "reserved_usd": "0.00054348",
+          "seconds": 5.692
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "passed": false,
+    "paid_calls": 24,
+    "token_rate_estimate_usd_total": "0.00254346",
+    "conservative_reserved_usd_total": "0.01354122",
+    "failed_case": "Badtheorylabs",
+    "failure": "Final variant holds the settled positive as review_needed; explicit planned fine-tuning was judged insufficiently specific. Owner settlement remains authoritative and is not revoked.",
+    "action": "Keep registration/list sync held; no third variant or deployment/activation until a new bounded evaluation decision.",
+    "generalization_limit": "Two variants on twelve-case sets provide bounded regression evidence, not a population precision estimate. NEAR is an explicit prompt example, not held-out generalization."
+  }
+}

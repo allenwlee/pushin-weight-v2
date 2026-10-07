@@ -51,7 +51,7 @@ def post_evidence(post):
             "created_at": post.created_at.isoformat(),
             "source_language": post.lang or "",
             "excerpt_truncated": len(text) > 6000,
-            "is_quote": bool(post.quoted_status_id_id),
+            "is_quote": bool(post.is_quote or post.quoted_status_id_id),
             "is_retweet": bool(post.is_retweet),
         }
     )
@@ -61,6 +61,11 @@ def post_evidence(post):
         url=f"https://x.com/i/status/{post.pk}" if str(post.pk).isdigit() else "",
         author_id=post.native_author_id,
         author_handle=post.author_handle or "",
+        is_reply=bool(post.is_reply or post.in_reply_to_id),
+        parent_post_id=post.in_reply_to_id or "",
+        parent_author_handle=post.in_reply_to_username or "",
+        quoted_post_id=str(post.quoted_status_id_id or ""),
+        quoted_author_handle=post.quoted_author_handle or "",
         stored_quote=(post.quoted_text or "")[:4000],
         local_parent=(getattr(post, "_editorial_parent_text", "") or "")[:4000],
         images=source_images(post),
@@ -206,21 +211,43 @@ def build_packet(cutoff, cfg):
             "roles_observed_now": True,
         },
     }
-    # Trim complete rows rather than silently chopping source strings mid-JSON.
-    for field in (
-        "context",
-        "headline_leads",
-        "people",
-        "stories",
-        "chart_context",
-        "posts",
-    ):
-        while (
-            len(json.dumps(packet, ensure_ascii=False).encode()) > cfg.max_packet_bytes
-            and packet[field]
-        ):
+    return trim_packet(packet, cfg.max_packet_bytes)
+
+
+def packet_bytes(packet):
+    return len(json.dumps(packet, ensure_ascii=False).encode())
+
+
+def trim_packet(packet, limit):
+    """Trim whole rows, reserving a quarter of source bytes for background."""
+    coverage = packet["coverage"]
+    coverage["included_24h"] = len(packet["posts"])
+    coverage["context_before_trim"] = len(packet["context"])
+    coverage["included_context"] = len(packet["context"])
+    coverage["context_trimmed"] = 0
+    for field in ("headline_leads", "people", "stories", "chart_context"):
+        while packet_bytes(packet) > limit and packet[field]:
             packet[field].pop()
-            packet["coverage"]["sampled"] = True
-    packet["coverage"]["included_24h"] = len(packet["posts"])
     packet["chart_support"] = "available" if packet["chart_context"] else "unavailable"
+    while packet_bytes(packet) > limit and (packet["posts"] or packet["context"]):
+        field = (
+            "context"
+            if packet_bytes(packet["context"]) > limit // 4 or not packet["posts"]
+            else "posts"
+        )
+        packet[field].pop()
+        coverage["sampled"] = True
+        coverage["included_24h"] = len(packet["posts"])
+        coverage["included_context"] = len(packet["context"])
+        coverage["context_trimmed"] = coverage["context_before_trim"] - len(
+            packet["context"]
+        )
+    coverage["included_24h"] = len(packet["posts"])
+    coverage["included_context"] = len(packet["context"])
+    coverage["context_trimmed"] = coverage["context_before_trim"] - len(
+        packet["context"]
+    )
+    packet["chart_support"] = "available" if packet["chart_context"] else "unavailable"
+    if packet_bytes(packet) > limit:
+        raise ValueError("packet metadata exceeds evidence cap")
     return packet

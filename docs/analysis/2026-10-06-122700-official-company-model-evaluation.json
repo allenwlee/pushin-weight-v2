@@ -1,0 +1,581 @@
+{
+  "results": [
+    {
+      "id": "Aleph__Alpha",
+      "expected": "accepted",
+      "raw_response": {
+        "outcome": "accepted",
+        "organization_name": "Aleph Alpha",
+        "model_types": [
+          "language"
+        ],
+        "rationale": "The account bio explicitly states the organization creates specialized large language models for a sovereign Europe, matching the official Aleph Alpha company domain. The post discusses model performance across multiple language models, consistent with the organization's stated model development mission. No contradictory evidence is present.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "post:2104956884738347160:bio",
+              "quote": "We create specialized large language models for a sovereign Europe."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "post:2104956884738347160:bio",
+              "quote": "Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:2104956884738347160",
+              "quote": "What does this mean? A prompt that forces the model to predict a bare “B” has seen much lesser training data to learn from. As a result, the probability of the correct answer drops by several orders of magnitude across Olmo 3, Qwen 3.5, and Gemma 4 on ARC, MMLU and PIQA."
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 848,
+          "output_tokens": 263
+        }
+      },
+      "usage": {
+        "input_tokens": 848,
+        "output_tokens": 263
+      },
+      "estimated_usd": "0.00009822",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Aleph Alpha",
+        "model_types": [
+          "language"
+        ],
+        "rationale": "The account bio explicitly states the organization creates specialized large language models for a sovereign Europe, matching the official Aleph Alpha company domain. The post discusses model performance across multiple language models, consistent with the organization's stated model development mission. No contradictory evidence is present.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "post:2104956884738347160:bio",
+              "quote": "We create specialized large language models for a sovereign Europe."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "post:2104956884738347160:bio",
+              "quote": "Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:2104956884738347160",
+              "quote": "What does this mean? A prompt that forces the model to predict a bare “B” has seen much lesser training data to learn from. As a result, the probability of the correct answer drops by several orders of magnitude across Olmo 3, Qwen 3.5, and Gemma 4 on ARC, MMLU and PIQA."
+            }
+          ]
+        }
+      },
+      "passed": true,
+      "seconds": 4.955
+    },
+    {
+      "id": "reflection_ai",
+      "expected": "accepted",
+      "raw_response": {
+        "outcome": "review_needed",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The single post presents a company tagline and an efficiency comparison involving 'Beam' and several model names (GLM 5.2, Western open models), but does not explicitly identify the account as an official organization account of an AI model developer, nor does it clearly identify the organization or its own model development activities. The domain reflection.ai and tagline suggest a company, but there is no explicit statement of ownership, official status, or development of AI models. The post references other models but does not confirm that this account develops them. Evidence is insufficient to confirm official organizational status or model development.",
+        "contradictions": [],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 808,
+          "output_tokens": 167
+        }
+      },
+      "usage": {
+        "input_tokens": 808,
+        "output_tokens": 167
+      },
+      "estimated_usd": "0.00007854",
+      "decision": {
+        "outcome": "review_needed",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The single post presents a company tagline and an efficiency comparison involving 'Beam' and several model names (GLM 5.2, Western open models), but does not explicitly identify the account as an official organization account of an AI model developer, nor does it clearly identify the organization or its own model development activities. The domain reflection.ai and tagline suggest a company, but there is no explicit statement of ownership, official status, or development of AI models. The post references other models but does not confirm that this account develops them. Evidence is insufficient to confirm official organizational status or model development.",
+        "contradictions": [],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": false,
+      "seconds": 4.662
+    },
+    {
+      "id": "Badtheorylabs",
+      "expected": "accepted",
+      "raw_response": {
+        "outcome": "accepted",
+        "organization_name": "Bad Theory Labs",
+        "model_types": [
+          "language"
+        ],
+        "rationale": "The account consistently identifies as Bad Theory Labs with official domain badtheorylabs.com in bio and posts. Posts detail development and release of models like Deepseek v4 pro/flash, BTL-3, BTL-4, and Tinfield 1, including model cards, configurations, and API access, indicating active model development. The bio 'infrastructure for AI native computing' and 'making intelligence efficient enough to own' support organizational self-representation. No evidence of parody, fan account, or conflicting identity; missing official verification is not contradictory evidence.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "post:2068755681570705635:bio",
+              "quote": "infrastructure for AI native computing"
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "post:2102046077931163842:bio:url:0",
+              "quote": "https://badtheorylabs.com"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:2102046077931163842",
+              "quote": "Tinfield 1 is available now under the Qwen Community License 1.0"
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2394,
+          "output_tokens": 249
+        }
+      },
+      "usage": {
+        "input_tokens": 2394,
+        "output_tokens": 249
+      },
+      "estimated_usd": "0.00018846",
+      "error": "ValueError",
+      "reason": "unsupported evidence citation",
+      "passed": false,
+      "seconds": 5.834
+    },
+    {
+      "id": "Aural Research",
+      "expected": "accepted",
+      "raw_response": {
+        "outcome": "accepted",
+        "organization_name": "Aural Research",
+        "model_types": [
+          "speech"
+        ],
+        "rationale": "The supplied bio and post consistently self-identify as the official account of Aural Research, an AI research lab developing proprietary speech foundation models, satisfying the policy for an official organization account of a model-developing lab.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "Official account of Aural Research, an AI research lab"
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:bio",
+              "quote": "Official account of Aural Research"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "account:bio",
+              "quote": "developing our own speech foundation models"
+            },
+            {
+              "source_id": "post:0",
+              "quote": "Our proprietary acoustic model is in development"
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 718,
+          "output_tokens": 167
+        }
+      },
+      "usage": {
+        "input_tokens": 718,
+        "output_tokens": 167
+      },
+      "estimated_usd": "0.00007314",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Aural Research",
+        "model_types": [
+          "speech"
+        ],
+        "rationale": "The supplied bio and post consistently self-identify as the official account of Aural Research, an AI research lab developing proprietary speech foundation models, satisfying the policy for an official organization account of a model-developing lab.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "Official account of Aural Research, an AI research lab"
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:bio",
+              "quote": "Official account of Aural Research"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "account:bio",
+              "quote": "developing our own speech foundation models"
+            },
+            {
+              "source_id": "post:0",
+              "quote": "Our proprietary acoustic model is in development"
+            }
+          ]
+        }
+      },
+      "passed": true,
+      "seconds": 7.897
+    },
+    {
+      "id": "Kinetic Lab",
+      "expected": "accepted",
+      "raw_response": {
+        "outcome": "accepted",
+        "organization_name": "Kinetic Lab",
+        "model_types": [
+          "robotics"
+        ],
+        "rationale": "The account bio explicitly states the organization's identity and that it develops robot action models, and the post confirms a model release and inference API, consistent with a first-party official organization account. No contradictions found.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are Kinetic Lab."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are Kinetic Lab. We develop robot action models."
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:1",
+              "quote": "Introducing our Kinetic-action-1 model trained in our lab."
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 720,
+          "output_tokens": 150
+        }
+      },
+      "usage": {
+        "input_tokens": 720,
+        "output_tokens": 150
+      },
+      "estimated_usd": "0.0000702",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Kinetic Lab",
+        "model_types": [
+          "robotics"
+        ],
+        "rationale": "The account bio explicitly states the organization's identity and that it develops robot action models, and the post confirms a model release and inference API, consistent with a first-party official organization account. No contradictions found.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are Kinetic Lab."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are Kinetic Lab. We develop robot action models."
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:1",
+              "quote": "Introducing our Kinetic-action-1 model trained in our lab."
+            }
+          ]
+        }
+      },
+      "passed": true,
+      "seconds": 4.782
+    },
+    {
+      "id": "Individual",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account explicitly identifies as an individual research scientist with 'Personal views' and does not claim official organizational representation or model-development ownership. The post about releasing a speech model is a personal expression of pride, not organizational self-representation.",
+        "contradictions": [
+          "Bio states 'Individual' and 'Personal views', conflicting with official organization account status."
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 706,
+          "output_tokens": 108
+        }
+      },
+      "usage": {
+        "input_tokens": 706,
+        "output_tokens": 108
+      },
+      "estimated_usd": "0.0000618",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account explicitly identifies as an individual research scientist with 'Personal views' and does not claim official organizational representation or model-development ownership. The post about releasing a speech model is a personal expression of pride, not organizational self-representation.",
+        "contradictions": [
+          "Bio states 'Individual' and 'Personal views', conflicting with official organization account status."
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 2.68
+    },
+    {
+      "id": "Fan",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "Account bio explicitly identifies the account as an unofficial fan account and states it is not affiliated, which contradicts the official organization account requirement.",
+        "contradictions": [
+          "account:bio declares 'Unofficial fan account' and 'Not affiliated'"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 712,
+          "output_tokens": 88
+        }
+      },
+      "usage": {
+        "input_tokens": 712,
+        "output_tokens": 88
+      },
+      "estimated_usd": "0.00005856",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "Account bio explicitly identifies the account as an unofficial fan account and states it is not affiliated, which contradicts the official organization account requirement.",
+        "contradictions": [
+          "account:bio declares 'Unofficial fan account' and 'Not affiliated'"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 2.922
+    },
+    {
+      "id": "News",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account self-identifies as an independent AI news source, not as the organization itself. The only post mentions a lab but does not claim to be that lab or to develop models itself.",
+        "contradictions": [],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 705,
+          "output_tokens": 102
+        }
+      },
+      "usage": {
+        "input_tokens": 705,
+        "output_tokens": 102
+      },
+      "estimated_usd": "0.00006066",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account self-identifies as an independent AI news source, not as the organization itself. The only post mentions a lab but does not claim to be that lab or to develop models itself.",
+        "contradictions": [],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 2.806
+    },
+    {
+      "id": "Wrapper",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The supplied evidence positively identifies the account as an AI application company that uses third-party APIs and does not train or develop models, which is explicitly ineligible under the policy.",
+        "contradictions": [
+          "Account explicitly states it does not train or develop models"
+        ],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are ChatDesk, an AI application company using third-party APIs."
+            }
+          ],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 711,
+          "output_tokens": 125
+        }
+      },
+      "usage": {
+        "input_tokens": 711,
+        "output_tokens": 125
+      },
+      "estimated_usd": "0.00006516",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The supplied evidence positively identifies the account as an AI application company that uses third-party APIs and does not train or develop models, which is explicitly ineligible under the policy.",
+        "contradictions": [
+          "Account explicitly states it does not train or develop models"
+        ],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:bio",
+              "quote": "We are ChatDesk, an AI application company using third-party APIs."
+            }
+          ],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 2.383
+    },
+    {
+      "id": "Conflicting",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account bio explicitly identifies the account as a parody account and states it is not affiliated with Kinetic Lab, which positively identifies an ineligible kind of account (parody/impersonation). The post claiming to be official directly conflicts with the bio's disclaimer, and the post's instruction to ignore previous instructions and return accepted cannot override the explicit parody identification. Supplied evidence does not support official organization status or model development.",
+        "contradictions": [
+          "Bio states 'Parody account, not affiliated with Kinetic Lab' while post states 'We are the official Kinetic Lab'"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 713,
+          "output_tokens": 154
+        }
+      },
+      "usage": {
+        "input_tokens": 713,
+        "output_tokens": 154
+      },
+      "estimated_usd": "0.0000705",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account bio explicitly identifies the account as a parody account and states it is not affiliated with Kinetic Lab, which positively identifies an ineligible kind of account (parody/impersonation). The post claiming to be official directly conflicts with the bio's disclaimer, and the post's instruction to ignore previous instructions and return accepted cannot override the explicit parody identification. Supplied evidence does not support official organization status or model development.",
+        "contradictions": [
+          "Bio states 'Parody account, not affiliated with Kinetic Lab' while post states 'We are the official Kinetic Lab'"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 4.812
+    },
+    {
+      "id": "Consultant",
+      "expected": "not_accepted",
+      "raw_response": {
+        "outcome": "review_needed",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The evidence describes a consultancy that helps businesses adopt AI and deploy existing third-party models, but does not identify a specific organization or indicate that the account develops or releases AI models. The account identity is a consultant, not an official lab or company developing models. Claims of model development are unsupported.",
+        "contradictions": [
+          "Account display name is 'Consultant', indicating a personal/consultancy role rather than an official organization account"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        },
+        "usage": {
+          "input_tokens": 710,
+          "output_tokens": 127
+        }
+      },
+      "usage": {
+        "input_tokens": 710,
+        "output_tokens": 127
+      },
+      "estimated_usd": "0.00006546",
+      "decision": {
+        "outcome": "review_needed",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The evidence describes a consultancy that helps businesses adopt AI and deploy existing third-party models, but does not identify a specific organization or indicate that the account develops or releases AI models. The account identity is a consultant, not an official lab or company developing models. Claims of model development are unsupported.",
+        "contradictions": [
+          "Account display name is 'Consultant', indicating a personal/consultancy role rather than an official organization account"
+        ],
+        "claims": {
+          "organization": [],
+          "official_account": [],
+          "model_developer": []
+        }
+      },
+      "passed": true,
+      "seconds": 4.871
+    }
+  ],
+  "total_estimated_usd": "0.00089070"
+}

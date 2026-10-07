@@ -1,0 +1,97 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ active_locale|slice:':2' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ frozen_copy.title }} · Pushin' Weight</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #0a0d12; color: #e8edf5; }
+    main { width: min(1100px, calc(100% - 32px)); margin: 40px auto; }
+    h1, h2 { letter-spacing: -.02em; }
+    a { color: #8cc8ff; }
+    .muted { color: #9eacbd; }
+    .panel { border: 1px solid #293342; border-radius: 12px; background: #111722; padding: 20px; margin: 24px 0; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 12px; }
+    .metric { flex: 1 1 140px; padding: 12px; border: 1px solid #293342; border-radius: 8px; }
+    .metric strong { display: block; font-size: 1.6rem; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
+    .tabs a { padding: 12px 16px; border: 1px solid #3a4658; border-radius: 8px; text-decoration: none; }
+    .tabs a[aria-current="page"] { background: #1e344b; border-color: #8bc4fa; color: #eef3fa; }
+    a:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid #8bc4fa; outline-offset: 3px; }
+    form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+    label { display: grid; gap: 6px; flex: 1 1 200px; min-width: 0; }
+    input, button { font: inherit; padding: 10px; border-radius: 7px; }
+    input { min-width: 0; color: #eef3fa; background: #090d13; border: 1px solid #3a4658; }
+    button { border: 0; cursor: pointer; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 650px; margin-top: 20px; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #293342; overflow-wrap: anywhere; }
+    td { max-width: 360px; }
+    details { margin-top: 10px; }
+    blockquote { margin: 8px 0; padding-left: 12px; border-left: 2px solid #3a4658; }
+    .pagination { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-top: 24px; }
+    @media (max-width: 760px) {
+      table { min-width: 0; }
+      thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      tbody, tr, td { display: block; width: 100%; }
+      tr { border-bottom: 1px solid #3a4658; padding: 12px 0; }
+      td { max-width: none; border-bottom: 0; padding: 8px 0; }
+      td[data-label]::before { content: attr(data-label); display: block; color: #9eacbd; margin-bottom: 6px; }
+    }
+  </style>
+</head>
+<body><main>
+  <p><a href="{{ admin_url }}">← {{ frozen_copy.admin }}</a></p>
+  <h1>{{ frozen_copy.title }}</h1>
+  {% if frozen_run.summary %}
+  <p class="muted">{{ frozen_copy.scope }} {{ frozen_copy.frozen_at }}: {{ frozen_run.summary.frozen_at|date:'Y-m-d H:i:s T' }} · {{ frozen_copy.updated }}: {{ refreshed_at|date:'Y-m-d H:i:s T' }} · <a href="{{ refresh_url }}">{{ frozen_copy.refresh }}</a></p>
+  <section class="panel" aria-label="{{ frozen_copy.progress }}">
+    <div class="metrics">
+      {% for metric in frozen_metrics %}<div class="metric">{{ metric.label }}<strong data-frozen-count="{{ metric.key }}">{{ metric.value }}</strong></div>{% endfor %}
+    </div>
+    <nav class="tabs" aria-label="{{ frozen_copy.other }}">
+      {% for category in frozen_categories %}<a href="{{ category.url }}" data-frozen-category="{{ category.key }}"{% if frozen_run.tab == category.key %} aria-current="page"{% endif %}>{{ category.label }} (<span data-frozen-category-count="{{ category.key }}">{{ category.count }}</span>)</a>{% endfor %}
+    </nav>
+  </section>
+  <nav class="tabs" aria-label="{{ frozen_copy.title }}">
+    {% for tab in frozen_tabs %}<a href="{{ tab.url }}" data-frozen-tab="{{ tab.key }}"{% if frozen_run.tab == tab.key %} aria-current="page"{% endif %}>{{ tab.label }} (<span data-frozen-tab-count="{{ tab.key }}">{{ tab.count }}</span>)</a>{% endfor %}
+  </nav>
+  <section class="panel">
+    <h2>{{ section_title }}</h2>
+    <p class="muted">{{ section_note }}</p>
+    <form method="get">
+      <input type="hidden" name="locale" value="{{ active_locale }}">
+      <input type="hidden" name="tab" value="{{ frozen_run.tab }}">
+      <label>{{ frozen_copy.search }}<input name="q" value="{{ frozen_run.query }}" maxlength="100"></label>
+      <button type="submit">{{ frozen_copy.apply }}</button>
+    </form>
+    <div class="table-scroll"><table>
+      <thead><tr><th>{{ frozen_copy.account }}</th><th>{{ frozen_copy.company }}</th><th>{{ frozen_copy.development }}</th><th>{{ frozen_copy.detail }}</th></tr></thead>
+      <tbody>
+      {% for row in frozen_run.rows %}
+        <tr data-frozen-account="{{ row.account_id }}">
+          <td data-label="{{ frozen_copy.account }}">{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.account_id }}{% endif %}<p class="muted">{{ row.state.account.display_name|default:'' }}</p></td>
+          <td data-label="{{ frozen_copy.company }}">{{ row.decision.organization_name|default:'—' }}</td>
+          <td data-label="{{ frozen_copy.development }}">{{ row.development_label|default:'—' }}{% if row.hf_verified %}<p>{{ frozen_copy.hf_verified }}</p>{% endif %}</td>
+          <td data-label="{{ frozen_copy.detail }}">{% if frozen_run.tab == 'awaiting' or frozen_run.tab == 'failed' %}<p>{{ row.error_code }}</p>{% if frozen_run.tab == 'awaiting' and row.next_attempt_at %}<p>{{ frozen_copy.next_retry }}: {{ row.next_attempt_at|date:'Y-m-d H:i:s T' }}</p>{% endif %}{% elif frozen_run.tab == 'pending' %}<p>{{ row.pending_label }}</p>{% else %}<p>{{ row.decision.rationale }}</p>{% endif %}
+            <details><summary>{{ frozen_copy.evidence }}</summary><p>{{ frozen_copy.baseline }}: {{ row.baseline_label }}</p>
+              {% for claim, citations in row.decision.claims.items %}{% for citation in citations %}<blockquote>{{ citation.quote }}</blockquote><p class="muted">{{ citation.source_id }}</p>{% endfor %}{% endfor %}
+            </details>
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="4">{{ frozen_copy.empty }}</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+    <nav class="pagination" aria-label="{{ frozen_copy.pages }}">
+      {% if previous_url %}<a href="{{ previous_url }}">{{ frozen_copy.previous }}</a>{% endif %}
+      <span>{{ frozen_copy.page }} {{ frozen_run.page.number }} / {{ frozen_run.page.paginator.num_pages }}</span>
+      {% if next_url %}<a href="{{ next_url }}">{{ frozen_copy.next }}</a>{% endif %}
+    </nav>
+  </section>
+  {% else %}<section class="panel"><p>{{ frozen_copy.not_started }}</p></section>{% endif %}
+</main></body>
+</html>

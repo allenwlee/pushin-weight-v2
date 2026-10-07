@@ -97,3 +97,28 @@ def test_owner_fixture_preserves_explicit_and_defaulted_judgments():
     assert sum(c["pulse"] for c in data["cases"]) == 21
     assert sum(c["chatter"] and c["pulse"] for c in data["cases"]) == 12
     assert "remainder are not headline worthy" in data["default_rule"]
+
+
+@pytest.mark.django_db
+@pytest.mark.requires_postgres
+def test_quote_evidence_keeps_raw_flag_without_harvested_quoted_post():
+    from core.models import Post
+    from monitor.editorial.evidence import post_evidence
+
+    post = Post.objects.create(
+        tweet_id="unharvested-quote",
+        text="My reaction",
+        is_quote=True,
+        quoted_text="The quoted claim",
+        quoted_author_handle="original_author",
+        in_reply_to_id="parent-not-harvested",
+        in_reply_to_username="parent_author",
+        is_reply=True,
+        created_at=timezone.now(),
+    )
+    row = post_evidence(post)
+    assert row["is_quote"] is True
+    assert row["quoted_author_handle"] == "original_author"
+    assert row["parent_post_id"] == "parent-not-harvested"
+    assert row["parent_author_handle"] == "parent_author"
+    assert row["is_reply"] is True

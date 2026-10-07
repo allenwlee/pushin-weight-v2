@@ -53,6 +53,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone as django_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -5832,6 +5833,217 @@ _PRODUCT_REVIEW_COPY = {
 }
 
 
+_ADMIN_COPY = {
+    "en": {
+        "title": "Admin", "accounts": "Official AI accounts", "empty": "No official accounts have been found yet.",
+        "review_tab": "Review needed", "queue_tab": "Scan queue", "history_tab": "List history",
+        "failed_tab": "Failed evaluations", "failed_note": "These evaluations failed or could not run. See the recorded error; this is not a company qualification decision.",
+        "tracked_tab": "Already tracked", "tracked_note": "These accounts already have official tracked brand or company links. Their existing links are shown below.",
+        "history_empty": "No list synchronization history yet.",
+        "review_note": "These candidates need review before registration or list addition. Verified HF model developers appear under Official accounts found.",
+        "found": "Official accounts found", "registered": "Registered", "added": "Call A adds acknowledged",
+        "pending": "Awaiting evaluation", "review": "Needs review", "confirmed": "Membership confirmed",
+        "coverage": "Initial scan coverage", "not_started": "Initial scan has not started.",
+        "enumerated": "Enumerated", "population": "Population", "complete": "Enumeration complete",
+        "incomplete": "Enumeration in progress", "coverage_note": "Enumeration counts stored authors; it does not mean every account has been evaluated.",
+        "account": "Account", "organization": "Organization", "decision": "Discovery decision",
+        "list": "Call A list", "evidence": "Decision evidence", "updated": "Last updated", "previous": "Previous", "next": "Next",
+        "page": "Page", "of": "of", "add_note": "Add acknowledgements, membership confirmations, and pre-existing members are separate outcomes.",
+        "outcomes": {"not_queued": "Not queued", "added": "Add acknowledged", "confirmed_after_request": "Membership confirmed after add request", "already_present": "Already present; no add requested", "request_unconfirmed": "Add requested; outcome unconfirmed", "queued": "Queued"},
+        "requested": "First add request", "acknowledged": "First add acknowledgement", "observed": "Membership confirmed at",
+        "attempts": "Attempts", "error": "Last error", "models": "Model types", "policy": "Policy", "model": "Evaluator model",
+    },
+    "zh_hans": {
+        "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未发现官方账号。",
+        "review_tab": "需审核", "queue_tab": "扫描队列", "history_tab": "列表记录",
+        "failed_tab": "评估失败", "failed_note": "这些评估失败或无法运行。请查看记录的错误；这不代表公司资格判定。",
+        "tracked_tab": "已追踪", "tracked_note": "这些账号已有官方品牌或公司关联，现有关联显示在下方。",
+        "history_empty": "暂无列表同步记录。",
+        "review_note": "这些候选账号在登记或添加到列表前需要审核。经验证的 HF 模型开发者显示在“已发现官方账号”中。",
+        "found": "已发现官方账号", "registered": "已登记", "added": "Call A 添加已确认",
+        "pending": "等待评估", "review": "需审核", "confirmed": "成员身份已确认",
+        "coverage": "初始扫描覆盖", "not_started": "初始扫描尚未开始。",
+        "enumerated": "已枚举", "population": "总数", "complete": "枚举完成",
+        "incomplete": "枚举进行中", "coverage_note": "枚举统计已存储的作者，不代表所有账号都已完成评估。",
+        "account": "账号", "organization": "组织", "decision": "发现判定", "list": "Call A 列表",
+        "evidence": "判定依据", "updated": "最后更新", "previous": "上一页", "next": "下一页",
+        "page": "页", "of": "/", "add_note": "添加确认、成员身份确认和原有成员是不同的结果。",
+        "outcomes": {"not_queued": "未排队", "added": "添加已确认", "confirmed_after_request": "添加请求后确认成员身份", "already_present": "原有成员；未请求添加", "request_unconfirmed": "已请求添加；结果未确认", "queued": "已排队"},
+        "requested": "首次添加请求", "acknowledged": "首次添加确认", "observed": "成员身份确认时间",
+        "attempts": "尝试次数", "error": "最近错误", "models": "模型类型", "policy": "策略", "model": "评估模型",
+    },
+    "ja": {
+        "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだ公式アカウントは見つかっていません。",
+        "review_tab": "要確認", "queue_tab": "スキャン待機列", "history_tab": "リスト履歴",
+        "failed_tab": "評価失敗", "failed_note": "評価が失敗したか実行できませんでした。記録されたエラーを確認してください。企業の適格性の判断ではありません。",
+        "tracked_tab": "追跡済み", "tracked_note": "これらのアカウントには追跡中の公式ブランドまたは企業との関連があります。既存の関連を下に表示します。",
+        "history_empty": "リスト同期の履歴はまだありません。",
+        "review_note": "これらの候補は登録やリスト追加の前に確認が必要です。HF で検証済みのモデル開発者は「発見した公式アカウント」に表示されます。",
+        "found": "発見した公式アカウント", "registered": "登録済み", "added": "Call A 追加確認済み",
+        "pending": "評価待ち", "review": "要確認", "confirmed": "メンバー確認済み",
+        "coverage": "初回スキャンの対象範囲", "not_started": "初回スキャンは未開始です。",
+        "enumerated": "列挙済み", "population": "対象数", "complete": "列挙完了",
+        "incomplete": "列挙中", "coverage_note": "列挙数は保存済み投稿者の数です。全アカウントの評価完了を意味しません。",
+        "account": "アカウント", "organization": "組織", "decision": "発見判定", "list": "Call A リスト",
+        "evidence": "判定の根拠", "updated": "最終更新", "previous": "前へ", "next": "次へ",
+        "page": "ページ", "of": "/", "add_note": "追加の確認、メンバー確認、既存メンバーは別の結果です。",
+        "outcomes": {"not_queued": "未登録", "added": "追加確認済み", "confirmed_after_request": "追加要求後にメンバー確認", "already_present": "既存メンバー；追加要求なし", "request_unconfirmed": "追加要求済み；結果未確認", "queued": "待機中"},
+        "requested": "初回追加要求", "acknowledged": "初回追加確認", "observed": "メンバー確認時刻",
+        "attempts": "試行回数", "error": "直近のエラー", "models": "モデル種別", "policy": "ポリシー", "model": "評価モデル",
+    },
+}
+
+
+_CANDIDATE_COPY = {
+    "en": {
+        "hf_verified": "HF verified",
+        "failed_evaluations": "Failed evaluations",
+        "already_tracked": "Already tracked", "tracked_brands": "Tracked brands", "tracked_companies": "Tracked companies",
+        "title": "Candidate queue", "note": "Screening selects candidates; completed LLM decisions count actual evaluations. Verified HF model publishers can be approved automatically; other positive decisions require human review. Gold accounts go first.",
+        "screened": "Authors screened", "selected": "Candidates selected", "llm_evaluated": "Accounts evaluated by LLM",
+        "owner_settled": "Owner settled", "waiting": "Waiting", "evaluating": "Evaluating", "retry_due": "Retry pending",
+        "review_needed": "Needs human review", "rejected": "Rejected", "registered": "Registered", "no_evidence": "No evidence",
+        "all": "All candidates", "status": "Candidate status", "search": "Search candidates", "apply": "Apply filters",
+        "empty": "No candidates match these filters.", "entrance": "Candidate entrance", "gold": "Gold / business badge",
+        "bio": "Development bio and website", "release": "Organization and release evidence",
+    },
+    "zh_hans": {
+        "hf_verified": "HF 已验证",
+        "failed_evaluations": "评估失败",
+        "already_tracked": "已追踪", "tracked_brands": "已追踪品牌", "tracked_companies": "已追踪公司",
+        "title": "候选账号队列", "note": "筛选仅选出候选账号；LLM 判定完成数统计实际评估。HF 模型发布者经验证后可自动确认；其他正面判定需要人工审核。金标账号优先。",
+        "screened": "已筛选作者", "selected": "已选候选账号", "llm_evaluated": "LLM 已评估账号",
+        "owner_settled": "所有者已确认", "waiting": "等待中", "evaluating": "评估中", "retry_due": "等待重试",
+        "review_needed": "需人工审核", "rejected": "已排除", "registered": "已登记", "no_evidence": "无证据",
+        "all": "全部候选账号", "status": "候选状态", "search": "搜索候选账号", "apply": "应用筛选",
+        "empty": "没有符合筛选条件的候选账号。", "entrance": "入选依据", "gold": "金标／企业认证",
+        "bio": "模型开发简介和网站", "release": "组织和发布证据",
+    },
+    "ja": {
+        "hf_verified": "HF 検証済み",
+        "failed_evaluations": "評価失敗",
+        "already_tracked": "追跡済み", "tracked_brands": "追跡中のブランド", "tracked_companies": "追跡中の企業",
+        "title": "候補アカウントの待機列", "note": "スクリーニングは候補の選定です。LLM の判定完了数は実際の評価を数えます。HF のモデル公開者は検証後に自動確認でき、その他の肯定判定は人の確認が必要です。金バッジを優先します。",
+        "screened": "確認した投稿者", "selected": "選定した候補", "llm_evaluated": "LLM 評価済みアカウント",
+        "owner_settled": "所有者確認済み", "waiting": "待機中", "evaluating": "評価中", "retry_due": "再試行待ち",
+        "review_needed": "人による確認待ち", "rejected": "対象外", "registered": "登録済み", "no_evidence": "根拠なし",
+        "all": "すべての候補", "status": "候補の状態", "search": "候補を検索", "apply": "絞り込む",
+        "empty": "条件に一致する候補はありません。", "entrance": "選定根拠", "gold": "金／企業認証バッジ",
+        "bio": "モデル開発の紹介とウェブサイト", "release": "組織とリリースの根拠",
+    },
+}
+
+
+_REQUALIFICATION_COPY = {
+    "en": {
+        "title": "Qualification rerun", "population": "Frozen accounts",
+        "note": "Qualifying results need human review unless independently verified. Newly qualifying counts exclude earlier positive results.",
+        "completed": "Processed", "qualified": "Qualifying", "newly_qualified": "Newly qualifying",
+        "model": "Model developers", "agent": "Agent developers", "harness": "Harness developers",
+        "uncertain": "Uncertain", "rejected": "Rejected", "failed": "Failed", "pending": "Pending",
+        "retry_pending": "Retry pending", "excluded": "Excluded from rerun", "hf_verified": "HF verified and registered",
+    },
+    "zh_hans": {
+        "title": "资格重新评估", "population": "固定账号数",
+        "note": "符合条件的结果需人工审核，除非已独立验证。新符合条件数不包含之前的正面判定。",
+        "completed": "已处理", "qualified": "符合条件", "newly_qualified": "新符合条件",
+        "model": "模型开发者", "agent": "智能体开发者", "harness": "运行框架开发者",
+        "uncertain": "不确定", "rejected": "已排除", "failed": "失败", "pending": "待处理",
+        "retry_pending": "等待重试", "excluded": "不参与重评", "hf_verified": "HF 已验证并登记",
+    },
+    "ja": {
+        "title": "適格性の再評価", "population": "固定したアカウント数",
+        "note": "独立した検証がない適格判定には人の確認が必要です。新規適格数には以前の肯定判定を含みません。",
+        "completed": "処理済み", "qualified": "適格", "newly_qualified": "新規適格",
+        "model": "モデル開発者", "agent": "エージェント開発者", "harness": "実行基盤開発者",
+        "uncertain": "不確定", "rejected": "対象外", "failed": "失敗", "pending": "未処理",
+        "retry_pending": "再試行待ち", "excluded": "再評価対象外", "hf_verified": "HF 検証・登録済み",
+    },
+}
+
+
+_FROZEN_RUN_COPY = {
+    "en": {
+        "previous_category": 'Previously qualifying',
+        "uncertain_category": 'Uncertain',
+        "rejected_category": 'Rejected',
+        "failed_category": 'Failed evaluations',
+        "excluded_category": 'Excluded',
+        "previous_note": 'Companies that passed before the frozen run and qualify again under the new rule.',
+        "uncertain_note": 'Completed evaluations without enough evidence to settle qualification.',
+        "rejected_note": 'Completed evaluations that do not meet the qualification rule.',
+        "failed_note": 'Evaluations with a terminal error and no valid new-rule decision.',
+        "excluded_note": 'Frozen accounts excluded from rerun evaluation, for example because evidence changed or an account was already settled.',
+        "title": "Frozen account run", "admin": "Admin", "scope": "Only accounts in this frozen cohort.",
+        "frozen_at": "Frozen at", "updated": "Updated", "progress": "Run progress",
+        "newly": "Newly qualifying", "awaiting": "Awaiting", "pending": "Pending",
+        "newly_note": "New positive results under the broader model, agent or harness rule. Earlier positives are excluded. Human review is still needed unless independently verified.",
+        "awaiting_note": "Evaluations waiting for another attempt after a temporary error. These are not qualification decisions.",
+        "pending_note": "Frozen accounts waiting for their first new-rule result, including requests in flight.",
+        "search": "Search account or company", "apply": "Search", "account": "Account", "company": "Company",
+        "development": "Development", "detail": "Decision or queue detail", "evidence": "Evidence and earlier result",
+        "baseline": "Earlier result", "accepted": "Previously qualifying", "review_needed": "Previously uncertain",
+        "no_decision": "No earlier valid decision", "rejected": "Rejected", "model_label": "Model", "agent_label": "Agent", "harness_label": "Harness",
+        "next_retry": "Next retry", "in_flight": "Evaluation in flight", "waiting": "Waiting for evaluation",
+        "hf_verified": "HF verified and registered", "empty": "No accounts in this view.",
+        "not_started": "The frozen run has not been initialized.", "pages": "Account pages", "page": "Page",
+        "previous": "Previous", "next": "Next", "other": "Other results", "refresh": "Refresh",
+    },
+    "zh_hans": {
+        "previous_category": '之前已符合条件',
+        "uncertain_category": '不确定',
+        "rejected_category": '未通过',
+        "failed_category": '评估失败',
+        "excluded_category": '不参与重评',
+        "previous_note": '在固定扫描前已通过，并再次符合新规则的公司。',
+        "uncertain_note": '评估已完成，但证据不足以确定是否符合条件。',
+        "rejected_note": '评估已完成，不符合资格规则。',
+        "failed_note": '评估出现终止错误，尚无有效的新规则判定。',
+        "excluded_note": '未参与本次重评的固定账号，例如证据已更改或身份已经确认。',
+        "title": "固定账号扫描", "admin": "管理", "scope": "仅显示此固定批次内的账号。",
+        "frozen_at": "固定时间", "updated": "更新时间", "progress": "扫描进度",
+        "newly": "新符合条件", "awaiting": "等待中", "pending": "待处理",
+        "newly_note": "按照模型、智能体或运行框架新规则首次通过的账号，不包含之前的正面判定。未经独立验证的结果仍需人工审核。",
+        "awaiting_note": "因暂时错误而等待再次评估的账号，不代表资格判定。",
+        "pending_note": "等待新规则首次结果的固定账号，包括正在评估的账号。",
+        "search": "搜索账号或公司", "apply": "搜索", "account": "账号", "company": "公司",
+        "development": "开发类型", "detail": "判定或队列详情", "evidence": "证据和之前的结果",
+        "baseline": "之前的结果", "accepted": "之前符合条件", "review_needed": "之前不确定",
+        "no_decision": "之前无有效判定", "rejected": "已排除", "model_label": "模型", "agent_label": "智能体", "harness_label": "运行框架",
+        "next_retry": "下次重试", "in_flight": "正在评估", "waiting": "等待评估",
+        "hf_verified": "HF 已验证并登记", "empty": "此视图没有账号。",
+        "not_started": "固定扫描尚未初始化。", "pages": "账号分页", "page": "页",
+        "previous": "上一页", "next": "下一页", "other": "其他结果", "refresh": "刷新",
+    },
+    "ja": {
+        "previous_category": '以前から適格',
+        "uncertain_category": '不確定',
+        "rejected_category": '不適格',
+        "failed_category": '評価失敗',
+        "excluded_category": '再評価対象外',
+        "previous_note": '固定前に適格で、新基準でも再び適格と判定された会社です。',
+        "uncertain_note": '評価は完了しましたが、適格性を確定する根拠が不足しています。',
+        "rejected_note": '評価が完了し、適格基準を満たさないと判定された対象です。',
+        "failed_note": '終端エラーで有効な新基準の判定が得られなかった評価です。',
+        "excluded_note": '根拠の変更や確定済みの状態などにより再評価から除外された固定対象です。',
+        "title": "固定アカウントの再評価", "admin": "管理", "scope": "固定した対象内のアカウントのみを表示します。",
+        "frozen_at": "固定日時", "updated": "更新日時", "progress": "再評価の進捗",
+        "newly": "新規適格", "awaiting": "待機中", "pending": "未処理",
+        "newly_note": "モデル・エージェント・実行基盤の新基準で新たに適格になったアカウントです。以前の肯定判定は含みません。独立した検証がなければ人の確認が必要です。",
+        "awaiting_note": "一時的なエラー後の再試行待ちです。適格性の判定ではありません。",
+        "pending_note": "新基準による最初の結果を待つ固定対象です。評価中のリクエストも含みます。",
+        "search": "アカウント・会社を検索", "apply": "検索", "account": "アカウント", "company": "会社",
+        "development": "開発区分", "detail": "判定・待機の詳細", "evidence": "根拠と以前の結果",
+        "baseline": "以前の結果", "accepted": "以前から適格", "review_needed": "以前は不確定",
+        "no_decision": "以前の有効な判定なし", "rejected": "対象外", "model_label": "モデル", "agent_label": "エージェント", "harness_label": "実行基盤",
+        "next_retry": "次の再試行", "in_flight": "評価中", "waiting": "評価待ち",
+        "hf_verified": "HF 検証・登録済み", "empty": "この表示にアカウントはありません。",
+        "not_started": "固定対象の再評価はまだ初期化されていません。", "pages": "アカウントのページ", "page": "ページ",
+        "previous": "前へ", "next": "次へ", "other": "その他の結果", "refresh": "更新",
+    },
+}
+
+
 def _can_review_products(request: HttpRequest) -> bool:
     if not request.user.is_authenticated:
         return False
@@ -5845,6 +6057,74 @@ def _product_review_context(
     request: HttpRequest, proposal: ProductVerificationProposal | None = None
 ) -> dict[str, Any]:
     locale = _resolve_locale(request)
+    copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
+    from pathlib import Path
+
+    from core.official_company_admin import (
+        CANDIDATE_STATUSES,
+        account_report,
+        candidate_report,
+    )
+    from x_monitor.config import load_config
+
+    # Older bookmarked candidate filters keep opening their queue. The normal
+    # admin entry point opens settled accounts, with review and audit separate.
+    default_tab = "queue" if any(key in request.GET for key in ("candidate_status", "candidate_q", "candidate_page")) else "found"
+    accounts_tab = request.GET.get("accounts_tab", default_tab)
+    if accounts_tab not in {"found", "review", "failed", "tracked", "queue", "history"}:
+        accounts_tab = "found"
+    report = account_report(
+        list_id=load_config(Path("config.yaml")).official_company.list_id,
+        page=request.GET.get("accounts_page", 1),
+        section="history" if accounts_tab == "history" else "found",
+    )
+    admin_copy = _ADMIN_COPY.get(copy_locale, _ADMIN_COPY["en"])
+    for row in report["rows"]:
+        row["list_label"] = admin_copy["outcomes"][row["list_outcome"]]
+    from core.official_company_requalification import cohort_report
+
+    rerun = cohort_report()
+    rerun_copy = _REQUALIFICATION_COPY.get(copy_locale, _REQUALIFICATION_COPY["en"])
+    fixed_status = {"review": "review_needed", "failed": "failed_evaluations", "tracked": "already_tracked"}.get(accounts_tab)
+    candidates = candidate_report(
+        page=request.GET.get("candidate_page", 1),
+        status=fixed_status or request.GET.get("candidate_status", "all"),
+        query=request.GET.get("candidate_q", ""),
+    )
+    candidate_copy = _CANDIDATE_COPY.get(copy_locale, _CANDIDATE_COPY["en"])
+    for row in candidates["rows"]:
+        state = row["state"]
+        row["entrance_label"] = candidate_copy[{1: "gold", 2: "bio", 3: "release"}[state.candidate_priority]]
+        status_key = {"pending": "waiting", "claimed": "evaluating", "accepted": "review_needed"}.get(state.status, state.status)
+        if state.status == "accepted" and state.decision.get("hf_verification", {}).get("outcome") == "passed":
+            status_key = "hf_verified"
+        if row["attention_category"]:
+            status_key = row["attention_category"]
+        row["status_label"] = candidate_copy["owner_settled"] if state.model == "owner-attestation" else candidate_copy.get(status_key, state.status)
+    for paginated, key in [(report, "accounts_page"), (candidates, "candidate_page")]:
+        for direction in ["previous", "next"]:
+            paginated[direction + "_url"] = ""
+            if getattr(paginated["page"], "has_" + direction)():
+                params = request.GET.copy()
+                params[key] = getattr(paginated["page"], direction + "_page_number")()
+                params["locale"] = locale
+                params["accounts_tab"] = accounts_tab
+                paginated[direction + "_url"] = "?" + params.urlencode()
+    tabs = []
+    for key, label, count in [
+        ("found", admin_copy["found"], report["summary"]["found"]),
+        ("review", admin_copy["review_tab"], candidates["summary"]["review_needed"]),
+        ("failed", admin_copy["failed_tab"], candidates["summary"]["failed_evaluations"]),
+        ("tracked", admin_copy["tracked_tab"], candidates["summary"]["already_tracked"]),
+        ("queue", admin_copy["queue_tab"], candidates["summary"]["selected"]),
+        ("history", admin_copy["history_tab"], None),
+    ]:
+        params = request.GET.copy()
+        for param in ("candidate_page", "accounts_page", "candidate_status"):
+            params.pop(param, None)
+        params["locale"] = locale
+        params["accounts_tab"] = key
+        tabs.append({"key": key, "label": label, "count": count, "url": "?" + params.urlencode()})
     proposals = (
         ProductVerificationProposal.objects.select_related(
             "source_post", "account", "proposed_brand", "proposed_candidate"
@@ -5852,7 +6132,35 @@ def _product_review_context(
     )
     return {
         "active_locale": locale,
-        "copy": _PRODUCT_REVIEW_COPY.get(locale, _PRODUCT_REVIEW_COPY["en"]),
+        "copy": _PRODUCT_REVIEW_COPY.get(copy_locale, _PRODUCT_REVIEW_COPY["en"]),
+        "admin_copy": admin_copy,
+        "accounts_tab": accounts_tab,
+        "account_tabs": tabs,
+        "account_section_title": admin_copy["history_tab"] if accounts_tab == "history" else admin_copy["accounts"],
+        "account_section_empty": admin_copy["history_empty"] if accounts_tab == "history" else admin_copy["empty"],
+        "candidate_section_title": admin_copy[accounts_tab + "_tab"] if fixed_status else candidate_copy["title"],
+        "candidate_section_note": admin_copy[accounts_tab + "_note"] if fixed_status else candidate_copy["note"],
+        "official_accounts": report,
+        "official_candidates": candidates,
+        "candidate_copy": candidate_copy,
+        "candidate_fixed_status": bool(fixed_status),
+        "qualification_rerun": rerun,
+        "frozen_run_label": _FROZEN_RUN_COPY.get(copy_locale, _FROZEN_RUN_COPY["en"])["title"],
+        "rerun_copy": rerun_copy,
+        "rerun_metrics": [
+            {"key": key, "label": rerun_copy[key], "value": rerun[key]}
+            for key in ("completed", "qualified", "newly_qualified", "model", "agent", "harness",
+                        "uncertain", "rejected", "failed", "pending", "retry_pending", "excluded", "hf_verified")
+        ] if rerun else [],
+        "candidate_metrics": [
+            {"key": key, "label": candidate_copy[key], "value": value}
+            for key, value in candidates["summary"].items()
+            if not fixed_status or key == fixed_status
+        ],
+        "candidate_status_options": [
+            {"value": key, "label": candidate_copy[key]} for key in CANDIDATE_STATUSES
+        ],
+        "candidate_refreshed_at": django_timezone.now(),
         "proposals": proposals,
         "proposal": proposal,
         "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),
@@ -5862,10 +6170,67 @@ def _product_review_context(
 
 
 @login_required
+def frozen_account_run(request: HttpRequest) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Admin requires owner or staff access.")
+    from core.official_company_requalification_admin import OTHER_CATEGORIES, TABS, frozen_run_report
+
+    locale = _resolve_locale(request)
+    copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
+    copy = {**_REQUALIFICATION_COPY.get(copy_locale, _REQUALIFICATION_COPY["en"]),
+            **_FROZEN_RUN_COPY.get(copy_locale, _FROZEN_RUN_COPY["en"])}
+    report = frozen_run_report(tab=request.GET.get("tab", "newly"),
+                               page=request.GET.get("page", 1), query=request.GET.get("q", ""))
+
+    def page_url(tab, page=1):
+        params = request.GET.copy()
+        for key, value in {"locale": locale, "tab": tab, "page": page}.items():
+            params[key] = value
+        return reverse("frozen_account_run") + "?" + params.urlencode()
+
+    for row in report["rows"]:
+        kind = row["development_type"]
+        row["development_label"] = copy.get(str(kind) + "_label", "—")
+        row["baseline_label"] = copy.get(row["baseline_outcome"], copy["no_decision"])
+        row["pending_label"] = copy["in_flight"] if row["attempt_id"] else copy["waiting"]
+    current = report["page"]
+    summary = report["summary"]
+    return render(request, "monitor/frozen_account_run.html", {
+        "active_locale": locale, "frozen_copy": copy, "frozen_run": report,
+        "admin_url": reverse("product_review") + "?" + urlencode({"locale": locale}),
+        "refresh_url": page_url(report["tab"], current.number if current else 1),
+        "frozen_tabs": [{"key": key, "label": copy[key], "count": summary[bucket],
+                         "url": page_url(key)} for key, bucket in TABS.items()] if summary else [],
+        "frozen_categories": [{"key": key, "label": copy[key + "_category"],
+                               "count": summary[bucket] - (summary["newly_qualified"] if key == "previous" else 0),
+                               "url": page_url(key)} for key, bucket in OTHER_CATEGORIES.items()] if summary else [],
+        "frozen_metrics": [{"key": key, "label": copy[key], "value": summary[key]}
+                           for key in ("population", "completed", "qualified")] if summary else [],
+        "section_title": copy.get(report["tab"] + "_category", copy[report["tab"]]),
+        "section_note": copy[report["tab"] + "_note"],
+        "previous_url": page_url(report["tab"], current.previous_page_number()) if current and current.has_previous() else "",
+        "next_url": page_url(report["tab"], current.next_page_number()) if current and current.has_next() else "",
+        "refreshed_at": django_timezone.now(),
+    })
+
+
+@login_required
 def product_review(request: HttpRequest) -> HttpResponse:
     if not _can_review_products(request):
         return HttpResponseForbidden("Product review requires owner or staff access.")
     return render(request, "monitor/product_review.html", _product_review_context(request))
+
+
+@login_required
+def product_review_legacy(request: HttpRequest, proposal_id: int | None = None) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Admin requires owner or staff access.")
+    if proposal_id is not None and request.method == "POST":
+        return product_review_detail(request, proposal_id)
+    target = reverse("product_review_detail", args=[proposal_id]) if proposal_id is not None else reverse("product_review")
+    if request.GET:
+        target += "?" + request.GET.urlencode()
+    return redirect(target, permanent=True)
 
 
 @login_required
@@ -5894,7 +6259,8 @@ def product_review_detail(request: HttpRequest, proposal_id: int) -> HttpRespons
             )
         except ProductReviewError as exc:
             return HttpResponseBadRequest(str(exc))
-        return redirect("product_review_detail", proposal_id=proposal.pk)
+        target = reverse("product_review_detail", args=[proposal.pk])
+        return redirect(target + "?" + urlencode({"locale": _resolve_locale(request)}))
     return render(request, "monitor/product_review.html", _product_review_context(request, proposal))
 
 

@@ -144,6 +144,14 @@ relations:
     - editorial_heroes
     - editorial_pictures
     - editorial_stories
+    # Discovery work and encrypted owner credentials belong to one environment.
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     # Collection work, private intake/audit payloads and service-local image storage.
     - people_identity_corrections
     - people_media
@@ -220,6 +228,13 @@ relations:
     - editorial_heroes
     - editorial_pictures
     - editorial_stories
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     - people_identity_corrections
     - people_media
     - people_names
@@ -301,6 +316,9 @@ relations:
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq
+    - official_company_account_states_id_seq
+    - official_company_attempts_id_seq
+    - official_company_list_intents_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -383,6 +401,9 @@ relations:
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq
+    - official_company_account_states_id_seq
+    - official_company_attempts_id_seq
+    - official_company_list_intents_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -444,6 +465,13 @@ scrub:
     - editorial_heroes
     - editorial_pictures
     - editorial_stories
+    - official_company_account_states
+    - official_company_attempts
+    - official_company_budgets
+    - official_company_list_intents
+    - official_company_owner_credentials
+    - official_company_provider_states
+    - official_company_scans
     - people_identity_corrections
     - people_media
     - staff_collection_work

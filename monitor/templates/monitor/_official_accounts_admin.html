@@ -1,0 +1,60 @@
+<section class="panel account-section" aria-labelledby="official-accounts-title">
+  <h2 id="official-accounts-title">{{ account_section_title }}</h2>
+  <div class="metrics">
+    <div class="metric">{{ admin_copy.found }}<strong data-admin-count="found">{{ official_accounts.summary.found }}</strong></div>
+    <div class="metric">{{ admin_copy.registered }}<strong data-admin-count="registered">{{ official_accounts.summary.registered }}</strong></div>
+    <div class="metric">{{ admin_copy.added }}<strong data-admin-count="added">{{ official_accounts.summary.added }}</strong></div>
+    <div class="metric">{{ admin_copy.confirmed }}<strong data-admin-count="confirmed">{{ official_accounts.summary.membership_confirmed }}</strong></div>
+  </div>
+  <p class="muted">{{ admin_copy.add_note }}</p>
+  <details>
+    <summary>{{ admin_copy.coverage }}</summary>
+    {% for scan in official_accounts.scans %}
+      <p>{{ scan.key }}: {{ admin_copy.enumerated }} {{ scan.enumerated }} / {{ admin_copy.population }} {{ scan.population }} · {% if scan.complete %}{{ admin_copy.complete }}{% else %}{{ admin_copy.incomplete }}{% endif %}</p>
+    {% empty %}<p>{{ admin_copy.not_started }}</p>{% endfor %}
+    <p class="muted">{{ admin_copy.coverage_note }}</p>
+  </details>
+  {% if official_accounts.rows %}
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th scope="col">{{ admin_copy.account }}</th><th scope="col">{{ admin_copy.organization }}</th><th scope="col">{{ admin_copy.decision }}</th><th scope="col">{{ admin_copy.list }}</th></tr></thead>
+      <tbody>
+      {% for row in official_accounts.rows %}
+        <tr data-admin-account="{{ row.state.account_id }}">
+          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account_id }}{% endif %}<br><small class="muted">{{ row.state.account_id }}</small></td>
+          <td>{{ row.state.decision.organization_name|default:'—' }}
+            {% if row.state.registered_company %}<p>{{ row.state.registered_company.display_name }}</p>{% endif %}
+            {% if row.state.registered_brand %}<p>{{ admin_copy.brand|default:copy.brand }}: {{ row.state.registered_brand.display_name|default:row.state.registered_brand_id }}</p>{% endif %}
+            {% if row.state.decision.model_types %}<p class="muted">{{ admin_copy.models }}: {{ row.state.decision.model_types|join:', ' }}</p>{% endif %}
+          </td>
+          <td><strong>{{ row.state.status }}</strong><p>{{ row.state.decision.rationale|default:'—' }}</p>
+            {% if row.state.decision.hf_verification.outcome == 'passed' %}<p>{{ candidate_copy.hf_verified }}: <a href="{{ row.state.decision.hf_verification.model_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}
+            <details><summary>{{ admin_copy.evidence }}</summary>
+              {% if row.state.decision.hf_verification.outcome == 'passed' %}<blockquote>{{ row.state.decision.hf_verification.development_quote }}</blockquote><p><a href="{{ row.state.decision.hf_verification.card_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}
+              {% for claim, citations in row.state.decision.claims.items %}<p>{{ claim }}</p>{% for citation in citations %}<blockquote>{{ citation.quote }}<br><small class="muted">{{ citation.source_id }}</small></blockquote>{% endfor %}{% endfor %}
+              <dl><dt>{{ admin_copy.model }}</dt><dd>{{ row.state.model|default:'—' }}</dd><dt>{{ admin_copy.policy }}</dt><dd>{{ row.state.policy_version|default:'—' }}</dd><dt>{{ admin_copy.attempts }}</dt><dd>{{ row.state.attempts }}</dd><dt>{{ admin_copy.updated }}</dt><dd>{{ row.state.updated_at|date:'Y-m-d H:i:s T' }}</dd></dl>
+              {% if row.state.last_error %}<p>{{ admin_copy.error }}: {{ row.state.last_error }}</p>{% endif %}
+            </details>
+          </td>
+          <td><strong>{{ row.list_label }}</strong>
+            {% if row.intent %}<p class="muted">{{ row.intent.status }}</p>
+              <details><summary>{{ admin_copy.evidence }}</summary><dl>
+                <dt>{{ admin_copy.requested }}</dt><dd>{{ row.intent.add_requested_at|date:'Y-m-d H:i:s T'|default:'—' }}</dd>
+                <dt>{{ admin_copy.acknowledged }}</dt><dd>{{ row.intent.add_acknowledged_at|date:'Y-m-d H:i:s T'|default:'—' }}</dd>
+                <dt>{{ admin_copy.observed }}</dt><dd>{{ row.intent.confirmed_at|date:'Y-m-d H:i:s T'|default:'—' }}</dd>
+                <dt>{{ admin_copy.attempts }}</dt><dd>{{ row.intent.attempts }}</dd>
+              </dl>{% if row.intent.last_error %}<p>{{ admin_copy.error }}: {{ row.intent.last_error }}</p>{% endif %}</details>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="pagination" aria-label="{{ admin_copy.accounts }}">
+    {% if official_accounts.previous_url %}<a href="{{ official_accounts.previous_url }}">{{ admin_copy.previous }}</a>{% endif %}
+    <span>{{ admin_copy.page }} {{ official_accounts.page.number }} {{ admin_copy.of }} {{ official_accounts.page.paginator.num_pages }}</span>
+    {% if official_accounts.next_url %}<a href="{{ official_accounts.next_url }}">{{ admin_copy.next }}</a>{% endif %}
+  </nav>
+  {% else %}<p>{{ account_section_empty }}</p>{% endif %}
+</section>

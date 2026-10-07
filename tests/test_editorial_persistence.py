@@ -48,6 +48,68 @@ def test_unknown_send_stays_reserved_and_cannot_be_repeated():
     assert EditorialCall.objects.get().state == "ambiguous"
 
 
+@pytest.mark.parametrize("defect", ["timeout", "thinking"])
+def test_factual_failure_persists_receipt_and_full_reservation_without_resend(
+    monkeypatch, defect
+):
+    import json
+    from pathlib import Path
+
+    from core.models import EditorialBudget
+    from monitor.editorial.config import load_editorial_config
+    from monitor.editorial.contracts import ProviderReplyError
+    from monitor.editorial.providers import json_call
+    from monitor.editorial.writing import editor_request
+    from tests.test_editorial_provider_profiles import reply
+
+    cfg = load_editorial_config(Path("config/editorial-english-launch.yaml"))
+    route = cfg.routes["editor"]
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "private-test-key")
+    row = claim_assessment(timezone.now(), "factual-failure")
+    req = editor_request(
+        {
+            "posts": [{"id": "1", "original_text": "A release", "images": []}],
+            "context": [],
+            "stories": [],
+            "people": [],
+        },
+        cfg,
+    )
+    sends = []
+
+    def transport(*args, **kwargs):
+        sends.append(1)
+        assert kwargs["timeout"] == 300
+        if defect == "timeout":
+            raise TimeoutError("PRIVATE transport text and credential")
+        decoded = reply(route.model)
+        decoded["usage"]["completion_tokens_details"]["reasoning_tokens"] = 50
+        return 200, json.dumps(decoded)
+
+    with pytest.raises(ProviderReplyError):
+        json_call(row, "editor", route, req, cfg, transport=transport)
+    saved = row.calls.get()
+    budget = EditorialBudget.objects.get()
+    assert saved.state == "ambiguous"
+    assert saved.reserved_usd == budget.reserved_usd >= Decimal("0.131072")
+    failure = saved.response["failure"]
+    assert len(failure["request_sha256"]) == 64
+    assert failure["elapsed_seconds"] >= 0
+    assert failure["request_profile"] == "editorial_editor_v1"
+    if defect == "timeout":
+        assert saved.error_code == "provider_timeout"
+        assert "http_status" not in failure  # No invented network phase/status.
+    else:
+        assert failure["usage"]["reasoning_tokens"] == 50
+    assert "PRIVATE" not in json.dumps(failure)
+    assert "private-test-key" not in json.dumps(failure)
+    with pytest.raises(BudgetHeld):
+        json_call(row, "editor", route, req, cfg, transport=transport)
+    budget.refresh_from_db()
+    assert budget.calls == 1 and budget.reserved_usd == saved.reserved_usd
+    assert sends == [1]
+
+
 def test_completed_stage_reuses_output_and_enforces_shared_budget():
     now = timezone.now()
     cfg = EditorialConfig(daily_usd=0.3, assessment_usd=1, daily_calls=10)

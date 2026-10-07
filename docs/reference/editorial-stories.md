@@ -71,9 +71,10 @@ the existing hero. An unchanged evidence packet skips model calls altogether.
 ## Source coverage and grouping
 
 The default packet has at most 160 recent posts, 40 older context posts and
-120,000 UTF-8 bytes. Hourly sampling prevents a burst in the final minute from
-using every slot. Coverage includes the eligible and included counts and a
-sampling flag. This is bounded discovery, not an exhaustive news scan. Original
+240,000 UTF-8 bytes. Hourly sampling prevents a burst in the final minute from
+using every slot. Trimming reserves up to one quarter of the byte allowance for
+background, instead of discarding it all first. Coverage records recent inclusion,
+context inclusion/trimming and sampling. This is bounded discovery, not an exhaustive news scan. Original
 post images are included as URLs, with at most three images attached to a
 vision request. A visually essential story requires a vision-capable writer
 and the selected original image. Unseen URLs are not visual verification.
@@ -92,6 +93,108 @@ Creation and fetch timestamps exclude later posts from saved-cutoff packets.
 Staff roles are explicitly labeled as observed now; this is not a historical
 reconstruction of the staff directory. Headline leads whose original sources
 are outside the packet cannot independently ground a new publication.
+
+Selection and writing share source-reading rules with the existing headline
+generator through [`monitor/headline_grounding.py`](../../monitor/headline_grounding.py).
+These rules preserve the actor, action, target, uncertainty and ownership of
+figures, and distinguish a report or promotion from a developer announcement.
+Sharing those rules does not impose the older generator's per-brand eligibility
+or translation policy on Chatter and Pulse.
+
+[`monitor/editorial/grounding.py`](../../monitor/editorial/grounding.py) assigns
+short model-facing labels such as `S001` and exact named passages. Passage fields
+distinguish the original post, stored quoted text and locally available reply
+context; available quoted/parent identities are supplied separately. Unknown
+identity stays unknown. The source's raw quote flag is preserved even when the
+quoted post is absent from the local database.
+
+Returned editor decisions and writer responses must include a `source_check`
+with actor/action/target, claim status and number ownership. Each claim's wire
+`support` object binds one source label, one field (original/quote/parent),
+passages owned by that field, and brands collected for that source. Complete
+schema alternatives preserve those relationships; packet-wide lists of valid
+brands and sources would permit invalid combinations. Code repeats the ownership
+checks locally and derives the final source-ID list, event brands and audit actor
+from validated support. The actor is the original author, quoted speaker or
+parent author for that exact field; an unavailable identity stays unknown.
+The model does not generate duplicate source lists or audit actor names. Code
+restores canonical post IDs before saving the response.
+A brand mentioned in text but absent from that post's collected matches cannot
+be added by the model. A grouped story can still combine separately supported
+brands and posts. Empty brand choices are valid for an untracked subject.
+
+After selection, `context.story_packet` resolves original anchor posts and
+searches stored original/quoted text for distinctive names and phrases. Recent
+recall covers seven days; one expanded query covers 180 days and samples up to
+eight candidates per month. A phrase introduced near an anchor name and a
+relationship cue (such as a nickname or meme) can extend the search; its source
+post, field, exact offsets and text are saved. At most two terms are added.
+Repeated distinctive names can also extend recall. Direct parent/quote links
+can recover unnamed teasers. A shared brand/author alone cannot link a teaser
+to a release, and an earlier model version is not evidence of this version's
+availability. The initial extractor targets Latin-script names, including those
+embedded in Chinese/Japanese posts; it does not provide general multilingual
+entity recognition or semantic relevance guarantees.
+
+Each lookup returns at most 80 candidates and has a 1,500ms statement timeout.
+The stored `story_context` reports query timeouts and candidate/omission counts.
+The concurrent migration `0069_editorial_context_search` adds one multi-column
+pg_trgm index on uppercase original and quoted post text; it adds no columns or
+tables. Reversing this migration removes the index but retains the potentially
+shared extension. Apply the migration before judging historical-query latency.
+
+A writer bundle preserves anchors and adds at most 24 context posts within
+96,000 evidence bytes, reserving up to eight slots for older history. Identical
+text and duplicate IDs are deduplicated. A source too large for remaining space
+is omitted; an oversized anchor set produces an explicit hold. Manual anchor
+IDs absent from discovery use the same collector and cutoff checks. The service
+freezes the bundle in the assessment before writing and reuses it across tracks
+and locales. Retrieval does not change story identity, priority age or unchanged
+story checks. It cannot recover a story the editor never selected.
+
+The writer receives selected sources, eligible background, their identifiers and chart context. It
+does not receive the editor's summary, reasons, claim prose or inferred subject
+kind. After its source checks it produces `supported_copy`, then copies those
+headline/byline/article strings into the final fields; validation rejects any
+disagreement. Editions retain source checks and supported copy privately.
+Each new edition also saves `evidence.attribution.post_count` and
+`evidence.attribution.posts` (distinct IDs and every URL), derived from the
+writer's validated citations. `cited_post_ids` and `sources` contain only used
+support; `post_ids` retains editorial anchors for unchanged-story compatibility.
+Retrieved candidates are not automatically citations or independent reports.
+Reader payloads expose `source_count` and complete source links, and the permanent
+story page displays both. Historical saved contracts remain readable. These checks establish reference
+ownership and consistency, not that every sentence follows from its evidence.
+The editor schema also binds absent chart evidence to `unavailable` and empty
+fact IDs, absent people to empty person IDs, and an empty existing-story list to
+`change=new` with a null story ID. `not_supported` still requires a supplied
+chart measurement; it is not a synonym for unavailable.
+
+The request also lists repeated-author groups and explicitly marks independent
+confirmation as unassessed. A narrow local guard rejects the observed wording
+claiming multiple independent reports/sources/accounts. Numeric prose with an
+all-empty number-ownership audit is held; this detects an audit contradiction,
+not all possible numeric or semantic errors. Three October 7 live iterations
+reached pipeline completion once but did not qualify the final candidate;
+see the [iteration report](../analysis/2026-10-07-122329-g2-source-contract-iterations.md).
+
+The launch editor/Pulse routes send the schema through DeepInfra's strict
+`json_schema` response format, without duplicating it in prompt text. Every
+object is closed to extra fields and requires explicit values for its properties.
+Other routes retain the prompt schema, JSON-object mode and the same local
+ownership validation. The schema has a separate 120,000-byte default cap; the
+serialized request cap is evidence allowance + schema allowance + 30,000 bytes.
+The full request still counts toward the pre-send monetary reservation. An
+oversized schema or request fails before reserving/sending; it does not silently
+remove sources. A rebuilt October 4 discovery packet retained 128 recent/22 background posts
+at 237,724 bytes; its direct editor request was 347,225 bytes with a 94,337-byte
+schema, within the 390,000-byte total cap. Offline size checks do not establish
+provider acceptance or model quality.
+
+When the source does not supply an event date, `occurred_at` is instructed to
+use first-observed posting time for priority aging. It must not be presented as
+a verified launch date. Missing context or unseen source images still limit
+what the editor can infer; supplying URLs alone does not inspect their pixels.
 
 ## Voices and routing
 
@@ -114,11 +217,55 @@ endpoints are OpenRouter and direct DeepInfra. `vision` is an explicit capabilit
 OpenRouter provider fallback is disabled. A mismatched returned model or
 truncated/invalid response is held. Rejected replies persist a fixed failure code,
 HTTP status, model-match Boolean, standard finish reason and integer token counts
-when available. Raw rejected text and credentials are excluded. Uncertain stages
+when available. Success/failure diagnostics include the exact serialized request's
+SHA-256 hash, request profile, socket timeout and elapsed seconds. Bounded
+provider request IDs, recognized service tiers, reported reasoning-token counts
+and finite estimated cost are retained when supplied. A transport timeout has no
+invented HTTP status or network phase. Raw rejected text and credentials are
+excluded. Uncertain stages
 retain their reservation and cannot resend. No guessed model, key or price is
 supplied.
 OpenRouter requests also cap the permitted provider input/output prices at the
 configured reservation rates.
+
+The English launch profile routes editor and Pulse directly to DeepInfra as
+`deepseek-ai/DeepSeek-V4-Flash-0731`, using `DEEPINFRA_API_KEY` and
+`reasoning_effort: none`. The `editorial_editor_v1` and `editorial_writer_v1`
+profiles in [`x_monitor/deepinfra.py`](../../x_monitor/deepinfra.py) share the
+existing headline settings: priority tier, strict JSON schema, top_p 0.95 and
+seed 42. Editor temperature is 0.2; Pulse temperature is 0. The socket timeout
+is 300 seconds. It is not a whole-assessment deadline: the 15-minute assessment
+lease still prevents stale publication and further calls after expiry.
+The shared adapter requires the exact served model, priority tier, a request ID,
+nonnegative input/output token counts, a finite nonnegative estimated cost and
+zero or absent reported reasoning tokens. It rejects truncated/empty completions
+and duplicate JSON keys. It sends no OpenRouter provider or price-cap fields on
+those routes.
+Chatter uses direct OpenAI Chat Completions at
+`https://api.openai.com/v1/chat/completions`, model `gpt-6-sol`, with
+`reasoning_effort: medium`, `max_completion_tokens: 4096`, image input and
+`service_tier: default`. It sends no OpenRouter routing fields. See the
+[OpenAI request contract](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
+and [model pricing](https://developers.openai.com/api/docs/models/gpt-6-sol).
+The configured $2.50/M input reservation includes the published cache-write
+rate; output reserves $10/M. Existing combined daily limits still apply.
+
+The launch credential is `OPENAI_API_KEY`, sourced from fuchitalee's
+`/Users/fuchitalee/.env.secrets`. Delivery must parse only that literal assignment
+without executing the file and provision its value in the intended editorial
+worker's Render environment. Runtime reads the process environment and fails
+before reserving/sending if the selected key is absent; it never falls back to
+OpenRouter. Neither selecting the profile nor passing offline checks provisions
+a Render credential or activates scheduled generation.
+
+The English launch profile allows **65,536 total output tokens** per DeepSeek
+editor/Pulse call, including reasoning; the Chatter writer has its independent
+4,096-token allowance. The route validator permits configured allowances up to
+65,536. These are application request limits, not claims about the provider's
+maximum capability. Each request reserves the full configured output allowance
+before sending; increasing that allowance does not increase the combined $5/day
+ceiling. At the factual route's $2/M reservation rate, output alone reserves
+$0.131072 per call, plus its bounded input reservation.
 
 Atomic commentary uses its existing model and the versioned
 `post-synthesis-direct-source-v3` prompt, with no editorial profile.

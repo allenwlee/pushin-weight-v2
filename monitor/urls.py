@@ -24,12 +24,16 @@ urlpatterns = [
     path("dashboard/each/chart/", views.dashboard_each_chart_json, name="dashboard_each_chart"),
     path("internal/", views.home_internal, name="home_internal"),
     path("brands/<str:brand>/", views.brand_home, name="brand_home"),
-    path("product-review/", views.product_review, name="product_review"),
+    path("admin", views.product_review, name="product_review"),
+    path("admin/", views.product_review_legacy),
+    path("admin/official-accounts/frozen-run", views.frozen_account_run, name="frozen_account_run"),
     path(
-        "product-review/<int:proposal_id>/",
+        "admin/products/<int:proposal_id>/",
         views.product_review_detail,
         name="product_review_detail",
     ),
+    path("product-review/", views.product_review_legacy),
+    path("product-review/<int:proposal_id>/", views.product_review_legacy),
 
     # JSON data APIs
     path("feed/", views.home_feed_json, name="feed"),

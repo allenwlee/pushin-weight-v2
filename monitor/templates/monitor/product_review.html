@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ copy.title }} · Pushin' Weight</title>
+  <title>{{ admin_copy.title }} · Pushin' Weight</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
   <style>
     :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -29,17 +29,55 @@
     button { padding: 10px 16px; border: 0; border-radius: 7px; cursor: pointer; }
     .approve { background: #50d890; color: #07130c; }
     .reject { background: #ed6b75; color: #190608; }
+    .account-section { margin-bottom: 32px; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
+    .metric { flex: 1 1 140px; border: 1px solid #293342; border-radius: 8px; padding: 12px; }
+    .metric strong { display: block; font-size: 1.6rem; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #293342; overflow-wrap: anywhere; }
+    td { max-width: 300px; }
+    details { margin: 8px 0; }
+    details dl { grid-template-columns: 1fr; gap: 6px; }
+    blockquote { margin: 8px 0; padding-left: 12px; border-left: 2px solid #3a4658; }
+    .pagination { display: flex; gap: 20px; justify-content: center; padding-top: 20px; }
+    .candidate-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin: 20px 0; }
+    .candidate-filters label { flex: 1 1 200px; min-width: 0; margin: 0; }
+    .admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+    .admin-tabs a { padding: 12px 16px; border: 1px solid #3a4658; border-radius: 8px; text-decoration: none; }
+    .admin-tabs a[aria-current="page"] { background: #1e344b; border-color: #8bc4fa; color: #eef3fa; }
+    .admin-tabs a:focus-visible { outline: 2px solid #8bc4fa; outline-offset: 3px; }
     @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } dl { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>{{ copy.title }}</h1>
+  <h1>{{ admin_copy.title }}</h1>
+  {% if qualification_rerun %}<p><a data-frozen-run-link href="{% url 'frozen_account_run' %}?locale={{ active_locale }}">{{ frozen_run_label }} →</a></p>{% endif %}
+  <nav class="admin-tabs" aria-label="{{ admin_copy.accounts }}">
+    {% for tab in account_tabs %}<a href="{{ tab.url }}" data-account-tab="{{ tab.key }}"{% if accounts_tab == tab.key %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.count != None %} <span>({{ tab.count }})</span>{% endif %}</a>{% endfor %}
+  </nav>
+  {% if qualification_rerun %}
+  <section id="qualification-rerun" class="panel account-section" aria-labelledby="rerun-title">
+    <h2 id="rerun-title">{{ rerun_copy.title }}</h2>
+    <p>{{ rerun_copy.population }}: <strong data-rerun-count="population">{{ qualification_rerun.population }}</strong></p>
+    <p class="muted">{{ rerun_copy.note }}</p>
+    <div class="metrics">
+      {% for metric in rerun_metrics %}<div class="metric">{{ metric.label }}<strong data-rerun-count="{{ metric.key }}">{{ metric.value }}</strong></div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% if accounts_tab == 'found' or accounts_tab == 'history' %}
+    {% include 'monitor/_official_accounts_admin.html' %}
+  {% else %}
+    {% include 'monitor/_official_candidates_admin.html' %}
+  {% endif %}
+  <h2>{{ copy.title }}</h2>
   <div class="layout">
     <section class="panel" aria-labelledby="queue-title">
       <h2 id="queue-title">{{ copy.queue }}</h2>
       {% for item in proposals %}
-        <a class="proposal" href="{% url 'product_review_detail' item.pk %}">
+        <a class="proposal" href="{% url 'product_review_detail' item.pk %}?locale={{ active_locale }}">
           <strong>{{ item.observed_name }}</strong><br>
           <span class="muted">{{ item.account_handle_snapshot|default:item.account_id }} · {{ item.hf_outcome }}</span>
         </a>
@@ -50,7 +88,7 @@
 
     <section class="panel" aria-live="polite">
       {% if proposal %}
-        <p><a href="{% url 'product_review' %}">← {{ copy.back }}</a></p>
+        <p><a href="{% url 'product_review' %}?locale={{ active_locale }}">← {{ copy.back }}</a></p>
         <h2>{{ proposal.observed_name }}</h2>
         <dl>
           <dt>Post ID</dt><dd>{{ proposal.source_post_id }}</dd>

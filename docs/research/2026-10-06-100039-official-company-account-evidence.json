@@ -1,0 +1,463 @@
+{
+  "source": "stored public post export; owner-verified positives; not complete timelines",
+  "observed_on": "2026-10-06",
+  "accounts": [
+    {
+      "handle": "Aleph__Alpha",
+      "author_id": "1073704329528438785",
+      "owner_verified_official": true
+    },
+    {
+      "handle": "reflection_ai",
+      "author_id": "1800594921704898560",
+      "owner_verified_official": true
+    },
+    {
+      "handle": "Badtheorylabs",
+      "author_id": "2048427879273218048",
+      "owner_verified_official": true
+    }
+  ],
+  "posts": [
+    {
+      "tweet_id": "2068755681570705635",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "Quick reminder: \n\nDeepseek v4 pro and v4 flash are free on BTL Runtime till June 28 \n\nOne of the most powerful models for agentic use and coding \n\ntry it at : https://t.co/SnmIb1Q1zK https://t.co/HGgQwrKX5Q",
+      "fetched_at": "2026-07-23T09:25:37.597709+00:00",
+      "created_at": "2026-06-21T17:59:24+00:00",
+      "author_description": "",
+      "author_profile_bio": null,
+      "author_entities": null,
+      "author_verified_type": null,
+      "author_is_blue_verified": null,
+      "author_pinned_tweet_ids": null
+    },
+    {
+      "tweet_id": "2080654925835469082",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "@3___infinix 目前的 Compact GGUF 不包含可用作推测解码草稿器的 MTP 头。公开的 MTP 配方是完整 BF16 BTL-3：合并 LoRA 后，从 Qwen 基座补回 15 个 MTP 张量，再由 vLLM 使用。GGUF 走的是 BTL packed llama.cpp；它的原生测速与 BF16+MTP 配方应分开比较。",
+      "fetched_at": "2026-07-24T14:15:44.027516+00:00",
+      "created_at": "2026-07-24T14:02:45+00:00",
+      "author_description": "",
+      "author_profile_bio": null,
+      "author_entities": null,
+      "author_verified_type": null,
+      "author_is_blue_verified": null,
+      "author_pinned_tweet_ids": null
+    },
+    {
+      "tweet_id": "2085504881918407153",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "@sachindetrax It’s not, it’s your config. Please check the model card. Someone else faced this same issue and they were used base qwen chat template and some other wrong configs. Send your config please.",
+      "fetched_at": "2026-08-06T23:15:51.280849+00:00",
+      "created_at": "2026-08-06T23:14:45+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump"
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": "",
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2079306502897074249"
+      ]
+    },
+    {
+      "tweet_id": "2085505590998999467",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "@sachindetrax binary: /home/bfg/applications/llama.cpp/build/bin/llama-server\nmodel: BTL-4-IQ2_XXS.gguf\n\n# mmproj: removed. Compact is a text-only build with no vision tower, and that\n#   projector was for Qwen3.6 anyway. BTL-4 is qwen3_5_moe.\n# chat_template: removed. The GGUF ships the correct one. BTL-4 uses a\n#   <tool_call><function=name><parameter=x> DSL, not stock Qwen's JSON form.\n\nhost: 0.0.0.0\nport: 8080\nui: false\n\n# Use the GGUF's embedded Jinja template. Without this, llama.cpp falls back to\n# its legacy built-in templates and BTL-4's tool-call format is never used, so\n# removing the chat_template override above only helps if this is on.\njinja: true\n\n# Separate reasoning into reasoning_content instead of letting it accumulate\n# into content every turn. llama.cpp's default \"auto\" does not do this\n# correctly for BTL-4.\nreasoning_format: deepseek\n\nthreads: 6\nthreads_batch: 6\n\nubatch_size: 2048\nbatch_size: 2048\n\ngpu_layers: 99\nflash_attention: \"on\"\nparallel: 1\n\n# 250000 was costing you KV\n\nThis is the config. Use this.",
+      "fetched_at": "2026-08-06T23:30:51.022571+00:00",
+      "created_at": "2026-08-06T23:17:34+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump"
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": "",
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2079306502897074249"
+      ]
+    },
+    {
+      "tweet_id": "2086805128342806538",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "@HenkPoley @finkd Waiting on qwen 3.8 27B though. We’d compare. Then fine tune it to be better then compress",
+      "fetched_at": "2026-08-10T13:31:10.64428+00:00",
+      "created_at": "2026-08-10T13:21:28+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "infrastructure for AI native computing 0xf482fc051884df0Ff351FD9b8393B78c195fdd4f.     E54u2LpWSNZ5LqLitetfw7Ajc7t4phCPHCJuJVRPpump"
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": "",
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2085359932900082039"
+      ]
+    },
+    {
+      "tweet_id": "2102046077931163842",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "Tinfield 1 is available now under the Qwen Community License 1.0.\nBase weights and benchmark details:\nhttps://t.co/QLeJFgPTb7\nCompressed builds and running instructions:\nTinfield 1 Compact:  https://t.co/5XD1bKBK7M\nTinfield 1 Mini : https://t.co/FM4AXFYj5B\nDownload a build. Put it to work.",
+      "fetched_at": "2026-09-21T14:45:40.510121+00:00",
+      "created_at": "2026-09-21T14:43:33+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "making intelligence efficient enough to own."
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": null,
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2085359932900082039"
+      ]
+    },
+    {
+      "tweet_id": "2102457013267750944",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "Tinfield 1 is now live \n\nNow available through api on https://t.co/HSAbaolIsW \n\nSign up grab your keys and use the open ai compatible url: https://t.co/iWGpNlrUF2\n\n$0.15 per million input token and $0.60 per million output token\n\n33 on tb4.0 and cheaper than glm 5.3 flash",
+      "fetched_at": "2026-09-22T18:01:38.224678+00:00",
+      "created_at": "2026-09-22T17:56:28+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "making intelligence efficient enough to own."
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": null,
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2102046067990692093"
+      ]
+    },
+    {
+      "tweet_id": "2103532471367172281",
+      "author_id": "2048427879273218048",
+      "author_handle": "Badtheorylabs",
+      "author_name": "Bad theory labs",
+      "text": "@ctjlewis The model on the left is Qwen3-1.7B, not Opus. It obviously knows basic arithmetic. It actually found the correct expression at token 1,313, checked it several more times, then drifted back into bad ideas and never returned the answer. That is the behaviour the demo is showing.\nInterference Search isn’t meant to teach a model that 4 × 4 = 16. The arithmetic on the search side is exact. The problem is choosing and composing operations without exploring the same effective state repeatedly. With six numbers, 831,176 possible paths collapsed into 13,229 distinct states. That is where the saving comes from.\nI do agree that saying “models reason in a line” is too broad. Models clearly compile common operations into their weights. Call that memoization if you want. The interesting version of Interference Search would let those reliable operations remain atomic, then externalize the parts that still require search, merge equivalent outcomes, and remove dead states.\nThe 128-digit multiplication is cool, but it doesn’t really argue against any of that. It shows that a model can execute a long arithmetic procedure. It doesn’t show that combinatorial search, repeated states, and losing valid solutions have disappeared.",
+      "fetched_at": "2026-09-25T17:15:49.705786+00:00",
+      "created_at": "2026-09-25T17:09:57+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/EulzI6fcRv",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "badtheorylabs.com",
+                "expanded_url": "https://badtheorylabs.com"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "making intelligence efficient enough to own."
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": null,
+      "author_is_blue_verified": true,
+      "author_pinned_tweet_ids": [
+        "2102046067990692093"
+      ]
+    },
+    {
+      "tweet_id": "2104956884738347160",
+      "author_id": "1073704329528438785",
+      "author_handle": "Aleph__Alpha",
+      "author_name": "Aleph Alpha",
+      "text": "What does this mean? A prompt that forces the model to predict a bare “B” has seen much lesser training data to learn from. As a result, the probability of the correct answer drops by several orders of magnitude across Olmo 3, Qwen 3.5, and Gemma 4 on ARC, MMLU and PIQA.",
+      "fetched_at": "2026-09-29T15:30:59.386835+00:00",
+      "created_at": "2026-09-29T15:30:04+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/1EGJEObKh5",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "aleph-alpha.com",
+                "expanded_url": "https://www.aleph-alpha.com"
+              }
+            ]
+          },
+          "description": {
+            "urls": [
+              {
+                "url": "https://t.co/k7MxJK2vJz",
+                "indices": [
+                  77,
+                  100
+                ],
+                "display_url": "jobs.ashbyhq.com/AlephAlpha",
+                "expanded_url": "https://jobs.ashbyhq.com/AlephAlpha"
+              }
+            ],
+            "hashtags": [
+              {
+                "text": "artificialintelligence",
+                "indices": [
+                  101,
+                  124
+                ]
+              },
+              {
+                "text": "writtenbyahuman",
+                "indices": [
+                  126,
+                  142
+                ]
+              }
+            ]
+          }
+        },
+        "description": "We create specialized large language models for a sovereign Europe. Join us: https://t.co/k7MxJK2vJz #artificialintelligence, #writtenbyahuman"
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": null,
+      "author_is_blue_verified": false,
+      "author_pinned_tweet_ids": []
+    },
+    {
+      "tweet_id": "2107186852306550900",
+      "author_id": "1800594921704898560",
+      "author_handle": "reflection_ai",
+      "author_name": "Reflection",
+      "text": "Beam leads in inference efficiency for its model class -- 3-4x more efficient than GLM 5.2 and over 4x more efficient than leading Western open models.\n\nThis means Beam completes tasks faster and cheaper. https://t.co/vXolEfXOI4",
+      "fetched_at": "2026-10-05T19:15:31.522519+00:00",
+      "created_at": "2026-10-05T19:11:09+00:00",
+      "author_description": "",
+      "author_profile_bio": {
+        "entities": {
+          "url": {
+            "urls": [
+              {
+                "url": "https://t.co/TB8MU5U6pN",
+                "indices": [
+                  0,
+                  23
+                ],
+                "display_url": "reflection.ai",
+                "expanded_url": "https://reflection.ai"
+              }
+            ]
+          },
+          "description": {}
+        },
+        "description": "Make intelligence open and accessible to all"
+      },
+      "author_entities": {
+        "url": {},
+        "description": {
+          "urls": []
+        }
+      },
+      "author_verified_type": "Business",
+      "author_is_blue_verified": false,
+      "author_pinned_tweet_ids": [
+        "2107186849370247235"
+      ]
+    }
+  ],
+  "official_x_access_verification": {
+    "list_id": "2067062923525275922",
+    "owner_id": "17456158",
+    "added_account_id": "1800594921704898560",
+    "credential_variables": [
+      "PUSHINWEIGHT_X_LIST_ACCESS_TOKEN",
+      "PUSHINWEIGHT_X_LIST_REFRESH_TOKEN"
+    ],
+    "receipts": [
+      {
+        "receipt_name": "new-token-identity.json",
+        "observed_at": "2026-10-06T11:28:22.344216+00:00",
+        "http_status": 200,
+        "data": {
+          "id": "17456158",
+          "username": "allenwlee"
+        }
+      },
+      {
+        "receipt_name": "new-token-list.json",
+        "observed_at": "2026-10-06T11:28:22.619460+00:00",
+        "http_status": 200,
+        "data": {
+          "id": "2067062923525275922",
+          "owner_id": "17456158",
+          "private": true,
+          "member_count": 82
+        }
+      },
+      {
+        "receipt_name": "new-token-list-members.json",
+        "observed_at": "2026-10-06T11:28:22.961860+00:00",
+        "http_status": 200,
+        "member_count": 82,
+        "has_next_token": false,
+        "reflection_present": false
+      },
+      {
+        "receipt_name": "reflection-membership-add.json",
+        "observed_at": "2026-10-06T11:28:44.684910+00:00",
+        "http_status": 200,
+        "data": {
+          "is_member": true
+        }
+      },
+      {
+        "receipt_name": "reflection-membership-readback.json",
+        "observed_at": "2026-10-06T11:28:44.976943+00:00",
+        "http_status": 200,
+        "member_count": 83,
+        "has_next_token": false,
+        "reflection_present": true
+      }
+    ],
+    "issuing_app_verified": false,
+    "earlier_oauth1_failure_cause_established": false,
+    "automatic_collector_or_config_or_db_registration_changed": false,
+    "remaining": [
+      "runtime secret provisioning",
+      "refresh and client matching",
+      "rotation persistence",
+      "runtime adapter verification"
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "provenance": "Frozen 2026-10-04 packet used in the October 6 editor audit and baseline trial; verbatim source text and collected brand matches.",
+  "cutoff": "2026-10-04T01:00:40.731920+00:00",
+  "posts": [
+    {
+      "id": "2106503895375851947",
+      "original_text": "@trawasthi_ai “Wake up” you have it against Qwen 3.6?",
+      "brand_keys": [
+        "qwen"
+      ],
+      "stored_quote": "",
+      "images": [],
+      "author_handle": "M_Keegan_",
+      "author_id": "3356103400",
+      "quoted_author_handle": "",
+      "parent_author_handle": "trawasthi_ai"
+    },
+    {
+      "id": "2106398475558482342",
+      "original_text": "Wake up, baby! Germany has joined the race of frontier LLMs with its sovereign model \"Kolibri\".\n\nAnd it's Open-Source, too!\n\nBeats Qwen2635B, Nemotron3 Super, and Mistral Small 4 in the Math, Science, and Code arena! 🎉\n\nThe underlying architecture: custom MoE Transformer https://t.co/kBae1BFK1T",
+      "brand_keys": [
+        "mistral"
+      ],
+      "stored_quote": "Small bird, fast wings, Kolibri is here.\n\n78B parameters. 3.46B active. Up to 1M tokens of context. Built in Europe.\n\nNow the weights are yours. Run it on your own hardware, under Apache 2.0. https://t.co/5263xZ9xZN",
+      "images": [
+        "https://pbs.twimg.com/media/HTtt7zxWIAA30Zb.png"
+      ],
+      "author_handle": "trawasthi_ai",
+      "author_id": "1545732544162775040",
+      "quoted_author_handle": "Aleph__Alpha",
+      "parent_author_handle": ""
+    },
+    {
+      "id": "2106383170857791527",
+      "original_text": "Speed is not a cosmetic upgrade in AI. It determines whether an agent feels alive or constantly waits on itself.\n\nGLM-5.3-FlashX brings up to 200 tokens/s, a 1M-token context window and native multimodal intelligence to https://t.co/t3L8LvsvNw.\n\nIts 320B architecture activates only 18B parameters per task, delivering serious capacity with efficient execution.\n\nBuilt for coding, tool use and long agent workflows where every second compounds.\n\nhttps://t.co/t3L8LvsvNw is not collecting model logos. It is assembling the execution layer builders will actually use.\n\n@justinsuntron @BAI_AGI #TronEcoStar",
+      "brand_keys": [
+        "glm"
+      ],
+      "stored_quote": "📢 GLM-5.3-FlashX Is Now Live on https://t.co/mTw8ldARw7\n\nDeveloped by https://t.co/4gbAHbEqiZ, GLM-5.3-FlashX is a speed-optimized native multimodal model built on an efficient 320B total / 18B active parameter sparse architecture, reaching generation speeds of up to 200 tokens/sec. It integrates a 1M context window, native understanding of text/images/videos/files, and interleaved reasoning for high-speed interactive coding and agent workflows.\n\nNow available on both https://t.co/mTw8ldARw7 API and Web Chat!\n\n👉 Try now: https://t.co/vi1PDjFrxs\n🔗 Learn more: https://t.co/B6Sf7T3ahU",
+      "images": [],
+      "author_handle": "MariaOnchainDev",
+      "author_id": "1643695495385169923",
+      "quoted_author_handle": "BAI_AGI",
+      "parent_author_handle": ""
+    }
+  ]
+}

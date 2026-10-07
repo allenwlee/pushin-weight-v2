@@ -1,4 +1,5 @@
 import io
+import json
 
 import pytest
 from django.utils import timezone
@@ -8,6 +9,45 @@ from core.models import Brand, Person, PersonBrandAffiliation, PersonMedia
 from core.staff_assets.media import store_image
 from monitor.editorial.config import EditorialConfig, Route
 from monitor.editorial.contracts import Event
+
+
+def grounded_reply(body, data):
+    """A fake provider selects real labels/passages from the captured request."""
+    content = body["messages"][1]["content"]
+    if isinstance(content, list):
+        content = content[0]["text"]
+    evidence = json.loads(content)["evidence"]
+    sources = evidence["posts"] if isinstance(evidence, dict) else evidence
+    source = sources[0]
+    entries = data.get("events", [data])
+    for entry in entries:
+        entry.pop("post_ids", None)
+        wanted_brands = (
+            entry.pop("brand_keys", source.get("brand_keys", []))
+            if "events" in data
+            else source.get("brand_keys", [])
+        )
+        if "events" not in data:
+            entry["supported_copy"] = {
+                k: entry[k] for k in ("headline", "byline", "article")
+            }
+        entry["source_check"] = [
+            {
+                "support": {
+                    "post_id": source["id"],
+                    "source_field": source["source_spans"][0]["source_field"],
+                    "span_ids": [source["source_spans"][0]["span_id"]],
+                    "brand_keys": [
+                        b for b in wanted_brands if b in source.get("brand_keys", [])
+                    ],
+                },
+                "action": "announces",
+                "target": "a release",
+                "status": "announcement",
+                "number_ownership": "none",
+            }
+        ]
+    return data
 
 
 @pytest.fixture

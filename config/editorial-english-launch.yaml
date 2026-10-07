@@ -23,20 +23,26 @@ voices:
   pulse:en: pulse-en-v1
 routes:
   editor: &factual
-    model: deepseek/deepseek-v4-flash-0731
-    endpoint: https://openrouter.ai/api/v1/chat/completions
-    key_env: OPENROUTER_API_KEY
-    reasoning: medium
+    model: deepseek-ai/DeepSeek-V4-Flash-0731
+    endpoint: https://api.deepinfra.com/v1/openai/chat/completions
+    key_env: DEEPINFRA_API_KEY
+    reasoning: none
+    request_profile: editorial_editor_v1
+    timeout_seconds: 300
     vision: false
-    # Conservative ceilings above catalog rates, also sent as provider max_price.
+    # Conservative reservation ceilings; direct DeepInfra has no OpenRouter fields.
     input_usd_per_million: 0.10
     output_usd_per_million: 2.00
-    max_output_tokens: 8192
-  pulse: *factual
+    # Established project DeepSeek output ceiling, including reasoning tokens.
+    max_output_tokens: 65536
+  pulse:
+    <<: *factual
+    request_profile: editorial_writer_v1
   chatter:
-    model: openai/gpt-6-sol
-    endpoint: https://openrouter.ai/api/v1/chat/completions
-    key_env: OPENROUTER_API_KEY
+    model: gpt-6-sol
+    endpoint: https://api.openai.com/v1/chat/completions
+    # Provision this exact variable from fuchitalee's ~/.env.secrets at launch.
+    key_env: OPENAI_API_KEY
     reasoning: medium
     vision: true
     # Catalog input $2/M; reserve $2.50/M including the published cache-write rate.
