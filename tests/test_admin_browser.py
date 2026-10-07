@@ -24,6 +24,37 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminBrowserTests(StaticLiveServerTestCase):
+    def test_qualification_rerun_progress_uses_fixed_cohort(self):
+        from core.models import OfficialCompanyAttempt
+        from core.official_company_accounts import POLICY_VERSION
+        from core.official_company_requalification import initialize_cohort
+        from tests.test_official_company_requalification import manifest, state
+
+        a, b = state(97901), state(97902)
+        initialize_cohort(manifest([a, b]))
+        OfficialCompanyAttempt.objects.create(
+            state=a, evidence_hash=a.evidence_hash, claim_token="rerun-browser", status="completed",
+            model="test-model", policy_version=POLICY_VERSION, reserved_usd=0,
+            decision={"outcome": "accepted", "development_type": "agent", "organization_name": "Agent Company"},
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                for locale in ["en", "zh_hans", "ja"]:
+                    page.goto(self.live_server_url + "/admin?locale=" + locale)
+                    self.assertTrue(page.locator('#qualification-rerun').is_visible())
+                    for key, expected in [("population", "2"), ("completed", "1"), ("qualified", "1"), ("newly_qualified", "1"), ("agent", "1"), ("harness", "0")]:
+                        self.assertEqual(page.locator(f'[data-rerun-count="{key}"]').inner_text(), expected)
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    shot = Path(__file__).resolve().parents[1] / f".pytest-tmp/admin-rerun-{locale}.png"
+                    shot.parent.mkdir(exist_ok=True)
+                    page.screenshot(path=str(shot), full_page=True)
+                    page.set_viewport_size({"width": 1440, "height": 1000})
+            finally:
+                browser.close()
+
     def test_failed_and_tracked_tabs_do_not_mix_with_company_review(self):
         from core.models import BrandAccount, OfficialCompanyAttempt, Role
         from core.official_company_candidates import CANDIDATE_POLICY

@@ -93,6 +93,22 @@ def test_evidence_hash_ignores_post_order_and_follower_counts():
     assert first["identity"] == build_evidence(a, list(reversed(rows)))["identity"]
 
 
+@pytest.mark.parametrize("kind", ["model", "agent", "harness"])
+def test_own_product_development_can_use_third_party_models_without_hf(kind):
+    evidence = build_evidence(account(), [{"id": "1", "text": f"We are Example Lab. We develop our own {kind}, using an open-weight base."}])
+    citation = {"source_id": "post:1", "quote": evidence["sources"][0]["text"]}
+    decision = {
+        "outcome": "accepted", "organization_name": "Example Lab",
+        "development_type": kind, "model_types": ["speech"] if kind == "model" else [],
+        "rationale": "Our own developed product, without an HF requirement.", "contradictions": [],
+        "claims": {key: [citation] for key in ["organization", "official_account", "product_developer"]},
+    }
+    assert validate_decision(decision, evidence)["development_type"] == kind
+    decision["claims"]["product_developer"] = [{"source_id": "unknown", "quote": "unsupported developer"}]
+    with pytest.raises(ValueError, match="citation"):
+        validate_decision(decision, evidence)
+
+
 def test_prompt_policy_change_preserves_existing_evidence_identity(monkeypatch):
     from core import official_company_accounts
 
@@ -155,13 +171,13 @@ def test_malformed_profile_does_not_invent_domain(bad_profile):
     assert evidence["sources"] == [{"id": "post:1", "text": "Known text"}]
 
 
-def test_original_candidate_prompt_is_retained():
+def test_owner_amended_candidate_prompt_is_versioned_and_pinned():
     import hashlib
 
     from core.official_company_accounts import POLICY_VERSION, SYSTEM_PROMPT
 
-    assert POLICY_VERSION == "official-model-developer-v2"
-    assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e"
+    assert POLICY_VERSION == "official-ai-product-developer-v3"
+    assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "79c370c67f9717bd408b60210b4f8262d3b93817c03504c89f4dc135dc972c7d"
 
 
 @pytest.mark.parametrize("signal", ["blockchain", "Web3", "web-3", "区块链", "ブロックチェーン"])
@@ -179,4 +195,4 @@ def test_blockchain_risk_changes_prompt_without_changing_eligibility_or_base_pro
     prompt, policy = evaluator_prompt(risky)
     assert prompt.startswith(SYSTEM_PROMPT)
     assert policy == BLOCKCHAIN_POLICY_VERSION
-    assert "higher hurdle" in prompt and "not an automatic rejection" in prompt
+    assert "higher technical-evidence hurdle" in prompt and "Blockchain association alone" in prompt

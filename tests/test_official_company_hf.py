@@ -17,7 +17,7 @@ def evidence(handle="examplelab"):
             "sources": [{"id": "account:bio", "text": "We develop our own speech models."}]}
 
 
-def transport(*, card="Our model was trained by Example Lab.", verified=True, profile_handle="examplelab", status=200, tags=None):
+def transport(*, card="Our model was trained by Example Lab.", verified=True, profile_handle="examplelab", status=200, tags=None, artifact="model.safetensors"):
     calls = []
 
     def respond(request):
@@ -31,7 +31,7 @@ def transport(*, card="Our model was trained by Example Lab.", verified=True, pr
         if path == "/examplelab":
             return httpx.Response(200, text=f'<a class="leading-snug" href="https://x.com/{profile_handle}">X</a><a class="leading-snug" href="https://example.ai">Website</a>')
         if path == "/api/models":
-            return httpx.Response(200, json=[{"id": "examplelab/speech", "sha": "a" * 40, "private": False, "siblings": [{"rfilename": "model.safetensors"}], "tags": tags or []}])
+            return httpx.Response(200, json=[{"id": "examplelab/speech", "sha": "a" * 40, "private": False, "siblings": [{"rfilename": artifact}], "tags": tags or []}])
         if path.endswith("README.md"):
             return httpx.Response(status, text=card)
         raise AssertionError(path)
@@ -44,7 +44,7 @@ def transport(*, card="Our model was trained by Example Lab.", verified=True, pr
     ("Our model was trained by Example Lab.", False, "examplelab", 200, []),
     ("Our model was trained by Example Lab.", True, "impostor", 200, []),
     ("Our model was trained by Example Lab.", True, "examplelab", 401, []),
-    ("Our model was trained by Example Lab.", True, "examplelab", 200, ["base_model:quantized:Meta/Llama"]),
+    ("Model developer: Meta; hosted by Example Lab.", True, "examplelab", 200, ["base_model:quantized:Meta/Llama"]),
 ])
 def test_ineligible_or_unavailable_hf_proof_stays_reviewable(card, verified, profile_handle, status, tags):
     route, calls = transport(card=card, verified=verified, profile_handle=profile_handle, status=status, tags=tags)
@@ -53,6 +53,15 @@ def test_ineligible_or_unavailable_hf_proof_stays_reviewable(card, verified, pro
     assert result["outcome"] == "review_needed"
     assert len(calls) <= 12
     assert len(calls) == len(result["requests"])
+
+
+@pytest.mark.parametrize("card", ["Our model was trained by Example Lab.", "Quantized by Example Lab, based on Meta's model."])
+def test_attributable_quantized_own_or_derivative_model_can_pass(card):
+    route, _ = transport(card=card, tags=["gguf", "base_model:quantized:Meta/Llama"], artifact="model.gguf")
+    with httpx.Client(transport=route) as client:
+        result = verify(evidence(), {"organization_name": "Example Lab"}, client=client)
+    assert result["outcome"] == "passed"
+    assert result["development_quote"] == card
 
 
 def test_real_profile_and_pinned_own_model_proof():

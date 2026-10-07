@@ -21,7 +21,7 @@ from django.utils import timezone
 from core.hf_metadata_client import NAMESPACE, REPO_ID
 from core.official_company_accounts import digest
 
-VERSION = "official-hf-model-developer-v2"
+VERSION = "official-hf-model-developer-v3"
 SALT = "official-company-hf-approval-v1"
 KEY_ENV = "PUSHINWEIGHT_OFFICIAL_COMPANY_HF_SIGNING_KEY"
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -118,7 +118,7 @@ def development_quote(card, organization, namespace, *, identity_name="", publis
             alias = _compact(label)
             if len(alias) >= 4 and _compact(name).startswith(alias) and _domain(url) in {_domain(site) for site in publisher_urls}:
                 names.add(alias)
-        match = re.search(r"(?:developed|trained|fine[- ]?tuned|finetuned)\s+by\s*:?\s*(.+)", clean, re.IGNORECASE)
+        match = re.search(r"(?:developed|trained|fine[- ]?tuned|finetuned|quantized|quantised)\s+by\s*:?\s*(.+)", clean, re.IGNORECASE)
         if match and re.search(r"\b(?:not|never)\s*$", clean[:match.start()], re.IGNORECASE):
             continue
         if match and credited(match[1], names):
@@ -210,11 +210,8 @@ def verify(evidence, decision, *, client=None, seconds=20):
             repo, sha = model.get("id", ""), model.get("sha", "")
             if not isinstance(repo, str) or not REPO_ID.fullmatch(repo) or repo.split("/")[0].casefold() != namespace.casefold() or not isinstance(sha, str) or not SHA.fullmatch(sha) or model.get("private") is not False or model.get("disabled"):
                 continue
-            artifacts = [row.get("rfilename", "") for row in (model.get("siblings") if isinstance(model.get("siblings"), list) else []) if isinstance(row, dict) and isinstance(row.get("rfilename"), str) and row["rfilename"].lower().endswith((".safetensors", ".bin", ".onnx", ".pt", ".pth", ".h5", ".hdf5", ".ckpt", ".tflite", ".mlmodel", ".pkl", ".joblib"))]
+            artifacts = [row.get("rfilename", "") for row in (model.get("siblings") if isinstance(model.get("siblings"), list) else []) if isinstance(row, dict) and isinstance(row.get("rfilename"), str) and row["rfilename"].lower().endswith((".safetensors", ".bin", ".onnx", ".pt", ".pth", ".h5", ".hdf5", ".ckpt", ".tflite", ".mlmodel", ".pkl", ".joblib", ".gguf"))]
             if not artifacts:
-                continue
-            tags = model.get("tags") or []
-            if any("quantized" in str(tag) or str(tag).casefold() == "gguf" for tag in tags):
                 continue
             card = api.get(f"/{repo}/raw/{sha}/README.md", text=True)
             quote = development_quote(card, org.get("fullname", ""), namespace, identity_name=identity_name, publisher_urls=publisher["websites"]) if isinstance(card, str) else ""
@@ -249,7 +246,7 @@ def approved(state):
     return proof == {**_binding(state), "verification_hash": digest({k: v for k, v in receipt.items() if k != "signature"})}
 
 
-def verify_review_candidates(*, limit=1, deadline=None):
+def verify_review_candidates(*, limit=1, deadline=None, state_ids=None):
     """One check per current evidence/version; failures remain human review."""
     from django.db import transaction
     from django.db.models import F, Q
@@ -260,7 +257,7 @@ def verify_review_candidates(*, limit=1, deadline=None):
     key = os.environ.get(KEY_ENV)
     if not key:
         return {"checked": 0, "approved": 0, "status": "signing_key_unavailable"}
-    ids = list(OfficialCompanyAccountState.objects.filter(
+    candidates = (OfficialCompanyAccountState.objects.filter(
         status="review_needed",
     ).exclude(last_error="already_tracked").exclude(model="owner-attestation"
     ).filter(Q(decision__contradictions=[]) | Q(decision__contradictions__isnull=True),
@@ -269,8 +266,12 @@ def verify_review_candidates(*, limit=1, deadline=None):
              | ~Q(hf_evidence_hash=F("evidence_hash"))
              | Q(decision__hf_verification__isnull=True)
              | Q(decision__hf_verification__version__isnull=True)
-             | Q(hf_evidence_hash__isnull=True))
-        .order_by("candidate_priority", "updated_at", "pk").values_list("pk", flat=True)[:limit])
+             | Q(hf_evidence_hash__isnull=True)))
+    if state_ids is not None:
+        if len(state_ids) > 2000:
+            raise ValueError("HF candidate set exceeds bound")
+        candidates = candidates.filter(pk__in=state_ids)
+    ids = list(candidates.order_by("candidate_priority", "updated_at", "pk").values_list("pk", flat=True)[:limit])
     result = {"checked": 0, "approved": 0}
     for state_id in ids:
         remaining = deadline - time.monotonic() if deadline is not None else 20

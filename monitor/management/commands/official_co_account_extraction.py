@@ -46,6 +46,7 @@ class Command(BaseCommand):
                 "provision-owner",
                 "refresh-owner",
                 "resume-model",
+                "requalify",
             ],
         )
         parser.add_argument("--account-id", action="append", default=[])
@@ -56,6 +57,7 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--config", default="config.yaml")
         parser.add_argument("--replace-owner-credential", action="store_true")
+        parser.add_argument("--cohort-manifest")
 
     def handle(self, *args, **opts):
         action = opts["action"]
@@ -68,7 +70,10 @@ class Command(BaseCommand):
         if len(ids) > limit:
             raise CommandError("account set exceeds limit")
         if opts["dry_run"] or action == "inspect":
+            from core.official_company_requalification import cohort_report
+
             result = coverage()
+            result["requalification"] = cohort_report()
             result["all_outcomes"] = dict(
                 OfficialCompanyAccountState.objects.values("status")
                 .annotate(n=Count("pk"))
@@ -91,7 +96,7 @@ class Command(BaseCommand):
         if not cfg.enabled:
             raise CommandError("official company discovery is disabled")
         run_id = "official-co-" + uuid.uuid4().hex
-        review_only = action in {"initial-scan", "incremental", "enqueue"} or (
+        review_only = action in {"initial-scan", "incremental", "enqueue", "requalify"} or (
             action == "drain" and (opts["evaluate_only"] or (
                 not cfg.registration_enabled and not cfg.list_sync_enabled
             ))
@@ -134,6 +139,21 @@ class Command(BaseCommand):
                     result = {"status": "ready", "action": action}
                 except XListError as exc:
                     raise CommandError(str(exc)) from None
+            elif action == "requalify":
+                from core.official_company_requalification import (
+                    initialize_cohort,
+                    run_cohort_batch,
+                )
+
+                if opts["cohort_manifest"]:
+                    manifest_path = Path(opts["cohort_manifest"])
+                    if manifest_path.stat().st_size > 1024 * 1024:
+                        raise CommandError("cohort manifest exceeds 1MiB")
+                    initialize_cohort(json.loads(manifest_path.read_text()))
+                call = build_discovery_call(cfg)
+                if call is None:
+                    raise CommandError("official company model client unavailable")
+                result = run_cohort_batch(cfg=cfg, call=call, limit=limit, deadline=deadline)
             elif action == "resume-model":
                 from core.models import OfficialCompanyProviderState
 

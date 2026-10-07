@@ -1,6 +1,8 @@
-# Official AI model-lab account discovery
+# Official AI company account discovery
 
-This service finds official accounts of organizations developing or releasing AI models of any kind. It reads stored account profiles and posts. It registers supported company/brand identities and queues additions to Call A's existing private X list. It does not change editorial admission to Chatter or Pulse.
+This service finds official accounts of companies or organizations developing an AI model, their own agent, or their own harness. Model development includes proprietary/closed-weight models and attributable derivatives of open-weight models, including fine-tuning and quantization. Agent and harness developers can use another company's models. Hugging Face presence and public weights are optional for every route. It reads stored account profiles and posts, registers supported company/brand identities and queues additions to Call A's existing private X list. It does not change editorial admission to Chatter or Pulse.
+
+The evaluator records separate evidence for company identity, official account identity and actual product development under `official-ai-product-developer-v3`. Mere model/API use, hosting, resale or unchanged mirrors do not establish development; an actual developed agent or harness qualifies even when it wraps third-party models. Agent/harness decisions leave model types empty rather than attributing their suppliers' models to them. Blockchain/Web3 evidence triggers the versioned higher technical-evidence hurdle for the actual development route. Ordinary positive evaluations still need human settlement; independent server-signed official HF own-model verification retains its automatic registration path. HF verification accepts attributable quantized derivatives/GGUF artifacts and preserves the distinction from unchanged mirrors. Existing signed settlements remain valid.
 
 There are two separate jobs. `initial-scan` cheaply screens every account at a frozen start boundary, without an age cutoff. Only selected candidates receive expensive official-account evaluation. The scheduled harvester independently screens new/changed account, post-fetch and profile evidence, with a rotating inventory check for missed observations. Follower-count changes alone do not create a new decision.
 
@@ -64,7 +66,7 @@ routes. Previously opened proposal forms can still submit to their old URLs,
 with the existing permission and CSRF checks. New proposal links use
 `/admin/products/<proposal_id>/` and retain the chosen display language.
 
-All commands return JSON. `inspect` and `--dry-run` do not call providers or write application records. Mutating operations use the same PostgreSQL harvest writer lock and return `writer_busy` without waiting when another writer owns it. Do not pause the cron to make a manual batch run.
+All commands return JSON. `inspect` and `--dry-run` do not call providers or write application records. Enumeration, enqueue, the fixed-cohort rerun and evaluation-only drains use the separate discovery lock and return `discovery_busy` without waiting. Registration, list synchronization and credential actions first require the harvest writer lock, then the discovery lock; a busy harvest writer returns `writer_busy`. Do not pause the cron to make a manual batch run.
 
 ```bash
 python manage.py official_co_account_extraction inspect
@@ -78,7 +80,13 @@ python manage.py official_co_account_extraction sync --seconds 45
 python manage.py official_co_account_extraction retry --account-id 1800594921704898560
 python manage.py official_co_account_extraction suppress --account-id 1800594921704898560
 python manage.py official_co_account_extraction resume-model
+python manage.py official_co_account_extraction requalify --cohort-manifest /path/to/frozen-cohort.json --limit 20 --seconds 120
+python manage.py official_co_account_extraction requalify --limit 20 --seconds 120
 ```
+
+The October 7 qualification rerun has a fixed population of 944 accounts: 896 review candidates and 48 failed evaluations, frozen at 11:35:02 UTC. Its compact manifest contains state ID, account ID, evidence hash and prior outcome in `review`/`failed` arrays, plus `frozen_at`. Initialization stores immutable membership in `OfficialCompanyScan` under `official-company-requalification-20261007-v3`; repeating the same manifest resumes work, and different membership is rejected. New-policy attempts retain separate decisions and spend receipts. Changed evidence, existing registrations/settlements, tracked identities and suppressions are protected. Physical calls remain serial, at most three attempts per account, with the existing shared initial USD50 ceiling and bounded request/lane deadlines.
+
+Once initialized, `/admin` shows rerun progress on every accounts tab. Qualifying counts include earlier positives that pass again; newly qualifying excludes the 86 earlier accepted results in the frozen baseline. Model, agent and harness counts describe eligibility findings, separate from list additions. Uncertain, rejected, failed, retry-pending, pending and excluded outcomes stay distinct. Independently HF-verified and registered accounts are recognized even when their paid evaluation failed; that verification subset is also shown separately. `inspect` includes the same read-only `requalification` report, qualifying account identities and measured/unknown reserved spend. These counters describe this fixed rerun, not the entire inventory or subsequent collection.
 
 Repeat bounded initial batches until enumeration completes; separately drain funded decisions and inspect outcomes. Never equate an enumeration cursor reaching the end with completed evaluation. `retry` cannot clear suppression. Retrying an account with changed or rejected evidence requires another decision; it does not restore an old acceptance automatically.
 

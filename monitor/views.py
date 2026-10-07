@@ -5934,6 +5934,34 @@ _CANDIDATE_COPY = {
 }
 
 
+_REQUALIFICATION_COPY = {
+    "en": {
+        "title": "Qualification rerun", "population": "Frozen accounts",
+        "note": "Qualifying results need human review unless independently verified. Newly qualifying counts exclude earlier positive results.",
+        "completed": "Processed", "qualified": "Qualifying", "newly_qualified": "Newly qualifying",
+        "model": "Model developers", "agent": "Agent developers", "harness": "Harness developers",
+        "uncertain": "Uncertain", "rejected": "Rejected", "failed": "Failed", "pending": "Pending",
+        "retry_pending": "Retry pending", "excluded": "Excluded from rerun", "hf_verified": "HF verified and registered",
+    },
+    "zh_hans": {
+        "title": "资格重新评估", "population": "固定账号数",
+        "note": "符合条件的结果需人工审核，除非已独立验证。新符合条件数不包含之前的正面判定。",
+        "completed": "已处理", "qualified": "符合条件", "newly_qualified": "新符合条件",
+        "model": "模型开发者", "agent": "智能体开发者", "harness": "运行框架开发者",
+        "uncertain": "不确定", "rejected": "已排除", "failed": "失败", "pending": "待处理",
+        "retry_pending": "等待重试", "excluded": "不参与重评", "hf_verified": "HF 已验证并登记",
+    },
+    "ja": {
+        "title": "適格性の再評価", "population": "固定したアカウント数",
+        "note": "独立した検証がない適格判定には人の確認が必要です。新規適格数には以前の肯定判定を含みません。",
+        "completed": "処理済み", "qualified": "適格", "newly_qualified": "新規適格",
+        "model": "モデル開発者", "agent": "エージェント開発者", "harness": "実行基盤開発者",
+        "uncertain": "不確定", "rejected": "対象外", "failed": "失敗", "pending": "未処理",
+        "retry_pending": "再試行待ち", "excluded": "再評価対象外", "hf_verified": "HF 検証・登録済み",
+    },
+}
+
+
 def _can_review_products(request: HttpRequest) -> bool:
     if not request.user.is_authenticated:
         return False
@@ -5971,6 +5999,10 @@ def _product_review_context(
     admin_copy = _ADMIN_COPY.get(copy_locale, _ADMIN_COPY["en"])
     for row in report["rows"]:
         row["list_label"] = admin_copy["outcomes"][row["list_outcome"]]
+    from core.official_company_requalification import cohort_report
+
+    rerun = cohort_report()
+    rerun_copy = _REQUALIFICATION_COPY.get(copy_locale, _REQUALIFICATION_COPY["en"])
     fixed_status = {"review": "review_needed", "failed": "failed_evaluations", "tracked": "already_tracked"}.get(accounts_tab)
     candidates = candidate_report(
         page=request.GET.get("candidate_page", 1),
@@ -6030,6 +6062,13 @@ def _product_review_context(
         "official_candidates": candidates,
         "candidate_copy": candidate_copy,
         "candidate_fixed_status": bool(fixed_status),
+        "qualification_rerun": rerun,
+        "rerun_copy": rerun_copy,
+        "rerun_metrics": [
+            {"key": key, "label": rerun_copy[key], "value": rerun[key]}
+            for key in ("completed", "qualified", "newly_qualified", "model", "agent", "harness",
+                        "uncertain", "rejected", "failed", "pending", "retry_pending", "excluded", "hf_verified")
+        ] if rerun else [],
         "candidate_metrics": [
             {"key": key, "label": candidate_copy[key], "value": value}
             for key, value in candidates["summary"].items()
