@@ -59,8 +59,8 @@ def state_for(identifier="992"):
     return enqueue_account(account)
 
 
-def test_unchanged_old_acceptance_requeues_for_current_evaluator():
-    from core.official_company_accounts import MODEL, POLICY_VERSION, enqueue_account
+def test_unchanged_model_acceptance_is_held_without_another_call():
+    from core.official_company_accounts import MODEL, enqueue_account
 
     state = state_for()
     state.status = "accepted"
@@ -71,8 +71,9 @@ def test_unchanged_old_acceptance_requeues_for_current_evaluator():
     state.save()
     old_hash = state.evidence_hash
     state = enqueue_account(state.account)
-    assert state.status == "pending" and state.attempts == 0
-    assert state.policy_version == POLICY_VERSION
+    assert state.status == "review_needed" and state.attempts == 3
+    assert state.last_error == "human_review_required"
+    assert state.policy_version == "official-model-developer-v2"
     assert state.evidence_hash == old_hash
     assert state.decision == {"outcome": "accepted"}
 
@@ -206,11 +207,13 @@ def test_owner_settlement_is_versioned_once_and_not_a_classifier_handle_rule():
     assert state.attempt_records.get().status == "owner_attested"
     enqueue_account(account)
     assert state.attempt_records.count() == 1
+    saved = (state.evidence_hash, state.evidence, state.decision, state.policy_version)
     account.bio = "Changed evidence"
     account.save()
     changed = enqueue_account(account)
-    assert changed.status == "pending"
-    assert not any(s["id"].startswith("owner:") for s in changed.evidence["sources"])
+    assert changed.status == "accepted" and changed.model == "owner-attestation"
+    assert (changed.evidence_hash, changed.evidence, changed.decision, changed.policy_version) == saved
+    assert changed.attempt_records.count() == 1
 
 
 def test_model_auth_failure_blocks_other_accounts_until_credential_revision():
@@ -240,3 +243,27 @@ def test_model_auth_failure_blocks_other_accounts_until_credential_revision():
     fail.credential_revision = "b" * 64
     assert evaluate_account(second.pk, cfg=cfg, call=fail, budget_scope="repaired")
     assert len(attempts) == 2
+
+
+def test_changed_evidence_does_not_keep_old_positive_as_current_review():
+    from core.official_company_accounts import enqueue_account, evaluate_account
+    from core.official_company_admin import account_report
+    from tests.test_official_company_cycle import accept
+
+    state = state_for("996")
+    assert evaluate_account(state.pk, cfg=configured(), call=accept, budget_scope="before-change")
+    state.refresh_from_db()
+    assert state.decision["outcome"] == "accepted"
+    original_attempt = state.attempt_records.get()
+    state.account.bio = "Materially changed identity evidence"
+    state.account.save()
+    changed = enqueue_account(state.account)
+    assert changed.status == "pending" and changed.decision == {}
+    assert evaluate_account(
+        state.pk, cfg=configured(), call=lambda *args: {}, budget_scope="after-change"
+    )
+    changed.refresh_from_db()
+    assert changed.status == "review_needed" and changed.decision == {}
+    original_attempt.refresh_from_db()
+    assert original_attempt.decision["outcome"] == "accepted"
+    assert account_report(list_id=2067062923525275922)["summary"]["found"] == 0

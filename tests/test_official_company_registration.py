@@ -23,15 +23,17 @@ def accepted(identifier="880", name="New Speech Lab"):
         account=a,
         evidence_hash="a" * 64,
         status="accepted",
-        model=MODEL,
+        model="owner-attestation",
         policy_version=POLICY_VERSION,
         decision={"outcome": "accepted", "organization_name": name},
     )
 
 
-def test_old_evaluator_acceptance_requeues_without_registering():
+@pytest.mark.parametrize("policy", [POLICY_VERSION, "legacy-evaluator"])
+def test_model_acceptance_requires_human_review_even_with_registration_enabled(policy):
     state = accepted()
-    state.policy_version = "official-model-developer-v2"
+    state.model = MODEL
+    state.policy_version = policy
     state.attempts = 3
     state.save()
     old_hash, old_decision = state.evidence_hash, state.decision
@@ -40,8 +42,9 @@ def test_old_evaluator_acceptance_requeues_without_registering():
         state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True)
     ) is None
     state.refresh_from_db()
-    assert state.status == "pending"
-    assert state.attempts == 0
+    assert state.status == "review_needed"
+    assert state.last_error == "human_review_required"
+    assert state.attempts == 3
     assert (state.evidence_hash, state.decision) == (old_hash, old_decision)
     assert (Brand.objects.count(), Company.objects.count()) == counts
     assert not BrandAccount.objects.filter(account=state.account).exists()

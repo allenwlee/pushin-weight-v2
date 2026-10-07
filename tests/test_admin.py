@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from core.models import Account, OfficialCompanyAccountState, OfficialCompanyListIntent
-from core.official_company_accounts import MODEL, POLICY_VERSION, register_account
+from core.official_company_accounts import POLICY_VERSION, register_account
 from core.official_company_admin import account_report
 from core.official_company_lists import sync_intents
 from x_monitor.config import OfficialCompanyConfig
@@ -32,7 +32,7 @@ def test_registration_sync_and_admin_display_share_real_data(owner_client):
         account=account,
         evidence_hash="a" * 64,
         status="accepted",
-        model=MODEL,
+        model="owner-attestation",
         policy_version=POLICY_VERSION,
         decision={
             "outcome": "accepted",

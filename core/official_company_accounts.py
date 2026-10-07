@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 ROLE = "official_co_account_extraction"
-POLICY_VERSION = "official-model-developer-v3"
+POLICY_VERSION = "official-model-developer-v2"
 # Prompt revisions change attempt provenance, not unchanged public evidence.
 EVIDENCE_POLICY_VERSION = "official-model-developer-v2"
 MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
@@ -213,28 +213,6 @@ badge, Hugging Face account, open weights, follower floor or English language is
 required. Individuals, staff accounts, journalists, fan/aggregation accounts,
 consultancies, tool wrappers and model users do not qualify merely because they
 mention AI or a lab. Links/badges alone cannot establish official ownership.
-Evaluate model development separately from organization identity. Running,
-hosting, serving, benchmarking or building a tool with another lab's model is
-NOT evidence that this organization develops a model. A system's benchmark rank,
-an AI product release, or a phrase like "our AI" is insufficient without evidence
-that the organization develops the underlying model. For example, a formal
-verification system running DeepSeek is a model user, even if its benchmark rank
-is first. Do not convert that usage into a model-development claim.
-Acceptance requires supplied first-party evidence of this organization's own
-model development or intended model release: training, fine-tuning/post-training,
-research on its own model architecture, or an explicit claim that it builds/develops/releases
-its own model. Fine-tuning a third-party base model qualifies when stated; using
-that base model unchanged does not. An official bio stating that the organization
-develops AI models qualifies without an announcement or open weights. This rule
-applies in every language and to every AI model type.
-The model_developer citation must itself support that development claim. Quote
-enough context to distinguish the organization's own model work from use of a
-third-party model. Every model_developer citation must describe development by
-this organization. A benchmark title, product name, availability, license, price,
-or release alone is insufficient: an organization could offer another lab's
-model. Find and quote supplied evidence of its own training, fine-tuning,
-post-training, model creation or explicit model-development intent. If that
-evidence is absent, return review_needed even when the product appears proprietary.
 Return review_needed when evidence cannot distinguish a plausible impersonator,
 when organization/model-development claims lack support, or evidence conflicts.
 Consistent first-party organizational self-representation is sufficient under
@@ -376,6 +354,17 @@ def enqueue_account(
                 fields.append("initial_scan")
             state.save(update_fields=fields)
             return state
+        if state and (
+            state.model == "owner-attestation" or state.status == "registered"
+        ):
+            state.candidate_priority = candidate_priority
+            state.candidate_policy_version = policy
+            fields = ["candidate_priority", "candidate_policy_version"]
+            if initial_scan:
+                state.initial_scan = initial_scan
+                fields.append("initial_scan")
+            state.save(update_fields=fields)
+            return state
         evidence = evidence_for_account(account)
         created = state is None
         if created:
@@ -388,10 +377,11 @@ def enqueue_account(
         if initial_scan:
             state.initial_scan = initial_scan
             fields.append("initial_scan")
-        stale_acceptance = _stale_evaluator_acceptance(state)
-        if created or changed or reentered or stale_acceptance:
+        if created or changed or reentered:
             state.evidence = evidence
             state.evidence_hash = evidence["identity"]
+            if changed:
+                state.decision = {}
             state.policy_version = POLICY_VERSION
             state.status = (
                 "pending"
@@ -408,15 +398,43 @@ def enqueue_account(
             state.save(update_fields=fields)
         if created and str(account.author_id) in OWNER_ATTESTATIONS:
             _apply_owner_attestation(state)
+        _hold_for_human_review(state)
     return state
 
 
-def _stale_evaluator_acceptance(state):
-    return (
+def _hold_for_human_review(state):
+    """Model positives are nominations; only an owner settlement can register."""
+    if (
         state.status == "accepted"
         and state.model != "owner-attestation"
-        and state.policy_version != POLICY_VERSION
-    )
+    ):
+        state.status = "review_needed"
+        state.last_error = "human_review_required"
+        state.claim_token = ""
+        state.claim_expires_at = None
+        state.next_attempt_at = None
+        state.save(update_fields=[
+            "status", "last_error", "claim_token", "claim_expires_at",
+            "next_attempt_at", "updated_at",
+        ])
+        return True
+    return False
+
+
+def hold_model_acceptances(*, limit):
+    """Convert preexisting positives without spending or changing their evidence."""
+    from django.db import transaction
+
+    from core.models import OfficialCompanyAccountState
+
+    with transaction.atomic():
+        states = list(
+            OfficialCompanyAccountState.objects.select_for_update(skip_locked=True)
+            .filter(status="accepted")
+            .exclude(model="owner-attestation")
+            .order_by("updated_at", "pk")[:limit]
+        )
+        return sum(_hold_for_human_review(state) for state in states)
 
 
 def _apply_owner_attestation(state):
@@ -648,6 +666,9 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
             state.decision = decision
             state.last_error = ""
             state.next_attempt_at = None
+            if state.status == "accepted":
+                state.status = "review_needed"
+                state.last_error = "human_review_required"
         state.claim_token = ""
         state.claim_expires_at = None
         state.save()
@@ -762,15 +783,7 @@ def register_account(state_id, *, cfg):
             )
             if state.status not in {"accepted", "registered"}:
                 return None
-            if _stale_evaluator_acceptance(state):
-                state.status = "pending"
-                state.policy_version = POLICY_VERSION
-                state.attempts = 0
-                state.claim_token = ""
-                state.claim_expires_at = None
-                state.next_attempt_at = None
-                state.last_error = "stale_evaluator_policy"
-                state.save()
+            if _hold_for_human_review(state):
                 return None
             account = Account.objects.select_for_update().get(pk=state.account_id)
             x_account_identifier(account)

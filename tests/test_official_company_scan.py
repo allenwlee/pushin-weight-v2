@@ -304,3 +304,32 @@ def test_all_three_settled_patterns_pass_without_id_overrides_or_gold(index):
         },
     )
     assert candidate_priorities([account])[account.pk] == 2
+
+
+def test_drain_holds_existing_model_positives_when_registration_is_disabled():
+    from unittest.mock import Mock
+
+    from core.official_company_accounts import MODEL, POLICY_VERSION, enqueue_account
+    from core.official_company_discovery import drain_accounts
+    from x_monitor.config import OfficialCompanyConfig
+
+    account = Account.objects.create(author_id="9400", bio="We build AI models")
+    state = enqueue_account(account)
+    state.status = "accepted"
+    state.model = MODEL
+    state.policy_version = POLICY_VERSION
+    state.decision = {"outcome": "accepted", "organization_name": "Candidate Lab"}
+    state.attempts = 1
+    state.save()
+    old_hash = state.evidence_hash
+    call = Mock()
+    result = drain_accounts(
+        cfg=OfficialCompanyConfig(enabled=True), call=call,
+        limit=1, budget_scope="hold-only",
+    )
+    state.refresh_from_db()
+    assert result["held_for_review"] == 1 and result["attempted"] == 0
+    assert state.status == "review_needed"
+    assert state.decision["outcome"] == "accepted"
+    assert state.evidence_hash == old_hash and state.attempts == 1
+    call.assert_not_called()

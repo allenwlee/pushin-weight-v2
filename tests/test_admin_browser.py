@@ -70,6 +70,39 @@ class AdminBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_model_positive_without_list_intent_is_visible_for_review(self):
+        account = Account.objects.create(author_id="884", handle="candidate_lab")
+        OfficialCompanyAccountState.objects.create(
+            account=account,
+            status="review_needed",
+            evidence_hash="a" * 64,
+            last_error="human_review_required",
+            decision={
+                "outcome": "accepted",
+                "organization_name": "Candidate Lab",
+                "rationale": "Candidate evidence requiring owner review.",
+            },
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                response = page.goto(self.live_server_url + "/admin?locale=en")
+                self.assertEqual(response.status, 200)
+                row = page.locator('[data-admin-account="884"]')
+                self.assertTrue(row.is_visible())
+                self.assertTrue(row.get_by_text("review_needed", exact=True).is_visible())
+                self.assertEqual(page.locator('[data-admin-count="found"]').inner_text(), "1")
+                self.assertEqual(page.locator('[data-admin-count="registered"]').inner_text(), "0")
+                page.set_viewport_size({"width": 390, "height": 844})
+                self.assertTrue(row.is_visible())
+                self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-human-review.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+            finally:
+                browser.close()
+
     def test_admin_route_has_discovery_details(self):
         now = timezone.now()
         for identifier, name, requested, acknowledged in [

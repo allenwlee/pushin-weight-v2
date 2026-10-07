@@ -21,6 +21,7 @@ from core.official_company_accounts import (
     ROLE,
     enqueue_account,
     evaluate_account,
+    hold_model_acceptances,
     register_account,
 )
 from core.official_company_candidates import candidate_priorities
@@ -271,7 +272,10 @@ def build_discovery_call(cfg):
 
 def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=None):
     now = timezone.now()
-    result = {"attempted": 0, "registered": 0}
+    result = {
+        "attempted": 0, "registered": 0,
+        "held_for_review": hold_model_acceptances(limit=limit),
+    }
     qs = (
         OfficialCompanyAccountState.objects.filter(
             status__in=["pending", "retry_due", "claimed"],

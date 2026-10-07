@@ -153,3 +153,12 @@ def test_malformed_profile_does_not_invent_domain(bad_profile):
     )
     assert evidence["domains"] == []
     assert evidence["sources"] == [{"id": "post:1", "text": "Known text"}]
+
+
+def test_original_candidate_prompt_is_retained():
+    import hashlib
+
+    from core.official_company_accounts import POLICY_VERSION, SYSTEM_PROMPT
+
+    assert POLICY_VERSION == "official-model-developer-v2"
+    assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e"

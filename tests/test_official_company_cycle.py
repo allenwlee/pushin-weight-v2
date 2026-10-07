@@ -46,13 +46,67 @@ def accept(system, user, model, max_tokens):
     }
 
 
-def test_lane_to_registration_list_observation_and_call_a_attribution():
+def test_model_positive_is_reviewed_without_registration_or_list_add():
+    from core.models import BrandAccount, CompanyAccount, OfficialCompanyListIntent
+
+    account = Account.objects.create(
+        author_id="12345", handle="voice_lab",
+        bio="We are Voice Lab. We release our own speech models.",
+    )
+    state = enqueue_account(account)
+    client = Mock()
+    client.members.return_value = (set(), True)
+    runner = CycleRunner(
+        cfg=config(), cycle_kind="scheduled",
+        _official_company_call=accept, _official_list_client=client,
+    )
+    result = runner._run_official_company_discovery(
+        run_id="cycle", deadline=runner.cfg.harvest.start_deadline()
+    )
+    assert result["attempted"] == 1 and result["registered"] == 0
+    state.refresh_from_db()
+    assert state.status == "review_needed"
+    assert state.last_error == "human_review_required"
+    assert state.decision["outcome"] == "accepted"
+    assert state.attempt_records.get().decision["outcome"] == "accepted"
+    assert not BrandAccount.objects.filter(account=account).exists()
+    assert not CompanyAccount.objects.filter(account=account).exists()
+    assert not OfficialCompanyListIntent.objects.exists()
+    assert not client.add.called
+
+
+def test_new_post_preserves_registered_owner_settlement_without_model_call():
+    from core.official_company_accounts import register_account
+
+    account = Account.objects.create(
+        author_id="1800594921704898560", handle="reflection_ai",
+        bio="We build AI models.",
+    )
+    state = enqueue_account(account)
+    register_account(state.pk, cfg=config().official_company)
+    state.refresh_from_db()
+    saved = (state.evidence_hash, state.evidence, state.decision, state.policy_version)
+    Post.objects.create(tweet_id="9401", author=account, text="A new research update")
+    model_call = Mock(side_effect=AssertionError("Settled identity must not be reevaluated"))
+    runner = CycleRunner(cfg=config(), cycle_kind="scheduled", _official_company_call=model_call)
+    result = runner._run_official_company_discovery(
+        run_id="new-owner-post", deadline=runner.cfg.harvest.start_deadline()
+    )
+    state.refresh_from_db()
+    assert result["attempted"] == 0
+    assert state.status == "registered" and state.model == "owner-attestation"
+    assert (state.evidence_hash, state.evidence, state.decision, state.policy_version) == saved
+    assert state.attempt_records.count() == 1
+    model_call.assert_not_called()
+
+
+def test_owner_settlement_to_list_observation_and_call_a_attribution():
     from x_monitor.attribution import compile_keyword_index
     from x_monitor.query_plan import PlannedCall
 
     account = Account.objects.create(
-        author_id="12345",
-        handle="voice_lab",
+        author_id="1800594921704898560",
+        handle="reflection_ai",
         bio="We are Voice Lab. We release our own speech models.",
     )
     enqueue_account(account)
@@ -67,12 +121,12 @@ def test_lane_to_registration_list_observation_and_call_a_attribution():
     result = runner._run_official_company_discovery(
         run_id="cycle", deadline=runner.cfg.harvest.start_deadline()
     )
-    assert result["attempted"] == 1 and result["registered"] == 1
+    assert result["attempted"] == 0 and result["registered"] == 1
     assert result["list_sync"]["confirmed"] == 1
     item = {
         "id": "new-post",
-        "author_id": "12345",
-        "author_handle": "voice_lab",
+        "author_id": "1800594921704898560",
+        "author_handle": "reflection_ai",
         "text": "New release details",
         "created_at": "2026-10-06T12:00:00Z",
     }
@@ -80,7 +134,7 @@ def test_lane_to_registration_list_observation_and_call_a_attribution():
         [item], list_id=int(runner.cfg.official_company.list_id)
     )
     runner._attribute_items([item], compile_keyword_index([]), {})
-    assert item["brand_ids"] == ["unseen-voice-lab"]
+    assert item["brand_ids"] == ["reflection"]
     runner._route_and_persist(
         PlannedCall(
             call_id="A",
@@ -94,7 +148,7 @@ def test_lane_to_registration_list_observation_and_call_a_attribution():
     )
     assert Post.objects.filter(pk="new-post").exists()
     assert PostBrand.objects.filter(
-        post_id="new-post", brand_id="unseen-voice-lab"
+        post_id="new-post", brand_id="reflection"
     ).exists()
 
 

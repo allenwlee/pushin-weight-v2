@@ -21,7 +21,10 @@ def account_report(*, list_id, page=1):
             filter=Q(attempts__gt=0)
             | Q(status__in=["accepted", "registered", "rejected", "review_needed"]),
         ),
-        found=Count("pk", filter=Q(status__in=["accepted", "registered"])),
+        found=Count(
+            "pk", filter=Q(status__in=["accepted", "registered"])
+            | Q(status="review_needed", decision__outcome="accepted"),
+        ),
         registered=Count("pk", filter=Q(status="registered")),
         review_needed=Count("pk", filter=Q(status="review_needed")),
         pending=Count(
@@ -44,7 +47,7 @@ def account_report(*, list_id, page=1):
     )
     query = (
         states.filter(
-            Q(status__in=["accepted", "registered"])
+            Q(status__in=["accepted", "registered", "review_needed"])
             | Q(pk__in=intents.values("state_id"))
         )
         .select_related("account", "registered_company", "registered_brand")

@@ -19,7 +19,9 @@ ollija:
 
 ## Plain-English Summary
 
-PushinWeight should recognize official AI company and lab accounts in posts it already stores, register those organizations, and add their accounts to the private list that Call A collects. This includes closed-model and pre-release labs. The existing people-affiliation extractor remains focused on people.
+**Latest owner decision (2026-10-07):** Keep the original v2 evaluator as a candidate screen. A NEAR-style false positive is acceptable in the human review queue. Hold every model-positive account for human review before creating official identities or list additions; existing explicitly settled owner identities remain approved. Model rejections remain recorded outside the positive review queue. This supersedes automatic acceptance/registration and the zero-false-positive production activation gate below, including the unshipped v3 precision repair and proposed further paid evaluation. No new prompt experiment is required. Production delivery remains direct; resume the filtered full scan with registration/list-sync flags held false.
+
+PushinWeight should recognize likely official AI company and lab accounts in posts it already stores and show their evidence for human review. After owner settlement, those organizations can be registered and their accounts added to the private list that Call A collects. This includes closed-model and pre-release labs. The existing people-affiliation extractor remains focused on people.
 
 A one-time scan will cover every stored author in the entire database, with no post-age or observation-age cutoff, to find official AI labs that release or develop for release any kind of AI model: language, image, video, audio, speech, multimodal, robotics/action, embedding or other model types. It will cheaply screen every author in bounded resumable batches and evaluate only selected candidates, keeping deferred authors and coverage counts. Gold/business badges admit accounts on their own and receive highest priority. Badge-free entrances use the measured bio, development, company website/name and release signals. Registration still requires an official model-developer decision. Reflection, Aleph Alpha, and Bad Theory Labs are already owner-verified positive examples. Going forward, a separate incremental extractor will run with the existing 15-minute harvester, inspecting newly stored authors and materially changed post/profile evidence rather than repeating the whole initial scan.
 
@@ -31,7 +33,7 @@ Tests will cover those examples and unseen companies, misleading accounts, dupli
 
 This branch is independent ingestion/discovery work originating from G2, with shared account records referenced by G1. Build against the current schema. The benchmark branch's proposed account and taxonomy changes are a compatibility consideration, not an implementation prerequisite or permission to migrate them here.
 
-- **Objective:** Newly encountered official AI company and lab accounts become registered organizations and join Call A's private collection list without routine manual entry.
+- **Objective:** Newly encountered likely official AI company and lab accounts enter a source-grounded human review queue; only owner-settled identities become registered organizations and join Call A's private collection list.
 - **Means:** Account-scoped evidence extraction, transactional registration, and a durable list-add queue (KTD1–KTD7).
 - **Authority:** Current owner instructions govern scope; this plan's Product Contract governs behavior. Existing repository rules govern execution and delivery.
 - **Execution profile:** Implement in this branch, verify on isolated PostgreSQL with fake provider boundaries, then complete the owner-authorized bounded evaluation, full-database discovery and production activation.
@@ -67,7 +69,7 @@ Useful organization evidence is already stored, but the person-oriented affiliat
 
 **Registration and synchronization**
 
-- R6. Reuse stable account and organization identities when registering supported Brand, Company, BrandAccount, and CompanyAccount records; ambiguous collisions require review rather than silent merges.
+- R6. Model-positive outcomes are candidates requiring human review; no model acceptance alone may register identities or enqueue list additions, even if registration flags are accidentally enabled. Previously explicit owner settlements remain registerable. Reuse stable account and organization identities for human-settled Brand, Company, BrandAccount, and CompanyAccount records; ambiguous collisions require review rather than silent merges.
 - R7. Enqueue settled official accounts for add-only membership in list `2067062923525275922`, without claiming membership until the provider confirms it.
 - R8. Recover safely from duplicate work, expired claims, rate limits, timeouts, partial completion, and unavailable owner credentials; registration remains durable when list synchronization is blocked.
 - R9. Expose bounded inspect, retry, and suppression operations through shared domain services and machine-readable management commands.
@@ -440,7 +442,7 @@ Add explicit `initial-scan`/resume and incremental modes using the same evidence
 - Canonical model/endpoint remains correct with deliberately mismatched generic provider environment values.
 - Migration forward/rollback and simultaneous claims use PostgreSQL; required race tests may not be silently skipped.
 
-**Verification:** Report exact executed/passed/skipped/error counts, at least three call-chain tests and the associated function-level count, and the frozen corpus results. Zero false accepts on the adversarial corpus and correct acceptance of unseen closed/pre-release positives are required before auto-registration activation; owner fixtures alone cannot prove model quality.
+**Verification:** Report exact executed/passed/skipped/error counts, at least three call-chain tests and the associated function-level count, and the frozen corpus results. The original v2 model screen may admit false positives to human review. Verification must prove every model-positive result is held, preserves its decision/citations, and cannot register or add list membership, even with registration enabled. Owner fixtures alone cannot prove model quality; reviewer judgment is now the settlement boundary.
 
 ---
 
@@ -617,6 +619,8 @@ For the current request, completion requires the intended revision observed in p
 
 ## Delivery Exceptions
 
+Latest owner amendment (2026-10-07): resume the original v2 evaluator as a human-reviewed candidate screen. Registration and list synchronization remain false; every new model-positive requires human settlement. The failed stricter-prompt gate and proposed additional paid experiment are retired. Existing owner settlements remain valid. Full scan completion stays an operational endpoint, and new candidate approval is a separate owner action; retain the worktree while that endpoint is incomplete.
+
 Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. The owner also identified top-gun as the token-issuing app. Normal production harvest pause/resume and unrelated taxonomy implementation are excluded. The owner paused only official-company extraction on 2026-10-07, then authorized resuming its filtered initial scan and extraction/registration/list synchronization with “ok let's run it”; the latest decision supersedes the feature pause. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work.
 
 ---
@@ -704,7 +708,7 @@ Staff/schema regression suite also passed: **302 tests**, required PostgreSQL **
 
 The prior b13b38b5 immutable20-post health cohort was revisited exactly once after its30minute grace: **unhealthy**,0commentary in either language,17/20canonical language detections and16/16required Chinese translations. That pre-existing processing path is unchanged by candidate screening; do not mark its health gate or the original verified-collection endpoint passed. Preserve the detailed local receipt and investigate separately within appropriate ownership.
 
-## Acceptance repair continuation — 2026-10-07, 12:07 JST
+## Acceptance repair continuation — 2026-10-07, 12:07 JST (historical; superseded by human review amendment)
 
 Independent Grok review returned two confirmed P1 findings. A stale non-owner accepted decision could register after flags were restored because evidence hashing intentionally stayed unchanged across a prompt revision. Added requeue checks at ordinary enqueue and registration, preserving owner-attested, registered and suppressed records and immutable evidence/decision history. The regression reproduced an official list intent before the fix; PostgreSQL verification and final suite results are recorded below when complete. The other finding was the falsely green citation gate; the report now preserves and explicitly grades both variants. Local review/validation ran sequentially in the parent under AGENTS, not as independent local agents. Grok independence was verified at provider-family level; requested grok-4.7/xhigh serving model/effort were unverified. Claude primary returned HTTP402 and did not review.
 
@@ -715,3 +719,21 @@ All 24 physical calls across two variants are used. Estimated token-rate spend t
 Final local checks: **228 passed**, all **194 required PostgreSQL tests executed**, zero skips/errors; eleven expected missing-staticfiles warnings. Scoped Ruff, `git diff --check` and `makemigrations --check --dry-run` passed. Reused Ollija36 checks remain valid because no Ollija implementation changed. No visible UI behavior changed; existing admin/browser tests ran in the full suite. Independent review and inline validation artifacts are `/tmp/compound-engineering-501/ce-code-review/20261007-114706-a272876a`; parent fix receipt is `.context/official-co-execution/acceptance-review-fix-return.json`. Source fixes and evaluation reporting are ready locally, but production activation is **not ready**.
 
 Read-only production verification after final evaluation: web and harvest both remain `4ad401ce`, discovery true, registration/list synchronization false, owned initial job canceled. Consistent coverage at 03:05:21 UTC remains 2,500/91,028 enumerated, 733 gold staged, 872 selected; filtered states include855 pending,11 rejected,3 review-needed,2 registered and1 accepted awaiting disabled registration. The latter is still governed by the deployed v2 evaluator; the local v3 registration guard must re-evaluate it before a future activation. This is not completed inventory or collection. Saved filtered/gold checkpoints remain intact.
+
+## Human review before registration — owner amendment 2026-10-07
+
+Use original `4ad401ce` v2 prompt byte-for-byte and the same DeepSeek V4 Flash0731 route/budgets/evidence. Retire the stricter v3 prompt, stale-policy rerun gate and additional paid evaluator experiment; preserve their report as historical evidence only. New model-positive attempts retain `decision.outcome=accepted` and move state to `review_needed` with `last_error=human_review_required`. Before new model work, move legacy non-owner `accepted` states to this same review status without another model call or losing attempt/evidence/decision history. Existing registered states, explicit owner settlements, rejected records and suppressions are preserved. Guard `register_account` against every unsettled model acceptance independently of config flags. No new core/models.py/migration/account-key/attribution changes.
+
+Extend the existing read-only `/admin` table to show review-needed candidates with their evidence and rationale; count model-positive review states as found while keeping review counts separate. Preserve pagination, access, HTML escaping, locales and list audit history. This does not authorize approving NEAR, Runway, SambaNova or any other new candidate; reviews remain outstanding. There is no new approval-button feature in this amendment. Previously settled Reflection/Aleph/Bad Theory Labs remain owner-approved exceptions, not new model nominations.
+
+Regression net: original prompt equality, original v2 model provenance/evidence identity, paid completion->review (immutable attempt decision accepted), unchanged legacy-positive hold without dispatch/reset, explicit owner settlement registration, real scheduled CycleRunner positive->review with zero Brand/Company/list writes even when all flags are enabled, and real `/admin` browser visibility of a review row lacking a list intent. Run discovery/harvest/admin PostgreSQL suite with zero required skips/errors. Confirm final diff has no model/schema/attribution change.
+
+Delivery uses existing authorized direct production route. Observe exact source SHA live on web and harvest, then launch one runner pinned to that SHA and requiring enabled=true/registration=false/list-sync=false. Preserve initial funding USD50, per-cycleUSD0.01/dayUSD1, original population boundary, gold checkpoint, old scan and writer-lease/window rules. No pause of normal harvest, no staging changes, no X API batch beyond normal collection. Verify initial job running, whole-population enumeration advances, gold-first attempts use original v2 evaluator, and model positives are held for review without new identity/list writes. Full scan completion remains a background endpoint; human account approval is a separate owner action before further list additions.
+
+### Human review release verification — 2026-10-07
+
+Final local discovery/harvest/admin suite: **235 passed**, **200 required PostgreSQL checks executed**, zero skips/errors. Scoped Ruff and diff checks passed; no model/migration change. Real Chromium verifies a review candidate without a list intent on desktop and mobile, with no horizontal overflow. Existing access, escaping, product-review and locale checks also passed.
+
+Independent Grok review found that a later stored post could revoke an owner-settled registration. A real scheduled CycleRunner regression reproduced the paid dispatch and lost settlement before the correction. Enqueue now preserves owner-attested and registered evidence/decision/status, updating candidate metadata only. The corrected test proves zero model dispatch after a new post. Materially changed ordinary evidence clears the current decision, preserving immutable attempts, so a later failed evaluation cannot display an old acceptance as a fresh nomination. Original v2 prompt fingerprint is frozen in tests.
+
+Review artifacts: `/tmp/compound-engineering-501/ce-code-review/20261007-135113-human-review`; parent fix receipt: `.context/official-co-execution/human-review-review-fix-return.json`. Local lenses and validator ran inline sequentially under AGENTS, not as independent agents. Grok provider-family independence is verified; requested grok-4.7/xhigh serving model and effort are unverified, and the peer did not independently review the final parent fix. Claude remained unavailable with HTTP402. No unapplied actionable finding remains. Explicit operator retry can reopen a review candidate and spend again; it is not used for this restart. Bounded legacy holds can defer locked records, while registration independently blocks unsettled positives.
