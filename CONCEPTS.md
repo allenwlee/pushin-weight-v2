@@ -84,6 +84,41 @@ chisel remain design history rather than runtime symbols.
 
 ## x-monitor pipeline
 
+### Atomic commentary
+
+Faithful commentary on one source post. It preserves that source's meaning and
+tone. Each locale derives directly from original evidence; a house voice belongs
+to an aggregation, even when that aggregation uses only one source post.
+
+### Chatter and Pulse
+
+Two editorial tracks built from one or more atomic sources. Chatter covers AI
+human interest, memes and insider news with a crafted voice. Pulse reports
+factual developments and separately states whether chart evidence supports them.
+A major event can qualify for both tracks.
+
+### Editor-in-chief
+
+The bounded editorial decision service that groups developments, judges each
+track's newsworthiness, and compares a worthy Chatter challenger with the aging
+current hero. Missing chart movement is not an exclusion rule.
+
+### Story and edition
+
+A story is a stable development identity and permanent URL. An edition is an
+immutable accepted headline, supporting line and article in one track and locale.
+Shared links can pin an exact edition even after the current hero changes.
+
+### Picture editor
+
+An optional shared service that selects relevant verified source imagery, then
+can create a separate derivative with the track's treatment. Bindings independently
+enable it for atomic commentary, existing headlines, Chatter or Pulse. G1 owns
+the underlying people, affiliations, photo verification and source bytes.
+
+The current contracts and commands are in
+[Chatter, Pulse and the picture editor](docs/reference/editorial-stories.md).
+
 The x-monitor service ingests social-media posts about AI/LLM brands, classifies them, and persists the results. The vocabulary below is scoped to the run-summary layer that operators read at the end of each pipeline run.
 
 ### Run summary

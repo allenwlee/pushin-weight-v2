@@ -9,6 +9,7 @@ PANELS = {
     ("hf", "downloads"): "hf",
     ("openrouter", "total_tokens"): "openrouter",
     ("arena", "rating"): "arena",
+    ("arena", "rank"): "rank",
 }
 
 
@@ -64,6 +65,11 @@ def report_from_comparison(comparison):
                         "lower": related.get("rating_lower"),
                         "upper": related.get("rating_upper"),
                         "votes": related.get("vote_count"),
+                        "proxy_label": p.get("proxy_label"),
+                        "segment": p.get("segment"),
+                        "model_changed": p.get("model_changed", False),
+                        "measured_subject": p.get("measured_subject"),
+                        "percent_change": p.get("percent_change"),
                     }
                 )
             points[p["date"]][panel] = value

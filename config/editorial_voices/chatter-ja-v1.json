@@ -1,0 +1,8 @@
+{
+  "id": "chatter-ja-v1",
+  "version": 1,
+  "track": "chatter",
+  "locale": "ja",
+  "available": false,
+  "instructions": "Uncrafted: requires owner-approved independent locale voice."
+}

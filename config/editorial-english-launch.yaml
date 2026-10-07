@@ -1,0 +1,45 @@
+# Explicit G2 English launch profile. Select via EDITORIAL_CONFIG_PATH only after
+# credentials and shared storage are configured. The default profile remains off.
+# Combined text/media reservations never exceed $5 per UTC day.
+enabled: true
+public_enabled: true
+daily_usd: 5
+assessment_usd: 2
+daily_calls: 384
+assessment_calls: 6
+media_daily_calls: 4
+# Six seconds at $0.08/s is $0.48; reserve extra for encoded-duration variance.
+media_cost_ceiling_usd: 0.60
+media_duration: 6
+pulse_limit: 1
+pictures:
+  atomic: select_only
+  current_headline: select_only
+  chatter: derive
+  pulse: derive
+permitted_reuse: [permitted, unknown]
+voices:
+  chatter:en: chatter-en-v1
+  pulse:en: pulse-en-v1
+routes:
+  editor: &factual
+    model: deepseek/deepseek-v4-flash-0731
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
+    reasoning: medium
+    vision: false
+    # Conservative ceilings above catalog rates, also sent as provider max_price.
+    input_usd_per_million: 0.10
+    output_usd_per_million: 2.00
+    max_output_tokens: 8192
+  pulse: *factual
+  chatter:
+    model: openai/gpt-6-sol
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
+    reasoning: medium
+    vision: true
+    # Catalog input $2/M; reserve $2.50/M including the published cache-write rate.
+    input_usd_per_million: 2.50
+    output_usd_per_million: 10.00
+    max_output_tokens: 4096

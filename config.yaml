@@ -403,7 +403,7 @@ synthesis:
   model: "google/gemma-4-31B-it-turbo"
   request_profile: "gemma4_tagged"
   response_format: "tagged_text"
-  prompt_version: "post-synthesis-gemma4-tagged-v2"
+  prompt_version: "post-synthesis-direct-source-v3"
   output_schema_version: 2
   activation_state: null
   provider_calls_enabled: null

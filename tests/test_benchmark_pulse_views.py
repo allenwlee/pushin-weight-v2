@@ -206,3 +206,29 @@ def test_review_setting_does_not_allow_anonymous_bypass(client):
         ).status_code
         == 403
     )
+
+
+@override_settings(
+    BENCHMARK_METRICS_ENABLED=True, BENCHMARK_REVIEW_ENABLED=True, DEBUG=False
+)
+def test_staff_review_requires_nonproduction_environment(client, django_user_model):
+    from core.models import DataSource
+
+    c = comparison()
+    source = DataSource.objects.get(pk="hf")
+    source.metadata["use_policy"] = {"numeric_export": {"status": "unresolved"}}
+    source.save(update_fields=["metadata"])
+    user = django_user_model.objects.create_user(
+        username="reviewer", email="review@example.org", is_staff=True
+    )
+    client.force_login(user)
+    url = reverse("benchmark_series", args=[c.pk, "fixture"]) + "?end=2026-09-12"
+    with override_settings(OLLIJA_STAGING_MODE=False):
+        assert client.get(url).status_code == 403
+    with override_settings(
+        OLLIJA_STAGING_MODE=True, OLLIJA_STAGING_ALLOWED_EMAILS={"review@example.org"}
+    ):
+        assert client.get(url).status_code == 200
+        user.is_staff = False
+        user.save(update_fields=["is_staff"])
+        assert client.get(url).status_code == 403

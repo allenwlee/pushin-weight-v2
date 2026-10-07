@@ -65,6 +65,11 @@ nonblank EN, ZH-CN, and JA children before the parent can become current. The
 parent retains evidence provenance, review state, attempts, input/output
 tokens, latency, safe error code, and lifecycle timestamps.
 
+`post-synthesis-direct-source-v3` writes each locale from that original context
+without an English pivot or house voice. Accepted atomic commentary can also
+queue an independently configured [picture assignment](editorial-stories.md);
+the attachment does not change the artifact identity or text validity.
+
 A context change cancels obsolete demand. Provider and validation failures
 remain auditable on the artifact parent and preserve the last successful
 current artifact.

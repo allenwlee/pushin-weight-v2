@@ -38,6 +38,7 @@
   };
   const pointValue = p => p && (mode === 'raw' ? (p.raw_value === null ? null : Number(p.raw_value)) : p.percent_change);
   const active = () => data.lines.filter(line => mode === 'raw' ? line.key === $('raw-series').value : visible.has(line.key));
+  const displayLabel = line => line.interpretation ? 'Arena · rank (release history)' : line.label;
   const coverageText = p => ({carried_forward:`Last published ${p.source_date}`, partial:'Partial day', missing:'No observation', not_reported_top50:'Not reported in available top-50 usage data', observed:'Observed', reconstructed:'Reconstructed; surviving relationships only'})[p.coverage] || p.coverage;
   function readout() {
     $('day-label').textContent = labelDate(days[current]);
@@ -47,7 +48,7 @@
       const index = data.lines.indexOf(line), p = line.points[current];
       const row = html('div', $('readout'), undefined, 'reading');
       const title = html('div', row, undefined, 'reading-label');
-      dot(title, index); html('span', title, line.label);
+      dot(title, index); html('span', title, displayLabel(line));
       html('div', row, fmt(mode === 'raw' ? p.raw_value : p.percent_change, mode === 'raw'), 'reading-value');
       html('small', row, `${fmt(p.raw_value, true)} ${line.unit}`);
       html('small', row, coverageText(p));
@@ -127,7 +128,7 @@
         if (point.observed || i===current) {
           const circle=element('circle',{cx:px,cy:py,r:i===current?4:2.2,fill:point.coverage==='partial'?'white':color,stroke:color,'stroke-width':1.6});
           const title=document.createElementNS(ns,'title');
-          title.textContent=`${line.label} · ${point.date}: ${fmt(mode==='raw'?point.raw_value:value,mode==='raw')} · ${coverageText(point)}${point.proxy_label ? ' · '+point.proxy_label : ''}`;circle.append(title);
+          title.textContent=`${displayLabel(line)} · ${point.date}: ${fmt(mode==='raw'?point.raw_value:value,mode==='raw')} · ${coverageText(point)}${point.proxy_label ? ' · '+point.proxy_label : ''}`;circle.append(title);
         }
       });
       element('path',{d:path,stroke:color,class:'series','data-series':line.key});
@@ -158,7 +159,7 @@
     }
     for (const line of data.lines) {
       const row=html('section',$('source-details'),undefined,'source-entry');
-      html('h3',row,line.label);
+      html('h3',row,displayLabel(line));
       if (line.interpretation) html('p',row,'Dashed rank segment: previous release proxy. The measured model changes at its first valid Arena evaluation; this is not a single model improving. '+line.interpretation.rationale);
       html('p',row,`Scope: ${line.subject.label || line.subject.key} · ${line.scope}. ${line.measurement_kind==='state'?'State at observation or publication':'Flow over a window'} · ${line.unit}.`);
       html('p',row,`Window: ${line.window_mode}${line.window_amount?' · '+line.window_amount:''}${line.window_unit?' '+line.window_unit:''}. Baseline: ${line.baseline.date || 'unavailable'} (${line.baseline.status.replaceAll('_',' ')}).`);
@@ -197,9 +198,9 @@
       data.lines.forEach((line,index)=>{
         visible.add(line.key);
         const button=html('button',$('legend'));
-        button.type='button';button.dataset.line=line.key;button.setAttribute('aria-pressed','true');dot(button,index);html('span',button,line.label);
+        button.type='button';button.dataset.line=line.key;button.setAttribute('aria-pressed','true');dot(button,index);html('span',button,displayLabel(line));
         button.addEventListener('click',()=>{if(visible.has(line.key)) visible.delete(line.key);else visible.add(line.key);button.setAttribute('aria-pressed',String(visible.has(line.key)));draw();});
-        const option=html('option',$('raw-series'),line.label);option.value=line.key;
+        const option=html('option',$('raw-series'),displayLabel(line));option.value=line.key;
       });
       $('day').max=String(days.length-1);$('day').value=String(current);
       $('day').addEventListener('input',()=>{current=Number($('day').value);draw();});

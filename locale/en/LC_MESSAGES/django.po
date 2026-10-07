@@ -29,3 +29,50 @@ msgstr "Trend summaries updated"
 
 msgid "X reports this account is based in %(place)s"
 msgstr "X reports this account is based in %(place)s"
+
+#: monitor/templates/monitor/editorial/
+msgid "Current General"
+msgstr "Current General"
+
+#: monitor/templates/monitor/editorial/
+msgid "Story archive"
+msgstr "Story archive"
+
+#: monitor/templates/monitor/editorial/
+msgid "This story is currently available in English."
+msgstr "This story is currently available in English."
+
+#: monitor/templates/monitor/editorial/
+msgid "Chart support is unavailable for this development."
+msgstr "Chart support is unavailable for this development."
+
+#: monitor/templates/monitor/editorial/
+msgid "Sources"
+msgstr "Sources"
+
+#: monitor/templates/monitor/editorial/
+msgid "Share on X"
+msgstr "Share on X"
+
+#: monitor/templates/monitor/editorial/
+msgid "Pause scrolling"
+msgstr "Pause scrolling"
+
+#: monitor/templates/monitor/editorial/
+msgid "Resume scrolling"
+msgstr "Resume scrolling"
+
+#: monitor/templates/monitor/editorial/
+msgid "Previous Chatter stories"
+msgstr "Previous Chatter stories"
+
+#: monitor/templates/monitor/editorial/
+msgid "No published stories yet."
+msgstr "No published stories yet."
+
+#: monitor/templates/monitor/editorial/
+msgid "Older stories"
+msgstr "Older stories"
+
+msgid "Available chart data does not support this development."
+msgstr "Available chart data does not support this development."

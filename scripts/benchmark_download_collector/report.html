@@ -403,6 +403,13 @@
         hf: ["hf", "hfNote", "#a46a1d"],
         openrouter: ["openrouter", "orNote", "#9a527e"],
       };
+      if (data.database_comparison?.lines.some(line => line.metric_key === "rank")) {
+        words.en.rank = "Arena rank · lower is better";
+        words.zh.rank = "Arena 排名 · 越低越好";
+        words.en.rankNote = "Previous release proxy is labeled at each point; the line breaks when the evaluated model changes. Rank percentage is not a change in capability.";
+        words.zh.rankNote = "每个数据点标明前代模型代理；被评估模型变化时曲线断开。排名百分比不代表能力变化。";
+        labels.rank = ["rank", "rankNote", "#b24b43"];
+      }
       const value = (p, k) => (k === "posts" ? p.posts : (p[k]?.value ?? null));
       function number(v, precise = false) {
         if (v === null || v === undefined) return words[lang].na;
@@ -468,6 +475,7 @@
           );
         }
         let path = "",
+          previousSegment = null,
           previous = null;
         points.forEach((p, i) => {
           const v = value(p, key);
@@ -477,10 +485,12 @@
           }
           const xx = x(i),
             yy = y(v);
+          if (key === "rank" && previousSegment !== p.rank.segment) previous = null;
+          previousSegment = p[key]?.segment;
           path +=
             previous === null
               ? ` M ${xx} ${yy}`
-              : key === "arena"
+              : key === "arena" || key === "rank"
                 ? ` H ${xx} V ${yy}`
                 : ` L ${xx} ${yy}`;
           previous = v;
@@ -488,6 +498,8 @@
           let tip = `${p.date}: ${number(v, key === "arena")}`;
           if (key === "arena")
             tip += ` · ${p.arena.model} · ${words[lang].published}: ${p.arena.published_at}`;
+          if (key === "rank")
+            tip += ` · ${p.rank.proxy_label || p.rank.measured_subject?.label || p.rank.model} · ${p.rank.percent_change === null ? words[lang].na : p.rank.percent_change + "%"} · ${words[lang].published}: ${p.rank.published_at}${p.rank.model_changed ? " · Model changed" : ""}`;
           dot.append(svgEl("title", {}, tip));
           svg.append(dot);
         });

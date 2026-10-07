@@ -1,7 +1,5 @@
 """Explicit predecessor interpretation over immutable Arena observations."""
 
-from django.db.models import Min
-
 from core.measurement_taxonomy import require
 from core.models import MetricValue
 
@@ -88,14 +86,26 @@ def predecessor_points(contract, line, days):
     from core.benchmark_metric_series import metric_points
 
     successor, definition, mapping_ids = metric_points(contract, line, days)
-    first = MetricValue.objects.filter(
-        source_metric=definition,
-        observation__mapping_id__in=mapping_ids,
-        observation__run__contract=contract,
-        observation__run__status__in=["success", "partial"],
-        observation__status="ok",
-    ).aggregate(first=Min("as_of_date"))["first"]
-    switch = first.isoformat() if first else None
+    publication_dates = (
+        MetricValue.objects.filter(
+            source_metric=definition,
+            observation__mapping_id__in=mapping_ids,
+            observation__run__contract=contract,
+            observation__run__status__in=["success", "partial"],
+            observation__status="ok",
+        )
+        .values_list("as_of_date", flat=True)
+        .distinct()
+    )
+    # Use the same revision/removal rules as the plotted data. An older row
+    # withdrawn by a corrected complete publication cannot start succession.
+    dates = sorted({day.isoformat() for day in publication_dates if day})
+    require(len(dates) <= 1000, "successor publication budget exceeded")
+    resolved = metric_points(contract, line, dates)[0] if dates else []
+    switch = next(
+        (point["date"] for point in resolved if point["raw_value"] is not None),
+        None,
+    )
     pred = line.get("predecessor")
     previous, previous_ids, relationship = None, [], None
     if pred:

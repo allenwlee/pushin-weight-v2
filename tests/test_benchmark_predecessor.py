@@ -151,3 +151,72 @@ def test_only_reviewed_compatible_successor_relationship_is_allowed():
     spec["source_configuration"]["arena"]["config"] = "text_style_control"
     with pytest.raises(ValueError, match="no style control"):
         configure_collection(spec)
+
+
+def test_corrected_publication_does_not_start_switch_and_export_keeps_proxy():
+    from core.benchmark_metric_report import report_from_comparison
+
+    contract = configure_collection(proxy_spec())
+
+    def publish(key, day, models):
+        return persist_source(
+            contract,
+            "arena",
+            digest(key),
+            {
+                "status": "ok",
+                "config": "text",
+                "coverage": "publication_window",
+                "rows": [
+                    {
+                        "model_name": m,
+                        "category": "overall",
+                        "leaderboard_publish_date": day,
+                        "rating": 1400.0,
+                        "rank": r,
+                    }
+                    for m, r in models
+                ],
+            },
+            source_metadata={
+                "publication_dates": [day],
+                "publication_start": day,
+                "publication_end": day,
+            },
+        )
+
+    publish("earlier", "2026-09-07", [("previous", 10.0), ("successor", 5.0)])
+    publish("correction", "2026-09-07", [("previous", 9.0)])
+    publish("valid", "2026-09-12", [("successor", 4.0)])
+    comparison = build_comparison(contract, "history", end_date="2026-09-14")
+    line = comparison["lines"][0]
+    assert line["interpretation"]["switch_date"] == "2026-09-12"
+    assert line["points"][0]["proxy"] is True
+    report = report_from_comparison(comparison)
+    rank = report["series"][0]["points"][0]["rank"]
+    assert rank["proxy_label"].startswith("Previous release proxy")
+    assert rank["measured_subject"] == line["points"][0]["measured_subject"]
+    assert rank["percent_change"] == 0
+    # Narrowing the requested window cannot bring the predecessor back.
+    late = build_comparison(
+        contract, "history", start_date="2026-09-13", end_date="2026-09-14"
+    )
+    assert all(not p["proxy"] for p in late["lines"][0]["points"])
+
+
+def test_missing_predecessor_is_gap_and_ambiguous_mapping_is_rejected():
+    spec = proxy_spec()
+    line = spec["methodology"]["comparisons"]["history"]["lines"][0]
+    predecessor = line.pop("predecessor")
+    c = configure_collection(spec)
+    result = build_comparison(c, "history", end_date="2026-09-12")
+    assert all(
+        p["raw_value"] is None and not p["proxy"] for p in result["lines"][0]["points"]
+    )
+    assert result["lines"][0]["baseline"]["status"] == "baseline_missing"
+    line["predecessor"] = predecessor
+    spec["methodology"]["comparisons"]["history"]["lines"][0]["predecessor"][
+        "mapping_identifiers"
+    ] = ["previous", "successor"]
+    with pytest.raises(ValueError, match="one exact Arena mapping"):
+        configure_collection(spec)

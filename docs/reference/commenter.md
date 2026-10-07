@@ -24,6 +24,12 @@ only supplied evidence, preserve attribution and uncertainty, and avoid
 inventing identity, intent, background, or wider market significance. It may
 omit secondary details but must not change the claims.
 
+Each locale is written directly from the original source, quoted post and parent
+context. Chinese and Japanese do not translate an English draft. Both prompt
+variants use `context.source` and preserve the source's tone without imposing a
+house voice. The configured version is `post-synthesis-direct-source-v3`.
+House voices belong to aggregated [Chatter/Pulse stories](editorial-stories.md).
+
 The parser checks the exact post identifier, field order and boundaries,
 nonempty locale values, and locale duplication. A malformed, partial, or
 identity-mismatched response is rejected. Provider response bodies are not
@@ -37,6 +43,10 @@ version. A changed post, quote, or available parent context produces a
 different artifact identity. Failed attempts are recorded safely and do not
 replace the current successful artifact. Legacy commentary columns are
 compatibility projections, not the normalized source of truth.
+
+Publication can queue the shared G2 picture editor when the `atomic` or
+`atomic:x` binding is enabled. This optional attachment does not alter commentary
+text or start an inline provider call. Its default is off.
 
 Readers create bounded demand records rather than waiting for a provider call
 inside the page request. Demand is deduplicated by post, context fingerprint,

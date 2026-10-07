@@ -136,6 +136,14 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Editorial jobs, accepted editions and media are one environment-local graph.
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     # Collection work, private intake/audit payloads and service-local image storage.
     - people_identity_corrections
     - people_media
@@ -205,6 +213,13 @@ relations:
     - metric_collection_runs
     - metric_observations
     - metric_values
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     - people_identity_corrections
     - people_media
     - people_names
@@ -284,6 +299,8 @@ relations:
     - source_metrics_id_seq
     - metric_observations_id_seq
     - metric_values_id_seq
+    - editorial_assessments_id_seq
+    - editorial_calls_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -364,6 +381,8 @@ relations:
     - source_metrics_id_seq
     - metric_observations_id_seq
     - metric_values_id_seq
+    - editorial_assessments_id_seq
+    - editorial_calls_id_seq
     - people_identity_corrections_id_seq
     - people_media_id_seq
     - people_names_id_seq
@@ -418,6 +437,13 @@ relations:
 
 scrub:
   truncate_tables:
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     - people_identity_corrections
     - people_media
     - staff_collection_work

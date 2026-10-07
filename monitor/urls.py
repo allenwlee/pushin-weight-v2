@@ -9,10 +9,15 @@ from django.shortcuts import redirect
 from django.urls import path
 
 from . import benchmark_views, views
+from .editorial import views as editorial_views
 
 urlpatterns = [
     path("benchmarks/<uuid:contract_id>/<slug:preset>/", benchmark_views.pulse, name="benchmark_pulse"),
     path("benchmarks/<uuid:contract_id>/<slug:preset>/series/", benchmark_views.series, name="benchmark_series"),
+    path("stories/", editorial_views.archive, name="editorial_archive"),
+    path("stories/<uuid:story_id>/", editorial_views.story, name="editorial_story"),
+    path("stories/<uuid:story_id>/assets/<uuid:picture_id>/<str:variant>/", editorial_views.asset, name="editorial_asset"),
+    path("api/v2/editorial-stories/", editorial_views.stories_api, name="editorial_stories_api"),
     # Pages
     path("", views.home, name="home"),
     path("dashboard/each", views.dashboard_each, name="dashboard_each"),

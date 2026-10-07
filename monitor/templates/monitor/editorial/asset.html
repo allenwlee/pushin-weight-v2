@@ -1,0 +1,1 @@
+{% if asset %}<figure class="editorial-asset">{% if asset.type == 'video' %}<video src="{{ asset.url }}" poster="{{ asset.poster }}" controls playsinline preload="metadata"></video>{% else %}<img src="{{ asset.url }}" alt="{{ asset.caption }}" loading="lazy">{% endif %}<figcaption>{{ asset.caption }}</figcaption></figure>{% endif %}

@@ -1,10 +1,10 @@
 # Database schema reference
 
-Last verified: 2026-10-02 23:45:20 JST
+Last verified: 2026-10-05 17:18 JST
 
-Scope: **121 application tables**, **1,537 physical columns**, plus one
-compatibility view. Source: `feat/g1-staff-identity-library`; migration graph through
-`0064_affiliation_text_provenance`.
+Scope: **128 application tables**, **1,605 physical columns**, plus one
+compatibility view. Source: `feat/g2-editorial` based on `71377000`; migration graph through
+`0068_editorial_media_stage_once`.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -34,6 +34,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Trend headlines and publication](#headlines) | 9 | Prepared headline text, publication pointers, work requests, and provider costs. |
+| [Chatter, Pulse and editorial pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
 | [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 
 For staff records, begin with **[People and job history](#people)**. A person can
@@ -132,8 +133,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 121 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 121.
+Each of the 128 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 128.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -164,6 +165,13 @@ the detailed sections. Subject counts above sum to 121.
 | [country_labels](#table-country_labels) | [Countries and regions](#geography) | One translated label for a country code. |
 | [discourse_keys](#table-discourse_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy pragmatic-register vocabulary key. |
 | [discourse_labels](#table-discourse_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated legacy pragmatic-register label. |
+| [editorial_assessments](#table-editorial_assessments) | [Chatter, Pulse and editorial pictures](#editorial) | One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome. |
+| [editorial_budgets](#table-editorial_budgets) | [Chatter, Pulse and editorial pictures](#editorial) | One UTC day of conservative spend reservations and text/media call counts. |
+| [editorial_calls](#table-editorial_calls) | [Chatter, Pulse and editorial pictures](#editorial) | One reserved provider stage and its saved response or uncertain-send outcome. |
+| [editorial_editions](#table-editorial_editions) | [Chatter, Pulse and editorial pictures](#editorial) | One immutable accepted story edition for a track, locale and revision. |
+| [editorial_heroes](#table-editorial_heroes) | [Chatter, Pulse and editorial pictures](#editorial) | One current hero pointer, or the shared provider-lock row. |
+| [editorial_pictures](#table-editorial_pictures) | [Chatter, Pulse and editorial pictures](#editorial) | One optional source/derivative assignment for a content revision. |
+| [editorial_stories](#table-editorial_stories) | [Chatter, Pulse and editorial pictures](#editorial) | One permanent development identity with original-post anchors. |
 | [event_evidence](#table-event_evidence) | [Events and opportunities](#events) | One source observation supporting an event occurrence. |
 | [events](#table-events) | [Events and opportunities](#events) | One attendance-bearing occurrence, such as a conference or meetup. |
 | [geopolitical_mode_keys](#table-geopolitical_mode_keys) | [Classification vocabularies and translated labels](#vocabularies) | One geopolitical-mode vocabulary key. |
@@ -4420,6 +4428,259 @@ Model: [TrendNarrativeProviderCall](../../core/models.py#L4073).
 [Back to table inventory](#table-inventory)
 
 
+<a id="editorial"></a>
+
+## Chatter, Pulse and editorial pictures
+
+These seven tables preserve editorial decisions, shareable editions, spend and
+optional picture assignments. They do not replace atomic source posts or the
+existing brand/window headlines. See [editorial operation](editorial-stories.md).
+
+Application services publish editions once and never edit their accepted copy.
+This is a writer convention, not a database immutability trigger. Picture rows
+can progress while a video task is collected.
+
+
+<a id="table-editorial_assessments"></a>
+
+### `editorial_assessments` — EditorialAssessment
+
+One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome.
+
+Model: [EditorialAssessment](../../core/models.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `interval` | `timestamp with time zone` | No | — |
+| `scope` | `varchar(80)` | No | Default: `'editorial'`. |
+| `cutoff` | `timestamp with time zone` | No | — |
+| `source_cycle_id` | `text` | No | — |
+| `state` | `varchar(24)` | No | Default: `'running'`. |
+| `fence` | `integer` | No | Default: `1`. |
+| `lease_until` | `timestamp with time zone` | No | — |
+| `packet` | `jsonb` | No | Default: `dict`. |
+| `decisions` | `jsonb` | No | Default: `dict`. |
+| `outcome` | `jsonb` | No | Default: `dict`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `idx_editorial_assessment_state`: `CREATE INDEX "idx_editorial_assessment_state" ON "editorial_assessments" ("state", "interval")`.
+
+**Named constraints:**
+
+- `uq_editorial_scope_interval`: `CONSTRAINT "uq_editorial_scope_interval" UNIQUE ("scope", "interval")`.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_budgets"></a>
+
+### `editorial_budgets` — EditorialBudget
+
+One UTC day of conservative spend reservations and text/media call counts.
+
+Model: [EditorialBudget](../../core/models.py).
+
+**Primary key:** `day`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `day` | `date` | No | Primary key. |
+| `reserved_usd` | `numeric(12, 6)` | No | Default: `0`. |
+| `calls` | `integer` | No | Default: `0`. |
+| `media_calls` | `integer` | No | Default: `0`. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field and automatic FK indexes.
+
+**Named constraints:**
+
+- `ck_editorial_budget_positive`: `CONSTRAINT "ck_editorial_budget_positive" CHECK ("reserved_usd" >= 0)`.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_calls"></a>
+
+### `editorial_calls` — EditorialCall
+
+One reserved provider stage and its saved response or uncertain-send outcome.
+
+Model: [EditorialCall](../../core/models.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `assessment_id` | `bigint` | No | FK → [editorial_assessments](#table-editorial_assessments). Django PROTECT. Model: `assessment`. |
+| `stage` | `varchar(200)` | No | — |
+| `kind` | `varchar(16)` | No | — |
+| `state` | `varchar(24)` | No | Default: `'sent'`. |
+| `reserved_usd` | `numeric(12, 6)` | No | — |
+| `budget_day` | `date` | No | — |
+| `response` | `jsonb` | No | Default: `dict`. |
+| `error_code` | `varchar(80)` | No | Default: `''`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `idx_editorial_call_state`: `CREATE INDEX "idx_editorial_call_state" ON "editorial_calls" ("state", "created_at")`.
+
+**Named constraints:**
+
+- `uq_editorial_call_stage`: `CONSTRAINT "uq_editorial_call_stage" UNIQUE ("assessment_id", "stage")`.
+- `uq_editorial_media_stage`: `CREATE UNIQUE INDEX "uq_editorial_media_stage" ON "editorial_calls" ("stage") WHERE "kind" = 'media'`.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_stories"></a>
+
+### `editorial_stories` — EditorialStory
+
+One permanent development identity with original-post anchors.
+
+Model: [EditorialStory](../../core/models.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. Default: `uuid.uuid4`. |
+| `development_key` | `varchar(160)` | No | Unique. |
+| `anchor_ids` | `jsonb` | No | Default: `list`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `idx_editorial_story_anchors`: `CREATE INDEX "idx_editorial_story_anchors" ON "editorial_stories" USING gin ("anchor_ids")`.
+
+**Named constraints:**
+
+None beyond the keys and field checks described above.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_editions"></a>
+
+### `editorial_editions` — EditorialEdition
+
+One immutable accepted story edition for a track, locale and revision.
+
+Model: [EditorialEdition](../../core/models.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. Default: `uuid.uuid4`. |
+| `story_id` | `uuid` | No | FK → [editorial_stories](#table-editorial_stories). Django PROTECT. Model: `story`. |
+| `assessment_id` | `bigint` | No | FK → [editorial_assessments](#table-editorial_assessments). Django PROTECT. Model: `assessment`. |
+| `track` | `varchar(16)` | No | — |
+| `locale` | `varchar(12)` | No | — |
+| `revision` | `integer` | No | — |
+| `headline` | `varchar(160)` | No | — |
+| `byline` | `varchar(500)` | No | — |
+| `article` | `text` | No | — |
+| `importance` | `double precision` | No | — |
+| `occurred_at` | `timestamp with time zone` | No | — |
+| `fingerprint` | `varchar(64)` | No | — |
+| `voice` | `jsonb` | No | Default: `dict`. |
+| `model` | `varchar(160)` | No | — |
+| `evidence` | `jsonb` | No | Default: `dict`. |
+| `selection` | `jsonb` | No | Default: `dict`. |
+| `published_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `idx_editorial_feed`: `CREATE INDEX "idx_editorial_feed" ON "editorial_editions" ("track", "locale", "published_at" DESC, "id" DESC)`.
+
+**Named constraints:**
+
+- `uq_editorial_edition_revision`: `CONSTRAINT "uq_editorial_edition_revision" UNIQUE ("story_id", "track", "locale", "revision")`.
+- `uq_editorial_edition_evidence`: `CONSTRAINT "uq_editorial_edition_evidence" UNIQUE ("story_id", "track", "locale", "fingerprint")`.
+- `uq_editorial_chatter_interval`: `CREATE UNIQUE INDEX "uq_editorial_chatter_interval" ON "editorial_editions" ("assessment_id", "locale") WHERE "track" = 'chatter'`.
+- `ck_editorial_edition_track`: `CONSTRAINT "ck_editorial_edition_track" CHECK ("track" IN ('chatter', 'pulse'))`.
+- `ck_editorial_importance`: `CONSTRAINT "ck_editorial_importance" CHECK (("importance" >= 0.0 AND "importance" <= 100.0))`.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_heroes"></a>
+
+### `editorial_heroes` — EditorialHero
+
+One current hero pointer, or the shared provider-lock row.
+
+Model: [EditorialHero](../../core/models.py).
+
+**Primary key:** `key`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `key` | `varchar(40)` | No | Primary key. |
+| `edition_id` | `uuid` | Yes | FK → [editorial_editions](#table-editorial_editions). Django PROTECT. Model: `edition`. |
+
+**Named indexes:**
+
+None beyond primary-key, unique-field and automatic FK indexes.
+
+**Named constraints:**
+
+None beyond the keys and field checks described above.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="table-editorial_pictures"></a>
+
+### `editorial_pictures` — EditorialPicture
+
+One optional source/derivative assignment for a content revision.
+
+Model: [EditorialPicture](../../core/models.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. Default: `uuid.uuid4`. |
+| `content_kind` | `varchar(24)` | No | — |
+| `content_id` | `varchar(160)` | No | — |
+| `source_platform` | `varchar(24)` | No | Default: `'x'`. |
+| `revision_hash` | `varchar(64)` | No | — |
+| `assessment_id` | `bigint` | Yes | FK → [editorial_assessments](#table-editorial_assessments). Django PROTECT. Model: `assessment`. |
+| `person_media_id` | `bigint` | Yes | FK → [people_media](#table-people_media). Django PROTECT. Model: `person_media`. |
+| `source_media_id` | `varchar(64)` | Yes | FK → [staff_media_objects](#table-staff_media_objects). Django PROTECT. Model: `source_media`. |
+| `provenance` | `jsonb` | No | Default: `dict`. |
+| `treatment` | `text` | No | Default: `''`. |
+| `mode` | `varchar(16)` | No | — |
+| `state` | `varchar(24)` | No | Default: `'selected'`. |
+| `provider_task_id` | `varchar(160)` | No | Default: `''`. |
+| `poll_count` | `integer` | No | Default: `0`. |
+| `next_poll_at` | `timestamp with time zone` | Yes | — |
+| `poll_lease_until` | `timestamp with time zone` | Yes | — |
+| `generated_storage_name` | `text` | No | Default: `''`. |
+| `generated_sha256` | `varchar(64)` | No | Default: `''`. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `idx_editorial_picture_poll`: `CREATE INDEX "idx_editorial_picture_poll" ON "editorial_pictures" ("state", "next_poll_at")`.
+
+**Named constraints:**
+
+- `uq_editorial_picture_revision`: `CONSTRAINT "uq_editorial_picture_revision" UNIQUE ("content_kind", "content_id", "revision_hash")`.
+
+[Back to table inventory](#table-inventory)
+
 <a id="processing"></a>
 
 ## Collection, extraction, and processing records
@@ -5112,8 +5373,8 @@ column list at creation; do not assume later table columns automatically appear
 in the existing view. Inspect the deployed view definition before relying on
 its exact column set.
 
-The column/type/index inventory above was reconciled with all 120 concrete
-`core` models and the final migration state through migration 0061. Raw SQL
+The column/type/index inventory above was reconciled with all 128 concrete
+`core` models and the final migration state through migration 0068. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and this compatibility view. Application-level validators and

@@ -1,0 +1,64 @@
+{
+  "database": "pw_benchmark_staging_rehearsal_20261007",
+  "backup_restored": true,
+  "migrations_applied": true,
+  "backup_sha256": "262ae7b561843186668edf5ceef7a7b3182ec0e837ef985ef2a61237b27e44e9",
+  "inbound_account_checks": [
+    {
+      "table": "twitter_list_memberships",
+      "rows": 0,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "posts",
+      "rows": 290672,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "brands_accounts",
+      "rows": 98,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "companies_accounts",
+      "rows": 0,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "untracked_brand_promotion_evidence",
+      "rows": 7384,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "account_post_appearances",
+      "rows": 6803,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "product_verification_proposals",
+      "rows": 0,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "people_accounts",
+      "rows": 552,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "account_profile_snapshots",
+      "rows": 21744,
+      "native_identity_mismatches": 0
+    },
+    {
+      "table": "profile_movement_candidates",
+      "rows": 0,
+      "native_identity_mismatches": 0
+    }
+  ],
+  "editorial_stories": 2,
+  "products": 2407,
+  "posts": 290672,
+  "post_brand_links": 364056,
+  "x_accounts": 88741,
+  "production_writes": 0
+}

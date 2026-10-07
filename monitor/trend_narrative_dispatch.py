@@ -30,6 +30,9 @@ def dispatch_harvest_completion(
     envelope = _eligible_envelope(stats, dry_run=dry_run)
     if envelope is None:
         return NarrativeDispatchResult(status="ineligible")
+    from monitor.editorial.dispatch import dispatch_editorial
+
+    dispatch_editorial(envelope)
     try:
         config = load_config(Path("config.yaml")).headline_narrative
     except Exception:
