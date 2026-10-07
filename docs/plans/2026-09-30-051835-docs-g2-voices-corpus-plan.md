@@ -10,8 +10,8 @@ ollija:
   delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route_selected_by_user: true
+  staging_transport: commit
 ---
 # G2 editorial engine, voices and modular picture editor
 
@@ -51,6 +51,74 @@ existing staged route and $5/day ceiling. Preserve the live-quality rerun
 waiver and direct OpenAI secret source. Existing uncommitted G2 implementation,
 regression tests and supporting task reports from this session are offered as
 the change set; unrelated historical experiment artifacts remain excluded.
+
+### October 7 release checkpoint — staging coordination pending
+
+Candidate `39ef296fff85d090c4fb77121f99311c5b2e9c4f` is pushed to
+`feat/g2-editorial` and PR #51. It integrates production main `d66d8508`;
+benchmark-only changes are excluded. All three GitHub jobs passed on that head
+(editorial, staff, official company), and the canonical PR snapshot reports
+CLEAN with no actionable feedback or residuals. Local integrated verification:
+452 passed / 171 required PostgreSQL tests / zero skips or errors. The release
+review is `docs/reviews/2026-10-07-151200-g2-release-review.md`.
+
+This release pass made one CI setup repair (install Playwright and Chromium),
+one grounding simplification, and resolved production-base migration/config
+integration. No new paid quality iteration occurred. Previous context and
+source-contract iteration counts remain unchanged.
+
+Read-only production preflight observed `d66d8508`, shared R2 storage, and the
+project DeepInfra credential. OpenAI and project MiniMax literal assignments
+are present in the local secret store; production worker provisioning remains
+pending. No Render environment, staging branch, production branch, database or
+runtime configuration was mutated by this release pass.
+
+The active `benchmark-staging-20261007` session owns a bounded staging operation.
+Preserve it and its native-ID compatibility layer; do not promote benchmark
+commits through G2. A user question requests exact-commit staging **after** that
+session releases the environment. This replaces the earlier staging-window
+question. Existing route metadata stays unchanged until the owner answers.
+Production authority, the live-quality waiver and $5/day cap remain in force.
+Receipts and the prepared release manifest are in
+`.local/g2-lfg-20261007/`. Historical untracked artifacts remain preserved.
+
+## October 7 fresh live generation (current owner request)
+
+The owner now says “ok let's do a fresh live generation run”. Run one bounded
+comparison on the saved real Ajax and Chonk cases using the amended shared
+`story_packet`, `writer_request`, direct provider transport, validation and
+edition attribution. Manually select the two known anchors; this tests writer
+and context behavior, not automatic editor selection or full-database recall.
+Generate Chatter for both and Pulse for Chonk: at most three physical text
+requests, no automatic retries, and $1.50 new reservations inside the existing
+combined $5/day cap. Preserve the earlier $1.482914 reservation total as an
+external-spend baseline in the isolated ledger. No generated media, source
+collection, deployment or shared database writes. Use a fresh local PostgreSQL
+database and the current G2 worktree code.
+
+Freeze acceptance before sending: copy/source validation; no cross-brand or
+speaker mixing; numeric audit agrees with supported numbers; API availability
+and future weights stay distinct; Chonk receives locally retrieved Chaton
+context; exact cited post count and all URLs persist. Record each call and any
+hold, with original outputs and conservative reservations. This is fresh live
+iteration 1 after the context/provider amendment. Stop after the bounded run
+and report actual outputs; no blanket quality claim from software checks.
+
+### Fresh live run outcome
+
+Fresh iteration 1 completed: three real calls, zero retries, $0.610239 new
+reservations ($2.093153 including the earlier baseline). Exact headlines:
+“PewDiePie’s AI is still loading”; “CHONK AND AWE! Mistral’s big AI model hits
+the API — but its weights must wait”; and “Mistral launches Mistral Large 4
+'Le Chonk' preview, a 1T-parameter multimodal model with open weights due this
+month”. All three passed software validation and persisted local editions with
+2/2/4 recorded source URLs. Chonk received 18 Chaton context posts.
+
+Editorial review found two remaining issues: Chatter's unsupported “not the
+strongest worldwide” qualification, and Pulse's meme date/naming motive drawn
+from context omitted from its citation list. This is mixed quality evidence,
+not full acceptance. No runtime source edit, retry or public publication.
+[Exact outputs and review](../analysis/2026-10-07-183000-g2-fresh-live-generation.md).
 
 ## October 7 launch-route decision (current)
 
@@ -1757,10 +1825,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
 8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
@@ -1782,6 +1850,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October 7 resumed release: the owner says “deploy lfg” after the proposed
+exact-commit staging route, the completed fresh live run, and the explicit
+confirmation that source counts/URLs are implemented but undeployed. Proceed
+through exact-commit staging now that benchmark ownership is released, then
+production and English activation. Preserve the staging branch and benchmark
+schema/data; do not merge benchmark-only commits into production. This current
+deploy instruction ends the hold and carries the two reported writing-quality
+limitations; no further paid quality iteration is required for this release.
+
 
 October 7 owner exception: skip the proposed fresh live-quality rerun and its
 new experiment-budget gate. Retain previous quality failures as limitations,
