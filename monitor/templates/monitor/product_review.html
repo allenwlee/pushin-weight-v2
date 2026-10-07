@@ -53,6 +53,7 @@
 <body>
 <main>
   <h1>{{ admin_copy.title }}</h1>
+  {% if qualification_rerun %}<p><a data-frozen-run-link href="{% url 'frozen_account_run' %}?locale={{ active_locale }}">{{ frozen_run_label }} →</a></p>{% endif %}
   <nav class="admin-tabs" aria-label="{{ admin_copy.accounts }}">
     {% for tab in account_tabs %}<a href="{{ tab.url }}" data-account-tab="{{ tab.key }}"{% if accounts_tab == tab.key %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.count != None %} <span>({{ tab.count }})</span>{% endif %}</a>{% endfor %}
   </nav>

@@ -61,7 +61,7 @@ def initialize_cohort(manifest):
     return created
 
 
-def cohort_report():
+def cohort_report(*, include_members=False):
     scan = OfficialCompanyScan.objects.filter(key=COHORT_KEY).first()
     if scan is None:
         return None
@@ -70,12 +70,12 @@ def cohort_report():
     if len(members) > 2000 or cursor["policy_version"] != POLICY_VERSION:
         raise ValueError("unsupported cohort")
     states = {row["pk"]: row for row in OfficialCompanyAccountState.objects.filter(pk__in=members).values(
-        "pk", "status", "decision", "evidence_hash", "last_error",
+        "pk", "status", "decision", "evidence_hash", "last_error", "next_attempt_at",
     )}
     attempts = list(OfficialCompanyAttempt.objects.filter(
         state_id__in=members, policy_version__in=POLICIES, created_at__gte=scan.started_at,
     ).order_by("-created_at", "-pk").values(
-        "state_id", "evidence_hash", "status", "decision", "actual_usd", "reserved_usd",
+        "pk", "state_id", "evidence_hash", "status", "decision", "actual_usd", "reserved_usd", "error_code",
     ))
     latest = {}
     spent = Decimal(0)
@@ -94,8 +94,20 @@ def cohort_report():
         "pending": 0, "excluded": 0, "hf_verified": 0,
         "qualified_accounts": [], "spent_usd": str(spent), "reserved_usd": str(reserved),
     }
+    if include_members:
+        result["members"] = []
+        result["frozen_at"] = scan.started_at
     for state_id, member in members.items():
         state = states.get(state_id, {})
+        attempt = latest.get(state_id)
+        record = {
+            **member, "bucket": "pending", "decision": {}, "development_type": None,
+            "hf_verified": False, "attempt_id": attempt["pk"] if attempt else None,
+            "error_code": (attempt or {}).get("error_code") or state.get("last_error", ""),
+            "next_attempt_at": state.get("next_attempt_at"),
+        }
+        if include_members:
+            result["members"].append(record)
         proof = (state.get("decision") or {}).get("hf_verification") or {}
         observed_at = parse_datetime(proof.get("observed_at", ""))
         # Registration already required the private server signature. The web
@@ -112,6 +124,7 @@ def cohort_report():
         )
         if hf_verified:
             result["hf_verified"] += 1
+            record["hf_verified"] = True
             decision = state["decision"]
         else:
             decision = None
@@ -123,23 +136,28 @@ def cohort_report():
         )
         if excluded and not hf_verified:
             result["excluded"] += 1
+            record["bucket"] = "excluded"
             continue
-        attempt = latest.get(state_id)
         if hf_verified:
             pass
         elif state_id in cursor["queued"] and state.get("last_error") in {
             "attempt_limit", "evidence_envelope_exceeded",
         }:
             result["failed"] += 1
+            record["bucket"] = "failed"
         elif attempt is None or attempt["status"] == "reserved":
             result["pending"] += 1
         elif attempt["status"] == "failed":
-            result["retry_pending" if state.get("status") == "retry_due" else "failed"] += 1
+            record["bucket"] = "retry_pending" if state.get("status") == "retry_due" else "failed"
+            result[record["bucket"]] += 1
         else:
             decision = attempt["decision"]
         if decision is not None:
+            record["decision"] = decision
             if decision.get("outcome") == "accepted":
                 kind = "model" if hf_verified else decision.get("development_type", "model")
+                record["development_type"] = kind
+                record["bucket"] = "newly_qualified" if member["baseline_outcome"] != "accepted" else "qualified"
                 result["qualified"] += 1
                 result[kind] += 1
                 result["newly_qualified"] += int(member["baseline_outcome"] != "accepted")
@@ -149,7 +167,8 @@ def cohort_report():
                     "newly_qualified": member["baseline_outcome"] != "accepted",
                 })
             else:
-                result["rejected" if decision.get("outcome") == "rejected" else "uncertain"] += 1
+                record["bucket"] = "rejected" if decision.get("outcome") == "rejected" else "uncertain"
+                result[record["bucket"]] += 1
     result["completed"] = scan.population - result["pending"] - result["retry_pending"]
     result["complete"] = result["completed"] == scan.population
     return result

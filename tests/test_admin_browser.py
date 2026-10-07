@@ -24,6 +24,70 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminBrowserTests(StaticLiveServerTestCase):
+    def test_frozen_run_has_separate_membership_scoped_tabs(self):
+        from datetime import timedelta
+
+        from core.models import OfficialCompanyAttempt
+        from core.official_company_accounts import POLICY_VERSION
+        from core.official_company_requalification import initialize_cohort
+        from tests.test_official_company_requalification import manifest, state
+
+        fresh, awaiting, pending, previous, outside = [state(97801 + n) for n in range(5)]
+        previous.decision = {"outcome": "accepted"}
+        previous.save()
+        initialize_cohort(manifest([fresh, awaiting, pending, previous]))
+        for s in [fresh, previous, outside]:
+            OfficialCompanyAttempt.objects.create(
+                state=s, evidence_hash=s.evidence_hash, claim_token=f"frozen-browser-{s.pk}",
+                status="completed", model="test-model", policy_version=POLICY_VERSION, reserved_usd=0,
+                decision={"outcome": "accepted", "development_type": "agent",
+                          "organization_name": "New Agent Company", "rationale": "Own agent development."},
+            )
+        awaiting.status = "retry_due"
+        awaiting.last_error = "TimeoutError"
+        awaiting.next_attempt_at = timezone.now() + timedelta(minutes=15)
+        awaiting.save()
+        OfficialCompanyAttempt.objects.create(
+            state=awaiting, evidence_hash=awaiting.evidence_hash, claim_token="frozen-browser-retry",
+            status="failed", error_code="TimeoutError", model="test-model",
+            policy_version=POLICY_VERSION, reserved_usd=0,
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                for locale, title in [("en", "Frozen account run"), ("zh_hans", "固定账号扫描"), ("ja", "固定アカウントの再評価")]:
+                    response = page.goto(self.live_server_url + "/admin/official-accounts/frozen-run?locale=" + locale)
+                    self.assertEqual(response.status, 200)
+                    self.assertTrue(page.get_by_role("heading", name=title, exact=True).is_visible())
+                    self.assertEqual(page.locator('[data-frozen-tab]').count(), 3)
+                    for tab, expected in [("newly", fresh), ("awaiting", awaiting), ("pending", pending)]:
+                        page.locator(f'[data-frozen-tab="{tab}"]').click()
+                        self.assertEqual(page.locator('[data-frozen-tab][aria-current="page"]').get_attribute('data-frozen-tab'), tab)
+                        self.assertEqual(page.locator('[data-frozen-account]').count(), 1)
+                        self.assertTrue(page.locator(f'[data-frozen-account="{expected.account_id}"]').is_visible())
+                        self.assertIn("locale=" + locale, page.url)
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    page.screenshot(path=str(Path(__file__).resolve().parents[1] / f".pytest-tmp/frozen-run-{locale}.png"), full_page=True)
+                    page.set_viewport_size({"width": 1440, "height": 1000})
+                page.goto(self.live_server_url + "/admin")
+                self.assertTrue(page.locator('[data-frozen-run-link]').is_visible())
+                self.assertLess(page.locator('[data-frozen-run-link]').bounding_box()['y'], 160)
+                page.locator('[data-frozen-run-link]').focus()
+                page.keyboard.press('Enter')
+                page.wait_for_url('**/admin/official-accounts/frozen-run?**')
+                page.goto(self.live_server_url + '/admin/official-accounts/frozen-run?locale=en')
+                page.locator('[name=q]').fill(fresh.account.handle)
+                page.get_by_role('button', name='Search', exact=True).click()
+                self.assertEqual(page.locator('[data-frozen-account]').count(), 1)
+                self.assertEqual(page.locator('[data-frozen-tab-count="newly"]').inner_text(), '1')
+                page.locator('[name=q]').fill(outside.account.handle)
+                page.get_by_role('button', name='Search', exact=True).click()
+                self.assertEqual(page.locator('[data-frozen-account]').count(), 0)
+            finally:
+                browser.close()
+
     def test_qualification_rerun_progress_uses_fixed_cohort(self):
         from core.models import OfficialCompanyAttempt
         from core.official_company_accounts import POLICY_VERSION

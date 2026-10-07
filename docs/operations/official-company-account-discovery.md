@@ -53,6 +53,19 @@ Each dedicated tab has its own count, search and pagination; status parameters
 cannot switch its category. Separating these views changes no stored decision,
 approval, retry schedule or list membership.
 
+The **Frozen account run** link near the top of `/admin` opens
+`/admin/official-accounts/frozen-run`. This owner/staff page reports only the
+saved October 7 cohort, using its matching new-policy attempt receipts and
+earlier positive baseline. **Newly qualifying** lists new positive findings,
+excluding companies that had already passed before the rerun. **Awaiting** lists
+temporary evaluation failures waiting for retry, with the recorded error and
+next retry time. **Pending** lists accounts without their first rerun result,
+including requests currently in flight. Other outcomes remain in the progress
+summary. Each tab supports account/company search and pages of 50; tab counts
+remain totals for the frozen cohort when search narrows the table. Refresh the
+page to read current progress. The page does not evaluate or approve accounts,
+change their queue state, or alter list membership.
+
 The add counter counts accounts with an acknowledged provider add. A membership
 read confirming an already-present account does not increment it. A timed-out
 request followed by positive membership readback is shown separately because
